@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj03">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBACC_ACCNUT_ACNT_SBJECT		회계계정과목
+		 R   : TBPRJ_ACMSLT_PRMPC_SM		실적원가집계
+		 R   : TBPRJ_INDRCT_DLRY			간접비배부
+		CRUD : TBPRJ_ACMSLT_PRMPC_ACNT		실적원가계정
+		CRUD : TBPRJ_ACMSLT_PRMPC_DLRY		실적원가배부
+
+
+		 R   : TBACC_ACCNUT_ACNT_SBJECT	계정코드
+		 R   : TBPRJ_					직접비집계 ^
+		 R   : TBPRJ_INDRCT_DLRY		간접비배부
+		CRUD : TBPRJ_					실적원가계산(사업별) ^
+		CRUD : TBPRJ_					실적원가계산(계정별) ^
+
+		TBPRJ_ACMSLT_PRMPC_SM	실적원가집계
+		TBPRJ_INDRCT_DLRY	간접비배부
+
+		 R   : TBPRJ_DLRY_ACNT_MAPNG	배부계정맵핑
+	-->
+
+	<!--  조회 -->
+	<select id="PRJ030204.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 BC.BSNS_CODE			/* 사업코드 */
+	,BC.BSNS_NM				/* 사업명 */
+	,BC.BSNS_TY				/* 사업유형 */
+	,C.AMT AS AMT1			/* 실적원가금액 */
+	,D.AMT AS AMT2			/* 간접배부금액 */
+	,C.AMT + D.AMT AS AMT_S			/* 합계 */
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+JOIN TBPRJ_BSNS_SUMRY B ON B.BSNS_CODE = BC.BSNS_CODE			/* 사업개요 */
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+LEFT JOIN (
+	SELECT
+		 BSNS_CODE			/* 사업코드 */
+		,SUM(NVL(JAN_AMOUNT,0) + NVL(FEB_AMOUNT,0) + NVL(MAR_AMOUNT,0)
+		   + NVL(APR_AMOUNT,0) + NVL(MAY_AMOUNT,0) + NVL(JUN_AMOUNT,0)
+		  + NVL(JULY_AMOUNT,0) + NVL(AUG_AMOUNT,0) + NVL(SEP_AMOUNT,0)
+		   + NVL(OCT_AMOUNT,0) + NVL(NOV_AMOUNT,0) + NVL(DEC_AMOUNT,0))
+		 AS AMT						/* 실적금액 */
+	FROM TBPRJ_ACMSLT_PRMPC_ACNT			/* 실적원가계정 */
+	WHERE STDR_YEAR = #STDR_YEAR#			/* 기준년도 */
+	GROUP BY BSNS_CODE
+) C ON C.BSNS_CODE = BC.BSNS_CODE
+LEFT JOIN (
+	SELECT
+		 BSNS_CODE			/* 사업코드 */
+		,SUM(DLRY_AMOUNT) AS AMT	/* 배부금액 */
+	FROM TBPRJ_ACMSLT_PRMPC_DLRY			/* 실적원가배부 */
+	WHERE STDR_YEAR = #STDR_YEAR#			/* 기준년도 */
+	GROUP BY BSNS_CODE
+) D ON D.BSNS_CODE = BC.BSNS_CODE
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 원장 */
+LEFT JOIN (
+	SELECT
+		 BSNS_CODE			/* 사업코드 */
+		,SUM(ACMSLT_AMOUNT) AS AMT		/* 실적금액 */
+	FROM TBPRJ_ACMSLT_PRMPC_SM				/* 실적원가집계 */
+	WHERE BSNS_YM LIKE #STDR_YEAR#||'%'		/* 기준년도 */
+	GROUP BY BSNS_CODE
+) C ON C.BSNS_CODE = BC.BSNS_CODE
+LEFT JOIN (
+	SELECT
+		 BSNS_CODE			/* 사업코드 */
+		,SUM(DLRY_AMOUNT) AS AMT	/* 배부금액 */
+	FROM TBPRJ_INDRCT_DLRY A				/* 간접비배부 */
+	WHERE BSNS_YM LIKE #STDR_YEAR#||'%'		/* 기준년도 */
+	GROUP BY BSNS_CODE
+) D ON D.BSNS_CODE = BC.BSNS_CODE
+</isEqual>
+WHERE BC.BSNS_TY != 'Z'				/* 간접비 */
+  AND B.TOT_WCT IS NOT NULL
+<isNotEmpty property="BSNS_GB" >
+  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+</isNotEmpty>
+ORDER BY BC.BSNS_CODE
+	</select>
+
+	<!-- 실적원가배부 ================================================== -->
+
+	<!-- 실적원가배부 조회 -->
+	<select id="PRJ030204.rList" parameterClass="map" resultClass="hashmap">
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+SELECT
+	 A.STDR_YEAR			/* 기준년도 */
+	,A.BSNS_CODE			/* 사업코드 */
+	,A.ACNT_CODE			/* 계정코드 */
+	,AC.ACCNUT_ACNT_NM		/* 계정과목명 */
+	,A.DLRY_STDR_CODE		/* 배부기준코드 */
+	,A.DLRY_AMOUNT AS AMT	/* 배부금액 */
+	,DC.DLRY_STDR_NM		/* 배부기준명 */
+FROM TBPRJ_ACMSLT_PRMPC_DLRY A			/* 실적원가배부 */
+LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT AC		/* 회계계정과목 */
+  ON A.STDR_YEAR = AC.ACCNUT_YEAR
+ AND A.ACNT_CODE = AC.ACCNUT_ACNT_CODE
+LEFT JOIN TBPRJ_DLRY_ACNT_MAPNG DM			/* 배부계정맵핑 */
+  ON A.STDR_YEAR = DM.STDR_YEAR
+ AND A.ACNT_CODE = DM.ACNT_CODE
+LEFT JOIN TBPRJ_DLRY_STDR_CODE DC			/* 배부기준코드 */
+  ON DC.STDR_YEAR = DM.STDR_YEAR
+ AND DC.DLRY_STDR_CODE = DM.DLRY_STDR_CODE
+WHERE A.STDR_YEAR = #STDR_YEAR#			/* 기준년도 */
+  AND A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2,3,4
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 원장 */
+SELECT
+	 SUBSTR(A.BSNS_YM,1,4) AS STDR_YEAR			/* 기준년도 */
+	,A.BSNS_CODE			/* 사업코드 */
+	,A.ACNT_CODE			/* 계정코드 */
+	,AC.ACCNUT_ACNT_NM		/* 계정과목명 */
+	,A.DLRY_STDR_CODE		/* 배부기준코드 */
+	,A.DLRY_AMOUNT AS AMT	/* 배부금액 */
+	,DC.DLRY_STDR_NM		/* 배부기준명 */
+FROM TBPRJ_INDRCT_DLRY A			/* 간접비배부 */
+LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT AC		/* 회계계정과목 */
+  ON AC.ACCNUT_YEAR = SUBSTR(A.BSNS_YM,1,4)
+ AND AC.ACCNUT_ACNT_CODE = A.ACNT_CODE
+LEFT JOIN TBPRJ_DLRY_ACNT_MAPNG DM			/* 배부계정맵핑 */
+  ON DM.STDR_YEAR = SUBSTR(A.BSNS_YM,1,4)
+ AND DM.ACNT_CODE = A.ACNT_CODE
+LEFT JOIN TBPRJ_DLRY_STDR_CODE DC			/* 배부기준코드 */
+  ON DC.STDR_YEAR = DM.STDR_YEAR
+ AND DC.DLRY_STDR_CODE = DM.DLRY_STDR_CODE
+WHERE SUBSTR(A.BSNS_YM,1,4) = #STDR_YEAR#	/* 기준년도 */
+  AND A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2,3,4
+</isEqual>
+	</select>
+
+	<!-- 실적원가계정 삭제 -->
+	<delete id="PRJ030204.rD" parameterClass="map">
+DELETE FROM TBPRJ_ACMSLT_PRMPC_ACNT			/* 실적원가계정 */
+WHERE STDR_YEAR = #STDR_YEAR#		/* 기준년도 */
+	</delete>
+
+	<!-- 간접비집계 조회(사업별) ================================================== -->
+
+	<select id="PRJ030204.r2List" parameterClass="map" resultClass="hashmap">
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+SELECT
+	 A.STDR_YEAR			/* 기준년도 */
+	,A.BSNS_CODE			/* 사업코드 */
+	,A.ACNT_CODE			/* 계정코드 */
+	,AC.ACCNUT_ACNT_NM		/* 계정과목명 */
+	,A.JAN_AMOUNT AS AMT01			/* 1월금액 */
+	,A.FEB_AMOUNT AS AMT02			/* 2월금액 */
+	,A.MAR_AMOUNT AS AMT03			/* 3월금액 */
+	,A.APR_AMOUNT AS AMT04			/* 4월금액 */
+	,A.MAY_AMOUNT AS AMT05			/* 5월금액 */
+	,A.JUN_AMOUNT AS AMT06			/* 6월금액 */
+	,A.JULY_AMOUNT AS AMT07			/* 7월금액 */
+	,A.AUG_AMOUNT AS AMT08			/* 8월금액 */
+	,A.SEP_AMOUNT AS AMT09			/* 9월금액 */
+	,A.OCT_AMOUNT AS AMT10			/* 10월금액 */
+	,A.NOV_AMOUNT AS AMT11			/* 11월금액 */
+	,A.DEC_AMOUNT AS AMT12			/* 12월금액 */
+	,  A.JAN_AMOUNT + A.FEB_AMOUNT + A.MAR_AMOUNT
+	 + A.APR_AMOUNT + A.MAY_AMOUNT + A.JUN_AMOUNT
+	 + A.JULY_AMOUNT + A.AUG_AMOUNT + A.SEP_AMOUNT
+	 + A.OCT_AMOUNT + A.NOV_AMOUNT + A.DEC_AMOUNT
+	 AS S_AMT						/* 합계 */
+FROM TBPRJ_ACMSLT_PRMPC_ACNT A			/* 실적원가계정 */
+LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT AC		/* 회계계정과목 */
+  ON A.STDR_YEAR = AC.ACCNUT_YEAR
+ AND A.ACNT_CODE = AC.ACCNUT_ACNT_CODE
+WHERE A.STDR_YEAR = #STDR_YEAR#			/* 기준년도 */
+  AND A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2,3
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 원장 */
+SELECT
+	 SUBSTR(A.BSNS_YM,1,4) AS STDR_YEAR			/* 기준년도 */
+	,A.BSNS_CODE			/* 사업코드 */
+	,A.ACCNUT_ACNT_CODE AS ACNT_CODE	/* 계정코드 */
+	,AC.ACCNUT_ACNT_NM		/* 계정과목명 */
+
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 1,A.ACMSLT_AMOUNT,0)) AS AMT01			/*  1월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 2,A.ACMSLT_AMOUNT,0)) AS AMT02			/*  2월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 3,A.ACMSLT_AMOUNT,0)) AS AMT03			/*  3월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 4,A.ACMSLT_AMOUNT,0)) AS AMT04			/*  4월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 5,A.ACMSLT_AMOUNT,0)) AS AMT05			/*  5월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 6,A.ACMSLT_AMOUNT,0)) AS AMT06			/*  6월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 7,A.ACMSLT_AMOUNT,0)) AS AMT07			/*  7월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 8,A.ACMSLT_AMOUNT,0)) AS AMT08			/*  8월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 9,A.ACMSLT_AMOUNT,0)) AS AMT09			/*  9월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)),10,A.ACMSLT_AMOUNT,0)) AS AMT10			/* 10월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)),11,A.ACMSLT_AMOUNT,0)) AS AMT11			/* 11월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)),12,A.ACMSLT_AMOUNT,0)) AS AMT12			/* 12월금액 */
+
+	,SUM(ACMSLT_AMOUNT) AS S_AMT						/* 합계 */
+FROM TBPRJ_ACMSLT_PRMPC_SM A			/* 실적원가집계 */
+LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT AC		/* 회계계정과목 */
+  ON AC.ACCNUT_YEAR = SUBSTR(A.BSNS_YM,1,4)
+ AND AC.ACCNUT_ACNT_CODE = A.ACCNUT_ACNT_CODE
+WHERE SUBSTR(A.BSNS_YM,1,4) = #STDR_YEAR#			/* 기준년도 */
+  AND A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+GROUP BY SUBSTR(A.BSNS_YM,1,4),A.BSNS_CODE,A.ACCNUT_ACNT_CODE,AC.ACCNUT_ACNT_NM
+ORDER BY 1,2,3
+</isEqual>
+	</select>
+
+	<!-- 실적원가배부 삭제 -->
+	<delete id="PRJ030204.r2D" parameterClass="map">
+DELETE FROM TBPRJ_ACMSLT_PRMPC_DLRY			/* 실적원가배부 */
+WHERE STDR_YEAR = #STDR_YEAR#		/* 기준년도 */
+	</delete>
+
+	<!-- 간접비배부 생성 ================================================== -->
+
+	<insert id="PRJ030204.make1" parameterClass="map">
+INSERT INTO TBPRJ_ACMSLT_PRMPC_ACNT (			/* 실적원가계정 */
+	 STDR_YEAR			/* 기준년도 */
+	,BSNS_CODE			/* 사업코드 */
+	,ACNT_CODE			/* 계정코드 */
+	,JAN_AMOUNT			/* 1월금액 */
+	,FEB_AMOUNT			/* 2월금액 */
+	,MAR_AMOUNT			/* 3월금액 */
+	,APR_AMOUNT			/* 4월금액 */
+	,MAY_AMOUNT			/* 5월금액 */
+	,JUN_AMOUNT			/* 6월금액 */
+	,JULY_AMOUNT		/* 7월금액 */
+	,AUG_AMOUNT			/* 8월금액 */
+	,SEP_AMOUNT			/* 9월금액 */
+	,OCT_AMOUNT			/* 10월금액 */
+	,NOV_AMOUNT			/* 11월금액 */
+	,DEC_AMOUNT			/* 12월금액 */
+
+	,REGISTER_ID		/* 등록자ID */
+	,REGIST_DT			/* 등록일시 */
+	,UPDUSR_ID			/* 수정자ID */
+	,UPDT_DT			/* 수정일시 */
+)
+SELECT
+	 SUBSTR(A.BSNS_YM,1,4) AS STDR_YEAR			/* 기준년도 */
+	,A.BSNS_CODE			/* 사업코드 */
+	,A.ACCNUT_ACNT_CODE		/* 계정코드 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 1,A.ACMSLT_AMOUNT,0)) AS AMT01			/*  1월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 2,A.ACMSLT_AMOUNT,0)) AS AMT02			/*  2월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 3,A.ACMSLT_AMOUNT,0)) AS AMT03			/*  3월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 4,A.ACMSLT_AMOUNT,0)) AS AMT04			/*  4월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 5,A.ACMSLT_AMOUNT,0)) AS AMT05			/*  5월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 6,A.ACMSLT_AMOUNT,0)) AS AMT06			/*  6월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 7,A.ACMSLT_AMOUNT,0)) AS AMT07			/*  7월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 8,A.ACMSLT_AMOUNT,0)) AS AMT08			/*  8월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)), 9,A.ACMSLT_AMOUNT,0)) AS AMT09			/*  9월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)),10,A.ACMSLT_AMOUNT,0)) AS AMT10			/* 10월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)),11,A.ACMSLT_AMOUNT,0)) AS AMT11			/* 11월금액 */
+	,SUM(DECODE(TO_NUMBER(SUBSTR(A.BSNS_YM,5,2)),12,A.ACMSLT_AMOUNT,0)) AS AMT12			/* 12월금액 */
+
+	,#S_USER_ID#
+	,SYSDATE
+	,#S_USER_ID#
+	,SYSDATE
+FROM TBPRJ_ACMSLT_PRMPC_SM A			/* 실적원가집계 */
+WHERE SUBSTR(A.BSNS_YM,1,4) = #STDR_YEAR#			/* 기준년도 */
+  AND A.BSNS_CODE IS NOT NULL
+GROUP BY SUBSTR(A.BSNS_YM,1,4),A.BSNS_CODE,A.ACCNUT_ACNT_CODE
+ORDER BY 1,2,3
+	</insert>
+
+	<insert id="PRJ030204.make2" parameterClass="map">
+INSERT INTO TBPRJ_ACMSLT_PRMPC_DLRY (			/* 실적원가배부 */
+	 STDR_YEAR			/* 기준년도 */
+	,BSNS_CODE			/* 사업코드 */
+	,ACNT_CODE			/* 계정코드 */
+	,DLRY_STDR_CODE			/* 배부기준코드 */
+	,DLRY_AMOUNT			/* 배부금액 */
+
+	,REGISTER_ID
+	,REGIST_DT
+	,UPDUSR_ID
+	,UPDT_DT
+)
+SELECT
+	 SUBSTR(A.BSNS_YM,1,4) AS STDR_YEAR			/* 기준년도 */
+	,A.BSNS_CODE			/* 사업코드 */
+	,A.ACNT_CODE			/* 계정코드 */
+	,A.DLRY_STDR_CODE		/* 배부기준코드 */
+	,SUM(A.DLRY_AMOUNT)		/* 배부금액 */
+
+	,#S_USER_ID#
+	,SYSDATE
+	,#S_USER_ID#
+	,SYSDATE
+FROM TBPRJ_INDRCT_DLRY A			/* 간접비배부 */
+WHERE SUBSTR(A.BSNS_YM,1,4) = #STDR_YEAR#			/* 기준년도 */
+GROUP BY SUBSTR(A.BSNS_YM,1,4),A.BSNS_CODE,A.ACNT_CODE,A.DLRY_STDR_CODE
+ORDER BY 1,2,3,4
+	</insert>
+
+</sqlMap>

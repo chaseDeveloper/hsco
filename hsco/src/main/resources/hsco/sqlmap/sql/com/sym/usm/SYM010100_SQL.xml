@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM010100_SQL">
+
+	<!-- 사용자 목록조회 -->
+	<select id="SYM010100DAO.getListUser" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT '0'         AS CHK
+		      ,A.USER_ID
+		      ,A.USER_NM
+		      ,NVL(B.EMPNO, A.empno) AS EMPNO 
+		      ,B.EMPNM
+		      ,B.ECNY_DE
+		      ,NVL(B.DEPT_CODE,A.DEPT_CODE) AS DEPT_CODE, 
+		       NVL(B.DEPT_NM,(SELECT dept_nm FROM VWHRM_DEPT WHERE dept_code = a.dept_code)) AS DEPT_NM 
+		      ,(
+		        SELECT CODE_NM
+		        FROM   TBCOM_CMMN_CODE
+		        WHERE  GRP_CODE = 'HRM001'
+		        AND    CODE = B.JSSFC_SE
+		       ) ||  CASE
+		               WHEN B.HR_CLSF_SE IS NULL THEN ''
+		               ELSE SUBSTR(B.HR_CLSF_SE, 2,1) || '급'
+		             END                                          AS HR_CLSF_NM
+		      ,(
+		        SELECT CODE_NM FROM TBCOM_CMMN_CODE
+		        WHERE GRP_CODE = 'HRM214'
+		        AND CODE = B.RSPOFC_SE
+		       )                                                  AS RSPOFC_NM
+		      ,NVL( A.USER_STTUS_CODE, 'JA' )                     AS USER_STTUS_CODE
+		      ,(
+		        SELECT CODE_NM FROM TBCOM_CMMN_CODE
+		        WHERE  GRP_CODE = 'COM011'
+		        AND    NVL( A.USER_STTUS_CODE, 'JA' ) = CODE
+		       )                                                  AS USER_STTUS_NM,
+		       B.BRTHDY
+		      ,( 
+		        SELECT CODE_NM FROM TBCOM_CMMN_CODE
+		        WHERE  GRP_CODE = 'COM005'
+		        AND    CODE = B.SEXDSTN 
+		       )                                                  AS SEXDSTN
+		      ,B.TELNO_1
+		      ,H_DECRYPT(B.TELNO_2)  AS TELNO_2
+		      ,B.LXTN_NO
+		      ,B.ZIP
+		      ,B.ADRES
+		      ,B.EMAIL
+		      ,A.INTRCP_CN
+		      ,NULL                    AS PWD  /*복호화되지 않은 암호는 조회하지 않음*/
+		      ,A.REGIST_DT             AS REGIST_DE
+		      ,A.REGISTER_ID
+		      ,A.UPDT_DT               AS UPDT_DE
+		      ,A.UPDUSR_ID
+		FROM   TBCOM_USER A
+		      ,(
+		        SELECT AA.*
+		              ,BB.DEPT_NM
+		        FROM   TBHRM_HR_MASTR AA
+		              ,VWHRM_DEPT BB
+		        WHERE  AA.DEPT_CODE = BB.DEPT_CODE
+		        AND    BB.USE_AT = 1
+		       ) B
+		WHERE  A.EMPNO = B.EMPNO(+)
+		<isNotEmpty property="DEPT_CODE">
+		AND    B.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="SEARCH_KEYWORD" prepend="and">
+			A.USER_NM LIKE '%' ||  #SEARCH_KEYWORD# || '%'
+		</isNotEmpty>
+		ORDER BY B.SORT_ORDR, B.HR_CLSF_SE, B.EMPNO, A.USER_ID, A.USER_NM
+	</select>
+
+
+
+
+	<!-- 사용자 등록 -->
+	<insert id="SYM010100DAO.insertUser" parameterClass="java.util.Map" >
+		INSERT INTO TBCOM_USER (
+		                USER_ID,
+		                USER_NM,
+		                EMPNO,
+		                DEPT_CODE,
+		                USER_STTUS_CODE,
+		                PWD,
+		                INTRCP_CN,
+		                REGISTER_ID,
+		                REGIST_DT,
+		                UPDUSR_ID,
+		                UPDT_DT
+		                )
+		     VALUES (
+		                #USER_ID#,
+		                #USER_NM#,
+		                #EMPNO#,
+		                #DEPT_CODE#,
+		                NVL(TRIM(#USER_STTUS_CODE#), 'JA'),
+		                SFCOM_ENC_HASH(#PWD#),
+		                #INTRCP_CN#,
+		                #S_USER_ID#,
+		                SYSDATE,
+		                #S_USER_ID#,
+		                SYSDATE
+		            )
+	</insert>
+	
+	
+	<!-- 사용자 수정 -->
+	<update id="SYM010100DAO.updateUser" parameterClass="java.util.Map" >
+	<![CDATA[
+		UPDATE TBCOM_USER
+		SET    USER_NM         = #USER_NM#
+	]]>
+	<isNotEmpty property="PWD">
+		      ,PWD             = SFCOM_ENC_HASH(#PWD#)
+	</isNotEmpty>
+	<![CDATA[
+		      ,DEPT_CODE       = #DEPT_CODE#
+		      ,EMPNO           = #EMPNO#
+		      ,USER_STTUS_CODE = NVL(TRIM(#USER_STTUS_CODE#), 'JA')
+		      ,INTRCP_CN       = #INTRCP_CN#
+		      ,UPDUSR_ID       = #S_USER_ID#
+		      ,UPDT_DT         = SYSDATE
+		WHERE  USER_ID         = #USER_ID#
+	]]>
+	</update>
+	
+	
+	<!--  사용자 삭제 -->
+	<delete id="SYM010100DAO.deleteUser" parameterClass="java.util.Map" >
+	<![CDATA[
+		DELETE
+		FROM   TBCOM_USER
+		WHERE  USER_ID = #USER_ID#
+	]]>
+	</delete>
+	
+	<!-- 사용자 삭제 시, 자식 데이터 존재 여부 체크 -->
+	<select id="SYM010100DAO.checkChildDataWhenDelete" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		     A.USER_ID
+		   , A.USER_NM
+		   , COUNT(B.USER_ID) AS GRP_CNT
+           , 0 AS MENU_CNT
+           , 0 AS BUTTON_CNT
+           , COUNT(E.USER_ID) AS GLAN_CNT
+      	   , 0 AS OPRTIN_CNT
+           , COUNT(G.USER_ID) AS CHGDTL_CNT
+		FROM TBCOM_USER A
+           , TBCOM_USER_GRP B
+         <!--    , TBCOM_USER_MENU C -->
+         <!--    , TBCOM_USER_SCRIN_BUTTON D -->
+           , TBCOM_GLAN_MENU E
+         <!--    , TBCOM_USER_OPRTIN F -->
+           , TBCOM_USER_CHGDTL G
+		WHERE A.USER_ID = B.USER_ID(+)
+       <!--    AND A.USER_ID = C.USER_ID(+)-->
+		<!--   AND A.USER_ID = D.USER_ID(+)--> 
+           AND A.USER_ID = E.USER_ID(+)
+       <!--   AND A.USER_ID = F.USER_ID(+)  -->
+          AND A.USER_ID = G.USER_ID(+)
+          <isNotEmpty prepend="and" property="userList">
+              <iterate prepend=" A.USER_ID IN " property="userList" open="(" close=")" conjunction=",">
+		          #userList[]#
+		      </iterate>
+		  </isNotEmpty>
+		GROUP BY A.USER_ID, A.USER_NM
+    </select>
+    
+</sqlMap>

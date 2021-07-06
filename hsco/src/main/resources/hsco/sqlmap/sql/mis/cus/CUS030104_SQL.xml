@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS030104_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!--안내정보메세지 목록 조회 -->
+	<select id="CUS030104DAO.selectCstmrList" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT A.CSTMR_SE   AS CSTMR_SE   /*고객구분*/
+				 , A.NM         AS CSTMR_NM   /*성명*/
+				 , B.CSTMR_GRAD AS CSTMR_GRAD /*고객등급*/
+				 , A.ADRES      AS ADRES      /*주소*/
+				 , TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890')      AS TELNO      /*전화번호 원본 값*/    
+				 , TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890')     AS MBTLNO     /*핸드폰번호 원본 값*/
+				 , A.EMAIL      AS EMAIL      /*이메일*/
+				 , ''           AS CHK
+			  FROM ( 
+			  		/*기타 고객정보*/
+					SELECT '01'         AS CSTMR_SE
+						 , CSTMR_NM AS NM
+						 , ADRES
+						 , GNRL_TLPHON AS TELNO
+						 , MBTLNO
+						 , EMAIL
+					FROM TBCUS_HMPG_CSTMR_INFO
+				   WHERE 1=1
+				   ]]>
+				   <isNotEmpty property="SE" prepend="AND">
+				      SE = #SE#
+				   </isNotEmpty>
+				  
+				  UNION ALL 
+				
+				 /*온라인 고객 정보*/
+					SELECT '09'                                AS CSTMR_SE
+                         , MEMBER_NAME                         AS NM
+                         , SFCOM_DEC_ALL(MEMBER_ADDR1)|| ' ' ||SFCOM_DEC_ALL(MEMBER_ADDR2)   AS ADRES
+                         , SFCOM_DEC_ALL(MEMBER_TEL1)||SFCOM_DEC_ALL(MEMBER_TEL2)||SFCOM_DEC_ALL(MEMBER_TEL3) AS TELNO
+                         , SFCOM_DEC_ALL(MEMBER_HP1)||SFCOM_DEC_ALL(MEMBER_HP2)||SFCOM_DEC_ALL(MEMBER_HP3)  AS MBTLNO
+                         , SFCOM_DEC_ALL(MEMBER_EMAIL)                        AS EMAIL
+                      FROM TBHPM_MEMBER A
+                     WHERE 1=1
+                     <isEqual property="CUSTOMER_TYPE" compareValue="1">
+                     AND	EXISTS (SELECT 1 FROM TBHPG_SMS_ALIMI AA WHERE ALIMI_RECV_YN = 'Y' AND A.MEMBER_ID = AA.MEMBER_ID)
+                     </isEqual>
+                     <isEqual property="CUSTOMER_TYPE" compareValue="2">
+                     AND	EXISTS (SELECT 1 FROM TBHPG_SMS_ALIMI AA WHERE ALIMI_RECV_YN2 = 'Y' AND A.MEMBER_ID = AA.MEMBER_ID)
+                     </isEqual>
+                     <isEqual property="CUSTOMER_TYPE" compareValue="3">
+                     AND	EXISTS (SELECT 1 FROM TBHPG_SMS_ALIMI AA WHERE ALIMI_RECV_YN3 = 'Y' AND A.MEMBER_ID = AA.MEMBER_ID)
+                     </isEqual>
+                     <isEqual property="CUSTOMER_TYPE" compareValue="4">
+                     AND	EXISTS (SELECT 1 FROM TBHPG_SMS_ALIMI AA WHERE ALIMI_RECV_YN4 = 'Y' AND A.MEMBER_ID = AA.MEMBER_ID)
+                     </isEqual>
+                     <isEqual property="CUSTOMER_TYPE" compareValue="5">
+                     AND	EXISTS (SELECT 1 FROM TBHPG_SMS_ALIMI AA WHERE ALIMI_RECV_YN5 = 'Y' AND A.MEMBER_ID = AA.MEMBER_ID)
+                     </isEqual>
+                     <isEqual property="CUSTOMER_TYPE" compareValue="6">
+                     AND	EXISTS (SELECT 1 FROM TBHPG_SMS_ALIMI AA WHERE ALIMI_RECV_YN6 = 'Y' AND A.MEMBER_ID = AA.MEMBER_ID)
+                     </isEqual>
+                     <isEqual property="CUSTOMER_TYPE" compareValue="7">
+                     AND	EXISTS (SELECT 1 FROM TBHPG_SMS_ALIMI AA WHERE ALIMI_RECV_YN7 = 'Y' AND A.MEMBER_ID = AA.MEMBER_ID)
+                     </isEqual>
+				 
+				 <![CDATA[
+				 UNION ALL
+				
+				/*영구임대 계약고객 정보*/
+				   SELECT '02' 				AS CSTMR_SE
+					     , CSTMR_NM     	AS NM
+					     , ADRES            AS ADRES
+					     , TELNO            AS TELNO
+					     , MBTLNO           AS MBTLNO
+					     , EMAIL            AS EMAIL
+					 FROM VICUS_CSTMR_INFO
+					WHERE 1=1
+					  AND VIEW_SE IN ('RN1-1', 'RN1-2')
+				 
+				 UNION ALL 
+				 
+				 /*매입임대고객정보*/
+				 	SELECT '04'             AS CSTMR_SE          /*고객구분*/
+					     , CSTMR_NM     	AS NM
+					     , ADRES            AS ADRES
+					     , TELNO            AS TELNO
+					     , MBTLNO           AS MBTLNO
+					     , EMAIL            AS EMAIL
+					 FROM VICUS_CSTMR_INFO
+					WHERE 1=1
+					  AND VIEW_SE IN ('RN2-1', 'RN2-2')
+
+				 UNION ALL 
+				 
+				 /*전세 고객정보*/
+				 SELECT '05'                                 AS CSTMR_SE          /*고객구분*/
+					  , CSTMR_NM     	AS NM
+				      , ADRES            AS ADRES
+					  , TELNO            AS TELNO
+					  , MBTLNO           AS MBTLNO
+					  , EMAIL            AS EMAIL
+				  FROM VICUS_CSTMR_INFO
+				 WHERE 1=1
+				   AND VIEW_SE IN ('RN3-1', 'RN3-2')
+				
+				 UNION ALL 
+				 
+				 /*보상고객정보만*/
+					SELECT '06'    		 AS CSTMR_SE
+						 , B.OWNER_NM 	 AS NM
+						 , B.TELNO_2  	 AS TELNO
+						 , B.TELNO_1  	 AS MBTLNO
+						 , B.ADRES       AS ADRES
+						 , ''       	 AS EMAIL
+                    FROM   TBCMP_THING_OWNER A
+                           INNER JOIN TBCMP_OWNER B
+                                   ON A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+                                  AND A.OWNER_NO = B.OWNER_NO
+                           INNER JOIN TBCMP_THING_WTNNC C
+                                   ON A.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                                  AND A.THING_SN = C.THING_SN
+                           INNER JOIN TBCMP_RWMNY_PYMNT D
+                                   ON B.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+                                  AND B.OWNER_NO = D.OWNER_NO
+                    WHERE 1=1
+                    
+				 UNION ALL 
+				 
+				 /*토지고객 정보만*/
+					SELECT '07' AS CSTMR_SE
+					      , CSTMR_NM     	AS NM
+					      , ADRES            AS ADRES
+						  , TELNO            AS TELNO
+						  , MBTLNO           AS MBTLNO
+						  , EMAIL            AS EMAIL
+					 FROM VICUS_CSTMR_INFO
+					WHERE 1=1
+					  AND VIEW_SE = 'LAD-1'
+					  
+				 UNION ALL 
+				 
+				 /*분양(주택)고객 정보만*/
+					SELECT '08'         AS CSTMR_SE
+					      , CSTMR_NM     	AS NM
+					      , ADRES            AS ADRES
+						  , TELNO            AS TELNO
+						  , MBTLNO           AS MBTLNO
+						  , EMAIL            AS EMAIL
+					FROM VICUS_CSTMR_INFO
+					WHERE 1=1
+					  AND VIEW_SE IN ('HOU-1', 'HOU-2', 'HOU-3')
+					 
+				UNION ALL
+                  
+                  /*홍보및마케팅고객*/
+		           SELECT '10'   AS CSTMR_SE
+		           		, A.MEMBER_NAME        AS NM
+		                , SFCOM_DEC_ALL(A.MEMBER_ADDR1)||SFCOM_DEC_ALL(A.MEMBER_ADDR2)			AS ADRES
+     					, SFCOM_DEC_ALL(A.MEMBER_TEL1)||SFCOM_DEC_ALL(A.MEMBER_TEL2)||SFCOM_DEC_ALL(A.MEMBER_TEL3) AS TELNO    
+     					, SFCOM_DEC_ALL(A.MEMBER_HP1)||SFCOM_DEC_ALL(A.MEMBER_HP2)||SFCOM_DEC_ALL(A.MEMBER_HP3) AS MBTLNO
+     					, SFCOM_DEC_ALL(A.MEMBER_EMAIL) AS EMAIL
+		              FROM TBHPM_MEMBER A, 
+		                   TBHPG_SMS_ALIMI B
+		             WHERE A.MEMBER_ID = B.MEMBER_ID(+)
+		               AND NVL(B.ALIMI_RECV_YN6, 'N') = 'Y' 
+		) A 
+		LEFT OUTER JOIN (
+			            SELECT  NM     AS NM
+				              , MBTLNO AS MBTLNO
+				              , NVL(MAX(CSTMR_GRAD), '02') AS CSTMR_GRAD
+				        FROM TBCUS_HMPG_CSTMR_CVPL
+				        GROUP BY NM, MBTLNO 
+					) B
+					 ON A.NM     = B.NM
+					AND (	TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890') = B.MBTLNO
+					     OR TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890') = B.MBTLNO
+					     )
+		WHERE 1=1
+		  AND CSTMR_SE = #CSTMR_SE#
+		]]>
+		<isNotEmpty property="CSTMR_GRAD">
+			AND B.CSTMR_GRAD = #CSTMR_GRAD#
+		</isNotEmpty>
+		<isNotEmpty property="CSTMR_NM">
+			AND A.NM LIKE '%' || #CSTMR_NM# || '%'
+		</isNotEmpty>
+	</select>
+	
+	<select id="CUS030104DAO.selectSmsSendList" resultClass="java.util.HashMap">
+		<![CDATA[
+		SELECT DEPT_CODE
+		     , (SELECT DEPT_NM
+		          FROM VWHRM_DEPT B
+		         WHERE A.DEPT_CODE = B.DEPT_CODE
+		       ) AS DEPT_NM
+		     , (SELECT USER_NM 
+                  FROM TBCOM_USER B
+                 WHERE B.USER_ID = A.REGISTER_ID
+               ) AS USER_NM
+             , RECPTN_TELNO
+             , TO_CHAR (SNDNG_RESVE_DT, 'YYYY-MM-DD HH24:MI:SS') AS  SNDNG_RESVE_DT
+             , SNDNG_CN
+             , RCVER_NM
+             , REGISTER_ID
+             , REGIST_DT
+		FROM TBCOM_UMS_SNDNG_DTLS A
+ 	   WHERE 1 = 1
+   		 AND REGISTER_ID IN ('20091003', '20109002', '20109004')	/* 콜센터 직원 고정 */
+         AND TO_CHAR (A.SNDNG_RESVE_DT, 'YYYYMMDD') >= #SDT_DE#
+         AND TO_CHAR (A.SNDNG_RESVE_DT, 'YYYYMMDD') <= #END_DE#
+ 	]]>
+ 	<isNotEmpty property="USER_ID" prepend="AND">
+		REGISTER_ID = #USER_ID#
+ 	</isNotEmpty>
+ 	<isNotEmpty property="RCVER_NM" prepend="AND">
+   		RCVER_NM LIKE '%' || #RCVER_NM# || '%'
+ 	</isNotEmpty>
+ 	<isNotEmpty property="RECPTN_TELNO" prepend="AND">
+		RECPTN_TELNO LIKE '%' || #RECPTN_TELNO# || '%'
+ 	</isNotEmpty>
+ 		ORDER BY A.SNDNG_RESVE_DT DESC, A.SNDNG_ID ASC
+	</select>
+</sqlMap>

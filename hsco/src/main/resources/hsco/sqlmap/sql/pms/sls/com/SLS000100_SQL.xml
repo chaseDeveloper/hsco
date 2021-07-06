@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS000100_SQL">
+
+	
+	<!-- 쿼리명 : 업무구분별 이율종류 조회
+	설명 : 업무구분별 이율종류 조회 조회
+	수정일  		수정자  	수정내용 
+	작성자 : 이광원
+	최초작성일 : 2016.07.05
+	-->
+	<select id="SLS000100DAO.selectIntrtGB" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+SELECT DISTINCT A.INTRT_KND AS CODE
+     , JOB_SE
+     , (CASE WHEN A.INTRT_KND = 'PMS' THEN '공통' ELSE B.INTRT_KND_NM END) AS CODE_NM
+     , (CASE WHEN A.INTRT_KND = 'PMS' THEN '[' || A.INTRT_KND || ']' || '공통' ELSE '[' || A.INTRT_KND || ']' ||B.INTRT_KND_NM END) AS ALL_CODE_NM
+  FROM TBPMS_INTRT_INFO A
+  <isEqual property="JOB_SE" compareValue="LAD">
+  LEFT JOIN (SELECT LAD_CODE 
+             , LAD_NM AS INTRT_KND_NM 
+          FROM TBSLS_LAD_INFO)  B ON A.INTRT_KND = B.LAD_CODE 
+  </isEqual>
+  <isEqual property="JOB_SE" compareValue="HOU">
+  LEFT JOIN (SELECT HOUSE_CODE 
+             , HOUSE_NM AS INTRT_KND_NM 
+         FROM TBSLS_HOUSE_INFO) B ON A.INTRT_KND = B.HOUSE_CODE
+  </isEqual>
+  <isEqual property="JOB_SE" compareValue="RN1">
+  LEFT JOIN (SELECT RENT_HOUSE_CODE 
+             , RENT_HOUSE_NM AS INTRT_KND_NM
+          FROM TBRNT_RENT_HOUSE) B ON A.INTRT_KND = B.RENT_HOUSE_CODE  
+  </isEqual>
+  <isEqual property="JOB_SE" compareValue="RN2">
+  LEFT JOIN (SELECT RENT_HOUSE_CODE 
+             , RENT_HOUSE_NM AS INTRT_KND_NM
+          FROM TBRNT_RENT_HOUSE) B ON A.INTRT_KND = B.RENT_HOUSE_CODE    
+  </isEqual>
+  <isEqual property="JOB_SE" compareValue="RN3">
+  LEFT JOIN (SELECT CHRCTR_PREPAR_VALUE_1 
+             , CODE_NM AS INTRT_KND_NM 
+          FROM TBCOM_CMMN_CODE ) B ON A.INTRT_KND = B.CHRCTR_PREPAR_VALUE_1   
+  </isEqual>
+  WHERE JOB_SE = #JOB_SE#
+  ORDER BY A.INTRT_KND
+	</select>	
+	
+	
+	<!-- 쿼리명 : 업무구분/이율종류별 적용일자 목록 조회
+	설명 : 업무구분/이율종류별 적용일자 목록 조회
+	수정일  		수정자  	수정내용
+	2016.01.13	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.01.13
+	-->
+	<select id="SLS000100DAO.selectApplcDeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT /* SLS000100DAO.selectApplcDeList 업무구분/이율종류별 적용일자 목록 조회 */
+               #JOB_SE# AS JOB_SE
+             , #INTRT_KND# AS INTRT_KND
+             , a.APPLC_DE
+          FROM TBPMS_INTRT_INFO a            /* 이율정보 */
+         WHERE a.JOB_SE = #JOB_SE#            /* 업무구분 */
+           AND a.INTRT_KND = #INTRT_KND#    /* 이율종류 */
+         GROUP BY a.APPLC_DE
+         ORDER BY a.APPLC_DE DESC   
+	</select>
+	
+	<!-- 쿼리명 : 이율정보 목록 조회
+	설명 : 등록 이율정보 목록 조회
+	수정일  		수정자  	수정내용
+	2015.08.13	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.08.07
+	-->
+	<select id="SLS000100DAO.selectIntrtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		SELECT /* SLS000100DAO.selectIntrtList 이율정보 목록 조회 */
+	           0 AS CHK
+	         , a.JOB_SE						/* 업무구분 */
+		     , (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE
+		          WHERE GRP_CODE = 'PCOM01'	/* PMS서식업무구분코드 */
+		            AND CODE = a.JOB_SE) AS JOB_SE_NM	/* 업무구분명 */
+		     , a.INTRT_KND					/* 이율종류 - 주택,토지코드  */
+		     , a.INTRT_SE					/* 이율구분 */
+		     , b.CODE_NM AS INTRT_SE_NM		/* 이율구분명 */
+		     , a.APPLC_DE					/* 적용일자 */
+		     , a.INTRT_SN					/* 이율일련번호 */
+		     , a.INTRT						/* 이율 */
+		     , a.ARRRG_DAYCNT_BEGIN			/* 연체일수시작 */
+		     , a.ARRRG_DAYCNT_END			/* 연체일수종료 */
+		     , NVL(a.USE_AT, 0) AS USE_AT	/* 사용여부 */
+		     , a.REGISTER_ID				/* 등록자ID */
+		     , a.REGIST_DT					/* 등록일시 */
+		     , a.UPDUSR_ID					/* 수정자ID */
+		     , a.UPDT_DT					/* 수정일시 */
+      	  FROM TBPMS_INTRT_INFO a			/* 이율정보 */
+	         , (SELECT CODE
+			         , CODE_NM
+			      FROM TBCOM_CMMN_CODE		/* 공통코드 */
+			     WHERE GRP_CODE = 'HOU0B6'	/* 주택요율구분 */
+			   ) b
+		 WHERE 1 = 1
+		   AND a.INTRT_SE = b.CODE(+)
+		   AND a.JOB_SE = #JOB_SE#			/* 업무구분 */
+		   AND a.INTRT_KND = #INTRT_KND#	/* 이율종류 - 주택코드/토지코드 */
+		   AND a.APPLC_DE = #APPLC_DE#
+		 ORDER BY a.APPLC_DE
+		        , a.INTRT_SE
+		        , a.INTRT_SN
+	</select>
+		
+	<!-- 쿼리명 : 이율정보 등록
+	설명 : 이율정보 신규 등록
+	수정일  		수정자  	수정내용
+	2015.08.13	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.08.07
+	-->
+	<insert id="SLS000100DAO.insertIntrtInfo" parameterClass="java.util.HashMap">
+	
+	
+	MERGE INTO TBPMS_INTRT_INFO 
+        USING DUAL
+	     ON(
+	                 JOB_SE = #JOB_SE#
+	             AND INTRT_KND = #INTRT_KND#
+	    	  AND INTRT_SE = #INTRT_SE#
+	             AND APPLC_DE = #APPLC_DE# 
+	             AND INTRT_SN = #INTRT_SN#
+		   )
+		WHEN MATCHED THEN
+		 UPDATE SET
+		    INTRT = #INTRT#
+		  , ARRRG_DAYCNT_BEGIN = #ARRRG_DAYCNT_BEGIN#
+		  , ARRRG_DAYCNT_END = #ARRRG_DAYCNT_END#
+		  , UPDUSR_ID = #S_USER_ID#
+		  , UPDT_DT = SYSDATE    
+		WHEN NOT MATCHED THEN	   
+		  INSERT 
+		  ( 
+		       JOB_SE
+			 , INTRT_KND 
+			 , INTRT_SE
+			 , APPLC_DE
+			 , INTRT_SN
+			 , INTRT
+			 , ARRRG_DAYCNT_BEGIN
+			 , ARRRG_DAYCNT_END
+			 , USE_AT
+			 , REGISTER_ID
+			 , REGIST_DT
+			 , UPDUSR_ID
+			 , UPDT_DT
+		  )
+		VALUES 
+		     ( #JOB_SE#
+			 , #INTRT_KND#
+			 , #INTRT_SE#
+			 , #APPLC_DE#
+			 , (SELECT NVL(MAX(INTRT_SN), 0) + 1
+			      FROM TBPMS_INTRT_INFO
+			     WHERE 1 = 1
+			       AND JOB_SE = #JOB_SE#
+			       AND INTRT_KND = #INTRT_KND#
+			       AND INTRT_SE = #INTRT_SE#
+			       AND APPLC_DE = #APPLC_DE#)
+			 , #INTRT#
+			 , #ARRRG_DAYCNT_BEGIN#
+			 , #ARRRG_DAYCNT_END#
+			 , '1'
+			 , #S_USER_ID#
+			 , SYSDATE
+			 , #S_USER_ID#
+			 , SYSDATE)
+			 
+			  
+	</insert>
+	
+	<!-- 쿼리명 : 이율정보 수정
+	설명 : 등록 이율정보 수정
+	수정일  		수정자  	수정내용
+	2015.08.13	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.08.07
+	-->
+	<update id="SLS0000100DAO.updateIntrtInfo" parameterClass="java.util.HashMap">
+		UPDATE /* SLS0000100DAO.updateIntrtInfo 이율정보 수정 */
+			   TBPMS_INTRT_INFO									/* 이율정보 */
+		   SET INTRT = #INTRT#									/* 이율 */
+			 , ARRRG_DAYCNT_BEGIN = #ARRRG_DAYCNT_BEGIN#		/* 연체이율 시작일 */
+			 , ARRRG_DAYCNT_END = #ARRRG_DAYCNT_END#			/* 연체이율 종료일 */
+			 , USE_AT = #USE_AT#								/* 사용여부 */
+			 , UPDUSR_ID = #S_USER_ID#							/* 수정자ID */
+			 , UPDT_DT = SYSDATE								/* 수정일시 */
+		 WHERE JOB_SE = #JOB_SE#								/* 업무구분 */
+		   AND INTRT_KND = #INTRT_KND#							/* 이율종류 */
+		   AND INTRT_SE = #INTRT_SE#							/* 이율구분 */
+		   AND APPLC_DE = #APPLC_DE#							/* 적용일자 */
+		   AND INTRT_SN = #INTRT_SN#							/* 이율일련번호 */
+	</update>
+	
+	<!-- 쿼리명 : 이율정보 삭제
+	설명 : 등록 이율정보 삭제
+	수정일  		수정자  	수정내용
+	2015.08.13	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.08.07
+	-->
+	<delete id="SLS0000100DAO.deleteIntrtInfo" parameterClass="java.util.HashMap">
+		DELETE /* SLS0000100DAO.deleteIntrtInfo 이율정보 삭제 */
+		  FROM TBPMS_INTRT_INFO			/* 이율정보 */
+		 WHERE JOB_SE = #JOB_SE#		/* 업무구분 */
+		   AND INTRT_KND = #INTRT_KND#	/* 이율종류 */
+		   AND INTRT_SE = #INTRT_SE#	/* 이율구분 */
+		   AND APPLC_DE = #APPLC_DE#	/* 적용일자 */
+		   AND INTRT_SN = #INTRT_SN#	/* 이율일련번호 */
+	</delete>
+	
+	<!-- 쿼리명 : 적용일자 별 이율정보 삭제
+	설명 : 등록 이율정보 삭제
+	수정일  		수정자  	수정내용
+	2015.08.13	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.08.07
+	-->
+	<delete id="SLS0000100DAO.deleteIntrt" parameterClass="java.util.HashMap">
+		DELETE /* SLS0000100DAO.deleteIntrtInfo 이율정보 삭제 */
+		  FROM TBPMS_INTRT_INFO			/* 이율정보 */
+		 WHERE JOB_SE = #JOB_SE#		/* 업무구분 */
+		   AND APPLC_DE = #APPLC_DE#	/* 적용일자 */
+	</delete>	
+
+</sqlMap>

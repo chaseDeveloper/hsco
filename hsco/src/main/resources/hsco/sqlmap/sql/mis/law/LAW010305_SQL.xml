@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="LAW010305_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 년도별 소송현황 목록 조회 -->
+	<select id="LAW010305DAO.selectYearLwstSttuList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ 
+		SELECT
+		     t1.YEAR
+		    ,NVL(YEAR_ING_1,0) AS YEAR_ING_1
+		    ,NVL(YEAR_ING_2,0) AS YEAR_ING_2
+		    ,NVL(YEAR_ING_3,0) AS YEAR_ING_3
+		    ,NVL(YEAR_ING_4,0) AS YEAR_ING_4
+		    ,NVL(YEAR_ING_5,0) AS YEAR_ING_5
+		    ,NVL(SUB_SUM_1,0)  AS SUB_SUM_1
+		    ,NVL(YEAR_END_1,0) AS YEAR_END_1
+		    ,NVL(YEAR_END_2,0) AS YEAR_END_2
+		    ,NVL(YEAR_END_3,0) AS YEAR_END_3
+		    ,NVL(YEAR_END_4,0) AS YEAR_END_4
+		    ,NVL(YEAR_END_5,0) AS YEAR_END_5
+		    ,NVL(SUB_SUM_2,0)  AS SUB_SUM_2
+		    ,NVL(SUM,0)        AS SUM
+		FROM (SELECT TO_CHAR(SYSDATE,'YYYY') - LEVEL + 1 AS YEAR
+		      FROM DUAL
+		      CONNECT BY LEVEL <= 5
+		     ) t1
+		     LEFT OUTER JOIN
+		     (SELECT 
+		           SUBSTR(t2.DELVY_DE,1,4) AS YEAR
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,DECODE(INCDNT_SE,'01',1,0),0)) AS YEAR_ING_1
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,DECODE(INCDNT_SE,'02',1,0),0)) AS YEAR_ING_2
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,DECODE(INCDNT_SE,'03',1,0),0)) AS YEAR_ING_3
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,DECODE(INCDNT_SE,'04',1,0),0)) AS YEAR_ING_4
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,DECODE(INCDNT_SE,'05',1,0),0)) AS YEAR_ING_5
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,1,0)) AS SUB_SUM_1
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,0,DECODE(INCDNT_SE,'01',1,0))) AS YEAR_END_1
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,0,DECODE(INCDNT_SE,'02',1,0))) AS YEAR_END_2
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,0,DECODE(INCDNT_SE,'03',1,0))) AS YEAR_END_3
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,0,DECODE(INCDNT_SE,'04',1,0))) AS YEAR_END_4
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,0,DECODE(INCDNT_SE,'05',1,0))) AS YEAR_END_5
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,0,1)) AS SUB_SUM_2
+		          ,COUNT(1) AS SUM
+		      FROM TBLAW_LWST t1
+		           INNER JOIN TBLAW_HDCH_REGIST t2
+		           ON  t1.LWST_MANAGE_NO = t2.LWST_MANAGE_NO
+		           AND t1.INCDNT_NO      = t2.INCDNT_NO
+		           INNER JOIN TBLAW_INCDNT t3
+		           ON  t1.LWST_MANAGE_NO = t3.LWST_MANAGE_NO
+		      WHERE SUBSTR(t2.DELVY_DE,1,4) BETWEEN TO_CHAR(SYSDATE,'YYYY')-4 AND TO_CHAR(SYSDATE,'YYYY')
+		      GROUP BY SUBSTR(t2.DELVY_DE,1,4)
+		     ) t2
+		     ON t1.YEAR = t2.YEAR
+		ORDER BY t1.YEAR DESC
+	]]>
+	</select>
+
+	<!--주제별 소송현황 목록 조회 -->
+	<select id="LAW010305DAO.selectLwstTySttList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+		     t1.CODE            AS LWST_TY
+		    ,NVL(LWST_TY_ING,0) AS LWST_TY_ING
+		    ,NVL(LWST_TY_END,0) AS LWST_TY_END
+		    ,NVL(LWST_TY_ING,0) + NVL(LWST_TY_END,0) AS SUM
+		FROM TBCOM_CMMN_CODE t1
+		     LEFT OUTER JOIN
+		     (SELECT 
+		           LWST_TY
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,1,0)) AS LWST_TY_ING /* 진행중 */
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,0,1)) AS LWST_TY_END /* 종결 */
+		      FROM TBLAW_LWST t1
+		           INNER JOIN TBLAW_HDCH_REGIST t2
+		           ON  t1.LWST_MANAGE_NO = t2.LWST_MANAGE_NO
+		           AND t1.INCDNT_NO      = t2.INCDNT_NO
+		      WHERE SUBSTR(t2.DELVY_DE,1,4) BETWEEN #BGN_YEAR# AND #END_YEAR#
+		      GROUP BY LWST_TY
+		     ) t2
+		     ON  t1.CODE = t2.LWST_TY
+		     AND t1.GRP_CODE = 'LAW003'
+		WHERE t1.GRP_CODE = 'LAW003'
+		ORDER BY t1.CODE_ORDR
+	]]>
+	</select>
+
+	<!--사업지구별 소송현황 목록 조회-->
+	<select id="LAW010305DAO.selectBsnsCodeSttList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT 
+		     A.BSNS_CODE                    AS BSNS_CODE
+		    ,A.BSNS_NM                      AS BSNS_NM
+		    ,'[' || A.BSNS_CODE || ']' || A.BSNS_NM
+		                    AS ALL_NM
+		    ,NVL(B.BSNS_ING,0)              AS BSNS_ING
+		    ,NVL(B.BSNS_END,0)              AS BSNS_END
+		    ,NVL(B.BSNS_ING + B.BSNS_END,0) AS SUM
+		FROM TBPRJ_BSNS_CODE A
+		     LEFT OUTER JOIN 
+		     (SELECT 
+		           BSNS_CODE
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,1,0)) AS BSNS_ING /* 진행중 */
+		          ,SUM(DECODE(LWST_RESULT_SE,NULL,0,1)) AS BSNS_END /* 종결 */
+		      FROM TBLAW_LWST t1
+		           INNER JOIN TBLAW_HDCH_REGIST t2
+		           ON  t1.LWST_MANAGE_NO = t2.LWST_MANAGE_NO
+		           AND t1.INCDNT_NO      = t2.INCDNT_NO
+               INNER JOIN TBLAW_INCDNT t3
+               ON  t1.LWST_MANAGE_NO = t3.LWST_MANAGE_NO
+              WHERE SUBSTR(t2.DELVY_DE,1,4) BETWEEN #BGN_YEAR# AND #END_YEAR#
+		      GROUP BY BSNS_CODE 
+		     ) B
+		     ON A.BSNS_CODE = B.BSNS_CODE
+		ORDER BY A.BSNS_CODE
+	]]>
+	</select>
+
+	<!-- 최근5개년 수임현황 목록 조회-->
+	<select id="LAW010305DAO.selectAcceptanceSttList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT 
+		     MAX(t3.OFFM_NM) AS OFFM_NM
+		    ,SUM(DECODE(SUBSTR(t2.DELVY_DE,1,4),TO_CHAR(SYSDATE,'YYYY')-4,1,0)) AS END_DE_YEAR0
+		    ,SUM(DECODE(SUBSTR(t2.DELVY_DE,1,4),TO_CHAR(SYSDATE,'YYYY')-3,1,0)) AS END_DE_YEAR1
+		    ,SUM(DECODE(SUBSTR(t2.DELVY_DE,1,4),TO_CHAR(SYSDATE,'YYYY')-2,1,0)) AS END_DE_YEAR2
+		    ,SUM(DECODE(SUBSTR(t2.DELVY_DE,1,4),TO_CHAR(SYSDATE,'YYYY')-1,1,0)) AS END_DE_YEAR3
+		    ,SUM(DECODE(SUBSTR(t2.DELVY_DE,1,4),TO_CHAR(SYSDATE,'YYYY'),1,0))   AS END_DE_YEAR4
+		FROM (SELECT LWST_MANAGE_NO, INCDNT_NO, LWST_AGENT
+	          FROM TBLAW_LWST_AGENT
+	          GROUP BY LWST_MANAGE_NO, INCDNT_NO, LWST_AGENT) t1
+		     INNER JOIN TBLAW_HDCH_REGIST t2
+		     ON  t1.LWST_MANAGE_NO = t2.LWST_MANAGE_NO
+		     AND t1.INCDNT_NO      = t2.INCDNT_NO
+		     LEFT OUTER JOIN TBLAW_JCFFR_OFFM t3
+		     ON  t1.LWST_AGENT     = t3.OFFM_SN
+		WHERE t2.DELVY_DE IS NOT NULL
+		  AND SUBSTR(t2.DELVY_DE,1,4) BETWEEN TO_CHAR(SYSDATE,'YYYY')-4 AND TO_CHAR(SYSDATE,'YYYY')
+		GROUP BY LWST_AGENT
+	]]>
+	</select>
+</sqlMap>

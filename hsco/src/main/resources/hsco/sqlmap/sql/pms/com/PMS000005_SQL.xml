@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PMS000005">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	 <!-- SMS 메시지 상세 목록조회 -->
+    <select id="PMS000005DAO.selectSmstranList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT SNDNG_SVC_TY, 
+			       DEPT_CODE,
+			       RECPTN_TELNO,
+			       TO_CHAR(SNDNG_RESVE_DT,'YYYY-MM-DD HH24:MI:SS') SNDNG_RESVE_DT,
+			       MSSAGE_TY, 
+			       SNDNG_CN, 
+			       RCVER_NM, 
+			       TO_CHAR(REGIST_DT,'YYYY-MM-DD HH24:MI:SS') REGIST_DT,
+			       CHRCTR_PREPAR_VALUE_0,
+			       CHRCTR_PREPAR_VALUE_1, 
+			       CHRCTR_PREPAR_VALUE_2, 
+			       CHRCTR_PREPAR_VALUE_3, 
+			       CHRCTR_PREPAR_VALUE_4, 
+			       (SELECT TO_CHAR(TR_REALSENDDATE,'YYYY-MM-DD HH24:MI:SS') 
+			         FROM LGSMS.TBCOM_SMS_LOG B 
+			        WHERE B.TR_NUM = A.SNDNG_ID 
+			       )||
+			       (SELECT TO_CHAR(RSLTDATE,'YYYY-MM-DD HH24:MI:SS') 
+			         FROM LGSMS.TBCOM_MMS_LOG B 
+			        WHERE B.MSGKEY = A.SNDNG_ID 
+			       )SEND_DATE,       
+			       NVL((SELECT TR_RSLTSTAT  
+			         FROM LGSMS.TBCOM_SMS_LOG B 
+			        WHERE B.TR_NUM = A.SNDNG_ID 
+			       )||  
+			       (SELECT RSLT 
+			         FROM LGSMS.TBCOM_MMS_LOG B 
+			        WHERE B.MSGKEY = A.SNDNG_ID 
+			       ),'대기') RLST_CD,
+			      NVL((SELECT TR_SENDSTAT 
+			         FROM LGSMS.TBCOM_SMS_LOG B 
+			        WHERE B.TR_NUM = A.SNDNG_ID 
+			       )|| 
+			       (SELECT STATUS 
+			         FROM LGSMS.TBCOM_MMS_LOG B 
+			        WHERE B.MSGKEY = A.SNDNG_ID 
+			       ),'대기') STS               
+			  FROM TBCOM_UMS_SNDNG_DTLS A
+			  WHERE 1=1 
+<isNotEmpty property="RCEPTER_SE"> /* 대기자 , 계약자 구분  */
+			    AND  CHRCTR_PREPAR_VALUE_0 = #RCEPTER_SE#
+</isNotEmpty>			  
+<isNotEmpty property="CNTRCTR_NO"> /* 계약자 , 대기자 번호 */
+			    AND  CHRCTR_PREPAR_VALUE_1 = #CNTRCTR_NO#
+</isNotEmpty>
+<isNotEmpty property="WAITR_HOUSE_CODE"> /* 대기자주택코드  */
+			    AND  CHRCTR_PREPAR_VALUE_2 = #WAITR_HOUSE_CODE#
+</isNotEmpty>
+<isNotEmpty property="WAITR_RECEP_DE"> /* 대기자접수일자 */
+			    AND  CHRCTR_PREPAR_VALUE_3 = #WAITR_RECEP_DE#
+</isNotEmpty>
+<isNotEmpty property="WAITR_SN"> /* 대기자일련번호 */
+			    AND  CHRCTR_PREPAR_VALUE_4 = #WAITR_SN#
+</isNotEmpty> 
+			  ORDER BY SNDNG_RESVE_DT DESC, SNDNG_ID ASC	 		        	    
+</select>
+    
+    
+ <!-- 고객 목록조회 -->
+<select id="PMS000005DAO.selectCstmrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">    
+            SELECT 
+                 CSTMR_SE               AS CSTMR_SE                /* 고객구분 */
+                ,JOB_SE 
+                ,RCEPTER_SE             AS RCEPTER_SE              /* 접수자구분 1: 대기자 2:계약자*/
+                ,PRMANENT_CSTMR_NO      AS PRMANENT_CSTMR_NO       /* 고객번호 */
+                ,CNTRCTR_NO AS CNTRCTR_NO /* 계약자번호 */
+                ,HOUSE_NM 
+                ,HOUSE_CODE AS HOUSE_CODE /* 주택코드 */
+                ,DONG       AS DONG /* 동  */
+                ,HO         AS HO /* 호  */ 
+                ,RCEPT_DE AS RCEPT_DE /* 접수일자 */ 
+                ,RCEPT_SN AS RCEPT_SN /* 접수일련번호 */
+                ,WAIT_AT                AS WAIT_AT              /* 대기자여부 */
+                ,CNTRCT_AT              AS CNTRCT_AT            /* 계약자여부 */
+                ,CASE
+                     WHEN WAIT_AT = 1 AND CNTRCT_AT = 1 THEN
+                      'WC'
+                     WHEN WAIT_AT = 1 AND CNTRCT_AT = 0 THEN
+                      'W'
+                     WHEN WAIT_AT = 0 AND CNTRCT_AT = 1 THEN
+                      'C'
+                     ELSE
+                      ''
+                 END AS RCEPTER_SE /* 접수자구분 */
+                ,NM                     AS NM                   /* 성명 */
+                , SFCOM_DEC_ALL(IHIDNUM)                AS IHIDNUM              /* 주민번호 */
+                ,CASE
+                     WHEN SUBSTR(SFCOM_DEC_ALL(IHIDNUM), 7, 1) = '1' OR SUBSTR(SFCOM_DEC_ALL(IHIDNUM), 7, 1) = '2' THEN
+                      '19' || SUBSTR(SFCOM_DEC_ALL(IHIDNUM), 1, 6)
+                     WHEN SUBSTR(SFCOM_DEC_ALL(IHIDNUM), 7, 1) = '3' OR SUBSTR(SFCOM_DEC_ALL(IHIDNUM), 7, 1) = '4' THEN
+                      '20' || SUBSTR(SFCOM_DEC_ALL(IHIDNUM), 1, 6)                   
+                     ELSE
+                      NULL
+                   END AS CSTMR_BRTHDY
+                ,EMAIL                  AS EMAIL                /* 이메일 */
+                ,REPLACE(TELNO,'-','')  AS TELNO                /* 전화번호 원본 값 */
+                ,REPLACE(MBTLNO,'-','') AS MBTLNO               /* 핸드폰번호 원본 값 */
+                ,ZIP                    AS ZIP                  /* 고객기본 우편번호 */
+                ,ADRES                  AS ADRES                /* 고객기본 주소 */
+              FROM (
+                    SELECT 
+                           '02'                                         AS CSTMR_SE          /* 고객구분 */
+                          ,'RN1' AS JOB_SE
+                          ,(CASE WHEN B.CNTRCTR_NO IS NULL THEN '1' ELSE '2' END) AS RCEPTER_SE
+                          , A.PRMANENT_CSTMR_NO                         AS PRMANENT_CSTMR_NO /* 고객번호 */
+                          ,B.CNTRCTR_NO AS CNTRCTR_NO /* 계약자번호 */ 
+                          ,(SELECT RENT_HOUSE_NM 
+                                  FROM TBRNT_RENT_HOUSE 
+                                 WHERE RENT_HOUSE_CODE = (CASE WHEN #RCEPTER_SE# = '1' THEN  C.RENT_HOUSE_CODE ELSE B.RENT_HOUSE_CODE END)) AS HOUSE_NM                          
+                          ,C.RENT_HOUSE_CODE AS HOUSE_CODE /* 임대주택코드 */
+                          ,B.DONG AS DONG /* 동  */
+                          ,B.HO AS HO /* 호  */ 
+                          ,C.RCEPT_DE AS RCEPT_DE /* 접수일자 */ 
+                          ,C.RCEPT_SN AS RCEPT_SN /* 접수일련번호 */ 
+                          , DECODE(C.RENT_HOUSE_CODE,NULL,'0','1') AS WAIT_AT           /* 대기자여부 */
+                          , DECODE(B.CNTRCTR_NO,NULL,'0','1')      AS CNTRCT_AT         /* 계약자여부 */
+                          , REPLACE(A.NM,'　','')                  AS NM
+                          , A.IHIDNUM                              AS IHIDNUM
+                          , A.TELNO                                AS TELNO             /* 전화번호 */
+                          , A.MBTLNO                               AS MBTLNO            /* 휴대폰번호 */
+                          , A.EMAIL                                AS EMAIL
+                          , A.ZIP                                  AS ZIP               /* 우편번호 */
+                          , A.ADRES || ' ' || A.ADRES_DETAIL  AS ADRES             /* 주소 */
+                    FROM TBRNT_PRMANENT_RENT_CSTMR A
+                         LEFT OUTER JOIN TBRNT_RENT_CNTRCT B
+                                      ON A.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO
+                         LEFT OUTER JOIN TBRNT_MVN_WAITR C
+                                       ON A.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO
+                    WHERE 1=1
+                    UNION ALL
+                    /* 매입임대 고객 정보 */
+                    SELECT 
+                           '04'                                         AS CSTMR_SE          /* 고객구분 */
+						  ,'RN2' AS JOB_SE                           
+                          ,(CASE WHEN B.CNTRCTR_NO IS NULL THEN '1' ELSE '2' END) AS RCEPTER_SE
+                          , A.PUCHAS_CSTMR_NO                           AS PRMANENT_CSTMR_NO /* 고객번호 */
+                          ,B.CNTRCTR_NO AS CNTRCTR_NO /* 계약자번호 */ 
+                          ,(SELECT RENT_HOUSE_NM 
+                                  FROM TBRNT_PUCHAS_HOUSE 
+                                 WHERE RENT_HOUSE_CODE = B.RENT_HOUSE_CODE) AS HOUSE_NM                          
+                          ,B.RENT_HOUSE_CODE AS HOUSE_CODE /* 임대주택코드 */
+                          ,B.DONG AS DONG /* 동  */
+                          ,B.HO AS HO /* 호  */ 
+                          ,D.RCEPT_DE AS RCEPT_DE /* 접수일자 */ 
+                          ,D.WAIT_RCEPT_SN  AS RCEPT_SN /* 대기접수일련번호  */ 
+                          , DECODE(B.CNTRCTR_NO,NULL,'0','1') AS WAIT_AT           /* 대기자여부 */
+                          , DECODE(B.CNTRCTR_NO,NULL,'0','1')      AS CNTRCT_AT         /* 계약자여부 */
+                          , REPLACE(A.NM,'　','')                  AS NM
+                          , A.IHIDNUM                              AS IHIDNUM
+                          , A.TELNO                                AS TELNO             /* 전화번호 */
+                          , A.MBTLNO                               AS MBTLNO            /* 휴대폰번호 */
+                          , A.EMAIL                                AS EMAIL
+                          , A.ZIP                                  AS ZIP               /* 우편번호 */
+                          , A.ADRES || ' ' || A.ADRES_DETAIL  AS ADRES             /* 주소 */
+                    FROM  TBRNT_PUCHAS_RENT_CSTMR A                                /* 매입임대고객 */
+                          LEFT OUTER JOIN TBRNT_PUCHAS_CNTRCT B                    /* 매입계약 */
+                                       ON A.PUCHAS_CSTMR_NO = B.PUCHAS_CSTMR_NO
+                          LEFT OUTER JOIN TBRNT_PUCHAS_WAITR D                     /* 매입대기자 */
+                                       ON A.PUCHAS_CSTMR_NO = D.PUCHAS_CSTMR_NO
+                    WHERE 1=1
+                    UNION ALL
+                    /* 주택(분양) 고객 정보 */
+                    SELECT 
+                           '08'                                         AS CSTMR_SE          /* 고객구분 */
+                          ,'HOU' AS JOB_SE 
+                          ,(CASE WHEN MAX(B.CNTRCTR_NO) IS NULL THEN '1' ELSE '2' END) AS RCEPTER_SE 
+                          , A.HOUSE_CSTMR_NO                            AS PRMANENT_CSTMR_NO /* 고객번호 */
+                          ,MAX(B.CNTRCTR_NO) AS CNTRCTR_NO /* 계약자번호 */
+                          ,MAX((SELECT HOUSE_NM FROM TBSLS_HOUSE_INFO WHERE HOUSE_CODE = C.HOUSE_CODE)) AS HOUSE_NM                           
+                          ,MAX(C.HOUSE_CODE) AS HOUSE_CODE /* 주택코드 */
+                          ,MAX(C.DONG) AS DONG /* 동  */
+                            ,MAX(C.HO) AS HO /* 호  */ 
+                          ,MAX(E.WAIT_RCEPT_DE ) AS RCEPT_DE /* 접수일자 */ 
+                          ,MAX(E.WAIT_RCEPT_SN  ) AS RCEPT_SN /* 대기접수일련번호  */
+                          , DECODE(MAX(E.HOUSE_CODE),NULL,'0','1')      AS WAIT_AT           /* 대기자여부 */
+                          , DECODE(MAX(B.CNTRCTR_NO),NULL,'0','1')      AS CNTRCT_AT         /* 계약자여부 */
+                          , REPLACE(MAX(A.CSTMR_NM),'　','')            AS NM
+                          , MAX(A.IHIDNUM)                              AS IHIDNUM
+                          , MAX(A.TELNO)                                AS TELNO             /* 전화번호 */
+                          , MAX(A.MBTLNO)                               AS MBTLNO            /* 휴대폰번호 */
+                          , MAX(A.EMAIL)                                AS EMAIL
+                          , MAX(A.ZIP)                                  AS ZIP               /* 우편번호 */
+                          , MAX(A.ADRES) || ' ' || MAX(A.ADRES_DETAIL)  AS ADRES             /* 주소 */
+                    FROM  TBSLS_HOUSE_CSTMR  A                                /*  주택고객  */
+                          LEFT OUTER JOIN TBSLS_HCNTRCTR B                    /*  주택계약자  */
+                                       ON A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+                          INNER JOIN TBSLS_HOUSE_DONG_HO C
+                                  ON B.HOUSE_CODE = C.HOUSE_CODE
+                                 AND B.DONG = C.DONG
+                                  AND B.HO   = C.HO
+                          INNER JOIN TBSLS_HOUSE_INFO D
+                                  ON C.HOUSE_CODE = D.HOUSE_CODE
+                                 AND D.USE_AT = '1'
+                          LEFT OUTER JOIN TBSLS_HOUSE_MVN_WAITR E
+                                       ON A.HOUSE_CSTMR_NO = E.HOUSE_CSTMR_NO
+                    WHERE 1=1
+                    GROUP BY A.HOUSE_CSTMR_NO
+                    UNION ALL
+                    /* 전세임대 고객 정보 */                    
+                    SELECT 
+                           '05'                                         AS CSTMR_SE          /* 고객구분 */ 
+                          ,'RN3' AS JOB_SE 
+                          ,(CASE WHEN MAX(B.CNTRCTR_NO) IS NULL THEN '1' ELSE '2' END) AS RCEPTER_SE
+                          , A.LFSTS_CSTMR_NO                            AS PRMANENT_CSTMR_NO /* 고객번호 */
+                          ,(CASE WHEN MAX(B.CNTRCTR_NO) IS NULL THEN MAX(C.APPLCNT_NO) ELSE MAX(B.CNTRCTR_NO) END) AS CNTRCTR_NO /* 계약자번호 */
+                          ,MAX((SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'RNT004' AND CHRCTR_PREPAR_VALUE_1 = C.AREA_SE)) AS HOUSE_NM                             
+                          ,MAX (NVL(B.AREA_SE,C.AREA_SE)) AS HOUSE_CODE /*  주택코드 = 지역구분  */
+                          ,MAX(B.DONG) AS DONG /* 동  */
+                            ,MAX(B.HO) AS HO /* 호  */ 
+                          ,MAX(C.RCEPT_DE) AS RCEPT_DE /* 접수일자 */ 
+                          ,MAX(C.WAIT_RCEPT_SN ) AS RCEPT_SN /* 대기접수일련번호  */ 
+                          , DECODE(MAX(C.APPLCNT_NO),NULL,'0','1')      AS WAIT_AT           /* 대기자여부 */
+                          , DECODE(MAX(B.CNTRCTR_NO),NULL,'0','1')      AS CNTRCT_AT         /* 계약자여부 */
+                          , REPLACE(MAX(A.NM),'　','')                  AS NM
+                          , MAX(A.IHIDNUM)                              AS IHIDNUM
+                          , MAX(A.TELNO)                                AS TELNO             /* 전화번호 */
+                          , MAX(A.MBTLNO)                               AS MBTLNO            /* 휴대폰번호 */
+                          , ''                                          AS EMAIL
+                          , MAX(A.ZIP)                                  AS ZIP               /* 우편번호 */
+                          , MAX(A.ADRES) || ' ' || MAX(A.ADRES_DETAIL)  AS ADRES             /* 주소 */
+                    FROM TBRNT_LFSTS_CSTMR  A                                /*  전세고객  */
+                         LEFT OUTER JOIN TBRNT_LFSTS_CNTRCT B               /*  전세계약자  */
+                                      ON A.LFSTS_CSTMR_NO = B.LFSTS_CSTMR_NO
+                         LEFT OUTER JOIN TBRNT_LFSTS_APPLCNT C
+                                      ON A.LFSTS_CSTMR_NO = C.LFSTS_CSTMR_NO
+                    WHERE 1=1
+                    GROUP BY A.LFSTS_CSTMR_NO
+                    UNION ALL
+                    /* 토지 고객 정보 */
+                    SELECT 
+                           '07'                                         AS CSTMR_SE          /* 고객구분 */
+                          ,'LAD' AS JOB_SE 
+                          ,(CASE WHEN MAX(B.CNTRCTR_NO) IS NULL THEN '1' ELSE '2' END) AS RCEPTER_SE 
+                          , A.LAD_CSTMR_NO                              AS PRMANENT_CSTMR_NO /* 고객번호 */
+                          ,MAX(B.CNTRCTR_NO) AS CNTRCTR_NO /* 계약자번호 */
+                          ,MAX((SELECT LAD_NM FROM TBSLS_LAD_INFO WHERE LAD_CODE = B.LAD_CODE)) AS HOUSE_NM                                   
+                          ,MAX(B.LAD_CODE ) AS HOUSE_CODE /* 토지코드  */                     
+                          ,MAX(B.BLCK) AS DONG /* 동 = 블록  */
+                          ,MAX(B.LOT) AS HO /* 호 = 롯트  */
+                          ,MAX(B.CNTRCT_DE) AS RCEPT_DE /*  접수일자 = 계약일자 */
+                          ,MAX(TO_NUMBER(B.LOT_TY)) AS RCEPT_SN /* 대기접수일련번호 = 롯트타입   */
+                          , '0'                                         AS WAIT_AT           /* 대기자여부 */
+                          , DECODE(MAX(B.CNTRCTR_NO),NULL,'0','1')       AS CNTRCT_AT         /* 계약자여부 */
+                          , REPLACE(MAX(A.CSTMR_NM),'　','')            AS NM
+                          , MAX(A.IHIDNUM)                              AS IHIDNUM
+                          , MAX(A.TELNO)                                AS TELNO             /* 전화번호 */
+                          , MAX(A.MBTLNO)                               AS MBTLNO            /* 휴대폰번호 */
+                          , MAX(A.EMAIL)                                AS EMAIL
+                          , MAX(A.ZIP)                                  AS ZIP               /* 우편번호 */
+                          , MAX(A.ADRES) || ' ' || MAX(A.ADRES_DETAIL)  AS ADRES             /* 주소 */
+                    FROM TBSLS_LAD_CSTMR A                                    /*  토지고객  */
+                         LEFT OUTER JOIN TBSLS_LCNTRCTR B                   /*  토지계약자  */
+                                      ON A.LAD_CSTMR_NO = B.LAD_CSTMR_NO
+                    WHERE 1=1
+                    GROUP BY A.LAD_CSTMR_NO
+                    UNION ALL
+                    /* 보상 고객 정보 */                      
+                    SELECT  '06'                                          AS CSTMR_SE
+                           ,'CMP' AS JOB_SE
+                           ,'2' AS RCEPTER_SE
+                           , MAX(B.OWNER_NO)                               AS PRMANENT_CSTMR_NO
+                           ,MAX(TO_CHAR(B.OWNER_NO)) AS CNTRCTR_NO /* 계약자번호 */ 
+                           ,MAX((SELECT BSNS_AREA_NM FROM TBCMP_REWARD_BSNS_DSTRC WHERE BSNS_AREA_CODE = B.BSNS_AREA_CODE)) AS HOUSE_NM
+                           ,MAX(B.BSNS_AREA_CODE) AS HOUSE_CODE /*  주택코드 = 지역구분 */
+                           ,'' AS DONG /* 동  */
+                           ,'' AS HO /* 호  */
+                           ,MAX(D.RQEST_DE) AS RCEPT_DE /* 접수일자 = 청구일자 */
+                           ,MAX(D.RQEST_SN) AS RCEPT_SN /* 대기접수일련번호 = 청구일련번호  */
+                           , '0'                                           AS WAIT_AT           /* 대기자여부 */
+                           , DECODE(MAX(D.RQEST_SN),NULL,'0','1')          AS CNTRCT_AT         /* 계약자여부 */       
+                           , B.OWNER_NM                                    AS NM
+                           , B.IHIDNUM                                     AS IHIDNUM
+                           , MAX(B.TELNO_1)                                AS TELNO             /* 전화번호 */
+                           , MAX(B.TELNO_2)                                AS MBTLNO            /* 휴대폰번호 */
+                           , ''                                            AS EMAIL
+                           , MAX(ZIP)                                      AS ZIP
+                           , MAX(B.ADRES) || ' ' || MAX(B.ADRES_DETAIL)    AS ADRES
+                    FROM   TBCMP_THING_OWNER A
+                           INNER JOIN TBCMP_OWNER B
+                                   ON A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+                                  AND A.OWNER_NO = B.OWNER_NO
+                           INNER JOIN TBCMP_THING_WTNNC C
+                                   ON A.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                                  AND A.THING_SN = C.THING_SN
+                           LEFT OUTER JOIN TBCMP_RWMNY_PYMNT D
+                                        ON B.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+                                       AND B.OWNER_NO = D.OWNER_NO        
+                    WHERE 1=1
+                    GROUP BY B.OWNER_NM, B.IHIDNUM                                                             
+                )
+            WHERE 1=1
+            <isNotEmpty property="RCEPTER_SE">
+              AND RCEPTER_SE = #RCEPTER_SE#           /* 1: 대기자 , 2: 계약자*/
+            </isNotEmpty>  
+            <isNotEmpty property="CNTRCTR_NO">  
+              AND CNTRCTR_NO = #CNTRCTR_NO#           /* 계약번호*/
+            </isNotEmpty>  
+            <isNotEmpty property="WAITR_HOUSE_CODE">  
+              AND HOUSE_CODE = #WAITR_HOUSE_CODE# /* HOUSE_CODE */
+            </isNotEmpty>
+            <isNotEmpty property="WAITR_RECEP_DE">  
+              AND RCEPT_DE = #WAITR_RECEP_DE#
+            </isNotEmpty>
+            <isNotEmpty property="WAITR_SN">  
+              AND RCEPT_SN = #WAITR_SN#
+            </isNotEmpty>  
+            <isNotEmpty property="JOB_SE">
+              AND JOB_SE = #JOB_SE#
+            </isNotEmpty>
+            ORDER BY CSTMR_SE, NM          
+</select>    
+
+</sqlMap>

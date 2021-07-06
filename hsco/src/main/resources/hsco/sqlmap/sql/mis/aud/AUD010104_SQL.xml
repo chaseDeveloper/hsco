@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUD010104_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 내외부감사관리 테이블 목록조회 -->
+	<select id="AUD010104DAO.selectInExAdList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.AUDIT_PLAN_NO
+		     , A.AUDIT_PLAN_YEAR
+		     , A.AUDIT_SE
+		     , A.AUDIT_PLAN_INSTT
+		     , A.AUDIT_PLAN_KND
+		     , A.AUDIT_PLAN_CL
+		     , A.AUDIT_PLAN_BGNDE
+		     , A.AUDIT_PLAN_ENDDE
+		     , A.AUDIT_PLAN_SJ
+		     , A.AUDIT_PLAN_MAIN_CN
+		     , A.AUDIT_PLAN_BUDGET
+		     , A.AUDIT_PLAN_CT
+		     , A.ATCH_FILE
+		     , NVL(A.DSPTH_AT, '0')       AS DSPTH_AT
+		     , NVL(A.AUDIT_ED_AT, '0')    AS AUDIT_ED_AT
+		     , A.RM
+		     , A.ATCH_FILE2
+		     , A.PRVYY_AUDIT_ACMSLT
+		     , A.AUDIT_BGNDE
+		     , A.AUDIT_ENDDE
+		  FROM TBAUD_AUDIT_PLAN A
+		 WHERE 1 = 1
+		   AND (A.CONFM_AT    = '1' OR A.PLAN_REGIST_AT != '1')
+		   AND A.CONFM_AT2    = '1'
+		   AND A.AUDIT_ED_AT != '0'
+		<![CDATA[
+		   AND A.AUDIT_PLAN_YEAR >= #AUDIT_BGNYEAR#
+		   AND A.AUDIT_PLAN_YEAR <= #AUDIT_ENDYEAR#
+		]]>
+		<isNotEmpty property="AUDIT_INSTT">
+		   AND A.AUDIT_PLAN_INSTT = #AUDIT_INSTT#
+		</isNotEmpty>
+		<isNotEmpty property="AUDIT_KND">
+		   AND A.AUDIT_PLAN_KND   = #AUDIT_KND#
+		</isNotEmpty>
+		<isNotEmpty property="AUDIT_CL">
+		   AND A.AUDIT_PLAN_CL    = #AUDIT_CL#
+		</isNotEmpty>
+		<isNotEmpty property="AUDIT_SE">
+		   AND A.AUDIT_SE         = #AUDIT_SE#
+		</isNotEmpty>
+		<isNotEmpty property="AUDIT_NO">
+		   AND A.AUDIT_PLAN_NO LIKE '%' || #AUDIT_NO# || '%'
+		</isNotEmpty>
+		ORDER BY A.AUDIT_PLAN_NO DESC
+	</select>
+	
+	<!--내외부감사진행관리_감사일지 테이블 목록조회 -->
+	<select id="AUD010104DAO.selectDiaryList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.DIARY_SN
+			 , A.AUDIT_NO
+			 , A.AUDIT_YEAR
+			 , A.AUDIT_DE
+			 , A.AUDIT_DEPT_CODE
+			 , A.AUDIT_DEPT_NM
+			 , A.ADTOR_NM
+			 , A.REALM_NM
+			 , A.AUDIT_CN
+			 , A.MANAGT_PLAN
+			 , A.DRCT_MATTER
+			 , A.ATCH_FILE
+			 , A.RM
+		  FROM TBAUD_AUDIT_DIARY A 
+		 WHERE A.AUDIT_YEAR = #AUDIT_YEAR#
+		   AND A.AUDIT_NO   = #AUDIT_NO#
+		   AND A.DIARY_SE   = '001' /*감사일지*/
+		<isNotEmpty property="DEPT_CODE">
+		   AND A.AUDIT_DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		ORDER BY A.DIARY_SN DESC
+	</select>
+	
+	<!--감사일지 부서조회 -->
+	<select id="AUD010104DAO.selectAuditDept" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.AUDIT_PLAN_NO    AS AUDIT_NO
+		     , B.DEPT_CODE
+		     , C.DEPT_NM
+		  FROM TBAUD_AUDIT_PLAN A
+		       INNER JOIN TBAUD_AUDIT_PLAN_TRGET_DEPT B
+		            ON A.AUDIT_PLAN_NO   = B.AUDIT_PLAN_NO
+		           AND A.AUDIT_PLAN_year = B.AUDIT_PLAN_YEAR
+		       LEFT OUTER JOIN TBHRM_DEPT C
+		            ON B.DEPT_CODE = C.DEPT_CODE
+		 WHERE A.AUDIT_PLAN_NO   = #AUDIT_NO#
+		   AND A.AUDIT_PLAN_YEAR = #AUDIT_YEAR#
+		ORDER BY A.AUDIT_PLAN_NO DESC
+	</select>
+	
+	<!--감사일지 감사인조회 -->
+	<select id="AUD010104DAO.selectAuditComposi" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT ADTOR_NM AS CODE
+		     , ADTOR_NM AS CODE_NM 
+		  FROM TBAUD_AUDIT_PLAN_AUDIT_COMPOSI
+		 WHERE AUDIT_PLAN_NO    = #AUDIT_NO#
+		   AND AUDIT_PLAN_YEAR  = #AUDIT_YEAR#
+		   AND AUDIT_PLAN_AT   != '1'
+		 ORDER BY ADTOR_NM
+	</select>
+	
+	<!--내외부감사진행관리_감사일지 테이블 등록 -->    
+	<insert id="AUD010104DAO.DiaryListC" parameterClass="java.util.HashMap">
+		INSERT INTO TBAUD_AUDIT_DIARY (
+		       DIARY_SN
+		     , AUDIT_NO
+		     , AUDIT_YEAR
+		     , AUDIT_DE
+		     , DIARY_SE
+		     , AUDIT_DEPT_CODE
+		     , AUDIT_DEPT_NM
+		     , ADTOR_NM
+		     , REALM_NM
+		     , AUDIT_CN
+		     , MANAGT_PLAN
+		     , DRCT_MATTER
+		     , ATCH_FILE
+		     , RM
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		)
+		VALUES (  
+		       (SELECT NVL(MAX(DIARY_SN), 0) + 1 FROM TBAUD_AUDIT_DIARY WHERE AUDIT_NO = #AUDIT_NO# AND AUDIT_YEAR = #AUDIT_YEAR#)
+		     , #AUDIT_NO#
+		     , #AUDIT_YEAR#
+		     , #AUDIT_DE#
+		     , '001'
+		     , #AUDIT_DEPT_CODE#
+		     , #AUDIT_DEPT_NM#
+		     , #ADTOR_NM#
+		     , #REALM_NM#
+		     , #AUDIT_CN#
+		     , #MANAGT_PLAN#
+		     , #DRCT_MATTER#
+		     , #ATCH_FILE#
+		     , #RM#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+	
+	<!--내외부감사진행관리_감사일지 테이블수정 -->
+	<update id="AUD010104DAO.DiaryListU" parameterClass="java.util.HashMap">
+		UPDATE TBAUD_AUDIT_DIARY
+		   SET AUDIT_DE        = #AUDIT_DE#
+		     , AUDIT_DEPT_CODE = #AUDIT_DEPT_CODE#
+		     , AUDIT_DEPT_NM   = #AUDIT_DEPT_NM#
+		     , ADTOR_NM        = #ADTOR_NM#
+		     , REALM_NM        = #REALM_NM#
+		     , AUDIT_CN        = #AUDIT_CN#
+		     , MANAGT_PLAN     = #MANAGT_PLAN#
+		     , DRCT_MATTER     = #DRCT_MATTER#
+		     , ATCH_FILE       = #ATCH_FILE#
+		     , RM              = #RM#
+		     , UPDUSR_ID       = #S_USER_ID#
+		     , UPDT_DT         = SYSDATE
+		 WHERE DIARY_SN   = #DIARY_SN#
+		   AND AUDIT_NO   = #AUDIT_NO#
+		   AND AUDIT_YEAR = #AUDIT_YEAR#
+	</update>
+	
+	<!--내외부감사진행관리_감사일지 테이블 삭제 -->
+	<delete id="AUD010104DAO.DiaryListD" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBAUD_AUDIT_DIARY 
+		 WHERE DIARY_SN   = #DIARY_SN#
+		   AND AUDIT_NO   = #AUDIT_NO#
+		   AND AUDIT_YEAR = #AUDIT_YEAR#
+	</delete>
+	
+	<!--내외부감사진행관리_감사자료테이블 목록조회 -->
+	<select id="AUD010104DAO.selectDtaList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.DTA_SN
+		     , A.AUDIT_NO
+		     , A.AUDIT_YEAR
+		     , A.AUDIT_DTA_SE
+		     , A.AUDIT_DTA_NM
+		     , A.ATCH_FILE
+		     , A.RM
+		     , A.REGISTER_ID
+		     , TO_CHAR(A.REGIST_DT, 'YYYYMMDD')    AS REGIST_DT
+		     , A.UPDUSR_ID
+		     , A.UPDT_DT
+		     , ''                                  AS CHK
+		  FROM TBAUD_AUDIT_DTA A 
+		<isNotEmpty property="DEPT_CODE">
+		       LEFT OUTER JOIN TBHRM_HR_MASTR B
+		            ON A.REGISTER_ID = B.EMPNO
+		</isNotEmpty>
+		 WHERE A.AUDIT_NO   = #AUDIT_NO#
+		<isNotEmpty property="AUDIT_YEAR">
+		   AND A.AUDIT_YEAR = #AUDIT_YEAR#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+		   AND B.DEPT_CODE  = #DEPT_CODE#
+		</isNotEmpty>
+		ORDER BY DTA_SN
+	</select>
+	
+	<!--내외부감사진행관리_감사자료 테이블 등록 -->    
+	<insert id="AUD010104DAO.DtaListC" parameterClass="java.util.HashMap">
+		<![CDATA[
+			INSERT INTO TBAUD_AUDIT_DTA (
+			       DTA_SN         /*자료일련번호*/
+			     , AUDIT_NO       /*감사번호*/
+			     , AUDIT_YEAR     /*감사년도*/
+			     , AUDIT_DTA_SE   /*감사자료구분*/
+			     , AUDIT_DTA_NM   /*감사자료명*/
+			     , ATCH_FILE      /*첨부파일*/
+			     , RM             /*비고*/  
+			     , REGISTER_ID    /*등록자ID*/
+			     , REGIST_DT      /*등록일시*/
+			     , UPDUSR_ID      /*수정자ID*/
+			     , UPDT_DT        /*수정일시*/
+			)
+			VALUES (  
+			       (
+			        SELECT CASE WHEN COUNT(DTA_SN) = 0 THEN 1
+			                    WHEN COUNT(DTA_SN) > 0 THEN MAX(TO_NUMBER(DTA_SN))+1
+			                    ELSE NULL
+			               END
+			          FROM (SELECT NVL2(COUNT(DTA_SN)
+			                     , MAX(TO_NUMBER(DTA_SN)),1)    AS DTA_SN
+			                  FROM TBAUD_AUDIT_DTA
+			               )
+			        GROUP BY DTA_SN
+			       )
+			     , #AUDIT_NO#
+			     , #AUDIT_YEAR#
+			     , #AUDIT_DTA_SE#
+			     , #AUDIT_DTA_NM#
+			     , #ATCH_FILE#
+			     , #RM#
+			     , #S_USER_ID#
+			     , #REGIST_DT#
+			     , #S_USER_ID#
+			     , SYSDATE
+			)
+		]]>
+	</insert>
+	
+	<!--내외부감사진행관리_감사자료 테이블수정 -->
+	<update id="AUD010104DAO.DtaListU" parameterClass="java.util.HashMap">
+		UPDATE TBAUD_AUDIT_DTA
+		   SET AUDIT_DTA_SE = #AUDIT_DTA_SE#
+		     , AUDIT_DTA_NM = #AUDIT_DTA_NM#
+		     , ATCH_FILE    = #ATCH_FILE#
+		     , RM           = #RM#
+		     , UPDUSR_ID    = #S_USER_ID#
+		     , UPDT_DT      = SYSDATE
+		 WHERE DTA_SN     = #DTA_SN#
+		   AND AUDIT_NO   = #AUDIT_NO#
+		   AND AUDIT_YEAR = #AUDIT_YEAR#
+	</update>
+	
+	<!--내외부감사진행관리_감사자료 테이블 삭제 -->
+	<delete id="AUD010104DAO.DtaListD" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBAUD_AUDIT_DTA 
+		 WHERE DTA_SN     = #DTA_SN#
+		   AND AUDIT_NO   = #AUDIT_NO#
+		   AND AUDIT_YEAR = #AUDIT_YEAR#
+	</delete>
+	
+	<!--내외부감사진행관리_현지조치요구서 테이블 목록조회 -->
+	<select id="AUD010104DAO.selectAMDList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.ACPLC_MANAGT_SN  
+		     , A.AUDIT_NO
+		     , A.AUDIT_YEAR
+		     , A.AUDIT_DEPT_CODE
+		     , D.DEPT_NM               AS AUDIT_DEPT_NM
+		     , A.JRSD_DEPT
+		     , B.DEPT_NM               AS JRSD_DEPT_NM
+		     , A.ADTOR_NM
+		     , A.OPERTN_YEAR
+		     , A.DSPS_SE
+		     , A.DSPS_SJ
+		     , A.DSPS_AMOUNT
+		     , A.DSPS_STTUS
+		     , A.ILGLT_INJSTC
+		     , A.MANAGT_MATTER
+		     , A.RM
+		     , ''                      AS CHK
+		     , A.ATCH_FILE
+		     , NVL(A.CONFM_AT, '0')    AS CONFM_AT
+		     , NVL(C.AUDIT_ED_AT, '0')    AS AUDIT_ED_AT
+		     , CASE WHEN (A.CONFM_AT = '1' OR C.AUDIT_ED_AT = '2') THEN '0'
+		            ELSE '1'
+		       END                     AS ENABLE_AT
+		     , CASE WHEN (A.CONFM_AT = '1' OR C.AUDIT_ED_AT = '2') THEN '1'
+		            ELSE '0'
+		       END                     AS READONLY
+		     , CASE WHEN (A.CONFM_AT = '1' OR C.AUDIT_ED_AT = '2') THEN 'txt_WF_Readonly'
+		            ELSE 'txt_WF_Essential'
+		       END                     AS CSS_CLASS
+		  FROM TBAUD_ACPLC_MANAGT_DMDDOC A
+		       LEFT OUTER JOIN TBHRM_DEPT B
+		            ON A.JRSD_DEPT = B.DEPT_CODE
+		       LEFT OUTER JOIN TBAUD_AUDIT_PLAN C
+		            ON A.AUDIT_NO   = C.AUDIT_PLAN_NO
+		           AND A.AUDIT_YEAR = C.AUDIT_PLAN_YEAR
+		       LEFT OUTER JOIN TBHRM_DEPT D
+		            ON A.AUDIT_DEPT_CODE = D.DEPT_CODE
+		 WHERE A.AUDIT_NO   = #AUDIT_NO#
+		   AND A.AUDIT_YEAR = #AUDIT_YEAR#
+		<isNotEmpty property="DEPT_CODE">
+		   AND A.CONFM_AT = '1'
+		</isNotEmpty>
+		ORDER BY ACPLC_MANAGT_SN
+	</select>
+	
+	<!--내외부감사진행관리_현지조치요구서 테이블 등록 -->    
+	<insert id="AUD010104DAO.AMDListC" parameterClass="java.util.HashMap">
+		<![CDATA[
+			INSERT INTO TBAUD_ACPLC_MANAGT_DMDDOC (
+			       ACPLC_MANAGT_SN 
+			     , AUDIT_NO
+			     , AUDIT_YEAR
+			     , AUDIT_DEPT_CODE
+			     , JRSD_DEPT
+			     , ADTOR_NM
+			     , OPERTN_YEAR
+			     , DSPS_SE
+			     , DSPS_SJ
+			     , DSPS_AMOUNT
+			     , DSPS_STTUS
+			     , ILGLT_INJSTC
+			     , MANAGT_MATTER 
+			     , RM
+			     , REGISTER_ID
+			     , REGIST_DT
+			     , UPDUSR_ID
+			     , UPDT_DT
+			     , ATCH_FILE
+			     , CONFM_AT
+			) VALUES (  
+			       ( 
+			        SELECT CASE WHEN COUNT(ACPLC_MANAGT_SN) = 0 THEN 1
+			                    WHEN COUNT(ACPLC_MANAGT_SN) > 0 THEN MAX(TO_NUMBER(ACPLC_MANAGT_SN))+1
+			                    ELSE NULL
+			               END
+			          FROM (
+			                SELECT NVL2(COUNT(ACPLC_MANAGT_SN)
+			                     , MAX(TO_NUMBER(ACPLC_MANAGT_SN)),1)    AS ACPLC_MANAGT_SN
+			                  FROM TBAUD_ACPLC_MANAGT_DMDDOC
+			               )
+			        GROUP BY ACPLC_MANAGT_SN
+			       )
+			     , #AUDIT_NO#
+			     , #AUDIT_YEAR#
+			     , #AUDIT_DEPT_CODE#
+			     , #JRSD_DEPT#
+			     , #ADTOR_NM#
+			     , #OPERTN_YEAR#
+			     , #DSPS_SE#
+			     , #DSPS_SJ#
+			     , #DSPS_AMOUNT#
+			     , #DSPS_STTUS#
+			     , #ILGLT_INJSTC#
+			     , #MANAGT_MATTER#
+			     , #RM#
+			     , #S_USER_ID#
+			     , SYSDATE
+			     , #S_USER_ID#
+			     , SYSDATE
+			     , #ATCH_FILE#
+			     , NVL(#CONFM_AT#, 0)
+			)
+		]]>
+	</insert>
+	
+	<!--내외부감사진행관리_현지조치요구서 테이블수정 -->
+	<update id="AUD010104DAO.AMDListU" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBAUD_ACPLC_MANAGT_DMDDOC
+			   SET AUDIT_DEPT_CODE = #AUDIT_DEPT_CODE#
+			     , JRSD_DEPT       = #JRSD_DEPT#
+			     , ADTOR_NM        = #ADTOR_NM#
+			     , OPERTN_YEAR     = #OPERTN_YEAR#
+			     , DSPS_SE         = #DSPS_SE#
+			     , DSPS_SJ         = #DSPS_SJ#
+			     , DSPS_AMOUNT     = #DSPS_AMOUNT#
+			     , DSPS_STTUS      = #DSPS_STTUS#
+			     , ILGLT_INJSTC    = #ILGLT_INJSTC#
+			     , MANAGT_MATTER   = #MANAGT_MATTER#
+			     , RM              = #RM#
+			     , UPDUSR_ID       = #S_USER_ID#
+			     , UPDT_DT         = SYSDATE
+			     , ATCH_FILE       = #ATCH_FILE#
+			     , CONFM_AT        = #CONFM_AT#
+			 WHERE ACPLC_MANAGT_SN = #ACPLC_MANAGT_SN#
+			   AND AUDIT_NO        = #AUDIT_NO#
+			   AND AUDIT_YEAR      = #AUDIT_YEAR#
+		]]>
+	</update>
+	
+	<!--내외부감사진행관리_현지조치요구서 테이블 삭제 -->
+	<delete id="AUD010104DAO.AMDListD" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBAUD_ACPLC_MANAGT_DMDDOC 
+		 WHERE ACPLC_MANAGT_SN = #ACPLC_MANAGT_SN#
+		   AND AUDIT_NO        = #AUDIT_NO#
+		   AND AUDIT_YEAR      = #AUDIT_YEAR#
+	</delete>
+	
+</sqlMap>

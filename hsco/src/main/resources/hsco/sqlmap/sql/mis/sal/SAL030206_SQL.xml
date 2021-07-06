@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL030206_SQL">	
+	
+	<!-- 세출확인용보수집계표정보 목록조회 -->
+	<select id="SAL030206DAO.selectSalaryAnexptrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT ALLWNC_SE
+		       , DECODE(ALLWNC_SE, 0, '보수', '수당') 	AS ALLWNC_SE_NM
+		       , ETC_EMP_YN
+		       , DECODE(ETC_EMP_YN, 0, '정원', '별도') 	AS ETC_EMP_YN_NM
+		       , PYMNT_DDC_CODE
+		       , PYMNT_DDC_CODE_NM
+		       , BUDGET_ACNT_NM
+		       , EXPNDTR_UNIT_NM
+		       , CNT
+		       , SUM(PYMNT_AMOUNT) AS PYMNT_AMOUNT
+		    FROM (
+		            SELECT ALLWNC_SE
+		                 , ETC_EMP_YN
+		                 , PYMNT_DDC_CODE
+		                 , PYMNT_DDC_CODE_NM
+		                 , A.ACNT_SBJECT || '. ' ||
+		                   (
+		                      SELECT BUDGET_ACNT_NM
+		                        FROM TBBDG_BUDGET_ACNT_CODE M
+		                       WHERE M.YEAR             = SUBSTR(#PYMNT_YM#, 1, 4)
+		                         AND M.BUDGET_ACNT_CODE = A.ACNT_SBJECT
+		                   )
+		                   AS BUDGET_ACNT_NM
+		                 , A.EXPNDTR_UNIT_CODE || '. ' ||
+		                   (
+		                      SELECT EXPNDTR_UNIT_NM
+		                        FROM TBBDG_EXPNDTR_UNIT_CODE M
+		                       WHERE M.YEAR              = SUBSTR(#PYMNT_YM#, 1, 4)
+		                         AND M.BUDGET_ACNT_CODE  = A.ACNT_SBJECT
+		                         AND M.EXPNDTR_UNIT_CODE = A.EXPNDTR_UNIT_CODE
+		                         AND M.EXCUT_UNIT_AT     = '1'
+		                   )
+		                   AS EXPNDTR_UNIT_NM
+		                 , CNT
+		                 , PYMNT_AMOUNT
+		              FROM (
+		                      SELECT ALLWNC_SE
+		                           , ETC_EMP_YN
+		                           , PYMNT_DDC_CODE
+		                           , PYMNT_DDC_CODE_NM
+		                           , ACNT_SBJECT
+		                           , EXPNDTR_UNIT_CODE
+		                           , TRIM(SUBSTR(MIN(EMP_NAME1), MAX(EMP_LEN) + 1)) ||'외 '|| TO_CHAR(COUNT(DISTINCT EMPNO) - 1) ||'명'	AS CNT
+		                           , SUM(PYMNT_AMOUNT)                                                                                  AS PYMNT_AMOUNT
+		                        FROM (
+		                                SELECT A.EMPNO
+		                                     , A.EMPNM
+		                                     , D.ALLWNC_SE
+		                                     , A.ETC_EMP_YN
+		                                     , B.PYMNT_DDC_CODE
+		                                     , D.PYMNT_DDC_CODE_NM
+		                                     , B.PYMNT_AMOUNT
+		                                     , C.ACNT_SBJECT
+		                                     , C.EXPNDTR_UNIT_CODE
+		                                     , (E.DEPT_CODE || A.RSPOFC_SE || 
+		                                     		SFHRM_GET_OFCPSCD(A.EMPNO, A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE) || 
+		                                            A.PAY_CLSF_SE || A.JSSFC_SE || A.EMPNO || A.EMPNM) 					AS EMP_NAME1
+		                                     , LENGTH(E.DEPT_CODE || A.RSPOFC_SE || 
+		                                     		SFHRM_GET_OFCPSCD(A.EMPNO, A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE) || 
+		                                            A.PAY_CLSF_SE || A.JSSFC_SE || A.EMPNO)      						AS EMP_LEN
+		                                  FROM TBHRM_HR_MASTR A
+		                                     , TBSAL_MT_PYMNT_DTLS B
+		                                     , (
+		                                           SELECT DISTINCT PYMNT_DDC_CODE
+		                                                         , ACNT_SBJECT
+		                                                         , EXPNDTR_UNIT_CODE
+		                                                      FROM TBSAL_SALARY_ANEXPTR_STDR
+		                                                     WHERE STDR_YEAR = SUBSTR('201608', 1, 4)
+		                                       )
+		                                       C
+		                                     , TBSAL_PYMNT_DDC_STDR_CODE D
+		                                     , VWHRM_DEPT E
+		                                 WHERE A.EMPNO = B.EMPNO
+		                                   AND A.JSSFC_SE IN ('000', '001', '002', '003', '007')
+		                                   AND B.PYMNT_YM       = #PYMNT_YM#
+		                                   AND B.SALARY_SE      = '1'
+		                                   AND B.PYMNT_DDC_CODE = C.PYMNT_DDC_CODE
+		                                   AND B.PYMNT_DDC_CODE = D.PYMNT_DDC_CODE
+		                                   AND A.ETC_EMP_YN     = '0'
+		                                   AND A.DEPT_CODE      = E.DEPT_CODE
+		                             )
+		                    GROUP BY ALLWNC_SE
+		                           , ETC_EMP_YN
+		                           , PYMNT_DDC_CODE
+		                           , PYMNT_DDC_CODE_NM
+		                           , ACNT_SBJECT
+		                           , EXPNDTR_UNIT_CODE
+		                                
+		                    UNION ALL
+		                                  
+		                      SELECT ALLWNC_SE
+		                           , ETC_EMP_YN
+		                           , PYMNT_DDC_CODE
+		                           , PYMNT_DDC_CODE_NM
+		                           , ACNT_SBJECT
+		                           , EXPNDTR_UNIT_CODE
+		                           , TRIM(SUBSTR(MIN(EMP_NAME1), MAX(EMP_LEN) + 1)) ||'외 '|| TO_CHAR(COUNT(DISTINCT EMPNO) - 1) ||'명' 	AS CNT
+		                           , SUM(PYMNT_AMOUNT)                                                                                	AS PYMNT_AMOUNT
+		                        FROM (
+		                                SELECT A.EMPNO
+		                                     , A.EMPNM
+		                                     , D.ALLWNC_SE
+		                                     , A.ETC_EMP_YN
+		                                     , B.PYMNT_DDC_CODE
+		                                     , D.PYMNT_DDC_CODE_NM
+		                                     , B.PYMNT_AMOUNT
+		                                     , C.ACNT_SBJECT
+		                                     , C.EXPNDTR_UNIT_CODE
+		                                     , (E.DEPT_CODE || A.RSPOFC_SE || 
+		                                     		SFHRM_GET_OFCPSCD(A.EMPNO, A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE) || 
+		                                            A.PAY_CLSF_SE || A.JSSFC_SE || A.EMPNO || A.EMPNM) 					AS EMP_NAME1
+		                                     , LENGTH(E.DEPT_CODE || A.RSPOFC_SE || 
+		                                     		SFHRM_GET_OFCPSCD(A.EMPNO, A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE) || 
+		                                            A.PAY_CLSF_SE || A.JSSFC_SE || A.EMPNO)      						AS EMP_LEN
+		                                  FROM TBHRM_HR_MASTR A
+		                                     , TBSAL_MT_PYMNT_DTLS B
+		                                     , (
+		                                           SELECT DISTINCT PYMNT_DDC_CODE
+		                                                         , ACNT_SBJECT
+		                                                         , EXPNDTR_UNIT_CODE
+		                                                      FROM TBSAL_SALARY_ANEXPTR_STDR
+		                                                     WHERE STDR_YEAR = SUBSTR('201608', 1, 4)
+		                                       )
+		                                       C
+		                                     , TBSAL_PYMNT_DDC_STDR_CODE D
+		                                     , VWHRM_DEPT E
+		                                 WHERE A.EMPNO = B.EMPNO
+		                                   AND A.JSSFC_SE IN ('000', '001', '002', '003', '007')
+		                                   AND B.PYMNT_YM       = #PYMNT_YM#
+		                                   AND B.SALARY_SE      = '1'
+		                                   AND B.PYMNT_DDC_CODE = C.PYMNT_DDC_CODE
+		                                   AND B.PYMNT_DDC_CODE = D.PYMNT_DDC_CODE
+		                                   AND A.ETC_EMP_YN     = '1'
+		                                   AND A.DEPT_CODE      = E.DEPT_CODE
+		                             )
+		                    GROUP BY ALLWNC_SE
+		                           , ETC_EMP_YN
+		                           , PYMNT_DDC_CODE
+		                           , PYMNT_DDC_CODE_NM
+		                           , ACNT_SBJECT
+		                           , EXPNDTR_UNIT_CODE
+		                   ) A
+		         )
+		GROUP BY ALLWNC_SE
+		       , ETC_EMP_YN
+		       , PYMNT_DDC_CODE
+		       , PYMNT_DDC_CODE_NM
+		       , BUDGET_ACNT_NM
+		       , EXPNDTR_UNIT_NM
+		       , CNT
+		ORDER BY ALLWNC_SE
+		       , ETC_EMP_YN
+    </select>  
+
+</sqlMap>

@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM010201_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<select id="HRM010201DAO.selectOrgcht" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.ORGCHT_CODE
+		      ,t1.ORGCHT_NM
+		      ,t1.APPLC_DE
+		      ,t1.APPLC_AT
+		      ,t1.RM
+		      ,t1.REGISTER_ID
+		      ,t1.REGIST_DT
+		      ,t1.UPDUSR_ID
+		      ,t1.UPDT_DT
+		FROM   TBHRM_ORGCHT t1
+		WHERE  1=1
+	]]>
+	<isNotEmpty property="APPLC_AT">
+		AND    t1.APPLC_AT = #APPLC_AT#
+	</isNotEmpty>
+	<isNotEmpty property="ORGCHT_CNM">
+		AND    ( t1.ORGCHT_CODE LIKE '%' || #ORGCHT_CNM# || '%'  OR  t1.ORGCHT_NM LIKE '%' || #ORGCHT_CNM# || '%' )
+	</isNotEmpty>
+	<![CDATA[
+		ORDER BY t1.REGIST_DT DESC
+	]]>
+	</select>
+
+
+	<!-- 조직도부서 조회 -->
+	<select id="HRM010201DAO.selectOrgchtDept" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.ORGCHT_CODE
+		      ,t1.DEPT_CODE
+		      ,t1.DEPT_NM
+		      ,t1.DEPT_CODE                            AS ORI_DEPT_CODE
+		      ,'['||t1.DEPT_CODE||'] '||t1.DEPT_NM     AS DEPT_CNM
+		      ,t1.UPPER_DEPT_CODE
+		      ,LEVEL                                   AS DEPT_LEVEL
+		      ,t1.USE_AT
+		      ,t1.SORT_ORDR
+		      ,t1.REGISTER_ID
+		      ,t1.REGIST_DT
+		      ,t1.UPDUSR_ID
+		      ,t1.UPDT_DT
+		FROM   (
+		        SELECT *
+		        FROM   TBHRM_ORGCHT_DEPT
+		        WHERE  ORGCHT_CODE = #ORGCHT_CODE#
+		       ) t1
+		START WITH t1.UPPER_DEPT_CODE IS NULL
+		CONNECT BY PRIOR t1.DEPT_CODE = t1.UPPER_DEPT_CODE
+		ORDER SIBLINGS BY t1.SORT_ORDR
+	]]>
+	</select>
+
+
+	<select id="HRM010201DAO.getOrgchtCode" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+	<![CDATA[
+		SELECT LPAD(TO_NUMBER(NVL(MAX(ORGCHT_CODE),0))+1, 6, '0')       AS ORGCHT_CODE
+		FROM   TBHRM_ORGCHT
+	]]>
+	</select>
+
+
+	<insert id="HRM010201DAO.insertOrgcht" parameterClass="java.util.Map">
+	<![CDATA[
+		INSERT INTO TBHRM_ORGCHT(
+		     ORGCHT_CODE
+		    ,ORGCHT_NM
+		    ,APPLC_DE
+		    ,APPLC_AT
+		    ,RM
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES (
+		     #ORGCHT_CODE#
+		    ,#ORGCHT_NM#
+		    ,(CASE WHEN #APPLC_AT# = '1' THEN #APPLC_DE# END)
+		    ,NVL(#APPLC_AT#,'0')
+		    ,#RM#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+
+
+	<update id="HRM010201DAO.updateOrgcht" parameterClass="java.util.Map">
+	<![CDATA[
+		UPDATE TBHRM_ORGCHT
+		SET    ORGCHT_CODE = #ORGCHT_CODE#
+		      ,ORGCHT_NM   = #ORGCHT_NM#
+		      ,APPLC_DE    = (
+		                      CASE
+		                        WHEN NVL(APPLC_AT,'0') = '0' AND #APPLC_AT# = '1' THEN #APPLC_DE#
+		                        WHEN NVL(APPLC_AT,'0') = '1' AND #APPLC_AT# = '0' THEN NULL
+		                      END
+		                     )
+		      ,APPLC_AT    = NVL(#APPLC_AT#,'0')
+		      ,RM          = #RM#
+		      ,UPDUSR_ID   = #S_USER_ID#
+		      ,UPDT_DT     = SYSDATE
+		WHERE  ORGCHT_CODE = #ORGCHT_CODE#
+	]]>
+	</update>
+
+
+	<delete id="HRM010201DAO.deleteOrgcht" parameterClass="java.util.Map">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_ORGCHT
+		WHERE  ORGCHT_CODE = #ORGCHT_CODE#
+	]]>
+	</delete>
+
+
+	<!-- 조직도부서 추가 -->
+	<insert id="HRM010201DAO.insertOrgchtDept" parameterClass="java.util.Map">
+	<![CDATA[
+		INSERT INTO TBHRM_ORGCHT_DEPT(
+		     ORGCHT_CODE
+		    ,DEPT_CODE
+		    ,DEPT_NM
+		    ,UPPER_DEPT_CODE
+		    ,USE_AT
+		    ,SORT_ORDR
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES (
+		     #ORGCHT_CODE#
+		    ,#DEPT_CODE#
+		    ,#DEPT_NM#
+		    ,#UPPER_DEPT_CODE#
+		    ,NVL(#USE_AT#,'0')
+		    ,#SORT_ORDR#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+
+
+	<!-- 조직도부서 수정 -->
+	<update id="HRM010201DAO.updateOrgchtDept" parameterClass="java.util.Map">
+	<![CDATA[
+		UPDATE TBHRM_ORGCHT_DEPT
+		SET    ORGCHT_CODE     = #ORGCHT_CODE#
+		      ,DEPT_CODE       = #DEPT_CODE#
+		      ,DEPT_NM         = #DEPT_NM#
+		      ,UPPER_DEPT_CODE = #UPPER_DEPT_CODE#
+		      ,USE_AT          = NVL(#USE_AT#,'0')
+		      ,SORT_ORDR       = #SORT_ORDR#
+		      ,UPDUSR_ID       = #S_USER_ID#
+		      ,UPDT_DT         = SYSDATE
+		WHERE  ORGCHT_CODE     = #ORGCHT_CODE#
+		AND    DEPT_CODE       = #ORI_DEPT_CODE#
+	]]>
+	</update>
+
+
+	<!-- 조직도부서 삭제 -->
+	<delete id="HRM010201DAO.deleteOrgchtDept" parameterClass="java.util.Map">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_ORGCHT_DEPT
+		WHERE  ORGCHT_CODE = #ORGCHT_CODE#
+	]]>
+	<isNotEmpty property="DEPT_CODE">
+		AND    DEPT_CODE   = #DEPT_CODE#
+	</isNotEmpty>
+	</delete>
+</sqlMap>

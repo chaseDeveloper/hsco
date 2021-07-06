@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050306_SQL">	
+	
+	<!-- 합계잔액시산표 -->
+	<select id="ACC050306DAO.smBlceTiablList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t2.ACCNUT_ACNT_CODE 
+			   ,NVL(t2.OUTPT_ACNT_NM,t2.ACCNUT_ACNT_NM) AS OUTPT_ACNT_NM 
+			   ,NVL(DECODE(t2.DBRT_SE, 'D' , t1.DR_AMT - t1.CR_AMT , 0),0) AS DR_JAN 
+			   ,NVL(t1.DR_AMT,0) AS DR_AMT
+			   ,NVL(t1.CR_AMT,0) AS CR_AMT
+			   ,NVL(DECODE(t2.DBRT_SE, 'C', t1.CR_AMT - t1.DR_AMT, 0),0) AS CR_JAN
+			   ,t2.ACNT_LEVEL
+		  FROM TBACC_ACCNUT_ACNT_SBJECT T2
+		 	   LEFT OUTER JOIN 
+		 	   		(SELECT ACCNUT_YEAR
+					       ,ACCNUT_ACNT_CODE
+					       ,SUM(DEBTOR_AMOUNT) AS DR_AMT 
+					       ,SUM(CRDIT_AMOUNT) AS CR_AMT
+					 FROM (
+					         SELECT ACCNUT_YEAR 
+					              ,ACCNUT_ACNT_CODE
+					              ,DEBTOR_AMOUNT
+					              ,CRDIT_AMOUNT
+					         FROM TBACC_ACCNUT_STACNT
+					         WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+					          AND ACCNUT_MT BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+					         UNION ALL
+					         SELECT ACCNUT_YEAR
+					              ,ACCNUT_ACNT_CODE
+					              ,DEBTOR_AMOUNT
+					              ,CRDIT_AMOUNT
+					         FROM TBACC_ACCNUT_STACNTSUM WHERE 1=1
+					          AND ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+					          AND ACCNUT_MT BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+					      )
+					 GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+		 	   		) T1
+		         ON T2.ACCNUT_YEAR = T1.ACCNUT_YEAR
+				AND T2.ACCNUT_ACNT_CODE = T1.ACCNUT_ACNT_CODE
+	 	 WHERE 1=1
+		   AND T2.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+		   AND T2.ACCNUT_ACNT_CODE IS NOT NULL
+		   AND ((SUBSTR(T2.ACCNUT_ACNT_CODE,1,1) = '1' AND T2.ACNT_LEVEL < 5)
+	        OR (SUBSTR(T2.ACCNUT_ACNT_CODE,1,1) IN ('2','3','4','5') AND T2.ACNT_LEVEL < 4)
+	       )
+	     ORDER BY T2.ACCNUT_ACNT_CODE
+	]]>
+	</select>
+	
+	
+</sqlMap>

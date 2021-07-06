@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH020202_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 쿼리명 : 관점별 가줓치 조회
+	설명 : 평가연도/차수 기준 관점별 가중치  조회  쿼리
+	수정일  수정자  수정내용
+	작성자 : 박병일
+	최초작성일 : 2015.08.17
+	-->
+	<select id="ACH020202DAO.mstList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT EVL_YEAR
+		       ,ODR_SE
+		       ,VIEWPOINT_SE
+		       ,STRCT_CODE
+		       ,STRCT_LEVEL
+		       ,WGHTVAL
+		  FROM TBACH_WGHTVAL
+		 WHERE 1=1 
+	       AND EVL_YEAR 	= #EVL_YEAR#
+	       AND ODR_SE 		= #ODR_SE#
+	       AND STRCT_CODE 	= '000000000000'
+	       AND STRCT_LEVEL 	= 0 <!-- 관점 -->
+	     ORDER BY VIEWPOINT_SE
+    </select>	
+	
+	<!-- 쿼리명 : 전략목표별 가중치 조회
+	설명 : 평가연도/차수/관점기준 전략목표별 가중치  조회  쿼리
+	수정일  수정자  수정내용
+	작성자 : 박병일
+	최초작성일 : 2015.08.17
+	-->
+	<select id="ACH020202DAO.mainSearchList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+			SELECT EVL_YEAR
+				  ,ODR_SE
+				  ,VIEWPOINT_SE
+				  ,STRCT_CODE
+			 	  ,STRCT_LEVEL
+				  ,IX_CODE
+				  ,SFACH_GET_IXNM( EVL_YEAR, ODR_SE, IX_CODE) AS IX_NM   
+				  ,ORGNZT_CODE
+				  ,WGHTVAL
+				  ,GOALVAL
+				  ,REFER_VAL
+				  ,LAST_RSLTS
+				  ,LAST_EVL_SCORE
+				  ,LPT_AT
+				  ,'[ ' || IX_CODE || ' ]' AS IX_CODE_C
+			 FROM TBACH_WGHTVAL
+			WHERE 1=1 
+			  AND EVL_YEAR 		= #EVL_YEAR# 
+			  AND ODR_SE 		= #ODR_SE# 
+			  AND VIEWPOINT_SE 	= #VIEWPOINT_SE#
+              AND SUBSTR(STRCT_CODE,2,11) = '00000000000'          
+              AND STRCT_LEVEL = 1			  
+			ORDER BY STRCT_CODE    
+		]]>		
+    </select>
+     
+    <!-- 쿼리명 : 관점구분별 성과지표  기초자료 생성
+	설명 : 관점구분별 성과지표  기초자료 생성 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 박병일
+	최초작성일 : 2015.07.20
+	-->
+    <update id="ACH020202DAO.bsisMstC" parameterClass="java.util.Map">
+		{call  
+		    BEGIN	    
+			    DELETE FROM TBACH_WGHTVAL
+				 WHERE 1=1
+				   AND EVL_YEAR     = #EVL_YEAR#    
+				   AND ODR_SE       = #ODR_SE# 
+				; 
+				INSERT INTO TBACH_WGHTVAL (
+							 EVL_YEAR
+							,ODR_SE
+							,VIEWPOINT_SE
+							,STRCT_CODE
+							,STRCT_LEVEL
+							,IX_CODE
+							,ORGNZT_CODE
+							,WGHTVAL
+							,GOALVAL
+							,REFER_VAL
+							,LPT_AT
+							,REGISTER_ID
+							,REGIST_DT
+							,UPDUSR_ID
+							,UPDT_DT
+							)
+							SELECT
+								  EVL_YEAR
+								 ,ODR_SE
+								 ,VIEWPOINT_SE
+								 ,'000000000000'
+								 ,0 <!-- 관점 -->
+								 ,IX_CODE
+								 ,'000000'
+								 ,100 / (SELECT COUNT(1)
+									       FROM TBACH_KPI A
+							              WHERE 1=1
+								            AND A.EVL_YEAR = #EVL_YEAR#
+								            AND A.ODR_SE = #ODR_SE#
+								            AND A.USE_AT = '1'
+								            AND A.IX_SE = '001' )<!-- 가중치 -->
+								 ,100
+								 ,0
+								 ,'0'
+								 ,#S_USER_ID#
+								 ,SYSDATE
+								 ,#S_USER_ID#
+								 ,SYSDATE
+							FROM TBACH_KPI
+						   WHERE 1=1
+							 AND EVL_YEAR 	= #EVL_YEAR#
+							 AND ODR_SE 	= #ODR_SE#
+							 AND USE_AT 	= '1'
+							 AND IX_SE 		= '001'
+						   ORDER BY IX_CODE 
+				;   
+		    END
+	    }
+	</update>
+		
+    <!-- 쿼리명 : 전략목표 가중치  기초자료 생성
+	설명 : 전략목표  기초자료 생성 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 박병일
+	최초작성일 : 2015.08.17
+	-->
+    <update id="ACH020202DAO.bsisDtlC" parameterClass="java.util.Map">
+		{call  
+		    BEGIN	    
+			    DELETE FROM TBACH_WGHTVAL
+				 WHERE 1=1
+				   AND EVL_YEAR     = #EVL_YEAR#    
+				   AND ODR_SE       = #ODR_SE#
+				   AND VIEWPOINT_SE = #VIEWPOINT_SE#
+				   AND STRCT_LEVEL > 0
+				; 
+				INSERT INTO TBACH_WGHTVAL (
+							 EVL_YEAR
+							,ODR_SE
+							,VIEWPOINT_SE
+							,STRCT_CODE
+							,STRCT_LEVEL
+							,IX_CODE
+							,ORGNZT_CODE
+							,WGHTVAL
+							,GOALVAL
+							,REFER_VAL
+							,LPT_AT
+							,REGISTER_ID
+							,REGIST_DT
+							,UPDUSR_ID
+							,UPDT_DT
+							)
+							SELECT
+								  EVL_YEAR
+								 ,ODR_SE
+								 ,VIEWPOINT_SE
+								 ,RPAD(TO_CHAR(ROWNUM),12,'0')
+								 ,1 <!-- 전략목표 -->
+								 ,IX_CODE
+								 ,'000000'
+								 ,100 / (SELECT COUNT(1)
+									       FROM TBACH_KPI A
+							              WHERE 1=1
+								            AND A.EVL_YEAR = #EVL_YEAR#
+								            AND A.ODR_SE = #ODR_SE#
+							                AND A.USE_AT = '1'
+							                AND A.IX_SE = '002' <!-- 전략목표 -->
+							                AND A.VIEWPOINT_SE = #VIEWPOINT_SE# ) <!-- 가중치 -->
+								 ,100
+								 ,0
+								 ,'0'
+								 ,#S_USER_ID#
+								 ,SYSDATE
+								 ,#S_USER_ID#
+								 ,SYSDATE
+							FROM TBACH_KPI
+						   WHERE 1=1
+							 AND EVL_YEAR 	= #EVL_YEAR#
+							 AND ODR_SE 	= #ODR_SE#
+							 AND USE_AT 	= '1'
+							 AND IX_SE 		= '002' <!-- 전략목표 -->
+							 AND VIEWPOINT_SE = #VIEWPOINT_SE#
+						   ORDER BY IX_CODE 
+				;
+				INSERT INTO TBACH_WGHTVAL (
+							 EVL_YEAR
+							,ODR_SE
+							,VIEWPOINT_SE
+							,STRCT_CODE
+							,STRCT_LEVEL
+							,IX_CODE
+							,ORGNZT_CODE
+							,WGHTVAL
+							,GOALVAL
+							,REFER_VAL
+							,LPT_AT
+							,REGISTER_ID
+							,REGIST_DT
+							,UPDUSR_ID
+							,UPDT_DT
+							)				
+							SELECT
+							      A.EVL_YEAR
+							     ,A.ODR_SE
+							     ,B.VIEWPOINT_SE
+							     ,RPAD(TO_CHAR(ROWNUM),12,'0')
+							     ,4 <!-- CSF -->
+							     ,A.IX_CODE
+							     ,'000000'
+							     ,100 / (SELECT COUNT(1)
+									       FROM TBACH_KPI C
+							              WHERE 1=1
+								            AND C.EVL_YEAR = #EVL_YEAR#
+								            AND C.ODR_SE = #ODR_SE#
+							                AND C.USE_AT = '1'
+							                AND C.IX_SE = '003' <!-- CSF -->
+                                            AND C.UPPER_IX_CODE = B.IX_CODE)
+							     ,100
+							     ,0
+							     ,'0'
+							     ,#S_USER_ID#
+							     ,SYSDATE
+							     ,#S_USER_ID#
+							     ,SYSDATE
+							FROM TBACH_KPI A, TBACH_KPI B
+							WHERE 1=1
+							 AND A.EVL_YEAR = B.EVL_YEAR(+)
+							 AND A.ODR_SE = B.ODR_SE(+)
+							 AND A.UPPER_IX_CODE = B.IX_CODE(+)
+							 AND A.IX_SE = '003' <!-- CSF -->
+							 AND A.EVL_YEAR = #EVL_YEAR#
+							 AND A.ODR_SE = #ODR_SE#
+							 AND A.USE_AT = '1'
+							 AND B.IX_SE = '002'
+							 AND B.VIEWPOINT_SE = #VIEWPOINT_SE#
+						   ORDER BY A.IX_CODE
+				;
+		    END
+	    }
+	</update>	
+	<!-- 쿼리명 : 관점구분별 성과지표 수정
+	설명 : 관점구분별 성과지표 수정 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 박병일
+	최초작성일 : 2015.07.20
+	-->
+	<update id="ACH020202DAO.mainU" parameterClass="java.util.Map">	    
+		UPDATE TBACH_WGHTVAL
+		   SET WGHTVAL      = #WGHTVAL#  
+			  ,UPDUSR_ID    = #S_USER_ID# 
+			  ,UPDT_DT      = SYSDATE
+		 WHERE 1=1
+		   AND EVL_YEAR     = #EVL_YEAR#    
+		   AND ODR_SE       = #ODR_SE#
+		   AND VIEWPOINT_SE = #VIEWPOINT_SE#
+	       AND STRCT_CODE 	= '000000000000'
+	       AND STRCT_LEVEL 	= 0	<!-- 관점 --> 
+    </update>
+    	
+	<!-- 쿼리명 : 관점구분별 성과지표 수정
+	설명 : 관점구분별 성과지표 수정 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 박병일
+	최초작성일 : 2015.07.20
+	-->
+	<update id="ACH020202DAO.dtlU" parameterClass="java.util.Map">	    
+		UPDATE TBACH_WGHTVAL
+		   SET WGHTVAL      = #WGHTVAL#  
+			  ,UPDUSR_ID    = #S_USER_ID# 
+			  ,UPDT_DT      = SYSDATE
+		 WHERE 1=1
+		   AND EVL_YEAR     = #EVL_YEAR#    
+		   AND ODR_SE       = #ODR_SE#
+		   AND VIEWPOINT_SE = #VIEWPOINT_SE#
+           AND SUBSTR(STRCT_CODE,2,11) = '00000000000'          
+           AND STRCT_LEVEL 	= 1 <!-- 전략목표 -->
+           AND IX_CODE 		= #IX_CODE#	    
+    </update>
+    
+	<select id="ACH020202DAO.getClosAt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+			SELECT NVL(MAX(NVL(CLOS_AT,'0')),'0') AS CLOS_AT
+			  FROM TBACH_CLOS
+			 WHERE 1=1
+		]]>
+         	<isNotEmpty property="EVL_YEAR">  
+               AND EVL_YEAR = #EVL_YEAR#
+            </isNotEmpty>				  
+    		<isNotEmpty property="ODR_SE"> 
+               AND ODR_SE = #ODR_SE# 
+            </isNotEmpty>
+    </select>    
+    
+</sqlMap>

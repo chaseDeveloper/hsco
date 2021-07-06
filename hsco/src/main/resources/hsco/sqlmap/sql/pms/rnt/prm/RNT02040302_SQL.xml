@@ -1,0 +1,381 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02040302_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 관리비 전체 청구내역 조회
+			 설명 : 매입임대 관리비 전체 청구내역 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.05
+	-->	
+	<select id="RNT02040302DAO.selectManagectTotalRecList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+					a.RENT_HOUSE_CODE
+					,c.RENT_HOUSE_NM
+					,a.DONG
+					,a.MANAGECT_CODE
+					,d.MANAGECT_CODE_NM
+					,a.LEVY_AMOUNT
+					,nvl(b.MANAGECT, 0) AS MANAGECT
+					,nvl(b.RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT
+					,nvl(b.CNT, 0) CNT
+					,nvl(b.MANAGECT, 0) + nvl(b.RDCAMT_AMOUNT, 0) AS MANAGECT_TOTAL
+					,a.LEVY_AMOUNT - (nvl(b.MANAGECT, 0) + nvl(b.RDCAMT_AMOUNT, 0)) AS DIFF_AMT
+		FROM 	TBRNT_MANAGECT_UNTPC a
+					,(SELECT 
+   							   B.RENT_HOUSE_CODE,
+		                       B.DONG,
+		                       MANAGECT_CODE,
+		                       COUNT (1) CNT,
+		                       SUM (MANAGECT) AS MANAGECT,
+		                       SUM (RDCAMT_AMOUNT) AS RDCAMT_AMOUNT
+					  FROM TBRNT_MT_MANAGECT A
+					      ,TBRNT_PUCHAS_CNTRCT B
+					  WHERE OCCRRNC_YM = #occrrncYm#
+					    AND A.CNTRCTR_NO = B.CNTRCTR_NO
+					  GROUP BY B.RENT_HOUSE_CODE, B.DONG, A.MANAGECT_CODE) b
+					,TBRNT_PUCHAS_HOUSE c
+					,TBRNT_MANAGECT_CODE d
+		WHERE	a.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE(+)
+		AND		a.DONG = b.DONG(+)
+		AND		a.MANAGECT_CODE = b.MANAGECT_CODE(+)
+		AND		a.OCCRRNC_YM = #occrrncYm#
+		AND		a.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+		AND		a.MANAGECT_CODE = d.MANAGECT_CODE
+		<isNotEmpty property="houseCode">		
+		AND		a.RENT_HOUSE_CODE LIKE #houseCode#
+		</isNotEmpty>
+		ORDER BY	a.RENT_HOUSE_CODE ,a.MANAGECT_CODE
+	</select>
+	
+	
+	
+	<!-- 쿼리명 : 매입임대 관리비 세대별 청구내역 조회
+			 설명 : 매입임대 관리비 세대별 청구내역 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.05
+	-->	
+	<select id="RNT02040302DAO.selectManagectGenerationRecList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+					*
+		FROM (SELECT 
+							substr(#occrrncYm#, 1, 4) || '년 ' || substr(#occrrncYm#, 5, 2) || '월분' AS OCCRRNC_YMT
+							,to_char(to_date(#occrrncYm# || '01') - 1, 'yyyy') || '년 ' || to_char(to_date(#occrrncYm# || '01') - 1, 'mm') || '월분' AS OCCRRNC_YMP
+							,z.NM
+							,x.CANCL_DE
+							,a.CNTRCTR_NO
+							,b.RENT_HOUSE_CODE
+							,c.RENT_HOUSE_NM
+							,b.DONG
+							,b.HO
+							,b.FAMILY_CO
+							,max(a.PAY_TMLMT) AS PAY_TMLMT
+							,sum(nvl(a.MANAGECT, 0)) AS MANAGECT
+							,sum(nvl(a.OVDINTR, 0)) AS OVDINTR
+							,sum(nvl(a.RDCAMT_AMOUNT, 0)) AS RDCAMT_AMOUNT
+							,sum(nvl(a.TOTAL, 0)) AS TOTAL
+							,sum(nvl(trunc_amt, 0)) AS trunc_amt
+							,sum(MANAGECT01) AS MANAGECT01
+							,sum(MANAGECT02) AS MANAGECT02
+							,sum(MANAGECT03) AS MANAGECT03
+							,sum(MANAGECT04) AS MANAGECT04
+							,sum(MANAGECT05) AS MANAGECT05
+							,sum(MANAGECT06) AS MANAGECT06
+							,sum(PAY_ETC) AS PAY_ETC
+							,sum(DEL_AMT) AS DEL_AMT
+							,sum(nvl(a.TOTAL, 0)) - sum(nvl(a.DEL_AMT, 0)) AS NOW_AMT
+							,sum(RDCAMT_AMOUNT_06) AS RDCAMT_AMOUNT_06
+							,max(m.LEVY_AMOUNT) AS LEVY_AMOUNT
+							,max(m.USGQTY) AS USGQTY
+							,max(m.TOT_HSHLD_NMPR_CO) AS TOT_HSHLD_NMPR_CO
+							,max(m.TOT_HSHLD_CO) AS TOT_HSHLD_CO
+							,max(m.TOT_DVR_AR) AS TOT_DVR_AR
+							,(SELECT
+										sum(nvl(RDCAMT_AMOUNT, 0))
+							  FROM TBRNT_MT_MANAGECT d
+							  WHERE a.CNTRCTR_NO = d.CNTRCTR_NO
+							  AND d.OCCRRNC_YM = #occrrncYm#
+							  AND d.MANAGECT_CODE = '06'
+							) AS tRDCAMT_AMOUNT_06
+				  FROM (SELECT 
+									CNTRCTR_NO
+									,PAY_TMLMT
+									,sum(MANAGECT01) AS MANAGECT01
+									,sum(MANAGECT02) AS MANAGECT02
+									,sum(MANAGECT03) AS MANAGECT03
+									,sum(MANAGECT04) AS MANAGECT04
+									,sum(MANAGECT05) AS MANAGECT05
+									,sum(MANAGECT06) AS MANAGECT06
+									,sum(RDCAMT_AMOUNT_06) AS RDCAMT_AMOUNT_06
+									,sum(PAY_ETC) AS PAY_ETC
+									,sum(DEL_AMT) AS DEL_AMT
+									,sum(RDCAMT_AMOUNT) AS RDCAMT_AMOUNT
+									,sum(MANAGECT) AS MANAGECT
+									,sum(OVDINTR) AS OVDINTR
+									,trunc(sum(TOTAL), - 1) AS TOTAL
+									,sum(nvl(TOTAL, 0)) - trunc(sum(nvl(TOTAL, 0)), - 1) AS TRUNC_AMT
+							FROM (SELECT
+												CNTRCTR_NO
+												,PAY_TMLMT
+												,(
+													CASE 
+														WHEN OCCRRNC_YM = #occrrncYm#
+															AND MANAGECT_CODE = '06'
+															THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+														ELSE 0
+														END
+													) AS MANAGECT01
+												,(
+													CASE 
+														WHEN OCCRRNC_YM = #occrrncYm#
+															AND MANAGECT_CODE = '06'
+															THEN nvl(RDCAMT_AMOUNT, 0)
+														ELSE 0
+														END
+													) AS RDCAMT_AMOUNT_06
+												,(
+													CASE 
+														WHEN OCCRRNC_YM = #occrrncYm#
+															AND MANAGECT_CODE = '05'
+															THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+														ELSE 0
+														END
+													) AS MANAGECT02
+												,(
+													CASE 
+														WHEN OCCRRNC_YM = #occrrncYm#
+															AND MANAGECT_CODE = '07'
+															THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+														ELSE 0
+														END
+													) AS MANAGECT03
+												,(
+													CASE 
+														WHEN OCCRRNC_YM = #occrrncYm#
+															AND MANAGECT_CODE = '10'
+															THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+														ELSE 0
+														END
+													) AS MANAGECT04
+												,(
+													CASE 
+														WHEN OCCRRNC_YM = #occrrncYm#
+															AND MANAGECT_CODE = '02'
+															THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+														ELSE 0
+														END
+													) AS MANAGECT05
+												,(
+													CASE 
+														WHEN OCCRRNC_YM = #occrrncYm#
+															AND MANAGECT_CODE = '04'
+															THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+														ELSE 0
+														END
+													) AS MANAGECT06
+												,(
+													CASE 
+														WHEN OCCRRNC_YM = #occrrncYm#
+															AND MANAGECT_CODE NOT IN (
+																'06'
+																,'05'
+																,'07'
+																,'10'
+																,'02'
+																,'04'
+																)
+															THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+														ELSE 0
+														END
+													) AS PAY_ETC
+												,0 AS DEL_AMT
+												,nvl(RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT
+												,NVL(MANAGECT, 0) AS MANAGECT
+												,NVL(OVDINTR, 0) AS OVDINTR
+												,NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0) AS TOTAL
+									  FROM 	TBRNT_MT_MANAGECT
+									  WHERE OCCRRNC_YM = #occrrncYm#)
+									  GROUP BY CNTRCTR_NO ,PAY_TMLMT) a
+									  ,TBRNT_PUCHAS_CNTRCT b
+									  ,TBRNT_PUCHAS_HOUSE c
+									  ,(SELECT
+												 *
+										FROM TBRNT_MANAGECT_UNTPC
+										WHERE OCCRRNC_YM = #occrrncYm#
+										AND MANAGECT_CODE = '06'
+										) m
+									,(SELECT 
+												NM
+												,PUCHAS_CSTMR_NO
+									  FROM  TBRNT_PUCHAS_RENT_CSTMR) z
+									,(SELECT 
+												CANCL_DE
+												,CNTRCTR_NO
+									  FROM  TBRNT_RENT_RESCI) x/* 해약일자 */
+									  
+		WHERE	a.CNTRCTR_NO = b.CNTRCTR_NO
+			<isNotEmpty property="houseCode">		
+			AND	b.RENT_HOUSE_CODE LIKE #houseCode#
+			</isNotEmpty>
+			AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+			AND b.RENT_HOUSE_CODE = m.RENT_HOUSE_CODE(+)
+			AND b.PUCHAS_CSTMR_NO = z.PUCHAS_CSTMR_NO
+			AND a.CNTRCTR_NO = x.CNTRCTR_NO(+)
+		AND b.DONG = m.DONG(+)
+	GROUP BY a.CNTRCTR_NO
+		,z.NM
+		,b.RENT_HOUSE_CODE
+		,c.RENT_HOUSE_NM
+		,b.DONG
+		,b.HO
+		,b.FAMILY_CO
+		,x.CANCL_DE)
+	ORDER BY RENT_HOUSE_CODE ,DONG ,HO
+	</select>
+	
+
+	<!-- 쿼리명 : 매입임대 관리비 기정보 조회
+			 설명 : 매입임대 관리비 기정보 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.07
+	-->	
+	<select id="RNT02040302DAO.selectManagectCntCheckList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+         			 count(1) CNT
+    	FROM TBRNT_MT_MANAGECT
+   		WHERE OCCRRNC_YM = #occrrncYm#
+   		<isNotEmpty property="houseCode">
+    	AND RENT_HOUSE_CODE LIKE #houseCode#
+    	</isNotEmpty>
+	</select>
+
+
+	<!-- 쿼리명 : 매입임대 관리비생성  프로시저 호출
+			 설명 : 매입임대 관리비생성  프로시저 호출
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.06
+	-->		 
+	<parameterMap id="in_param" class="java.util.HashMap">
+		<parameter property="occrrncYm" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="payTmlmt" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="houseCode" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="managectCode" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+	</parameterMap>	
+	
+	<procedure id="RNT02040302DAO.SPRNT_MANAGECT_CREATE" parameterMap="in_param">
+		{ CALL SPRNT_MANAGECT_CREATE( ? , ? , ? , ? , ? )}
+	</procedure>
+	
+	
+	
+	<!-- 쿼리명 : 매입임대 관리비 세대별 감액금액 조회
+			 설명 : 매입임대 관리비 세대별 감액금액 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.07
+	-->	
+	<select id="RNT02040302DAO.selectRdcamtAmountBatchList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT 
+  					a.*
+					,b.RENT_HOUSE_NM
+					,d.NM
+		FROM 	TBRNT_MT_MANAGECT a
+					,TBRNT_PUCHAS_CNTRCT c
+					,TBRNT_PUCHAS_HOUSE b
+				  	,TBRNT_PUCHAS_RENT_CSTMR d
+		WHERE a.OCCRRNC_YM = #occrrnc_ym#
+  		AND c.PUCHAS_CSTMR_NO = d.PUCHAS_CSTMR_NO
+		AND a.MANAGECT_CODE = '04'
+		AND a.CNTRCTR_NO = c.CNTRCTR_NO
+		AND c.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+		<isNotEmpty property="houseCode">		
+		AND c.RENT_HOUSE_CODE = #houseCode#
+		</isNotEmpty>
+		ORDER BY c.RENT_HOUSE_CODE, c.DONG, c.HO
+	</select>
+	
+	
+	<!-- 쿼리명 : 매입임대 관리비 세대별 감액금액 등록
+			 설명 : 매입임대 관리비 세대별 감액금액 등록 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.07
+	-->	
+		<parameterMap id="managectValueU_param" class="java.util.HashMap">
+		<parameter property="OCCRRNC_YM" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="CNTRCTR_NO" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="MANAGECT_CODE" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="MANAGECT" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+	</parameterMap>	
+	
+	<procedure id="RNT02040302DAO.SPRNT_MANAGECT_VALUE_U" parameterMap="managectValueU_param">
+		{ CALL SPRNT_MANAGECT_VALUE_U( ? , ? , ? , ? , ? )}
+	</procedure>
+	
+	
+	
+	<!-- 쿼리명 : 매입임대 관리비 세대별 감액금액 이월금액 조회
+			 설명 : 매입임대 관리비 세대별 감액금액 이월금액 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.07
+	-->	
+	<select id="RNT02040302DAO.selectRdcamtAmountCyfdList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+					a.CNTRCTR_NO
+					,#occrrnc_ym# AS OCCRRNC_YM
+					,a.AMT AS RDCAMT_AMOUNT
+					,'04' AS MANAGECT
+					,b.RENT_HOUSE_NM
+					,d.NM
+					,c.RENT_HOUSE_CODE
+					,c.DONG
+					,c.HO
+		FROM (SELECT 
+							CNTRCTR_NO
+							,OCCRRNC_YM
+							,sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0)) AS AMT
+				  FROM TBRNT_MT_MANAGECT a
+				  WHERE OCCRRNC_YM = to_char(add_months(to_date(#occrrnc_ym# || '01'), - 1), 'yyyymm')
+				  GROUP BY CNTRCTR_NO, OCCRRNC_YM
+				  HAVING sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0)) <![CDATA[ < ]]> 0
+			  	) a
+				,TBRNT_PUCHAS_CNTRCT c
+				,TBRNT_PUCHAS_HOUSE b
+		  		,TBRNT_PUCHAS_RENT_CSTMR d
+		WHERE a.CNTRCTR_NO = c.CNTRCTR_NO
+		AND c.PUCHAS_CSTMR_NO = d.PUCHAS_CSTMR_NO
+		AND c.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+		<isNotEmpty property="houseCode">
+		AND c.RENT_HOUSE_CODE = #houseCode#
+		</isNotEmpty>
+		ORDER BY c.RENT_HOUSE_CODE, c.DONG, c.HO		
+	</select>
+	
+	
+	
+	
+	<!-- 쿼리명 : 매입임대 관리비 세대별 감액금액 이월금액 등록
+			 설명 : 매입임대 관리비 세대별 감액금액 이월금액 등록 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.08
+	-->	
+	<parameterMap id="managectValueADD_param" class="java.util.HashMap">
+		<parameter property="OCCRRNC_YM" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="CNTRCTR_NO" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="MANAGECT_CODE" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="RDCAMT_AMOUNT" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+	</parameterMap>	
+	
+	<procedure id="RNT02040302DAO.SPRNT_MANAGECT_VALUE_ADD" parameterMap="managectValueADD_param">
+		{ CALL SPRNT_MANAGECT_VALUE_ADD( ? , ? , ? , ? , ? )}
+	</procedure>
+</sqlMap>

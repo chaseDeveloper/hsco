@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PRJ010111_SQL">
+
+	<!-- 계약 조회 -->
+	<select id="PRJ010111DAO.selectCntrct" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.PROGRS_SE
+		      ,t1.CNTRCT_NO
+		      ,REGEXP_REPLACE(t1.CNTRCT_NO, '([0-9]{4})([0-9]{1})([0-9]{5})', '\1-\2-\3')       AS CNTRCT_NO_VIEW
+		      ,t1.CNTRCT_SE
+		      ,t2.CODE_NM                           AS CNTRCT_SE_NM
+		      ,t3.BSNS_NM
+		      ,t1.CNTRCT_NM
+		      ,NVL(t4.BCNC_NM, '사업자 無')         AS BCNC_NM
+		      ,t1.STRWRK_DE
+		      ,t1.COMPET_DE
+		      ,(TO_DATE(t1.COMPET_DE,'YYYYMMDD') - TO_DATE(t1.STRWRK_DE,'YYYYMMDD') + 1)    AS TOT_DAYCNT
+		      ,CASE WHEN TO_DATE(t1.COMPET_DE,'YYYYMMDD') <= TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD') THEN NULL ELSE (TO_DATE(t1.COMPET_DE,'YYYYMMDD') - TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD') + 1) END    AS TOT_DAYCNT
+		      ,CNTRCT_AMOUNT                                AS FRST_CNTRCT_AMOUNT
+		      ,SFCTR_CNTRCT_AMOUNT(t1.CNTRCT_NO, NULL)      AS CNTRCT_AMOUNT
+		      ,t1.BSIS_AMOUNT
+		      ,t1.PREARNGE_PC
+		      ,t1.SCSBID_AMOUNT
+		      ,t1.SCSBID_RT
+		      ,t1.RCEPT_SE
+		      ,t1.CNTRCT_DE
+		      ,t1.BSNS_CODE
+		      ,t1.MNG_DEPT_CODE
+		      ,t5.DEPT_NM               AS MNG_DEPT_NM
+		      ,t6.REQEST_NO2            AS REQEST_NO
+		      ,t6.REQEST_NM
+		      ,t6.ORDER_SN              AS ORDER_NO
+		      ,t6.ORDER_NM
+		FROM   TBCTR_CNTRCT t1
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		            ON t1.CNTRCT_SE = t2.CODE
+		           AND t2.GRP_CODE = 'CTR022'
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE t3
+		            ON t1.BSNS_CODE = t3.BSNS_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT b1.CNTRCT_NO
+		                              ,MIN(b2.BCNC_NM) KEEP (DENSE_RANK FIRST ORDER BY b1.QOTA_RT, b1.REGIST_DT) || DECODE(COUNT(1), 1, '', ' (外 ' || (COUNT(1) - 1) || '개 업체)')   AS BCNC_NM
+		                        FROM   TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS b1
+		                               LEFT OUTER JOIN TBCTR_BCNC_MASTR b2
+		                                    ON b1.BCNC_CODE = b2.BCNC_CODE
+		                        GROUP BY b1.CNTRCT_NO
+		                       ) t4
+		            ON t1.CNTRCT_NO = t4.CNTRCT_NO
+		       LEFT OUTER JOIN TBHRM_DEPT t5
+		            ON t1.MNG_DEPT_CODE = t5.DEPT_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT r1.REQEST_NO
+		                              ,REGEXP_REPLACE(r1.REQEST_NO, '([0-9]{4})([0-9]{1})([0-9]{5})', '\1-\2-\3')   AS REQEST_NO2
+		                              ,r1.REQEST_NM
+		                              ,r2.ORDER_PLAN_YEAR || '-' || r2.ORDER_PLAN_SN    AS ORDER_SN
+		                              ,r2.ORDER_NM
+		                        FROM   TBCTR_CNTRCT_REQEST r1
+		                               LEFT OUTER JOIN TBCTR_ORDER_PLAN r2
+		                                ON r1.ORDER_YEAR = r2.ORDER_PLAN_YEAR
+		                               AND r1.ORDER_SN = r2.ORDER_PLAN_SN
+		                        WHERE  1=1
+		                       ) t6
+		            ON t1.REQEST_NO = t6.REQEST_NO
+		WHERE  1=1
+	]]>
+	<isNotEmpty property="CNTRCT_YEAR">
+		AND    SUBSTR(t1.CNTRCT_NO, 1, 4) = #CNTRCT_YEAR#
+	</isNotEmpty>
+	<isNotEmpty property="CNTRCT_NO">
+		AND    t1.CNTRCT_NO = #CNTRCT_NO#
+	</isNotEmpty>
+	<isNotEmpty property="CNTRCT_NM">
+		AND    t1.CNTRCT_NM LIKE '%' || #CNTRCT_NM# || '%'
+	</isNotEmpty>
+	<![CDATA[
+		ORDER BY t1.CNTRCT_NO
+	]]>
+	</select>
+
+
+	<!-- 하도급 조회 -->
+	<select id="PRJ010111DAO.selectSubcntr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.CNTRCT_NO
+		      ,t1.BCNC_CODE
+		      ,t3.BCNC_NM                           AS ENTRPS_BCNC_NM
+		      ,t1.SEQ
+		      ,t1.SUBCNTR_ENTRPS_CODE
+		      ,NVL(t1.SUBCNTR_ENTRPS, t4.BCNC_NM)   AS SUBCNTR_ENTRPS_NM
+		      ,NVL(t4.AREA_ENTRPS_AT, '0')          AS AREA_ENTRPS_AT
+		      ,t1.DIRECT_PYMNT_AT
+		      ,t2.CNTRCT_AMOUNT                     AS ENTRPS_CNTRCT_AMOUNT
+		      ,t1.SUBCNTR_CNTRCT_AMOUNT
+		      ,t1.SUBCNTR_RT
+		      ,t1.CNTRCT_DE
+		      ,t1.STTEMNT_DE
+		      ,t1.SUBCNTR_CNST_CODE
+		      ,t1.SUBCNTR_CNST
+		      ,t1.CNTRCT_PD_1
+		      ,t1.CNTRCT_PD_2
+		FROM   TBCTR_ENTRPS_ACCTO_SUBCNTR_CNT t1
+		       LEFT OUTER JOIN TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS t2
+		            ON t1.CNTRCT_NO = t2.CNTRCT_NO
+		           AND t1.BCNC_CODE = t2.BCNC_CODE
+		       LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+		            ON t1.BCNC_CODE = t3.BCNC_CODE
+		       LEFT OUTER JOIN TBCTR_BCNC_MASTR t4
+		            ON t1.SUBCNTR_ENTRPS_CODE = t4.BCNC_CODE
+		WHERE  t1.CNTRCT_NO = #CNTRCT_NO#
+		ORDER BY t1.CNTRCT_NO
+		        ,t1.SUBCNTR_CNST_CODE
+		        ,t1.SEQ
+	]]>
+	</select>
+
+
+	<!-- 입금계좌 조회 -->
+	<select id="PRJ010111DAO.selectAcnut" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.CNTRCT_NO
+		      ,t1.OUTSRC_STLE_SE
+		      ,t3.CODE_NM               AS OUTSRC_STLE_NM
+		      ,t1.BCNC_CODE
+		      ,t1.SN
+		      ,t1.BANK_CODE
+		      ,t2.FNNC_INSTT_CODE_NM    AS BANK_NM
+		      ,t1.DPSTR_NM
+		      ,t1.ACNUTNO
+		      ,t1.MNBS_ACNUT_AT
+		FROM   TBCTR_CNTRCT_BCNC_ACNUT t1
+		       LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t2
+		            ON t1.BANK_CODE = t2.FNNC_INSTT_CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		            ON t1.OUTSRC_STLE_SE = t3.CODE
+		           AND t3.GRP_CODE = 'CTR036'
+		WHERE  t1.CNTRCT_NO       = #CNTRCT_NO#
+		AND    t1.OUTSRC_STLE_SE  = #OUTSRC_STLE_SE#
+		AND    t1.BCNC_CODE       = #BCNC_CODE#
+		ORDER BY t1.CNTRCT_NO
+		        ,t1.OUTSRC_STLE_SE
+		        ,t1.BCNC_CODE
+		        ,t1.SN
+	]]>
+	</select>
+
+
+	<!-- 하도급 추가 -->
+	<insert id="PRJ010111DAO.insertSubcntr" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBCTR_ENTRPS_ACCTO_SUBCNTR_CNT (
+		     CNTRCT_NO
+		    ,BCNC_CODE
+		    ,SEQ
+		    ,SUBCNTR_ENTRPS_CODE
+		    ,SUBCNTR_ENTRPS
+		    ,SUBCNTR_CNTRCT_AMOUNT
+		    ,SUBCNTR_RT
+		    ,SUBCNTR_CNST_CODE
+		    ,SUBCNTR_CNST
+		    ,CNTRCT_DE
+		    ,STTEMNT_DE
+		    ,CNTRCT_PD_1
+		    ,CNTRCT_PD_2
+		    ,RM
+		    ,DIRECT_PYMNT_AT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES (
+		     #CNTRCT_NO#
+		    ,#BCNC_CODE#
+		    ,(
+		      SELECT NVL(MAX(SEQ),0)+1
+		      FROM   TBCTR_ENTRPS_ACCTO_SUBCNTR_CNT
+		      WHERE  CNTRCT_NO = #CNTRCT_NO#
+		      AND    BCNC_CODE = #BCNC_CODE#
+		     )
+		    ,#SUBCNTR_ENTRPS_CODE#
+		    ,#SUBCNTR_ENTRPS_NM#
+		    ,#SUBCNTR_CNTRCT_AMOUNT#
+		    ,#SUBCNTR_RT#
+		    ,#SUBCNTR_CNST_CODE#
+		    ,#SUBCNTR_CNST#
+		    ,#CNTRCT_DE#
+		    ,#STTEMNT_DE#
+		    ,#CNTRCT_PD_1#
+		    ,#CNTRCT_PD_2#
+		    ,#RM#
+		    ,#DIRECT_PYMNT_AT#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+
+
+	<!-- 하도급 수정 -->
+	<update id="PRJ010111DAO.updateSubcntr" parameterClass="java.util.HashMap">
+	<![CDATA[
+		UPDATE TBCTR_ENTRPS_ACCTO_SUBCNTR_CNT
+		SET    CNTRCT_NO             = #CNTRCT_NO#
+		      ,BCNC_CODE             = #BCNC_CODE#
+		      ,SEQ                   = #SEQ#
+		      ,SUBCNTR_ENTRPS_CODE   = #SUBCNTR_ENTRPS_CODE#
+		      ,SUBCNTR_ENTRPS        = #SUBCNTR_ENTRPS#
+		      ,SUBCNTR_CNTRCT_AMOUNT = #SUBCNTR_CNTRCT_AMOUNT#
+		      ,SUBCNTR_RT            = #SUBCNTR_RT#
+		      ,SUBCNTR_CNST_CODE     = #SUBCNTR_CNST_CODE#
+		      ,SUBCNTR_CNST          = #SUBCNTR_CNST#
+		      ,CNTRCT_DE             = #CNTRCT_DE#
+		      ,STTEMNT_DE            = #STTEMNT_DE#
+		      ,CNTRCT_PD_1           = #CNTRCT_PD_1#
+		      ,CNTRCT_PD_2           = #CNTRCT_PD_2#
+		      ,RM                    = #RM#
+		      ,DIRECT_PYMNT_AT       = #DIRECT_PYMNT_AT#
+		      ,UPDUSR_ID             = #S_USER_ID#
+		      ,UPDT_DT               = SYSDATE
+		WHERE  CNTRCT_NO             = #CNTRCT_NO#
+		AND    BCNC_CODE             = #BCNC_CODE#
+		AND    SEQ                   = #SEQ#
+	]]>
+	</update>
+
+
+	<!-- 하도급 삭제 -->
+	<delete id="PRJ010111DAO.deleteSubcntr" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBCTR_ENTRPS_ACCTO_SUBCNTR_CNT
+		WHERE  CNTRCT_NO             = #CNTRCT_NO#
+		AND    BCNC_CODE             = #BCNC_CODE#
+		AND    SEQ                   = #SEQ#
+	]]>
+	</delete>
+
+
+	<!-- 하도급 계좌 추가 -->
+	<insert id="PRJ010111DAO.insertAcnut" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBCTR_CNTRCT_BCNC_ACNUT (
+		     CNTRCT_NO
+		    ,OUTSRC_STLE_SE
+		    ,BCNC_CODE
+		    ,SN
+		    ,BANK_CODE
+		    ,DPSTR_NM
+		    ,ACNUTNO
+		    ,MNBS_ACNUT_AT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES (
+		     #CNTRCT_NO#
+		    ,#OUTSRC_STLE_SE#
+		    ,#BCNC_CODE#
+		    ,(
+		      SELECT NVL(MAX(SN),0)+1
+		      FROM   TBCTR_CNTRCT_BCNC_ACNUT
+		      WHERE  CNTRCT_NO      = #CNTRCT_NO#
+		      AND    OUTSRC_STLE_SE = #OUTSRC_STLE_SE#
+		      AND    BCNC_CODE      = #BCNC_CODE#
+		     )
+		    ,#BANK_CODE#
+		    ,#DPSTR_NM#
+		    ,#ACNUTNO#
+		    ,#MNBS_ACNUT_AT#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+
+
+	<!-- 하도급 계좌 수정 -->
+	<update id="PRJ010111DAO.updateAcnut" parameterClass="java.util.HashMap">
+	<![CDATA[
+		UPDATE TBCTR_CNTRCT_BCNC_ACNUT
+		SET    CNTRCT_NO      = #CNTRCT_NO#
+		      ,OUTSRC_STLE_SE = #OUTSRC_STLE_SE#
+		      ,BCNC_CODE      = #BCNC_CODE#
+		      ,SN             = #SN#
+		      ,BANK_CODE      = #BANK_CODE#
+		      ,DPSTR_NM       = #DPSTR_NM#
+		      ,ACNUTNO        = #ACNUTNO#
+		      ,MNBS_ACNUT_AT  = #MNBS_ACNUT_AT#
+		      ,UPDUSR_ID      = #S_USER_ID#
+		      ,UPDT_DT        = SYSDATE
+		WHERE  CNTRCT_NO      = #CNTRCT_NO#
+		AND    OUTSRC_STLE_SE = #OUTSRC_STLE_SE#
+		AND    BCNC_CODE      = #BCNC_CODE#
+		AND    SN             = #SN#
+	]]>
+	</update>
+
+
+	<!-- 하도급 계좌 삭제 -->
+	<delete id="PRJ010111DAO.deleteAcnut" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBCTR_CNTRCT_BCNC_ACNUT
+		WHERE  CNTRCT_NO      = #CNTRCT_NO#
+		AND    OUTSRC_STLE_SE = #OUTSRC_STLE_SE#
+		AND    BCNC_CODE      = #BCNC_CODE#
+		AND    SN             = #SN#
+	]]>
+	</delete>
+
+</sqlMap>

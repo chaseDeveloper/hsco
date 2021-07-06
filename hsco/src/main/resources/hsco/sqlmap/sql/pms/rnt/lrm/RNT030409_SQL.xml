@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT030409">
+
+	<!-- 쿼리명 : 계약자별 체납액 합계
+	설명 : 계약자조회
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.13
+	-->
+	<select id="RNT030409DAO.getList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+
+SELECT A.CNTRCTR_NO
+     , A.CNTRCT_CO
+     , A.AREA_SE
+     , A.DONG
+     , A.HO
+     , C.NM
+     , C.ZIP
+     , C.ADRES
+     , C.ADRES_DETAIL
+     , C.TELNO
+     , C.MBTLNO 
+     , B.RNTCHRG_NPYM
+     , NVL(B.OVDINTR_NPYM,0) AS OVDINTR_NPYM
+     , NVL(B.RSVMNEY_NPYM,0) AS RSVMNEY_NPYM
+     , B.RNTCHRG_NPYM + NVL(B.OVDINTR_NPYM,0) + NVL(B.RSVMNEY_NPYM,0) as TOT_AMT
+     , B.CNT
+     , Z.RESCI_TRMNAT_DE     
+     , (SELECT SFCOM_CODE_NM('COM021' , BANK_CD , 'CODE_NM') ||' : '|| VACCT_NO 
+         FROM VA_MAST 
+        WHERE CUST_CD =  A.CNTRCTR_NO
+          AND OPT1 = '1' 
+          AND BANK_CD = '031') AS BANK_NM
+FROM TBRNT_LFSTS_CNTRCT A
+<![CDATA[  
+    , (SELECT CNTRCTR_NO,
+    		   COUNT(RNTCHRG_THSMON) AS CNT,
+               SUM(NVL(RNTCHRG_THSMON,0) + NVL(RNTCHRG_RDCAMT,0)) RNTCHRG_NPYM,
+               SUM(NVL(OVDINTR,0)) OVDINTR_NPYM,
+               SUM(NVL(RSVMNEY_THSMON,0) + NVL(RSVMNEY_RDCAMT,0)) RSVMNEY_NPYM
+          FROM TBRNT_LFSTS_MT_RNTCHRG
+         WHERE DEDT_DE BETWEEN #DEDT_DE1# AND #DEDT_DE2#
+           AND (RCIV_DE IS NULL   OR   RCIV_DE > #DEDT_DE3#)                
+         GROUP BY CNTRCTR_NO) B
+    , TBRNT_LFSTS_CSTMR C
+    , TBRNT_LFSTS_RESCI_TRMNAT Z   
+]]>            
+WHERE A.CNTRCTR_NO = B.CNTRCTR_NO         
+  AND A.LFSTS_CSTMR_NO = C.LFSTS_CSTMR_NO
+  AND A.CNTRCTR_NO = Z.CNTRCTR_NO(+)
+  AND A.CNTRCT_CO = Z.CNTRCTR_CO(+)
+ <isNotEmpty property="CNTRCTR_NO">
+	 AND A.CNTRCTR_NO = #CNTRCTR_NO#
+ </isNotEmpty>
+  <isNotEmpty property="AREA_SE">
+	 AND A.AREA_SE = #AREA_SE#
+ </isNotEmpty>
+ <isNotEmpty property="NM">
+ 	AND C.NM LIKE #NM#||'%'
+ </isNotEmpty>	
+  <isNotEmpty property="DONG">
+ 	AND A.DONG LIKE #DONG#
+ </isNotEmpty>	
+  <isNotEmpty property="HO">
+ 	AND A.HO LIKE #HO#
+ </isNotEmpty>		
+	ORDER BY A.CNTRCTR_NO
+	</select>
+	
+	<!-- 쿼리명 : 계약자별 월별 체납액 
+	설명 : 계약자별 월별 체납액 
+	수정일  수정자  수정내용	
+	작성자 : 이광원
+	최초작성일 : 2015.10.13
+	-->		
+<select id="RNT030409DAO.getList1" parameterClass="map" resultClass="hashmap">
+
+SELECT A.CNTRCTR_NO
+     , A.AREA_SE
+     , A.DONG
+     , A.HO
+     , C.NM
+     , C.ADRES
+     , C.ADRES_DETAIL
+     , C.TELNO
+     , C.MBTLNO 
+     , B.RNTCHRG_NPYM
+     , NVL(B.OVDINTR_NPYM,0) AS OVDINTR_NPYM
+     , NVL(B.RSVMNEY_NPYM,0) AS RSVMNEY_NPYM
+     , Z.RESCI_TRMNAT_DE     
+FROM TBRNT_LFSTS_CNTRCT A
+<![CDATA[ 
+    , (SELECT CNTRCTR_NO
+               , RNTCHRG_THSMON + NVL(RNTCHRG_RDCAMT,0) AS RNTCHRG_NPYM
+               , OVDINTR AS OVDINTR_NPYM
+               , RSVMNEY_THSMON + NVL(RSVMNEY_RDCAMT,0) AS RSVMNEY_NPYM
+          FROM TBRNT_LFSTS_MT_RNTCHRG
+         WHERE DEDT_DE BETWEEN #DEDT_DE1# AND #DEDT_DE2#
+           AND (RCIV_DE IS NULL   OR   RCIV_DE > #DEDT_DE3#)     
+           ) B
+    , TBRNT_LFSTS_CSTMR C           
+	, TBRNT_LFSTS_RESCI_TRMNAT Z           
+]]>           
+WHERE A.CNTRCTR_NO = B.CNTRCTR_NO   
+  AND A.LFSTS_CSTMR_NO = C.LFSTS_CSTMR_NO      
+  AND A.CNTRCTR_NO = Z.CNTRCTR_NO(+)
+  AND A.CNTRCT_CO = Z.CNTRCTR_CO(+)
+  AND A.CNTRCTR_NO = #CNTRCTR_NO#
+</select>	
+	<!-- 쿼리명 : 체납이자 생성 프로시저
+	설명 : 월임대료 생성 프로시저
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.09.21
+	-->	
+<parameterMap id="sp_rn_mcost_delay_u" class="java.util.HashMap">
+	<parameter property="IN_AREA_SE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_CNTRCTR_NO" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_CREATEDATE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_PAYENDDATE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+</parameterMap>	
+	
+<procedure id="RNT030409DAO.SP_RN_MCOST_DELAY_U" parameterMap="sp_rn_mcost_delay_u">
+{ CALL SP_RN_MCOST_DELAY_U( ? , ? , ? , ? , ?)}
+</procedure>	
+
+</sqlMap>

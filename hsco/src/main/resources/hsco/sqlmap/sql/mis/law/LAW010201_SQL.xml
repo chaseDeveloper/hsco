@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="LAW010201_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 법률자문신청 목록조회 -->
+	<select id="LAW010201DAO.selectLawCnsutReqst" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT
+				 A.REQST_NO                   AS REQST_NO            /*신청번호*/
+				,A.REQST_DE                   AS REQST_DE            /*신청일자*/
+				,A.REQST_DEPT                 AS REQST_DEPT          /*신청부서*/
+				,(SELECT SFSAL_GETDEPTNM_01(A.REQST_DEPT) FROM DUAL) 
+											  AS REQST_DEPT_NM       /*신청부서명*/
+				,A.APPLCNT                    AS APPLCNT             /*신청자*/
+				,(SELECT EMPNM FROM TBHRM_HR_MASTR WHERE A.APPLCNT = EMPNO)
+				                              AS APPLCNT_NM
+				,A.BSNS_CODE                  AS BSNS_CODE           /*사업코드*/
+				,(SELECT BSNS_NM 
+					FROM TBPRJ_BSNS_CODE Z 
+				   WHERE Z.BSNS_CODE=A.BSNS_CODE) AS BSNS_NM
+				,A.CL                         AS CL                  /*분류*/
+				,A.LAW_CNSUT_REQEST_NM        AS LAW_CNSUT_REQEST_NM /*벌률자문의뢰명*/
+				,A.ATCH_FILE                  AS ATCH_FILE           /*첨부파일*/
+				,A.DRFT_DE                    AS DRFT_DE             /*기안일자*/
+				,A.DRFT_JOB_CONFM_NO          AS DRFT_JOB_CONFM_NO   /*기안업무승인번호*/
+				,A.RCEPT_AT                   AS RCEPT_AT            /*접수여부*/
+				,A.REGISTER_ID                AS REGISTER_ID         /*등록자id*/
+				,TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS')                  AS REGIST_DT           /*등록일시*/
+				,A.UPDUSR_ID                  AS UPDUSR_ID           /*수정자id*/
+				,A.UPDT_DT                    AS UPDT_DT             /*수정일시*/
+				,A.CNSUT_REQST_CN                                    /*법률자문의뢰내용 */
+				,(CASE 
+				WHEN (SELECT COUNT(1) AS CNT FROM TBLAW_LAW_CNSUT_RESULT WHERE REQST_NO = A.REQST_NO) = 0 THEN '02' /*미회신*/
+				WHEN (SELECT COUNT(1) AS CNT FROM TBLAW_LAW_CNSUT_RESULT WHERE REQST_NO = A.REQST_NO) > 0 THEN '01' /*회신*/
+				ELSE NULL END)                AS RPLY_AT
+				,C.LAST_SANCTN_STTUS          AS LAST_SANCTN_STTUS
+				,SFCOM_GET_IN_SANCTNSTS('MIS', 'LAW', A.REQST_NO || '^' || TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS'), A.REGIST_DT) AS INNER_SANCTN_STTUS		/*내부결재 상태*/
+		        ,SFCOM_GET_IN_SANCTNSTS_IMG('MIS', 'LAW', A.REQST_NO || '^' || TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS'), A.REGIST_DT) INNER_SANCTN_STTUS_IMG /*내부결재 상태 이미지*/
+		        ,TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS') AS INNER_SANCTN_KEY 
+			  FROM TBLAW_LAW_CNSUT_REQST A
+   LEFT OUTER JOIN TBCOM_INNER_SANCTN_MASTR C
+				ON A.DRFT_JOB_CONFM_NO = C.INNER_SANCTN_ID
+			 WHERE 1=1
+		<isNotEmpty property="EMPNO" prepend="AND">
+			A.APPLCNT = #EMPNO#
+		</isNotEmpty>
+		<isNotEmpty property="LAND_CODE">
+			   AND BSNS_CODE = #LAND_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="CNSUT_SE">
+			   AND CL = #CNSUT_SE#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+			   AND REQST_DEPT = #DEPT_CODE#
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="REQEST_NM">
+			   AND LAW_CNSUT_REQEST_NM LIKE '%' || #REQEST_NM# || '%'
+		</isNotEmpty>
+		ORDER BY A.REQST_DE DESC, A.REQST_NO DESC
+	</select>
+
+	<!--법률자문신청목록 등록 -->
+	<insert id="LAW010201DAO.lawCnsutReqstC" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			INSERT INTO TBLAW_LAW_CNSUT_REQST ( 
+					 REQST_NO
+					,REQST_DE
+					,REQST_DEPT
+					,APPLCNT
+					,BSNS_CODE
+					,CL
+					,LAW_CNSUT_REQEST_NM
+					,ATCH_FILE
+					,DRFT_DE
+					,DRFT_JOB_CONFM_NO
+					,RCEPT_AT
+					,RPLY_AT
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+					,CNSUT_REQST_CN
+				) VALUES ( 
+					 (SELECT CASE WHEN COUNT(REQST_NO) = 0 THEN TO_CHAR(SYSDATE,'YYYY') || #CL# || '01'
+								  WHEN COUNT(REQST_NO) > 0 THEN TO_CHAR(SYSDATE,'YYYY') || #CL# || (CASE WHEN MAX(TO_NUMBER(REQST_NO))+1 < 10 THEN '0' || TO_CHAR(MAX(TO_NUMBER(REQST_NO))+1)
+																										 WHEN MAX(TO_NUMBER(REQST_NO))+1 >= 10 THEN TO_CHAR(MAX(TO_NUMBER(REQST_NO))+1)
+																									ELSE NULL END)
+							 ELSE NULL END 
+						FROM (SELECT NVL2(COUNT(REQST_NO),MAX(TO_NUMBER(SUBSTR(REQST_NO,7,2))),1) AS REQST_NO
+								FROM TBLAW_LAW_CNSUT_REQST
+							  )
+					)
+					,#REQST_DE#
+					,#REQST_DEPT#
+					,#APPLCNT#
+					,#BSNS_CODE#
+					,#CL#
+					,#LAW_CNSUT_REQEST_NM#
+					,#ATCH_FILE#
+					,#DRFT_DE#
+					,#DRFT_JOB_CONFM_NO#
+					,'02'
+					,#RPLY_AT#
+					,#S_USER_ID#
+					,SYSDATE
+					,#S_USER_ID#
+					,SYSDATE
+					,#CNSUT_REQST_CN#
+				)
+		]]>
+	</insert>
+
+	<!--법률자문신청목록 수정 -->
+	<update id="LAW010201DAO.lawCnsutReqstU" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		UPDATE TBLAW_LAW_CNSUT_REQST
+		   SET 
+				REQST_DE             = #REQST_DE#
+				,REQST_DEPT          = #REQST_DEPT#
+				,APPLCNT             = #APPLCNT#
+				,BSNS_CODE           = #BSNS_CODE#
+				,CL                  = #CL#
+				,LAW_CNSUT_REQEST_NM = #LAW_CNSUT_REQEST_NM# 
+				,ATCH_FILE           = #ATCH_FILE#    
+				,DRFT_DE             = #DRFT_DE#
+				,DRFT_JOB_CONFM_NO   = #DRFT_JOB_CONFM_NO#
+				,RCEPT_AT            = #RCEPT_AT#
+				,RPLY_AT             = #RPLY_AT#
+				,UPDUSR_ID           = #S_USER_ID#
+				,UPDT_DT             = SYSDATE
+				,CNSUT_REQST_CN      = #CNSUT_REQST_CN#
+		 WHERE REQST_NO = #REQST_NO#
+		]]>
+	</update>
+
+	<!--법률자문신청목록 삭제 -->
+	<delete id="LAW010201DAO.lawCnsutReqstD" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE TBLAW_LAW_CNSUT_REQST
+		 WHERE REQST_NO = #REQST_NO#
+		]]>
+	</delete>
+
+	<!--법률자문결과 목록조회 -->
+	<select id="LAW010201DAO.selectLawCnsutResult" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			  A.RPLY_DE     AS RPLY_DE
+			 ,A.REQST_NO    AS REQST_NO
+			 ,A.RPLY_SJ     AS RPLY_SJ
+			 ,A.SUMRY_SNTNC AS SUMRY_SNTNC
+			 ,A.LAWYER_OFFM AS LAWYER_OFFM
+			 ,A.LAWYER      AS LAWYER
+			 ,A.ATCH_FILE   AS ATCH_FILE
+			 ,A.REGISTER_ID AS REGISTER_ID
+			 ,A.REGIST_DT   AS REGIST_DT
+			 ,A.UPDUSR_ID   AS UPDUSR_ID
+			 ,A.UPDT_DT     AS UPDT_DT
+		  FROM TBLAW_LAW_CNSUT_RESULT A
+		 WHERE REQST_NO = #REQST_NO#
+	</select>
+ 
+	 <!--내부결재 레포트 데이터셋 -->
+	<select id="LAW010201DAO.innerSanctnUbiDataset" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+			SELECT
+					 T1.REQST_NO			AS REQST_NO
+					,T1.REQST_DE 			AS REQST_DE
+					,T1.REQST_DEPT_NM		AS REQST_DEPT_NM
+					,T1.APPLCNT   			AS APPLCNT
+					,T1.BSNS_CODE_NM 		AS BSNS_CODE_NM
+					,T1.CL 					AS CL
+					,T1.LAW_CNSUT_REQEST_NM AS LAW_CNSUT_REQEST_NM
+					,T1.ATCH_FILE			AS ATCH_FILE
+					,T1.DRFT_DE 			AS DRFT_DE
+					,T1.DRFT_JOB_CONFM_NO	AS DRFT_JOB_CONFM_NO
+					,T1.RCEPT_AT 			AS RCEPT_AT
+					,T1.RPLY_AT 			AS RPLY_AT
+					,T2.CNT -1 				AS CNT
+					,T2.ORGINL_FILE_NM		AS ORGINL_FILE_NM
+					,T2.FILE_SN 			AS FILE_SN
+			  FROM ( SELECT 
+							 A.REQST_NO
+							,A.REQST_DE
+							,(SELECT SFSAL_GETDEPTNM_01(A.REQST_DEPT)FROM DUAL) AS REQST_DEPT_NM
+							,SFSAL_GETEMPNO_01(A.APPLCNT)||'('||A.APPLCNT||')' AS APPLCNT
+							,(SELECT BSNS_NM FROM TBPRJ_BSNS_CODE WHERE BSNS_CODE = A.BSNS_CODE) AS BSNS_CODE_NM
+							,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAW007' AND CODE = A.CL) AS CL
+							,A.LAW_CNSUT_REQEST_NM
+							,A.ATCH_FILE
+							,A.DRFT_DE
+							,A.DRFT_JOB_CONFM_NO
+							,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAW010' AND CODE = A.RCEPT_AT) AS RCEPT_AT
+							,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAW012' AND CODE = A.RPLY_AT) AS RPLY_AT
+				 	   FROM TBLAW_LAW_CNSUT_REQST A
+				 	  WHERE 1=1
+						AND A.REQST_NO = #REQST_NO#
+					)T1 
+	LEFT OUTER JOIN 
+					(
+						SELECT 
+								 COUNT(1) AS CNT
+								,MIN(DECODE(FILE_ORDR, FILE_ORDR_MIN, ORGINL_FILE_NM, ''))    AS ORGINL_FILE_NM
+								,FILE_SN
+						  FROM (
+								SELECT 
+									 ''
+									,FILE_SN
+									,FILE_ORDR
+									,MIN(FILE_ORDR) OVER (PARTITION BY FILE_SN)        AS FILE_ORDR_MIN
+									,ORGINL_FILE_NM
+								  FROM TBCOM_CMMN_ATCHMNFL
+								)
+						  WHERE 1=1
+					   GROUP BY FILE_SN
+					) T2
+	ON T1.ATCH_FILE = T2.FILE_SN
+		  ]]>
+	</select>
+
+	<!--최초 내부결재 진행 여부 체크-->
+	<select id="LAW010201DAO.selectInnerSanctnMasterCheck" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ 
+		SELECT COUNT(1) AS CHK
+		  FROM TBCOM_INNER_SANCTN_MASTR
+		 WHERE INNER_SANCTN_ID = #KEY#
+		  ]]>
+	</select>
+	
+	<!-- 내부결재 번호 수정 -->
+	<update id="LAW010201DAO.innerSanctU" parameterClass="java.util.HashMap" >
+<![CDATA[
+		UPDATE TBLAW_LAW_CNSUT_REQST
+		   SET 
+				INNER_SANCTN_ID  = #INNER_SANCTN_ID#
+				,DRFT_DE      			= TO_CHAR(SYSDATE,'YYYYMMDD')
+				,UPDUSR_ID           = #S_USER_ID#
+				,UPDT_DT              = SYSDATE
+		 WHERE REQST_NO = #REQST_NO#
+		]]>
+</update>
+</sqlMap>

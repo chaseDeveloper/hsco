@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP041000_SQL">
+<!--  설명  : 보상금청구결재
+	작성자 : 지효정 --> 
+	
+	<!-- 보상금 지급 목록 -->
+	<select id="CMP041000DAO.rwmnyPymntList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT 
+			 '0' AS CHK
+		    ,A.BSNS_AREA_CODE 	/* 사업지역코드 */	
+		    ,A.OWNER_NO 		/* 소유자번호 */		
+		    ,A.RQEST_SN 		/* 청구일련번호 */	
+		    ,A.RQEST_DE 		/* 청구일자 */		
+		    ,A.RQEST_AMOUNT_CASH/* 청구금액 현금 */
+		    ,A.RQEST_AMOUNT_CDIT/* 청구금액 채권 */
+		    ,A.RQEST_AMOUNT_CASH + A.RQEST_AMOUNT_CDIT AS RQEST_AMOUNT /* 청구금액 합계 */
+		    ,B.OWNER_NM AS NM	/* 소유자 이름 */
+		    ,SFCMP_GET_CODENM('COM021', A.BANK_CODE) AS BANK_NM/* 은행명 */
+		    ,A.ACNUTNO 			/* 계좌번호 */	
+		    ,A.OWNER_DPSTR			/* 예금주 */		
+		    ,A.RWMNY_PYMNT_SE 	/* 지급구분 */
+		    ,A.PYMNT_DE 		/* 지급일자 */		
+		    ,A.PYMNT_PRARNDE 	/* 지급예정일 */	
+		    ,A.RM				/* 비고 */
+		    ,A.CONFM_SE_2		/* 승인구분2 */
+		    ,A.CONFM_DE_2		/* 승인일자2 */			
+		FROM TBCMP_RWMNY_PYMNT A, TBCMP_OWNER B
+		WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   B.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+		AND   B.OWNER_NO = A.OWNER_NO
+		<isNotEmpty property="ST_RQEST_DE">
+		AND   A.RQEST_DE >= #ST_RQEST_DE#
+		</isNotEmpty>
+		<isNotEmpty property="ED_RQEST_DE">
+		AND   A.RQEST_DE <![CDATA[<=]]> #ED_RQEST_DE#
+		</isNotEmpty>
+		<isNotEqual property="RQEST" compareValue="%">
+		AND   A.CONFM_SE_2 >= #RQEST#
+		</isNotEqual> 
+		<isNotEmpty property="CONFM_DE_2">
+		AND   A.CONFM_DE_2 >= #CONFM_DE_2#
+		</isNotEmpty>
+	</select>
+	
+	<update id="CMP041000DAO.rwmnyPymntU" parameterClass="java.util.Map">
+		UPDATE TBCMP_RWMNY_PYMNT SET
+			CONFM_SE_2 = 1
+			,CONFM_DE_2 = TO_CHAR(SYSDATE, 'YYYYMMDD')
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#
+		AND   RQEST_SN = #RQEST_SN#
+	</update>
+	
+	<!-- 조서 목록 -->
+	<select id="CMP041000DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT *
+		FROM(
+		    SELECT 
+		         BSNS_AREA_CODE	/* 사업지역코드 */
+		        ,THING_SN		/* 물건일련번호 */	
+		        ,LOCPLC_CODE	/* 소재지코드 */		
+		        ,SFCMP_GET_LOCPLC(BSNS_AREA_CODE, LOCPLC_CODE) || ' ' || 
+             	 DECODE(SLNO, NULL, LNM, LNM || '-' || SLNO) AS FULL_LOCPLC_CODE_NM
+		        ,TRIM(THING_CL) AS THING_CL	/* 물건분류 */
+		        ,THING_NM		/* 물건명 */
+		        ,LNDCGR_INCRPR	/* 지목_편입 */
+		        ,REAL_LNDCGR	/* 실제지목 */
+		        ,NOW_USE_STTUS	/* 현재이용현황 */	
+		        ,AR_LGSTR		/* 면적_공부 */			
+		        ,AR_INCRPR		/* 면적_편입 */		
+		        ,UNIT			/* 단위 */				
+		        ,THING_UNTPC AS UNTPC			/* 단가 */		
+		        ,RWMNY			/* 보상금 */			
+		        ,RM_1			/* 비고1 */			
+		    FROM TBCMP_THING_WTNNC
+		    WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		)A,(
+		    SELECT 
+		         BA.OWNER_SN
+		        ,BA.THING_SN
+		        ,BA.AR
+		        ,BA.RWMNY AS OWNER_RWMNY
+		        ,BA.POSESN_QOTA
+		        ,BC.OWNER_NM AS NM
+		        ,BB.RELATE_KND
+		    FROM TBCMP_THING_OWNER BA, TBCMP_THING_PARTCPNT BB, TBCMP_OWNER BC
+		    WHERE BA.OWNER_NO = #OWNER_NO#
+		    AND   BA.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		    AND   BA.BSNS_AREA_CODE = BB.BSNS_AREA_CODE(+)
+		    AND   BA.OWNER_SN = BB.OWNER_SN(+)
+		    AND   BC.BSNS_AREA_CODE(+) = BB.BSNS_AREA_CODE
+		    AND   BB.PARTCPNT_NO = BC.OWNER_NO(+)
+		)B
+		WHERE A.THING_SN = B.THING_SN
+	</select>
+</sqlMap>

@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02040203_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 고객상세정보 조회
+			 설명 : 매입임대 고객상세정보 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.18
+	-->	
+	<select id="RNT02040203DAO.selectPuchasRentCntrctDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+					A.CNTRCTR_NO												/*계약자번호*/
+					,A.RENT_HOUSE_CODE											/*임대주택코드*/
+					,A.DONG														/*동*/
+					,A.HO														/*호*/
+					,B.RENT_HOUSE_NM											/*임대주택명*/
+					,A.CNTRCT_DE												/*계약일자*/
+					,C.CANCL_DE													/*해약일자*/
+					,C.RESCI_RESN_CODE											/*해약사유*/
+					,A.PUCHAS_CSTMR_NO											/*고객번호*/
+					,D.NM														/*계약자명*/
+					,D.IHIDNUM													/*주빈번호*/
+					,E.DVR_AR													/*면적*/
+					,A.GTN														/*보증금*/
+					,A.RNTCHRG													/*임대료*/
+					,E.FLOOR													/*층구분*/
+					,A.QUALF_SE												    /*자격구분명*/
+					,(SELECT
+								'계좌번호 : ' || ACNUTNO || ' 예금주 : ' || DPSTR || ' 신청일자 : ' || ATCNG_REQST_DE
+					  FROM	TBPMS_ATCNG
+					  WHERE	CNTRCTR_NO	=	A.CNTRCTR_NO
+					  AND	JOB_SE	=	'RN2'
+					  AND   PAY_SE  = '03'
+					  AND	ATCNG_CANCL_DE		IS	NULL) ASATCNG_INFO
+		FROM		TBRNT_PUCHAS_CNTRCT A										/*매입계약 테이블*/
+					,TBRNT_PUCHAS_HOUSE B										/*매입주택 테이블*/
+					,TBRNT_PUCHAS_RESCI C										/*매입해약 테이블*/
+					,TBRNT_PUCHAS_RENT_CSTMR D								/*매입임대고객 테이블*/
+					,TBRNT_PUCHAS_HOUSE_BILD E								/*매입주택건축물 테이블*/
+		WHERE	A.CNTRCTR_NO				=	#CNTRCTR_NO#
+		AND		A.RENT_HOUSE_CODE		=	B.RENT_HOUSE_CODE
+		AND		A.CNTRCTR_NO				=	C.CNTRCTR_NO(+)
+		AND		D.PUCHAS_CSTMR_NO	=	A.PUCHAS_CSTMR_NO
+		AND		E.RENT_HOUSE_CODE		=	A.RENT_HOUSE_CODE
+		AND		E.DONG						=	A.DONG
+		AND		E.HO							=	A.HO
+	</select>
+
+
+
+	<!-- 쿼리명 : 매입임대 임대료 상세정보 조회
+			 설명 : 매입임대 임대료 상세정보 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.18
+	-->	
+	<select id="RNT02040203DAO.selectPuchasRntchrgList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT ROWNUM
+				,a.*
+			FROM (
+				SELECT a.CNTRCTR_NO
+					,b.RENT_HOUSE_CODE
+					,c.RENT_HOUSE_NM
+					,b.DONG
+					,b.HO
+					,m.NM
+					,m.IHIDNUM
+					,a.MDAT_YM
+					,a.MDAT_DE
+					,nvl(a.RNTCHRG, 0) AS RNTCHRG
+					,nvl(a.RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT
+					,a.RDCAMT_DE
+					,nvl(a.RCIV_AMOUNT, 0) AS RCIV_AMOUNT
+					,a.RCIV_DE
+					,a.PAY_TMLMT
+					,nvl(a.OVDINTR, 0) AS OVDINTR
+					,nvl(a.RNTCHRG, 0) + nvl(a.RDCAMT_AMOUNT, 0) + nvl(a.OVDINTR, 0) AS PAY_TOTAL
+					,a.NHT_SN
+				FROM TBRNT_PUCHAS_CNTRCT b
+					,TBRNT_PUCHAS_MT_RNTCHRG a
+			   		,TBRNT_PUCHAS_RENT_CSTMR m
+			   		,TBRNT_PUCHAS_HOUSE c
+				WHERE b.CNTRCTR_NO = #CNTRCTR_NO#
+					AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+			    	AND b.PUCHAS_CSTMR_NO = m.PUCHAS_CSTMR_NO
+					AND b.CNTRCTR_NO = a.CNTRCTR_NO
+					AND a.MDAT_YM BETWEEN #stMdatYm# AND #edMdatYm#
+					AND a.RCIV_DE IS NULL
+				ORDER BY a.PAY_TMLMT
+				) a
+	</select>
+
+
+
+	<!-- 쿼리명 : 매입임대 임대료 납부정보 조회(팝업)
+			 설명 : 매입임대 임대료 납부정보 조회(팝업) 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.18
+	-->	
+	<select id="RNT02040203DAO.selectMtRntchrgPopList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+					C.NM																												/*계약자명*/
+					,A.RENT_HOUSE_CODE																						/*주택코드*/
+					,B.RENT_HOUSE_NM																							/*주택명*/
+					,A.DONG																											/*동*/
+					,A.HO																												/*호*/
+					,D.PAY_TMLMT																									/*납입기한*/
+					,D.RNTCHRG																									/*임대료*/
+					,D.OVDINTR																										/*연체료*/
+					,D.RDCAMT_AMOUNT																							/*차액*/
+					,NVL(D.RNTCHRG,0)+NVL(D.OVDINTR,0)+NVL(D.RDCAMT_AMOUNT,0) AS TOT_AMOUNT		/*합계*/
+					,D.RCIV_AMOUNT																								/*수납금액*/
+					,D.RCIV_DE																										/*수납일자*/
+					,D.CASH_RCIPT_RGSDE																						/*현금영수증 발행일*/
+		FROM		TBRNT_PUCHAS_CNTRCT A																					/*매입계약 테이블*/
+					,TBRNT_PUCHAS_HOUSE B																					/*매입주택 테이블*/
+					,TBRNT_PUCHAS_RENT_CSTMR C																			/*매입임대고객 테이블*/
+					,TBRNT_PUCHAS_MT_RNTCHRG D																			/*매입월임대료 테이블*/
+		WHERE	A.RENT_HOUSE_CODE		=	B.RENT_HOUSE_CODE
+		AND		D.CNTRCTR_NO				=	#cntrctrNo#
+		AND		A.PUCHAS_CSTMR_NO	=	C.PUCHAS_CSTMR_NO
+		AND		A.CNTRCTR_NO				=	D.CNTRCTR_NO
+		<isNotEmpty property="stMdatYm">
+			AND	D.MDAT_YM <![CDATA[>=]]> #stMdatYm#
+		</isNotEmpty>
+		<isNotEmpty property="edMdatYm">
+			AND	D.MDAT_YM <![CDATA[<=]]> #edMdatYm#
+		</isNotEmpty>
+		<isEqual property="rcivAt" compareValue="0">
+			AND	D.RCIV_DE IS NULL
+		</isEqual>
+		<isNotEqual property="rcivAt" compareValue="0">
+			<isNotEmpty property="stRcivDe">
+				AND	D.RCIV_DE <![CDATA[>=]]> #stRcivDe#
+			</isNotEmpty>
+			<isNotEmpty property="edRcivDe">
+				AND	D.RCIV_DE <![CDATA[<=]]> #edRcivDe#
+			</isNotEmpty>
+		<isEqual property="rcivAt" compareValue="1">
+				AND	D.RCIV_DE IS NOT NULL
+		</isEqual>
+		</isNotEqual>
+		ORDER BY	D.PAY_TMLMT
+	</select>	
+
+
+
+	<!-- 쿼리명 : 매입임대 임대료 연체이자생성
+			 설명 : 매입임대 임대료 연체이자생성 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.18
+	-->
+	<update id="RNT02040203DAO.savePuchasRentMtRntchrgU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_PUCHAS_MT_RNTCHRG
+		SET OVDINTR = SFRNT_LFSTS_DELAY_RATE('RN2', #rentHouseCode#, PAY_TMLMT, #payTmlmt#, NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0))
+		    ,UPDUSR_ID			=	#S_USER_ID#							/*수정자ID*/
+		    ,UPDT_DT				=	SYSDATE									/*수정일시*/
+		WHERE CNTRCTR_NO = #cntrctrNo#
+	   	  AND PAY_TMLMT  <![CDATA[<=]]> #payTmlmt# /* 조정년월 */
+		  AND RCIV_DE IS NULL
+	</update>
+
+	<!-- 쿼리명 : 매입임대 임대료 연체이자생성
+			 설명 : 매입임대 임대료 연체이자생성 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.18
+	-->
+	<update id="RNT02040203DAO.savePuchasRentMtRntchrgChkU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_PUCHAS_MT_RNTCHRG
+		SET OVDINTR = SFRNT_LFSTS_DELAY_RATE('RN2', #rentHouseCode#, PAY_TMLMT, #payTmlmt#, NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0))
+		    ,UPDUSR_ID			=	#S_USER_ID#							/*수정자ID*/
+		    ,UPDT_DT				=	SYSDATE									/*수정일시*/
+		WHERE CNTRCTR_NO = #cntrctrNo#
+	   	  AND PAY_TMLMT  <![CDATA[<=]]> #payTmlmt# /* 조정년월 */
+		  AND RCIV_DE IS NULL
+		  AND MDAT_YM = #mdatYm#
+		  AND MDAT_DE = #mdatDe#
+		  AND NHT_SN = #nhtSn#
+	</update>
+
+	<!-- 쿼리명 : 매입임대 월임대료 정보 입력
+			 설명 : 매입임대 월임대료 입력 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.16
+	-->	
+	<insert id="RNT02040203DAO.savePuchasRntchrgC" parameterClass="java.util.HashMap">
+		INSERT INTO TBRNT_PUCHAS_MT_RNTCHRG(							/*매입압류 테이블*/
+					CNTRCTR_NO													/*계약자번호*/
+					,MDAT_YM														/*조정년월*/
+					,MDAT_DE														/*조정일자*/
+					,NHT_SN															/*고지서순번*/
+					,RNTCHRG														/*임대료*/
+					,OVDINTR															/*연체이자*/
+					,PAY_TMLMT														/*납부기한*/
+					,RCIV_AMOUNT													/*수납금액*/
+					,RCIV_DE															/*수납일자*/
+					,RDCAMT_DE														/*감액일자*/
+					,RDCAMT_AMOUNT												/*감액금액*/
+					,DEPT_CODE														/*부서코드*/
+					,PAYMTHD														/*납부방법*/
+					,OPERT_SE														/*작업구분*/
+					,CASH_RCIPT_RGSDE											/*현금영수증등록일*/
+					,CASH_RCIPT_SN													/*현금영수증일련번호*/
+					,REGISTER_ID														/*등록자ID*/
+					,REGIST_DT														/*등록일시*/
+					,UPDUSR_ID														/*수정자ID*/
+					,UPDT_DT															/*수정일시*/
+					)
+		VALUES(
+					#CNTRCTR_NO#													/*계약자번호*/   
+					,SUBSTR(#MDAT_YM#,0,6)													/*조정년월*/
+					,#MDAT_DE#														/*조정일자*/
+					,NVL((
+							SELECT max(NHT_SN)
+							FROM TBRNT_PUCHAS_MT_RNTCHRG
+							WHERE MDAT_DE = #MDAT_DE#
+							),0)+1														/*고지서순번*/
+					,#RNTCHRG#														/*임대료*/
+					,#OVDINTR#														/*연체이자*/
+					,#PAY_TMLMT#													/*납부기한*/
+					,#RCIV_AMOUNT#												/*수납금액*/
+					,#RCIV_DE#														/*수납일자*/
+					,#RDCAMT_DE#													/*감액일자*/
+					,#RDCAMT_AMOUNT#											/*감액금액*/
+					,#DEPT_CODE#													/*부서코드*/
+					,#PAYMTHD#														/*납부방법*/
+					,'B'																	/*작업구분*/
+					,#CASH_RCIPT_RGSDE#											/*현금영수증등록일*/
+					,#CASH_RCIPT_SN#												/*현금영수증일련번호*/
+					,#S_USER_ID#													/*등록자ID*/
+					,SYSDATE															/*등록일시*/
+					,#S_USER_ID#													/*수정자ID*/
+					,SYSDATE															/*수정일시*/
+				)
+	</insert>
+
+
+	<!-- 쿼리명 : 매입임대 월임대료 정보 수정
+			 설명 : 매입임대 월임대료 정보 수정 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.16
+	-->	
+	<update id="RNT02040203DAO.savePuchasRntchrgU" parameterClass="java.util.HashMap">
+			UPDATE TBRNT_PUCHAS_MT_RNTCHRG SET 
+						   PAY_TMLMT  = #PAY_TMLMT#
+					       ,RCIV_AMOUNT   = #RCIV_AMOUNT#
+					       ,RCIV_DE  = #RCIV_DE#
+					       ,RDCAMT_DE  = #RDCAMT_DE#
+					       ,RNTCHRG   = #RNTCHRG#
+					       ,RDCAMT_AMOUNT    = #RDCAMT_AMOUNT#
+					       ,OVDINTR = #OVDINTR#
+					       ,UPDUSR_ID = #S_USER_ID#
+					       ,UPDT_DT  = SYSDATE
+			 WHERE MDAT_YM    = #MDAT_YM#
+				AND CNTRCTR_NO = #CNTRCTR_NO#
+				AND NHT_SN   = #NHT_SN#
+				AND MDAT_DE   = #MDAT_DE#
+	</update>
+	
+	
+	<!-- 쿼리명 : 매입임대 월임대료 정보 삭제
+			 설명 : 매입임대 월임대료 정보 삭제 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.16
+	-->	
+	<delete id="RNT02040203DAO.savePuchasRntchrgD" parameterClass="java.util.HashMap">
+			DELETE 
+			FROM TBRNT_PUCHAS_MT_RNTCHRG
+			 WHERE MDAT_YM    = #MDAT_YM#
+				AND CNTRCTR_NO = #CNTRCTR_NO#
+				AND NHT_SN   = #NHT_SN#
+				AND MDAT_DE   = #MDAT_DE#
+	</delete>	
+</sqlMap>

@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM060126_SQL">
+ 
+ 	<!-- 초기 검색조건 조회 -->
+	<select id="HRM060126DAO.selectSearchList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT T1.EVL_YEAR   AS EVL_YEAR
+		     , MAX(T1.HT_SE) AS HT_SE
+		FROM TBHRM_WORK_EVL_TRGTER T1
+		   , (SELECT EMPNO
+		           , MAX(EVL_YEAR) AS EVL_YEAR
+		      FROM TBHRM_WORK_EVL_TRGTER
+		      WHERE 1=1
+		      AND EMPNO = #EMPNO#
+		      GROUP BY EMPNO
+		     ) T2
+		WHERE T1.EMPNO = T2.EMPNO
+		  AND T1.EVL_YEAR = T2.EVL_YEAR
+		GROUP BY T1.EMPNO, T1.EVL_YEAR
+	</select>
+	
+	<!-- 평정 대상자 -->
+	<select id="HRM060126DAO.selectEmpChk" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT COUNT(EMPNO) AS EMP_CNT
+		FROM TBHRM_WORK_EVL_TRGTER
+		WHERE EVL_YEAR = #EVL_YEAR#
+		AND HT_SE = #HT_SE#
+		AND EMPNO = #EMPNO#
+	</select>
+	
+	<!-- 실적기간 조회-->	
+	<select id="HRM060126DAO.selectAcmsltPd" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT HT_BGNDE
+		      ,HT_ENDDE
+		      ,INDVDL_BGNDE
+		      ,INDVDL_ENDDE
+		      ,CASE WHEN TO_CHAR(SYSDATE,'YYYYMMDD') BETWEEN INDVDL_BGNDE AND INDVDL_ENDDE THEN 'Y' ELSE 'N' END       AS UPDATE_YN
+		      ,DCSN_DE
+		FROM   TBHRM_WORK_EVL_PD
+		WHERE  EVL_YEAR = #EVL_YEAR#
+		AND    HT_SE    = #HT_SE#
+	]]>
+	</select>
+	
+	<!-- 사원정보 조회 -->
+	<select id="HRM060126DAO.selectEmpInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH DEPT_GNFD_DTLS_TM AS ( /*현 보직일*/
+		    SELECT EMPNO, DEPT_CODE, MIN(GNFD_DE) AS DEPT_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, DEPT_CODE
+		)
+		, CLSF_GNFD_DTLS_TM AS ( /*현직급 임용일*/
+		    SELECT EMPNO, CLSF_SE, MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, CLSF_SE
+		)
+		SELECT t1.EMPNO
+		     , t6.EMPNM                                                         /*성명*/
+		     , t1.DEPT_CODE
+		     , t4.DEPT_NM                                                       /*소속명*/
+		     , SFCOM_CODE_NM('HRM003', t1.OFCPS_SE, 'CODE_NM') AS OFCPS_NM      /*직위명*/
+		     , SFCOM_CODE_NM('HRM002', t1.CLSF_SE, 'CODE_NM')  AS HR_CLSF_NM    /*직급명*/
+		     , t6.BRTHDY                                                        /*생년월일*/
+		     , t6.ECNY_DE                                                       /*입사일*/
+		     , NVL(t6.NOW_CLSF_EMPLMN_DE, t3.CLSF_GNFD_DE)     AS CLSF_GNFD_DE  /*현직급 임용일*/
+		     , NVL(t6.APPNT_DE, t2.DEPT_GNFD_DE)               AS DEPT_GNFD_DE  /*현 보직일*/
+   			 , t5.HT_BGNDE AS HT_BGNDE
+			 , t5.HT_ENDDE AS HT_ENDDE
+		FROM TBHRM_WORK_EVL_TRGTER t1
+		    LEFT OUTER JOIN DEPT_GNFD_DTLS_TM t2
+		            ON t1.EMPNO     = t2.EMPNO
+		           AND t1.DEPT_CODE = t2.DEPT_CODE
+		    LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+		            ON t1.EMPNO      = t3.EMPNO
+		           AND t1.CLSF_SE = t3.CLSF_SE
+		    LEFT OUTER JOIN VWHRM_DEPT t4
+		            ON t1.DEPT_CODE = t4.DEPT_CODE
+		    LEFT OUTER JOIN TBHRM_WORK_EVL_PD t5
+		            ON t1.EVL_YEAR = t5.EVL_YEAR
+		           AND t1.HT_SE = t5.HT_SE
+		    LEFT OUTER JOIN TBHRM_HR_MASTR t6
+		            ON t1.EMPNO = t6.EMPNO
+		WHERE 1=1
+		AND t1.EVL_YEAR = #EVL_YEAR#
+		AND t1.HT_SE = #HT_SE#
+		AND t1.EMPNO = #EMPNO#
+		ORDER BY t1.OFCPS_SE
+		       , t1.JSSFC_SE
+		       , t1.CLSF_SE
+	]]>
+	</select>
+	
+	<!-- ===================== [ 탭1 ~ 탭5 ] ===================== -->
+	
+	<!-- 업무추진실적 세부내역 목록 조회 -->
+	<select id="HRM060126DAO.selectJobPrtnAcmsltList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 EVL_YEAR	/*평가연도*/
+			,HT_SE		/*반기구분*/
+			,EMPNO		/*사원번호*/
+			,SN			/*순번*/
+			,ACMSLT_SE	/*실적구분*/
+			,CN			/*내용*/
+		FROM TBHRM_JOB_ACMSLT_DETAIL
+		WHERE EVL_YEAR	= #EVL_YEAR#
+		  AND HT_SE		= #HT_SE#
+		  AND EMPNO		= #EMPNO#
+		  AND ACMSLT_SE = #ACMSLT_SE#
+	</select>
+	
+	<!-- 업무추진실적 세부내역 생성 -->
+	<insert id="HRM060126DAO.jobPrtnAcmsltC" parameterClass="java.util.HashMap">
+		INSERT
+		INTO TBHRM_JOB_ACMSLT_DETAIL
+		    (
+		       EVL_YEAR
+		      ,HT_SE
+		      ,EMPNO
+		      ,SN
+		      ,ACMSLT_SE
+		      ,CN
+		      ,REGISTER_ID
+		      ,REGIST_DT
+		      ,UPDUSR_ID
+		      ,UPDT_DT
+		    )
+		    VALUES
+		    (
+		       #EVL_YEAR#   
+		      ,#HT_SE#      
+		      ,#EMPNO#      
+		      ,(
+			      	SELECT
+			      		NVL(MAX(SN), 0)+1
+			      	FROM TBHRM_JOB_ACMSLT_DETAIL
+					WHERE EVL_YEAR	= #EVL_YEAR#
+					  AND HT_SE		= #HT_SE#
+					  AND EMPNO		= #EMPNO#
+				)        
+		      ,#ACMSLT_SE#  
+		      ,#CN#         
+		      ,#S_USER_ID#
+		      ,SYSDATE 
+		      ,#S_USER_ID#  
+		      ,SYSDATE    
+		    )	
+	</insert>
+	
+	<!-- 업무추진실적 세부내역 수정 -->
+	<update id="HRM060126DAO.jobPrtnAcmsltU" parameterClass="java.util.HashMap">
+		UPDATE TBHRM_JOB_ACMSLT_DETAIL
+		SET
+			 EVL_YEAR    = #EVL_YEAR#
+			,HT_SE       = #HT_SE#
+			,EMPNO       = #EMPNO#
+			,SN          = #SN#
+			,ACMSLT_SE   = #ACMSLT_SE#
+			,CN          = #CN#
+			,UPDUSR_ID   = #S_USER_ID#
+			,UPDT_DT     = SYSDATE
+		WHERE EVL_YEAR	= #EVL_YEAR#
+		  AND HT_SE		= #HT_SE#
+		  AND EMPNO		= #EMPNO#
+		  AND SN        = #SN#
+	</update>
+		
+	<!-- 업무추진실적 세부내역 삭제 -->
+	<delete id="HRM060126DAO.jobPrtnAcmsltD" parameterClass="java.util.HashMap">
+		DELETE
+		FROM TBHRM_JOB_ACMSLT_DETAIL
+		WHERE EVL_YEAR	= #EVL_YEAR#
+		  AND HT_SE		= #HT_SE#
+		  AND EMPNO		= #EMPNO#
+		  AND SN        = #SN#
+	</delete>
+
+</sqlMap>

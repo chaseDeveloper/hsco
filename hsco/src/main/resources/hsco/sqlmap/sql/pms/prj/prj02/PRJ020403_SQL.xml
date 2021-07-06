@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBPRJ_ISSNO_ADIT_INFO		호별추가정보
+		 R   : TBHRM_HR_MASTR				인사마스터
+		CRUD : TBPRJ_RENT_PC_UPLMT			임대가상한
+		CRUD : TBPRJ_RENT_PC_CALC			임대가산정
+		CRUD : TBPRJ_RENT_PC_CHANGE			임대가변경
+		CRUD : TBPRJ_GTN_UPLMT				보증금상한
+		CRUD : TBPRJ_RNTCHRG_UPLMT			임대료상한
+	-->
+
+<!-- 임대가상한 조회 : PRJ020104.totList -->
+
+<!-- 임대가상한 저장 : PRJ020104.tot_U -->
+
+<!-- 보증금상한 조회 : PRJ020104.gtnList -->
+
+<!-- 보증금상한 저장 : PRJ020104.gtn_U -->
+
+<!-- 임대료상한 조회 : PRJ020104.rentList -->
+
+<!-- 임대료상한 저장 : PRJ020104.rent_U -->
+
+<!-- 임대가산정 조회  -->
+<select id="PRJ020403.calcList" parameterClass="map" resultClass="hashmap">
+WITH V_PRJ_HOU_CNT AS		/* 주택 세대수 조회 : 호별추가정보 TBPRJ_ISSNO_ADIT_INFO */
+(
+<include refid="pms_prj.v_prj_house_count"/>
+)
+SELECT
+	 C.BSNS_CODE		/* 사업코드 */
+	,C.HOUSE_CODE		/* 주택코드 */
+	,C.SUPLY_TY_CODE	/* 공급유형코드 */
+	,C.TY_CODE			/* 타입코드 */
+	,C.HSHLD_CO			/* 세대수 */
+
+	,NVL(A.STDR_DE,#STDR_DE#) AS STDR_DE			/* 기준일자 */
+
+	,A.BSIS_AMOUNT		/* 기초금액 */
+	,A.GTN				/* 보증금 */
+	,A.RNTCHRG			/* 임대료 */
+
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, C.TY_CODE) AS TY_CODE_NM	/* 타입(블럭) */
+	,SFSAL_GETEMPNO_01(A.UPDUSR_ID) AS EMPNM
+	,SFPRJ_GETDEPTNM(A.UPDUSR_ID) AS DEPT_NM
+FROM V_PRJ_HOU_CNT C
+JOIN TBPRJ_BSNS_CODE BC ON C.BSNS_CODE = BC.BSNS_CODE
+LEFT JOIN TBPRJ_RENT_PC_CALC A				/* 임대가산정 */
+  ON A.BSNS_CODE = C.BSNS_CODE
+ AND A.HOUSE_CODE = C.HOUSE_CODE
+ AND A.SUPLY_TY_CODE = C.SUPLY_TY_CODE
+ AND A.TY_CODE = C.TY_CODE
+WHERE C.BSNS_CODE = #BSNS_CODE# 
+  AND C.HOUSE_CODE = #HOUSE_CODE# 
+<isNotEmpty property="SUPLY_TY_CODE" >
+  AND C.SUPLY_TY_CODE = #SUPLY_TY_CODE#
+</isNotEmpty>
+ORDER BY 1,2,3,4
+ </select>
+
+<!-- 임대가산정 저장 -->
+<update id="PRJ020403.calc_U" parameterClass="map">
+MERGE INTO TBPRJ_RENT_PC_CALC		/* 임대가산정 */
+USING DUAL
+ON (  BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND HOUSE_CODE = #HOUSE_CODE#			/* 주택코드 */
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#	/* 공급유형코드 */
+  AND TY_CODE = #TY_CODE#				/* 타입코드 */
+)
+WHEN MATCHED THEN
+UPDATE SET
+	 STDR_DE = #STDR_DE#			/* 기준일자 */
+	,HSHLD_CO = #HSHLD_CO#			/* 세대수 */
+	,BSIS_AMOUNT = #BSIS_AMOUNT#	/* 기초금액 */
+	,GTN = #GTN#					/* 보증금 */
+	,RNTCHRG = #RNTCHRG#			/* 임대료 */
+
+	,UPDUSR_ID = #S_USER_ID#		/* 수정자ID */
+	,UPDT_DT = SYSDATE				/* 수정일시 */
+WHEN NOT MATCHED THEN
+INSERT(
+	 BSNS_CODE			/* 사업코드 */
+	,HOUSE_CODE			/* 주택코드 */
+	,SUPLY_TY_CODE		/* 공급유형코드 */
+	,TY_CODE			/* 타입코드 */
+
+	,STDR_DE			/* 기준일자 */
+	,HSHLD_CO			/* 세대수 */
+	,BSIS_AMOUNT		/* 기초금액 */
+	,GTN				/* 보증금 */
+	,RNTCHRG			/* 임대료 */
+
+	,REGISTER_ID		/* 등록자ID */
+	,REGIST_DT			/* 등록일시 */
+	,UPDUSR_ID			/* 수정자ID */
+	,UPDT_DT			/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#		/* 사업코드 */
+	,#HOUSE_CODE#		/* 주택코드 */
+	,#SUPLY_TY_CODE#	/* 공급유형코드 */
+	,#TY_CODE#			/* 타입코드 */
+
+	,#STDR_DE#			/* 기준일자 */
+	,#HSHLD_CO#			/* 세대수 */
+	,#BSIS_AMOUNT#		/* 기초금액 */
+	,#GTN#				/* 보증금 */
+	,#RNTCHRG#			/* 임대료 */
+
+	,#S_USER_ID#		/* 등록자ID */
+	,SYSDATE			/* 등록일시 */
+	,#S_USER_ID#		/* 수정자ID */
+	,SYSDATE			/* 수정일시 */
+)
+</update>
+
+<!-- 임대가변경 조회  -->
+<select id="PRJ020403.chngList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE		/* 사업코드 */
+	,A.HOUSE_CODE		/* 주택코드 */
+	,A.SUPLY_TY_CODE	/* 공급유형코드 */
+	,A.TY_CODE			/* 타입코드 */
+	,A.CHANGE_ODR		/* 변경차수 */
+
+	,A.CHANGE_DE		/* 변경일자 */
+	,A.HSHLD_CO			/* 세대수 */
+	,A.BSIS_AMOUNT		/* 기초금액 */
+	,A.GTN				/* 보증금 */
+	,A.RNTCHRG			/* 임대료 */
+
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.TY_CODE) AS TY_CODE_NM	/* 타입(블럭) */
+	,SFSAL_GETEMPNO_01(A.UPDUSR_ID) AS EMPNM
+	,SFPRJ_GETDEPTNM(A.UPDUSR_ID) AS DEPT_NM
+FROM TBPRJ_RENT_PC_CHANGE A					/* 임대가변경 */
+JOIN TBPRJ_BSNS_CODE BC ON A.BSNS_CODE = BC.BSNS_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#
+  AND A.HOUSE_CODE = #HOUSE_CODE#
+<isNotEmpty property="SUPLY_TY_CODE" >
+  AND A.SUPLY_TY_CODE = #SUPLY_TY_CODE#
+</isNotEmpty>
+<isNotEmpty property="TY_CODE" >
+  AND A.TY_CODE = #TY_CODE#
+</isNotEmpty>
+ORDER BY 1,2,3,4,5
+</select>
+
+<!-- 임대가변경 추가  -->
+<insert id="PRJ020403.chng_C" parameterClass="map">
+INSERT INTO TBPRJ_RENT_PC_CHANGE			/* 임대가변경 */
+(
+	 BSNS_CODE			/* 사업코드 */
+	,HOUSE_CODE			/* 주택코드 */
+	,SUPLY_TY_CODE		/* 공급유형코드 */
+	,TY_CODE			/* 타입코드 */
+	,CHANGE_ODR			/* 변경차수 */
+	,CHANGE_DE			/* 변경일자 */
+	,HSHLD_CO			/* 세대수 */
+	,BSIS_AMOUNT		/* 기초금액 */
+	,GTN				/* 보증금 */
+	,RNTCHRG			/* 임대료 */
+
+	,REGISTER_ID		/* 등록자ID */
+	,REGIST_DT			/* 등록일시 */
+	,UPDUSR_ID			/* 수정자ID */
+	,UPDT_DT			/* 수정일시 */
+)VALUES(
+	 #BSNS_CODE#		/* 사업코드 */
+	,#HOUSE_CODE#		/* 주택코드 */
+	,#SUPLY_TY_CODE#	/* 공급유형코드 */
+	,#TY_CODE#			/* 타입코드 */
+	,(SELECT NVL(MAX(CHANGE_ODR)+1,1)
+		 FROM TBPRJ_RENT_PC_CHANGE
+		WHERE BSNS_CODE = #BSNS_CODE#
+		  AND HOUSE_CODE = #HOUSE_CODE#
+		  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#
+		  AND TY_CODE = #TY_CODE#
+	 )
+	,#CHANGE_DE#		/* 변경일자 */
+	,#HSHLD_CO#			/* 세대수 */
+	,#BSIS_AMOUNT#		/* 기초금액 */
+	,#GTN#				/* 보증금 */
+	,#RNTCHRG#			/* 임대료 */
+
+	,#S_USER_ID#		/* 등록자ID */
+	,SYSDATE			/* 등록일시 */
+	,#S_USER_ID#		/* 수정자ID */
+	,SYSDATE			/* 수정일시 */
+)
+</insert>
+
+<!-- 임대가변경 수정 -->
+<update id="PRJ020403.chng_U" parameterClass="map">
+UPDATE TBPRJ_RENT_PC_CHANGE			/* 임대가변경 */
+SET 
+	 CHANGE_DE = #CHANGE_DE#		/* 변경일자 */
+	,HSHLD_CO = #HSHLD_CO#			/* 세대수 */
+	,BSIS_AMOUNT = #BSIS_AMOUNT#	/* 기초금액 */
+	,GTN = #GTN#					/* 보증금 */
+	,RNTCHRG = #RNTCHRG#			/* 임대료 */
+
+	,UPDUSR_ID = #S_USER_ID#	/* 수정자ID */
+	,UPDT_DT = SYSDATE			/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#
+  AND HOUSE_CODE = #HOUSE_CODE#
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#
+  AND TY_CODE = #TY_CODE#
+  AND CHANGE_ODR = #CHANGE_ODR#
+</update>
+
+<!-- 임대가변경 삭제  -->
+<delete id="PRJ020403.chng_D" parameterClass="map">
+DELETE FROM TBPRJ_RENT_PC_CHANGE
+WHERE BSNS_CODE = #BSNS_CODE# 
+  AND HOUSE_CODE = #HOUSE_CODE# 
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#
+  AND TY_CODE = #TY_CODE#
+  AND CHANGE_ODR = #CHANGE_ODR#
+</delete>
+
+</sqlMap>

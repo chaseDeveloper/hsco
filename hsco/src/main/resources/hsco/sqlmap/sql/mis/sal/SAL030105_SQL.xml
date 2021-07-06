@@ -1,0 +1,1846 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL030105_SQL">	
+
+	<!-- 확정내역 -->
+	<select id="SAL030105DAO.selectClosAtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH MT_SALARY_T AS (
+		    SELECT
+          	 	 PYMNT_YM
+        		,SN
+		        ,COUNT(1) AS CNT
+		        ,SUM(PYMNT_AMT) AS PYMNT_AMT
+		        ,SUM(DDC_AMT) AS DDC_AMT
+		        ,SUM(TOT_AMT) AS TOT_AMT
+		    FROM (
+		          SELECT 
+		          	   t1.PYMNT_YM
+              		  ,t1.SN
+		              ,t3.JSSFC_SE
+		              ,t1.EMPNO
+		              ,SUM(DECODE(t2.PYMNT_DDC_SE,0,t1.AMOUNT,0)) AS PYMNT_AMT
+		              ,SUM(DECODE(t2.PYMNT_DDC_SE,1,t1.AMOUNT,0)) AS DDC_AMT
+		              ,SUM(DECODE(t2.PYMNT_DDC_SE,0,1,-1) * t1.AMOUNT) AS TOT_AMT
+		          FROM TBSAL_MT_SALARY_DTLS t1
+		               INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE t2
+		               ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+		               INNER JOIN TBHRM_HR_MASTR t3
+		               ON t1.EMPNO = t3.EMPNO
+		          WHERE t1.PYMNT_YM LIKE #YEAR#||'%'
+		          GROUP BY t1.PYMNT_YM, t1.SN, t3.JSSFC_SE, t1.EMPNO
+		         )
+		    GROUP BY PYMNT_YM, SN
+		)
+		SELECT
+			 t1.PYMNT_YM
+			,t2.PYMNT_DE
+    		,t1.SN
+		    ,t1.CNT
+		    ,t1.PYMNT_AMT
+		    ,t1.DDC_AMT
+		    ,t1.TOT_AMT
+	        ,NVL(t2.CLOS_AT,'0') AS CLOS_AT
+			FROM MT_SALARY_T t1
+	         LEFT OUTER JOIN TBSAL_MT_SALARY_CALC t2
+	         ON  t1.PYMNT_YM = t2.PYMNT_YM
+	         AND t1.SN = t2.SN
+	    ORDER BY t1.PYMNT_YM, t1.SN
+	</select>
+	
+	<!-- 급여 확정/취소처리 -->
+	<update id="SAL030105DAO.updateMtSalaryClosAt" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_MT_SALARY_CALC
+		SET  CLOS_AT 	= #CLOS_AT#
+			,UPDUSR_ID	= #S_USER_ID#
+			,UPDT_DT	= SYSDATE
+		WHERE PYMNT_YM	= #PYMNT_YM#
+		  AND SN 		= #SN#
+	</update>
+	
+	
+	<!-- 월급여확정정보 목록조회 -->
+	<select id="SAL030105DAO.selectMtSalaryDcsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT '0'                          AS CHK
+			     , A.PYMNT_YM                   AS PYMNT_YM
+			     , A.SALARY_SE                  AS SALARY_SE
+			     , A.PYMNT_SE                   AS PYMNT_SE
+			     , A.PYMNT_DE                   AS PYMNT_DE
+			     , A.PYMNT_NMPR                 AS PYMNT_NMPR
+			     , A.DCSN_AT                    AS DCSN_AT
+			     , A.DCSN_DE                    AS DCSN_DE
+			     , A.CALC_TOTAMT                AS CALC_TOTAMT
+			     , A.DDC_TOTAMT                 AS DDC_TOTAMT
+			     , A.RL_RECPT_AMOUNT            AS RL_RECPT_AMOUNT
+			     , A.OPERTOR                    AS OPERTOR
+			     , SFSAL_GETEMPNO_01(A.OPERTOR) AS OPERTOR_NM
+			  FROM TBSAL_MT_SALARY_CREAT A
+			 WHERE 1                        = 1
+			   AND SUBSTR(A.PYMNT_YM, 1, 4) = SUBSTR(#YEAR#, 1, 4)
+			   AND SALARY_SE                in ('1', '3')
+		]]>
+		<isNotEmpty property="DCSN_AT">
+			   AND A.DCSN_AT = #DCSN_AT#
+		</isNotEmpty>
+		<isEmpty property="DCSN_AT">
+			   AND A.DCSN_AT = '0'
+		</isEmpty>	
+			 ORDER BY A.PYMNT_YM DESC , A.SALARY_SE ASC, A.PYMNT_DE ASC			 		        	     
+    </select>  
+    
+    <!-- 월급여확정 기본급 호봉제-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1010" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.BSLRY =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1010'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 건설수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1050" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.CNSTRC_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1050'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#		
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 기술수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1070" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.TCHNLGY_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1070'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#	
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 직책보조비-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1955" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.RSPOFC_SBSIDY =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1955'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+			  	/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1955'
+			       )
+			    */		
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 특수업무수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1090" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.SPCL_JOB_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1090'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+			  	/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1090'
+			       )
+				*/	
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 위험수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1091" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.RISK_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1092'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+			  	/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1092'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 운전수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1092" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.DRV_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1091'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+			  	/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1091'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 가족수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1080" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.FAMILY_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1080'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1080'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 장기근속수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1060" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.INORG_CNWK_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1060'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1060'
+			       )
+				*/	
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 시간외수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1910" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.TIME__ELSE_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1910'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1910'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 급식보조비-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1940" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.MLSV_SBSIDY =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1940'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1940'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 교통보조비-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1960" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.TRNSPORT_SBSIDY =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1960'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1960'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 특정업무수행비-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1191" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.SPCIFY_JOB_EXC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1191'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1191'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 대우수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1220" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.TRTMNT_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1220'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1220'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 현장체제비-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1991" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.SPT_SYSM_CT =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1991'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1991'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 감독수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1992" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.MNG_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1992'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1992'
+			       )
+				*/	
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 업무추진여비-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1961" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.JOB_PRTN_TRVCT =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1961'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1961'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 학자보조금-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1140" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.SCHXPN_SBSIDY =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1140'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1140'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 연차수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1110" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.YRYC_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1110'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1110'
+			       )
+				*/	
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 성과급-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1030" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.BUDGET_PRICEWAGE =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1030'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1030'
+			       )
+				*/		
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 인센티브 성과급-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1150" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.INCNTV_PRICEWAGE =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1150'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1150'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 직무수당-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1957" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.DTY_ALLWNC =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1957'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1957'
+			       )
+				*/
+        ]]>        
+    </update>
+    
+    <!-- 월급여확정 연말정산 환급-->
+    <update id="SAL030105DAO.MtSalaryDcsn_P1240" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.YND_RETUN =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.PYMNT_SE       = B.PYMNT_SE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'P1240'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+				/*
+			   AND B.EMPNO IN
+			       (
+			              SELECT D.EMPNO
+			                FROM TBSAL_MT_PYMNT_DTLS D
+			               WHERE D.PYMNT_YM       = B.PYMNT_YM
+			                 AND D.SALARY_SE      = B.SALARY_SE
+			                 AND D.PYMNT_DE       = B.PYMNT_DE
+			                 AND D.PYMNT_SE       = B.PYMNT_SE
+			                 AND D.PYMNT_DDC_CODE = 'P1240'
+			       )
+				*/	
+		]]>
+    </update>
+    
+	<!-- 월급여확정 - 과세총액 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_TAXT_AMOUNT" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.TAXT_AMOUNT =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM         = B.PYMNT_YM
+			                 AND A.SALARY_SE 		= B.SALARY_SE
+			                 AND A.PYMNT_DE  		= B.PYMNT_DE
+			                 AND A.PYMNT_SE  		= B.PYMNT_SE
+			                 AND A.EMPNO     		= B.EMPNO
+			                 AND A.TAXT_AT          IS NULL
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#			
+		]]>
+    </update>
+    
+    <!-- 월급여확정 - 비과세총액 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_TAXXMPT_AMOUNT" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.TAXXMPT_AMOUNT =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM      	= B.PYMNT_YM
+			                 AND A.SALARY_SE 		= B.SALARY_SE
+			                 AND A.PYMNT_DE  		= B.PYMNT_DE
+			                 AND A.PYMNT_SE  		= B.PYMNT_SE
+			                 AND A.EMPNO         	= B.EMPNO
+			                 AND A.TAXT_AT        	= '1'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#	
+		]]>
+    </update>
+
+    <!-- 월급여확정 - 총지급액 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_TOT_PYMNTAMT" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.TOT_PYMNTAMT =
+			       (
+			              SELECT NVL(SUM(A.PYMNT_AMOUNT), 0)
+			                FROM TBSAL_MT_PYMNT_DTLS A
+			               WHERE A.PYMNT_YM                 = B.PYMNT_YM
+			                 AND A.SALARY_SE                = B.SALARY_SE
+			                 AND A.PYMNT_DE       			= B.PYMNT_DE
+			                 AND A.PYMNT_SE                 = B.PYMNT_SE
+			                 AND A.EMPNO                    = B.EMPNO
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+		]]>       
+    </update>
+
+    <!-- 월급여확정 - 공제 연말정산 소득세 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2210" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.INCMTAX_EXCCLC =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2210'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 연말정산 지방소득세 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2021" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.LCLTY_INCMTAX_EXCCLC =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2021'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 건강보험 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2110" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.HLTHINS =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2110'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#	
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 국민연금 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2120" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.NPN =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2120'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 고용보험 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2150" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.EMPLYMINSRNC =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2150'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 노동조합비 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2250" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.MXTR_CT =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2250'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 식권공제 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2298" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.FSTMP_PURCHS_DDC =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2298'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 봉사단기금 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2301" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.SRVC_GRP_ENDW =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2301'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 기금원금 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2230" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.ENDW_PRNCPAL =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2230'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 기금이자 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2240" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.ENDW_INTR =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2240'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 급여압류 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2280" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.MENDNG_SEIZR =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2280'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 학자금대부상환 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2260" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.SCHXPN_RPAY =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2260'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 임금피크공제 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2221" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.WAGE_PEAK =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2221'
+			       )
+			 WHERE B.PYMNT_YM    = #PYMNT_YM#
+			   AND B.PYMNT_DE    = #PYMNT_DE#
+			   AND B.SALARY_SE   = #SALARY_SE#
+			   AND B.PYMNT_SE    = #PYMNT_SE#
+			   AND B.STDR_ANSLRY > 0
+        ]]>
+    </update>
+
+
+    <!-- 월급여확정 - 공제 소득세 재계산 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2010_RE" parameterClass="java.util.HashMap">
+		<isEqual property="PYMNT_SE" compareValue = "2"> 
+           <![CDATA[
+            UPDATE TBSAL_MT_DDC_DTLS D
+			SET D.DDC_AMOUNT = 
+			       (  SELECT 
+			       			SFSAL_TAX_INCOM_AMT(B.EMPNO, #PYMNT_YM#, NVL(C.TAXT_AMOUNT, 0), NVL(B.HN_DDC_NMPR, 0)) AS TAXX_AMT /* 공제금액 */
+			           FROM TBSAL_MT_SALARY_PYMNT B
+					   INNER JOIN
+				              (
+				                         SELECT PYMNT_YM
+				                              , SALARY_SE
+				                              , EMPNO
+				                              , SUM(TAXT_AMOUNT) AS TAXT_AMOUNT  /* 과세소득 합산 */
+				                           FROM TBSAL_MT_SALARY_PYMNT
+				                          WHERE PYMNT_YM  = #PYMNT_YM#
+				                            AND SALARY_SE = #SALARY_SE#
+				                       GROUP BY PYMNT_YM
+				                              , SALARY_SE
+				                              , EMPNO
+				              )
+				              C
+				            ON B.PYMNT_YM  	= C.PYMNT_YM
+				           AND B.SALARY_SE 	= C.SALARY_SE
+				           AND B.EMPNO    	= C.EMPNO
+						 WHERE B.PYMNT_YM   = #PYMNT_YM#
+						   AND B.SALARY_SE  = #SALARY_SE#
+						   AND B.PYMNT_DE   = #PYMNT_DE#
+						   AND B.PYMNT_SE   = #PYMNT_SE#
+						   AND B.PYMNT_YM	= D.PYMNT_YM
+						   AND B.SALARY_SE	= D.SALARY_SE
+			               AND B.PYMNT_DE	= D.PYMNT_DE
+                 		   AND B.PYMNT_SE	= D.PYMNT_SE
+                 		   AND B.EMPNO		= D.EMPNO)
+			WHERE D.PYMNT_YM 			= #PYMNT_YM#
+			  AND D.SALARY_SE 			= #SALARY_SE#
+			  AND D.PYMNT_DE 			= #PYMNT_DE#	
+			  AND D.PYMNT_SE 			= #PYMNT_SE#	
+			  AND D.PYMNT_DDC_CODE 		= 'S2010'
+          ]]>
+        </isEqual> 
+        <isEqual property="PYMNT_SE" compareValue = "4"> 
+           <![CDATA[
+            UPDATE TBSAL_MT_DDC_DTLS D
+			SET D.DDC_AMOUNT = 
+			       (  SELECT 
+			       			SFSAL_TAX_INCOM_AMT(B.EMPNO, #PYMNT_YM#, NVL(C.TAXT_AMOUNT, 0), NVL(B.HN_DDC_NMPR, 0)) AS TAXX_AMT /* 공제금액 */
+			           FROM TBSAL_MT_SALARY_PYMNT B
+					   INNER JOIN
+				              (
+				                         SELECT PYMNT_YM
+				                              , SALARY_SE
+				                              , EMPNO
+				                              , SUM(TAXT_AMOUNT) AS TAXT_AMOUNT  /* 과세소득 합산 */
+				                           FROM TBSAL_MT_SALARY_PYMNT
+				                          WHERE PYMNT_YM  = #PYMNT_YM#
+				                            AND SALARY_SE = #SALARY_SE#
+				                       GROUP BY PYMNT_YM
+				                              , SALARY_SE
+				                              , EMPNO
+				              )
+				              C
+				            ON B.PYMNT_YM  	= C.PYMNT_YM
+				           AND B.SALARY_SE 	= C.SALARY_SE
+				           AND B.EMPNO    	= C.EMPNO
+						 WHERE B.PYMNT_YM   = #PYMNT_YM#
+						   AND B.SALARY_SE  = #SALARY_SE#
+						   AND B.PYMNT_DE   = #PYMNT_DE#
+						   AND B.PYMNT_SE   = #PYMNT_SE#
+						   AND B.PYMNT_YM	= D.PYMNT_YM
+						   AND B.SALARY_SE	= D.SALARY_SE
+			               AND B.PYMNT_DE	= D.PYMNT_DE
+                 		   AND B.PYMNT_SE	= D.PYMNT_SE
+                 		   AND B.EMPNO		= D.EMPNO)
+			WHERE D.PYMNT_YM 			= #PYMNT_YM#
+			  AND D.SALARY_SE 			= #SALARY_SE#
+			  AND D.PYMNT_DE 			= #PYMNT_DE#	
+			  AND D.PYMNT_SE 			= #PYMNT_SE#	
+			  AND D.PYMNT_DDC_CODE 		= 'S2010'
+		]]>
+        </isEqual> 
+        <isEqual property="PYMNT_SE" compareValue = "1">
+			SELECT SYSDATE FROM DUAL
+        </isEqual> 
+    </update>
+    
+    <!-- 월급여확정 - 공제 지방소득세 재계산 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2020_RE" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_DDC_DTLS D
+			   SET D.DDC_AMOUNT =
+			       (
+			              SELECT FLOOR(NVL(A.DDC_AMOUNT, 0) / 100) * 10
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = D.PYMNT_YM
+			                 AND A.PYMNT_DE       = D.PYMNT_DE
+			                 AND A.SALARY_SE      = D.SALARY_SE
+			                 AND A.PYMNT_SE       = D.PYMNT_SE
+			                 AND A.EMPNO          = D.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2010'
+			       )
+			 WHERE D.PYMNT_YM       = #PYMNT_YM#
+			   AND D.SALARY_SE      = #SALARY_SE#
+			   AND D.PYMNT_DE       = #PYMNT_DE#
+			   AND D.PYMNT_SE       = #PYMNT_SE#
+			   AND D.PYMNT_DDC_CODE = 'S2020'
+       ]]>       
+    </update>
+    
+    <!-- 월급여확정 - 공제 소득세 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2010" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.INCMTAX =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2010'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#	
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 지방소득세 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_S2020" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.LCLTY_INCMTAX =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM       = B.PYMNT_YM
+			                 AND A.SALARY_SE      = B.SALARY_SE
+			                 AND A.PYMNT_DE       = B.PYMNT_DE
+			                 AND A.EMPNO          = B.EMPNO
+			                 AND A.PYMNT_DDC_CODE = 'S2020'
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#	
+        ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 공제총액 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_DDC_TOTAMT" parameterClass="java.util.HashMap">
+ 		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.DDC_TOTAMT =
+			       (
+			              SELECT NVL(SUM(A.DDC_AMOUNT), 0)
+			                FROM TBSAL_MT_DDC_DTLS A
+			               WHERE A.PYMNT_YM             = B.PYMNT_YM
+			                 AND A.SALARY_SE            = B.SALARY_SE
+			                 AND A.PYMNT_DE             = B.PYMNT_DE
+			                 AND A.EMPNO                = B.EMPNO
+			                 AND A.DDC_AMOUNT IS NOT NULL
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#	
+        ]]>
+     </update>
+    
+    <!-- 월급여확정 - 실수령액 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_RL_RECPT_AMOUNT" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.RL_RECPT_AMOUNT =
+			       (
+			              SELECT ( NVL(SUM(A.TOT_PYMNTAMT), 0) - NVL(SUM(A.DDC_TOTAMT), 0) )
+			                FROM TBSAL_MT_SALARY_PYMNT A
+			               WHERE A.PYMNT_YM  = B.PYMNT_YM
+			                 AND A.SALARY_SE = B.SALARY_SE
+			                 AND A.PYMNT_DE  = B.PYMNT_DE
+			                 AND A.PYMNT_SE  = B.PYMNT_SE
+			                 AND A.EMPNO     = B.EMPNO
+			       )
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+         ]]>
+    </update>
+    
+    <!-- 월급여확정 - 지급내역 마감 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_CLOS_AT" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_PYMNT_DTLS B
+			   SET B.CLOS_AT   = '1'
+			     , B.CLOS_DE   = #DCSN_DE#
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#
+         ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제내역 마감 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_CLOS_AT2" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_DDC_DTLS B
+			   SET B.CLOS_AT   = '1'
+			     , B.CLOS_DE   = #DCSN_DE#
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#		
+         ]]>
+    </update>
+    
+    <!-- 월급여확정 - 마스터 마감 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_CLOS_AT3" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.CLOS_AT   = '1'
+			     , B.CLOS_DE   = #DCSN_DE#
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#		
+         ]]>
+    </update>
+    
+    <!-- 월급여확정 - 마스터 생성내역 마감 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_CLOS_AT4" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_CREAT B
+			   SET B.DCSN_AT   = '1'
+			     , B.DCSN_DE   = #DCSN_DE#
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#			
+         ]]>
+    </update>
+    
+    <!-- 월급여확정 - 급여계좌정보 수정 -->
+    <update id="SAL030105DAO.MtSalaryBankUpdate" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.SALARY_BANK_CODE     =	(SELECT G.SALARY_BANK_CODE FROM TBSAL_EMPL_BANK_ACNUT G WHERE G.EMPNO = B.EMPNO)	/* 급여은행코드 */
+			       ,B.SALARY_BANK_ACNUT   =	(SELECT G.SALARY_BANK_ACNUT FROM TBSAL_EMPL_BANK_ACNUT G WHERE G.EMPNO = B.EMPNO)	/* 급여은행계좌 */
+			       ,B.ALLWNC_BANK_CODE    =	(SELECT G.ALLWNC_BANK_CODE FROM TBSAL_EMPL_BANK_ACNUT G WHERE G.EMPNO = B.EMPNO)	/* 수당은행코드 */	
+			       ,B.ALLWNC_BANK_ACNUT   =	(SELECT G.ALLWNC_BANK_ACNUT FROM TBSAL_EMPL_BANK_ACNUT G WHERE G.EMPNO = B.EMPNO)	/* 수당은행계좌 */
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#		
+         ]]>
+    </update>
+    
+    <!-- 급여이체데이터생성 -->
+    <insert id="SAL030105DAO.MtSalary_Transfr" parameterClass="java.util.HashMap">      
+		<isEqual property="PYMNT_SE" compareValue = "1">
+              INSERT INTO TBSAL_SALARY_TRANSFR_MANAGE (
+						 PYMNT_YM
+						,PYMNT_DE
+						,PYMNT_SE
+						,SALARY_SE
+						,EMPNO
+						,EMPNM
+						,DEPT_CODE
+						,BANK_CODE
+						,ACNUT_NO
+						,PYMNT_AMOUNT
+						,TRNSMIS_SE
+						,ANSLRY_AT
+						,RM                 /* 비고 */
+						,REGISTER_ID        /* 등록자ID */
+					    ,REGIST_DT          /* 등록일시 */
+					    ,UPDUSR_ID          /* 수정자ID */
+					    ,UPDT_DT            /* 수정일시 */
+			  )
+			  SELECT 
+						 #PYMNT_YM#
+						,#PYMNT_DE#
+						,#PYMNT_SE#
+						,#SALARY_SE#
+						,A.EMPNO
+						,A.EMPNM
+						,A.DEPT_CODE
+					    ,LPAD(A.ALLWNC_BANK_CODE,3,'0')				/* 수당은행코드 */
+					    ,A.ALLWNC_BANK_ACNUT						/* 수당은행계좌 */
+						,A.RL_RECPT_AMOUNT
+						,'0'
+						,DECODE(A.ANSLRY_AT,'Y','1','','2')
+						,''
+					    ,#S_USER_ID#           /* 등록자ID */
+						,SYSDATE               /* 등록일시 */
+						,#S_USER_ID#           /* 수정자ID */
+						,SYSDATE               /* 수정일시 */
+				   FROM TBSAL_MT_SALARY_PYMNT A
+				  WHERE A.PYMNT_YM 		= #PYMNT_YM#
+					AND A.PYMNT_DE   	= #PYMNT_DE#
+					AND A.PYMNT_SE   	= #PYMNT_SE#
+					AND A.SALARY_SE  	= #SALARY_SE#
+					AND A.CLOS_AT IS NOT NULL
+			<![CDATA[
+					AND A.RL_RECPT_AMOUNT > 0
+			]]> 
+       </isEqual>
+       <isEqual property="PYMNT_SE" compareValue = "2">
+              INSERT INTO TBSAL_SALARY_TRANSFR_MANAGE (
+						 PYMNT_YM
+						,PYMNT_DE
+						,PYMNT_SE
+						,SALARY_SE
+						,EMPNO
+						,EMPNM
+						,DEPT_CODE
+						,BANK_CODE
+						,ACNUT_NO
+						,PYMNT_AMOUNT
+						,TRNSMIS_SE
+						,ANSLRY_AT
+						,RM                 /* 비고 */
+						,REGISTER_ID        /* 등록자ID */
+					    ,REGIST_DT          /* 등록일시 */
+					    ,UPDUSR_ID          /* 수정자ID */
+					    ,UPDT_DT            /* 수정일시 */
+			 )
+			 SELECT 
+						 #PYMNT_YM#
+						,#PYMNT_DE#
+						,#PYMNT_SE#
+						,#SALARY_SE#
+						,A.EMPNO
+						,A.EMPNM
+						,A.DEPT_CODE
+					    ,LPAD(A.SALARY_BANK_CODE,3,'0')				/* 급여은행코드 */
+					    ,A.SALARY_BANK_ACNUT						/* 급여은행계좌 */
+     					,A.RL_RECPT_AMOUNT
+						,'0'
+						,DECODE(A.ANSLRY_AT,'Y','1','','2')
+						,''
+					    ,#S_USER_ID#           /* 등록자ID */
+						,SYSDATE               /* 등록일시 */
+						,#S_USER_ID#           /* 수정자ID */
+						,SYSDATE               /* 수정일시 */
+					FROM TBSAL_MT_SALARY_PYMNT A
+				   WHERE A.PYMNT_YM 	= #PYMNT_YM#
+				 	 AND A.PYMNT_DE   	= #PYMNT_DE#
+					 AND A.PYMNT_SE   	= #PYMNT_SE#
+					 AND A.SALARY_SE  	= #SALARY_SE#
+					 AND A.CLOS_AT IS NOT NULL
+			<![CDATA[
+					 AND A.RL_RECPT_AMOUNT > 0
+			]]> 
+       </isEqual>  
+       <isEqual property="PYMNT_SE" compareValue = "4">
+              INSERT INTO TBSAL_SALARY_TRANSFR_MANAGE (
+						 PYMNT_YM
+						,PYMNT_DE
+						,PYMNT_SE
+						,SALARY_SE
+						,EMPNO
+						,EMPNM
+						,DEPT_CODE
+						,BANK_CODE
+						,ACNUT_NO
+						,PYMNT_AMOUNT
+						,TRNSMIS_SE
+						,ANSLRY_AT
+						,RM                 /* 비고 */
+						,REGISTER_ID        /* 등록자ID */
+					    ,REGIST_DT          /* 등록일시 */
+					    ,UPDUSR_ID          /* 수정자ID */
+					    ,UPDT_DT            /* 수정일시 */
+			 )
+			 SELECT 
+						 #PYMNT_YM#
+						,#PYMNT_DE#
+						,#PYMNT_SE#
+						,#SALARY_SE#
+						,A.EMPNO
+						,A.EMPNM
+						,A.DEPT_CODE
+					    ,LPAD(A.SALARY_BANK_CODE,3,'0')				/* 급여은행코드 */
+					    ,A.SALARY_BANK_ACNUT						/* 급여은행계좌 */
+						,A.RL_RECPT_AMOUNT
+						,'0'
+						,'3'
+						,''
+					    ,#S_USER_ID#           /* 등록자ID */
+						,SYSDATE               /* 등록일시 */
+						,#S_USER_ID#           /* 수정자ID */
+						,SYSDATE               /* 수정일시 */
+				   FROM TBSAL_MT_SALARY_PYMNT A
+				  WHERE A.PYMNT_YM 		= #PYMNT_YM#
+					AND A.PYMNT_DE   	= #PYMNT_DE#
+					AND A.PYMNT_SE   	= #PYMNT_SE#
+					AND A.SALARY_SE  	= #SALARY_SE#
+					AND A.CLOS_AT IS NOT NULL
+			<![CDATA[
+					AND A.RL_RECPT_AMOUNT > 0
+			]]> 
+        </isEqual>                
+    </insert>     
+    
+    <!-- 급여이체데이터생성 -->
+    <insert id="SAL030105DAO.MtSalary_Transfr_2" parameterClass="java.util.HashMap">      
+		<isEqual property="PYMNT_SE" compareValue = "2">
+        <![CDATA[
+              INSERT INTO TBSAL_SALARY_TRANSFR_MANAGE (
+						 PYMNT_YM
+						,PYMNT_DE
+						,PYMNT_SE
+						,SALARY_SE
+						,EMPNO
+						,EMPNM
+						,DEPT_CODE
+						,BANK_CODE
+						,ACNUT_NO
+						,PYMNT_AMOUNT
+						,TRNSMIS_SE
+						,ANSLRY_AT
+						,RM                 /* 비고 */
+						,REGISTER_ID        /* 등록자ID */
+					    ,REGIST_DT          /* 등록일시 */
+					    ,UPDUSR_ID          /* 수정자ID */
+					    ,UPDT_DT            /* 수정일시 */
+			 )
+			 SELECT 
+						 #PYMNT_YM#
+						,#PYMNT_DE#
+						,#PYMNT_SE#
+						,#SALARY_SE#
+						,A.PYMNT_DDC_CODE	
+						,A.PYMNT_DDC_CODE_NM
+						,''
+						,LPAD(A.RCPMNY_BANK_CODE,3,'0')
+					    ,A.RCPMNY_ACNUT_NO						    
+						,(SELECT SUM(B.DDC_AMOUNT) 
+						    FROM TBSAL_MT_DDC_DTLS B
+						   WHERE B.PYMNT_YM 	= #PYMNT_YM#
+						     AND B.PYMNT_DE 	= #PYMNT_DE#
+						     AND B.SALARY_SE 	= #SALARY_SE#
+						     AND B.PYMNT_SE 	= #PYMNT_SE#		
+						     AND B.PYMNT_DDC_CODE = A.PYMNT_DDC_CODE
+                             AND B.DDC_AMOUNT > 0)
+						,'0'
+						,''
+						,''
+					    ,#S_USER_ID#           /* 등록자ID */
+						,SYSDATE               /* 등록일시 */
+						,#S_USER_ID#           /* 수정자ID */
+						,SYSDATE               /* 수정일시 */
+			 FROM  TBSAL_PYMNT_DDC_STDR_CODE A
+             WHERE SUBSTR(A.PYMNT_DDC_CODE,1,1) = 'S'
+        ]]> 
+		</isEqual>
+        <isEqual property="PYMNT_SE" compareValue = "1">
+		<![CDATA[ 
+            INSERT INTO TBSAL_SALARY_TRANSFR_MANAGE (
+						 PYMNT_YM
+						,PYMNT_DE
+						,PYMNT_SE
+						,SALARY_SE
+						,EMPNO
+						,EMPNM
+						,DEPT_CODE
+						,BANK_CODE
+						,ACNUT_NO
+						,PYMNT_AMOUNT
+						,TRNSMIS_SE
+						,ANSLRY_AT
+						,RM                 /* 비고 */						
+						,REGISTER_ID        /* 등록자ID */
+					    ,REGIST_DT          /* 등록일시 */
+					    ,UPDUSR_ID          /* 수정자ID */
+					    ,UPDT_DT            /* 수정일시 */
+			 )
+			SELECT 
+						 #PYMNT_YM#
+						,#PYMNT_DE#
+						,#PYMNT_SE#
+						,#SALARY_SE#
+						,A.PYMNT_DDC_CODE	
+						,A.PYMNT_DDC_CODE_NM
+						,''
+						,LPAD(A.RCPMNY_BANK_CODE,3,'0')
+					    ,A.RCPMNY_ACNUT_NO						    
+						,(SELECT SUM(B.DDC_AMOUNT) 
+						    FROM TBSAL_MT_DDC_DTLS B
+						   WHERE B.PYMNT_YM = #PYMNT_YM#
+						     AND B.PYMNT_DE = #PYMNT_DE#
+						     AND B.SALARY_SE = #SALARY_SE#
+						     AND B.PYMNT_SE = #PYMNT_SE#		
+						     AND B.PYMNT_DDC_CODE = A.PYMNT_DDC_CODE
+                             AND B.DDC_AMOUNT > 0)
+						,'0'
+						,''
+						,''
+					    ,#S_USER_ID#           /* 등록자ID */
+						,SYSDATE               /* 등록일시 */
+						,#S_USER_ID#           /* 수정자ID */
+						,SYSDATE               /* 수정일시 */
+			 FROM  TBSAL_PYMNT_DDC_STDR_CODE A
+             WHERE A.PYMNT_DDC_CODE = 'S2298'
+		]]>
+        </isEqual>  
+        <isEqual property="PYMNT_SE" compareValue = "4">
+			SELECT SYSDATE FROM DUAL
+        </isEqual>        
+    </insert>     
+    
+	<!-- 급여이체정보 삭제 -->
+    <delete id="SAL030105DAO.MtSalary_Transfr_3" parameterClass="java.util.HashMap">
+        <![CDATA[
+			DELETE
+			  FROM TBSAL_SALARY_TRANSFR_MANAGE
+			 WHERE PYMNT_YM           = #PYMNT_YM#
+			   AND PYMNT_DE           = #PYMNT_DE#
+			   AND PYMNT_SE           = #PYMNT_SE#
+			   AND SALARY_SE          = #SALARY_SE#
+			   AND PYMNT_AMOUNT IS NULL
+        ]]>         
+    </delete>
+    
+
+    <!-- 월급여확정취소 -->
+    <!-- 월급여확정 - 마스터 생성내역 취소 -->
+    <update id="SAL030105DAO.MtSalaryDcsn_CANCEL" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.CLOS_AT              = ''	/* 마감여부 */
+			     , B.CLOS_DE              = ''	/* 마감일자 */
+			 WHERE B.PYMNT_YM             = #PYMNT_YM#
+			   AND B.PYMNT_DE             = #PYMNT_DE#
+			   AND B.SALARY_SE            = #SALARY_SE#
+			   AND B.PYMNT_SE             = #PYMNT_SE#
+         ]]>
+    </update>
+
+    <update id="SAL030105DAO.MtSalaryDcsn_CANCEL_OLD" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_PYMNT B
+			   SET B.BSLRY                = 0	/* 기본급 */
+			     , B.CNSTRC_ALLWNC        = 0	/* 건설수당 */
+			     , B.INORG_CNWK_ALLWNC    = 0	/* 장기근속수당 */
+			     , B.TCHNLGY_ALLWNC       = 0	/* 기술수당 */
+			     , B.FAMILY_ALLWNC        = 0	/* 가족수당 */
+			     , B.SPCL_JOB_ALLWNC      = 0	/* 특수업무수당 */
+			     , B.SPCIFY_JOB_EXC       = 0	/* 특정업무수행 */
+			     , B.DRV_ALLWNC           = 0	/* 운전수당 */
+			     , B.RISK_ALLWNC          = 0	/* 위험수당 */
+			     , B.YRYC_ALLWNC          = 0	/* 연차수당 */
+			     , B.SCHXPN_SBSIDY        = 0	/* 학자금보조비 */
+			     , B.INCNTV_PRICEWAGE     = 0	/* 인센티브성과급 */
+			     , B.BUDGET_PRICEWAGE     = 0	/* 예산성과급 */
+			     , B.DTY_ALLWNC           = 0	/* 직무수당 */
+			     , B.TIME__ELSE_ALLWNC    = 0	/* 시간외수당 */
+			     , B.MLSV_SBSIDY          = 0	/* 급식보조비 */
+			     , B.RSPOFC_SBSIDY        = 0	/* 직책보조비 */
+			     , B.TRNSPORT_SBSIDY      = 0	/* 교통보조비 */
+			     , B.JOB_PRTN_TRVCT       = 0	/* 업무추진여비 */
+			     , B.SPT_SYSM_CT          = 0	/* 현장체제비 */
+			     , B.MNG_ALLWNC           = 0	/* 감독수당 */
+			     , B.MANAGE_JOB_ALLWNC    = 0	/* 관리업무수당 */
+			     , B.RESTDE_ALLWNC        = 0	/* 휴일수당 */
+			     , B.INFANT_NRTR_CT       = 0	/* 영유아보육비 */
+			     , B.ETC_ALLWNC           = 0	/* 기타수당 */
+			     , B.ALLWNC_EXCCLC        = 0	/* 수당정산 */
+			     , B.SALARY_PYMNT_TOTAMT  = 0	/* 급여지급총액 */
+			     , B.ALLWNC_PYMNT_TOTAMT  = 0	/* 수당지급총액 */
+			     , B.TOT_PYMNTAMT         = 0	/* 총지급액 */
+			     , B.INCMTAX              = 0	/* 소득세 */
+			     , B.LCLTY_INCMTAX        = 0	/* 지방소득세 */
+			     , B.HLTHINS              = 0	/* 건강보험 */
+			     , B.NPN                  = 0	/* 국민연금 */
+			     , B.EMPLYMINSRNC         = 0	/* 고용보험 */
+			     , B.ENDW_PRNCPAL         = 0	/* 기금원금 */
+			     , B.ENDW_INTR            = 0	/* 기금이자 */
+			     , B.MXTR_CT              = 0	/* 조합비 */
+			     , B.SRVC_GRP_ENDW        = 0	/* 봉사단기금 */
+			     , B.SCHXPN_RPAY          = 0	/* 학자금상환 */
+				 , B.FSTMP_PURCHS_DDC	  = 0	/* 식권구매공제 */
+			     , B.YND_EXCCLC           = 0	/* 연말정산 */
+			     , B.MENDNG_SEIZR         = 0	/* 보수압류 */
+			     , B.INCMTAX_EXCCLC       = 0	/* 소득세정산 */
+			     , B.LCLTY_INCMTAX_EXCCLC = 0	/* 지방소득세정산 */
+			     , B.HLTHINS_EXCCLC       = 0	/* 건강보험정산 */
+			     , B.EMPLYMINSRNC_EXCCLC  = 0	/* 고용보험정산 */
+			     , B.DDC_TOTAMT           = 0	/* 공제총액 */
+			     , B.RL_RECPT_AMOUNT      = 0	/* 실수령액 */
+			     , B.TAXT_AMOUNT          = 0	/* 과세금액 */
+			     , B.TAXXMPT_AMOUNT       = 0	/* 비과세금액 */
+			     , B.CLOS_AT              = ''	/* 마감여부 */
+			     , B.CLOS_DE              = ''	/* 마감일자 */
+			 WHERE B.PYMNT_YM             = #PYMNT_YM#
+			   AND B.PYMNT_DE             = #PYMNT_DE#
+			   AND B.SALARY_SE            = #SALARY_SE#
+			   AND B.PYMNT_SE             = #PYMNT_SE#
+         ]]>
+    </update>
+    
+    <!-- 월급여확정 - 지급 생성내역 취소-->
+    <update id="SAL030105DAO.MtSalaryDcsn_CANCEL2" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_PYMNT_DTLS B
+			   SET B.CLOS_AT   = ''
+			     , B.CLOS_DE   = ''
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#			
+         ]]>
+    </update>
+    
+    <!-- 월급여확정 - 공제 생성내역 취소-->
+    <update id="SAL030105DAO.MtSalaryDcsn_CANCEL3" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_DDC_DTLS B
+			   SET B.CLOS_AT   = ''
+			     , B.CLOS_DE   = ''
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#					
+         ]]>
+    </update>
+    
+    <!-- 월급여확정 - 월급여생성 생성내역 취소-->
+    <update id="SAL030105DAO.MtSalaryDcsn_CANCEL4" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBSAL_MT_SALARY_CREAT B
+			   SET B.DCSN_AT   = '0'
+			     , B.DCSN_DE   = ''
+			 WHERE B.PYMNT_YM  = #PYMNT_YM#
+			   AND B.PYMNT_DE  = #PYMNT_DE#
+			   AND B.SALARY_SE = #SALARY_SE#
+			   AND B.PYMNT_SE  = #PYMNT_SE#			
+         ]]>
+    </update>
+    
+     <!-- 급여이체정보 삭제 -->
+    <delete id="SAL030105DAO.MtSalaryDcsn_CANCEL5" parameterClass="java.util.HashMap">
+		<![CDATA[
+			DELETE
+			  FROM TBSAL_SALARY_TRANSFR_MANAGE
+			 WHERE PYMNT_YM  = #PYMNT_YM#
+			   AND PYMNT_DE  = #PYMNT_DE#
+			   AND PYMNT_SE  = #PYMNT_SE#
+			   AND SALARY_SE = #SALARY_SE#
+        ]]>
+    </delete> 
+
+  	<!-- 설명  : 월급여 지급/공제 집계처리 프로시저 (전체) -->
+	<parameterMap id="sp_sal_mt_salary_pymnt_all_param" class="java.util.HashMap">
+		<parameter property="PYMNT_YM"     		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="SALARY_SE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="PYMNT_DE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="PYMNT_SE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+
+		<parameter property="S_USER_ID"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="OUT_RESULT_CD"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"	jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+	</parameterMap>
+	<procedure id="SAL030105DAO.SPSAL_MT_SALARY_PYMNT_ALL_U" parameterMap="sp_sal_mt_salary_pymnt_all_param">
+		{ call SPSAL_MT_SALARY_PYMNT_ALL_U(?,?,?,?,  ?,?,?) }
+	</procedure>
+</sqlMap>

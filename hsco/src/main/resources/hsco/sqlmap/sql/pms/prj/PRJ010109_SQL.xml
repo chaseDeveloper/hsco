@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PRJ010109_SQL">
+	
+	<!-- 계약정보(착공/준공) 조회 -->
+	<select id="PRJ010109DAO.selectCntrct" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT T.CNTRCT_NO
+		     , T.CNTRCT_NM
+		     , T.CHANGE_DE
+		     , T.STRWRK_DE
+		     , T.COMPET_DE
+		     , T.CNTRCT_CHANGE_ODR
+		     , T.CNTRCT_CHANGE_ODR_NM
+		  FROM (
+		        SELECT CNTRCT_NO
+		             , CNTRCT_NM
+		             , CNTRCT_DE AS CHANGE_DE
+		             , STRWRK_DE
+		             , COMPET_DE
+		             , 0 AS CNTRCT_CHANGE_ODR
+		             , '최초' AS CNTRCT_CHANGE_ODR_NM
+		          FROM TBCTR_CNTRCT
+		        
+		        UNION ALL
+		        
+		        SELECT T1.CNTRCT_NO
+		             , T2.CNTRCT_NM
+		             , T1.CHANGE_DE
+		             , T2.STRWRK_DE
+		             , T1.AFTCH_COMPET_DE AS COMPET_DE
+		             , T1.CNTRCT_CHANGE_ODR
+		             , T1.CNTRCT_CHANGE_ODR || '차' AS CNTRCT_CHANGE_ODR_NM
+		          FROM TBCTR_CNTRCT_CHANGE T1
+		               LEFT OUTER JOIN TBCTR_CNTRCT T2
+		                    ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		       ) T
+		 WHERE T.CNTRCT_NO = #CNTRCT_NO#
+		ORDER BY CNTRCT_CHANGE_ODR
+	</select>
+	
+	<!-- 예정공정 -->
+	<select id="PRJ010109DAO.selectPrearngeProcs" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT T1.CNTRCT_NO
+		     , T1.CHG_TO
+		     , T1.PLN_SN
+		     , T1.BIG_CS_NM
+		     , T1.MID_CS_NM
+		     , T2.SUM_RT
+		     , '' AS NEW_N_CHLDRN
+		  FROM TBBF_PLN_PRCS T1
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                             , CHG_TO
+		                             , PLN_SN
+		                             , SUM(PLN_CSTP_RT) AS SUM_RT
+		                          FROM TBBF_PLN_PRCS_DTLS
+		                        GROUP BY CNTRCT_NO, CHG_TO, PLN_SN
+		                       ) T2
+		            ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		           AND T1.CHG_TO    = T2.CHG_TO
+		           AND T1.PLN_SN    = T2.PLN_SN
+		 WHERE T1.CNTRCT_NO = #CNTRCT_NO#
+		   AND T1.CHG_TO    = #CHG_TO#
+		ORDER BY T1.PLN_SN
+	</select>
+	
+	<!-- 계획일련번호 조회 -->
+	<select id="PRJ010109DAO.selectPlnSn" parameterClass="java.util.Map" resultClass="java.lang.String">
+		SELECT NVL(MAX(PLN_SN), 0) + 1    AS NEXT_PLN_SN
+		  FROM TBBF_PLN_PRCS
+		 WHERE CNTRCT_NO = #CNTRCT_NO#
+		   AND CHG_TO    = #CHG_TO#
+	</select>
+	
+	<!-- 예정공정 등록 -->
+	<insert id="PRJ010109DAO.insertPlnPrcs" parameterClass="java.util.Map">
+		INSERT INTO TBBF_PLN_PRCS (
+		       CNTRCT_NO
+		     , CHG_TO
+		     , PLN_SN
+		     , BIG_CS_NM
+		     , MID_CS_NM
+		     , FST_INP_DTTM
+		     , FST_INP_ID
+		     , LST_CHG_DTTM
+		     , LST_CHG_ID
+		)
+		VALUES (
+		       #CNTRCT_NO#
+		     , #CHG_TO#
+		     , #PLN_SN#
+		     , #BIG_CS_NM#
+		     , #MID_CS_NM#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		)
+	</insert>
+	
+	<!-- 예정공정 수정 -->
+	<update id="PRJ010109DAO.updatePlnPrcs" parameterClass="java.util.Map">
+		UPDATE TBBF_PLN_PRCS
+		   SET BIG_CS_NM    = #BIG_CS_NM#
+		     , MID_CS_NM    = #MID_CS_NM#
+		     , LST_CHG_ID   = #S_USER_ID#
+		     , LST_CHG_DTTM = SYSDATE
+		 WHERE CNTRCT_NO = #CNTRCT_NO#
+		   AND CHG_TO    = #CHG_TO#
+		   AND PLN_SN    = #PLN_SN#
+	</update>
+	
+	<!-- 예정공정 삭제 -->
+	<delete id="PRJ010109DAO.deletePlnPrcs" parameterClass="java.util.Map">
+		DELETE
+		  FROM TBBF_PLN_PRCS
+		 WHERE CNTRCT_NO = #CNTRCT_NO#
+		   AND CHG_TO    = #CHG_TO#
+		   AND PLN_SN    = #PLN_SN#
+	</delete>
+	
+	<!-- 주별 공정률 -->
+	<select id="PRJ010109DAO.selectWeekProcs" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		WITH WEEK_TM AS (
+		    SELECT TO_DATE(T.STRWRK_DE, 'YYYYMMDD') + LEVEL - 1    AS S_DAY
+		         , T.CNTRCT_NO
+		      FROM (
+		             SELECT S.*
+		               FROM (
+		                     SELECT CNTRCT_NO
+		                          , STRWRK_DE
+		                          , COMPET_DE
+		                          , 0 AS CNTRCT_CHANGE_ODR
+		                       FROM TBCTR_CNTRCT
+		                     
+		                     UNION ALL
+		                     
+		                     SELECT T1.CNTRCT_NO
+		                          , T2.STRWRK_DE
+		                          , T1.AFTCH_COMPET_DE    AS COMPET_DE
+		                          , T1.CNTRCT_CHANGE_ODR
+		                       FROM TBCTR_CNTRCT_CHANGE T1
+		                            LEFT OUTER JOIN TBCTR_CNTRCT T2
+		                                 ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		                    ) S
+		              WHERE S.CNTRCT_NO         = #CNTRCT_NO#
+		                AND S.CNTRCT_CHANGE_ODR = #CHG_TO#
+		           ) T
+		    CONNECT BY (TO_DATE(T.STRWRK_DE, 'YYYYMMDD') + LEVEL - 1) <![CDATA[<]]> (TO_DATE(T.COMPET_DE, 'YYYYMMDD') + 1)
+		)
+		SELECT T1.CNTRCT_NO
+		     , #CHG_TO#    AS CHG_TO
+		     , #PLN_SN#    AS PLN_SN
+		     , T1.WEEK
+		     , TO_CHAR(T1.WEEK_SDT, 'YYYYMMDD')    AS WEEK_SDT
+		     , TO_CHAR(T1.WEEK_EDT, 'YYYYMMDD')    AS WEEK_EDT
+		     , T2.PLN_CSTP_RT
+		  FROM (
+		        SELECT S1.CNTRCT_NO
+		             , DENSE_RANK() OVER(ORDER BY TRUNC(S1.S_DAY, 'D'))    AS WEEK
+		             , MIN(S1.S_DAY)    AS WEEK_SDT
+		             , MAX(S1.S_DAY)    AS WEEK_EDT
+		          FROM WEEK_TM S1
+		        GROUP BY S1.CNTRCT_NO, TRUNC(S1.S_DAY, 'D')
+		       ) T1
+		       LEFT OUTER JOIN TBBF_PLN_PRCS_DTLS T2
+		            ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		           AND T2.CHG_TO    = #CHG_TO#
+		           AND T2.PLN_SN    = #PLN_SN#
+		           AND T1.WEEK      = T2.PLN_W
+		ORDER BY T1.WEEK
+	</select>
+	
+	<!-- 예정공정표 조회 -->
+	<select id="PRJ010109DAO.selectPrearngeProcsTable" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		SELECT T1.BIG_CS_NM
+		     , T1.MID_CS_NM
+		     , SUM(NVL(T2.PLN_CSTP_RT, 0))    AS SUM_RT
+		<iterate property="WEEK_LIST">
+		     , SUM(DECODE(T2.PLN_W, #WEEK_LIST[]#, T2.PLN_CSTP_RT, 0)) AS SUM_RT_$WEEK_LIST[]$
+		</iterate>
+		  FROM TBBF_PLN_PRCS T1
+		       LEFT OUTER JOIN TBBF_PLN_PRCS_DTLS T2
+		            ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		           AND T1.CHG_TO    = T2.CHG_TO
+		           AND T1.PLN_SN    = T2.PLN_SN
+		 WHERE T1.CNTRCT_NO = #CNTRCT_NO#
+		   AND T1.CHG_TO    = #CHG_TO#
+		GROUP BY T1.PLN_SN
+		       , T1.BIG_CS_NM
+		       , T1.MID_CS_NM
+		ORDER BY T1.PLN_SN
+	</select>
+	
+	<!-- 주별 공정률 수정 -->
+	<update id="PRJ010109DAO.updatePlnPrcsDtls" parameterClass="java.util.Map">
+		MERGE INTO TBBF_PLN_PRCS_DTLS
+		  USING DUAL
+		  ON (
+		          CNTRCT_NO = #CNTRCT_NO#
+		      AND CHG_TO    = #CHG_TO#
+		      AND PLN_SN    = #PLN_SN#
+		      AND PLN_W     = #WEEK#
+		     )
+		WHEN MATCHED THEN
+		  UPDATE
+		     SET PLN_CSTP_RT  = #PLN_CSTP_RT#
+		       , LST_CHG_DTTM = SYSDATE
+		       , LST_CHG_ID   = #S_USER_ID#
+		WHEN NOT MATCHED THEN
+		  INSERT (
+		     CNTRCT_NO
+		   , CHG_TO
+		   , PLN_SN
+		   , PLN_W
+		   , PLN_BGNDE
+		   , PLN_ENDDE
+		   , PLN_CSTP_RT
+		   , FST_INP_DTTM
+		   , FST_INP_ID
+		   , LST_CHG_DTTM
+		   , LST_CHG_ID
+		  )
+		  VALUES (
+		     #CNTRCT_NO#
+		   , #CHG_TO#
+		   , #PLN_SN#
+		   , #WEEK#
+		   , #WEEK_SDT#
+		   , #WEEK_EDT#
+		   , #PLN_CSTP_RT#
+		   , SYSDATE
+		   , #S_USER_ID#
+		   , SYSDATE
+		   , #S_USER_ID#
+		  )
+	</update>
+	
+	<!-- 주별 공정률 모두 삭제 -->
+	<delete id="PRJ010109DAO.deletePlnPrcsDtlsAll" parameterClass="java.util.Map">
+		DELETE
+		  FROM TBBF_PLN_PRCS_DTLS
+		 WHERE CNTRCT_NO = #CNTRCT_NO#
+		   AND CHG_TO    = #CHG_TO#
+		   AND PLN_SN    = #PLN_SN#
+	</delete>
+	
+</sqlMap>

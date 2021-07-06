@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUDJOB0002_SQL">	
+    
+    <!-- 근태, 출장, 휴가 중복사례 조회 -->
+    <select id="AUDJOB0002.dupCnt" resultClass="java.util.HashMap">
+    <![CDATA[
+		SELECT 
+		       NVL(SUM(HVOF),0)      AS HVOF 
+		     , NVL(SUM(HVOF_TIME),0) AS HVOF_TIME
+		FROM(
+			SELECT 
+			        NVL((SELECT NVL2(HVOF_DE,1,0)
+			               FROM TBHRM_HVOF_INFO
+			             WHERE TRIM(t1.APPR_DATE) = HVOF_DE),0) AS HVOF       /*휴무일 카드결재건*/
+			       ,CASE WHEN TRIM(t1.APPR_TIME) BETWEEN '080000' AND '230000'
+			        THEN '0' ELSE '1'                       END AS HVOF_TIME  /*23~08시 결제*/
+			FROM CCM_APPR t1
+			LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t2
+			  ON t1.BG_YEAR    = t2.DECSN_YEAR
+			 AND t1.EXRSOL_SEQ = t2.DECSN_NO
+			WHERE TRIM(t1.APPR_DATE) >= SYSDATE-3
+			AND TRIM(t1.APPR_DATE)   <= SYSDATE
+			AND NOT EXISTS       /*취소된 카드내역 제외*/
+			  (SELECT 1
+			     FROM CCM_APPR s1
+			   WHERE s1.CARD_NO = t1.CARD_NO
+			     AND s1.APPR_NO   = t1.APPR_NO
+			     AND s1.CANCEL_YN = 'Y'
+			  )  
+		  )
+	]]>
+    </select>
+    
+    <select id="AUDJOB0002.trgetEmpList" resultClass="java.util.HashMap">
+    	SELECT EMPNO
+    	FROM TBAUD_NTCN_TRGET
+    	WHERE NTCN_SE = '02'
+    </select>
+    
+    <!-- 메신저(인트라웨어) 사원번호 조회 -->
+	<select id="AUDJOB0002.msgEmpno" resultClass="java.lang.String">
+		SELECT
+		     USER_ID
+		    ,NAME
+		FROM INTRAWARE.USR_GLOBAL A
+		WHERE  USER_ID= ( SELECT B.USER_ID
+					      FROM   INTRAWARE.GW_USER_INFO B
+					      WHERE  B.EMP_CODE=#EMPNO#
+					    )
+	</select>
+</sqlMap>

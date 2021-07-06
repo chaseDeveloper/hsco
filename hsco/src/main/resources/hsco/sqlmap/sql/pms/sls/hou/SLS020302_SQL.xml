@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS020302DAO">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   
+	<!-- 쿼리명 : 주택코드 조회영역
+	설명 : 주택코드 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 변승우
+	최초작성일 : 2015. 08 .28
+	-->
+	<select id="SLS020302DAO.houseCodeSh" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT HOUSE_CODE AS CODE
+				 , '['||HOUSE_CODE||']'||HOUSE_NM AS CODE_NM
+			  FROM TBSLS_HOUSE_INFO
+			 WHERE 1 = 1
+		]]>
+			 ORDER BY CODE
+	</select>
+	
+	
+	
+	<!-- 쿼리명 : 자격구분 조회영역
+	설명 : 자격구분 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 변승우
+	최초작성일 : 2015. 08 .28
+	-->
+	<select id="SLS020302DAO.qualfDivList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+        		'0' AS CHK 
+        		,CODE AS CODE
+                ,'['||CODE||']'||CODE_NM AS DATA
+                FROM TBCOM_CMMN_CODE
+                WHERE GRP_CODE = 'HOU004'
+                ORDER BY CODE                
+	</select>
+	
+	
+	<!-- 쿼리명 : 주택소유여부의뢰 조회영역
+	설명 : 주택소유여부의뢰 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 변승우
+	최초작성일 : 2015. 08 .28
+	-->
+	<select id="SLS020302DAO.houseMvnWaitrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT ROWNUM AS NO, A.*
+			FROM (
+			    SELECT C.HOUSE_CODE, H.HOUSE_NM, ' ' AS DONG, ' ' AS HO,
+			           (CASE WHEN NVL(F.CNT1,0) = 0 THEN '000000' ELSE '111111' END) AS DIV0,
+			            '+' AS DIV1, 
+			           (SELECT SFCOM_DEC_ALL(IHIDNUM) FROM TBSLS_HOUSE_CSTMR WHERE HOUSE_CSTMR_NO = C.HOUSE_CSTMR_NO) AS JUMIN_NO,            
+			           (SELECT CSTMR_NM FROM TBSLS_HOUSE_CSTMR WHERE HOUSE_CSTMR_NO = C.HOUSE_CSTMR_NO) AS CSTMR_NM,            
+			           C.HOUSE_SN
+			      FROM TBSLS_HOUSE_MVN_WAITR C, TBSLS_HOUSE_INFO H,
+			           (SELECT HOUSE_CODE, HOUSE_SN, SUM (TCNT) AS TCNT, SUM (CNT1) AS CNT1,
+			                   SUM (CNT2) AS CNT2
+			              FROM (SELECT HOUSE_CODE, HOUSE_SN, COUNT (1) AS TCNT,
+			                           (CASE WHEN FAMILY_RELATE IN ('005', '006') THEN COUNT (1) ELSE 0 END) AS CNT1,
+			                           (CASE WHEN FAMILY_RELATE NOT IN ('005', '006') THEN COUNT (1) ELSE 0 END) AS CNT2
+			                      FROM TBSLS_HOUSE_MVN_WAITR_FAMILY
+			                     GROUP BY HOUSE_CODE, HOUSE_SN, FAMILY_RELATE) B  
+			             GROUP BY HOUSE_CODE, HOUSE_SN) F
+			     WHERE C.CNTRCT_NTICE_DE IS NULL
+			       AND C.CNTRCT_DE IS NULL
+		       <isNotEmpty property="DE01" >
+		           <isNotEmpty property="DE02" >
+		           	   AND C.WAIT_RCEPT_DE BETWEEN #DE01# AND #DE02#
+		           </isNotEmpty>
+		       </isNotEmpty>			       
+			       AND C.HOUSE_CODE = F.HOUSE_CODE(+)
+			       AND C.HOUSE_SN = F.HOUSE_SN(+)
+	           <isNotEmpty property="HOUSE_CODE" >
+	          	   AND C.HOUSE_CODE = #HOUSE_CODE#
+			   </isNotEmpty>			       
+			       AND C.HOUSE_CODE = H.HOUSE_CODE
+			       AND H.HOUSE_SE  = 'S2'
+			       AND H.USE_AT = '1'
+			   <isNotEmpty property="QUALF_DIV" prepend="AND" open=" "> INSTR( #QUALF_DIV# , C.QUALF_SE ) <![CDATA[ > ]]> 0</isNotEmpty>
+			     UNION
+			    SELECT C.HOUSE_CODE, H.HOUSE_NM, NULL DONG, NULL HO,
+			           (CASE WHEN F.FAMILY_RELATE IN ('005', '006') THEN '222222' ELSE '333333' END) AS DIV0,
+			           '-' AS DIV1,
+			           (SELECT SFCOM_DEC_ALL(IHIDNUM) FROM TBSLS_HOUSE_CSTMR WHERE HOUSE_CSTMR_NO = C.HOUSE_CSTMR_NO) AS JUMIN_NO, 
+			           (SELECT CSTMR_NM FROM TBSLS_HOUSE_CSTMR WHERE HOUSE_CSTMR_NO = F.HOUSE_CSTMR_NO) AS CSTMR_NM, 
+			           C.HOUSE_SN
+			      FROM TBSLS_HOUSE_MVN_WAITR C, TBSLS_HOUSE_INFO H, TBSLS_HOUSE_MVN_WAITR_FAMILY F
+			     WHERE C.CNTRCT_NTICE_DE IS NULL 
+			       AND C.CNTRCT_DE IS NULL
+		       <isNotEmpty property="DE01" >
+		           <isNotEmpty property="DE02" >
+		           	   AND C.WAIT_RCEPT_DE BETWEEN #DE01# AND #DE02#
+		           </isNotEmpty>
+		       </isNotEmpty>		
+			       AND C.HOUSE_CODE = F.HOUSE_CODE
+			       AND C.HOUSE_SN = F.HOUSE_SN
+	           <isNotEmpty property="HOUSE_CODE" >
+	          	   AND C.HOUSE_CODE = #HOUSE_CODE#
+			   </isNotEmpty>
+			       AND C.HOUSE_CODE = H.HOUSE_CODE
+			       AND H.HOUSE_SE  = 'S2'
+			       AND H.USE_AT = '1'
+			   <isNotEmpty property="QUALF_DIV" prepend="AND" open=" "> INSTR( #QUALF_DIV# , C.QUALF_SE ) <![CDATA[ > ]]> 0</isNotEmpty>
+			     ORDER BY 1, HOUSE_SN , DIV0
+			) A   
+	</select>
+	
+<!-- 쿼리명 : 주택소유여부의뢰 조회영역
+	설명 : 주택소유여부의뢰 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 변승우
+	최초작성일 : 2015. 08 .28
+	-->
+	<select id="SLS020302DAO.houseHcntrctrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+				SELECT ROWNUM as no, A.* 
+			    FROM (                
+			        SELECT c.HOUSE_CODE, h.HOUSE_NM, c.DONG, c.HO,
+			               (CASE WHEN f.cnt1 = 0 THEN '000000' ELSE '111111' END) AS DIV0,
+			               '+' AS DIV2,
+			               (SELECT SFCOM_DEC_ALL(IHIDNUM)
+			               FROM TBSLS_HOUSE_CSTMR
+			               WHERE HOUSE_CSTMR_NO = c.HOUSE_CSTMR_NO) AS JUMIN_NO,
+			               (SELECT CSTMR_NM
+			               FROM TBSLS_HOUSE_CSTMR
+			               WHERE HOUSE_CSTMR_NO = c.HOUSE_CSTMR_NO) AS CSTMR_NM
+			          FROM TBSLS_HCNTRCTR c, TBSLS_HOUSE_INFO h,
+			               (SELECT CNTRCTR_NO, SUM (tcnt) AS tcnt, SUM (cnt1) AS cnt1,
+			                       SUM (cnt2) AS cnt2
+			                  FROM (SELECT CNTRCTR_NO, COUNT (1) AS tcnt,
+			                               (CASE WHEN FAMILY_RELATE IN ('005', '006')
+			                                     THEN COUNT (1) ELSE 0 END
+			                               ) AS cnt1,
+			                               (CASE WHEN FAMILY_RELATE NOT IN ('005', '006')
+			                                     THEN COUNT (1) ELSE 0 END
+			                               ) AS cnt2
+			                          FROM TBSLS_HCNTRCTR_FAMILY
+			                         GROUP BY CNTRCTR_NO, FAMILY_RELATE) b
+			                 GROUP BY CNTRCTR_NO) f
+			         WHERE c.CNTRCTR_STTUS_CODE = '01' 
+			           AND c.RENT_LTTOT_CNVRS_DE IS NULL
+			           AND c.CNTRCTR_NO = f.CNTRCTR_NO(+)
+			           <isNotEmpty property="HOUSE_CODE" >
+			           AND c.HOUSE_CODE = #HOUSE_CODE#
+					   </isNotEmpty>			           
+			           AND c.HOUSE_CODE = h.HOUSE_CODE
+			           AND h.HOUSE_SE  = 'S2'
+			           AND h.USE_AT = '1'
+<!-- 			       <isNotEmpty property="DONG" prepend="AND" open=" ">c.DONG = #DONG#</isNotEmpty>
+			           <isNotEmpty property="HO" prepend="AND" open=" ">c.HO = #HO#</isNotEmpty> -->
+						<isNotEmpty property="DONG">
+						AND   c.DONG = #DONG#
+						</isNotEmpty>
+						<isNotEmpty property="HO">
+						AND   c.HO = #HO#
+						</isNotEmpty>				           
+			           <isNotEmpty property="QUALF_DIV" prepend="AND" open=" "> INSTR(#QUALF_DIV#, NVL(c.RENT_QUALF_SE,c.LTTOT_QUALF_SE) ) <![CDATA[ > ]]> 0</isNotEmpty>  
+			     UNION ALL
+			        SELECT c.HOUSE_CODE, h.HOUSE_NM, c.DONG, c.HO,
+			               (CASE WHEN f.FAMILY_RELATE IN ('005', '006')
+			                     THEN '222222' ELSE '333333' END
+			               ) AS DIV0,
+			               '-' AS DIV2,
+			               (SELECT SFCOM_DEC_ALL(IHIDNUM)
+			               FROM TBSLS_HOUSE_CSTMR
+			               WHERE HOUSE_CSTMR_NO = c.HOUSE_CSTMR_NO) AS JUMIN_NO,
+			               (SELECT CSTMR_NM
+			               FROM TBSLS_HOUSE_CSTMR
+			               WHERE HOUSE_CSTMR_NO = f.HOUSE_CSTMR_NO) AS CSTMR_NM
+			          FROM TBSLS_HCNTRCTR c, TBSLS_HOUSE_INFO h, TBSLS_HCNTRCTR_FAMILY f
+			         WHERE c.CNTRCTR_STTUS_CODE = '01' 
+			           AND c.RENT_LTTOT_CNVRS_DE IS NULL
+			           AND c.CNTRCTR_NO = f.CNTRCTR_NO
+			           AND c.HOUSE_CODE = #HOUSE_CODE#
+			           AND c.HOUSE_CODE = h.HOUSE_CODE
+			           AND h.HOUSE_SE  = 'S2'
+			           AND h.USE_AT = '1'
+<!-- 			       <isNotEmpty property="DONG" prepend="AND" open=" ">c.DONG = #DONG#</isNotEmpty>
+			           <isNotEmpty property="HO" prepend="AND" open=" ">c.HO = #HO#</isNotEmpty>	 -->	
+						<isNotEmpty property="DONG">
+						AND   c.DONG = #DONG#
+						</isNotEmpty>
+						<isNotEmpty property="HO">
+						AND   c.HO = #HO#
+						</isNotEmpty>			               
+			           <isNotEmpty property="QUALF_DIV" prepend="AND" open=" "> INSTR(#QUALF_DIV#, NVL(c.RENT_QUALF_SE,c.LTTOT_QUALF_SE) ) <![CDATA[ > ]]>0</isNotEmpty> 
+			         ORDER BY 1, 2, 3, 4         
+			     )A    
+	</select>	
+	
+</sqlMap>

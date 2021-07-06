@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM030502_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 증명서발행 목록 조회 -->
+	<select id="HRM030502DAO.tbhrmCrtfList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT T.*
+		      ,TCC1.CODE_NM                                                     AS CRTF_NM
+		      ,TCC2.CODE_NM || '(' || TCC3.CODE_NM || ')'                       AS JSSFC_CLSF
+		FROM   (
+		        SELECT THM.EMPNO                                                                        AS EMPNO
+		              ,THM.EMPNM                                                                        AS EMPNM
+		              ,TCI.OUTPT_MAN_NM
+		              ,THM.DEPT_CODE                                                                    AS DEPT_CODE
+		              ,VD.DEPT_NM                                                                       AS DEPT_NM
+		              ,TCI.CRTF_SE                                                                      AS CRTF_SE
+		              ,TCI.REQST_DE                                                                     AS REQST_DE
+		              ,DECODE(TCI.REQST_DE, NULL, NULL, SUBSTR(TCI.REQST_DE, 1, 4) || '-' || SUBSTR(TCI.REQST_DE, 5, 2) || '-' || SUBSTR(TCI.REQST_DE, 7, 2)) AS REQST_DE2
+		              ,TCI.REQST_SEQ                                                                    AS REQST_SEQ
+		              ,NVL(TCI.CONFM_AT, 0)                                                             AS CONFM_AT
+		              ,TCI.CONFM_DE                                                                     AS CONFM_DE
+		              ,DECODE(TCI.CONFM_DE, NULL, NULL, SUBSTR(TCI.CONFM_DE, 1, 4) || '-' || SUBSTR(TCI.CONFM_DE, 5, 2) || '-' || SUBSTR(TCI.CONFM_DE, 7, 2)) AS CONFM_DE2
+		              ,TCI.OUTPT_TMLMT_DE
+		              ,TCI.OUTPT_AT                                                                     AS OUTPT_AT
+		              ,TCI.ISSU_QY                                                                      AS ISSU_QY
+		              ,TCI.REQST_QY
+		              ,TCI.PRPOS_NM                                                                     AS PRPOS_NM
+		              ,THM.JSSFC_SE
+		              ,THM.HR_CLSF_SE
+		              ,TCI.REQST_YEAR
+		              ,TCI.RM
+		              ,TCI.PRESENTN_OFFIC_NM
+		              ,CASE WHEN TRIM(TCI.ISSU_YEAR) IS NOT NULL AND TRIM(TCI.ISSU_SEQ) IS NOT NULL THEN TCI.ISSU_YEAR||'-'|| TCI.ISSU_SEQ ELSE '' END AS ISSU_NO
+		              ,TCI.DEPT_NM                                                                      AS C_DEPT_NM
+		              ,TCI.CLSF_NM                                                                      AS C_CLSF_NM
+		              ,TCI.OFCPS_NM                                                                     AS C_OFCPS_NM
+		              ,NVL(TCI.IHIDNUM_EXPSR_AT, 0)                                                     AS IHIDNUM_EXPSR_AT
+		        FROM   TBHRM_CRTF_ISSU TCI
+		               LEFT OUTER JOIN TBHRM_HR_MASTR THM
+		                    ON TCI.APPLCNT_EMPNO = THM.EMPNO
+		               LEFT OUTER JOIN VWHRM_DEPT VD
+		                    ON THM.DEPT_CODE = VD.DEPT_CODE
+		        ) T
+		        INNER JOIN TBCOM_CMMN_CODE TCC1
+		             ON T.CRTF_SE = TCC1.CODE
+		            AND TCC1.GRP_CODE = 'HRM021'
+		            <isNotEmpty property="AUTH">
+			            AND TCC1.CHRCTR_PREPAR_VALUE_0 = #AUTH#
+		            </isNotEmpty>
+		        LEFT OUTER JOIN TBCOM_CMMN_CODE TCC2
+		             ON T.JSSFC_SE = TCC2.CODE
+		            AND TCC2.GRP_CODE = 'HRM001'
+		        LEFT OUTER JOIN TBCOM_CMMN_CODE TCC3
+		             ON T.HR_CLSF_SE = TCC3.CODE
+		            AND TCC3.GRP_CODE = 'HRM002'
+		WHERE  1=1
+		AND    T.REQST_DE BETWEEN #BGN_DE# AND #END_DE#
+	<isNotEmpty property="CONFM_AT" prepend="AND    ">
+		<isEqual property="CONFM_AT" compareValue="0">(T.CONFM_AT = #CONFM_AT# OR T.CONFM_AT IS NULL)</isEqual>
+		<isEqual property="CONFM_AT" compareValue="1">T.CONFM_AT = #CONFM_AT#</isEqual>
+		<isEqual property="CONFM_AT" compareValue="2">T.CONFM_AT = #CONFM_AT#</isEqual>
+	</isNotEmpty>
+	<isNotEmpty property="CRTF_SE"   prepend="AND    ">T.CRTF_SE = #CRTF_SE#</isNotEmpty>
+	<isNotEmpty property="DEPT_CODE" prepend="AND    ">T.DEPT_CODE = #DEPT_CODE#</isNotEmpty>
+	<isNotEmpty property="EMPNO"     prepend="AND    ">T.EMPNO = #EMPNO#</isNotEmpty>
+	<![CDATA[
+		 ORDER BY REQST_DE DESC, EMPNO, DEPT_CODE, CRTF_SE, REQST_DE
+	]]>
+	</select>
+	
+	<!-- 제증명신청 추가 -->
+	<insert id="HRM030502DAO.insertCrtf" parameterClass="java.util.HashMap">
+		INSERT INTO TBHRM_CRTF_ISSU (
+               REQST_YEAR
+             , REQST_SEQ
+             , CRTF_SE
+             , APPLCNT_EMPNO
+             , APPLCNT_ADRES
+             , REQST_DE
+             , REQST_QY
+             , OUTPT_TMLMT_DE
+             , PRESENTN_OFFIC_NM
+             , PRPOS_NM
+             , CONFM_AT
+             , CONFMER_EMPNO
+             , CONFM_DE
+		     , OUTPT_AT
+		     , ISSU_YEAR
+		     , ISSU_SEQ
+		     , ISSU_DE
+		     , ISSU_QY
+		     , RM
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		     , CNFIRM_AT
+		     , CNFIRM_EMPNO
+		     , CNFIRM_DE
+		     , IHIDNUM_EXPSR_AT
+		)
+		VALUES (
+               #REQST_YEAR#
+             , (SELECT NVL(MAX(REQST_SEQ)+1, 1) FROM TBHRM_CRTF_ISSU WHERE REQST_YEAR = #REQST_YEAR#)
+             , #CRTF_SE#
+             , #EMPNO#
+             , #APPLCNT_ADRES#
+             , #REQST_DE#
+             , #REQST_QY#
+             , #OUTPT_TMLMT_DE#
+             , #PRESENTN_OFFIC_NM#
+             , #PRPOS_NM#
+             , #CONFM_AT#
+             , #CONFMER_EMPNO#
+             , #CONFM_DE#
+             , '0'
+             , #ISSU_YEAR#
+             , #ISSU_SEQ#
+             , #ISSU_DE#
+             , '0'
+             , #RM#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+             , #CNFIRM_AT#
+             , #CNFIRM_EMPNO#
+             , #CNFIRM_DE#
+		     , #IHIDNUM_EXPSR_AT#
+        )
+	</insert>
+	
+	
+	<!-- 승인 처리 -->
+	<update id="HRM030502DAO.updateCrtf" parameterClass="java.util.HashMap">
+		UPDATE TBHRM_CRTF_ISSU
+		SET    OUTPT_TMLMT_DE   = #OUTPT_TMLMT_DE#
+		      ,CONFM_AT         = #CONFM_AT#
+		      ,OUTPT_AT         = #OUTPT_AT#
+		      ,IHIDNUM_EXPSR_AT = #IHIDNUM_EXPSR_AT#
+		      <isNotEmpty property="CONFM_AT">
+		      	  <isEqual property="CONFM_AT" compareValue="0">
+		      	  ,CONFM_DE        = NULL
+		      	  ,CONFMER_EMPNO   = NULL
+		      	  ,ISSU_YEAR	   = NULL
+		      	  ,ISSU_SEQ		   = NULL
+		      	  </isEqual>
+			      <isEqual property="CONFM_AT" compareValue="1">
+			      ,CONFM_DE        = #CONFM_DE#
+			      ,CONFMER_EMPNO   = (SELECT EMPNO FROM TBCOM_USER WHERE USER_ID = #S_USER_ID#)
+			      ,ISSU_YEAR       = NVL(TRIM(ISSU_YEAR), TO_CHAR(SYSDATE,'YYYY'))
+			      ,ISSU_SEQ		   = NVL(TRIM(ISSU_SEQ), (SELECT NVL(MAX(ISSU_SEQ),0)+1 FROM TBHRM_CRTF_ISSU WHERE ISSU_YEAR = TO_CHAR(SYSDATE,'YYYY')))
+			      </isEqual>
+			      <isEqual property="CONFM_AT" compareValue="2">
+		      	  ,CONFM_DE        = NULL
+		      	  ,CONFMER_EMPNO   = NULL
+		      	  ,ISSU_YEAR	   = NULL
+		      	  ,ISSU_SEQ		   = NULL
+		      	  </isEqual>
+		      </isNotEmpty>
+		      ,REQST_QY          = #REQST_QY#
+		      ,PRESENTN_OFFIC_NM = #PRESENTN_OFFIC_NM#
+		      ,PRPOS_NM          = #PRPOS_NM#
+		      ,RM                = #RM#
+		      ,DEPT_NM           = #C_DEPT_NM#
+		      ,CLSF_NM           = #C_CLSF_NM#
+		      ,OFCPS_NM          = #C_OFCPS_NM#
+		      ,UPDUSR_ID         = #S_USER_ID#
+		      ,UPDT_DT           = SYSDATE
+		WHERE  REQST_YEAR        = #REQST_YEAR#
+		AND    REQST_SEQ         = #REQST_SEQ#
+	</update>
+	
+	
+	<!-- 제증명신청 삭제 -->
+	<delete id="HRM030502DAO.deleteCrtf" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBHRM_CRTF_ISSU
+		 WHERE REQST_SEQ            = #REQST_SEQ#
+           AND REQST_YEAR           = #REQST_YEAR#
+	</delete>
+</sqlMap>

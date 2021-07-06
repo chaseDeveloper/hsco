@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP030100_SQL">
+<!--  설명  : 보상액사정
+	작성자 : 지효정  -->
+	 
+	<!--  조서 목록 -->
+	<select id="CMP030100DAO.thingWtnncList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.*
+			, 0 AS CHK
+			,NVL(A.RWMNY - (
+                SELECT	SUM(RWMNY)
+                FROM TBCMP_THING_OWNER
+                WHERE BSNS_AREA_CODE = A.BSNS_AREA_CODE
+                AND   THING_SN = A.THING_SN),0) AS MARGIN /* 차액 */
+            ,A.REWARD_STLE||
+             CASE NVL(A.REWARD_STLE,'0') 
+                 WHEN '0' 
+                 THEN LPAD(NVL(C.CODE_ORDR,'99'),2,'0') 
+                 ELSE 
+                     CASE 
+                         WHEN A.RWMNY > 0 
+                         THEN '00' 
+                         ELSE LPAD(NVL(C.CODE_ORDR,'99'),2,'0') 
+                     END 
+             END AS SORT_ORDR         
+		FROM(
+			SELECT
+			     A.BSNS_AREA_CODE		/* 사업지역코드 */
+	            ,A.THING_SN				/* 물건일련번호 */
+	            ,SFCMP_GET_LOCPLC(A.BSNS_AREA_CODE, A.LOCPLC_CODE) AS LOCPLC_CODE_NM
+	            ,A.LOCPLC_CODE			/* 소재지코드 */
+	            ,A.LNM_SE
+	            ,A.LNM					/* 지번 */
+	            ,A.SLNO					/* 부번 */
+	            ,A.LNM_SLNO				/* 지번 + 부번 */
+	            ,A.THING_CL				/* 물건 분류 코드 */
+	            ,A.THING_NM				/* 물건명 */
+	            ,A.STRCT_STNDRD			/* 구조규격 */
+	            ,A.AR_INCRPR			/* 면적_편입 */
+	            ,A.UNIT					/* 단위 코드 */
+	            ,A.UNTPC
+	            ,A.RWMNY 				/* 보상금 */
+	            ,A.RM_1					/* 비고 */
+	            ,A.REWARD_ODR			/* 보상차수 */
+	            ,A.LNDCGR_LGSTR
+	            ,A.LNDCGR_INCRPR                 
+			    ,BC.BCNC_CODE1 			/* 평가사1 */
+			    ,BC.UNTPC1				/* 평가사1 단가 */
+			    ,BC.EVL_AMOUNT1			/* 평가사1 평가금액 */
+			    ,BC.BCNC_NM1			/* 평가사1의 이름 */
+			    ,BC.BCNC_CODE2 			/* 평가사2 */
+			    ,BC.UNTPC2				/* 평가사2 단가 */
+			    ,BC.EVL_AMOUNT2			/* 평가사2 평가금액 */
+			    ,BC.BCNC_NM2			/* 평가사2의 이름 */
+			    ,BC.BCNC_CODE3			/* 평가사3 */
+			    ,BC.UNTPC3				/* 평가사3 단가 */
+			    ,BC.EVL_AMOUNT3			/* 평가사3 평가금액 */
+			    ,BC.BCNC_NM3			/* 평가사3의 이름 */
+			    ,A.REWARD_STLE			/* 일괄적용여부 */
+			    ,BC.BNDE_APPLC_GROUP	/* 일괄적용그룹 */
+			    ,CASE RQEST_SE_CNT WHEN 0 THEN BC.SERVC_ENTRPS_CNT ELSE 0 END AS SERVC_ENTRPS_CNT /* 평가사 갯수 */
+			FROM
+			(
+			    SELECT
+			         A.BSNS_AREA_CODE
+			        ,A.THING_SN
+			        ,A.LOCPLC_CODE
+			        ,A.LNM_SE
+			        ,A.LNM
+			        ,A.SLNO
+			        ,DECODE(A.SLNO, NULL, A.LNM, A.LNM || '-' || A.SLNO) AS LNM_SLNO
+			        ,TRIM(A.THING_CL) AS THING_CL
+			        ,A.THING_NM
+			        ,A.STRCT_STNDRD
+			        ,A.AR_INCRPR
+			        ,A.UNIT
+			        ,A.THING_UNTPC AS UNTPC
+			        ,A.RWMNY
+			        ,A.RM_1
+			        ,A.REWARD_ODR
+			        ,A.LNDCGR_LGSTR
+			        ,A.LNDCGR_INCRPR                 
+			        ,(SELECT NVL(COUNT(*),0) AS CNT FROM TBCMP_THING_OWNER B WHERE B.BSNS_AREA_CODE = A.BSNS_AREA_CODE AND B.THING_SN = A.THING_SN AND RQEST_SE = '1') AS RQEST_SE_CNT
+			        ,A.REWARD_STLE
+			    FROM TBCMP_THING_WTNNC A
+			    WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			    <isNotEmpty property="LOCPLC_CODE">
+			    AND	  A.LOCPLC_CODE = #LOCPLC_CODE#
+			   	</isNotEmpty>
+				<isNotEmpty property="REWARD_ODR">
+				AND	  A.REWARD_ODR = #REWARD_ODR#
+				</isNotEmpty>
+				<isEqual property="SELECT" compareValue="0">
+				<isNotEmpty property="THING_CL">
+				AND	  A.THING_CL IN
+				<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+				#ARR_THING_CL[]#
+				</iterate>
+				</isNotEmpty>
+				</isEqual>
+				<isNotEmpty property="LNM">
+				AND   A.LNM = #LNM#
+				</isNotEmpty>
+				<isNotEmpty property="SLNO">
+				AND	  A.SLNO = #SLNO#
+				</isNotEmpty>
+			    ORDER BY A.THING_SN
+			)A,
+			(
+			    SELECT
+			         MAX(BSNS_AREA_CODE) AS BSNS_AREA_CODE
+			        ,THING_SN
+			        ,MAX(REWARD_STLE) AS REWARD_STLE
+			        ,MAX(BNDE_APPLC_GROUP) AS BNDE_APPLC_GROUP
+			        ,MAX(SERVC_ENTRPS_CNT) AS SERVC_ENTRPS_CNT
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE1, BCNC_CODE1, NULL)) AS BCNC_CODE1
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE1, DECODE(UNTPC, NULL, 0, UNTPC), 0)) AS UNTPC1
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE1, DECODE(EVL_AMOUNT, NULL, 0, EVL_AMOUNT), 0)) AS EVL_AMOUNT1
+			        ,MAX(BCNC_NM1) AS BCNC_NM1
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE2, BCNC_CODE2, NULL)) AS BCNC_CODE2
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE2, DECODE(UNTPC, NULL, 0, UNTPC), 0)) AS UNTPC2
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE2, DECODE(EVL_AMOUNT, NULL, 0, EVL_AMOUNT), 0)) AS EVL_AMOUNT2
+			        ,MAX(BCNC_NM2) AS BCNC_NM2
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE3, BCNC_CODE3, NULL)) AS BCNC_CODE3
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE3, DECODE(UNTPC, NULL, 0, UNTPC), 0)) AS UNTPC3
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE3, DECODE(EVL_AMOUNT, NULL, 0, EVL_AMOUNT), 0)) AS EVL_AMOUNT3
+			        ,MAX(BCNC_NM3) AS BCNC_NM3
+			    FROM(
+			        SELECT
+			        	 B.*
+			        	,C.BCNC_CODE AS BCNC_CODE
+			        	,C.THING_UNTPC AS UNTPC
+			        	,C.EVL_AMOUNT
+			        	,C.THING_SN
+			        	,C.REWARD_STLE		    /* 일괄적용여부 */
+						,C.BNDE_APPLC_GROUP		/* 일괄적용그룹 */
+			        FROM(
+			            SELECT
+			                 MAX(BSNS_AREA_CODE) AS BSNS_AREA_CODE
+			                ,MAX(DECODE(RNUM, 1, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM1
+			                ,MAX(DECODE(RNUM, 2, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM2
+			                ,MAX(DECODE(RNUM, 3, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM3
+			                ,MAX(DECODE(RNUM, 1, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE1
+			                ,MAX(DECODE(RNUM, 2, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE2
+			                ,MAX(DECODE(RNUM, 3, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE3
+			                ,MAX(RNUM) AS SERVC_ENTRPS_CNT
+			            FROM(
+			                SELECT
+			                	 RANK()OVER(ORDER BY BA.SORT_ORDR) AS RNUM
+			                	,BA.BCNC_CODE
+			                	,#BSNS_AREA_CODE# AS BSNS_AREA_CODE
+			                	,BB.ENTRPS_NM AS BCNC_NM
+			                FROM TBCMP_BSNSBY_PRPRAPR BA, TBCTR_SERVC_ENTRPS BB
+			                WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			                AND   BA.BCNC_CODE = BB.SERVC_ENTRPS_CODE
+			                AND   BB.ENTRPS_SE = '01'
+			            )
+			        )B, TBCMP_APASMT C
+			        WHERE B.BSNS_AREA_CODE = C.BSNS_AREA_CODE(+)
+			        AND   (C.BCNC_CODE IN(B.BCNC_CODE1, B.BCNC_CODE2, B.BCNC_CODE3))
+			    )
+			    GROUP BY THING_SN
+			) BC,
+			(
+				SELECT DISTINCT
+					 D.BSNS_AREA_CODE
+					,D.THING_SN
+				FROM TBCMP_THING_OWNER D, TBCMP_OWNER E
+				WHERE D.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+				AND   D.OWNER_NO = E.OWNER_NO
+				AND	  D.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+				AND   '1' = E.OWNER_SE
+				<isNotEmpty property="NM">
+	            AND	  E.OWNER_NM LIKE '%' || #NM# || '%'
+	            </isNotEmpty>
+			) DE
+			WHERE A.BSNS_AREA_CODE = BC.BSNS_AREA_CODE (+)
+			AND   A.THING_SN = BC.THING_SN (+)
+			AND   A.BSNS_AREA_CODE = DE.BSNS_AREA_CODE
+			AND   A.THING_SN = DE.THING_SN
+		)A , TBCMP_LOCPLC_INFO B, TBCOM_CMMN_CODE C WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE AND A.LOCPLC_CODE = B.LOCPLC_CODE AND 'CMP001' = C.GRP_CODE AND A.THING_CL = C.CODE		
+		ORDER BY B.SORT_ORDR, TO_NUMBER(LNM), TO_NUMBER(SLNO), SORT_ORDR, BNDE_APPLC_GROUP
+	</select>
+
+	<!-- 평가사 리스트 -->
+	<select id="CMP030100DAO.bsnsbyPrpraprList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT MAX(BSNS_AREA_CODE) AS BSNS_AREA_CODE , 
+		       MAX(DECODE(RNUM, 1, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM1 , 
+		       MAX(DECODE(RNUM, 2, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM2 , 
+		       MAX(DECODE(RNUM, 3, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM3 , 
+		       MAX(DECODE(RNUM, 1, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE1 , 
+		       MAX(DECODE(RNUM, 2, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE2 , 
+		       MAX(DECODE(RNUM, 3, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE3 , 
+		       MAX(RNUM) AS SERVC_ENTRPS_CNT 
+		  FROM 
+		       (SELECT RANK()OVER(ORDER BY BA.SORT_ORDR) AS RNUM , 
+		              BA.BCNC_CODE , 
+		              BA.BSNS_AREA_CODE , 
+		              BB.ENTRPS_NM AS BCNC_NM 
+		         FROM TBCMP_BSNSBY_PRPRAPR BA, 
+		              TBCTR_SERVC_ENTRPS BB 
+		        WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE# 
+		              AND BA.BCNC_CODE = BB.SERVC_ENTRPS_CODE 
+		              AND BB.ENTRPS_SE = '01' 
+		       )
+	</select>		       
+
+	<update id="CMP030100DAO.thingWtnncU" parameterClass="java.util.Map">
+		UPDATE TBCMP_THING_WTNNC SET
+			 THING_UNTPC = #UNTPC#
+			,RWMNY = #RWMNY#
+			,BNDE_APPLC_GROUP = #BNDE_APPLC_GROUP#
+			,UPDUSR_ID = #S_USER_ID#
+			,UPDT_DT = SYSDATE		
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   THING_SN = #THING_SN#
+	</update>
+
+	<!-- 감정 평가결과 수정 -->
+	<update id="CMP030100DAO.tbcmpApasmtU" parameterClass="java.util.Map">
+		BEGIN
+		UPDATE TBCMP_APASMT SET
+			 THING_UNTPC = #UNTPC1#
+			,EVL_AMOUNT = #EVL_AMOUNT1#
+			,UPDUSR_ID = #S_USER_ID#
+			,UPDT_DT = SYSDATE
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   THING_SN = #THING_SN#
+		AND   BCNC_CODE = #BCNC_CODE1#
+		;
+
+		UPDATE TBCMP_APASMT SET
+			 THING_UNTPC = #UNTPC2#
+			,EVL_AMOUNT = #EVL_AMOUNT2#
+			,UPDUSR_ID = #S_USER_ID#
+			,UPDT_DT = SYSDATE
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   THING_SN = #THING_SN#
+		AND   BCNC_CODE = #BCNC_CODE2#
+		;
+
+		UPDATE TBCMP_APASMT SET
+			 THING_UNTPC = #UNTPC3#
+			,EVL_AMOUNT = #EVL_AMOUNT3#
+			,UPDUSR_ID = #S_USER_ID#
+			,UPDT_DT = SYSDATE
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   THING_SN = #THING_SN#
+		AND   BCNC_CODE = #BCNC_CODE3#
+		;
+
+		END;
+	</update>
+
+	<!-- 물건 소유자 리스트 -->
+	<select id="CMP030100DAO.thingOwnerList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		 SELECT
+             A.BSNS_AREA_CODE 	/* 사업지역코드 */
+            ,A.THING_SN			/* 물건일련번호 */
+            ,A.OWNER_NO			/* 소유자번호 */
+            ,A.POSESN_QOTA		/* 소유지분 */
+            ,A.AR				/* 면적 */
+            ,A.RWMNY			/* 보상금 */
+            ,A.ACEPTNC_CNFIRM	/* 수용확인 */
+            ,A.RQEST_SE			/* 청구구분 */
+            ,A.INPUT_TME		/* 입력회차 */
+            ,A.ACEPTNC_AT		/* 수용여부 */
+            ,A.RQEST_SN			/* 청구일련번호 */
+            ,A.ACEPTNC_ADJDC_ODR/* 수용재결차수 */
+            ,A.ACEPTNC_ADJDC_DE	/* 수용재결일자 */
+            ,A.RM				/* 비고 */
+            ,A.OWNER_SN			/* 소유자일련번호 */
+            ,B.OWNER_NM AS NM	/* 소유자 이름 */
+            ,B.TELNO_1			/* 소유자 연락처 */
+            ,B.ADRES			/* 소유자 주소 */
+            , trunc(a.ar / (select AR_INCRPR from TBCMP_THING_WTNNC m where m.BSNS_AREA_CODE = a.BSNS_AREA_CODE and m.THING_SN = a.THING_SN),20) as CAL_QOTA
+        FROM TBCMP_THING_OWNER A, TBCMP_OWNER B
+		WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		AND   A.OWNER_NO = B.OWNER_NO
+		AND	  A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   A.THING_SN = #THING_SN#
+		AND   '1' = B.OWNER_SE
+		ORDER BY OWNER_SN
+	</select>
+
+	<!-- 물건 소유자 수정 -->
+	<update id="CMP030100DAO.thingOwnerU" parameterClass="java.util.Map">
+		UPDATE TBCMP_THING_OWNER SET
+			 RWMNY = #RWMNY#
+			,POSESN_QOTA = #POSESN_QOTA# 
+			,AR = #AR#
+			,UPDUSR_ID = #S_USER_ID#
+			,UPDT_DT = SYSDATE
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   THING_SN = #THING_SN#
+		AND   OWNER_SN = #OWNER_SN#
+	</update>
+
+	<!-- 비감평 리스트 -->
+	<select id="CMP030100DAO.notFSList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT A.CODE, 
+		       A.CODE_NM, 
+		       NVL(B.UNTPC, 0) AS UNTPC 
+		  FROM TBCOM_CMMN_CODE A, 
+		       TBCMP_BSNSBY_UNTPC B 
+		 WHERE A.GRP_CODE = 'CMP001' 
+		       AND A.CHRCTR_PREPAR_VALUE_0 = 'N' 
+		       AND A.CODE = #CODE#
+		       AND A.CODE = B.COMM_CODE(+) 
+		       AND '1' = B.USE_AT(+)    
+		       AND #BSNS_AREA_CODE# = B.BSNS_AREA_CODE(+)  
+		       AND #UNTPC_CL_NM# = B.UNTPC_CL_NM(+)  
+	</select>
+</sqlMap>

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT030406">
+
+<!-- 쿼리명 : 자동이체 헤더내용 조회
+설명 : 계약자조회
+수정일  수정자  수정내용
+작성자 : 이광원
+최초작성일 : 2015.11.10
+-->
+	<select id="RNT030406DAO.selectAtcngRqestRcivList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+SELECT 
+      A.OCCRRNC_SE
+    , A.DEFRAY_YM
+    , A.DEFRAY_SN
+    , A.CNTRCTR_NO
+    , A.DTA_SE
+    , A.TRANSFR_FILE_SE
+    , A.BANK_CODE
+    , A.ACNUTNO
+    , A.DEFRAY_REQEST_AMOUNT
+    , A.DEFRAY_AT
+    , A.ERROR_CODE
+    , A.DEFRAY_RESULT
+    , A.NEW_SE
+    , A.CPTAL_SE
+    , A.PAYER_NO
+    , A.CMPNY_RELATE_INFO
+    , A.TRANSFR_RQEST_APNTDT
+    , A.TRANSFR_REQEST_DE
+    , A.DEFRAY_DE
+    , A.DECSN_DE
+    , A.DECSN_NO
+    , A.TRANSFR_PROCESS_SE
+    , B.AREA_SE
+    , B.DONG
+    , B.HO
+    , A.REGISTER_ID
+    , A.REGIST_DT
+    , A.UPDUSR_ID
+    , A.UPDT_DT
+    , C.NM
+FROM TBRNT_LFSTS_ATCNG_RQEST_RCIV A
+JOIN TBRNT_LFSTS_CNTRCT B ON A.CMPNY_RELATE_INFO = B.CNTRCTR_NO
+JOIN TBRNT_LFSTS_CSTMR C ON B.LFSTS_CSTMR_NO = C.LFSTS_CSTMR_NO
+WHERE A.DEFRAY_YM = #DEFRAY_YM#
+  AND A.OCCRRNC_SE = '02' 
+	</select>
+	
+
+<!-- 쿼리명 : 월별 자동이체 내역 정보조회
+설명 : 자동이체 정보 조회 
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->		
+<select id="RNT030406DAO.selectAtcngRqestRcivSumInfo" parameterClass="map" resultClass="hashmap">	
+SELECT A.*
+     , B.* 
+  FROM
+(SELECT /* SLS040203DAO.selectAtcngRqestRcivSumInfo 월별 자동이체 내역 조회 */
+      NVL(SUM(a1.TOTAL_CNT), 0) AS TOTAL_CNT                                      /* 총건수 */
+    , NVL(SUM(a1.TOTAL_AMT), 0) AS TOTAL_AMT                                      /* 총금액 */
+    , NVL(SUM(a1.DEFRAY_CNT), 0) AS DEFRAY_CNT                                    /* 출금건수 */
+    , NVL(SUM(a1.DEFRAY_AMT), 0) AS DEFRAY_AMT                                    /* 출금금액 */
+    , NVL(SUM(a1.TOTAL_CNT), 0) - NVL(SUM(a1.DEFRAY_CNT), 0) AS NOT_DEFRAY_CNT    /* 미출금건수 */
+    , NVL(SUM(a1.TOTAL_AMT), 0) - NVL(SUM(a1.DEFRAY_AMT), 0) AS NOT_DEFRAY_AMT /* 미출금금액 */
+ FROM (SELECT CASE WHEN a.ERROR_CODE = '0000'
+                   THEN COUNT(1)
+                   ELSE 0
+              END AS DEFRAY_CNT
+            , CASE WHEN a.ERROR_CODE = '0000'
+                   THEN SUM(a.DEFRAY_REQEST_AMOUNT)
+                   ELSE 0
+              END AS DEFRAY_AMT
+            , COUNT(1) AS TOTAL_CNT
+            , SUM(a.DEFRAY_REQEST_AMOUNT) AS TOTAL_AMT
+         FROM TBRNT_LFSTS_ATCNG_RQEST_RCIV a    /* 자동이체청구수납 */
+        WHERE A.DEFRAY_YM = #DEFRAY_YM#    /* 출금년월 */
+          AND A.OCCRRNC_SE = '02' 
+        GROUP BY A.ERROR_CODE            /* 오류코드 */
+      ) a1
+) A
+LEFT JOIN (SELECT MAX(TRANSFR_REQEST_DE) AS TRANSFR_REQEST_DE
+                , MAX(DEFRAY_DE) AS DEFRAY_DE 
+             FROM TBRNT_LFSTS_ATCNG_RQEST_RCIV 
+            WHERE DEFRAY_YM = #DEFRAY_YM#) B ON 1=1    
+</select>
+
+<!-- 쿼리명 : 월별 자동이체 내역 건수 조회
+설명 : 월별 자동이체 내역 건수 조회
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->	  
+       <select id="RNT030406DAO.selectAtcngProcessCnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+           SELECT 
+               COUNT(*) as PROCESS_CNT
+          FROM TBRNT_LFSTS_ATCNG_RQEST_RCIV a    
+         WHERE a.DEFRAY_YM = #DEFRAY_YM#          
+           AND a.OCCRRNC_SE = '02'     
+       </select>	
+
+<!-- 쿼리명 : 월별 자동이체 내역  삭제
+설명 : 월월별 자동이체 내역 
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->	  
+	<delete id="RNT030406DAO.deleteAtcngInfo" parameterClass="java.util.HashMap">
+		DELETE 
+			   TBRNT_LFSTS_ATCNG_RQEST_RCIV		   
+ 		 WHERE DEFRAY_YM = #DEFRAY_YM#
+ 		   AND OCCRRNC_SE = '02' 
+	</delete>
+
+<!-- 쿼리명 : 월별 자동이체 내역 저장
+설명 : 월별 자동이체 내역 저장
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->	  
+<insert id="RNT030406DAO.insertAtcngReqstInfo" parameterClass="java.util.HashMap">
+INSERT 
+  INTO TBRNT_LFSTS_ATCNG_RQEST_RCIV
+  (  OCCRRNC_SE
+   , DEFRAY_YM
+   , DEFRAY_SN
+   , CNTRCTR_NO
+   , DTA_SE
+   , TRANSFR_FILE_SE
+   , BANK_CODE
+   , ACNUTNO
+   , DEFRAY_REQEST_AMOUNT
+   , DEFRAY_AT
+   , ERROR_CODE
+   , DEFRAY_RESULT
+   , NEW_SE
+   , CPTAL_SE
+   , PAYER_NO
+   , CMPNY_RELATE_INFO
+   , TRANSFR_RQEST_APNTDT
+   , TRANSFR_REQEST_DE
+   , DEFRAY_DE
+   , DECSN_DE
+   , DECSN_NO
+   , TRANSFR_PROCESS_SE
+   , AREA_SE
+   , DONG
+   , HO
+   , REGISTER_ID
+   , REGIST_DT
+   , UPDUSR_ID
+   , UPDT_DT
+)VALUES(
+      '02'
+    , #DEFRAY_YM#
+    , #DEFRAY_SN#
+    , #CNTRCTR_NO#
+    , #DTA_SE#
+    , #TRANSFR_FILE_SE#
+    , '0'||#BANK_CODE#
+    , #ACNUTNO#
+    , #DEFRAY_REQEST_AMOUNT#
+    , #DEFRAY_AT#
+    , #ERROR_CODE#
+    , #DEFRAY_RESULT#
+    , #NEW_SE#
+    , #CPTAL_SE#
+    , #PAYER_NO#
+    , #CMPNY_RELATE_INFO#
+    , #TRANSFR_RQEST_APNTDT#
+    , #TRANSFR_REQEST_DE#
+    , #DEFRAY_DE#
+    , #DECSN_DE#
+    , #DECSN_NO#
+    , 'U'
+    , #AREA_SE#
+    , #DONG#
+    , #HO#
+    , #S_USER_ID#
+    , SYSDATE
+    , #S_USER_ID#
+    , SYSDATE
+)
+</insert>
+</sqlMap>

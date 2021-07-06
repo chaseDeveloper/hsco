@@ -1,0 +1,609 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="cyberAccount_SQL" >
+   <!--  설명  : 가상고객 팝업 		
+   		작성자 : 지효정 -->
+	
+	<!-- 미납 목록 -->
+	<select id="cyberAccountDAO.nonPaymentList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/*임대료*/
+		SELECT 
+			 0 AS CHK
+			,CNTRCTR_NO		/*계약자번호*/
+			,'RN' AS CORT_CODE	/*납부코드*/
+			,0 AS PAY_NUM		/*납부번호*/
+			,0 AS REC_CLASS	
+			,0 AS REC_SEQ
+			,PAY_TMLMT		/*납부기한*/
+			,NVL(RNTCHRG, 0) AS CORT_AMOUNT			/*임대료*/
+			,NVL(RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT	/*차액금액*/
+			,NVL(OVDINTR, 0) AS OVDINTR				/*연체이자*/
+			,NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) + NVL(OVDINTR, 0) AS TOT_AMOUNT	/*총 납부금*/
+			,0 AS RCIV_NO
+			,'임대료' AS CORT_CODE_NM
+		FROM TBRNT_RENT_MT_RNTCHRG
+		WHERE CNTRCTR_NO = #cntrctrNo#
+		AND   RCIV_DE IS NULL
+		AND   NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) + NVL(OVDINTR, 0) > 0
+		AND   'RN' IN 		
+		<iterate property="arr_cortCode"  open="(" close=")" conjunction="," >
+		#arr_cortCode[]#
+		</iterate>	
+		UNION ALL
+		
+		/*보증금*/
+		SELECT 
+			0 AS CHK
+			,CNTRCTR_NO	/*계약자번호*/
+			,'R0' AS CORT_CODE
+			,0 AS PAY_NUM
+			,0 AS REC_CLASS
+			,0 AS REC_SEQ
+			,PAY_TMLMT	/*납부기한*/
+			,NVL(GTN,0)/*+NVL(CNTRCT_AMOUNT,0)*/ AS CORT_AMOUNT/*보증금*/
+			,0 AS RDCAMT_AMOUNT		/*차액금액*/
+			,0 AS OVDINTR			/*연체이자*/
+			,NVL(GTN,0)/*+NVL(CNTRCT_AMOUNT,0)*/ AS TOT_AMOUNT	/*총 납부금*/
+			,0 AS RCIV_NO
+			,'보증금' AS CORT_CODE_NM
+		FROM TBRNT_RENT_GTN
+		WHERE CNTRCTR_NO = #cntrctrNo#
+		AND   RCIV_DE IS NULL
+		AND   PAY_TMLMT LIKE (
+								SELECT SUBSTR(MAX(PAY_TMLMT), 1, 4) || '%'		/* 마지막 미납보증금 납부년도 */
+								  FROM TBRNT_RENT_GTN
+								 WHERE CNTRCTR_NO = #cntrctrNo#)
+		AND   'R0' IN
+		<iterate property="arr_cortCode"  open="(" close=")" conjunction="," >
+		#arr_cortCode[]#
+		</iterate>						
+		
+		UNION ALL
+		
+		/*소송비*/
+		SELECT 
+			 0 AS CHK
+			,CNTRCTR_NO			/*계약자번호*/
+			,'T2' AS CORT_CODE
+			,0 AS PAY_NUM
+			,0 AS REC_CLASS
+			,0 AS REC_SEQ
+			,JUDMN_DE AS PAY_TMLMT		/*납부기한*/
+			,NVL(LWST_AMOUNT, 0) - NVL(RCIV_AMOUNT, 0) AS CORT_AMOUNT			/*임대료*/
+			,0 AS RDCAMT_AMOUNT	/*차액금액*/
+			,0 AS OVDINTR		/*연체이자*/
+			,NVL(LWST_AMOUNT, 0) - NVL(RCIV_AMOUNT, 0) AS TOT_AMOUNT	/*총 납부금*/
+			,0 AS RCIV_NO
+			,'소송비' AS CORT_CODE_NM
+		FROM TBRNT_RENT_LWST
+		WHERE CNTRCTR_NO = #cntrctrNo#
+		AND   NVL(LWST_AMOUNT, 0) - NVL(RCIV_AMOUNT, 0) > 0
+		AND   'T2' IN 
+		<iterate property="arr_cortCode"  open="(" close=")" conjunction="," >
+		#arr_cortCode[]#
+		</iterate>			
+		
+		UNION ALL
+		
+		/*지원금*/
+		SELECT 
+		    0 AS CHK
+		    ,CNTRCTR_NO			/*계약자번호*/
+		    ,'BS' CORT_CODE
+		    ,SPORT_NO AS PAY_NUM
+		    ,0 REC_CLASS
+		    ,SN AS REC_SEQ
+		    ,PAY_TMLMT		/*납부기한*/
+		    ,NVL(RQEST_AMOUNT, 0) AS CORT_AMOUNT			/*임대료*/
+		    ,0 AS RDCAMT_AMOUNT	/*차액금액*/
+		    ,0 AS OVDINTR		/*연체이자*/
+		    ,NVL(RQEST_AMOUNT, 0) AS TOT_AMOUNT	/*총 납부금*/
+		    ,0 AS RCIV_NO
+		    ,'지원금' AS CORT_CODE_NM
+		FROM TBRNT_GTN_SPORT
+		WHERE CNTRCTR_NO = #cntrctrNo#
+		AND   RCIV_DE IS NULL
+		<isEmpty property="chkAll">
+		AND   RQEST_YM <![CDATA[<=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')
+		</isEmpty>
+		AND   'BS' IN 
+		<iterate property="arr_cortCode"  open="(" close=")" conjunction="," >
+		#arr_cortCode[]#
+		</iterate>			
+		
+	</select>
+
+	<!-- 입금내역 목록 -->
+	<select id="cyberAccountDAO.receiptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 BANK_CD		/*은행코드*/
+			,SFCMP_GET_CODENM('COM021', BANK_CD) AS BANK_NM		/*은행명*/
+		    ,VACCT_NO		/*가상계좌번호*/
+		    ,IN_DATE		/*수납일자*/
+		    ,PAYEND_DATE	/*납입기한*/
+		    ,BILL_AMT		/*청구금액*/
+		    ,PAY_NUM		/*청구순번*/
+		    ,DECODE(CRT_DIV,'RN',DECODE(CORT_CODE,'RN','임대료','R0','보증금','T2','소송비','BS','지원금',CORT_CODE)
+		                   ,'MA',DECODE(CORT_CODE,'MA','관리비',CORT_CODE)
+		                   ,'BS','지원금') AS CORT_CODE	/*납부구분*/
+		FROM VA_RECEIPT
+		WHERE CRT_ID = #cntrctrNo#
+		AND   CORT_CODE IN 
+		<iterate property="arr_cortCode"  open="(" close=")" conjunction="," >
+		#arr_cortCode[]#
+		</iterate>			
+		ORDER BY IN_DATE DESC, PAYEND_DATE
+	</select> 
+	
+	<!-- 가상계좌 목록 -->
+	<select id="cyberAccountDAO.vacctNoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 BANK_CD	/*은행코드*/
+			,SFCMP_GET_CODENM('COM021', BANK_CD) AS BANK_NM		/*은행명*/
+		    ,VACCT_NO	/*가상계좌번호*/
+		    ,'[' || SFCMP_GET_CODENM('COM021', BANK_CD) || ']' || ' ' || VACCT_NO AS FULL_NM
+		    ,CUST_CD
+		    ,OPT1
+			,OPT2
+			,CRT_DIV
+			,DECODE(CRT_DIV, 'MA', 'MA', DECODE(OPT1, '1', 'RN', 'R0')) AS CORD_CODE			/* 계좌구분 */
+			,DECODE(BANK_CD, '031', '1', '0') AS CHKSORT
+		FROM VA_MAST A                                             
+		WHERE 1=1
+		<isNotEmpty property="crtDiv"> 
+		AND   CRT_DIV = #crtDiv#
+		</isNotEmpty>
+		<isNotEmpty property="cntrctrNo">
+		AND   CUST_CD = #cntrctrNo#
+		</isNotEmpty>
+		<isEqual property="accntGubun" compareValue="1">
+		AND   NVL(OPT1,'0') = '1'
+		</isEqual>
+		<isEqual property="accntGubun" compareValue="2">
+		AND   NVL(OPT2,'0') = '1'
+		</isEqual>
+		ORDER BY CHKSORT DESC, BANK_CD, VACCT_NO
+	</select>
+	
+	<!-- 납부내역 목록 -->
+	<select id="cyberAccountDAO.billList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+	       	 A.BANK_CD	/*은행코드*/
+	       	,SFCMP_GET_CODENM('COM021', A.BANK_CD) AS BANK_NM		/*은행명*/
+	       	,A.VACCT_NO	/*가상계좌번호*/
+	       	,TO_DATE(A.TR_DATE ,'YYYY-MM-DD') AS TR_DATE	/*거래일자*/
+	       	,A.TR_NO		/*거래번호*/
+	       	,TO_DATE(A.TR_SDATE ,'YYYY-MM-DD') AS TR_SDATE	/*거래시작일*/
+	       	,TO_DATE(A.TR_EDATE ,'YYYY-MM-DD') AS TR_EDATE	/*거래종료일*/
+	       	,A.BILL_AMT	/*청구금액*/
+	       	,A.IN_DATE	/*입금일자*/
+	       	,A.CRT_DIV	/*계약구분*/
+	       	,A.CRT_ID		/*계약번호*/
+	       	,A.EXT1		/*비고*/
+	       	,DECODE(A.BANK_CD, '031', '1', '0') AS CHKSORT
+		FROM VA_BILL A
+			,VA_MAST B
+		WHERE A.CRT_ID = #cntrctrNo#
+		AND   A.BANK_CD  = B.BANK_CD
+		AND   A.VACCT_NO = B.VACCT_NO
+		<isNotEmpty property="vacctNo">
+		AND   A.VACCT_NO = #vacctNo#
+		</isNotEmpty>
+		<isNotEmpty property="crtDiv">
+		AND   A.CRT_DIV = #crtDiv#
+		</isNotEmpty>
+		<isNotEmpty property="bankCd">
+		AND   A.BANK_CD = #bankCd#
+		</isNotEmpty>
+		<isEqual property="chkOpt" compareValue="RN">
+		AND   NVL(B.OPT1,'0') = '1'
+		</isEqual>
+		<isEqual property="chkOpt" compareValue="R0">
+		AND   NVL(B.OPT2,'0') = '1'
+		</isEqual>
+		ORDER BY CHKSORT DESC, A.BANK_CD, A.VACCT_NO
+	</select>
+	
+	<!-- 납부내역상세 목록 -->
+	<select id="cyberAccountDAO.billDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+ 			 SFCMP_GET_CODENM('COM021', bank_cd)  AS BANK_NM
+			,VACCT_NO
+			,PAYEND_DATE
+			,DECODE(CORT_CODE,'RN','임대료',
+							  'R0','보증금',
+							  'T2','소송비',
+							  'MA','관리비',
+							  'BS','지원금',
+							  '기타')  AS CORT_CODE_NM
+			,BILL_AMT
+		FROM VA_BILL_DETAIL A
+		WHERE BANK_CD = #bankCd#
+		AND   CRT_ID = #cntrctrNo#
+		AND   VACCT_NO = #vacctNo#
+		AND   TR_DATE = SUBSTR(#trDate#, 0, 8)
+		AND   CORT_CODE IN
+		<iterate property="arr_cortCode"  open="(" close=")" conjunction="," >
+		#arr_cortCode[]#
+		</iterate>			
+		ORDER BY BANK_CD, CORT_CODE
+	</select>
+	
+	<parameterMap id="sp_va_bill_uid_param" class="java.util.HashMap">
+		<parameter property="IN_FLAG"     		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_BANK_CD"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_ACCT_NO"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_TR_DATE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_TR_SDATE" 		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_TR_EDATE" 		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CRT_DIV"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CRT_ID"   		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_BILL_SEQ"		jdbcType="VARCHAR"	javaType="string"  	mode="IN" />
+		<parameter property="IN_CORT_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAY_NUM"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_REC_CLASS"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_REC_SEQ"		jdbcType="VARCHAR"	javaType="string"   mode="IN" />
+		<parameter property="IN_PAYEND_DATE"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_BILL_AMT"		jdbcType="VARCHAR"	javaType="string"   mode="IN" />
+		<parameter property="IN_PAY_AMT"		jdbcType="VARCHAR"	javaType="string"	mode="IN" />
+		<parameter property="IN_SALE_AMT"		jdbcType="VARCHAR"	javaType="string"	mode="IN" />
+		<parameter property="IN_INT_AMT"		jdbcType="VARCHAR"	javaType="string"	mode="IN" />
+		<parameter property="IN_BILL_DIV"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="S_USER_ID"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_BJ_YN"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />		
+	</parameterMap>
+
+	<procedure id="cyberAccountDAO.SP_VA_BILL_UID" parameterMap="sp_va_bill_uid_param">
+		{ call SP_VA_BILL_UID(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+	</procedure>
+	
+	
+		<!-- 쿼리명 : 영구임대 납부서 출력 
+			 설명 : 영구임대 납부서 출력  쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.10.23
+	-->
+	<select id="cyberAccountDAO.selectBillPrintList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT DISTINCT
+			  	 a.RENT_HOUSE_CODE
+				,a.DONG
+				,a.HO
+				,m.NM
+				,b1.ZIP
+				,trim(b1.ADRES) || ' ' || trim(b1.ADRES_DETAIL) AS ADDR1
+				,b.RENT_HOUSE_NM || ' ' || trim(to_number(a.DONG) || '-' || to_number(a.HO)) AS ADDR2
+				,SUBSTR(d.PAYEND_DATE1, 1,6) AS BILL_YM
+				,d.PAYEND_DATE1 AS PAYEND_DATE
+				,'주택(아파트)' AS C_TITLE1
+				,b.RENT_HOUSE_NM AS C_CONT1
+				,'동   호   수' AS C_TITLE2
+				,trim(to_number(a.DONG) || '-' || to_number(a.HO)) AS C_CONT2
+				,'납   부   자' AS C_TITLE3
+				,m.NM AS C_CONT3
+				,'자동이체코드' AS C_TITLE4
+				,a.RENT_HOUSE_CODE || '-' || a.DONG || '-' || a.HO AS C_CONT4
+				,#acctGubun# AS A_TITLE1
+				/*,'임 대 료' AS A_TITLE1*/
+				,d.PAY_AMT AS A_AMT1
+				,'연체금액' AS A_TITLE2
+				,d.INT_AMT AS A_AMT2
+				,'차감금액' AS A_TITLE3
+				,d.SALE_AMT AS A_AMT3
+				,'  ' AS A_TITLE4
+				,0 AS A_AMT4
+				,d.PAY_AMT + d.SALE_AMT + d.INT_AMT AS A_AMT5
+				,e.MIN_RATIO
+				,e.MAX_RATIO
+				,f.OPOST_NO
+				,f.OADDR1
+				,f.OADDR2
+				,f.OTEL_NO
+				,f.OFAX_NO
+				,v.BANK1 AS BANK1
+				,v.ACCT_NO1 AS ACCT_NO1
+				,v.BANK2 AS BANK2
+				,v.ACCT_NO2 AS ACCT_NO2
+				,v.BANK3 AS BANK3
+				,v.ACCT_NO3 AS ACCT_NO3
+				,v.BANK4 AS BANK4
+				,v.ACCT_NO4 AS ACCT_NO4
+				,v.BANK5 AS BANK5
+				,v.ACCT_NO5 AS ACCT_NO5
+				,v.BANK6 AS BANK6
+				,v.ACCT_NO6 AS ACCT_NO6
+				,d.PAY_AMT AS PAY_AMT
+				,d.SALE_AMT
+				,d.INT_AMT
+				,d.TOT_AMT
+				,d.MONTH1
+				,to_char(d.PAYEND_DATE1, 'yyyy-mm-dd') AS PAYEND_DATE1
+				,d.PAY_AMT1
+				,d.SALE_AMT1
+				,d.INT_AMT1
+				,d.TOT_AMT1
+				,d.MONTH2
+				,to_char(d.PAYEND_DATE2, 'yyyy-mm-dd') AS PAYEND_DATE2
+				,d.PAY_AMT2
+				,d.SALE_AMT2
+				,d.INT_AMT2
+				,d.TOT_AMT2
+				,d.MONTH3
+				,to_char(d.PAYEND_DATE3, 'yyyy-mm-dd') AS PAYEND_DATE3
+				,d.PAY_AMT3
+				,d.SALE_AMT3
+				,d.INT_AMT3
+				,d.TOT_AMT3
+				,d.MONTH4
+				,to_char(d.PAYEND_DATE4, 'yyyy-mm-dd') AS PAYEND_DATE4
+				,d.PAY_AMT4
+				,d.SALE_AMT4
+				,d.INT_AMT4
+				,d.TOT_AMT4
+				,d.MONTH5
+				,to_char(d.PAYEND_DATE5, 'yyyy-mm-dd') AS PAYEND_DATE5
+				,d.PAY_AMT5
+				,d.SALE_AMT5
+				,d.INT_AMT5
+				,d.TOT_AMT5
+				,d.MONTH6
+				,to_char(d.PAYEND_DATE6, 'yyyy-mm-dd') AS PAYEND_DATE6
+				,d.PAY_AMT6
+				,d.SALE_AMT6
+				,d.INT_AMT6
+				,d.TOT_AMT6
+				,d.MONTH7
+				,to_char(d.PAYEND_DATE7, 'yyyy-mm-dd') AS PAYEND_DATE7
+				,d.PAY_AMT7
+				,d.SALE_AMT7
+				,d.INT_AMT7
+				,d.TOT_AMT7
+				,d.MONTH8
+				,to_char(d.PAYEND_DATE8, 'yyyy-mm-dd') AS PAYEND_DATE8
+				,d.PAY_AMT8
+				,d.SALE_AMT8
+				,d.INT_AMT8
+				,d.TOT_AMT8
+				,d.MONTH9
+				,to_char(d.PAYEND_DATE9, 'yyyy-mm-dd') AS PAYEND_DATE9
+				,d.PAY_AMT9
+				,d.SALE_AMT9
+				,d.INT_AMT9
+				,d.TOT_AMT9
+				,d.MONTH10
+				,to_char(d.PAYEND_DATE10, 'yyyy-mm-dd') AS PAYEND_DATE10
+				,d.PAY_AMT10
+				,d.SALE_AMT10
+				,d.INT_AMT10
+				,d.TOT_AMT10
+				,d.MONTH11
+				,to_char(d.PAYEND_DATE11, 'yyyy-mm-dd') AS PAYEND_DATE11
+				,d.PAY_AMT11
+				,d.SALE_AMT11
+				,d.INT_AMT11
+				,d.TOT_AMT11
+				,d.MONTH12
+				,to_char(d.PAYEND_DATE12, 'yyyy-mm-dd') AS PAYEND_DATE12
+				,d.PAY_AMT12
+				,d.SALE_AMT12
+				,d.INT_AMT12
+				,d.TOT_AMT12
+				,d.MONTH13
+				,to_char(d.PAYEND_DATE13, 'yyyy-mm-dd') AS PAYEND_DATE13
+				,d.PAY_AMT13
+				,d.SALE_AMT13
+				,d.INT_AMT13
+				,d.TOT_AMT13
+				,'' AS REC_DE
+				,0 AS REC_AMT
+				,s.BANK_NM
+				,s.ACNUTNO
+				,s.DPSTR
+				,a.RENT_HOUSE_CODE || '-' || a.DONG || '-' || a.HO AS AUTO_CODE
+				/*,'1430000' AS BIZ_NO*/
+				,DECODE(#cortCode#, 
+						'BS', 
+						(SELECT CHRCTR_PREPAR_VALUE_2 FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'PCOM05' AND CODE = '02'), 
+						(SELECT CHRCTR_PREPAR_VALUE_2 FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'PCOM05' AND CODE = '01')
+				 ) AS BIZ_NO
+				,b.RENT_HOUSE_NM || ' ' || trim(to_number(a.DONG) || '-' || to_number(a.HO)) AS APT_ADDR
+				,to_char(d.PAYEND_DATE1, 'yyyy') BILL_YEAR
+				,to_char(d.PAYEND_DATE1, 'mm') BILL_MONTH
+				,SUBSTR(c.TR_DATE, 1, 4) AS CAL_YEAR
+				,SUBSTR(c.TR_DATE, 5, 2) AS CAL_MONTH
+				,SUBSTR(c.TR_DATE, 7, 2) AS CAL_DAY
+				,SUBSTR(c.TR_EDATE, 1, 4) AS END_YEAR
+				,SUBSTR(c.TR_EDATE, 5, 2) AS END_MONTH
+				,SUBSTR(c.TR_EDATE, 7, 2) AS END_DAY
+				,c.BILL_DIV
+				,c.TR_DATE
+				,c.TR_NO
+			  ,s.BANK_NM || ' - ' || d.VACCT_NO AS BANK_G
+				,d.BANK_CD
+				,d.VACCT_NO
+				,a.CNTRCTR_NO
+				,#cortCode# AS CRT_DIV
+				,0 AS USE_VOLUME
+				,0 COST_AMT
+				,0 TFAMILY_CNT
+				,0 TSALE_AMT_06
+				,0 SALE_AMT_06
+		FROM TBRNT_RENT_CNTRCT a
+			,TBRNT_RENT_HOUSE b
+			,TBRNT_RENT_HOUSE_DONG b1
+		  ,TBRNT_PRMANENT_RENT_CSTMR m
+			,VA_BILL c
+			,(
+				SELECT CRT_ID
+					,BANK_CD
+					,VACCT_NO
+					,max(decode(rownum, 1, CORT_NM, '')) AS MONTH1
+					,max(decode(rownum, 1, PAYEND_DATE, '')) AS PAYEND_DATE1
+					,sum(decode(rownum, 1, PAY_AMT, NULL)) AS PAY_AMT1
+					,sum(decode(rownum, 1, SALE_AMT, NULL)) AS SALE_AMT1
+					,sum(decode(rownum, 1, INT_AMT, NULL)) AS INT_AMT1
+					,sum(decode(rownum, 1, BILL_AMT, NULL)) AS TOT_AMT1
+					,max(decode(rownum, 2, CORT_NM, '')) AS MONTH2
+					,max(decode(rownum, 2, PAYEND_DATE, '')) AS PAYEND_DATE2
+					,sum(decode(rownum, 2, PAY_AMT, NULL)) AS PAY_AMT2
+					,sum(decode(rownum, 2, SALE_AMT, NULL)) AS SALE_AMT2
+					,sum(decode(rownum, 2, INT_AMT, NULL)) AS INT_AMT2
+					,sum(decode(rownum, 2, BILL_AMT, NULL)) AS TOT_AMT2
+					,max(decode(rownum, 3, CORT_NM, '')) AS MONTH3
+					,max(decode(rownum, 3, PAYEND_DATE, '')) AS PAYEND_DATE3
+					,sum(decode(rownum, 3, PAY_AMT, NULL)) AS PAY_AMT3
+					,sum(decode(rownum, 3, SALE_AMT, NULL)) AS SALE_AMT3
+					,sum(decode(rownum, 3, INT_AMT, NULL)) AS INT_AMT3
+					,sum(decode(rownum, 3, BILL_AMT, NULL)) AS TOT_AMT3
+					,max(decode(rownum, 4, CORT_NM, '')) AS MONTH4
+					,max(decode(rownum, 4, PAYEND_DATE, '')) AS PAYEND_DATE4
+					,sum(decode(rownum, 4, PAY_AMT, NULL)) AS PAY_AMT4
+					,sum(decode(rownum, 4, SALE_AMT, NULL)) AS SALE_AMT4
+					,sum(decode(rownum, 4, INT_AMT, NULL)) AS INT_AMT4
+					,sum(decode(rownum, 4, BILL_AMT, NULL)) AS TOT_AMT4
+					,max(decode(rownum, 5, CORT_NM, '')) AS MONTH5
+					,max(decode(rownum, 5, PAYEND_DATE, '')) AS PAYEND_DATE5
+					,sum(decode(rownum, 5, PAY_AMT, NULL)) AS PAY_AMT5
+					,sum(decode(rownum, 5, SALE_AMT, NULL)) AS SALE_AMT5
+					,sum(decode(rownum, 5, INT_AMT, NULL)) AS INT_AMT5
+					,sum(decode(rownum, 5, BILL_AMT, NULL)) AS TOT_AMT5
+					,max(decode(rownum, 6, CORT_NM, '')) AS MONTH6
+					,max(decode(rownum, 6, PAYEND_DATE, '')) AS PAYEND_DATE6
+					,sum(decode(rownum, 6, PAY_AMT, NULL)) AS PAY_AMT6
+					,sum(decode(rownum, 6, SALE_AMT, NULL)) AS SALE_AMT6
+					,sum(decode(rownum, 6, INT_AMT, NULL)) AS INT_AMT6
+					,sum(decode(rownum, 6, BILL_AMT, NULL)) AS TOT_AMT6
+					,max(decode(rownum, 7, CORT_NM, '')) AS MONTH7
+					,max(decode(rownum, 7, PAYEND_DATE, '')) AS PAYEND_DATE7
+					,sum(decode(rownum, 7, PAY_AMT, NULL)) AS PAY_AMT7
+					,sum(decode(rownum, 7, SALE_AMT, NULL)) AS SALE_AMT7
+					,sum(decode(rownum, 7, INT_AMT, NULL)) AS INT_AMT7
+					,sum(decode(rownum, 7, BILL_AMT, NULL)) AS TOT_AMT7
+					,max(decode(rownum, 8, CORT_NM, '')) AS MONTH8
+					,max(decode(rownum, 8, PAYEND_DATE, '')) AS PAYEND_DATE8
+					,sum(decode(rownum, 8, PAY_AMT, NULL)) AS PAY_AMT8
+					,sum(decode(rownum, 8, SALE_AMT, NULL)) AS SALE_AMT8
+					,sum(decode(rownum, 8, INT_AMT, NULL)) AS INT_AMT8
+					,sum(decode(rownum, 8, BILL_AMT, NULL)) AS TOT_AMT8
+					,max(decode(rownum, 9, CORT_NM, '')) AS MONTH9
+					,max(decode(rownum, 9, PAYEND_DATE, '')) AS PAYEND_DATE9
+					,sum(decode(rownum, 9, PAY_AMT, NULL)) AS PAY_AMT9
+					,sum(decode(rownum, 9, SALE_AMT, NULL)) AS SALE_AMT9
+					,sum(decode(rownum, 9, INT_AMT, NULL)) AS INT_AMT9
+					,sum(decode(rownum, 9, BILL_AMT, NULL)) AS TOT_AMT9
+					,max(decode(rownum, 10, CORT_NM, '')) AS MONTH10
+					,max(decode(rownum, 10, PAYEND_DATE, '')) AS PAYEND_DATE10
+					,sum(decode(rownum, 10, PAY_AMT, NULL)) AS PAY_AMT10
+					,sum(decode(rownum, 10, SALE_AMT, NULL)) AS SALE_AMT10
+					,sum(decode(rownum, 10, INT_AMT, NULL)) AS INT_AMT10
+					,sum(decode(rownum, 10, BILL_AMT, NULL)) AS TOT_AMT10
+					,max(decode(rownum, 11, CORT_NM, '')) AS MONTH11
+					,max(decode(rownum, 11, PAYEND_DATE, '')) AS PAYEND_DATE11
+					,sum(decode(rownum, 11, PAY_AMT, NULL)) AS PAY_AMT11
+					,sum(decode(rownum, 11, SALE_AMT, NULL)) AS SALE_AMT11
+					,sum(decode(rownum, 11, INT_AMT, NULL)) AS INT_AMT11
+					,sum(decode(rownum, 11, BILL_AMT, NULL)) AS TOT_AMT11
+					,max(decode(rownum, 12, CORT_NM, '')) AS MONTH12
+					,max(decode(rownum, 12, PAYEND_DATE, '')) AS PAYEND_DATE12
+					,sum(decode(rownum, 12, PAY_AMT, NULL)) AS PAY_AMT12
+					,sum(decode(rownum, 12, SALE_AMT, NULL)) AS SALE_AMT12
+					,sum(decode(rownum, 12, INT_AMT, NULL)) AS INT_AMT12
+					,sum(decode(rownum, 12, BILL_AMT, NULL)) AS TOT_AMT12
+					,substr(min(CASE 
+								WHEN rownum > 12
+									THEN CORT_NM
+								END), 1, 7) || '~' || substr(max(CASE 
+								WHEN rownum > 12
+									THEN CORT_NM
+								END), 1, 7) || Trim(substr(max(CASE 
+									WHEN rownum > 12
+										THEN CORT_NM
+									END), 8, 20)) AS MONTH13
+					,max(CASE 
+							WHEN rownum > 12
+								THEN PAYEND_DATE
+							END) AS PAYEND_DATE13
+					,sum(CASE 
+							WHEN rownum > 12
+								THEN PAY_AMT
+							END) AS PAY_AMT13
+					,sum(CASE 
+							WHEN rownum > 12
+								THEN SALE_AMT
+							END) AS SALE_AMT13
+					,sum(CASE 
+							WHEN rownum > 12
+								THEN INT_AMT
+							END) AS INT_AMT13
+					,sum(CASE 
+							WHEN rownum > 12
+								THEN BILL_AMT
+							END) AS TOT_AMT13
+					,sum(PAY_AMT) AS PAY_AMT
+					,sum(SALE_AMT) AS SALE_AMT
+					,sum(INT_AMT) AS INT_AMT
+					,sum(BILL_AMT) AS TOT_AMT
+				FROM (
+					SELECT a.*
+						,decode(CORT_CODE, 'RN', to_char(PAYEND_DATE, 'yyyy-mm '), '') || decode(CORT_CODE, 'RN', '임대료', 'R0', '보증금', 'T2', '소송비', 'BS', '지원금','기타수입') AS CORT_NM
+					FROM VA_BILL_DETAIL a
+					WHERE BANK_CD = #bankCd#
+						AND VACCT_NO = #vacctNo#
+						AND CRT_ID = #cntrctrNo#
+					ORDER BY PAYEND_DATE DESC
+					) b
+				GROUP BY CRT_ID
+					,BANK_CD
+					,VACCT_NO
+				) d
+			,(
+				SELECT 
+					min(ARRRG_INTRT) AS MIN_RATIO
+					,max(ARRRG_INTRT) AS MAX_RATIO
+				FROM TBRNT_LFSTS_ARRRG_INTRT a
+				) e
+			,(
+		     SELECT 
+		         CHRCTR_PREPAR_VALUE_0 AS OPOST_NO
+			              ,CHRCTR_PREPAR_VALUE_1 AS OADDR1
+			              ,CHRCTR_PREPAR_VALUE_2 AS OADDR2
+		      ,'전화:' || (SELECT CHRCTR_PREPAR_VALUE_0 FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'COM027' AND CODE_NM = 'RN') AS OTEL_NO
+		      ,'FAX :' || (SELECT CHRCTR_PREPAR_VALUE_1 FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'COM027' AND CODE_NM = 'RN') AS OFAX_NO
+		      FROM TBCOM_CMMN_CODE A
+		      WHERE GRP_CODE = 'COM027'
+		      AND CODE = 'RN'
+				) f
+			,(
+				SELECT CNTRCTR_NO
+					,(
+						SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE
+		          WHERE GRP_CODE = 'COM021' 
+							AND CODE = BANK_CODE          
+						) AS BANK_NM
+		       ,ACNUTNO
+		       , DPSTR
+				FROM TBPMS_ATCNG
+				WHERE ATCNG_CANCL_DE IS NULL
+				  AND JOB_SE = 'RN1'
+				) s
+			,VI_VA_MAST v 
+		WHERE a.CNTRCTR_NO = c.CRT_ID
+		  AND a.PRMANENT_CSTMR_NO 	= m.PRMANENT_CSTMR_NO
+			AND a.RENT_HOUSE_CODE 	= b.RENT_HOUSE_CODE(+)
+			AND c.BANK_CD 			= d.BANK_CD
+			AND c.VACCT_NO 			= d.VACCT_NO
+			AND c.CRT_ID 			= d.CRT_ID
+			AND a.RENT_HOUSE_CODE 	= b1.RENT_HOUSE_CODE(+)
+			AND a.DONG 				= b1.DONG(+)
+			AND a.CNTRCTR_NO 		= s.CNTRCTR_NO(+)
+			AND a.CNTRCTR_NO 		= v.CRT_ID
+			AND v.CRT_DIV 			= #cortCode#	/* 가상계좌부서구분 : LN-보상판매처(토지), SL-보상판매처(주택), RN-주거복지처(영구임대), MA-관리비(다가구), BS-주거복지처(보증금지원) */
+			<isEqual property="opt" compareValue="1">
+            AND v.opt1 = '1'
+            </isEqual>
+            <isEqual property="opt" compareValue="2">
+            AND v.opt2 = '1'
+            </isEqual>   	
+	</select>
+</sqlMap>

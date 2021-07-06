@@ -1,0 +1,941 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/*****************************************************************************
+ * 프로그램명 		: 	comValidate.xjs
+ * 작  성  자  	: 	송금준
+ * 작  성  일   	: 	2015.07.
+ * 설      명  		:   Validattion 공통 함수다.
+ * 수  정  자  	: 	
+ * 수 정 이력  	: 	
+ * 사용방법	    :   
+*******************************************************************************/
+
+/**
+*@fileoverview nexacro service library 
+*@gfn_checkValidation			: 멀티 입력 Validation 판단하는 함수 (Main Function)
+*@gfn_checkValidation_NoUpdChk  : Dataset의 변경 사항이 없을 경우, True를 Return한다.
+*@gfn_checkValidGrid			: 멀티 입력 Validation 판단하는 함수 (Grid)
+*@gfn_checkValidDiv				: 멀티 입력 Validation 판단하는 함수 (Div, Form 등)
+*@gfn_checkValidDs				: 멀티 입력 Validation 판단하는 함수 (Dataset)
+*@gfn_getBindComponent			: Grid에 Bind된 Dataset을 가져온다
+* @memberof! comValidate
+*/
+
+/********************************************************************************
+ * Function Name	: gfn_checkValidation 
+ * Description		: 멀티 입력 Validation 판단하는 함수
+ * Arguments		: obj - 대상 Object (Div, Form, Grid, Dataset 등)
+                      objChkDs - 체크 컬럼 정보 데이타셋
+                      bUpdateChk - Dataset의 업데이트 체크 여부 (true[default] / false)
+                      sKey - 키값
+ * Return 			: true = 변경 된 데이터가 존재
+ *					  false = 변경 된 데이터가 없음
+ ********************************************************************************/
+this.gfn_checkValidation = function(obj, objChkDs:Dataset, bUpdateChk, sKey)
+{
+	if(this.comUtils.isNullEmpty(bUpdateChk)){
+		bUpdateChk = true;
+	}
+	
+    if (obj instanceof Grid)
+        return this.gfn_checkValidGrid(obj, objChkDs, bUpdateChk, sKey);
+    else if (obj instanceof Div || obj instanceof Form)
+        return this.gfn_checkValidDiv(obj, objChkDs, bUpdateChk, sKey);
+    else if (obj instanceof Dataset)
+        return this.gfn_checkValidDs(obj, objChkDs, bUpdateChk, sKey);
+//        return this.gfn_checkValidDiv(obj, objChkDs, sKey);
+}
+
+/********************************************************************************
+ * Function Name	: gfn_checkValidation_NoUpdChk
+ * Description		: Dataset의 변경 사항이 없을 경우, True를 Return한다.
+ * Arguments		: obj - 대상 Object (Div, Form, Grid, Dataset 등)
+                      objChkDs - 체크 컬럼 정보 데이타셋
+                      sKey - 키값
+ * Return 			: true = 변경 된 데이터가 존재
+ *					  false = 변경 된 데이터가 없음
+ ********************************************************************************/
+this.gfn_checkValidation_NoUpdChk = function (obj, objChkDs:Dataset, sKey)
+{
+    if (obj instanceof Grid) {
+		var objDs = this.objects[obj.binddataset];
+		if(!this.comUtils.isDatasetUpdated(objDs)) {
+			return true;
+		}
+        return this.gfn_checkValidGrid(obj, objChkDs, true, sKey);
+    } else if (obj instanceof Div || obj instanceof Form) {
+        return this.gfn_checkValidDiv(obj, objChkDs, true, sKey);
+    } else if (obj instanceof Dataset) {
+		if(!this.comUtils.isDatasetUpdated(obj)) {
+			return true;
+		}
+        return this.gfn_checkValidDs(obj, objChkDs, true, sKey);
+    }
+}
+
+/********************************************************************************
+ * Function Name	: gfn_checkValidGrid 
+ * Description		: 멀티 입력 Validation 판단하는 함수
+ * Arguments		: objGrid - 대상 그리드
+                      objChkDs - 체크 컬럼 정보 데이타셋
+                      bUpdateChk - Dataset의 업데이트 체크 여부 (true[default] / false)
+                      sKey - 키값
+ * Return 			: true = 변경 된 데이터가 존재
+ *					  false = 변경 된 데이터가 없음
+ ********************************************************************************/
+/*
+  <Column id="compId" type="STRING" size="256"/>   -- 필터 값.... 그리드 ID
+  <Column id="colId" type="STRING" size="256"/>    -- 체크 할 ColumnId
+  <Column id="PK" type="STRING" size="256"/>       -- PK 구분 : 중복 체크
+  <Column id="notNull" type="STRING" size="256"/>  
+  <Column id="type" type="STRING" size="256"/>
+  <Column id="length" type="STRING" size="256"/>
+  <Column id="from" type="STRING" size="256"/>
+  <Column id="to" type="STRING" size="256"/>
+  <Column id="msgId" type="STRING" size="256"/>
+*/  
+this.gfn_checkValidGrid = function(objGrid:Grid, objChkDs:Dataset, bUpdateChk, sKey) {
+    var objBindDs = this.objects[objGrid.binddataset];
+    var sFilterVal = this.comUtils.isNullEmpty(sKey)?objGrid.name:sKey;
+    
+    //삭제행 처리 로직에 따른 처리 확인 필요
+    
+    if (!this.comUtils.isDatasetUpdated(objBindDs)) {
+		if(bUpdateChk) {
+// 			alert("저장할 내역이 없습니다.");
+			this.gfn_message("comm.데이터.변경.없음");
+		}
+		return false;
+    }
+    
+    objChkDs.filter("compId=='" + sFilterVal +"'");
+
+    if (objChkDs.getRowCount() == 0) {
+        objChkDs.filter("");
+        return true;
+    }
+    
+    if (!this.comUtils.isDatasetUpdated(objBindDs))
+    {
+        objChkDs.filter("");
+        return false;
+    }
+    
+    var arrChkCol = new Array();
+    var sDuplication = "";
+    var nPKFindRow = objChkDs.findRow("PK", "Y");
+    var arrIdx=0;
+    
+    if (nPKFindRow != -1)
+    {
+         arrChkCol[arrIdx] = objChkDs.getColumn(nPKFindRow, "colId");
+         sDuplication = "String(" + arrChkCol[arrIdx] + ")";
+         
+         for (var i=nPKFindRow+1; i<objChkDs.getRowCount(); i++)
+         {
+             if (objChkDs.getColumn(i, "PK") == 'Y')
+             {
+                 arrIdx++;
+                 arrChkCol[arrIdx] = objChkDs.getColumn(i, "colId");
+                 sDuplication += "+String(" + arrChkCol[arrIdx] + ")";
+             }
+         }
+    }
+    
+	for (var i=0; i<objChkDs.getRowCount(); i++)
+	{
+		if (objChkDs.getColumn(i, "notNull") == 'Y' )
+		{
+		    var sChkColId = objChkDs.getColumn(i, "colId");   
+		    var nNullFindRow = objBindDs.findRowExpr("dataset.parent.comUtils.isNullEmpty("+sChkColId+") && (dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT || dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE)");
+		    
+		    if (nNullFindRow > -1)
+		    {
+		        var nMsg = objChkDs.getColumn(i, "msgId");	
+// 		        this.alert(nMsg + "를(을) 입력하여 주십시오.");
+		        this.gfn_message("comm.항목.입력.을", nMsg);
+		        
+		        var nCell = objGrid.getBindCellIndex("body", sChkColId);
+		        objBindDs.set_rowposition(nNullFindRow);
+		        
+		        //그리드에 바인드 되어 있는 컬럼이 아니면 바인드 정보에서 바인드 되어 있는 component가 있는 지 확인 한다.
+		        //바인드 된 컴퍼넌트 부터 찾고 그리드의 셀을 찾는다
+		        var objRetComponent = this.gfn_getBindComponent(objBindDs, sChkColId);
+		            
+				if (typeof objRetComponent != "boolean")
+				{
+					objRetComponent.setFocus();	
+					objChkDs.filter("");
+					return false;
+				}
+		        
+		        if (nCell == -1)
+		        {
+		            objChkDs.filter("");
+		            return false;
+		        }
+		        
+		        objBindDs.set_rowposition(nNullFindRow);
+		        objGrid.setFocus();		         
+		        objGrid.setCellPos(nCell);
+		        objChkDs.filter("");
+		        return false;
+		    }
+		}
+		
+		//null 체크 후에 length 체크 해야 함
+		if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "nlength")))
+	    {
+	        var nLength = objChkDs.getColumn(i, "nlength");
+	        var sChkColId = objChkDs.getColumn(i, "colId");   
+	        var sChkGb = objChkDs.getColumn(i, "lengthChkGb");
+	        var sOper = this._getOperator(sChkGb);
+	        //var nLengthFindRow = objBindDs.findRowExpr("(dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT || dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE) && String("+sChkColId+").length" + sOper + nLength);
+	        var nLengthFindRow = objBindDs.findRowExpr("(dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT || dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE) && String("+sChkColId+").length" + sOper + nLength + "&& String("+sChkColId+") != 'undefined'");
+	        if (nLengthFindRow != -1)
+	        {
+	            var sMsgId = objChkDs.getColumn(i, "msgId");	
+		        var sMessage = this._getMessage(sChkGb, sMsgId, nLength);
+
+		        alert(sMessage);
+		        
+		        objBindDs.set_rowposition(nLengthFindRow);
+		        objGrid.setFocus();
+		        objChkDs.filter("");
+		        return false;
+	        }
+	    }
+		
+		//null 체크 후에 최소값 체크 해야 함
+		if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "from")))
+	    {
+	        var nFrom = objChkDs.getColumn(i, "from");
+	        var sChkColId = objChkDs.getColumn(i, "colId");   
+	        
+	        var nFromFindRow = objBindDs.findRowExpr("(dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT || dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE) && String("+sChkColId+")<"+nFrom);
+	        if (nFromFindRow != -1)
+	        {
+	            var nMsg = objChkDs.getColumn(i, "msgId");
+// 		        this.alert(nMsg + "의 값은 " + nFrom + " 보다 크거나 같아야 합니다.");
+                if(nMsg.indexOf("^") > -1) {
+		            var msgArr = nMsg.split('^');
+		            this.gfn_message("errors.항목값.범위.이상", msgArr[0] + "|" + msgArr[1]);
+		        } else {
+		            //this.gfn_message("errors.항목값.범위.이상", nMsg + "|" + nFrom);
+		            this.gfn_message("errors.항목값.범위.이상", nMsg + " 상한값|" + nMsg + " 시작값");
+		        }
+		        
+		        objBindDs.set_rowposition(nFromFindRow);
+		        objGrid.setFocus();
+		        objChkDs.filter("");
+		        return false;
+	        }
+	    }
+		
+		//null 체크 후에 최대값 체크 해야 함
+		if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "to")))
+	    {
+	        var nTo = objChkDs.getColumn(i, "to");
+	        var sChkColId = objChkDs.getColumn(i, "colId");   
+	        
+	        var nToFindRow = objBindDs.findRowExpr("(dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT || dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE) && String("+sChkColId+")>"+nTo);
+	        if (nToFindRow != -1)
+	        {
+	            var nMsg = objChkDs.getColumn(i, "msgId");	
+	            
+// 		        this.alert(nMsg + "의 값은 " + nTo + " 보다 작거나 같아야 합니다.");
+		        if(nMsg.indexOf("^") > -1) {
+		            var msgArr = nMsg.split('^');
+		            this.gfn_message("errors.항목값.범위.이하", msgArr[0] + "|" + msgArr[1]);
+		        } else {
+		            this.gfn_message("errors.항목값.범위.이하", nMsg + " 시작값|" + nMsg + " 상한값");
+		        }
+		        objBindDs.set_rowposition(nToFindRow);
+		        objGrid.setFocus();
+		        objChkDs.filter("");
+		        return false;
+	        }
+	    }
+
+	    if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "expr")))
+	    {
+	        var nExprFindRow = objBindDs.findRowExpr(objChkDs.getColumn(i, "expr"));
+	        if (nExprFindRow != -1)
+	        {
+	            var nMsg = objChkDs.getColumn(i, "msgId");
+
+				this.gfn_message("comm.항목.입력.을", nMsg);
+		        objBindDs.set_rowposition(nExprFindRow);
+		        objGrid.setFocus();
+		        objChkDs.filter("");
+		        return false;
+	        }
+	    }
+	    
+	    var sFuncNm = objChkDs.getColumn(i, "func");
+	    if (!this.comUtils.isNullEmpty(sFuncNm))
+	    {
+	        objCollFunc = this.lookupFunc(sFuncNm);
+	        if (objCollFunc != null)
+			{	   
+				var bRetVal = objCollFunc.call();
+				
+				//리턴 값에 따른 처리 방법 확인 후 작성
+			}
+	    }
+	}
+	if (sDuplication != "") {
+		for (var i=0; i<objBindDs.getRowCount(); i++)
+		{
+			if (objBindDs.getRowType(i) == Dataset.ROWTYPE_INSERT || objBindDs.getRowType(i) == Dataset.ROWTYPE_UPDATE)
+			{
+				 var sChkVal = "";
+				 for (var ii=0; ii<arrChkCol.length; ii++)
+				 {
+					 sChkVal += objBindDs.getColumn(i, arrChkCol[ii]);
+				 }
+				 
+				 var nDupFindRow = objBindDs.findRowExpr("rowidx!=" + i + " && " + sDuplication + "=='" +(sChkVal)+ "'");
+				 
+				 if (nDupFindRow != -1)
+				 {
+					 this.gfn_message("info.그리드.데이터.중복", (i+1) + "|" + (nDupFindRow + 1 ));
+					 
+					 objBindDs.set_rowposition(i);
+					 objChkDs.filter("");
+					 return false;
+				 }
+			}
+		}
+	}
+	
+	objChkDs.filter("");
+    return true;
+
+}
+
+/********************************************************************************
+ * Function Name	: gfn_checkValidDs 
+ * Description		: 멀티 입력 Validation 판단하는 함수
+ * Arguments		: objDs - 대상 Dataset
+                      objChkDs - 체크 컬럼 정보 데이타셋
+                      bUpdateChk - Dataset의 업데이트 체크 여부 (true[default] / false)
+                      sKey - 키값
+ * Return 			: true = 변경 된 데이터가 존재
+ *					  false = 변경 된 데이터가 없음
+ ********************************************************************************/
+/*
+  <Column id="compId" type="STRING" size="256"/>   -- 필터 값.... 그리드 ID
+  <Column id="colId" type="STRING" size="256"/>    -- 체크 할 ColumnId
+  <Column id="PK" type="STRING" size="256"/>       -- PK 구분 : 중복 체크
+  <Column id="notNull" type="STRING" size="256"/>  
+  <Column id="type" type="STRING" size="256"/>
+  <Column id="length" type="STRING" size="256"/>
+  <Column id="from" type="STRING" size="256"/>
+  <Column id="to" type="STRING" size="256"/>
+  <Column id="msgId" type="STRING" size="256"/>
+*/  
+this.gfn_checkValidDs = function(objDs:Dataset, objChkDs:Dataset, bUpdateChk, sKey) {
+//    var objBindDs = this.objects[objGrid.binddataset];
+    var sFilterVal = this.comUtils.isNullEmpty(sKey)?objDs.name:sKey;
+    
+    //삭제행 처리 로직에 따른 처리 확인 필요
+    
+    if (!this.comUtils.isDatasetUpdated(objDs)) {
+		if(bUpdateChk) {
+// 			alert("저장할 내역이 없습니다.");
+			this.gfn_message("comm.데이터.변경.없음");
+		}
+		return false;
+	}
+
+    objChkDs.filter("compId=='" + sFilterVal +"'");
+
+    if (objChkDs.getRowCount() == 0) {
+        objChkDs.filter("");
+        return true;
+    }
+    
+    if (!this.comUtils.isDatasetUpdated(objDs))
+    {
+        objChkDs.filter("");
+        return false;
+    }
+    
+    var arrChkCol = new Array();
+    var sDuplication = "";
+    var nPKFindRow = objChkDs.findRow("PK", "Y");
+    var arrIdx=0;
+    
+    if (nPKFindRow != -1)
+    {
+         arrChkCol[arrIdx] = objChkDs.getColumn(nPKFindRow, "colId");
+         sDuplication = "String(" + arrChkCol[arrIdx] + ")";
+         
+         for (var i=nPKFindRow+1; i<objChkDs.getRowCount(); i++)
+         {
+             if (objChkDs.getColumn(i, "PK") == 'Y')
+             {
+                 arrIdx++;
+                 arrChkCol[arrIdx] = objChkDs.getColumn(i, "colId");
+                 sDuplication += "+String(" + arrChkCol[arrIdx] + ")";
+             }
+         }
+    }
+    
+	for (var i=0; i<objChkDs.getRowCount(); i++)
+	{
+		if (objChkDs.getColumn(i, "notNull") == 'Y' )
+		{
+		    var sChkColId = objChkDs.getColumn(i, "colId");   
+		    var nNullFindRow = objDs.findRowExpr("dataset.parent.comUtils.isNullEmpty("+sChkColId+") && (dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT || dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE)");
+		    
+		    if (nNullFindRow > -1)
+		    {
+		        var nMsg = objChkDs.getColumn(i, "msgId");	
+		        		        
+		        if(objDs.rowcount>1){
+					this.gfn_message("comm.항목.입력.을", "["+(nNullFindRow+1)+"행] "+nMsg);
+				}else{
+					this.gfn_message("comm.항목.입력.을", nMsg);
+				}
+		         	         
+// 		        var nCell = objGrid.getBindCellIndex("body", sChkColId);
+		        objDs.set_rowposition(nNullFindRow);
+		        
+		        //그리드에 바인드 되어 있는 컬럼이 아니면 바인드 정보에서 바인드 되어 있는 component가 있는 지 확인 한다.
+		        //바인드 된 컴퍼넌트 부터 찾고 그리드의 셀을 찾는다
+		        var objRetComponent = this.gfn_getBindComponent(objDs, sChkColId);
+		            
+				if (typeof objRetComponent != "boolean")
+				{
+					objRetComponent.setFocus();	
+					objChkDs.filter("");
+					return false;
+				}
+		        
+// 		        if (nCell == -1)
+// 		        {
+// 		            objChkDs.filter("");
+// 		            return false;
+// 		        }
+		        
+		        objDs.set_rowposition(nNullFindRow);
+// 		        objGrid.setFocus();		         
+// 		        objGrid.setCellPos(nCell);
+		        objChkDs.filter("");
+		        return false;
+		    }
+		}
+		
+		//null 체크 후에 length 체크 해야 함
+		if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "nlength")))
+	    {
+	        var nLength = objChkDs.getColumn(i, "nlength");
+	        var sChkColId = objChkDs.getColumn(i, "colId");
+	        var sChkGb = objChkDs.getColumn(i, "lengthChkGb");
+	        var sOper = this._getOperator(sChkGb);
+	        var nLengthFindRow = objDs.findRowExpr("(dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT || dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE) && String("+sChkColId+").length" + sOper + nLength  + "&& String("+sChkColId+") != 'undefined'");
+	        if (nLengthFindRow != -1)
+	        {
+	            var sMsgId = objChkDs.getColumn(i, "msgId");	
+		        var sMessage = this._getMessage(sChkGb, sMsgId, nLength);
+		        alert(sMessage);
+		        objDs.set_rowposition(nLengthFindRow);
+// 		        objGrid.setFocus();
+		        objChkDs.filter("");
+		        return false;
+	        }
+	    }
+		
+		//null 체크 후에 최소값 체크 해야 함
+		if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "from")))
+	    {
+	        var nFrom = objChkDs.getColumn(i, "from");
+	        var sChkColId = objChkDs.getColumn(i, "colId");   
+	        
+	        var nFromFindRow = objDs.findRowExpr("(dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT || dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE) && String("+sChkColId+")<"+nFrom);
+	        if (nFromFindRow != -1)
+	        {
+		        
+		        var nMsg = objChkDs.getColumn(i, "msgId");
+// 		        this.alert(nMsg + "의 값은 " + nFrom + " 보다 크거나 같아야 합니다.");
+                if(nMsg.indexOf("^") > -1) {
+		            var msgArr = nMsg.split('^');
+		            this.gfn_message("errors.항목값.범위.이상", msgArr[0] + "|" + msgArr[1]);
+		        } else {
+		            //this.gfn_message("errors.항목값.범위.이상", nMsg + "|" + nFrom);
+		            this.gfn_message("errors.항목값.범위.이상", nMsg + " 상한값|" + nMsg + " 시작값");
+		        }
+		        
+		        objDs.set_rowposition(nFromFindRow);
+//		        objGrid.setFocus();
+		        objChkDs.filter("");
+		        return false;
+	        }
+	    }
+		
+		//null 체크 후에 최대값 체크 해야 함
+		if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "to")))
+	    {
+	        var nTo = objChkDs.getColumn(i, "to");
+	        var sChkColId = objChkDs.getColumn(i, "colId");   
+	        
+	        var nToFindRow = objDs.findRowExpr("(dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT || dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE) && String("+sChkColId+")>"+nTo);
+	        if (nToFindRow != -1)
+	        {
+	            var nMsg = objChkDs.getColumn(i, "msgId");
+	            		            
+// 		        this.alert(nMsg + "의 값은 " + nTo + " 보다 작거나 같아야 합니다.");
+		        if(nMsg.indexOf("^") > -1) {
+		            var msgArr = nMsg.split('^');
+		            this.gfn_message("errors.항목값.범위.이하", msgArr[0] + "|" + msgArr[1]);
+		        } else {
+		            this.gfn_message("errors.항목값.범위.이하", nMsg + " 시작값|" + nMsg + " 상한값");
+		        } 	
+	            	
+		        objDs.set_rowposition(nToFindRow);
+//		        objGrid.setFocus();
+		        objChkDs.filter("");
+		        return false;
+	        }
+	    }
+
+	    if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "expr")))
+	    {
+	        var nExprFindRow = objDs.findRowExpr(objChkDs.getColumn(i, "expr"));
+	        if (nExprFindRow != -1)
+	        {
+	            var nMsg = objChkDs.getColumn(i, "msgId");	
+	            this.gfn_message("info.표현식.검색결과.없음", nMsg);
+		        objDs.set_rowposition(nExprFindRow);
+//		        objGrid.setFocus();
+		        objChkDs.filter("");
+		        return false;
+	        }
+	    }
+	    
+	    var sFuncNm = objChkDs.getColumn(i, "func");
+	    if (!this.comUtils.isNullEmpty(sFuncNm))
+	    {
+	        objCollFunc = this.lookupFunc(sFuncNm);
+	        if (objCollFunc != null)
+			{	   
+				var bRetVal = objCollFunc.call();
+				if(!bRetVal){
+					return;
+				}
+			}
+	    }
+	}
+	if (sDuplication != "") {
+		for (var i=0; i<objDs.getRowCount(); i++)
+		{
+			if (objDs.getRowType(i) == Dataset.ROWTYPE_INSERT || objDs.getRowType(i) == Dataset.ROWTYPE_UPDATE)
+			{
+				 var sChkVal = "";
+				 for (var ii=0; ii<arrChkCol.length; ii++)
+				 {
+					 sChkVal += objDs.getColumn(i, arrChkCol[ii]);
+				 }
+				 
+				 var nDupFindRow = objDs.findRowExpr("rowidx!=" + i + " && " + sDuplication + "=='" +(sChkVal)+ "'");
+				 
+				 if (nDupFindRow != -1)
+				 {
+					 this.gfn_message("info.그리드.데이터.중복", (i+1) + "|" + (nDupFindRow + 1 ));
+					 objDs.set_rowposition(i);
+					 objChkDs.filter("");
+					 return false;
+				 }
+			}
+		}
+	}
+	
+	objChkDs.filter("");
+    return true;
+
+}
+
+/********************************************************************************
+ * Function Name	: gfn_checkValidDiv 
+ * Description		: Single 입력 Validation 판단하는 함수
+ * Arguments		: objGrid - 대상 그리드
+                      objChkDs - 체크 컬럼 정보 데이타셋
+                      bUpdateChk - Dataset의 업데이트 체크 여부 (true[default] / false)
+                      sKey - 키값
+ * Return 			: true/false
+ ********************************************************************************/
+this.gfn_checkValidDiv = function(objDiv, objChkDs, bUpdateChk, sKey) {
+    if (this.comUtils.isNullEmpty(objChkDs))
+        objChkDs = this.objects["DS_VALIDATION"];
+    
+    var sFilterVal = this.comUtils.isNull(sKey)?objDiv.name:sKey;
+    objChkDs.filter("compId=='" + sFilterVal +"'");
+    
+    var bRetVal = true;
+    var sMsg = "";
+    
+    for (var i=0; i<objChkDs.getRowCount(); i++)
+    {
+        objTarget = objDiv.components[objChkDs.getColumn(i, "colId")];
+        
+        if (objTarget == null)
+        {
+            trace("component 확인 :::: " + objChkDs.getColumn(i, "colId"));
+            continue;
+        }
+        
+        if (objChkDs.getColumn(i, "notNull") == "Y")
+        {
+            if (objTarget instanceof ListBox)
+            {
+                bRetVal = _componentCheck.listBoxChk("notNull");
+                
+                if (!bRetVal) {
+                    sMsg = objChkDs.getColumn(i, "msgId");	
+                    this.gfn_message("comm.항목.선택.요청", sMsg);
+					
+					break;
+				}
+            } else {
+                bRetVal = _componentCheck.commonChk(objTarget, "notNull");
+                
+                if (!bRetVal) {
+                    sMsg = objChkDs.getColumn(i, "msgId");	
+					this.gfn_message("comm.항목.입력.을", sMsg);
+					break;
+				}
+            }
+        }
+		
+		if(!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "nlength")))
+		{
+			if(objTarget.text.trim().length != parseInt(objChkDs.getColumn(i, "nlength")))
+			{
+				bRetVal = false;
+				if(!bRetVal)
+				{
+					sMsg = objChkDs.getColumn(i, "msgId") + "의 길이가 맞지 않습니다. 다시 입력하여 주십시요.";
+					break;
+				}
+			}
+		}
+
+		if (objTarget instanceof Calendar)  //기간 비교
+		{
+			var objForm = null;
+			var objTo = null;
+			var sChkGb = objChkDs.getColumn(i, "lengthChkGb");
+			var nLength = objChkDs.getColumn(i, "nlength");
+			
+			if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "from")))
+			{
+				objForm = objDiv.components[objChkDs.getColumn(i, "from")];
+				objTo = objTarget;
+			} else if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "to"))) {
+				objTo = objDiv.components[objChkDs.getColumn(i, "to")];
+				objForm = objTarget;
+			} else {
+				objForm = objTarget;
+			}
+			
+			if (objForm==null || objTo==null)
+			{
+			    if (this.comUtils.isNullEmpty(sChkGb) || this.comUtils.isNullEmpty(nLength))
+					continue;
+			}
+
+			 //lengthChkGb 구분 비교 1. BY - befor year
+			 //                       2. BM - befot Month
+			 //                       3. BD - befot Day
+			 //                       1. AY - after year
+			 //                       2. AM - after Month
+			 //                       3. AD - after Day
+			 //                       1. Y - year  컴퍼넌트 끼리 비교시
+			 //                       2. M - year  컴퍼넌트 끼리 비교시
+			 //                       3. D - year  컴퍼넌트 끼리 비교시
+			 //lengthChkGb 구분 비교 1. GT - greater than (>) --- <=
+			 //                       2. GE - greater than or equal (>=) --- <
+			 //                       3. LT - less than (<) --- >=
+			 //                       4. LE - less than or equal (<=) --- >
+			 //                       5. EQ - equal to (==) : Default --- !=
+			 //                       6. NE - not equal to (!=) --- ==
+			
+			var arrRetVal = _componentCheck.calendarChk(objForm, objTo, sChkGb, nLength);
+			bRetVal = arrRetVal[0];
+			
+			if (!bRetVal)
+			{
+			    sMsg = objChkDs.getColumn(i, "msgId") + arrRetVal[1];	
+			    break;
+			}
+		} else if (objTarget instanceof MaskEdit) {
+		    if (objChkDs.getColumn(i, "type") == "HH:mm")
+		    {
+		        // No Code
+		    }
+		} else if (objTarget instanceof Spin) {
+			//null 체크 후에 최소값 체크 해야 함
+			if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "from")))
+			{
+				var nFrom = objChkDs.getColumn(i, "from");
+				
+				if (parseInt(objTarget.value) < parseInt(nFrom))
+				{
+					
+					var nMsg = objChkDs.getColumn(i, "msgId");
+// 		            this.alert(nMsg + "의 값은 " + nFrom + " 보다 크거나 같아야 합니다.");
+                    if(nMsg.indexOf("^") > -1) {
+		                var msgArr = nMsg.split('^');
+		                this.gfn_message("errors.항목값.범위.이상", msgArr[0] + "|" + msgArr[1]);
+		            } else {
+		                //this.gfn_message("errors.항목값.범위.이상", nMsg + "|" + nFrom);
+		                this.gfn_message("errors.항목값.범위.이상", nMsg + " 상한값|" + nMsg + " 시작값");
+		            }
+					
+					
+					objTarget.setFocus();
+					objChkDs.filter("");
+					return false;
+				}
+			}
+			
+			//null 체크 후에 최대값 체크 해야 함
+			if (!this.comUtils.isNullEmpty(objChkDs.getColumn(i, "to")))
+			{
+				var nTo = objChkDs.getColumn(i, "to");
+				
+				if (parseInt(objTarget.value) > parseInt(nTo))
+				{
+					
+					var nMsg = objChkDs.getColumn(i, "msgId");
+	            		            
+// 		            this.alert(nMsg + "의 값은 " + nTo + " 보다 작거나 같아야 합니다.");
+		            if(nMsg.indexOf("^") > -1) {
+		                var msgArr = nMsg.split('^');
+		                this.gfn_message("errors.항목값.범위.이하", msgArr[0] + "|" + msgArr[1]);
+		            } else {
+		                this.gfn_message("errors.항목값.범위.이하", nMsg + " 시작값|" + nMsg + " 상한값");
+		            }
+					
+					objTarget.setFocus();
+					objChkDs.filter("");
+					return false;
+				}
+			}
+		}
+    }
+    
+    objChkDs.filter("");
+    
+    if (!bRetVal)
+	{
+		// 2015.12.29 : 최승락 주석처리(전체 검증이 필요합니다.)
+		//this.alert(sMsg);
+		objTarget.setFocus();
+		return false;
+	}
+	
+    return true;
+}
+
+_componentCheck = {
+
+   objForm : this,
+
+    commonChk : function (obj, opts) {        
+        return this.objForm.comUtils.isNullEmpty(obj.value)?false:true;
+    },
+
+	listBoxChk : function(opts) {
+		var nSelectCnt = objTarget.getSelectedCount();
+		
+		if (nSelectCnt == 0)
+		{
+			return false;
+		}
+		
+		return true;
+	},
+	
+	editChk : function(opts) {
+		return true
+	},
+	
+	maskEditChk : function(opts) {
+		
+		return true;
+	},
+	
+	calendarChk : function(objFrom, objTo, sChkGb, nLength) {
+		
+		if (objFrom instanceof Calendar &&  objTo instanceof Calendar)
+		{
+		    if (objFrom.value > objTo.value)
+		        return [false, "시작일이 종료일보다 큽니다."];
+		    
+		    if (!this.objForm.comUtils.isNullEmpty(sChkGb)) 
+		    {		        
+		        var sChkDate = this.objForm.gfn_AddDate(objFrom.value, nLength, sChkGb);
+		        
+		        if (sChkDate < objTo.value)
+				{
+				     return [false, "기간은 "+nLength+ this.objForm.comUtils.decode(sChkGb, "Y", "년", "M", "개월", "D", "일") + "이내 이어야 합니다." ];
+				}
+			}
+		} else {
+		    
+		    if (!this.objForm.comUtils.isNullEmpty(sChkGb)) 
+		    {
+		        var sCurrentDate = this.objForm.gfn_Today("YYYYMMDD");
+
+		        var sWorkGb = sChkGb.substr(1,1);
+		        var sTargetDate = this.objForm.gfn_AddDate(sCurrentDate, nLength, sWorkGb);
+		    		    
+		        switch (sChkGb.substr(0,1)){
+					case "B":     //이전만 체크
+						if (sTargetDate > objFrom.value)
+						    return [false, "기간은 "+sTargetDate+ "보다 커야 합니다." ];
+						break;
+					case "A":     //이후만 체크
+						if (sTargetDate < objFrom.value)
+						    return [false, "기간은 "+sTargetDate+ "보다 작아야 합니다." ];
+						break;
+					case "D":
+					    var sTargetFromDate = this.objForm.gfn_AddDate(sCurrentDate, -1*nLength, sWorkGb);
+					    var sTargetToDate = this.objForm.gfn_AddDate(sCurrentDate, nLength, sWorkGb);
+					    
+					    if (this.objForm.gfn_AddDate(sCurrentDate, -1*nLength, sWorkGb) < this.objForm.gfn_AddDate(sCurrentDate, nLength, sWorkGb))
+					    {
+					        sTargetFromDate = this.objForm.gfn_AddDate(sCurrentDate, -1*nLength, sWorkGb);
+							sTargetToDate = this.objForm.gfn_AddDate(sCurrentDate, nLength, sWorkGb);
+					    } else {
+					        sTargetFromDate = this.objForm.gfn_AddDate(sCurrentDate, nLength, sWorkGb);
+							sTargetToDate = this.objForm.gfn_AddDate(sCurrentDate, -1*nLength, sWorkGb);
+					    }
+					    
+						if ( sTargetFromDate > objFrom.value || sTargetToDate < objFrom.value)
+						    return [false, "기간은 "+sTargetFromDate+ "보다 크고 " + sTargetToDate + "보다 작아야 합니다."];
+						break;
+				}
+		    }
+		}
+		
+		return [true];
+	},
+	
+	comboChk : function(opts) {
+		
+		return true;
+	},
+	
+	textAreaChk : function(opts) {
+		
+		return true;
+	}
+}
+
+// 실 연산자를 얻어오기
+// strChkGb : 연산 구분
+//	1. GT - greater than (>) --- <=
+//	2. GE - greater than or equal (>=) --- <
+//	3. LT - less than (<) --- >=
+//	4. LE - less than or equal (<=) --- >
+//	5. EQ - equal to (==) : Default --- !=
+//	6. NE - not equal to (!=) --- ==
+this._getOperator = function (strChkGb)
+{
+	if(this.comUtils.isNullEmpty(strChkGb)) {
+		strChkGb = "EQ";
+	}
+
+	var strOper;
+	switch(strChkGb) {
+		case "GT" : 
+			strOper = "<=";
+			break;
+		case "GE" : 
+			strOper = "<";
+			break;
+		case "LT" : 
+			strOper = ">=";
+			break;
+		case "LE" : 
+			strOper = ">";
+			break;
+		case "EQ" : 
+			strOper = "!=";
+			break;
+		case "NE" : 
+			strOper = "==";
+			break;
+	}
+	return strOper;
+}
+
+this._getMessage = function (strChkGb, sMsgId, nLen)
+{
+	if(this.comUtils.isNullEmpty(strChkGb)) {
+		strChkGb = "EQ";
+	}
+
+	var strMessage;
+	switch(strChkGb) {
+		case "GT" : 
+			strMessage = sMsgId + "의 길이는 " + nLen + " 보다 길어야 합니다.";
+			break;
+		case "GE" : 
+			strMessage = sMsgId + "의 길이는 " + nLen + " 보다 길거나 같아야 합니다.";
+			break;
+		case "LT" : 
+			strMessage = sMsgId + "의 길이는 " + nLen + " 보다 짧아야 합니다.";
+			break;
+		case "LE" : 
+			strMessage = sMsgId + "의 길이는 " + nLen + " 보다 짧거나 같아야 합니다.";
+			break;
+		case "EQ" : 
+			strMessage = sMsgId + "의 길이는 " + nLen + " 이어야 합니다.";
+			break;
+		case "NE" : 
+			strMessage = sMsgId + "의 길이는 " + nLen + " 가 아니어야 합니다.";
+			break;
+	}
+	return strMessage;
+}
+
+/********************************************************************************
+ * Function Name	: gfn_getBindComponent 
+ * Description		: objDs - 대상 Dataset
+ * Arguments		: sColId - 컬럼 ID
+ * Return 			: 검색 결과 없을 경우 false
+                      bind 된 Component
+ ********************************************************************************/
+this.gfn_getBindComponent = function(objDs, sColId) {
+    
+    var sBindDsNm = objDs.name;
+    
+    //<BindItem id="item1" compid="edt_gongyeonNm" propid="value" datasetid="DS_GNAF902M01" columnid="pblprfrNm"/>
+    for (var i=0; i<this.binds.length; i++)
+    {
+        var objBindItem = this.binds[i];
+        
+        if (objBindItem.datasetid == sBindDsNm && objBindItem.columnid == sColId && objBindItem.propid=="value")
+        {
+            var arrCompPath = objBindItem.compid.split(".");
+            var objParent = this;
+            
+            for (var ii=0; ii<arrCompPath.length; ii++)
+            {
+                objParent =  objParent.components[arrCompPath[ii]];
+                
+                if (objParent == null)
+                    return false;
+            }
+            return objParent;
+        }
+            //return eval("this." + objBindItem.compid);
+    }
+    
+    return false;
+}
+]]></Script>

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP040502_SQL">
+<!--  설명  : 소유권이전 등기대장
+	작성자 : 지효정 -->
+	
+	<!-- 미등기 목록 -->
+	<select id="CMP040502DAO.unrgistTrnsferList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT A.*  
+		  FROM 
+		       (SELECT A.BSNS_AREA_CODE , 
+		              A.LOCPLC_CODE , 
+		              SFCMP_GET_LOCPLC(A.BSNS_AREA_CODE, A.LOCPLC_CODE) || ' ' || DECODE(A.SLNO, NULL, A.LNM, A.LNM || '-' || A.SLNO) AS FULL_LOCPLC_CODE_NM , 
+		              A.LNM_SE , 
+		              A.LNM , 
+		              A.SLNO , 
+		              TRIM(A.THING_CL) AS THING_CL , 
+		              A.THING_NM , 
+		              A.STRCT_STNDRD , 
+		              A.REAL_LNDCGR , 
+		              A.NOW_USE_STTUS , 
+		              A.LAD_SE , 
+		              A.REMNDR_LAD_SE , 
+		              A.AR_LGSTR , 
+		              A.AR_INCRPR , 
+		              A.UNIT , 
+		              A.RM_1 , 
+		              A.BGNN_LNM , 
+		              A.THING_SN , 
+		              A.RGIST_TRGET_AT , 
+		              B.POSESN_QOTA , 
+		              B.AR , 
+		              B.OWNER_NM , 
+		              B.OWNER_ADRES , 
+		              B.OWNER_NO , 
+		              A.LNDCGR_LGSTR , 
+		              A.LNDCGR_INCRPR , 
+		              E.RCEPT_DE, 
+		              E.RGIST_COMPT_DE, 
+		              E.RGIST_NO, 
+		              E.RTURN_DE,  
+		              E.RM
+		         FROM TBCMP_THING_WTNNC A, 
+		              (SELECT A.THING_SN , 
+		                     A.OWNER_SN , 
+		                     A.POSESN_QOTA , 
+		                     A.AR , 
+		                     B.OWNER_NM AS OWNER_NM , 
+		                     B.ADRES AS OWNER_ADRES , 
+		                     A.OWNER_NO 
+		                FROM TBCMP_THING_OWNER A, 
+		                     TBCMP_OWNER B 
+		               WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE# 
+		                     AND B.BSNS_AREA_CODE = A.BSNS_AREA_CODE 
+		                     AND A.OWNER_NO = B.OWNER_NO 
+		                     AND '1' = B.OWNER_SE 
+		              ) B, 
+		              TBCMP_RGIST_TRNSFER E 
+		        WHERE 
+					<isNotEmpty property="TRGET_AT">
+					<isEqual property="TRGET_AT" compareValue="0">
+					  NOT EXISTS (SELECT * FROM TBCMP_RGIST_TRNSFER K WHERE K.BSNS_AREA_CODE = A.BSNS_AREA_CODE AND K.THING_SN = A.THING_SN)
+					</isEqual>
+					<isEqual property="TRGET_AT" compareValue="1">
+					  1 = 1
+					<isNotEmpty property="ST_RCEPT_DE">
+				      AND #ST_RCEPT_DE# <![CDATA[<=]]>  E.RCEPT_DE
+					</isNotEmpty>
+					<isNotEmpty property="ED_RCEPT_DE">
+				      AND #ED_RCEPT_DE# <![CDATA[>=]]>  E.RCEPT_DE
+					</isNotEmpty>
+				      AND A.BSNS_AREA_CODE = E.BSNS_AREA_CODE 
+				      AND A.THING_SN = E.THING_SN
+					</isEqual>
+					</isNotEmpty>
+					<isEmpty property="TRGET_AT">
+					  1 = 1
+					</isEmpty>
+				      AND A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+					<isNotEmpty property="LOCPLC_CODE">
+				      AND A.LOCPLC_CODE = #LOCPLC_CODE#
+					</isNotEmpty>
+					<isNotEmpty property="NM">
+				      AND B.OWNER_NM LIKE '%' || #NM# || '%'
+					</isNotEmpty>
+		              AND A.BSNS_AREA_CODE = #BSNS_AREA_CODE# 
+		              AND A.THING_SN = B.THING_SN 
+		              AND A.BSNS_AREA_CODE = E.BSNS_AREA_CODE(+) 
+		              AND A.THING_SN = E.THING_SN(+) 
+		              AND A.RGIST_TRGET_AT = '1' 
+		       ) A, 
+		       TBCMP_LOCPLC_INFO X, 
+		       TBCOM_CMMN_CODE Y 
+		 WHERE A.BSNS_AREA_CODE = X.BSNS_AREA_CODE 
+		       AND A.LOCPLC_CODE = X.LOCPLC_CODE 
+		       AND 'CMP001' = Y.GRP_CODE 
+		       AND A.THING_CL = Y.CODE 
+		ORDER BY A.OWNER_NM,A.OWNER_ADRES,X.SORT_ORDR,TO_NUMBER(A.LNM),TO_NUMBER(A.SLNO),Y.CODE_ORDR,A.THING_SN	
+	</select>
+	
+
+	<!-- 등기이전 생성/수정 -->
+	<update id="CMP040502DAO.rgistTrnsferCU" parameterClass="java.util.Map">
+		MERGE INTO TBCMP_RGIST_TRNSFER USING DUAL ON ( BSNS_AREA_CODE = #BSNS_AREA_CODE# AND THING_SN = #THING_SN# AND OWNER_NO = #OWNER_NO# ) 
+		WHEN MATCHED THEN  
+		    UPDATE 
+		           SET RCEPT_DE = #RCEPT_DE# ,
+		           RGIST_COMPT_DE = #RGIST_COMPT_DE# , 
+		           RGIST_NO = #RGIST_NO# ,
+		           RTURN_DE = #RTURN_DE# , 
+		           RM = #RM#,
+		           UPDUSR_ID = #S_USER_ID# , 
+		           UPDT_DT = SYSDATE 
+		WHEN NOT MATCHED THEN 
+		    INSERT 
+		           ( 
+		               BSNS_AREA_CODE , 
+		               THING_SN , 
+		               RGIST_COMPT_DE , 
+		               RCEPT_DE , 
+		               RGIST_NO , 
+		               OWNER_NO , 
+		               RTURN_DE ,
+		               RM,
+		               REGISTER_ID , 
+		               REGIST_DT , 
+		               UPDUSR_ID , 
+		               UPDT_DT 
+		           ) 
+		           VALUES 
+		           ( 
+		               #BSNS_AREA_CODE# , 
+		               #THING_SN# , 
+		               #RGIST_COMPT_DE# , 
+		               #RCEPT_DE# , 
+		               #RGIST_NO# , 
+		               #OWNER_NO# ,
+		               #RTURN_DE# ,
+		               #RM#,
+		               #S_USER_ID# , 
+		               SYSDATE , 
+		               #S_USER_ID# , 
+		               SYSDATE 
+		           ) 
+	</update>
+</sqlMap>

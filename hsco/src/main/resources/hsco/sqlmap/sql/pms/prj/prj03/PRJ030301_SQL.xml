@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj03">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBACC_ACCNUT_ACNT_SBJECT		회계계정과목
+		 R   : TBACC_EXP_DSN_MASTR			지출결의
+		 R   : TBPRJ_EXPENS_RT				경비율
+		 R   : TBPRJ_PRMPC_CODE				원가코드
+		 R   : TBPRJ_BSNS_SUMRY				사업개요
+		CRUD : TBPRJ_COMPET_PRMPC_ACMSLT	준공원가실적		실적원가계산(원가코드별)
+		CRUD : TBPRJ_COMPET_PRMPC_RATE		준공원가비율		실적원가계산(비율코드별)
+
+		 R   : TBACC_ACCNUT_ACNT_SBJECT	계정코드
+		 R   : TBACC_					지출정보 ^
+		 R   : TBPRJ_EXPENS_RT			경비율
+		 R   : TBPRJ_PRMPC_CODE			원가코드
+		 R   : TBPRJ_BSNS_SUMRY			사업개요
+		CRUD : TBPRJ_					준공원가계산(사업별월별) ^
+		CRUD : TBPRJ_					준공원가계산(원가코드별) ^
+		CRUD : TBPRJ_					준공원가계산(비율코드별) ^
+
+		 R   : TBPRJ_PRMPC_ACNT_MAPNG	원가계정맵핑
+	-->
+
+	<!--  조회 -->
+	<select id="PRJ030301.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 BC.BSNS_CODE			/* 사업코드 */
+	,BC.BSNS_NM				/* 사업명 */
+	,BC.BSNS_TY				/* 사업유형 */
+	,B.STRWRK_DE			/* 착공일자 */
+	,B.COMPET_DE			/* 준공일자 */
+	,ROUND(B.TOT_WCT /100000000,2) AS AMT1		/* 총사업비(억원) */
+	,0 AS AMT2		/* 준공원가합계 : TODO */
+	,0 AS AMT3		/* 계획대비차액 */
+	,0 AS AMT4		/* 실적원가집계 */
+	,0 AS AMT5		/* 간접원가집계 */
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+JOIN TBPRJ_BSNS_SUMRY B ON B.BSNS_CODE = BC.BSNS_CODE			/* 사업개요 */
+WHERE 1=1
+<isNotEmpty property="BSNS_GB" >
+  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+</isNotEmpty>
+ORDER BY B.STRWRK_DE,BC.BSNS_TY,BC.BSNS_CODE
+	</select>
+
+	<!-- 준공원가실적 ================================================== -->
+
+	<!-- 준공원가실적 조회 -->
+	<select id="PRJ030301.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE		/* 사업코드 */
+	,A.STD_PRMPC_CODE	/* 표준원가코드 */
+	,A.CL_SE			/* 분류구분 */
+
+	,A.ACMSLT_PRMPC AS AMT		/* 실적원가 */
+	,A.CMPNTRT AS RT			/* 구성비 */
+
+	,C.STD_PRMPC_CODE	/* 표준원가코드 */
+	,C.CL_SE			/* 분류구분 */
+	,DECODE(C.CL_SE, 1, C.LCLAS_NM, 2, C.MLSFC_NM, C.SCLAS_NM)
+	 AS CODE_NM			/* 원가항목명 */
+FROM TBPRJ_COMPET_PRMPC_ACMSLT A			/* 준공원가실적 */
+LEFT JOIN TBPRJ_PRMPC_CODE C				/* 표준원가코드 */
+  ON A.STD_PRMPC_CODE = C.STD_PRMPC_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+ORDER BY 1,2,3
+	</select>
+
+	<!-- 준공원가실적 수정 -->
+	<update id="PRJ030301.rU" parameterClass="map">
+UPDATE TBPRJ_COMPET_PRMPC_ACMSLT			/* 준공원가실적 */
+  SET
+	 ACMSLT_PRMPC = #ACMSLT_PRMPC#	/* 실적원가 */
+	,CMPNTRT = #CMPNTRT#			/* 구성비 */
+
+	,UPDUSR_ID = #S_USER_ID#	/* 수정자ID */
+	,UPDT_DT = SYSDATE			/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+  AND CL_SE = #CL_SE#						/* 분류구분 */
+	</update>
+
+	<!-- 준공원가실적 삭제 -->
+	<delete id="PRJ030301.rD" parameterClass="map">
+DELETE FROM TBPRJ_COMPET_PRMPC_ACMSLT			/* 준공원가실적 */
+WHERE BSNS_CODE IN 
+(SELECT BC.BSNS_CODE
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+WHERE NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 : 1-진행,2-완료*/
+)
+	</delete>
+
+	<!--
+WHERE BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+  AND CL_SE = #CL_SE#						/* 분류구분 */
+	-->
+
+	<!-- 준공원가_비율코드별 ================================================== -->
+
+	<!-- 준공원가_비율코드별 조회 -->
+	<select id="PRJ030301.r2List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.RATE_CODE			/* 비율코드 */
+
+	,A.APPLC_RATE AS RT			/* 적용비율 */
+	,A.COMPUT_AMOUNT AS AMT		/* 산출금액 */
+
+	,ER.RATE_CODE			/* 비율코드 */
+	,ER.EXPENS_RT_SBJECT	/* 제경비율과목 */
+	,ER.COMPUT_RATE			/* 산출비율 */
+FROM TBPRJ_COMPET_PRMPC_RATE A			/* 준공원가_비율코드별 */
+JOIN TBPRJ_BSNS_CODE BC					/* 사업코드 */
+  ON A.BSNS_CODE = BC.BSNS_CODE
+LEFT JOIN TBPRJ_EXPENS_RT ER			/* 경비율 */
+  ON ER.BSNS_TY = BC.BSNS_TY
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND ER.APPLC_YEAR = #YEAR#
+ORDER BY 1,2,3
+	</select>
+
+	<!-- 준공원가비율 수정 -->
+	<update id="PRJ030301.r2U" parameterClass="map">
+UPDATE TBPRJ_COMPET_PRMPC_RATE			/* 준공원가비율 */
+  SET
+	 APPLC_RATE = #APPLC_RATE#			/* 적용비율 */
+	,COMPUT_AMOUNT = #COMPUT_AMOUNT#	/* 산출금액 */
+
+	,UPDUSR_ID = #S_USER_ID#	/* 수정자ID */
+	,UPDT_DT = SYSDATE			/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND RATE_CODE = #RATE_CODE#		/* 비율코드 */
+	</update>
+
+	<!-- 준공원가비율 삭제 -->
+	<delete id="PRJ030301.r2D" parameterClass="map">
+DELETE FROM TBPRJ_COMPET_PRMPC_RATE			/* 준공원가비율 */
+WHERE BSNS_CODE IN 
+(SELECT BC.BSNS_CODE
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+WHERE NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 : 1-진행,2-완료*/
+)
+	</delete>
+
+	<!--
+WHERE BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND RATE_CODE = #RATE_CODE#		/* 비율코드 */
+	-->
+
+	<!-- 생성 ================================================== -->
+
+	<!-- 준공원가실적 생성 -->
+	<insert id="PRJ030301.make1" parameterClass="map">
+INSERT INTO TBPRJ_COMPET_PRMPC_ACMSLT (			/* 준공원가실적 */
+	 BSNS_CODE		/* 사업코드 */
+	,STD_PRMPC_CODE	/* 표준원가코드 */
+	,CL_SE			/* 분류구분 */
+
+	,ACMSLT_PRMPC		/* 실적원가 */
+	,CMPNTRT			/* 구성비 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+)
+SELECT
+	 A.BSNS_CODE		/* 사업코드 */
+	,A.STD_PRMPC_CODE	/* 표준원가코드 */
+	,C.CL_SE			/* 분류구분 */
+
+	,A.AMT					/* 실적금액 */
+	,ROUND(100 * RATIO_TO_REPORT(A.AMT) OVER (PARTITION BY A.BSNS_CODE,A.STD_PRMPC_CODE,C.CL_SE), 2)
+	 AS RT					/* 구성비 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+FROM (
+	SELECT
+		 A.BSNS_CODE		/* 사업코드 */
+		,A.STD_PRMPC_CODE	/* 표준원가코드 */
+
+		,SUM(A.AMT) AS AMT	/* 집계 */
+
+	FROM (
+	<include refid="pms_prj.v_prj_acc_detail"/>
+	) A				/* 실적원가집계 */
+	GROUP BY A.BSNS_CODE,A.STD_PRMPC_CODE
+) A
+LEFT JOIN TBPRJ_PRMPC_CODE C
+  ON C.STD_PRMPC_CODE = A.STD_PRMPC_CODE
+WHERE A.STD_PRMPC_CODE IS NOT NULL
+  AND A.BSNS_CODE IN 
+(SELECT BC.BSNS_CODE
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+WHERE NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 : 1-진행,2-완료*/
+)
+ORDER BY 1,2,3
+	</insert>
+
+	<!-- 준공원가실적 생성 -->
+	<insert id="PRJ030301.make2" parameterClass="map">
+INSERT INTO TBPRJ_COMPET_PRMPC_RATE (			/* 준공원가비율 */
+	 BSNS_CODE		/* 사업코드 */
+	,RATE_CODE		/* 비율코드 */
+
+	,APPLC_RATE			/* 적용비율 */
+	,COMPUT_AMOUNT		/* 산출금액 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#	/* 사업코드 */
+	,#RATE_CODE#	/* 비율코드 */
+
+	,#APPLC_RATE#			/* 적용비율 */
+	,#COMPUT_AMOUNT#		/* 산출금액 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+)
+	</insert>
+
+</sqlMap>

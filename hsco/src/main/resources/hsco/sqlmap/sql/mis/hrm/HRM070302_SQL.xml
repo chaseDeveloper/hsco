@@ -1,0 +1,343 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070302_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 쿼리명 : 월별당직관리
+	설명 : 월별당직관리 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이혜선
+	최초작성일 : 2015.10.21
+	-->
+		<!-- 당직자 선택팝업 조회 -->
+		<select id="HRM070302DAO.selectEmpnoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+            SELECT     A.EMPNO                           AS EMPNO
+				      ,A.SEXDSTN                         AS SEXDSTN
+				      ,A.RSPOFC_SE                       AS RSPOFC_SE
+				      ,A.DEPT_CODE                       AS DEPT_CODE
+				      ,SFSAL_GETEMPNO_01(A.EMPNO)        AS EMPNM
+				      ,NVL(SFSAL_GETDEPTNM_01(A.DEPT_CODE), SFHRM_GET_DEPTNM(A.DEPT_CODE, '0'))    AS DEPT_NM
+                      ,B.BNDT_SE                         AS BNDT_SE
+                      ,(
+                          SELECT MAX(iA.BNDT_DE)
+                                FROM TBHRM_DALY_BNDT iA
+                                WHERE iA.EMPNO = A.EMPNO
+                                AND iA.BNDT_SE = #BNDT_SE#
+                                AND Nvl(iA.SUBDUTY_AT,'0') = '0'
+                       )                                 AS LAST_BNDT_DE
+				FROM TBHRM_HR_MASTR A
+				LEFT OUTER JOIN
+				TBHRM_BNDT_SN B
+				ON A.EMPNO = B.EMPNO
+				WHERE 1=1
+				AND A.STTUS_SE ='000'
+				AND A.JSSFC_SE IN (001,002,003)
+                AND B.TRGET_AT = '1'
+       		  ]]>
+       		  
+			<isEqual property="BNDT_SE" compareValue="001"> 
+				AND  A.SEXDSTN = '1'
+				AND  B.BNDT_SE = '001'
+			</isEqual>
+			<isNotEqual property="BNDT_SE" compareValue="001"> 
+				AND  B.BNDT_SE = '000'
+			</isNotEqual>
+			<isNotEmpty property="EMPNO">
+				AND  A.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNM">
+				AND  A.EMPNM = #EMPNM#
+			</isNotEmpty>
+			<![CDATA[
+				ORDER BY A.EMPNO
+			]]>
+	</select>  
+			
+	<!-- 월별당직관리 조회 -->
+	<select id="HRM070302DAO.selectDalyBndtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT '0' CHK
+		      ,SUBSTR(A.DT, 5, 2)||'월' AS MON
+		      ,A.DT
+		      ,TO_CHAR(TO_DATE(A.DT, 'YYYYMMDD'), 'DY')||'요일' AS WEEK_NM
+		      ,NVL(B.EMPNO,' ') AS EMPNO
+		      ,DECODE(SFSAL_GETEMPNO_01(B.EMPNO),'',' ',DECODE((SELECT MAX(BNDT_DE) FROM TBHRM_DALY_BNDT WHERE EMPNO = B.EMPNO AND BNDT_DE < B.BNDT_DE AND BNDT_SE = B.BNDT_SE AND Nvl(SUBDUTY_AT,'0') = '0'),'',SFSAL_GETEMPNO_01(B.EMPNO),SFSAL_GETEMPNO_01(B.EMPNO)||'['||CONCAT(TO_DATE(B.BNDT_DE,'YYYYMMDD')-TO_DATE((SELECT MAX(BNDT_DE) FROM TBHRM_DALY_BNDT WHERE EMPNO = B.EMPNO AND BNDT_DE < B.BNDT_DE AND BNDT_SE = B.BNDT_SE AND Nvl(SUBDUTY_AT,'0') = '0'),'YYYYMMDD'),'일전')||']'))AS EMPNM
+		      ,C.EMPNM      AS EMPNM2
+		      ,C.SEXDSTN 
+		      ,B.BNDT_SE
+		      ,B.SEQ  
+		      ,A.HVOF_SE
+		      ,A.HVOF_NM
+              ,C.DEPT_CODE
+              ,NVL(SFSAL_GETDEPTNM_01(C.DEPT_CODE), SFHRM_GET_DEPTNM(C.DEPT_CODE, '0'))    AS DEPT_NM
+				       
+			  ,B.SANCTN_NO                               AS SANCTN_NO
+		      ,SFCOM_GET_DRFTSTS(B.SANCTN_NO, Nvl(B.REGIST_DT,Sysdate))                        AS DRFT_STS            /* 기안상태        */
+		      ,'theme://images/sanctn/' || 'D' || SFCOM_GET_DRFTSTS(B.SANCTN_NO,  Nvl(B.REGIST_DT,Sysdate)) || '.png'        AS DRFT_STS_IMG        /* 기안상태Img    */
+		      ,TO_CHAR(D.DRFT_DT,'YYYY-MM-DD HH24:MI:SS')            AS DRFT_DT            /* 기안일시        */
+		      ,SFCOM_GET_APPRSTS(B.SANCTN_NO,  Nvl(B.REGIST_DT,Sysdate))                        AS SANCTN_STS        /* 결재상태        */
+		      ,'theme://images/sanctn/' || 'A' || SFCOM_GET_APPRSTS(B.SANCTN_NO,  Nvl(B.REGIST_DT,Sysdate)) || '.png'        AS SANCTN_STS_IMG    /* 결재상태Img    */
+		      ,TO_CHAR(D.LAST_SANCTN_DT,'YYYY-MM-DD HH24:MI:SS')     AS LAST_SANCTN_DT    /* 최종결재일시    */
+		      
+		      , TO_CHAR(Nvl(B.REGIST_DT,Sysdate),'YYYYMMDD') AS REGIST_DT
+		      , CASE WHEN B.BNDT_SE = '000' AND COUNT(*) OVER(PARTITION BY A.DT) = 4 AND ROW_NUMBER() OVER (PARTITION BY A.DT ORDER BY B.SEQ ASC, C.SEXDSTN DESC) BETWEEN 1 AND 2 THEN '전반부일직'
+					 WHEN B.BNDT_SE = '000' AND COUNT(*) OVER(PARTITION BY A.DT) = 4 AND ROW_NUMBER() OVER (PARTITION BY A.DT ORDER BY B.SEQ ASC, C.SEXDSTN DESC) BETWEEN 3 AND 4 THEN '후반부일직'
+					 WHEN B.BNDT_SE = '000' AND COUNT(*) OVER(PARTITION BY A.DT) = 2 THEN DECODE(ROW_NUMBER() OVER (PARTITION BY A.DT ORDER BY B.SEQ ASC, C.SEXDSTN DESC), 1,'전반부일직', '후반부일직')
+					 ELSE '당직'
+					 END TYPE_NM
+		      
+		FROM   (
+		        SELECT TO_CHAR(t1.DT,'YYYYMMDD') AS DT
+		              ,NVL(t2.HVOF_SE,'000')     AS HVOF_SE
+		              ,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'SAL008' AND CODE = t2.HVOF_SE ) AS HVOF_NM
+		        FROM   (
+		                SELECT TO_DATE(#HVOF_DE#||'01', 'YYYYMMDD') + LEVEL-1 AS DT
+		                FROM   DUAL
+		                CONNECT BY LEVEL <= LAST_DAY(TO_DATE(#HVOF_DE#||'01','YYYYMMDD')) - TO_DATE(#HVOF_DE#||'01','YYYYMMDD') + 1
+		               ) t1
+		               LEFT OUTER JOIN TBHRM_HVOF_INFO t2
+		               ON  TO_CHAR(t1.DT,'YYYYMMDD') = t2.HVOF_DE
+		       ) A
+		       LEFT OUTER JOIN TBHRM_DALY_BNDT B
+		            ON A.DT = B.BNDT_DE
+		       LEFT OUTER JOIN TBHRM_HR_MASTR C
+		            ON B.EMPNO = C.EMPNO
+               LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR D
+               ON B.SANCTN_NO = D.SANCTN_NO
+		 Where
+		 	Nvl(B.SUBDUTY_AT,'0') = '0'
+		ORDER BY A.DT, B.SEQ ASC , C.SEXDSTN DESC
+	]]>
+	</select>
+	
+	<!-- 자동생성 당직리스트 조회 -->
+	<select id="HRM070302DAO.autoBndtSnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+                SELECT A.EMPNO                        AS EMPNO
+                      ,A.BNDT_SE                       AS BNDT_SE
+                      ,SFSAL_GETEMPNO_01(A.EMPNO)      AS EMPNM
+                      ,B.SEXDSTN                       AS SEXDSTN
+                      /*,A.LAST_BNDT_DE                  AS LAST_BNDT_DE*/
+                      ,(
+                          SELECT MAX(iA.BNDT_DE)
+                                FROM TBHRM_DALY_BNDT iA
+                                WHERE iA.EMPNO = A.EMPNO
+                                AND iA.BNDT_SE = A.BNDT_SE
+                                AND Nvl(iA.SUBDUTY_AT,'0') = '0'
+                                AND iA.BNDT_DE < #HVOF_DE#||'00'
+                       )                                 AS LAST_BNDT_DE
+                FROM TBHRM_BNDT_SN A
+                        LEFT OUTER JOIN
+                     TBHRM_HR_MASTR B
+                        ON A.EMPNO = B.EMPNO
+                WHERE 1=1
+                AND B.STTUS_SE ='000'
+                AND B.JSSFC_SE IN (001,002,003)
+                AND A.TRGET_AT ='1'
+                AND NOT EXISTS (SELECT 1 FROM TBSAL_WAGE_PEAK AA WHERE #HVOF_DE# BETWEEN BGNDE AND ENDDE AND A.EMPNO = AA.EMPNO) /*임금피크제 인원 제외*/
+                ORDER BY BNDT_SE, NVL(LAST_BNDT_DE,'19000000'),EMPNO
+			]]>
+	</select>
+
+	<!-- 자동생성 휴무일자&날짜 조회 -->
+	<select id="HRM070302DAO.selectDtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+			  SELECT TO_CHAR(t1.DT,'YYYYMMDD') AS DT
+			        ,NVL(t2.HVOF_SE,'000')     AS HVOF_SE
+			        ,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'SAL008' AND CODE = t2.HVOF_SE ) AS HVOF_NM
+			  FROM   (
+			          SELECT TO_DATE(#HVOF_DE#||'01', 'YYYYMMDD') + LEVEL-1 AS DT
+			          FROM   DUAL
+			          CONNECT BY LEVEL <= LAST_DAY(TO_DATE(#HVOF_DE#||'01','YYYYMMDD')) - TO_DATE(#HVOF_DE#||'01','YYYYMMDD') + 1
+			         ) t1
+			         LEFT OUTER JOIN
+			         TBHRM_HVOF_INFO t2
+			         ON  TO_CHAR(t1.DT,'YYYYMMDD') = t2.HVOF_DE
+			]]>
+	</select>
+
+    <!--월별당직 등록 -->
+     <insert id="HRM070302DAO.saveAutoBndtSnC" parameterClass="java.util.HashMap">
+        <![CDATA[
+            INSERT INTO TBHRM_DALY_BNDT(
+				 BNDT_DE
+				 ,EMPNO
+				 ,BNDT_SE
+				 ,SEQ
+				 ,SUBDUTY_AT
+				 ,SUBDUTY_BEFORE_EMPNO
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+             ) VALUES (
+				 #DT#
+				,#EMPNO#
+				,#BNDT_SE#
+				,(SELECT NVL(MAX(SEQ)+1,DECODE(#SEXDSTN#, 2, 1, 2)||0) FROM TBHRM_DALY_BNDT WHERE BNDT_DE = #DT# AND BNDT_SE = #BNDT_SE# AND SEQ LIKE DECODE(#SEXDSTN#, 2, 1, 2) ||'%')
+				,'0'
+				,#EMPNO#
+                ,#S_USER_ID#
+                ,SYSDATE
+                ,#S_USER_ID#
+                ,SYSDATE
+             )
+        ]]>
+    </insert>
+
+	 <!--  신규시 최종당직일자 update-->		
+    <update id="HRM070302DAO.saveTbhrmBndtSnU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			  UPDATE TBHRM_BNDT_SN
+			  SET	
+				LAST_BNDT_DE                  =    #DT#
+    			,UPDUSR_ID                    =    #S_USER_ID#
+    			,UPDT_DT                      =    SYSDATE
+			  
+		      WHERE 	EMPNO = #EMPNO#
+			  AND 		BNDT_SE = #BNDT_SE#
+        ]]>
+    </update>
+    
+	<!-- 월별당직관리 삭제 -->
+    <delete id="HRM070302DAO.saveAutoBndtSnD" parameterClass="java.util.HashMap">
+        <![CDATA[
+             DELETE 
+             FROM  TBHRM_DALY_BNDT 
+             WHERE BNDT_DE             = #DT#
+               AND EMPNO               = #EMPNO#
+               AND BNDT_SE             = #BNDT_SE#
+               AND SEQ                 = #SEQ#
+        ]]>
+    </delete>
+
+	 <!--  삭제시 최종당직일자 update-->		
+    <update id="HRM070302DAO.saveTbhrmBndtSnDU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			  UPDATE TBHRM_BNDT_SN
+			  SET	
+				LAST_BNDT_DE                  =    ( SELECT MAX(BNDT_DE)
+							                         FROM TBHRM_DALY_BNDT
+							                         WHERE EMPNO = #EMPNO#
+							                         AND BNDT_SE = #BNDT_SE#
+                                					AND Nvl(SUBDUTY_AT,'0') = '0'
+							                         )
+    			,UPDUSR_ID                    =    #S_USER_ID#
+    			,UPDT_DT                      =    SYSDATE
+			  
+		      WHERE 	EMPNO = #EMPNO#
+			  AND 		BNDT_SE = #BNDT_SE#
+        ]]>
+    </update>
+    
+    <!--  결재번호 입력-->			
+    <update id="HRM070302DAO.approveU" parameterClass="java.util.HashMap">
+        <![CDATA[
+              UPDATE TBHRM_DALY_BNDT A
+              SET    SANCTN_NO           = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+                      ,UPDUSR_ID            =  #S_USER_ID#
+                      ,UPDT_DT            =  SYSDATE              
+              WHERE     SUBDUTY_AT = '0'
+              AND       BNDT_DE Between SUBSTR(#DT#,1,6)||'01' And SUBSTR(#DT#,1,6)||'31'
+
+        ]]>
+    </update>
+    
+	<!-- 당직수당지급 삭제 -->
+    <delete id="HRM070302DAO.deleteBndtPymnt" parameterClass="java.util.HashMap">
+        <![CDATA[
+             DELETE 
+             FROM  TBHRM_BNDT_PYMNT 
+             WHERE PYMNT_YM            = #PYMNT_YM#
+        ]]>
+    </delete>
+  
+	<!-- 당직수당지출 삭제 -->
+    <delete id="HRM070302DAO.deleteBndtPymntExpndtr" parameterClass="java.util.HashMap">
+        <![CDATA[
+             DELETE 
+             FROM  TBHRM_BNDT_PYMNT_EXPNDTR 
+             WHERE PYMNT_YM            = #PYMNT_YM#
+        ]]>
+    </delete>        
+    
+    <insert id="HRM070302DAO.insertBndtPymntExpndtr" parameterClass="java.util.HashMap">
+    	<![CDATA[
+			INSERT INTO TBHRM_BNDT_PYMNT_EXPNDTR
+			(
+			   PYMNT_YM
+			 , PYMNT_DE
+			 , SANCTN_NO
+			 , REGISTER_ID
+			 , REGIST_DT
+			 , UPDUSR_ID
+			 , UPDT_DT
+			)
+			VALUES
+			(
+			   #PYMNT_YM#
+			 , #PYMNT_DE#
+			 , ''
+			 , #S_USER_ID#
+			 , SYSDATE
+			 , #S_USER_ID#
+			 , SYSDATE
+			)    
+    	]]>
+	</insert>
+	
+    <insert id="HRM070302DAO.insertBndtPymnt" parameterClass="java.util.HashMap">
+    	<![CDATA[
+			INSERT INTO TBHRM_BNDT_PYMNT
+			SELECT  #PYMNT_YM# AS PYMNT_YM
+			     , NVL(B.EMPNO ,' ') AS EMPNO
+			     , B.BNDT_SE
+			     , B.BNDT_DE
+			     , B.SEQ
+			     , C.EMPNM
+			     , C.DEPT_CODE
+			     , NVL(SFSAL_GETDEPTNM_01(C.DEPT_CODE) ,SFHRM_GET_DEPTNM(C.DEPT_CODE ,'0')) AS DEPT_NM
+			     , C.HR_CLSF_SE
+			     , C.JSSFC_SE
+			     , DECODE(B.BNDT_SE, '000', 30000, 20000) AS BNDT_ALLWNC
+				 , #S_USER_ID#
+				 , SYSDATE
+				 , #S_USER_ID#
+				 , SYSDATE
+			FROM
+			  (
+			    SELECT TO_CHAR(t1.DT ,'YYYYMMDD') AS DT      ,
+			      NVL(t2.HVOF_SE ,'000')          AS HVOF_SE ,
+			      (
+			        SELECT CODE_NM
+			        FROM TBCOM_CMMN_CODE
+			        WHERE GRP_CODE = 'SAL008'
+			        AND CODE       = t2.HVOF_SE
+			      ) AS HVOF_NM
+			    FROM
+			      (
+			        SELECT TO_DATE( #PYMNT_YM#
+			          ||'01' ,'YYYYMMDD') + LEVEL-1 AS DT
+			        FROM DUAL
+			          CONNECT BY LEVEL <= LAST_DAY(TO_DATE(#PYMNT_YM#
+			          ||'01' ,'YYYYMMDD')) - TO_DATE( #PYMNT_YM#
+			          ||'01' ,'YYYYMMDD')  + 1
+			      )
+			      t1
+			    LEFT OUTER JOIN TBHRM_HVOF_INFO t2
+			    ON TO_CHAR(t1.DT ,'YYYYMMDD') = t2.HVOF_DE
+			  )
+			  A
+			LEFT OUTER JOIN TBHRM_DALY_BNDT B
+			ON A.DT = B.BNDT_DE
+			LEFT OUTER JOIN TBHRM_HR_MASTR C
+			ON B.EMPNO = C.EMPNO
+			WHERE NVL(B.SUBDUTY_AT ,'0') = '0'
+			ORDER BY A.DT ,
+			  B.SEQ ASC   ,
+			  C.SEXDSTN DESC
+    	]]>
+	</insert>					
+  </sqlMap>

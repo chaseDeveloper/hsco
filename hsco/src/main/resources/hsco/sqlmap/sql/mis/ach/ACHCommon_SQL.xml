@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACHCommon_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- get 지표코드명  -->
+	<select id="ACHCommonDAO.selectIxNm" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+			SELECT SFACH_GET_IXNM(#EVL_YEAR#, #ODR_SE#, #IX_CODE#) AS CODE_NM
+			  FROM DUAL
+		]]>     	     
+    </select>
+    
+	<!-- get 평가점수목록  -->
+	<select id="ACHCommonDAO.selectEvlScoreList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT EVL_SE    AS EVL_SE
+			      ,EVL_GRAD  AS EVL_GRAD
+			      ,EVL_SCORE AS EVL_SCORE
+			      ,RM 		 AS RM
+			  FROM TBACH_QLE_EVL_GRAD
+			 WHERE 1=1
+			   AND EVL_YEAR = #EVL_YEAR#
+			   AND ODR_SE = #ODR_SE#
+			   AND SCTN_SE = '02' <!-- fixed -->
+			 ORDER BY EVL_SE, EVL_GRAD   
+    </select>    
+    
+    <!-- comboList 평가조직코드 목록 -->
+	<select id="ACHCommonDAO.selectOrgnztList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT ORGNZT_CODE 	AS CODE
+		      ,ORGNZT_NM 	AS CODE_NM
+			  ,'[ ' || ORGNZT_CODE || ' ] ' || TRIM(ORGNZT_NM) 	AS ALL_CODE_NM			      
+		  FROM TBACH_EVL_TRGET_ORGNZT
+		 WHERE 1=1
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE 	= #ODR_SE#
+		 ORDER BY ORGNZT_CODE
+    </select>
+    
+    <!-- param 평가조직코드 목록 -->
+	<select id="ACHCommonDAO.selectOrgnztListSingle" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    SELECT DISTINCT
+           LISTAGG('''' || ORGNZT_CODE || ''' AS D' || ROWNUM, ',')
+           WITHIN GROUP (ORDER BY ORGNZT_CODE) AS IN_PARAM
+      FROM TBACH_EVL_TRGET_ORGNZT
+     WHERE EVL_YEAR = #EVL_YEAR#
+       AND ODR_SE = #ODR_SE#
+    </select>    
+    
+    <!-- get 평가주기 -->
+	<select id="ACHCommonDAO.selectEvlCycleSingle" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    SELECT EVL_YEAR, EVL_CYCLE
+      FROM TBACH_EVL_CYCLE
+     WHERE EVL_YEAR = #EVL_YEAR#
+    </select>      
+    
+    <!-- comboList 평가차수 목록 -->
+	<select id="ACHCommonDAO.selectOdrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT A.ODR_SE 				AS CODE
+	          ,SFACH_GET_EVLODRNM(B.EVL_CYCLE, A.ODR_SE) AS CODE_NM
+	          ,NVL(TO_CHAR(C.REGIST_DT, 'YYYY-MM-DD'),'설정안됨') AS CODE_CN	/* 집계기준일 */
+	      FROM TBACH_EVL_ODR A
+	      LEFT OUTER JOIN TBACH_EVL_SM_STDR C
+	              ON A.EVL_YEAR = C.EVL_YEAR
+	             AND A.ODR_SE = C.ODR_SE
+	             AND C.APPLC_AT = '1'
+	         , TBACH_EVL_CYCLE B
+	     WHERE 1=1 
+	       AND A.EVL_YEAR = B.EVL_YEAR       
+	       AND A.EVL_YEAR = #EVL_YEAR#
+	     ORDER BY TO_NUMBER(A.ODR_SE)
+    </select>
+    
+    <!-- comboList 현재 기준 평가차수(평가연도&차수) -->
+	<select id="ACHCommonDAO.selectCurEvlOdrInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT CUR_EVL_YEAR AS CUR_EVL_YEAR
+			  ,CUR_ODR_SE   AS CUR_ODR_SE
+		  FROM TBACH_SETUP
+    </select>
+    
+    <!-- comboList 계량평가 지표코드 목록 -->
+	<select id="ACHCommonDAO.selectQyeIxcodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT IX_CODE 		AS CODE
+			  ,TRIM(IX_NM) 	AS CODE_NM
+			  ,'[ ' || IX_CODE || ' ] ' || TRIM(IX_NM) 	AS ALL_CODE_NM
+              ,MESURE_CYCLE AS MESURE_CYCLE
+              ,MESURE_UNIT  AS MESURE_UNIT
+              ,ACMSLT_VALUE_MANAGE_MTHD AS ACMSLT_VALUE_MANAGE_MTHD
+              ,INDVDL_IX_AT
+		  FROM TBACH_KPI
+		 WHERE 1=1
+		   AND USE_AT = '1'
+		   AND IX_CHARCT = '000' 	<!-- 계량  -->
+		   AND IX_SE = '004'		<!-- KPI -->
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#		   
+		 ORDER BY IX_CODE
+    </select>
+    
+	<!-- get 지표별 가감점기준점수 목록  -->
+	<select id="ACHCommonDAO.selectAdsbtrScoreList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT ADSBTR_SE  		AS ADSBTR_SE
+			      , ADSBTR_CODE 	AS ADSBTR_CODE
+			      , ADSBTR_SCORE 	AS ADSBTR_SCORE
+			      , RM				AS RM
+			  FROM TBACH_KPI_ADDPNT_DMRTR
+			 WHERE 1=1
+			   AND EVL_YEAR = #EVL_YEAR#
+			   AND ODR_SE 	= #ODR_SE#
+			   AND IX_CODE 	= #IX_CODE#
+			 ORDER BY ADSBTR_SE, TO_NUMBER(ADSBTR_CODE)   
+    </select>
+        
+    <!-- comboList 계량평가 지표코드[마일리지 타입] 목록 -->
+	<select id="ACHCommonDAO.selectIxcodeListM" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT IX_CODE 		AS CODE
+			  ,TRIM(IX_NM) 	AS CODE_NM
+			  ,'[ ' || IX_CODE || ' ] ' || TRIM(IX_NM) 	AS ALL_CODE_NM
+			  ,IX_CHARCT
+			  ,APPLC_SCOPE_SE
+			  ,MESURE_CYCLE
+			  ,MESURE_UNIT
+			  ,ACMSLT_VALUE_MANAGE_MTHD
+			  ,ACMSLT_CALC_FRMLA
+		  FROM TBACH_KPI
+		 WHERE 1=1
+		   AND USE_AT = '1'
+		   AND IX_SE = '004'		<!-- KPI -->
+           AND ACMSLT_VALUE_MANAGE_MTHD IN ('C','M','M1','M2') <!-- 마일리지 -->		   
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#		   
+		 ORDER BY IX_CODE
+    </select>
+    
+    <!-- comboList 계량평가 지표코드[복합지표 타입] 목록 -->
+	<select id="ACHCommonDAO.selectIxcodeListT" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT IX_CODE 		AS CODE
+			  ,TRIM(IX_NM) 	AS CODE_NM
+			  ,'[ ' || IX_CODE || ' ] ' || TRIM(IX_NM) 	AS ALL_CODE_NM
+			  ,IX_CHARCT
+			  ,APPLC_SCOPE_SE
+			  ,MESURE_CYCLE
+			  ,MESURE_UNIT
+			  ,ACMSLT_VALUE_MANAGE_MTHD
+			  ,ACMSLT_CALC_FRMLA
+		  FROM TBACH_KPI
+		 WHERE 1=1
+		   AND USE_AT = '1'
+		   AND IX_SE = '004'		<!-- KPI -->
+           AND ACMSLT_VALUE_MANAGE_MTHD IN ('T') <!-- 복합지표 -->		   
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#		   
+		 ORDER BY IX_CODE
+    </select> 
+    
+    <!-- comboList 계량평가 지표코드[상대평가 타입] 목록 -->
+	<select id="ACHCommonDAO.selectIxcodeListA" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT IX_CODE 		AS CODE
+			  ,TRIM(IX_NM) 	AS CODE_NM
+			  ,'[ ' || IX_CODE || ' ] ' || TRIM(IX_NM) 	AS ALL_CODE_NM
+			  ,IX_CHARCT
+			  ,APPLC_SCOPE_SE
+			  ,MESURE_CYCLE
+			  ,MESURE_UNIT
+			  ,ACMSLT_VALUE_MANAGE_MTHD
+			  ,ACMSLT_CALC_FRMLA
+		  FROM TBACH_KPI
+		 WHERE 1=1
+		   AND USE_AT = '1'
+		   AND IX_SE = '004'		<!-- KPI -->
+           AND ACMSLT_VALUE_MANAGE_MTHD IN ('A','B','R1','R2') <!-- 상대평가 -->		   
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#		   
+		 ORDER BY IX_CODE
+    </select> 
+    
+    <!-- comboList 계량평가 지표코드[일정관리 타입] 목록 -->
+	<select id="ACHCommonDAO.selectIxcodeListD" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT IX_CODE 		AS CODE
+			  ,TRIM(IX_NM) 	AS CODE_NM
+			  ,'[ ' || IX_CODE || ' ] ' || TRIM(IX_NM) 	AS ALL_CODE_NM
+			  ,IX_CHARCT
+			  ,APPLC_SCOPE_SE
+			  ,MESURE_CYCLE
+			  ,MESURE_UNIT
+			  ,ACMSLT_VALUE_MANAGE_MTHD
+			  ,ACMSLT_CALC_FRMLA
+		  FROM TBACH_KPI
+		 WHERE 1=1
+		   AND USE_AT = '1'
+		   AND IX_SE = '004'		<!-- KPI -->
+           AND ACMSLT_VALUE_MANAGE_MTHD IN ('E','D') <!-- 일정관리 -->
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#		   
+		 ORDER BY IX_CODE
+    </select> 
+    
+    <!-- comboList 계량평가 지표코드[이행평가 타입] 목록 -->
+	<select id="ACHCommonDAO.selectIxcodeListE" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT IX_CODE 		AS CODE
+			  ,TRIM(IX_NM) 	AS CODE_NM
+			  ,'[ ' || IX_CODE || ' ] ' || TRIM(IX_NM) 	AS ALL_CODE_NM	
+		  FROM TBACH_KPI
+		 WHERE 1=1
+		   AND USE_AT = '1'
+		   AND IX_SE = '004'		<!-- KPI -->
+           AND ACMSLT_VALUE_MANAGE_MTHD IN ('X') <!-- 이행평가 -->
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#		   
+		 ORDER BY IX_CODE
+    </select>   
+    
+    <!-- comboList 계량평가 지표코드[공정율관리 타입] 목록 -->
+	<select id="ACHCommonDAO.selectIxcodeListF" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT IX_CODE 		AS CODE
+			  ,TRIM(IX_NM) 	AS CODE_NM
+			  ,'[ ' || IX_CODE || ' ] ' || TRIM(IX_NM) 	AS ALL_CODE_NM	
+		  FROM TBACH_KPI
+		 WHERE 1=1
+		   AND USE_AT = '1'
+		   AND IX_SE = '004'		<!-- KPI -->
+           AND ACMSLT_VALUE_MANAGE_MTHD IN ('F') <!-- 공정율관리 -->
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#	   
+		 ORDER BY IX_CODE
+    </select> 
+    
+    <!-- comboList 상위 지표코드  목록 -->
+	<select id="ACHCommonDAO.selectUpIxcodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT IX_CODE 		AS CODE
+			  ,TRIM(IX_NM) 	AS CODE_NM
+			  ,'[ ' || SFCOM_CODE_NM('ACH001',IX_SE) || ' ] ' || '[ ' || IX_CODE || ' ] ' || TRIM(IX_NM) 	AS ALL_CODE_NM	
+		  FROM TBACH_KPI
+		 WHERE 1=1
+		   AND USE_AT = '1'		
+		   <isNotEmpty property="IX_SE">	      
+		   AND IX_SE = LPAD(TO_CHAR(TO_NUMBER(#IX_SE#) - 1), 3,'0') <!-- 지표구분 -->
+		   </isNotEmpty>
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#	   
+		 ORDER BY IX_CODE
+    </select> 
+    
+    <!-- comboList 지표코드  목록 -->
+	<select id="ACHCommonDAO.selectIxcodeAllList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT IX_CODE 		AS CODE
+			  ,TRIM(IX_NM) 	AS CODE_NM
+			  ,'[ ' || IX_CODE || ' ] ' || TRIM(IX_NM) 	AS ALL_CODE_NM	
+		  FROM TBACH_KPI
+		 WHERE 1=1
+		   AND USE_AT = '1'		   
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#	   
+		 ORDER BY IX_CODE
+    </select>
+    
+    <!-- comboList 비계량지표 측정월  목록 -->
+	<select id="ACHCommonDAO.selectQlevalSeqList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT SEQ 				 AS CODE
+		       ,TO_CHAR(SEQ) || '월' AS CODE_NM
+		  FROM TBACH_QLEVAL_RESULT <!-- 비계량지표 결과_실적포함 -->
+		 WHERE 1=1 
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#
+		<![CDATA[		   
+		   AND SEQ <> 0
+		]]>
+		   GROUP BY EVL_YEAR,ODR_SE,SEQ
+		   ORDER BY SEQ
+    </select>    
+    
+    <!-- TempList 달성율구간Color 목록 -->
+	<select id="ACHCommonDAO.selectAchivRtSctnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  SE_CODE
+			  , SE_NM
+			  , BEGIN_SCTN
+			  , END_SCTN
+			  , APPN_COLOR
+		 FROM TBACH_ACHIV_RT_SCTN
+		WHERE 1=1
+        ORDER BY SE_CODE
+    </select>     
+    
+</sqlMap>

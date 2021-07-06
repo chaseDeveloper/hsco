@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="login_SQL">
+
+	<select id="loginDAO.sysOpenDt" parameterClass="java.lang.String" resultClass="java.lang.String">
+		SELECT MAX(OPEN_DT)||'000000' SYS_OPEN_DT FROM TBPMS_CPR_INFO 
+	</select>
+
+	<!-- 사용자 로그인 체크 -->
+	<select id="loginDAO.loginChk" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+		SELECT A.USER_ID, A.USER_NM, B.EMPNM,
+		       NVL(B.DEPT_CODE,A.DEPT_CODE) DEPT_CODE,  
+               NVL(B.DEPT_NM,(SELECT DEPT_NM FROM VWHRM_DEPT WHERE DEPT_CODE = A.DEPT_CODE)) DEPT_NM,		       		        
+		       B.DEPT_SE,
+		       B.WORK_DEPT, B.STTUS_SE, B.DTY_SE, A.EMPNO, 
+		       SFHRM_GET_OFCPSCD(B.EMPNO,B.JSSFC_SE,B.HR_CLSF_SE,B.ECNY_DE) AS OFCPS_SE
+		       <!-- ,
+		        (SELECT OPEN_DT FROM TBPMS_CPR_INFO WHERE ROWNUM=1) SYS_OPEN_DT
+		       -->
+		 FROM TBCOM_USER A,
+		      (
+		       SELECT A.EMPNO, A.EMPNO AS USER_ID, A.EMPNM,
+		              A.DEPT_CODE,  B.DEPT_NM, B.DEPT_SE,
+		              A.WORK_DEPT, A.STTUS_SE, A.DTY_SE,
+		              A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE
+		         FROM TBHRM_HR_MASTR A,
+		              VWHRM_DEPT B
+		        WHERE A.DEPT_CODE = B.DEPT_CODE
+		          AND B.USE_AT = 1
+		      ) B
+		 WHERE A.EMPNO = B.EMPNO(+)
+		   AND NVL(A.USER_STTUS_CODE, 'JA') = 'JA'
+		   AND A.USER_ID = #USER_ID#
+	</select> 
+	
+	<!-- 사용자 디폴트 권한 가져올때, 사번이 있는 사용자만으로 제한로직추가(2016.08.02 JJY) -->
+	<select id="loginDao.authGrp" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">	
+		SELECT DISTINCT
+		    A.AUTH_GRP_ID, B.AUTH_GRP_NM, A.USER_ID, B.AUTH_CODE
+		FROM
+		    TBCOM_USER_GRP A,
+		    TBCOM_AUTH_GRP B
+		WHERE
+		    A.AUTH_GRP_ID = B.AUTH_GRP_ID
+		AND NVL(A.INTRCP_AT,0) = 0
+		AND A.USER_ID = #USER_ID#
+        UNION ALL
+        SELECT 
+        	A.AUTH_GRP_ID, A.AUTH_GRP_NM, B.USER_ID, A.AUTH_CODE
+        FROM 
+        	TBCOM_AUTH_GRP A, 
+        	TBCOM_USER B
+        WHERE A.DFLT_AT = 1	
+        AND B.USER_ID = #USER_ID#
+        AND B.EMPNO IS NOT NULL
+	</select>
+	
+	<!-- 로그인메뉴조회 2016.07.21 사용자메뉴(TBCOM_USER_MENU) 테이블 권한체크에서 제외시킴-->
+	<select id="loginDAO.loginMenu" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">
+		SELECT *
+		        FROM
+		        (
+		            SELECT DISTINCT
+		                  A.MENU_ID, A.UPPER_MENU,
+		                  A.MENU_STTUS, A.MENU_NM,
+		                  A.MENU_LVL, A.MENU_ORDR,
+		                  A.PAGE_ID, A.MENU_PARAMTR,
+		                  A.MENU_GRP, A.MENU_OPTP,
+		                  A.SYS_SE_CODE,
+		                  (SELECT PAGE_NM FROM TBCOM_PAGE WHERE PAGE_ID = A.PAGE_ID AND USE_AT = '1') AS PAGE_NM,
+		                  (SELECT PAGE_URL FROM TBCOM_PAGE WHERE PAGE_ID = A.PAGE_ID AND USE_AT = '1') AS PAGE_URL,
+		                  (SELECT HPCM_AT FROM TBCOM_PAGE WHERE PAGE_ID = A.PAGE_ID AND USE_AT = '1') AS HPCM_AT,
+		                  (
+		                    SELECT
+		                            MAX(MENU_ORDR)
+		                    FROM TBCOM_MENU
+		                    WHERE UPPER_MENU = A.UPPER_MENU AND USE_AT ='1'
+		                  ) AS MENU_ORDR_MAX
+		                  , A.JOB_SE
+		            FROM   TBCOM_MENU A, TBCOM_AUTH_GRP_MENU B
+		            WHERE    A.USE_AT     = '1'
+		            AND    A.MENU_STTUS IN ('VIEW')
+		            AND    A.MENU_OPTP IN ('MAIN')
+		            AND    A.MENU_ID = B.MENU_ID
+		            AND    B.AUTH_GRP_ID IN  <iterate property="AUTH_GRP" open="(" close=")" conjunction="," > #AUTH_GRP[].AUTH_GRP_ID# </iterate>
+		            AND    B.INTRCP_AT = '0'
+		        ) A
+		        CONNECT BY PRIOR A.MENU_ID = A.UPPER_MENU
+		        START   WITH A.MENU_ID IN (0)
+		        ORDER SIBLINGS BY A.MENU_ORDR, A.MENU_LVL, A.MENU_ID			   
+    </select>
+	
+	
+	<!-- 
+	<select id="loginDAO.loginMenu" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">
+		SELECT *
+		        FROM
+		        (
+		            SELECT DISTINCT
+		                  A.MENU_ID, A.UPPER_MENU,
+		                  A.MENU_STTUS, A.MENU_NM,
+		                  A.MENU_LVL, A.MENU_ORDR,
+		                  A.PAGE_ID, A.MENU_PARAMTR,
+		                  A.MENU_GRP, A.MENU_OPTP,
+		                  A.SYS_SE_CODE,
+		                  (SELECT PAGE_NM FROM TBCOM_PAGE WHERE PAGE_ID = A.PAGE_ID AND USE_AT = '1') AS PAGE_NM,
+		                  (SELECT PAGE_URL FROM TBCOM_PAGE WHERE PAGE_ID = A.PAGE_ID AND USE_AT = '1') AS PAGE_URL,
+		                  (
+		                    SELECT
+		                            MAX(MENU_ORDR)
+		                    FROM TBCOM_MENU
+		                    WHERE UPPER_MENU = A.UPPER_MENU AND USE_AT ='1'
+		                  ) AS MENU_ORDR_MAX
+		                  , A.JOB_SE
+		            FROM   TBCOM_MENU A,
+		                        (SELECT B.MENU_ID, NVL(C.INTRCP_AT, B.INTRCP_AT) AS INTRCP_AT FROM TBCOM_AUTH_GRP_MENU B, TBCOM_USER_MENU C
+		                            WHERE 1 = 1
+		                            AND    B.AUTH_GRP_ID IN  <iterate property="AUTH_GRP" open="(" close=")" conjunction="," > #AUTH_GRP[].AUTH_GRP_ID# </iterate>
+		                            AND    B.MENU_ID = C.MENU_ID(+)
+		                            AND    C.USER_ID(+) = #USER_ID#) B
+		            WHERE    A.USE_AT     = '1'
+		            AND    A.MENU_STTUS IN ('VIEW')
+		            AND    A.MENU_OPTP IN ('MAIN')
+		            AND    A.MENU_ID = B.MENU_ID
+		            AND   B.INTRCP_AT = '0'
+		        ) A
+		        CONNECT BY PRIOR A.MENU_ID = A.UPPER_MENU
+		        START   WITH A.MENU_ID IN (0)
+		        ORDER SIBLINGS BY A.MENU_ORDR, A.MENU_LVL, A.MENU_ID		
+
+	   
+    </select>
+	
+	<select id="loginDAO.loginMenu" parameterClass="java.util.List"  resultClass="java.util.HashMap">
+            
+		SELECT *
+		FROM
+		(
+		    SELECT DISTINCT
+		          A.MENU_ID, A.UPPER_MENU,
+		          A.MENU_STTUS, A.MENU_NM,
+		          A.MENU_LVL, A.MENU_ORDR,
+		          A.PAGE_ID, A.MENU_PARAMTR,
+		          A.MENU_GRP, A.MENU_OPTP,
+		          A.SYS_SE_CODE,		          
+		          (SELECT PAGE_NM FROM TBCOM_PAGE WHERE PAGE_ID = A.PAGE_ID AND USE_AT = '1') AS PAGE_NM,
+		          (SELECT PAGE_URL FROM TBCOM_PAGE WHERE PAGE_ID = A.PAGE_ID AND USE_AT = '1') AS PAGE_URL,
+		          (
+		            SELECT 
+		                    MAX(MENU_ORDR) 
+		            FROM TBCOM_MENU 
+		            WHERE UPPER_MENU = A.UPPER_MENU AND USE_AT ='1'
+		          ) AS MENU_ORDR_MAX
+		          , A.JOB_SE
+		    FROM   TBCOM_MENU A,
+		           TBCOM_AUTH_GRP_MENU B
+		    WHERE    A.USE_AT     = '1'
+		    AND    A.MENU_STTUS IN ('VIEW')
+			AND    A.MENU_OPTP IN ('MAIN')	    
+		    AND    A.MENU_ID = B.MENU_ID
+		    AND    B.AUTH_GRP_ID IN <iterate open="(" close=")" conjunction="," > #[].AUTH_GRP_ID# </iterate> 
+		) A
+		CONNECT BY PRIOR A.MENU_ID = A.UPPER_MENU
+		START   WITH A.MENU_ID IN (0)
+		ORDER SIBLINGS BY A.MENU_ORDR, A.MENU_LVL, A.MENU_ID		
+
+	   
+    </select>    
+     -->
+    
+    <!-- 공통메세지조회 -->
+	<select id="loginDAO.loginMessage" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		      MSSAGE_CODE
+		    , MSSAGE_NM
+		    , MSSAGE_TY
+		    , MSSAGE_DC 
+		    , EXPSR_SE
+		    , EXPSR_MTH
+		FROM TBCOM_MSSAGE
+	</select>
+	
+	<!-- 사용자 ID/PASSWORD 로그인  -->
+	<select id="loginDAO.CheckUserlogin" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT A.USER_ID, A.USER_NM, 
+			       A.DEPT_CODE,  B.DEPT_NM, B.DEPT_SE
+			FROM 
+			    TBCOM_USER A
+			  , VWHRM_DEPT B
+			WHERE
+			    A.DEPT_CODE = B.DEPT_CODE(+)		
+			AND NVL(A.USER_STTUS_CODE, 'JA') = 'JA'
+			AND A.USER_ID = #USER_ID# 
+		<!-- <isEqual property="V_USER_SYS_ID" compareValue = "PORTAL">
+			AND A.PWD = #PWD#
+		</isEqual>
+		<isNotEqual property="V_USER_SYS_ID" compareValue = "PORTAL">
+			AND (A.PWD = SFCOM_ENC_HASH(#PWD#)
+				OR 1 = (SELECT 1 FROM TBPMS_CPR_INFO
+                	WHERE MASTER_KEY || TO_CHAR(SYSDATE, 'MMDD')||'1!' =#PWD#))
+		</isNotEqual>		 -->
+	</select>  
+
+	<select id="loginDAO.selectLoginUser" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+            USER_ID
+          , PWD
+          , USER_NM
+          , USER_STTUS_CODE
+          , PASSWORD_CHANGE_DT
+          , STSTUS_NM
+        FROM (
+        	SELECT 
+        	    A.*, B.CODE_NM AS STSTUS_NM, ROWNUM RNUM 
+        	FROM (
+        		SELECT
+        		      USER_ID
+        		    , USER_NM
+        		    , PWD
+        		    , TO_CHAR(PASSWORD_CHANGE_DT, 'YYYYMMDD HH24MISS') AS PASSWORD_CHANGE_DT /* 비밀번호변경일시 */
+        		    , USER_STTUS_CODE /* 차단상태코드 */
+        		FROM TBCOM_USER
+        		WHERE USER_ID = #USER_ID#
+        		ORDER BY USER_ID DESC
+        <![CDATA[					
+        	) A
+        	, (
+        	   SELECT 
+                     CODE
+                   , CODE_NM
+               FROM TBCOM_CMMN_CODE
+               WHERE GRP_CODE='COM011' 
+                 AND USE_AT = '1'
+        	) B
+        	WHERE A.USER_STTUS_CODE = B.CODE(+)
+        ) 
+        WHERE ROWNUM <= 1
+        ]]>
+	</select>	
+	
+	<select id="loginDAO.selectUserId" parameterClass="java.lang.String" resultClass="java.lang.String">
+		SELECT 
+			 USER_ID
+		FROM TBCOM_USER t1
+			 INNER JOIN TBHRM_DCLZ_MAPPING_MANAGE t2
+			 ON t1.EMPNO = t2.EMPNO
+		WHERE t2.GRPWR_NO = #value#
+		  AND ROWNUM = 1
+	</select>
+	
+	<insert id="loginDAO.insertLoginToken" parameterClass="java.util.HashMap">
+		INSERT INTO TBCOM_LOGIN_TOKEN
+		(
+			 USER_ID
+			,TOKEN
+			,REGIST_DT
+		) VALUES (
+			 #USER_ID#
+			,#TOKEN#
+			,SYSDATE
+		)
+	</insert>
+	
+	<select id="loginDAO.getUserIdByToken" parameterClass="java.lang.String" resultClass="java.util.HashMap">
+		SELECT t1.USER_ID, t2.PWD
+		FROM TBCOM_LOGIN_TOKEN t1
+			 INNER JOIN TBCOM_USER t2
+			 ON t1.USER_ID = t2.USER_ID
+		WHERE TOKEN = #value#
+		  AND (SYSDATE - t1.REGIST_DT)*24*60*60 <![CDATA[<=]]> 60
+	</select>
+	
+	<delete id="loginDAO.deleteToken" parameterClass="java.lang.String">
+		DELETE FROM TBCOM_LOGIN_TOKEN
+		WHERE USER_ID = #value#
+	</delete>
+	
+	
+</sqlMap>

@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC070703_SQL">	
+ 
+	<select id="ACC070103DAO.incDsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t5.DEPT_NM                                                               /* 부서명      */
+		      ,t1.DECSN_YEAR                                                            /* 지출년도      */
+		      ,t1.DECSN_NO                                                              /* 결의번호      */  
+		      ,t1.SUMRY1                                                                /* 적요      */
+		      ,SFCOM_GET_SANCTN_DOC_NO(t1.SANCTN_NO) AS DOC_ID                          /* 문서번호      */
+		      ,t1.SANCTN_NO                                                             /* 결재번호      */
+		      ,SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) AS SANCTN_KND                         /* 결재구분      */
+		FROM TBACC_INC_DSN_MASTR t1
+		     LEFT OUTER JOIN
+		     (SELECT DECSN_YEAR
+		           , DECSN_NO
+		           , MAX(ACCT_NO) AS ACCT_NO
+		           , SUM(DECSN_AMOUNT) AS DECSN_AMOUNT
+		           , CASE WHEN COUNT(1) > 1 THEN MAX(BCNC_NM)||' 외 '||(COUNT(1)-1)||'건' ELSE MAX(BCNC_NM) END AS BCNC_NM
+		      FROM TBACC_INC_DSN_DETAIL
+		      GROUP BY DECSN_YEAR, DECSN_NO
+		     ) t2
+		     ON  t1.DECSN_YEAR  = t2.DECSN_YEAR
+		     AND t1.DECSN_NO    = t2.DECSN_NO
+		     LEFT OUTER JOIN VWHRM_DEPT t5
+		     ON  t1.DEPT_CODE = t5.DEPT_CODE
+		WHERE t1.ITNC_DE BETWEEN #SRCH_ST_DE# AND #SRCH_ED_DE#
+		<isNotEmpty property="DECSN_NO">
+		  AND t1.DECSN_NO LIKE '%' || #DECSN_NO# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="ANACT_KND">
+		  AND t1.ANACT_KND = #ANACT_KND#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+		  AND t1.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="SRCH_TXT">
+		  AND t1.SUMRY1 LIKE '%'|| #SRCH_TXT# ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+		  AND t1.BSNS_CODE = #BSNS_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="ACCT_NO">  /*계좌번호*/
+		  AND t2.ACCT_NO = #ACCT_NO#
+		</isNotEmpty>
+		  AND t1.HSCO_INC_ACNUT_AT = '1' /* 1:공사수입계좌 */
+		ORDER BY t1.DECSN_NO DESC
+	</select>
+	
+	<!-- 수입결의 이력(마스터) 조회 -->
+	<select id="ACC070103DAO.selectIncDsnMastrHist" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT X1.P_TYPE
+		      ,X1.DECSN_YEAR
+		      ,X1.DECSN_NO
+		      ,X1.SN
+		      ,X1.OCCRRNC_DT
+		      ,X1.BSNS_CODE
+		      ,X1.BUDGET_YEAR
+		      ,X1.BSNS_SE
+		      ,X1.BALC_SE
+		      ,X1.BUDGET_ACNT_CODE
+		      ,X1.EXPNDTR_UNIT_CODE
+		      ,X1.ATMC_JRNLZ_TY_CODE
+		      ,X1.ANACT_KND
+		      ,X1.DEPT_CODE
+		      ,X1.ITNC_DE
+		      ,X1.NHT_PBLICTE_DE
+		      ,X1.PAY_TMLMT
+		      ,X1.INC_BUDGET_ARNG_RGIST
+		      ,X1.NHT_NO
+		      ,X1.SUMRY1
+		      ,X1.SUMRY2
+		      ,X1.REGISTER_ID
+		      ,X1.REGIST_DT
+		      ,X1.UPDUSR_ID
+		      ,X1.UPDT_DT
+		      ,X1.SANCTN_NO
+		      ,X1.HSCO_INC_ACNUT_AT
+		      ,X1.FILE_SN
+		      ,X1.BUDGET_DEPT_CODE
+		  FROM (
+		        /*수입결의마스터*/
+		        SELECT 'TYPE_01' AS P_TYPE
+		              ,T1.DECSN_YEAR
+		              ,T1.DECSN_NO
+		              ,0 AS SN
+		              ,NULL AS OCCRRNC_DT
+		              ,T1.BSNS_CODE
+		              ,T1.BUDGET_YEAR
+		              ,T1.BSNS_SE
+		              ,T1.BALC_SE
+		              ,T1.BUDGET_ACNT_CODE
+		              ,T1.EXPNDTR_UNIT_CODE
+		              ,T1.ATMC_JRNLZ_TY_CODE
+		              ,T1.ANACT_KND
+		              ,T1.DEPT_CODE
+		              ,T1.ITNC_DE
+		              ,T1.NHT_PBLICTE_DE
+		              ,T1.PAY_TMLMT
+		              ,T1.INC_BUDGET_ARNG_RGIST
+		              ,T1.NHT_NO
+		              ,T1.SUMRY1
+		              ,T1.SUMRY2
+		              ,T1.REGISTER_ID
+		              ,T1.REGIST_DT
+		              ,T1.UPDUSR_ID
+		              ,T1.UPDT_DT
+		              ,T1.SANCTN_NO
+		              ,T1.HSCO_INC_ACNUT_AT
+		              ,T1.FILE_SN
+		              ,T1.BUDGET_DEPT_CODE
+		         FROM TBACC_INC_DSN_MASTR T1
+		        WHERE T1.DECSN_YEAR = #DECSN_YEAR#
+		          AND T1.DECSN_NO= #DECSN_NO#
+		        UNION ALL 
+		        /*수입결의마스터이력*/
+		        SELECT 'TYPE_02' AS P_TYPE
+		              ,T1.DECSN_YEAR
+		              ,T1.DECSN_NO
+		              ,T1.SN
+		              ,TO_CHAR(T1.OCCRRNC_DT, 'YYYY-MM-DD HH24:MI:SS') AS OCCRRNC_DT
+		              ,T1.BSNS_CODE
+		              ,T1.BUDGET_YEAR
+		              ,T1.BSNS_SE
+		              ,T1.BALC_SE
+		              ,T1.BUDGET_ACNT_CODE
+		              ,T1.EXPNDTR_UNIT_CODE
+		              ,T1.ATMC_JRNLZ_TY_CODE
+		              ,T1.ANACT_KND
+		              ,T1.DEPT_CODE
+		              ,T1.ITNC_DE
+		              ,T1.NHT_PBLICTE_DE
+		              ,T1.PAY_TMLMT
+		              ,T1.INC_BUDGET_ARNG_RGIST
+		              ,T1.NHT_NO
+		              ,T1.SUMRY1
+		              ,T1.SUMRY2
+		              ,T1.REGISTER_ID
+		              ,T1.REGIST_DT
+		              ,T1.UPDUSR_ID
+		              ,T1.UPDT_DT
+		              ,T1.SANCTN_NO
+		              ,T1.HSCO_INC_ACNUT_AT
+		              ,T1.FILE_SN
+		              ,T1.BUDGET_DEPT_CODE
+		          FROM TBACC_INC_DSN_MASTR_HIST T1
+		         WHERE T1.DECSN_YEAR = #DECSN_YEAR#
+		           AND T1.DECSN_NO= #DECSN_NO#
+		       )X1
+		ORDER BY X1.P_TYPE ASC, X1.SN DESC
+	</select>
+	
+	<!-- 수입결의 이력(디테일) 조회 -->
+	<select id="ACC070103DAO.selectIncdsnDetailHist" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT X1.P_TYPE
+		      ,X1.DECSN_YEAR
+		      ,X1.DECSN_NO
+		      ,X1.SEQ
+		      ,X1.SN
+		      ,X1.OCCRRNC_DT
+		      ,X1.BCNC_CODE
+		      ,X1.BCNC_NM
+		      ,X1.BANK_CD
+		      ,X1.ACCT_NO
+		      ,X1.ACCT_TXDAY
+		      ,X1.ACCT_TXDAY_SEQ
+		      ,X1.DECSN_AMOUNT
+		      ,X1.SUPLY_AMOUNT
+		      ,X1.VAT
+		      ,X1.TAXBILL_NO
+		      ,X1.PBLICTE_DE
+		      ,X1.REGISTER_ID
+		      ,X1.REGIST_DT
+		      ,X1.UPDUSR_ID
+		      ,X1.UPDT_DT
+		      ,X1.NM
+		      ,X1.EXP_BCNC_CODE
+		      ,X1.EXP_BCNC_NM
+		      ,X1.EXP_FNNC_INSTT_CODE
+		      ,X1.EXP_ACNUTNO
+		      ,X1.EXP_DPSTR
+		  FROM (
+		        /*수입결의세부*/
+		        SELECT 'TYPE_01' AS P_TYPE
+		              ,T1.DECSN_YEAR
+		              ,T1.DECSN_NO
+		              ,T1.SEQ
+		              ,0 AS SN
+		              ,NULL AS OCCRRNC_DT
+		              ,T1.BCNC_CODE
+		              ,T1.BCNC_NM
+		              ,T1.BANK_CD
+		              ,T1.ACCT_NO
+		              ,T1.ACCT_TXDAY
+		              ,T1.ACCT_TXDAY_SEQ
+		              ,T1.DECSN_AMOUNT
+		              ,T1.SUPLY_AMOUNT
+		              ,T1.VAT
+		              ,T1.TAXBILL_NO
+		              ,T1.PBLICTE_DE
+		              ,T1.REGISTER_ID
+		              ,T1.REGIST_DT
+		              ,T1.UPDUSR_ID
+		              ,T1.UPDT_DT
+		              ,T1.NM
+		              ,T1.EXP_BCNC_CODE
+		              ,T1.EXP_BCNC_NM
+		              ,T1.EXP_FNNC_INSTT_CODE
+		              ,T1.EXP_ACNUTNO
+		              ,T1.EXP_DPSTR
+		          FROM TBACC_INC_DSN_DETAIL T1
+		         WHERE T1.DECSN_YEAR = #DECSN_YEAR#
+		           AND T1.DECSN_NO= #DECSN_NO#
+		        UNION ALL
+		        /*수입결의세부이력*/
+		        SELECT 'TYPE_02' AS P_TYPE
+		              ,T1.DECSN_YEAR
+		              ,T1.DECSN_NO
+		              ,T1.SEQ
+		              ,T1.SN
+		              ,TO_CHAR(T1.OCCRRNC_DT, 'YYYY-MM-DD HH24:MI:SS') AS OCCRRNC_DT
+		              ,T1.BCNC_CODE
+		              ,T1.BCNC_NM
+		              ,T1.BANK_CD
+		              ,T1.ACCT_NO
+		              ,T1.ACCT_TXDAY
+		              ,T1.ACCT_TXDAY_SEQ
+		              ,T1.DECSN_AMOUNT
+		              ,T1.SUPLY_AMOUNT
+		              ,T1.VAT
+		              ,T1.TAXBILL_NO
+		              ,T1.PBLICTE_DE
+		              ,T1.REGISTER_ID
+		              ,T1.REGIST_DT
+		              ,T1.UPDUSR_ID
+		              ,T1.UPDT_DT
+		              ,T1.NM
+		              ,T1.EXP_BCNC_CODE
+		              ,T1.EXP_BCNC_NM
+		              ,T1.EXP_FNNC_INSTT_CODE
+		              ,T1.EXP_ACNUTNO
+		              ,T1.EXP_DPSTR
+		          FROM TBACC_INC_DSN_DETAIL_HIST T1
+		         WHERE T1.DECSN_YEAR = #DECSN_YEAR#
+		           AND T1.DECSN_NO= #DECSN_NO#
+		       )X1
+		ORDER BY X1.SEQ ASC, X1.P_TYPE ASC, X1.SN DESC
+	</select>
+
+</sqlMap>

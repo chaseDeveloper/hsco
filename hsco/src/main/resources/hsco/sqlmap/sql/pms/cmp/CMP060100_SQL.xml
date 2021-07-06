@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP060100_SQL">
+<!-- 설명  : 공탁관리
+	작성자 : 지효정 -->
+
+	<!-- 물건 소유자 목록 -->
+	<select id="CMP060100DAO.thingOwnerList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT DISTINCT
+			 ABC.BSNS_AREA_CODE	/* 사업지역코드 */
+			,ABC.OWNER_NO		/* 소유자 번호 */
+			,ABC.NM				/* 소유자 이름 */
+			,ABC.ADRES			/* 소유자 주소 */
+			,ABC.IHIDNUM		/* 소유자 주민번호 */
+			,ABC.TELNO_1		/* 소유자 연락처 */
+			,ABC.ZIP			/* 소유자 우편번호 */
+		FROM(
+			SELECT AB.*
+			FROM(
+				SELECT
+					 A.BSNS_AREA_CODE
+					,A.OWNER_NO
+					,A.THING_SN
+					,B.OWNER_NM AS NM
+					,B.ADRES
+					,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM
+					,B.TELNO_1
+					,B.ZIP
+				FROM TBCMP_THING_OWNER A, TBCMP_OWNER B
+				WHERE A.BSNS_AREA_CODE = #bsnsAreaCode#
+				AND   A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				AND   A.OWNER_NO = B.OWNER_NO
+				<isNotEmpty property="nm">
+				AND	  B.OWNER_NM LIKE '%' || #nm# || '%'
+				</isNotEmpty>
+				AND   A.ACEPTNC_ADJDC_ODR IS NOT NULL
+				AND   A.ACEPTNC_ADJDC_ODR != 0
+
+				<isNotEmpty property="ACEPTNC_ADJDC_ODR">
+				AND	  A.ACEPTNC_ADJDC_ODR IN
+				<iterate property="ARR_ACEPTNC_ADJDC_ODR"  open="(" close=")" conjunction="," >
+				#ARR_ACEPTNC_ADJDC_ODR[]#
+				</iterate>
+				</isNotEmpty>
+
+				<isEqual property="rqestSe" compareValue="1">
+	            AND   (A.RQEST_SE = '0' OR A.RQEST_SE IS NULL)
+	            </isEqual>
+	            <isEqual property="rqestSe" compareValue="0">
+	            AND   A.RQEST_SE = '1'
+	            </isEqual>
+			)AB,
+			(
+				SELECT BSNS_AREA_CODE, THING_SN
+				FROM TBCMP_THING_WTNNC
+				WHERE BSNS_AREA_CODE = #bsnsAreaCode#
+				<isNotEmpty property="locplcCode">
+				AND	  LOCPLC_CODE = #locplcCode#
+				</isNotEmpty>
+				ORDER BY BSNS_AREA_CODE, THING_SN
+			)C
+			WHERE AB.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+			AND AB.THING_SN = C.THING_SN
+		)ABC
+		ORDER BY ABC.NM
+	</select>
+
+	<!-- 조서 목록 -->
+	<select id="CMP060100DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+        SELECT
+               A.*
+              ,ROWNUM RNUM
+         FROM (
+                SELECT AA.BSNS_AREA_CODE                                        /* 사업지역코드 */
+                      ,AA.THING_SN                                              /* 물건일련번호 */
+                      ,LOCPLC_CODE                                              /* 소재지코드 */
+                      ,SFCMP_GET_LOCPLC(AA.BSNS_AREA_CODE, LOCPLC_CODE) || ' ' ||
+                       DECODE(SLNO, NULL, LNM, LNM || '-' || SLNO) AS FULL_LOCPLC_CODE_NM
+                      ,TRIM(THING_CL) AS THING_CL                               /* 물건 분류 코드 */
+                      ,SFCMP_GET_CODENM('CMP001', TRIM(THING_CL)) AS THING_CL_NM/* 물건분류명 */
+                      ,THING_NM                                                 /* 물건명 */
+                      ,LNDCGR_INCRPR                                            /* 지목_편입 */
+                      ,( SELECT LNDCGR_NM
+                           FROM TBCMP_LNDCGR_CODE
+                          WHERE LNDCGR_CODE = AA.LNDCGR_INCRPR
+                       ) AS LNDCGR_INCRPR_NM
+                      ,REAL_LNDCGR                                              /* 실제지목 */
+                      ,NOW_USE_STTUS                                            /* 현재이용현황 */
+                      ,AR_LGSTR                                                 /* 면적_공부 */
+                      ,AR_INCRPR                                                /* AR_INCRPR */
+                      ,UNIT                                                     /* 단위 코드 */
+                      ,SFCMP_GET_CODENM('CMP002', TRIM(UNIT)) AS UNIT_NM        /* 단위명 */
+                      ,THING_UNTPC AS UNTPC                                     /* 단가 */
+                      ,AA.RWMNY                                                 /* 보상금 */
+                      ,RM_1                                                     /* 비고 */
+                      ,BB.AR                                                    /* 소유자 면적 */
+                  FROM TBCMP_THING_WTNNC AA,
+                       TBCMP_THING_OWNER BB
+                 WHERE AA.BSNS_AREA_CODE = BB.BSNS_AREA_CODE
+                   AND AA.THING_SN = BB.THING_SN
+                   AND AA.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+                   AND BB.OWNER_NO = #OWNER_NO#
+                   AND ( ( BB.ACEPTNC_ADJDC_ODR IS NOT NULL AND BB.ACEPTNC_ADJDC_ODR != 0 )
+                                               
+                         <isNotEmpty property="THING_CL">
+                         OR ( AA.THING_CL IN
+                         <iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+                         #ARR_THING_CL[]#
+                         </iterate>
+                         )
+                         </isNotEmpty>
+
+                       )
+                   <isNotEmpty property="ACEPTNC_ADJDC_ODR">
+                   AND BB.ACEPTNC_ADJDC_ODR IN
+                   <iterate property="ARR_ACEPTNC_ADJDC_ODR"  open="(" close=")" conjunction="," >
+                   #ARR_ACEPTNC_ADJDC_ODR[]#
+                   </iterate>
+                   </isNotEmpty>
+              ) A
+	</select>
+
+	<select id="CMP060100DAO.aceptncAdjdcOdrList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT
+		    ACEPTNC_ADJDC_ODR CODE
+		    ,ACEPTNC_ADJDC_ODR || '차' CODE_NM
+		FROM TBCMP_THING_OWNER
+		WHERE BSNS_AREA_CODE = #bsnsAreaCode#
+		AND   ACEPTNC_ADJDC_ODR IS NOT NULL
+		AND   ACEPTNC_ADJDC_ODR != 0
+		GROUP BY ACEPTNC_ADJDC_ODR
+		ORDER BY CODE
+	</select>
+
+	<!-- 공탁목록 -->
+	<select id="CMP060100DAO.ldgmntList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT
+		     A.BSNS_AREA_CODE  	/* 사업지역코드 */
+		    ,A.OWNER_NO        	/* 소유자번호 */
+		    ,A.LDGMNT_SN       	/* 공탁일련번호 */
+		    ,A.ZIP_DEPOSITARY  	/* 우편번호_피공탁자 */
+		    ,A.ADRES_DEPOSITARY 	/* 주소_피공탁자 */
+		    ,A.DESPOSITARY_TLPHON  	/* 전화번호 */
+		    ,A.LDGMNT_DE       	/* 공탁일자 */
+		    ,A.LDGMNT_AMOUNT   	/* 공탁금액 */
+		    ,A.LDGMNT_REASON   	/* 공탁이유 */
+		    ,A.REWARD_STLE     	/* 보상형태 */
+		    ,A.LDGMNT_BANK      /* 은행코드 */
+		    ,A.NM_AGENT        	/* 성명_대리인 */
+		    ,A.TELNO_AGENT     	/* 전화번호_대리인 */
+		    ,A.ADRES_AGENT     	/* 주소_대리인 */
+		    ,B.OWNER_NM AS NM
+    		,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM
+    		,A.FILE_SN
+		FROM TBCMP_LDGMNT A, TBCMP_OWNER B
+		WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   A.OWNER_NO = #OWNER_NO#
+		AND   A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		AND   A.OWNER_NO = B.OWNER_NO
+	</select>
+
+	<insert id="CMP060100DAO.ldgmntC" parameterClass="java.util.Map">
+		INSERT INTO TBCMP_LDGMNT(
+			 BSNS_AREA_CODE  	/* 사업지역코드 */
+		    ,OWNER_NO        	/* 소유자번호 */
+		    ,LDGMNT_SN       	/* 공탁일련번호 */
+		    ,ZIP_DEPOSITARY  	/* 우편번호_피공탁자 */
+		    ,ADRES_DEPOSITARY 	/* 주소_피공탁자 */
+		    ,DESPOSITARY_TLPHON	/* 전화번호 */
+		    ,LDGMNT_DE       	/* 공탁일자 */
+		    ,LDGMNT_AMOUNT   	/* 공탁금액 */
+		    ,LDGMNT_REASON   	/* 공탁이유 */
+		    ,REWARD_STLE     	/* 보상형태 */
+		    ,LDGMNT_BANK       	/* 은행 */
+		    ,NM_AGENT        	/* 성명_대리인 */
+		    ,TELNO_AGENT     	/* 전화번호_대리인 */
+		    ,ADRES_AGENT     	/* 주소_대리인 */
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)VALUES(
+			 #BSNS_AREA_CODE#
+			,#OWNER_NO#
+			,(SELECT NVL(MAX(LDGMNT_SN), 0) + 1 FROM TBCMP_LDGMNT)
+			,#ZIP_DEPOSITARY#
+			,#ADRES_DEPOSITARY#
+			,#DESPOSITARY_TLPHON#
+			,#LDGMNT_DE#
+			,#LDGMNT_AMOUNT#
+			,#LDGMNT_REASON#
+			,#REWARD_STLE#
+			,#LDGMNT_BANK#
+			,#NM_AGENT#
+			,#TELNO_AGENT#
+			,#ADRES_AGENT#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+
+	<update id="CMP060100DAO.ldgmntU" parameterClass="java.util.Map">
+		UPDATE TBCMP_LDGMNT SET
+			 LDGMNT_SN = #LDGMNT_SN#
+			,ZIP_DEPOSITARY = #ZIP_DEPOSITARY#
+			,ADRES_DEPOSITARY = #ADRES_DEPOSITARY#
+			,DESPOSITARY_TLPHON = #DESPOSITARY_TLPHON#
+			,LDGMNT_DE = #LDGMNT_DE#
+			,LDGMNT_AMOUNT = #LDGMNT_AMOUNT#
+			,LDGMNT_REASON = #LDGMNT_REASON#
+			,REWARD_STLE = #REWARD_STLE#
+			,LDGMNT_BANK = #LDGMNT_BANK#
+			,NM_AGENT = #NM_AGENT#
+			,TELNO_AGENT = #TELNO_AGENT#
+			,ADRES_AGENT = #ADRES_AGENT#
+			,UPDUSR_ID = #S_USER_ID#
+		    ,UPDT_DT = SYSDATE
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#
+		AND   LDGMNT_SN = #LDGMNT_SN#
+	</update>
+
+	<delete id="CMP060100DAO.ldgmntD" parameterClass="java.util.Map">
+		DELETE FROM TBCMP_LDGMNT
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#
+		AND   LDGMNT_SN = #LDGMNT_SN#
+	</delete>
+
+	<!-- 첨부파일 목록 -->
+	<select id="CMP060100DAO.ldgmntAtchList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT A.LDGMNT_SN, 
+		       B.FILE_ORDR AS PHOTO_NO, 
+		       A.BSNS_AREA_CODE, 
+		       B.ORGINL_FILE_NM AS FILE_NM, 
+		       B.FILE_SN || '|' || B.FILE_ORDR AS COURS_NM, 
+		       DECODE(REGEXP_SUBSTR(FILE_TY, '[^/]+', 1, 1), 'image', '1', '2') AS PHOTO_SE, 
+		       SUBSTR(B.ORGINL_FILE_NM, INSTR(B.ORGINL_FILE_NM, '.') + 1, LENGTH(B.ORGINL_FILE_NM)) AS FILE_EXTSN , 
+		       B.FILE_SN, 
+		       B.FILE_ORDR 
+		  FROM TBCMP_LDGMNT A, 
+		       TBCOM_CMMN_ATCHMNFL B 
+		 WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		       AND A.OWNER_NO = #OWNER_NO# 
+		       AND A.LDGMNT_SN = #LDGMNT_SN# 
+		       AND A.FILE_SN = B.FILE_SN
+		ORDER BY B.FILE_ORDR
+	</select>
+
+	<!-- 첨부파일 생성 -->
+	<insert id="CMP060100DAO.ldgmntAtchC" parameterClass="java.util.Map">
+		UPDATE TBCMP_LDGMNT 
+		       SET FILE_SN = #FILE_SN# ,
+		       UPDUSR_ID = #S_USER_ID# ,
+		       UPDT_DT = SYSDATE 
+		 WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		       AND OWNER_NO = #OWNER_NO# 
+		       AND LDGMNT_SN = #LDGMNT_SN# 
+	</insert>
+
+	<!-- 첨부파일 삭제 -->
+	<delete id="CMP060100DAO.ldgmntAtchD" parameterClass="java.util.Map">
+		UPDATE TBCMP_LDGMNT 
+		       SET FILE_SN = null ,
+		       UPDUSR_ID = #S_USER_ID# ,
+		       UPDT_DT = SYSDATE 
+		 WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		       AND OWNER_NO = #OWNER_NO# 
+		       AND LDGMNT_SN = #LDGMNT_SN# 
+	</delete>
+</sqlMap>

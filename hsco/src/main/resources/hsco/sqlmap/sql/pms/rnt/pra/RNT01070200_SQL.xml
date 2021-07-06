@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01070200_SQL">	
+   <!--  설명  : 보증금지원관리
+		작성자 : 지효정 -->
+	<!-- 지원금 목록 -->
+	<select id="RNT01070200DAO.gtnSportList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT01070200DAO.gtnSportList */
+		SELECT 
+			 A.CNTRCTR_NO			/*계약번호*/
+		    ,A.RENT_HOUSE_CODE		/*주택코드*/
+			,B.RENT_HOUSE_NM		/*주택명*/
+		    ,A.DONG					/*동*/
+		    ,A.HO					/*호*/
+		    ,C.NM					/*계약자명*/
+		    ,SFCOM_DEC_ALL(C.IHIDNUM) AS IHIDNUM		/*주민번호*/
+		    ,C.TELNO				/*전화번호*/
+		    ,C.MBTLNO				/*휴대폰번호*/
+		    ,E.ADRES ||' ' || E.ADRES_DETAIL || ' ' || TO_NUMBER(A.DONG) || '동 ' || TO_NUMBER(A.HO) || '호' AS ADRES	/*주소*/
+		    ,(SELECT MAX(GDCC_SNDNG_DE) FROM TBRNT_MVN_WAITR W WHERE CNTRCTR_NO = A.CNTRCTR_NO) AS GDCC_SNDNG_DE	/*발송일자*/
+		    ,A.FRST_CNTRCT_DE       /*최초계약일자*/
+		    ,A.CNTRCT_DE			/*계약일자*/
+		    ,A.CANCL_DE				/*해약일자*/
+		    ,A.SPORT_AMOUNT			/*신청지원금*/
+		    ,(SELECT SUM(RQEST_AMOUNT) FROM TBRNT_GTN_SPORT WHERE CNTRCTR_NO = A.CNTRCTR_NO) AS SPORT_RCIV_AMOUNT	/*납부지원금*/
+		    ,E.SCNT					/*지원기간*/
+		    ,E.WAMT					/*월상환액*/
+		    ,E.MCNT					/*체납횟수*/
+			,(SELECT SUM(RQEST_AMOUNT) FROM TBRNT_GTN_SPORT  WHERE CNTRCTR_NO = A.CNTRCTR_NO AND RCIV_DE IS NOT NULL
+			        AND RCIV_DE BETWEEN NVL(#stRcivDe#, '19000101') AND NVL(#edRcivDe#, '99991231')
+			 ) AS TOT_SPORT_RCIV_AMOUNT	/*상환총액*/
+		FROM 
+			 TBRNT_RENT_CNTRCT A
+		    ,TBRNT_RENT_HOUSE B
+		    ,TBRNT_RENT_HOUSE_DONG E
+		    ,TBRNT_PRMANENT_RENT_CSTMR C
+		    ,(
+		    	SELECT 
+		        	CNTRCTR_NO
+		            , MIN(RQEST_AMOUNT) AS PAY_AMT
+		            , MAX(RQEST_AMOUNT) AS WAMT
+		            , COUNT(1) AS SCNT
+		            , SUM(CASE WHEN PAY_TMLMT <![CDATA[<=]]> TO_CHAR(SYSDATE,'YYYYMMDD') AND RCIV_DE IS NULL THEN 1 ELSE 0 END) AS MCNT  
+		          FROM TBRNT_GTN_SPORT 
+		          GROUP BY CNTRCTR_NO
+		    ) E
+		WHERE A.RENT_HOUSE_CODE  = B.RENT_HOUSE_CODE
+		AND   A.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO
+		AND   A.CNTRCTR_NO = E.CNTRCTR_NO(+)
+		AND   A.RENT_HOUSE_CODE = E.RENT_HOUSE_CODE(+)
+		AND   A.DONG = E.DONG(+)
+		AND   A.SPORT_AMOUNT > 0 
+		<isNotEmpty property="rentHouseCode">
+		AND   A.RENT_HOUSE_CODE like #rentHouseCode#
+		</isNotEmpty>
+		AND   A.FRST_CNTRCT_DE BETWEEN NVL(#stCntrctDe#, '19000101') AND NVL(#edCntrctDe#, '99991231')
+		AND   B.HOUSE_SE = 'R1'		
+		ORDER BY RENT_HOUSE_CODE, DONG, HO
+	</select>
+
+
+	<!-- 보증금지원 대기자 목록 -->
+	<select id="RNT01070200DAO.waiterGtnSportList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT01070200DAO.waiterGtnSportList[보증금지원 대기자 목록] */
+		SELECT C.RENT_HOUSE_NM,
+			   A.RENT_HOUSE_CODE,
+			   A.DONG,
+			   A.HO,
+			   D.NM,
+			   SFCOM_DEC_ALL(D.IHIDNUM) AS IHIDNUM,			/*주민번호*/
+			   D.TELNO,										/*전화번호*/
+			   D.MBTLNO,									/*휴대폰번호*/
+			   DECODE(A.CNTRCTR_NO, NULL, D.ADRES ||' ' || D.ADRES_DETAIL
+										, E.ADRES ||' ' || E.ADRES_DETAIL || ' ' || TO_NUMBER(A.DONG) || '동 ' || TO_NUMBER(A.HO) || '호') AS ADRES,		/*주소*/
+			   A.GDCC_SNDNG_DE,
+			   B.CNTRCT_DE, 
+			   B.CANCL_DE,
+			   B.SPORT_AMOUNT,
+			   B.FRST_CNTRCT_DE
+		  FROM TBRNT_MVN_WAITR A
+		  LEFT JOIN TBRNT_RENT_CNTRCT B
+			ON B.CNTRCTR_NO = A.CNTRCTR_NO
+		 INNER JOIN TBRNT_RENT_HOUSE C
+			ON C.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		   AND C.HOUSE_SE = 'R1'
+		  LEFT JOIN TBRNT_RENT_HOUSE_DONG E
+		    ON E.RENT_HOUSE_CODE  = A.RENT_HOUSE_CODE
+		   AND E.DONG  = A.DONG
+		 INNER JOIN TBRNT_PRMANENT_RENT_CSTMR D
+			ON D.PRMANENT_CSTMR_NO = A.PRMANENT_CSTMR_NO
+		 WHERE 1 = 1
+		   AND NVL(A.SPORT_TRGET_AT,'0') = '1'
+		<isNotEmpty property="rentHouseCode">
+		   AND A.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		 ORDER BY RENT_HOUSE_CODE, DONG, HO
+	</select>
+</sqlMap>

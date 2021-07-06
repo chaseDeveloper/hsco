@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj03">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBACC_ACCNUT_ACNT_SBJECT		회계계정과목
+		 R   : TBPRJ_DLRY_STDR_CODE			배부기준코드
+		 R   : TBPRJ_INDRCT_SM				간접비집계
+		 R   : TBPRJ_DLRY_STDR_RATE			배부기준비율
+		CRUD : TBPRJ_INDRCT_DLRY			간접비배부
+
+
+		 R   : TBACC_ACCNUT_ACNT_SBJECT	계정코드
+		 R   : TBPRJ_DLRY_ACNT_MAPNG	배부계정맵핑
+		 R   : TBPRJ_INDRCT_SM			간접비집계
+		 R   : TBPRJ_DLRY_STDR_RATE		배부기준비율
+		CRUD : TBPRJ_INDRCT_DLRY		간접비배부(계정별)
+		CRUD : TBPRJ_INDRCT_DLRY		간접비배부(사업별)
+	-->
+
+	<!-- 간접비집계 ================================================== -->
+
+	<!-- 간접비집계 조회 -->
+	<select id="PRJ030203.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.ACCNUT_ACNT_CODE		/* 회계계정코드 */
+	,DM.DLRY_STDR_CODE		/* 배부기준코드 */
+	,AC.ACCNUT_ACNT_NM		/* 계정과목명 */
+	,DC.DLRY_STDR_NM		/* 배부기준명 */
+	,DC.COMPUT_STDR			/* 산출기준 */
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 배부 */
+	,B.AMT					/* 실적간접비 */
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 집계 */
+	,A.AMT					/* 실적금액 */
+</isEqual>
+FROM (
+	SELECT
+		 ACCNUT_YEAR			/* 회계년도 */
+		,ACCNUT_ACNT_CODE		/* 회계계정코드 */
+		,SUM(ACMSLT_AMOUNT) AS AMT	/* 실적금액 */
+	FROM TBPRJ_INDRCT_SM			/* 간접비집계 */
+	WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+	GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+) A
+LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT AC		/* 회계계정과목 */
+  ON A.ACCNUT_YEAR = AC.ACCNUT_YEAR
+ AND A.ACCNUT_ACNT_CODE = AC.ACCNUT_ACNT_CODE
+LEFT JOIN TBPRJ_DLRY_ACNT_MAPNG DM			/* 배부계정맵핑 */
+  ON A.ACCNUT_YEAR = DM.STDR_YEAR
+ AND A.ACCNUT_ACNT_CODE = DM.ACNT_CODE
+LEFT JOIN TBPRJ_DLRY_STDR_CODE DC			/* 배부기준코드 */
+  ON DC.STDR_YEAR = DM.STDR_YEAR
+ AND DC.DLRY_STDR_CODE = DM.DLRY_STDR_CODE
+LEFT JOIN (
+	SELECT
+		 ACNT_CODE					/* 계정코드 */
+		,DLRY_STDR_CODE				/* 배부기준코드 */
+		,SUM(DLRY_AMOUNT) AS AMT	/* 배부금액 */
+	FROM TBPRJ_INDRCT_DLRY					/* 간접비배부 */
+	WHERE BSNS_YM LIKE #ACCNUT_YEAR#||'%'
+	GROUP BY ACNT_CODE, DLRY_STDR_CODE
+) B ON A.ACCNUT_ACNT_CODE = B.ACNT_CODE
+   AND DM.DLRY_STDR_CODE = B.DLRY_STDR_CODE
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#			/* 직접비 */
+ORDER BY 1,2,3
+	</select>
+
+	<!-- 간접비배부 삭제 -->
+	<delete id="PRJ030203.mD" parameterClass="map">
+DELETE FROM TBPRJ_INDRCT_DLRY			/* 간접비배부 */
+WHERE BSNS_YM LIKE #ACCNUT_YEAR#||'%'		/* 회계년도 */
+	</delete>
+
+	<!-- 간접비집계 조회(계정별 월별) ================================================== -->
+
+	<select id="PRJ030203.rList" parameterClass="map" resultClass="hashmap">
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 배부 */
+SELECT
+	 A.BSNS_YM						/* 사업년월 */
+	,SUM(A.ACMSLT_AMOUNT) AS AMT	/* 실적금액 */
+FROM TBPRJ_INDRCT_SM A			/* 간접비집계 */
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#		/* 회계년도 */
+  AND A.ACCNUT_ACNT_CODE = #ACCNUT_ACNT_CODE#	/* 회계계정코드 */
+GROUP BY A.BSNS_YM
+ORDER BY 1
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 집계 */
+SELECT
+	 A.BSNS_YM						/* 사업년월 */
+	,SUM(A.ACMSLT_AMOUNT) AS AMT	/* 실적금액 */
+FROM TBPRJ_INDRCT_SM A			/* 간접비집계 */
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#		/* 회계년도 */
+  AND A.ACCNUT_ACNT_CODE = #ACCNUT_ACNT_CODE#	/* 회계계정코드 */
+GROUP BY A.BSNS_YM
+ORDER BY 1
+</isEqual>
+	</select>
+
+	<!-- 간접비집계 조회(사업별) ================================================== -->
+
+	<select id="PRJ030203.r2List" parameterClass="map" resultClass="hashmap">
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 배부 */
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,DM.DLRY_STDR_CODE		/* 배부기준코드 */
+	,DR.DLRY_RT_STDR		/* 배부율기준 */
+	,DR.DLRY_RT				/* 배부율 */
+
+	,A.AMT					/* 배부금액 */
+	,BC.BSNS_NM				/* 사업명 */
+	,BC.BSNS_TY				/* 사업유형 */
+FROM (
+	SELECT
+		 SUBSTR(BSNS_YM,1,4) AS STDR_YEAR
+		,BSNS_CODE					/* 사업코드 */
+		,DLRY_STDR_CODE				/* 배부기준코드 */
+		,ACNT_CODE					/* 회계계정코드 */
+		,SUM(DLRY_AMOUNT) AS AMT	/* 배부금액 */
+	FROM TBPRJ_INDRCT_DLRY				/* 간접비배부 */
+	GROUP BY SUBSTR(BSNS_YM,1,4), BSNS_CODE, DLRY_STDR_CODE, ACNT_CODE
+) A
+LEFT JOIN TBPRJ_BSNS_CODE BC			/* 사업코드 */
+  ON BC.BSNS_CODE = A.BSNS_CODE
+LEFT JOIN TBPRJ_DLRY_ACNT_MAPNG DM			/* 배부계정맵핑 */
+  ON DM.STDR_YEAR = A.STDR_YEAR			/* 기준년도 */
+ AND DM.ACNT_CODE = A.ACNT_CODE			/* 회계계정코드 */
+LEFT JOIN TBPRJ_DLRY_STDR_RATE DR			/* 배부기준비율 */
+  ON DR.STDR_YEAR = #ACCNUT_YEAR#		/* 기준년도 */
+ AND DR.BSNS_CODE = A.BSNS_CODE			/* 사업코드 */
+ AND DR.BSNS_TY = BC.BSNS_TY			/* 사업유형 */
+ AND DR.DLRY_STDR_CODE = DM.DLRY_STDR_CODE	/* 배부기준코드 */
+WHERE A.STDR_YEAR = #ACCNUT_YEAR#
+  AND A.ACNT_CODE = #ACCNUT_ACNT_CODE#	/* 회계계정코드 */
+ORDER BY 1,2,3
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 집계 */
+SELECT
+	 DR.BSNS_CODE			/* 사업코드 */
+	,DM.DLRY_STDR_CODE		/* 배부기준코드 */
+	,DR.DLRY_RT_STDR		/* 배부율기준 */
+	,DR.DLRY_RT				/* 배부율 */
+
+	,ROUND(A.S_AMT * DR.DLRY_RT / 100) AS AMT	/* 배부금액 */
+	,A.S_AMT				/* 배부총액 */
+	,BC.BSNS_NM				/* 사업명 */
+	,BC.BSNS_TY				/* 사업유형 */
+FROM (
+	SELECT
+		 ACCNUT_YEAR					/* 기준년도 */
+		,ACCNUT_ACNT_CODE				/* 회계계정코드 */
+		,DLRY_STDR_CODE					/* 배부기준코드 */
+		,SUM(ACMSLT_AMOUNT) AS S_AMT	/* 배부총액 */
+	FROM TBPRJ_INDRCT_SM							/* 간접비집계 */
+	GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE, DLRY_STDR_CODE
+) A
+LEFT JOIN TBPRJ_DLRY_ACNT_MAPNG DM					/* 배부계정맵핑 */
+  ON DM.STDR_YEAR = A.ACCNUT_YEAR			/* 기준년도 */
+ AND DM.ACNT_CODE = A.ACCNUT_ACNT_CODE		/* 회계계정코드 */
+LEFT JOIN TBPRJ_DLRY_STDR_RATE DR					/* 배부기준비율 */
+  ON DR.STDR_YEAR = A.ACCNUT_YEAR			/* 기준년도 */
+ AND DR.DLRY_STDR_CODE = DM.DLRY_STDR_CODE	/* 배부기준코드 */
+LEFT JOIN TBPRJ_BSNS_CODE BC				/* 사업코드 */
+  ON BC.BSNS_CODE = DR.BSNS_CODE
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#				/* 기준년도 */
+  AND A.ACCNUT_ACNT_CODE = #ACCNUT_ACNT_CODE#	/* 회계계정코드 */
+  AND DR.BSNS_CODE IS NOT NULL
+ORDER BY 1,2,3
+</isEqual>
+	</select>
+
+	<!-- 간접비배부 생성 ================================================== -->
+
+	<insert id="PRJ030203.make" parameterClass="map">
+INSERT INTO TBPRJ_INDRCT_DLRY (			/* 간접비배부 */
+	 BSNS_CODE			/* 사업코드 */
+	,BSNS_YM			/* 사업년월 */
+	,ACNT_CODE			/* 계정코드 */
+	,DLRY_STDR_CODE		/* 배부기준코드 */
+
+	,BSNSBY_AMOUNT			/* 사업별금액 */
+	,DLRY_AMOUNT			/* 배부금액 */
+
+	,REGISTER_ID
+	,REGIST_DT
+	,UPDUSR_ID
+	,UPDT_DT
+)
+SELECT
+	 DR.BSNS_CODE			/* 사업코드 */
+	,A.BSNS_YM				/* 사업년월 */
+	,A.ACCNUT_ACNT_CODE		/* 회계계정코드 */
+	,DM.DLRY_STDR_CODE		/* 배부기준코드 */
+
+	,NULL
+	,ROUND(A.S_AMT * DR.DLRY_RT / 100) AS AMT	/* 배부금액 */
+
+	,#S_USER_ID#
+	,SYSDATE
+	,#S_USER_ID#
+	,SYSDATE
+FROM (
+	SELECT
+		 ACCNUT_YEAR					/* 기준년도 */
+		,BSNS_YM						/* 사업년월 */
+		,ACCNUT_ACNT_CODE				/* 회계계정코드 */
+		,DLRY_STDR_CODE					/* 배부기준코드 */
+		,SUM(ACMSLT_AMOUNT) AS S_AMT	/* 배부총액 */
+	FROM TBPRJ_INDRCT_SM							/* 간접비집계 */
+	GROUP BY ACCNUT_YEAR, BSNS_YM, ACCNUT_ACNT_CODE, DLRY_STDR_CODE
+) A
+LEFT JOIN TBPRJ_DLRY_ACNT_MAPNG DM					/* 배부계정맵핑 */
+  ON DM.STDR_YEAR = A.ACCNUT_YEAR			/* 기준년도 */
+ AND DM.ACNT_CODE = A.ACCNUT_ACNT_CODE		/* 회계계정코드 */
+LEFT JOIN TBPRJ_DLRY_STDR_RATE DR					/* 배부기준비율 */
+  ON DR.STDR_YEAR = A.ACCNUT_YEAR			/* 기준년도 */
+ AND DR.DLRY_STDR_CODE = DM.DLRY_STDR_CODE	/* 배부기준코드 */
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#				/* 기준년도 */
+  AND DR.BSNS_CODE IS NOT NULL
+ORDER BY 1,2,3,4
+	</insert>
+
+</sqlMap>

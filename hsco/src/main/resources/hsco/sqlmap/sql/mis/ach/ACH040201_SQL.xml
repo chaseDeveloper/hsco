@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH040201_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>	
+	
+	<!-- 쿼리명 : 관점별 Dash-Board 조회
+	설명 : 전략맵 조회  쿼리
+	수정일  수정자  수정내용
+	작성자 : 양성모
+	최초작성일 : 2017.08.04
+	-->
+	<select id="ACH040201DAO.selectListMst" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH V_SETUP AS 
+		       (SELECT A.EVL_YEAR
+		             , A.ODR_SE
+		             , A.CUR_MT
+		             , B.SEQ
+		        FROM TBACH_EVL_ODR A
+		           , TBACH_EVL_SM_STDR B
+		        WHERE 1=1
+		          AND A.EVL_YEAR = B.EVL_YEAR
+		          AND A.ODR_SE   = B.ODR_SE
+		          AND B.APPLC_AT = '1'
+		          AND A.EVL_YEAR = #EVL_YEAR#
+		          AND A.ODR_SE   = #ODR_SE#
+		       ) 
+		SELECT
+	    	 C.EVL_YEAR                   AS EVL_YEAR                 
+	    	,C.ODR_SE                     AS ODR_SE
+            ,C.IX_CODE                    AS IX_CODE                                 
+			,LPAD(' ', 3)    || C.IX_NM     AS IX_NM   
+			,C.IX_SE                      AS IX_SE                    
+			,C.UPPER_IX_CODE              AS UPPER_IX_CODE            
+			,C.VIEWPOINT_SE               AS VIEWPOINT_SE
+		    ,CASE NVL( C.UPPER_IX_CODE, '0')
+		          WHEN '0' <!-- 공사전체 -->
+		          THEN 
+		              (SELECT ROUND( SUM(NVL(K.ACMTL_ACMSLT,0)) / SUM(K.ACMTL_GOAL) * 100 ,2)
+		                 FROM TBACH_EVL_SM_DETAIL K 
+		                WHERE 1=1 
+	                      AND K.EVL_YEAR = C.EVL_YEAR 
+	                      AND K.ODR_SE = C.ODR_SE
+	                      AND K.SEQ = V.SEQ
+	                      AND K.MT_SE = V.CUR_MT
+	                   <isNotEmpty property = "ORGNZT_CODE"> 
+	                      AND K.ORGNZT_CODE = #ORGNZT_CODE#
+	                   </isNotEmpty>
+		                GROUP BY K.EVL_YEAR, K.ODR_SE
+		               )
+		           WHEN '00000'   <!-- 관점 -->
+		           THEN 
+		               ( SELECT ROUND( SUM(NVL(K.ACMTL_ACMSLT,0)) / SUM(K.ACMTL_GOAL) * 100 ,2)
+		                   FROM TBACH_EVL_SM_DETAIL K 
+		                  WHERE 1=1 
+	                        AND K.EVL_YEAR = C.EVL_YEAR 
+	                        AND K.ODR_SE = C.ODR_SE
+	                        AND K.SEQ       = V.SEQ
+	                        AND K.MT_SE = V.CUR_MT
+	                        AND K.V_IX_CODE = C.IX_CODE
+		                   <isNotEmpty property = "ORGNZT_CODE"> 
+		                    AND K.ORGNZT_CODE = #ORGNZT_CODE#
+		                   </isNotEmpty>
+		                  GROUP BY K.EVL_YEAR, K.ODR_SE, K.V_IX_CODE
+		               )
+		           ELSE   <!-- 전략목표 -->
+		              NVL((SELECT CASE WHEN SUM(K.ACMTL_GOAL) = 0 AND SUM(NVL(K.ACMTL_ACMSLT,0)) <![CDATA[ <> ]]> 0
+		                           THEN SUM(NVL(K.ACMTL_ACMSLT,0))
+		                           ELSE ROUND( SUM(NVL(K.ACMTL_ACMSLT,0)) / SUM(K.ACMTL_GOAL) * 100 ,2)
+		                      END 
+		                 FROM TBACH_EVL_SM_DETAIL K 
+		                WHERE 1=1 
+	                      AND K.EVL_YEAR = C.EVL_YEAR 
+	                      AND K.ODR_SE = C.ODR_SE
+	                      AND K.SEQ       = V.SEQ
+	                      AND K.MT_SE = V.CUR_MT
+	                      AND K.S_IX_CODE = C.IX_CODE 
+	                   <isNotEmpty property = "ORGNZT_CODE"> 
+	                      AND K.ORGNZT_CODE = #ORGNZT_CODE#
+	                   </isNotEmpty>
+		                GROUP BY K.EVL_YEAR, K.ODR_SE, K.V_IX_CODE, K.S_IX_CODE 
+		               ),0)                
+		           END AS ACHIV_RT
+    		FROM TBACH_KPI C
+    		   , V_SETUP V
+    	   WHERE 1=1
+			 AND C.EVL_YEAR = V.EVL_YEAR
+			 AND C.ODR_SE = V.ODR_SE
+	  	     AND C.USE_AT = '1'
+             <![CDATA[    
+             AND TO_NUMBER(C.IX_SE) <= TO_NUMBER('002')
+             ]]>
+	  	   START WITH C.IX_CODE = '00000'
+		 CONNECT BY PRIOR C.IX_CODE = C.UPPER_IX_CODE
+    </select> 
+    
+</sqlMap>

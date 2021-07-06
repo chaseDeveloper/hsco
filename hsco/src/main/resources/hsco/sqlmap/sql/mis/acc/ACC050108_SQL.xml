@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050108_SQL">	
+	
+	<!-- 지출결의내역 -->
+	<select id="ACC050108DAO.expDsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+		      t1.ITNC_DE      				/*결의일자*/
+		     ,t1.DET_DCSN_DE  				/*채무확정일자*/
+		     ,t1.CPTAL_EXPNDTR_ACNTBK_DE  	/*자금지출*/
+		     ,t1.ANACT_KND					/*결의서구분*/
+		     ,t1.DECSN_YEAR					/*결의년도*/
+		     ,t1.DECSN_NO 					/*결의번호*/
+		     ,t1.SUMRY  					/*적요*/
+		     ,t1.DECSN_AMOUNT 				/*금액*/
+		     ,t2.RCPT_MAN 					/*채주*/
+		     ,t3.DEPT_NM               /*부서명*/
+		FROM TBACC_EXP_DSN_MASTR t1
+		     LEFT OUTER JOIN 
+		     (SELECT DECSN_YEAR
+		           , DECSN_NO
+		           , MAX(RCPT_MAN) || CASE WHEN COUNT(1) > 1 THEN ' 외 '||(COUNT(1) -1)||'명' ELSE NULL END AS RCPT_MAN
+		      FROM TBACC_EXP_DSN_DETAIL
+		      GROUP BY DECSN_YEAR, DECSN_NO
+		     ) t2
+		     ON  t1.DECSN_YEAR = t2.DECSN_YEAR
+		     AND t1.DECSN_NO   = t2.DECSN_NO
+		     LEFT OUTER JOIN VWHRM_DEPT t3
+		     ON  t1.DEPT_CODE = t3.DEPT_CODE
+		     LEFT OUTER JOIN VIEW_MIS_SANCTN_KND@DL_INTRACITY t4
+     		 ON  t1.SANCTN_NO = t4.SANCTN_NO
+		WHERE 1=1
+		<isNotEmpty property="DEPT_CODE">
+            <isNotEqual property="DEPT_CODE" compareValue="000000">
+          AND t1.DEPT_CODE = #DEPT_CODE#
+            </isNotEqual>
+        </isNotEmpty>
+        <isNotEmpty property="ANACT_KND">
+       	  AND t1.ANACT_KND = #ANACT_KND#
+        </isNotEmpty>
+		<isEqual property="STDR_DE" compareValue="1">
+		  AND t1.ITNC_DE BETWEEN #SRCH_ST_DE# AND #SRCH_ED_DE#		/* 결의일자			*/
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="2">
+		  AND t1.DET_DCSN_DE BETWEEN #SRCH_ST_DE# AND #SRCH_ED_DE#	/* 채무확정일자		*/
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="3">
+		  AND t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DE# AND #SRCH_ED_DE#	/* 자금지출일자		*/
+		</isEqual>
+		<isNotEmpty property="SEARCH_TEXT">
+			<isEqual property="SEARCH_GUBUN" compareValue="1">
+				AND t1.CHECK_NO = #SEARCH_TEXT#							/* 수표번호			*/
+			</isEqual>
+			 <isEqual property="SEARCH_GUBUN" compareValue="2">
+			 	AND t1.DECSN_NO LIKE '%' || #SEARCH_TEXT# || '%'		/* 결의번호  			*/
+			</isEqual>
+			<isEqual property="SEARCH_GUBUN" compareValue="3">
+				AND t1.SUMRY LIKE '%' || #SEARCH_TEXT# || '%'		/*적요*/
+			</isEqual>
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+		  AND t1.BSNS_CODE = #BSNS_CODE#	/*사업코드*/
+		</isNotEmpty>
+		<isNotEmpty property="BUDGET_ACNT_CODE">
+		  AND t1.BUDGET_ACNT_CODE 	= #BUDGET_ACNT_CODE#	/*예산코드*/
+		</isNotEmpty>
+		<isNotEmpty property="NOCHIT_AT">
+		  <isEqual property="NOCHIT_AT" compareValue="1">
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM TBACC_CHIT_MASTR t4
+			WHERE t1.DECSN_YEAR = t4.DECSN_YEAR
+			  AND t1.DECSN_NO 	= t4.DECSN_NO
+			  AND t4.CHIT_SE 	= '2'
+		  )
+		  </isEqual>
+		</isNotEmpty>
+		<isNotEmpty property="MIN_AM">
+		  AND t1.DECSN_AMOUNT <![CDATA[>=]]> #MIN_AM#
+		</isNotEmpty>
+		<isNotEmpty property="MAX_AM">
+		  AND t1.DECSN_AMOUNT <![CDATA[<=]]> #MAX_AM#
+		</isNotEmpty>
+		  AND (t1.SANCTN_NO = '0' OR t4.SANCTN_KND = '5')
+		ORDER BY t1.DECSN_YEAR DESC, t1.CPTAL_EXPNDTR_ACNTBK_DE DESC NULLS FIRST, t1.DECSN_NO DESC
+	</select>
+	
+	<!-- 전표내역 -->
+	<select id="ACC050108DAO.chitMastrR" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+		   	 t1.CHIT_CONFM_AT   	/* 전표승인여부 */
+		    ,t1.CHIT_DE         	/* 전표일자 */
+		    ,t1.ACCNUT_YEAR			/* 회계년도	*/
+		    ,t1.CHIT_NO         	/* 전표번호 */
+		    ,t3.ACCNUT_ACNT_LIST  	/* 회계계정목록 */
+		    ,t1.DECSN_YEAR      	/* 결의년도 */
+		    ,t1.DECSN_NO        	/* 결의번호 */
+		    ,t1.CHIT_SE				/* 전표구분 */
+		    ,t1.CHIT_KND			/* 전표종류 */
+		    ,t1.CHIT_TY				/* 전표유형 */
+		    ,NVL(t1.CPTAL_EXPNDTR_DE, t5.CPTAL_EXPNDTR_ACNTBK_DE) AS CPTAL_EXPNDTR_DE	/* 자금지출일자 */
+		    ,t4.DEBTOR_AMOUNT   	/* 차변 */
+		    ,t4.CRDIT_AMOUNT    	/* 대변 */
+		    ,t1.SUMRY_1         	/* 적요1 */
+		    ,t1.SUMRY_2         	/* 적요2 */
+		    ,t1.BUDGET_YEAR			/* 예산년도 */      
+		    ,t1.BSNS_SE          	/* 사업구분 */
+		    ,t1.BALC_SE          	/* 수지구분 */
+		    ,t1.BUDGET_ACNT_CODE 	/* 예산코드 */
+		    ,t2.BUDGET_ACNT_NM2 AS BUDGET_ACNT_NM   	/* 예산명 */
+		    ,t1.EXPNDTR_UNIT_CODE	/* 부기코드 */
+		    ,t8.BUKIP_NM AS EXPNDTR_UNIT_NM  	/* 부기명 */
+		    ,t1.DEPT_CODE			/* 부서코드 */
+		    ,t5.ITNC_DE				/* 발의일자 */
+		    ,t5.DET_DCSN_DE			/* 채무확정일자 */
+		    ,t1.PRUF_SE_CODE		/* 지출증빙 */
+		    ,t6.DEPT_NM
+		    ,t7.BSNS_NM
+		FROM TBACC_CHIT_MASTR t1
+		     LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t2
+	         ON  t1.BUDGET_YEAR       = t2.YEAR
+	         AND t1.BSNS_SE           = t2.BSNS_SE
+	         AND t1.BALC_SE           = t2.BALC_SE
+	         AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+		     LEFT OUTER JOIN
+		     (SELECT 
+		           ACCNUT_YEAR
+		          ,CHIT_NO
+		          ,LISTAGG(ACCNUT_ACNT_NM,',') WITHIN GROUP(ORDER BY NULL) AS ACCNUT_ACNT_LIST
+		      FROM (
+		            SELECT
+		                 DISTINCT
+		                 b1.ACCNUT_YEAR
+		                ,b1.CHIT_NO
+		                ,b2.ACCNUT_ACNT_NM
+		            FROM TBACC_CHIT_DETAIL b1
+		                 LEFT OUTER JOIN
+		                 TBACC_ACCNUT_ACNT_SBJECT b2
+		                 ON  b1.ACCNUT_YEAR = b2.ACCNUT_YEAR
+		                 AND  b1.ACCNUT_ACNT_CODE = b2.ACCNUT_ACNT_CODE
+		          )
+		      GROUP BY ACCNUT_YEAR, CHIT_NO
+		     ) t3
+		     ON t1.ACCNUT_YEAR = t3.ACCNUT_YEAR
+		     AND t1.CHIT_NO = t3.CHIT_NO
+		    LEFT OUTER JOIN
+		    (SELECT 
+		         ACCNUT_YEAR
+		        ,CHIT_NO
+		        ,NVL(SUM(DEBTOR_AMOUNT),0) AS DEBTOR_AMOUNT
+		        ,NVL(SUM(CRDIT_AMOUNT),0) AS CRDIT_AMOUNT
+		     FROM TBACC_CHIT_DETAIL
+		     GROUP BY ACCNUT_YEAR, CHIT_NO
+		    ) t4
+		    ON t1.ACCNUT_YEAR = t4.ACCNUT_YEAR
+		    AND t1.CHIT_NO = t4.CHIT_NO
+		    LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t5
+		    ON t1.DECSN_YEAR = t5.DECSN_YEAR
+		  	AND t1.DECSN_NO = t5.DECSN_NO
+		  	LEFT OUTER JOIN TBHRM_DEPT t6
+			ON t1.DEPT_CODE = t6.DEPT_CODE
+			LEFT OUTER JOIN TBPRJ_BSNS_CODE t7
+			ON t1.BSNS_CODE = t7.BSNS_CODE
+		  	LEFT OUTER JOIN TBBDG_BUKIP_CODE t8
+	        ON  t1.EXPNDTR_UNIT_CODE = t8.BUKIP_CODE
+		WHERE t1.DECSN_YEAR = #DECSN_YEAR#
+		  AND t1.DECSN_NO 	= #DECSN_NO#
+		  AND t1.CHIT_SE = '2' /*1:수입, 2:지출, 3:대체*/
+		  AND NVL(t1.CHIT_TY, 1) = #CHIT_TY#		/*1:분개, 2:분개확정*/
+	</select>
+	
+	<!-- 전표상세 -->
+	<select id="ACC050108DAO.chitDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 t1.ACCNUT_YEAR				/* 회계년도 */
+			,t1.CHIT_NO                 /* 전표번호 */
+			,t2.SEQ                     /* 순번 */
+			,t2.ACCNUT_ACNT_CODE        /* 회계계정코드 */
+			,t3.ACCNUT_ACNT_NM          /* 회계계정명 */
+			,t2.DEBTOR_AMOUNT           /* 차변금액 */
+			,t2.CRDIT_AMOUNT            /* 대변금액 */
+			,t1.CHIT_DE                 /* 전표일자 */
+			,t1.SUMRY_1                 /* 적요 */
+			,t2.BCNC_CODE               /* 거래처코드 */
+			,t4.BCNC_NM                 /* 거래처명 */
+		    ,t2.FNNC_INSTT_CODE         /* 금융기관코드 */
+		    ,t6.FNNC_INSTT_CODE_NM      /* 금융기관명 */
+		    ,t2.ACNUTNO                 /* 계좌번호 */
+		FROM TBACC_CHIT_MASTR t1
+		     INNER JOIN TBACC_CHIT_DETAIL t2
+		     ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		     AND t1.CHIT_NO     = t2.CHIT_NO
+		     LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		     ON  t2.ACCNUT_YEAR       = t3.ACCNUT_YEAR
+		     AND t2.ACCNUT_ACNT_CODE  = t3.ACCNUT_ACNT_CODE
+		     LEFT OUTER JOIN TBCTR_BCNC_MASTR t4
+		     ON  t2.BCNC_CODE = t4.BCNC_CODE
+		     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t6
+		     ON  t2.FNNC_INSTT_CODE = t6.FNNC_INSTT_CODE
+		WHERE t1.DECSN_YEAR = #DECSN_YEAR#
+		  AND t1.DECSN_NO 	= #DECSN_NO#
+		  AND t1.CHIT_SE = '2' /*1:수입, 2:지출, 3:대체*/
+		  AND NVL(t1.CHIT_TY, 1) = #CHIT_TY#		/*1:분개, 2:분개확정*/
+		ORDER BY t2.SEQ
+	</select>
+	
+	
+	<parameterMap id="ACC050108DAO.expndtrSlipIMap" class="java.util.HashMap">
+		<parameter property="DECSN_YEAR"            jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="DECSN_NO"          	jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="S_USER_ID"          	jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="OUT_SLIP_NO" 			jdbcType="VARCHAR" javaType="java.lang.String" mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"        jdbcType="VARCHAR" javaType="java.lang.String" mode="OUT" />
+	</parameterMap>
+	
+	<!-- 지출전표생성 -->
+	<procedure id="ACC050108DAO.expndtrSlipI" parameterMap="ACC050108DAO.expndtrSlipIMap">
+		{ CALL SPACC_EXPNDTR_SLIP_I(?, ?, ?, ?, ?) }
+	</procedure>
+</sqlMap>

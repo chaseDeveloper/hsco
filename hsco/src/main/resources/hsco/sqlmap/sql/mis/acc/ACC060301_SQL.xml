@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC060301_SQL">
+	<!-- 구분회계코드 -->
+	<select id="ACC060301DAO.seAccnutAcntCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT SUBSTR(#YYYY#,1,4) ACCNUT_YEAR,
+			   '' AS  SE_ACCNUT_ACNT_CODE,
+		       '화성도시공사 전체' SE_ACCNUT_ACNT_NM,
+		       '' AS SE_ACCNUT_ACNT_CODENM		  
+		FROM DUAL
+		
+		UNION ALL
+		
+		SELECT 
+		    ACCNUT_YEAR 
+		  , SE_ACCNUT_ACNT_CODE
+		  , SE_ACCNUT_ACNT_NM
+		  , '['||SUBSTR(SE_ACCNUT_ACNT_CODE,1,3)||'-'|| 
+		    SUBSTR(SE_ACCNUT_ACNT_CODE,4,4)||'-'||
+		    SUBSTR(SE_ACCNUT_ACNT_CODE,8,2)||'-'||
+		    SUBSTR(SE_ACCNUT_ACNT_CODE,10,2)||']'||
+		    SE_ACCNUT_ACNT_NM AS SE_ACCNUT_ACNT_CODENM
+		FROM TBACC_SE_ACCNUT_ACNT_CODE
+		WHERE ACCNUT_YEAR = SUBSTR(#YYYY#,1,4)
+		ORDER BY SE_ACCNUT_ACNT_CODE NULLS FIRST
+	</select>
+	
+	<!-- 공급유형 조회 -->
+	<select id="ACC060301DAO.suplyTypeCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC060301DAO.suplyTypeCodeList*/]]>
+		SELECT '4' SE_ACC_CODE,
+			   '' AS  CODE,
+		       '화성도시공사 전체' CODE_NM,
+		       '1' USE_AT
+		FROM DUAL
+		
+		UNION ALL
+		
+		SELECT   t1.SE_ACC_CODE ,
+		         t1.CODE ,
+		         DECODE(t1.SE_ACC_CODE,'2',t2.BSNS_NM,t1.CODE_NM) AS CODE_NM ,
+		         t1.USE_AT
+		FROM     TBACC_SE_ACCNUT_ACNT_TY_MANAGE t1
+		         LEFT OUTER JOIN TBPRJ_BSNS_CODE t2
+		         ON       t1.CODE = t2.BSNS_CODE
+		WHERE    SE_ACC_CODE      = '3'
+		ORDER BY CODE NULLS FIRST
+	
+	
+	</select>
+	
+	<!-- 사업유형 조회 -->
+	<select id="ACC060301DAO.bsnsTypeCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC060301DAO.bsnsTypeCodeList*/]]>
+		SELECT '4' SE_ACC_CODE,
+			   '' AS  CODE,
+		       '화성도시공사 전체' CODE_NM,
+		       '1' USE_AT
+		FROM DUAL
+		
+		UNION ALL
+		
+		SELECT   t1.SE_ACC_CODE ,
+        		 t1.CODE ,
+		         DECODE(t1.SE_ACC_CODE,'2',t2.BSNS_NM,t1.CODE_NM) AS CODE_NM ,
+		         t1.USE_AT
+		FROM     TBACC_SE_ACCNUT_ACNT_TY_MANAGE t1
+		         LEFT OUTER JOIN TBPRJ_BSNS_CODE t2
+		         ON       t1.CODE = t2.BSNS_CODE
+		WHERE    SE_ACC_CODE      = '4'
+		ORDER BY CODE NULLS FIRST
+	</select>
+	
+	<!-- 구분회계 재무상태표 조회 -->
+	<select id="ACC060301DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC060301DAO.select*/]]>
+		WITH THIS_STACNT_T AS ( /*당기*/
+		    SELECT t1.ACCNUT_YEAR
+		         , CASE WHEN t1.ACCNUT_ACNT_CODE = '10000000' /*자산*/ THEN '13030990' /*자산총계*/
+		                WHEN t1.ACCNUT_ACNT_CODE = '20000000' /*부채*/ THEN '22070990' /*부채총계*/
+		                WHEN t1.ACCNUT_ACNT_CODE = '30000000' /*자본*/ THEN '32070990' /*자본총계*/
+		                ELSE t1.ACCNUT_ACNT_CODE
+		           END AS ACCNUT_ACNT_CODE
+		         , NVL(SUM(t1.DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(t1.CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNTSUM_SE t1
+		         INNER JOIN TBACC_SE_ACCNUT_ACNT_CODE t2
+		         ON  t1.ACCNUT_YEAR			= t2.ACCNUT_YEAR
+		         AND t1.SE_ACCNUT_ACNT_CODE	= t2.SE_ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR = SUBSTR(#ACCNUT_YM#,1,4)
+		    AND   t1.ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#ACCNUT_YM#,5,2) /*결산월*/
+		
+		<isNotEmpty property="SUPLY_TY">
+		    AND   t2.SUPLY_TY 		= #SUPLY_TY#
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_TY">
+		    AND   t2.BSNS_TY 		= #BSNS_TY#
+		</isNotEmpty>
+		
+		<!-- 2016.08.25 -->
+		<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+		    AND   t2.SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		</isNotEmpty>
+		
+		    GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE
+		    UNION ALL
+		    SELECT t1.ACCNUT_YEAR
+		         , CASE WHEN t1.ACCNUT_ACNT_CODE = '10000000' /*자산*/ THEN '13030990' /*자산총계*/
+		                WHEN t1.ACCNUT_ACNT_CODE = '20000000' /*부채*/ THEN '22070990' /*부채총계*/
+		                WHEN t1.ACCNUT_ACNT_CODE = '30000000' /*자본*/ THEN '32070990' /*자본총계*/
+		                ELSE t1.ACCNUT_ACNT_CODE
+		           END AS ACCNUT_ACNT_CODE
+		         , NVL(SUM(t1.DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(t1.CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNT_SE t1
+		         INNER JOIN TBACC_SE_ACCNUT_ACNT_CODE t2
+		         ON  t1.ACCNUT_YEAR			= t2.ACCNUT_YEAR
+		         AND t1.SE_ACCNUT_ACNT_CODE	= t2.SE_ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR = SUBSTR(#ACCNUT_YM#,1,4)
+		    AND   t1.ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#ACCNUT_YM#,5,2) /*결산월*/
+		
+		<isNotEmpty property="SUPLY_TY">
+		    AND   t2.SUPLY_TY 		= #SUPLY_TY#
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_TY">
+		    AND   t2.BSNS_TY 		= #BSNS_TY#
+		</isNotEmpty>
+		
+		<!-- 2016.08.25 -->
+		<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+		    AND   t2.SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		</isNotEmpty>
+		
+		    GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE
+		)
+		, PRE_STACNT_T AS (     /*전기*/
+		    SELECT t1.ACCNUT_YEAR 
+		         , CASE WHEN t1.ACCNUT_ACNT_CODE = '10000000' /*자산*/ THEN '13030990' /*자산총계*/
+		                WHEN t1.ACCNUT_ACNT_CODE = '20000000' /*부채*/ THEN '22070990' /*부채총계*/
+		                WHEN t1.ACCNUT_ACNT_CODE = '30000000' /*자본*/ THEN '32070990' /*자본총계*/
+		                ELSE t1.ACCNUT_ACNT_CODE
+		           END AS ACCNUT_ACNT_CODE
+		         , NVL(SUM(t1.DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(t1.CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNTSUM_SE t1
+		         INNER JOIN TBACC_SE_ACCNUT_ACNT_CODE t2
+		         ON  t1.ACCNUT_YEAR			= t2.ACCNUT_YEAR
+		         AND t1.SE_ACCNUT_ACNT_CODE	= t2.SE_ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR = SUBSTR(#ACCNUT_YM#, 0, 4)
+		    AND   t1.ACCNUT_MT   BETWEEN '00'/*이월*/ AND '00' /*결산월*/
+		
+		<isNotEmpty property="SUPLY_TY">
+		    AND   t2.SUPLY_TY 		= #SUPLY_TY#
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_TY">
+		    AND   t2.BSNS_TY 		= #BSNS_TY#
+		</isNotEmpty>
+		
+		<!-- 2016.08.25 -->
+		<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+		    AND   t2.SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		</isNotEmpty>
+		
+		
+		    GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE
+		    UNION ALL
+		    SELECT t1.ACCNUT_YEAR
+		         , CASE WHEN t1.ACCNUT_ACNT_CODE = '10000000' /*자산*/ THEN '13030990' /*자산총계*/
+		                WHEN t1.ACCNUT_ACNT_CODE = '20000000' /*부채*/ THEN '22070990' /*부채총계*/
+		                WHEN t1.ACCNUT_ACNT_CODE = '30000000' /*자본*/ THEN '32070990' /*자본총계*/
+		                ELSE t1.ACCNUT_ACNT_CODE
+		           END AS ACCNUT_ACNT_CODE
+		         , NVL(SUM(t1.DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(t1.CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNT_SE t1
+		         INNER JOIN TBACC_SE_ACCNUT_ACNT_CODE t2
+		         ON  t1.ACCNUT_YEAR			= t2.ACCNUT_YEAR
+		         AND t1.SE_ACCNUT_ACNT_CODE	= t2.SE_ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR = SUBSTR(#ACCNUT_YM#, 0, 4)
+		    AND   t1.ACCNUT_MT   BETWEEN '00'/*이월*/ AND '00' /*결산월*/
+		
+		<isNotEmpty property="SUPLY_TY">
+		    AND   t2.SUPLY_TY 		= #SUPLY_TY#
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_TY">
+		    AND   t2.BSNS_TY 		= #BSNS_TY#
+		</isNotEmpty>
+		
+		<!-- 2016.08.25 -->
+		<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+		    AND   t2.SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		</isNotEmpty>
+		
+		    GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE
+		)
+<![CDATA[
+SELECT   t1.ACCNUT_ACNT_CODE ,
+         MAX(NVL(t1.OUTPT_ACNT_NM, t1.ACCNUT_ACNT_NM)) AS ACCNUT_ACNT_NM ,(
+         CASE
+	       		  WHEN T1.ACNT_LEVEL >= 3
+                  THEN NVL(SUM(CASE WHEN t1.DBRT_SE = 'D' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '0' THEN t2.DR_AMT - t2.CR_AMT
+                                    WHEN t1.DBRT_SE = 'D' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '1' THEN t2.CR_AMT - t2.DR_AMT
+                                    WHEN t1.DBRT_SE = 'C' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '0' THEN t2.CR_AMT - t2.DR_AMT
+                                    WHEN t1.DBRT_SE = 'C' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '1' THEN t2.DR_AMT - t2.CR_AMT
+                                    ELSE 0
+                           END),0)
+                  ELSE 0
+         END) AS THSTRM_AMOUNT ,(
+         CASE
+        		  WHEN T1.ACNT_LEVEL < 3
+                  THEN NVL(SUM(CASE WHEN t1.DBRT_SE = 'D' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '0' THEN t2.DR_AMT - t2.CR_AMT
+                                    WHEN t1.DBRT_SE = 'D' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '1' THEN t2.CR_AMT - t2.DR_AMT
+                                    WHEN t1.DBRT_SE = 'C' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '0' THEN t2.CR_AMT - t2.DR_AMT
+                                    WHEN t1.DBRT_SE = 'C' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '1' THEN t2.DR_AMT - t2.CR_AMT
+                                    ELSE 0
+                           END),0)
+                  ELSE 0
+         END) AS THSTRM_SM ,(
+         CASE
+       			  WHEN T1.ACNT_LEVEL >= 3
+                  THEN NVL(SUM(CASE WHEN t1.DBRT_SE = 'D' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '0' THEN t3.DR_AMT - t3.CR_AMT
+                                    WHEN t1.DBRT_SE = 'D' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '1' THEN t3.CR_AMT - t3.DR_AMT
+                                    WHEN t1.DBRT_SE = 'C' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '0' THEN t3.CR_AMT - t3.DR_AMT
+                                    WHEN t1.DBRT_SE = 'C' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '1' THEN t3.DR_AMT - t3.CR_AMT
+                                    ELSE 0
+                           END),0)
+                  ELSE 0
+         END) AS FRMTRM_AMOUNT ,(
+         CASE
+                  WHEN T1.ACNT_LEVEL < 3 
+                  THEN NVL(SUM(CASE WHEN t1.DBRT_SE = 'D' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '0' THEN t3.DR_AMT - t3.CR_AMT
+                                    WHEN t1.DBRT_SE = 'D' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '1' THEN t3.CR_AMT - t3.DR_AMT
+                                    WHEN t1.DBRT_SE = 'C' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '0' THEN t3.CR_AMT - t3.DR_AMT
+                                    WHEN t1.DBRT_SE = 'C' AND NVL(t1.RSYMNEY_ACNT_AT,'0') = '1' THEN t3.DR_AMT - t3.CR_AMT
+                                    ELSE 0
+                           END),0)
+                  ELSE 0
+         END) AS FRMTRM_SM
+FROM     TBACC_ACCNUT_ACNT_SBJECT t1
+         LEFT OUTER JOIN THIS_STACNT_T t2
+         ON       t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+         AND      t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+         LEFT OUTER JOIN PRE_STACNT_T t3
+         ON       t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+WHERE    t1.ACCNUT_YEAR               = SUBSTR(#ACCNUT_YM#,1,4)
+AND      t1.ACCNUT_ACNT_CODE NOT IN ('32080999')
+AND      t1.ACNT_SE = '1'         /*재무상태표*/
+AND      t1.OUTPT_AT = '1'         /*출력여부*/
+AND      t1.ACNT_LEVEL <= 4
+GROUP BY t1.ACCNUT_YEAR ,
+         t1.ACNT_LEVEL,
+         t1.ACCNUT_ACNT_CODE ,
+         t1.RSYMNEY_ACNT_AT
+         
+       UNION ALL
+       
+		SELECT '32080999' AS ACCNUT_ACNT_CODE
+     		 , '[자본과부채총계]'  AS ACCNUT_ACNT_NM
+     		 , 0           			 AS THSTRM_AMOUNT
+		     , NVL(SUM(DECODE(t1.DBRT_SE, 'D', t2.DR_AMT - t2.CR_AMT, 'C', t2.CR_AMT - t2.DR_AMT ,t2.DR_AMT - t2.CR_AMT)),0)   AS THIS_STACNT_AMT
+		     ,  0          			 AS FRMTRM_AMOUNT
+     		 , NVL(SUM(DECODE(t1.DBRT_SE, 'D', t3.DR_AMT - t3.CR_AMT, 'C', t3.CR_AMT - t3.DR_AMT ,t3.DR_AMT - t3.CR_AMT)),0)   AS PRE_STACNT_AMT
+		FROM TBACC_ACCNUT_ACNT_SBJECT t1
+		  	 LEFT OUTER JOIN THIS_STACNT_T t2
+		  	 ON  t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+		  	 AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+		  	 LEFT OUTER JOIN PRE_STACNT_T t3
+		  	 ON  t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		WHERE t1.ACCNUT_YEAR = SUBSTR(#ACCNUT_YM#,1,4)
+		AND   t1.ACNT_SE  = '1' /*재무상태표*/
+		AND   t1.OUTPT_AT = '1' /*출력여부*/
+		AND   t1.ACCNUT_ACNT_CODE IN ('22070990','32070990')
+		GROUP BY t1.ACCNUT_YEAR
+		       , t1.RSYMNEY_ACNT_AT
+		ORDER BY ACCNUT_ACNT_CODE NULLS FIRST
+		]]>
+	</select>
+	<!-- 구분회계 세부내역 조회 -->
+	<select id="ACC060301DAO.seAccExcelDown" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC060301DAO.seAccExcelDown*/]]>
+		SELECT * FROM
+		(
+		 SELECT
+		         t1.ACCNUT_ACNT_CODE,
+		
+		          MAX(NVL(t3.OUTPT_ACNT_NM, t3.ACCNUT_ACNT_NM)) AS ACCNUT_ACNT_NM,
+		          t1.SE_ACCNUT_ACNT_CODE,
+		 					t2.SE_ACCNUT_ACNT_NM,
+		          NVL(SUM(t1.DEBTOR_AMOUNT),0) AS DR_AMT ,
+		          NVL(SUM(t1.CRDIT_AMOUNT ),0) AS CR_AMT ,
+		          SUM(CASE WHEN T3.DBRT_SE = 'D' THEN   NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT ,0)
+		          			ELSE NVL(t1.CRDIT_AMOUNT ,0) - NVL(t1.DEBTOR_AMOUNT,0) END) AS JAN_AMT
+		 FROM     TBACC_ACCNUT_STACNT_SE t1
+		          INNER JOIN TBACC_SE_ACCNUT_ACNT_CODE t2
+		          ON       t1.ACCNUT_YEAR         = t2.ACCNUT_YEAR
+		          AND      t1.SE_ACCNUT_ACNT_CODE = t2.SE_ACCNUT_ACNT_CODE
+		          INNER JOIN TBACC_ACCNUT_ACNT_SBJECT T3
+		          ON       t1.ACCNUT_YEAR         = t3.ACCNUT_YEAR
+		          AND        t1.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		 WHERE    t1.ACCNUT_YEAR                  = SUBSTR(#ACCNUT_YM#,1,4)
+		 AND      t1.ACCNUT_MT BETWEEN '00' AND      SUBSTR(#ACCNUT_YM#,5,2)
+<![CDATA[		 AND      (t1.DEBTOR_AMOUNT <> 0 OR t1.CRDIT_AMOUNT <>0)  ]]>
+		 GROUP BY t1.ACCNUT_YEAR, t1.SE_ACCNUT_ACNT_CODE,t1.ACCNUT_ACNT_CODE, t2.SE_ACCNUT_ACNT_NM
+		 ORDER BY  ACCNUT_ACNT_CODE,SE_ACCNUT_ACNT_CODE	
+	 )
+	 WHERE SUBSTR(ACCNUT_ACNT_CODE,1,1) IN ('1','2','3')
+	</select>
+
+</sqlMap>

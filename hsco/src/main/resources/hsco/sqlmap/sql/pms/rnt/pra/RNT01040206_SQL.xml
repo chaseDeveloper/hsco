@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01040206_SQL">	
+   <!--  설명  : 수납소인관리
+		작성자 : 지효정 -->
+	<!-- 수납정보 목록 -->
+	<select id="RNT01040206DAO.rentSprmnyRcivList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 A.NTIC_SE				/*고지구분 1:임대료, 2:지원금, 3:관리비*/
+		    ,A.RCIV_DE				/*수납일자*/
+		    ,A.RCIV_NO				/*수납번호 : 고지구분별 일련번호*/
+			,A.CNTRCTR_NO			/*계약자번호*/
+			,A.PAY_SE				/*납부구분 : 공통코드 RNT009*/
+		    ,A.PAY_TMLMT			/*납부기한*/
+		    ,CASE A.PAYMTHD 
+		    	WHEN 'A' THEN '자동이체'
+			    WHEN 'O' THEN 'OCR'      
+		        ELSE '가상계좌' 		
+		     END AS PAYMTHD_NM		/*납부방법명*/
+		    ,A.PAYMTHD				/*납부방법명*/
+		    ,CASE A.OPERT_SE 		
+		     	WHEN 'J' THEN '정상'
+			 	WHEN 'O' THEN '과오납'
+				WHEN 'H' THEN '확인요망'  
+		        ELSE '미확인' 
+		     END AS OPERT_SE_NM		/*작업구분명*/
+		    ,A.OPERT_SE				/*작업구분*/
+		    ,A.BANK_CODE			/*은행코드*/
+		    ,A.SPOT_CODE			/*지점코드*/
+		    ,A.BANK_CODE || A.SPOT_CODE AS BANK_DCODE
+		    ,A.RCIV_AMOUNT			/*수납금액*/			
+		    ,A.FALT_AMOUNT			/*과오금액*/
+		    ,A.RCIV_SE				/*수납구분*/
+		    ,A.OVERRPAY_PROCESS_AT	/*과오납처리여부*/		
+		    ,CASE A.PROCESS_STTUS 	
+		     	WHEN 'C' THEN '처리' 
+		        ELSE '미처리' 
+		     END AS PROCESS_STTUS_NM/*처리상태명*/
+		    ,A.PROCESS_STTUS		/*처리상태*/
+		    ,A.VIRTL_ACNUTNO		/*가상계좌번호*/
+		    ,A.RQEST_SE				/*청구구분*/
+		    ,A.VIRTL_ACNUT_PROCESS_NO	/*가상계좌처리번호*/
+		    ,A.MDAT_YM				/*조정년월*/
+		    ,A.MDAT_DE				/*조정일자*/
+		    ,A.NHT_SN				/*고지서순번*/
+		    ,B.RENT_HOUSE_CODE		/*주택코드*/
+		    ,C.RENT_HOUSE_NM		/*주택명*/
+		    ,C.HOUSE_SE				/*주택구분*/	
+		    ,B.DONG					/*동*/
+		    ,B.HO					/*호*/
+		    ,D.NM					/*계약자명*/
+		    ,D.IHIDNUM				/*주민번호*/
+            ,B.DONG || ' 동 ' || B.HO || ' 호' AS DONGHO  /*동호 */
+            ,Z.ZIP 										/*우편번호 */
+            ,Z.ADRES 									/*주소1 */
+            ,Z.ADRES_DETAIL 							/*주소2 */
+            ,D.TELNO 									/*연락처1 */
+            ,D.MBTLNO 									/*연락처2 */  
+		FROM 
+			 TBRNT_RENT_SPRMNY_RCIV A
+		    ,TBRNT_RENT_CNTRCT B
+		    ,TBRNT_RENT_HOUSE C
+		    ,TBRNT_PRMANENT_RENT_CSTMR D
+		    ,TBRNT_RENT_HOUSE_DONG Z
+		WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+		AND   B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		AND   B.PRMANENT_CSTMR_NO = D.PRMANENT_CSTMR_NO
+		AND   Z.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		AND   Z.DONG = B.DONG
+		AND   A.NTIC_SE = #NTIC_SE#
+		<isNotEmpty property="stRcivDe">
+		AND   A.RCIV_DE BETWEEN #stRcivDe# AND #edRcivDe#
+		</isNotEmpty>
+		<isNotEmpty property="houseSe">
+		AND   #houseSe# LIKE '%' || C.HOUSE_SE || '%'
+		</isNotEmpty>
+		<isNotEmpty property="rentHouseCode">
+		AND   B.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND   B.DONG = #dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND   B.HO = #ho#
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+		AND   D.NM = #nm#
+		</isNotEmpty>   
+		AND A.PAYMTHD LIKE #paymthd# 
+		ORDER BY B.RENT_HOUSE_CODE, B.DONG, B.HO, A.RCIV_DE
+	</select>
+
+	<!-- 수납정보 생성 -->
+	<insert id="RNT01040206DAO.rentSprmnyRcivC" parameterClass="java.util.HashMap">
+		INSERT INTO TBRNT_RENT_SPRMNY_RCIV(
+			 NTIC_SE  				/*고지구분 1:임대료, 2:지원금, 3:관리비*/             
+			,RCIV_DE               	/*수납일자*/
+			,RCIV_NO               	/*수납번호 : 고지구분별 일련번호*/
+			,CNTRCTR_NO            	/*계약자번호*/
+			,PAY_SE                	/*납부구분 : 공통코드 RN009*/
+			,PAY_TMLMT             	/*납부기한*/
+			,PAYMTHD               	/*납부방법*/
+			,OPERT_SE              	/*작업구분*/
+			,BANK_CODE             	/*은행코드*/
+			,SPOT_CODE             	/*지점코드*/
+			,RCIV_AMOUNT           	/*수납금액*/
+			,FALT_AMOUNT           	/*과오금액*/
+			,RCIV_SE               	/*수납구분*/
+			,OVERRPAY_PROCESS_AT   	/*과오납처리여부*/
+			,PROCESS_STTUS         	/*처리상태*/
+			,VIRTL_ACNUTNO         	/*가상계좌번호*/
+			,RQEST_SE              	/*청구구분*/
+			,VIRTL_ACNUT_PROCESS_NO	/*가상계좌처리번호*/
+			,MDAT_YM               	/*조정년월*/
+			,MDAT_DE               	/*조정일자*/
+			,NHT_SN 				/*고지서순번*/
+			,REGISTER_ID 			
+			,REGIST_DT   			
+			,UPDUSR_ID   
+			,UPDT_DT 
+		)
+		VALUES(
+			 #NTIC_SE#					/*고지구분 1:임대료, 2:지원금, 3:관리비*/               
+			,#RCIV_DE#              /*수납일자*/ 
+			,(SELECT NVL(MAX(RCIV_NO), 0) + 1 FROM TBRNT_RENT_SPRMNY_RCIV WHERE  RCIV_DE = #RCIV_DE#)/*수납번호 : 고지구분별 일련번호*/
+			,#CNTRCTR_NO#           /*계약자번호*/ 
+			,#PAY_SE#               /*납부구분 : 공통코드 RN009*/ 
+			,#PAY_TMLMT#            /*납부기한*/ 
+			,'O'              		/*납부방법*/ 
+			,'J'             		/*작업구분*/ 
+			,#BANK_CODE#            /*은행코드*/ 
+			,#SPOT_CODE#            /*지점코드*/ 
+			,#RCIV_AMOUNT#          /*수납금액*/ 
+			,#FALT_AMOUNT#          /*과오금액*/ 
+			,#RCIV_SE#              /*수납구분*/ 
+			,#OVERRPAY_PROCESS_AT#  /*과오납처리여부*/ 
+			,'C'       				/*처리상태*/ 
+			,#VIRTL_ACNUTNO#        /*가상계좌번호*/ 
+			,#RQEST_SE#             /*청구구분*/ 
+			,#VIRTL_ACNUT_PROCESS_NO#/*가상계좌처리번호*/
+			,#MDAT_YM#              /*조정년월*/ 
+			,#MDAT_DE#              /*조정일자*/ 
+			,#NHT_SN#				/*고지서순번*/ 
+			,#S_USER_ID#
+			,SYSDATE   
+			,#S_USER_ID#   
+			,SYSDATE 
+		)
+	</insert>
+	
+	<!-- 수납정보 수정 -->
+	<update id="RNT01040206DAO.rentSprmnyRcivU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_RENT_SPRMNY_RCIV SET
+			 CNTRCTR_NO = #CNTRCTR_NO#            
+			,PAY_SE = #PAY_SE#       
+			,PAY_TMLMT = #PAY_TMLMT#            
+			,PAYMTHD = #PAYMTHD#              
+			,OPERT_SE = #OPERT_SE#             
+			,BANK_CODE = #BANK_CODE#            
+			,SPOT_CODE = #SPOT_CODE#            
+			,RCIV_AMOUNT = #RCIV_AMOUNT#          
+			,FALT_AMOUNT = #FALT_AMOUNT#          
+			,RCIV_SE = #RCIV_SE#              
+			,OVERRPAY_PROCESS_AT = #OVERRPAY_PROCESS_AT#                      
+			,PROCESS_STTUS = #PROCESS_STTUS#         
+			,VIRTL_ACNUTNO = #VIRTL_ACNUTNO#        
+			,RQEST_SE = #RQEST_SE#             
+			,VIRTL_ACNUT_PROCESS_NO = #VIRTL_ACNUT_PROCESS_NO#
+			,MDAT_YM = #MDAT_YM#              
+			,MDAT_DE = #MDAT_DE#              
+			,NHT_SN = #NHT_SN#
+			,UPDUSR_ID = #S_USER_ID#
+			,UPDT_DT = SYSDATE
+		WHERE NTIC_SE = #NTIC_SE#             
+		AND   RCIV_DE = #RCIV_DE#              
+		AND   RCIV_NO = #RCIV_NO#               
+	</update>
+	
+	<!-- 수납정보 삭제 -->
+	<delete id="RNT01040206DAO.rentSprmnyRcivD" parameterClass="java.util.HashMap">
+		DELETE FROM TBRNT_RENT_SPRMNY_RCIV
+		WHERE NTIC_SE = #NTIC_SE#             
+		AND   RCIV_DE = #RCIV_DE#              
+		AND   RCIV_NO = #RCIV_NO#
+	</delete>
+
+</sqlMap>

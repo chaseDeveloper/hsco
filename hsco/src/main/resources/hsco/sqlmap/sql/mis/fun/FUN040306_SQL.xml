@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN040306_SQL">	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 월간 자금집행계획 조회 -->
+	<select id="FUN040306DAO.selectWeekCptalPlanList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT C.DEPT_NM, 
+		       A.BUDGET_ACNT_NM, 
+		       B.BSNS_NM,
+		       A.EXPNDTR_UNIT_NM,
+		       A.BUDGET_AM, 
+		       A.DEPT_CODE,
+		       A.YEAR AS BUDGET_YEAR, 
+		       A.PLAN_YM,
+		       A.BSNS_SE, 
+		       A.BALC_SE, 
+		       A.BUDGET_ACNT_CODE, 
+		       A.EXPNDTR_UNIT_CODE,
+		       A.DETAIL_BSNS_CODE,
+		       A.CONFM_AT, 
+		       A.CONFM_AT AS CHK,
+			   MAX(A.PLAN_AMOUNT) AS PLAN_AMOUNT, 
+			   SUM(A.PLAN_AMOUNT_01) AS PLAN_AMOUNT_01,
+			   SUM(A.PLAN_AMOUNT_02) AS PLAN_AMOUNT_02,
+			   SUM(A.PLAN_AMOUNT_03) AS PLAN_AMOUNT_03,
+			   SUM(A.PLAN_AMOUNT_04) AS PLAN_AMOUNT_04,
+			   SUM(A.PLAN_AMOUNT_05) AS PLAN_AMOUNT_05,
+			   NVL((
+			   		SELECT MAX(WEEK_ATMB) 
+			   		FROM   TBFUN_YEAR_ACCTO_WEEK_ESTBS 
+			   		WHERE  PLAN_YM = A.PLAN_YM
+			   		AND    BGNDE IS NOT NULL
+			   		AND    ENDDE IS NOT NULL
+			   ), 0) AS MAX_WEEK
+		  FROM 
+		       (SELECT B.DEPT_CODE, 
+		              B.BUDGET_ACNT_CODE, 
+		              A.BUDGET_ACNT_NM, 
+		              B.DETAIL_BSNS_CODE, 
+		              B.EXPNDTR_UNIT_CODE, 
+		              B.EXPNDTR_UNIT_NM, 
+		              B.BUDGET_AM, 
+		              B.YEAR, 
+		              B.BSNS_SE, 
+		              B.BALC_SE,
+		              #YEAR#||#STDR_MT# AS PLAN_YM,
+		              NVL(D.CONFM_AT,'0') AS CONFM_AT, 
+		              NVL(C.AMOUNT, 0) AS PLAN_AMOUNT, 
+					  CASE D.WEEK_ATMB WHEN '1' THEN NVL(D.AMOUNT, 0) ELSE 0 END AS PLAN_AMOUNT_01,
+					  CASE D.WEEK_ATMB WHEN '2' THEN NVL(D.AMOUNT, 0) ELSE 0 END AS PLAN_AMOUNT_02,
+					  CASE D.WEEK_ATMB WHEN '3' THEN NVL(D.AMOUNT, 0) ELSE 0 END AS PLAN_AMOUNT_03,
+					  CASE D.WEEK_ATMB WHEN '4' THEN NVL(D.AMOUNT, 0) ELSE 0 END AS PLAN_AMOUNT_04,
+					  CASE D.WEEK_ATMB WHEN '5' THEN NVL(D.AMOUNT, 0) ELSE 0 END AS PLAN_AMOUNT_05
+		         FROM TBBDG_BUDGET_ACNT_CODE A, 
+		              (SELECT YEAR , 
+		                     BSNS_SE , 
+		                     BALC_SE , 
+		                     BUDGET_ACNT_CODE , 
+		                     DEPT_CODE , 
+		                     DETAIL_BSNS_CODE , 
+		                     EXPNDTR_UNIT_CODE , 
+		                     EXPNDTR_UNIT_NM , 
+		                     SUM(BUDGET_AM) AS BUDGET_AM 
+		                FROM TBBDG_FRMTN_BUDGET 
+		               WHERE 1=1 
+		                     AND BUDGET_SE = '0' /* 본예산 */ 
+		                     AND YEAR = #YEAR# /* 예산년도 */
+							 <isNotEmpty property="BSNS_SE">		                      
+		                     AND BSNS_SE = #BSNS_SE# /* 사업구분 */ 
+							 </isNotEmpty>
+							 <isNotEmpty property="BALC_SE">		                      
+		                     AND BALC_SE = #BALC_SE# /* 수지구분 */ 
+							 </isNotEmpty>
+							 <isNotEmpty property="DEPT_CODE">		                      
+		                     AND DEPT_CODE = #DEPT_CODE# /* 부서코드 */ 
+							 </isNotEmpty>
+							 <isNotEmpty property="DETAIL_BSNS_CODE">		                      
+		                     AND DETAIL_BSNS_CODE = #DETAIL_BSNS_CODE# /* 사업지구코드 */ 
+							 </isNotEmpty>
+		               GROUP BY YEAR, BSNS_SE, BALC_SE, BUDGET_ACNT_CODE, DEPT_CODE,  DETAIL_BSNS_CODE, EXPNDTR_UNIT_CODE, EXPNDTR_UNIT_NM 
+		              ) B , 
+		              (SELECT SUBSTR(PLAN_YM, 0, 4) AS YEAR, 
+		                     SUBSTR(PLAN_YM, 5,2) AS MM, 
+		                     DEPT_CODE, 
+		                     BUDGET_YEAR, 
+		                     BSNS_SE, 
+		                     BALC_SE, 
+		                     BUDGET_ACNT_CODE, 
+		                     EXPNDTR_UNIT_CODE, 
+		                     PLAN_AMOUNT,
+		                     DCSN_AMOUNT,
+		                     DECODE(CONFM_AT,'1',DCSN_AMOUNT, PLAN_AMOUNT) AS AMOUNT,
+		                     CONFM_AT,
+		                     DETAIL_BSNS_CODE,
+		                     PLAN_YM
+		                FROM TBFUN_MNTHNG_CPTAL_PLAN 
+		               WHERE BUDGET_YEAR = #YEAR# /* 예산년도 */
+		               		 AND PLAN_YM = #YEAR#||#STDR_MT# /* 계획월 */ 
+							 <isNotEmpty property="BSNS_SE">		                      
+		                     AND BSNS_SE = #BSNS_SE# /* 사업구분 */ 
+							 </isNotEmpty>
+							 <isNotEmpty property="BALC_SE">		                      
+		                     AND BALC_SE = #BALC_SE# /* 수지구분 */ 
+							 </isNotEmpty>
+							 <isNotEmpty property="DEPT_CODE">		                      
+		                     AND DEPT_CODE = #DEPT_CODE# /* 부서코드 */ 
+							 </isNotEmpty>
+							 <isNotEmpty property="DETAIL_BSNS_CODE">		                      
+		                     AND DETAIL_BSNS_CODE = #DETAIL_BSNS_CODE# /* 사업지구코드 */ 
+							 </isNotEmpty>
+		              ) C , 
+		              (SELECT SUBSTR(PLAN_YM, 0, 4) AS YEAR, 
+		                     WEEK_ATMB, 
+		                     DEPT_CODE, 
+		                     BUDGET_YEAR, 
+		                     BSNS_SE, 
+		                     BALC_SE, 
+		                     BUDGET_ACNT_CODE, 
+		                     EXPNDTR_UNIT_CODE, 
+		                     PLAN_AMOUNT,
+		                     DCSN_AMOUNT,
+		                     DECODE(CONFM_AT,'1',DCSN_AMOUNT, PLAN_AMOUNT) AS AMOUNT,
+		                     CONFM_AT,
+		                     DETAIL_BSNS_CODE,
+		                     PLAN_YM
+		                FROM TBFUN_WEEK_CPTAL_PLAN 
+		               WHERE BUDGET_YEAR = #YEAR# /* 예산년도 */
+		               		 AND PLAN_YM = #YEAR#||#STDR_MT# /* 계획월 */
+		               		 AND CONFM_AT = '1' 
+							 <isNotEmpty property="BSNS_SE">		                      
+		                     AND BSNS_SE = #BSNS_SE# /* 사업구분 */ 
+							 </isNotEmpty>
+							 <isNotEmpty property="BALC_SE">		                      
+		                     AND BALC_SE = #BALC_SE# /* 수지구분 */ 
+							 </isNotEmpty>
+							 <isNotEmpty property="DEPT_CODE">		                      
+		                     AND DEPT_CODE = #DEPT_CODE# /* 부서코드 */ 
+							 </isNotEmpty>
+							 <isNotEmpty property="DETAIL_BSNS_CODE">		                      
+		                     AND DETAIL_BSNS_CODE = #DETAIL_BSNS_CODE# /* 사업지구코드 */ 
+							 </isNotEmpty>
+		              ) D 
+		        WHERE 1=1 
+		             <isEqual property="PLAN_REGIST_AT" compareValue="1">
+		              AND A.PLAN_REGIST_AT = '1'  /*계획등록여부 주석처리*/
+		             </isEqual> 
+		              AND A.YEAR = #YEAR# /* 예산년도 */ 
+					 <isNotEmpty property="BSNS_SE">		                      
+		              AND A.BSNS_SE = #BSNS_SE# /* 사업구분 */ 
+					 </isNotEmpty>
+					 <isNotEmpty property="BALC_SE">		                      
+		              AND A.BALC_SE = #BALC_SE# /* 수지구분 */ 
+					 </isNotEmpty>
+		              AND A.YEAR = B.YEAR 
+		              AND A.BSNS_SE = B.BSNS_SE 
+		              AND A.BALC_SE = B.BALC_SE 
+		              AND A.BUDGET_ACNT_CODE = B.BUDGET_ACNT_CODE 
+		              AND B.BSNS_SE = D.BSNS_SE(+) 
+		              AND B.BALC_SE = D.BALC_SE(+) 
+		              AND B.BUDGET_ACNT_CODE = D.BUDGET_ACNT_CODE(+) 
+		              AND B.DEPT_CODE = D.DEPT_CODE (+) 
+		              AND B.YEAR = D.BUDGET_YEAR(+) 
+		              AND B.EXPNDTR_UNIT_CODE = D.EXPNDTR_UNIT_CODE(+) 
+		              AND B.DETAIL_BSNS_CODE = D.DETAIL_BSNS_CODE(+)
+		              AND D.BSNS_SE           = C.BSNS_SE(+)
+   					  AND D.BALC_SE           = C.BALC_SE(+)
+					  AND D.BUDGET_ACNT_CODE  = C.BUDGET_ACNT_CODE(+)
+					  AND D.DEPT_CODE         = C.DEPT_CODE (+)
+					  AND D.YEAR              = C.BUDGET_YEAR(+)
+					  AND D.EXPNDTR_UNIT_CODE = C.EXPNDTR_UNIT_CODE(+)
+					  AND D.DETAIL_BSNS_CODE  = C.DETAIL_BSNS_CODE(+)
+					  AND D.PLAN_YM           = C.PLAN_YM(+)
+		       ) A ,
+		       TBPRJ_BSNS_CODE B ,
+		       VWHRM_DEPT C
+		 WHERE A.DETAIL_BSNS_CODE = B.BSNS_CODE(+)
+		       AND A.DEPT_CODE = C.DEPT_CODE(+)
+		 GROUP BY A.PLAN_YM, A.DEPT_CODE, A.BUDGET_ACNT_CODE, A.BUDGET_ACNT_NM, A.DETAIL_BSNS_CODE, A.EXPNDTR_UNIT_CODE, A.EXPNDTR_UNIT_NM, A.BUDGET_AM,A.YEAR, A.BSNS_SE, A.BALC_SE, A.CONFM_AT, B.BSNS_NM, C.DEPT_NM 
+		ORDER BY A.DEPT_CODE, A.BUDGET_ACNT_CODE, A.EXPNDTR_UNIT_CODE 		
+    </select>
+    
+
+    <!-- 월간자금계획 등록 / 수정 -->
+    <insert id="FUN040306DAO.WeekCptalPlanCU" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*FUN040306DAO.WeekCptalPlanCU*/ ]]>
+        <![CDATA[
+		MERGE INTO TBFUN_WEEK_CPTAL_PLAN 
+		  USING DUAL
+		  ON (
+		        PLAN_YM = #PLAN_YM# 
+		        AND WEEK_ATMB = #WEEK_ATMB#
+		        AND DEPT_CODE = #DEPT_CODE# 
+		        AND BUDGET_YEAR = #BUDGET_YEAR# 
+		        AND BSNS_SE = #BSNS_SE# 
+		        AND BALC_SE = #BALC_SE# 
+		        AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE# 
+		        AND EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+		  		)
+		WHEN MATCHED THEN
+		      UPDATE SET
+			           PLAN_AMOUNT      = #PLAN_AMOUNT#
+			          ,CONFM_AT         = #CONFM_AT#
+			          ,DETAIL_BSNS_CODE = #DETAIL_BSNS_CODE#
+					  ,UPDUSR_ID 		= #S_USER_ID#
+					  ,UPDT_DT 		    = SYSDATE      
+		WHEN NOT MATCHED THEN
+				INSERT 
+				      (
+			           PLAN_YM,
+			           WEEK_ATMB,
+			           DEPT_CODE,
+			           BUDGET_YEAR,
+			           BSNS_SE,
+			           BALC_SE,
+			           BUDGET_ACNT_CODE,
+			           EXPNDTR_UNIT_CODE,
+			           PLAN_AMOUNT,
+			           CONFM_AT,
+			           DETAIL_BSNS_CODE, 
+			           REGISTER_ID,
+			           REGIST_DT,
+			           UPDUSR_ID,
+			           UPDT_DT
+				     ) 
+				VALUES
+				      (
+			           #PLAN_YM#,
+			           #WEEK_ATMB#,
+			           #DEPT_CODE#,
+			           #BUDGET_YEAR#,
+			           #BSNS_SE#,
+			           #BALC_SE#,
+			           #BUDGET_ACNT_CODE#,
+			           #EXPNDTR_UNIT_CODE#,
+			           #PLAN_AMOUNT#,
+			           #CONFM_AT#,
+			           #DETAIL_BSNS_CODE#, 
+				       #S_USER_ID#,
+					   SYSDATE,
+					   #S_USER_ID#,
+					   SYSDATE
+				      )
+        ]]>
+    </insert>
+
+
+    <!-- 월간자금계획 승인여부 수정 -->
+    <update id="FUN040306DAO.updateConfmAt" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*FUN040306DAO.updateConfmAt*/ ]]>
+        <![CDATA[
+		UPDATE TBFUN_WEEK_CPTAL_PLAN 
+		       SET CONFM_AT = #CHK#, 
+		       DCSN_AMOUNT = PLAN_AMOUNT,
+		       UPDUSR_ID = #S_USER_ID#, 
+		       UPDT_DT = SYSDATE 
+		 WHERE PLAN_YM = #PLAN_YM#
+		       AND DEPT_CODE = #DEPT_CODE# 
+		       AND BUDGET_YEAR = #BUDGET_YEAR# 
+		       AND BSNS_SE = #BSNS_SE# 
+		       AND BALC_SE = #BALC_SE# 
+		       AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE# 
+		       AND EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+        ]]>
+    </update>
+</sqlMap>

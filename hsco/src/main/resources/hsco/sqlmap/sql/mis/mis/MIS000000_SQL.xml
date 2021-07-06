@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG050101_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 사업지구코드를 조회한다.-->
+	<select id="MIS000000DAO.bsnsAreaList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+	   SELECT BSNS_CODE AS CODE
+		      ,BSNS_NM   AS CODE_NM
+		      ,'[' || BSNS_CODE || ']' || BSNS_NM AS ALL_NM
+		 FROM TBPRJ_BSNS_CODE
+		WHERE 1=1 
+		ORDER BY BSNS_CODE
+		]]>
+	</select>
+
+	<!-- 최종 내부결재 상태 조회 -->
+	<select id="MIS000000DAO.selectLastSanctnSttus" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		SELECT LAST_SANCTN_STTUS AS LAST_SANCTN_STTUS
+		  FROM TBCOM_INNER_SANCTN_MASTR
+		 WHERE INNER_SANCTN_ID = #INNER_SANCTN_ID#
+		]]>
+	</select>	
+	
+	<!-- 접속자의 권한을 조회한다.-->
+	<select id="MIS000000DAO.getAuthCnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT COUNT(1)   AS AUTH_CNT
+		FROM   TBCOM_USER_GRP
+		WHERE  AUTH_GRP_ID = #AUTH_GRP_ID#
+		AND    USER_ID     = #S_USER_ID#
+	]]>
+	</select>
+	
+	<!-- IMS 인사마스터 사진정보 -->
+	<select id="MIS000000DAO.empPicList" resultClass="hsco.cmm.util.OutMap">
+		SELECT
+			  EMPNO			AS EMPNO 
+			 ,PHOTO_FILE   	AS PHOTO
+		FROM TBHRM_HR_PHOTO
+	</select>
+	
+	<!-- 사진 파일번호 인사정보 수정 -->
+	<update id="MIS000000DAO.empPicU" parameterClass="java.util.HashMap">
+		UPDATE TBHRM_HR_MASTR
+		SET	FILE_SN = #FILE_SN#
+		WHERE EMPNO	= #EMPNO#
+	</update>
+	
+	<!-- 첨부파일 목록조회 -->
+	<select id="MIS000000DAO.atchFileList" parameterClass="java.lang.String" resultClass="java.util.HashMap">
+		SELECT
+        	  A.FILE_SN			    		/*  파일일련번호 */
+        	, A.FILE_ORDR					/*  파일순차 */
+        	, A.FILE_STRE_COURS				/*  파일저장경로 */
+        	, A.STRE_FILE_NM				/*  저장파일명 */
+        	, A.ORGINL_FILE_NM	    		/*  원본파일명 */
+        	, A.FILE_EXTSN					/*  파일확장자 */
+        	, A.FILE_CN			    		/*  파일내용   */
+        	, A.FILE_MG			    		/*  파일크기   */
+        	, A.USE_AT			    		/*  사용여부   */
+        	, A.FILE_ID              		/*       */
+        	, B.SYS_SE_CODE					/*  시스템구분코드 */
+        	, B.JOB_SE_CODE AS JOB_SE 		/*  업무구분코드 */
+        	, ROW_NUMBER() OVER (PARTITION BY A.FILE_SN ORDER BY A.FILE_ORDR ASC) AS SN
+        	, A.FILE_TY	
+        FROM TBCOM_CMMN_ATCHMNFL A 			/* 공통첨부파일 */
+          ,  TBCOM_CMMN_ATCHMNFL_MASTR B 	/* 공통첨부파일마스터 */
+        WHERE 1=1
+          AND A.FILE_SN = B.FILE_SN
+          /* AND A.USE_AT='1' */
+          AND B.FILE_SN = #value#
+        ORDER BY 1,2,3
+	</select>
+	
+	
+	<!-- 메신저(인트라웨어) 사원번호 조회 -->
+	<select id="MIS000000DAO.msgEmpno" resultClass="java.lang.String">
+		SELECT
+		     USER_ID
+		    ,NAME
+		FROM INTRAWARE.USR_GLOBAL A
+		WHERE  USER_ID= ( SELECT B.USER_ID
+					      FROM   INTRAWARE.GW_USER_INFO B
+					      WHERE  B.EMP_CODE=#RCVER_USER_ID#
+					    )
+	</select>
+	
+	<!-- 메신저(인트라웨어) 사원번호 조회 -->
+	<select id="MIS000000DAO.allowAt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT DECODE(COUNT(*), 0, 'N', 'Y') AS ALLOW_AT
+		FROM TBCOM_AUTH_GRP A
+			 , TBCOM_USER_GRP B
+		WHERE A.AUTH_GRP_ID = B.AUTH_GRP_ID
+		AND B.USER_ID IN 
+		<iterate property="EMPNO" open="(" close=")" conjunction=",">
+			#EMPNO[]#
+		</iterate>
+		AND A.AUTH_CODE IN 
+		<iterate property="ALLOW_AUTH_CODE" open="(" close=")" conjunction=",">
+			#ALLOW_AUTH_CODE[]#
+		</iterate>
+	</select>
+	
+</sqlMap>

@@ -1,0 +1,445 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020405_SQL">
+
+	<!-- 자금지출기록부 조회 -->
+	<select id="ACC020405DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC020405DAO.select*/]]>
+		WITH TBFUN_CPTAL_ASIGN_TM AS (
+		    SELECT '0' AS TIMHDER_CONFM
+		         , t1.CPTAL_ASIGN_DE AS CPTAL_EXPNDTR_ACNTBK_DE
+		         , '[자금배정]' AS SUMRY
+		         , NULL        AS RCPT_MAN
+		         , NULL        AS CHECK_NO
+		         , NVL(SUM(CASE WHEN t2.CPTAL_BALC_SE_CODE = '01' THEN t2.ASIGN_AMOUNT ELSE 0 END), 0) AS ASIGN_AMOUNT01 /*배정액:국민은행*/
+		         , NVL(SUM(CASE WHEN t2.CPTAL_BALC_SE_CODE = '02' THEN t2.ASIGN_AMOUNT ELSE 0 END), 0) AS ASIGN_AMOUNT02 /*배정액:화성은행*/
+		         , NVL(SUM(CASE WHEN t2.CPTAL_BALC_SE_CODE = '05' THEN t2.ASIGN_AMOUNT ELSE 0 END), 0) AS ASIGN_AMOUNT03 /*배정액:우리은행*/
+		         , NVL(SUM(t2.ASIGN_AMOUNT),0)                                                         AS ASIGN_SUM_AMOUNT
+		         , NULL AS FNNC_INSTT_CODE
+		         , NULL AS FNNC_INSTT_NM
+		         , 0  AS FNNC004_EXPNDTR_AMT /*대변: 국민*/
+		         , 0  AS FNNC020_EXPNDTR_AMT /*대변: 우리*/
+		         , 0  AS FNNC031_EXPNDTR_AMT /*대변: 화성*/
+		         , 0  AS FNNC_EXPNDTR_AMT
+		         , 0  AS MIJIGUK_AMT01 /* 차변: 미지급금*/
+		         , 0  AS MIJIGUK_AMT02 /* 차변: 미지급비용*/
+		         , 0  AS MIJIGUK_AMT03 /* 차변: 기타계정*/
+		         , 0  AS MIJIGUK_AMT
+		         , 0            AS ASIGN_BLCE01
+		         , 0            AS ASIGN_BLCE02
+		         , 0            AS ASIGN_BLCE03
+		         , 0            AS ASIGN_BLCE
+		         , NULL AS DECSN_YEAR
+		         , NULL AS DECSN_NO
+		         , NULL AS ANACT_KND
+		         , NULL AS BSNS_BALC_SE
+		         , NULL AS BUDGET_ACNT_CODE
+		         , NULL AS BUDGET_ACNT_NM
+		         , NULL AS MTCHG_SE
+		         , NULL AS CMPNSP_NO_CNT
+		         
+		         ,NVL(MAX(T1.REGIST_DT), TO_DATE('19990101', 'YYYYMMDD')) AS REGIST_DT
+		         
+		    FROM TBFUN_CPTAL_ASIGN t1
+		      INNER JOIN TBFUN_CPT_BALC_ASN_CPTAL t2
+		      ON  t1.ASIGN_YM = t2.ASIGN_YM
+		      AND t1.ODR      = t2.ODR
+		      
+		      LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		      ON  t3.GRP_CODE = 'FUN003'
+		      AND t2.CPTAL_BALC_SE_CODE = t3.CODE
+		      
+		    WHERE t1.ASIGN_YM       BETWEEN SUBSTR(#SRCH_DT#,1,4)||'01'   AND SUBSTR(#SRCH_DT#,1,6)
+		    AND   t1.CPTAL_ASIGN_DE BETWEEN SUBSTR(#SRCH_DT#,1,4)||'0101' AND #SRCH_DT#
+		    <isNotEmpty property="SITE_SE" prepend="AND    ">t2.ASIGN_SE = DECODE(#SITE_SE#, '01', '1', '03', '2') /*배정구분  1:본사, 2:레포츠*/</isNotEmpty>
+		    GROUP BY t1.CPTAL_ASIGN_DE
+		)
+		, TBACC_EXP_DSN_MASTR_TM AS (
+		    SELECT NVL(t1.TIMHDER_CONFM,'0') AS TIMHDER_CONFM
+		         , t1.CPTAL_EXPNDTR_ACNTBK_DE
+		         , t1.SUMRY
+		         , CASE WHEN T1.ANACT_KND = '07' AND T1.REGIST_DT > (SELECT TO_DATE(OPEN_DT||'000000','YYYYMMDDHH24MISS') FROM TBPMS_CPR_INFO)
+							THEN (SELECT CREDTR FROM TBACC_SLARY_EXP_DSN_MTR_DET ST WHERE ST.DECSN_YEAR = T1.DECSN_YEAR AND ST.DECSN_NO = T1.DECSN_NO)
+						WHEN T1.ANACT_KND != '01' THEN T3.RCPT_MAN
+			            ELSE (  SELECT DECODE(ST.RCPT_MAN_CNT, 0, '', 1, ST.RCPT_MAN, ST.RCPT_MAN||'외 '||(ST.RCPT_MAN_CNT-1)||'명')
+		                        FROM (
+		                              SELECT DECSN_NO, RCPT_MAN, SEQ, COUNT(DISTINCT RCPT_MAN) OVER(PARTITION BY DECSN_YEAR, DECSN_NO) AS RCPT_MAN_CNT, MIN(SEQ) OVER(PARTITION BY DECSN_YEAR, DECSN_NO) AS MIN_SEQ
+		                              FROM TBACC_EXP_DSN_DETAIL_TRVCT ST
+		                              )ST
+		                        WHERE ST.DECSN_NO = T1.DECSN_NO
+		                        AND ST.SEQ = ST.MIN_SEQ)
+		           END AS RCPT_MAN      /*채주(영수자)*/
+		         , t1.CHECK_NO
+		         , 0 AS ASIGN_AMOUNT01 /*배정액:국민은행*/
+		         , 0 AS ASIGN_AMOUNT02 /*배정액:화성은행*/
+		         , 0 AS ASIGN_AMOUNT03 /*배정액:우리은행*/
+		         , 0 AS ASIGN_SUM_AMOUNT
+		         , t1.FNNC_INSTT_CODE
+		         , t4.CODE_NM                                                                      AS FNNC_INSTT_NM
+		         
+		         <!--  2016.08.22 반납결의서일 경우 차변,대변 모두 (-)로 표시
+		         , CASE WHEN t1.FNNC_INSTT_CODE = '004'/*국민은행*/ THEN t1.DECSN_AMOUNT ELSE 0 END AS FNNC004_EXPNDTR_AMT /*대변: 국민*/
+		         , CASE WHEN t1.FNNC_INSTT_CODE = '020'/*우리은행*/ THEN t1.DECSN_AMOUNT ELSE 0 END AS FNNC020_EXPNDTR_AMT /*대변: 우리*/
+		         , CASE WHEN t1.FNNC_INSTT_CODE = '031'/*화성은행*/ THEN t1.DECSN_AMOUNT ELSE 0 END AS FNNC031_EXPNDTR_AMT /*대변: 화성*/
+		         , t1.DECSN_AMOUNT 																  AS FNNC_EXPNDTR_AMT /*대변: 총계*/
+		         -->
+		         , CASE WHEN t1.FNNC_INSTT_CODE = '004'/*국민은행*/ THEN DECODE(t1.ANACT_KND, '05', t1.DECSN_AMOUNT*-1, t1.DECSN_AMOUNT) ELSE 0 END AS FNNC004_EXPNDTR_AMT /*대변: 국민*/
+		         , CASE WHEN t1.FNNC_INSTT_CODE = '020'/*우리은행*/ THEN DECODE(t1.ANACT_KND, '05', t1.DECSN_AMOUNT*-1, t1.DECSN_AMOUNT) ELSE 0 END AS FNNC020_EXPNDTR_AMT /*대변: 우리*/
+		         , CASE WHEN t1.FNNC_INSTT_CODE = '031'/*화성은행*/ THEN DECODE(t1.ANACT_KND, '05', t1.DECSN_AMOUNT*-1, t1.DECSN_AMOUNT) ELSE 0 END AS FNNC031_EXPNDTR_AMT /*대변: 화성*/
+		         , DECODE(t1.ANACT_KND, '05', t1.DECSN_AMOUNT*-1, t1.DECSN_AMOUNT) AS FNNC_EXPNDTR_AMT /*대변: 총계*/
+		         
+		         , CASE WHEN t1.BSNS_SE || t1.BALC_SE = '22'/*자본적지출*/ THEN DECODE(t1.ANACT_KND, '05', t1.DECSN_AMOUNT*-1, t1.DECSN_AMOUNT) ELSE 0 END AS MIJIGUK_AMT01 /* 차변: 미지급금*/
+		         , CASE WHEN t1.BSNS_SE || t1.BALC_SE = '12'/*수익적지출*/ THEN DECODE(t1.ANACT_KND, '05', t1.DECSN_AMOUNT*-1, t1.DECSN_AMOUNT) ELSE 0 END AS MIJIGUK_AMT02 /* 차변: 미지급비용*/
+		         , CASE WHEN t1.BSNS_SE || t1.BALC_SE = '32'/*자금운용*/   THEN DECODE(t1.ANACT_KND, '05', t1.DECSN_AMOUNT*-1, t1.DECSN_AMOUNT) ELSE 0 END AS MIJIGUK_AMT03 /* 차변: 기타계정*/
+		         , DECODE(t1.ANACT_KND, '05', t1.DECSN_AMOUNT*-1, t1.DECSN_AMOUNT) AS MIJIGUK_AMT /* 차변: 총계*/
+		         
+		         , 0            AS ASIGN_BLCE01
+		         , 0            AS ASIGN_BLCE02
+		         , 0            AS ASIGN_BLCE03
+		         , 0            AS ASIGN_BLCE
+		         , t1.DECSN_YEAR
+		         , t1.DECSN_NO
+		         , t1.ANACT_KND
+		         , t1.BSNS_SE || t1.BALC_SE AS BSNS_BALC_SE
+		         , t1.BUDGET_ACNT_CODE
+		         
+		         /*, t2.BUDGET_ACNT_NM	*/	         
+		         ,(CASE
+		           	WHEN t1.BSNS_SE || t1.BALC_SE = '32' /*자금운용*/ THEN  
+		           		t2.BUDGET_ACNT_NM
+		           	ELSE
+		           		NULL
+		         	END) AS BUDGET_ACNT_NM /* 차변: 기타계정 */
+		         , t3.MTCHG_SE
+		         , NVL(t3.CMPNSP_NO_CNT,0) AS CMPNSP_NO_CNT
+		         
+		         ,NVL(T1.REGIST_DT, TO_DATE('19990101', 'YYYYMMDD')) AS REGIST_DT
+		         
+		    FROM TBACC_EXP_DSN_MASTR t1
+		      
+		      LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t2
+		      ON  t1.BUDGET_YEAR = t2.YEAR
+		      AND t1.BSNS_SE     = t2.BSNS_SE
+		      AND t1.BALC_SE     = t2.BALC_SE
+		      AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+		     
+		      LEFT OUTER JOIN (
+		        SELECT DECSN_YEAR
+		             , DECSN_NO
+		             , MAX(RCPT_MAN) KEEP(DENSE_RANK FIRST  ORDER BY SEQ DESC)  AS RCPT_MAN
+		             , MAX(MTCHG_SE)                                            AS MTCHG_SE
+		             , SUM(DECODE(TRIM(CMPNSP_NO),NULL,0,1))					AS CMPNSP_NO_CNT 
+		        FROM TBACC_EXP_DSN_DETAIL
+		        GROUP BY DECSN_YEAR
+		               , DECSN_NO
+		      ) t3
+		      ON  t1.DECSN_YEAR = t3.DECSN_YEAR
+		      AND t1.DECSN_NO   = t3.DECSN_NO
+		      
+		      LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		      ON  t4.GRP_CODE = 'ACC003'
+		      AND t1.FNNC_INSTT_CODE = t4.CODE
+		   
+		    WHERE t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN SUBSTR(#SRCH_DT#,1,4)||'0101' AND #SRCH_DT#
+		    AND NVL(EXPNDTR_CNFIRM_AT,'0') = '1'
+		    AND T1.PARENT_DECSN_NO IS NULL
+		    <isNotEmpty property="DEPT_CODE">
+	             <isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">
+	               	t1.DEPT_CODE = #DEPT_CODE#
+	             </isNotEqual>
+	        </isNotEmpty>
+	        
+		    ORDER BY t1.CPTAL_EXPNDTR_ACNTBK_DE, t1.CHECK_NO ASC
+		)
+		, TBACC_EXP_DSN_MASTR_SUM_DAILY AS (
+		  SELECT '0'    AS TIMHDER_CONFM
+		         , NULL AS CPTAL_EXPNDTR_ACNTBK_DE
+		         , '[일     계]' AS SUMRY
+		         , NULL         AS RCPT_MAN
+		         , NULL         AS CHECK_NO
+		         , NVL(SUM(ASIGN_AMOUNT01),0)   AS ASIGN_AMOUNT01
+		         , NVL(SUM(ASIGN_AMOUNT02),0)   AS ASIGN_AMOUNT02
+		         , NVL(SUM(ASIGN_AMOUNT03),0)   AS ASIGN_AMOUNT03
+		         , NVL(SUM(ASIGN_SUM_AMOUNT),0) AS ASIGN_SUM_AMOUNT
+		         , NULL AS FNNC_INSTT_CODE
+		         , NULL AS FNNC_INSTT_NM
+		         , NVL(SUM(FNNC004_EXPNDTR_AMT),0)  AS FNNC004_EXPNDTR_AMT /*대변: 국민*/
+		         , NVL(SUM(FNNC020_EXPNDTR_AMT),0)  AS FNNC020_EXPNDTR_AMT /*대변: 우리*/
+		         , NVL(SUM(FNNC031_EXPNDTR_AMT),0)  AS FNNC031_EXPNDTR_AMT /*대변: 화성*/
+		         , NVL(SUM(FNNC_EXPNDTR_AMT),0)     AS FNNC_EXPNDTR_AMT    /*대변: 총계*/
+		         , NVL(SUM(MIJIGUK_AMT01),0)        AS MIJIGUK_AMT01 /* 차변: 미지급금*/
+		         , NVL(SUM(MIJIGUK_AMT02),0)        AS MIJIGUK_AMT02 /* 차변: 미지급비용*/
+		         , NVL(SUM(MIJIGUK_AMT03),0)        AS MIJIGUK_AMT03 /* 차변: 기타계정*/
+		         , NVL(SUM(MIJIGUK_AMT),0)          AS MIJIGUK_AMT   /* 차변: 총계*/
+		         , 0            AS ASIGN_BLCE01
+		         , 0            AS ASIGN_BLCE02
+		         , 0            AS ASIGN_BLCE03
+		         , 0            AS ASIGN_BLCE
+		         , NULL AS DECSN_YEAR
+		         , NULL AS DECSN_NO
+		         , NULL AS ANACT_KND
+		         , NULL AS BSNS_BALC_SE
+		         , NULL AS BUDGET_ACNT_CODE
+		         , NULL AS BUDGET_ACNT_NM
+		         , NULL AS MTCHG_SE
+		         , NULL AS CMPNSP_NO_CNT
+		         
+		         ,NVL(MAX(REGIST_DT), TO_DATE('19990101', 'YYYYMMDD')) AS REGIST_DT
+		         
+		  FROM (
+		      SELECT * FROM TBFUN_CPTAL_ASIGN_TM t1
+		      WHERE t1.CPTAL_EXPNDTR_ACNTBK_DE = #SRCH_DT#
+		      UNION ALL 
+		      SELECT * FROM TBACC_EXP_DSN_MASTR_TM t2
+		      WHERE t2.CPTAL_EXPNDTR_ACNTBK_DE = #SRCH_DT#
+		  )
+		)
+		, TBACC_EXP_DSN_MASTR_SUM_MONTH AS (
+		  SELECT '0'    AS TIMHDER_CONFM
+		         , NULL AS CPTAL_EXPNDTR_ACNTBK_DE
+		         , '[월     계]' AS SUMRY
+		         , NULL         AS RCPT_MAN
+		         , NULL         AS CHECK_NO
+		         , NVL(SUM(ASIGN_AMOUNT01),0)   AS ASIGN_AMOUNT01
+		         , NVL(SUM(ASIGN_AMOUNT02),0)   AS ASIGN_AMOUNT02
+		         , NVL(SUM(ASIGN_AMOUNT03),0)   AS ASIGN_AMOUNT03
+		         , NVL(SUM(ASIGN_SUM_AMOUNT),0) AS ASIGN_SUM_AMOUNT
+		         , NULL AS FNNC_INSTT_CODE
+		         , NULL AS FNNC_INSTT_NM
+		         , NVL(SUM(FNNC004_EXPNDTR_AMT),0)  AS FNNC004_EXPNDTR_AMT /*대변: 국민*/
+		         , NVL(SUM(FNNC020_EXPNDTR_AMT),0)  AS FNNC020_EXPNDTR_AMT /*대변: 우리*/
+		         , NVL(SUM(FNNC031_EXPNDTR_AMT),0)  AS FNNC031_EXPNDTR_AMT /*대변: 화성*/
+		         , NVL(SUM(FNNC_EXPNDTR_AMT),0)     AS FNNC_EXPNDTR_AMT /*대변: 총계*/
+		         , NVL(SUM(MIJIGUK_AMT01),0)        AS MIJIGUK_AMT01 /* 차변: 미지급금*/
+		         , NVL(SUM(MIJIGUK_AMT02),0)        AS MIJIGUK_AMT02 /* 차변: 미지급비용*/
+		         , NVL(SUM(MIJIGUK_AMT03),0)        AS MIJIGUK_AMT03 /* 차변: 기타계정*/
+		         , NVL(SUM(MIJIGUK_AMT),0)          AS MIJIGUK_AMT   /* 차변: 총계*/
+		         , NVL(SUM(ASIGN_AMOUNT01),0) - NVL(SUM(FNNC004_EXPNDTR_AMT),0)     AS ASIGN_BLCE01
+		         , 0                                                                AS ASIGN_BLCE02
+		         , 0                                                                AS ASIGN_BLCE03
+		         , NVL(SUM(ASIGN_SUM_AMOUNT),0) - NVL(SUM(MIJIGUK_AMT),0)           AS ASIGN_BLCE
+		         , NULL AS DECSN_YEAR
+		         , NULL AS DECSN_NO
+		         , NULL AS ANACT_KND
+		         , NULL AS BSNS_BALC_SE
+		         , NULL AS BUDGET_ACNT_CODE
+		         , NULL AS BUDGET_ACNT_NM
+		         , NULL AS MTCHG_SE
+		         , NULL AS CMPNSP_NO_CNT
+		         
+		         ,NVL(MAX(REGIST_DT), TO_DATE('19990101', 'YYYYMMDD')) AS REGIST_DT
+		         
+		  FROM (
+		      SELECT * FROM TBFUN_CPTAL_ASIGN_TM t1
+		      WHERE t1.CPTAL_EXPNDTR_ACNTBK_DE LIKE SUBSTR(#SRCH_DT#,1,6)||'%'
+		      UNION ALL 
+		      SELECT * FROM TBACC_EXP_DSN_MASTR_TM t2
+		      WHERE t2.CPTAL_EXPNDTR_ACNTBK_DE LIKE SUBSTR(#SRCH_DT#,1,6)||'%'
+		  )
+		)
+		, TBACC_EXP_DSN_MASTR_SUM_YEAR AS (
+		  SELECT '0'    AS TIMHDER_CONFM
+		         , NULL AS CPTAL_EXPNDTR_ACNTBK_DE
+		         , '[누     계]' AS SUMRY
+		         , NULL         AS RCPT_MAN
+		         , NULL         AS CHECK_NO
+		         , NVL(SUM(ASIGN_AMOUNT01),0)   AS ASIGN_AMOUNT01
+		         , NVL(SUM(ASIGN_AMOUNT02),0)   AS ASIGN_AMOUNT02
+		         , NVL(SUM(ASIGN_AMOUNT03),0)   AS ASIGN_AMOUNT03
+		         , NVL(SUM(ASIGN_SUM_AMOUNT),0) AS ASIGN_SUM_AMOUNT
+		         , NULL AS FNNC_INSTT_CODE
+		         , NULL AS FNNC_INSTT_NM
+		         , NVL(SUM(FNNC004_EXPNDTR_AMT),0)  AS FNNC004_EXPNDTR_AMT /*대변: 국민*/
+		         , NVL(SUM(FNNC020_EXPNDTR_AMT),0)  AS FNNC020_EXPNDTR_AMT /*대변: 우리*/
+		         , NVL(SUM(FNNC031_EXPNDTR_AMT),0)  AS FNNC031_EXPNDTR_AMT /*대변: 화성*/
+		         , NVL(SUM(FNNC_EXPNDTR_AMT),0)     AS FNNC_EXPNDTR_AMT /*대변: 총계*/
+		         , NVL(SUM(MIJIGUK_AMT01),0)        AS MIJIGUK_AMT01 /* 차변: 미지급금*/
+		         , NVL(SUM(MIJIGUK_AMT02),0)        AS MIJIGUK_AMT02 /* 차변: 미지급비용*/
+		         , NVL(SUM(MIJIGUK_AMT03),0)        AS MIJIGUK_AMT03 /* 차변: 기타계정*/
+		         , NVL(SUM(MIJIGUK_AMT),0)          AS MIJIGUK_AMT   /* 차변: 총계*/
+		         
+		         /*, NVL(SUM(ASIGN_AMOUNT01),0) - NVL(SUM(FNNC004_EXPNDTR_AMT),0)     AS ASIGN_BLCE01 2016.09.13 */
+		         , NVL(SUM(ASIGN_SUM_AMOUNT), 0) - NVL(SUM(FNNC_EXPNDTR_AMT), 0) AS ASIGN_BLCE01 /* 자금배정액소계 - 지출액(대변)소계 2016.09.13 */
+		         
+		         , 0                                                                AS ASIGN_BLCE02
+		         , 0                                                                AS ASIGN_BLCE03
+		         
+		         /* , NVL(SUM(ASIGN_SUM_AMOUNT),0) - NVL(SUM(MIJIGUK_AMT),0)           AS ASIGN_BLCE  2016.09.13 */
+		         , NVL(SUM(ASIGN_SUM_AMOUNT), 0) - NVL(SUM(FNNC_EXPNDTR_AMT), 0) AS ASIGN_BLCE /* 자금배정액소계 - 지출액(대변)소계 2016.09.13 */
+		         
+		         , NULL AS DECSN_YEAR
+		         , NULL AS DECSN_NO
+		         , NULL AS ANACT_KND
+		         , NULL AS BSNS_BALC_SE
+		         , NULL AS BUDGET_ACNT_CODE
+		         , NULL AS BUDGET_ACNT_NM
+		         , NULL AS MTCHG_SE
+		         , NULL AS CMPNSP_NO_CNT
+		         
+		         ,NVL(MAX(REGIST_DT), TO_DATE('19990101', 'YYYYMMDD')) AS REGIST_DT
+		         
+		  FROM (
+		      SELECT * FROM TBFUN_CPTAL_ASIGN_TM t1
+		      UNION ALL 
+		      SELECT * FROM TBACC_EXP_DSN_MASTR_TM t2
+		  )
+		)
+		SELECT TIMHDER_CONFM
+		      ,CPTAL_EXPNDTR_ACNTBK_DE
+		      ,SUMRY
+		      ,RCPT_MAN
+		      ,CHECK_NO
+		      ,ASIGN_AMOUNT01
+		      ,ASIGN_AMOUNT02
+		      ,ASIGN_AMOUNT03
+		      ,ASIGN_SUM_AMOUNT
+		      ,FNNC_INSTT_CODE
+		      ,FNNC_INSTT_NM
+		      ,FNNC004_EXPNDTR_AMT
+		      ,FNNC020_EXPNDTR_AMT
+		      ,FNNC031_EXPNDTR_AMT
+		      ,FNNC_EXPNDTR_AMT
+		      ,MIJIGUK_AMT01
+		      ,MIJIGUK_AMT02
+		      ,MIJIGUK_AMT03
+		      ,MIJIGUK_AMT
+		      ,DECSN_YEAR
+		      ,DECSN_NO
+		      ,ANACT_KND
+		      ,BSNS_BALC_SE
+		      ,BUDGET_ACNT_CODE
+		      ,BUDGET_ACNT_NM
+		      ,ASIGN_BLCE01
+		      ,ASIGN_BLCE02
+		      ,ASIGN_BLCE03
+		      ,ASIGN_BLCE
+		      ,MTCHG_SE
+		      ,UNION_ORDER	
+		      ,CMPNSP_NO_CNT
+		      ,#S2_EMPNO#      AS S2_EMPNO                /*상신자*/
+		      ,#S3_EMPNO#      AS S3_EMPNO                /*2번째결재자*/
+		      ,#S2_SANCTN_DT#  AS S2_SANCTN_DT            /*상신일시*/
+		      ,#S3_SANCTN_DT#  AS S3_SANCTN_DT            /*2번째결재일시*/
+		      
+		      ,NULL AS SANCTN_NO
+		           
+		      ,SFCOM_GET_IN_SANCTNSTS('MIS', 'ACC', 'ACC-100050' || '^' || #SRCH_DT# || '^' || #SITE_SE# , REGIST_DT) AS LAST_SANCTN_STTUS
+	          ,SFCOM_GET_IN_SANCTNSTS_IMG('MIS', 'ACC', 'ACC-100050' || '^' || #SRCH_DT#  || '^' || #SITE_SE#, REGIST_DT) AS LAST_SANCTNSTS_IMG	
+	          
+	          ,TO_CHAR(REGIST_DT,'YYYYMMDD') AS REGIST_DT
+	          
+		FROM   (
+		        SELECT 1 AS UNION_ORDER, t1.* FROM TBFUN_CPTAL_ASIGN_TM t1
+		        WHERE t1.CPTAL_EXPNDTR_ACNTBK_DE = #SRCH_DT#
+		        
+		        UNION ALL 
+		        
+		        SELECT 2 AS UNION_ORDER, t2.* FROM TBACC_EXP_DSN_MASTR_TM t2
+		        WHERE t2.CPTAL_EXPNDTR_ACNTBK_DE = #SRCH_DT#
+		          AND NVL(t2.TIMHDER_CONFM,0) LIKE #TIMHDER_CONFM#
+		        
+		        UNION ALL
+		        
+		        SELECT 3 AS UNION_ORDER, t3.* FROM TBACC_EXP_DSN_MASTR_SUM_DAILY t3
+		      	<isEqual property="SUM_MONTH_AT" compareValue="1">
+		        
+		        UNION ALL
+		        
+		        SELECT 4 AS UNION_ORDER, t4.* FROM TBACC_EXP_DSN_MASTR_SUM_MONTH t4
+		        </isEqual>
+		        
+		        UNION ALL
+		       
+		        SELECT 5 AS UNION_ORDER, t5.* FROM TBACC_EXP_DSN_MASTR_SUM_YEAR t5
+		       )		       
+		      
+		       
+		WHERE  1=1		 
+			 
+		ORDER BY UNION_ORDER
+		        <isEqual property="MTCHG_SE_ORDER" compareValue="1" prepend=",">MTCHG_SE ASC NULLS LAST</isEqual>
+		        
+		        <!-- $ 처리 2016.08.11 -->
+		        <isEqual property="SORT_ODR" compareValue="CHECK_NO">
+		        ,CHECK_NO
+		        </isEqual>
+		        <isEqual property="SORT_ODR" compareValue="FNNC_EXPNDTR_AMT">
+		        ,FNNC_EXPNDTR_AMT
+		        </isEqual>
+		        
+		        ,TIMHDER_CONFM
+		        ,CPTAL_EXPNDTR_ACNTBK_DE
+	</select>
+
+	
+	<select id="ACC020405DAO.selectChildList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*ACC020405DAO.select*/]]>
+		SELECT	DECSN_YEAR
+				, DECSN_NO
+		FROM 	TBACC_EXP_DSN_MASTR
+		WHERE	PARENT_DECSN_NO = #DECSN_NO#
+		AND		SFCOM_GET_IN_SANCTNSTS('MIS' ,'ACC'  ,DECSN_YEAR || '^' || DECSN_NO, REGIST_DT) = 'S01'
+	</select>
+	
+	
+	<!-- 팀장승인 -->
+	<update id="ACC020405DAO.timhderConfmU" parameterClass="java.util.HashMap">
+		UPDATE TBACC_EXP_DSN_MASTR
+		SET TIMHDER_CONFM 	= #TIMHDER_CONFM#
+		WHERE DECSN_YEAR 	= #DECSN_YEAR#
+		  AND DECSN_NO		= #DECSN_NO#
+	</update>
+	
+	<parameterMap id="ACC020405DAO.expndtrSlipIMap" class="java.util.HashMap">
+		<parameter property="DECSN_YEAR"            jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="DECSN_NO"          	jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="S_USER_ID"          	jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="OUT_SLIP_NO" 			jdbcType="VARCHAR" javaType="java.lang.String" mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"        jdbcType="VARCHAR" javaType="java.lang.String" mode="OUT" />
+	</parameterMap>
+	
+	<!-- 전표생성 -->
+	<procedure id="ACC020405DAO.expndtrSlipI" parameterMap="ACC020405DAO.expndtrSlipIMap">
+		{ CALL SPACC_EXPNDTR_SLIP_I(TO_CHAR(SYSDATE,'YYYYMMDD'), ?, ?, 'C1', ?, ?, ?) }
+	</procedure>
+	
+	<!-- 전표삭제 -->
+	<delete id="ACC020405DAO.expndtrSlipD" parameterClass="java.util.HashMap">
+		DECLARE
+		BEGIN
+			DELETE FROM TBACC_CHIT_DETAIL t1
+			WHERE EXISTS (
+				SELECT 1
+				FROM TBACC_CHIT_MASTR t2
+				WHERE t1.ACCNUT_YEAR 	= t2.ACCNUT_YEAR
+				  AND t1.CHIT_NO		= t2.CHIT_NO
+				  AND t2.DECSN_YEAR		= #DECSN_YEAR#
+				  AND t2.DECSN_NO		IN (SELECT DECSN_NO FROM TBACC_EXP_DSN_MASTR AA WHERE PARENT_DECSN_NO = #DECSN_NO#)
+			)
+			;
+			
+			DELETE FROM TBACC_CHIT_MASTR
+			WHERE DECSN_YEAR = #DECSN_YEAR#
+			  AND DECSN_NO	 IN (SELECT DECSN_NO FROM TBACC_EXP_DSN_MASTR AA WHERE PARENT_DECSN_NO = #DECSN_NO#)
+			;
+			
+			DELETE FROM TBACC_CHIT_DETAIL t1
+			WHERE EXISTS (
+				SELECT 1
+				FROM TBACC_CHIT_MASTR t2
+				WHERE t1.ACCNUT_YEAR 	= t2.ACCNUT_YEAR
+				  AND t1.CHIT_NO		= t2.CHIT_NO
+				  AND t2.DECSN_YEAR		= #DECSN_YEAR#
+				  AND t2.DECSN_NO		= #DECSN_NO#
+			)
+			;
+			
+			DELETE FROM TBACC_CHIT_MASTR
+			WHERE DECSN_YEAR = #DECSN_YEAR#
+			  AND DECSN_NO	 = #DECSN_NO#
+			;
+		END;
+	</delete>
+
+    
+</sqlMap>

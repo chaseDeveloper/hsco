@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj03">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBACC_ACCNUT_ACNT_SBJECT		회계계정과목
+		 R   : TBACC_EXP_DSN_MASTR			지출결의
+		 R   : TBPRJ_EXPENS_RT				경비율
+		 R   : TBPRJ_PRMPC_CODE				원가코드
+		 R   : TBPRJ_BSNS_SUMRY				사업개요
+		 R   : TBPRJ_ACMSLT_PRMPC_SM		실적원가집계
+		CRUD : TBPRJ_PREARNGE_PRMPC			예정원가
+
+
+		 R   : TBACC_ACCNUT_ACNT_SBJECT	계정코드
+		 R   : TBACC_					지출정보 ^
+		 R   : TBPRJ_EXPENS_RT			경비율
+		 R   : TBPRJ_PRMPC_CODE			원가코드
+		 R   : TBPRJ_BSNS_SUMRY			사업개요
+		 R   : TBPRJ_					직접비집계 ^
+		CRUD : TBPRJ_PREARNGE_PRMPC		예정원가	예정원가계산 ~
+	-->
+
+	<!--  조회 -->
+	<select id="PRJ030401.bsnsList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 BC.BSNS_CODE			/* 사업코드 */
+	,BC.BSNS_NM				/* 사업명 */
+	,BC.BSNS_TY				/* 사업유형 */
+	,B.STRWRK_DE			/* 착공일자 */
+	,B.COMPET_DE			/* 준공일자 */
+	,ROUND(B.TOT_WCT /100000000,2) AS TOT_WCT		/* 총사업비(억원) */
+<!-- 
+	,B.TOT_WCT				/* 총사업비 */
+	,C.AMT
+-->
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+JOIN TBPRJ_BSNS_SUMRY B ON B.BSNS_CODE = BC.BSNS_CODE			/* 사업개요 */
+WHERE 1=1
+<isNotEmpty property="BSNS_GB" >
+  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+</isNotEmpty>
+ORDER BY B.STRWRK_DE,BC.BSNS_TY,BC.BSNS_CODE
+	</select>
+
+	<!-- 추정원가년차 ================================================== -->
+
+	<select id="PRJ030401.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.BSNS_STEP			/* 사업단계 */
+	,A.ODR					/* 차수 */
+	,A.STD_PRMPC_CODE		/* 표준원가코드 */
+	,A.YRYC					/* 연차 */
+	,A.YEAR					/* 년도 */
+<!-- 
+	,ROUND(A.AMOUNT /100000000,2) AS AMT	/* 금액(억원) */
+-->
+	,SUM(A.AMOUNT) AS AMT					/* 금액 */
+
+	,C.CL_SE			/* 분류구분 */
+	,DECODE(C.CL_SE, 1, C.LCLAS_NM, 2, C.MLSFC_NM, C.SCLAS_NM)
+	 AS CODE_NM			/* 원가항목명 */
+
+FROM TBPRJ_PRSMP_PRMPC_DSTRC A			/* 추정원가년차 */
+LEFT JOIN TBPRJ_PRMPC_CODE C			/* 표준원가코드 */
+  ON A.STD_PRMPC_CODE = C.STD_PRMPC_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A.BSNS_STEP = '2'					/* 사업단계 : 설계단계 */
+  AND A.ODR = 							/* 차수 */
+  (SELECT MAX(O.ODR)
+   FROM TBPRJ_PRSMP_PRMPC_DSTRC O
+   WHERE O.BSNS_CODE = A.BSNS_CODE
+     AND O.BSNS_STEP = A.BSNS_STEP
+  )
+  AND A.YEAR > #YEAR# 							/* 년도 */
+GROUP BY A.BSNS_CODE,A.BSNS_STEP,A.ODR,A.STD_PRMPC_CODE,A.YRYC,A.YEAR,C.CL_SE,DECODE(C.CL_SE, 1, C.LCLAS_NM, 2, C.MLSFC_NM, C.SCLAS_NM)
+ORDER BY 1,2,3,4,5
+	</select>
+
+	<!-- 예정원가 ================================================== -->
+
+	<select id="PRJ030401.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.STDR_YEAR			/* 기준년도 */
+	,A.BSNS_CODE			/* 사업코드 */
+	,A.BSNS_YY_ODR			/* 사업년차수 */
+	,A.BSNS_YEAR			/* 사업년도 */
+<!-- 
+	,A.PLAN_PRMPC AS AMT	/* 계획원가 */
+	,A.CMPNTRT AS RT		/* 구성비 */
+-->
+	,ROUND(A.PLAN_PRMPC /100000000,2) AS AMT	/* 계획원가(억원) */
+	,ROUND(100 * RATIO_TO_REPORT(A.PLAN_PRMPC)
+	 OVER (PARTITION BY A.STDR_YEAR,A.BSNS_CODE,A.BSNS_YY_ODR,A.BSNS_YEAR,A.RM), 2)
+	 AS RT 		/* 구성비 */
+	,A.RM					/* 비고 */
+FROM TBPRJ_PREARNGE_PRMPC A			/* 예정원가 */
+WHERE A.STDR_YEAR = #YEAR#				/* 기준년도 */
+  AND A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A.BSNS_YY_ODR =					/* 사업년차수 */
+  (SELECT MAX(O.BSNS_YY_ODR)
+   FROM TBPRJ_PREARNGE_PRMPC O
+   WHERE O.STDR_YEAR = A.STDR_YEAR
+     AND O.BSNS_CODE = A.BSNS_CODE
+  )
+<isNotEmpty property="CD1" >
+</isNotEmpty>
+ORDER BY 1,2,3
+	</select>
+
+</sqlMap>

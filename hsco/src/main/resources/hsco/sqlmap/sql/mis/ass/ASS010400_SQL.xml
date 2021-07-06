@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ASS010400_SQL">	
+    
+	<!-- 불용품관리(마스터) 조회 -->
+	<select id="ASS010400DAO.atldManageList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+            SELECT T1.REQST_YEAR                                 AS REQST_YEAR          /* 신청년도 */
+                   ,T1.ODR                                       AS ODR                 /* 차수 */
+                   ,T1.DISUSE_PLAN_DE                            AS DISUSE_PLAN_DE      /* 불용계획일자 */
+                   ,T1.REQUST_DEPT                               AS REQUST_DEPT         /* 요청부서 */
+                   ,T2.DEPT_NM                                   AS DEPT_NM             /* 요청부서 명 */
+                   ,NVL(T6.DISUSE_PROCESS_AT, '0')               AS DISUSE_PROCESS_AT   /* 불용처리여부 */
+                   ,NVL(T1.DISUSE_CONFM_AT, '0')                 AS DISUSE_CONFM_AT     /* 불용승인여부 */
+                   ,T1.DISUSE_CONFM_DE                           AS DISUSE_CONFM_DE     /* 불용승인일자 */
+                   ,NVL(T6.ACQS_AMOUNT,0)                        AS ACQS_AMOUNT         /* 취득금액합계 */
+                   ,NVL(T6.DPRC_ACMTL_AMOUNT,0)                  AS DPRC_ACMTL_AMOUNT   /* 상각누계액합계 */
+                   ,NVL(T6.DISUSE_AMOUNT,0)                      AS DISUSE_AMOUNT       /* 불용금액합계 */
+                   ,T1.REGIST_DT
+            FROM   TBASS_ATLD_MANAGE T1
+                   LEFT OUTER JOIN VWHRM_DEPT T2
+                                ON T1.REQUST_DEPT = T2.DEPT_CODE
+                   LEFT OUTER JOIN (SELECT T1.REQST_YEAR
+                                            , T1.ODR
+                                            , SUM(NVL(T1.DISUSE_AMOUNT,0)) AS DISUSE_AMOUNT 
+                                            , SUM(NVL(T2.DPRC_ACMTL_AMOUNT,0)) AS DPRC_ACMTL_AMOUNT
+                                            , SUM(NVL(T2.GOVSUBY_DPRC_ACMTL_AMOUNT,0)) AS GOVSUBY_DPRC_ACMTL_AMOUNT
+                                            , SUM(NVL(T3.ACQS_AMOUNT,0)) AS ACQS_AMOUNT
+                                            , NVL(MAX(T1.DISUSE_PROCESS_AT), 0) AS DISUSE_PROCESS_AT
+                                     FROM   TBASS_ATLD_MANAGE_DETAIL T1
+                                            LEFT OUTER JOIN (SELECT ASSETS_NO
+                                                                     ,MIN(DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS DPRC_ACMTL_AMOUNT
+                                                                     ,MIN(GOVSUBY_DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS GOVSUBY_DPRC_ACMTL_AMOUNT
+                                                              FROM TBASS_DPRC
+                                                              GROUP BY ASSETS_NO
+                                                             ) T2
+                                                          ON T1.ASSETS_NO = T2.ASSETS_NO
+                                            ,TBASS_ASSETS_MASTR T3
+                                      WHERE T1.ASSETS_NO = T3.ASSETS_NO
+                                      GROUP BY T1.REQST_YEAR, T1.ODR
+                                    ) T6
+                                 ON T1.REQST_YEAR = T6.REQST_YEAR
+                                AND T1.ODR = T6.ODR             
+            WHERE 1=1
+              AND (T1.CHARGER_REGIST_AT <> '1' OR T1.CHARGER_REGIST_AT IS NULL)
+              AND T1.REQST_YEAR = #RECIPT_YEAR#
+              
+		]]>	
+			<isNotEmpty property="REQUST_DEPT">
+				<isNotEqual property="REQUST_DEPT" compareValue="000000">
+					AND T1.REQUST_DEPT = #REQUST_DEPT#
+				</isNotEqual>
+			</isNotEmpty>
+			<!-- <isNotEmpty property="DISUSE_PROCESS_AT">
+		      AND T1.DISUSE_PROCESS_AT = #DISUSE_PROCESS_AT#
+			</isNotEmpty> -->
+		<![CDATA[
+		    ORDER BY T1.REQST_YEAR, T1.ODR
+		]]>		
+    </select>
+    
+	<!-- 불용품관리상세(디테일) 조회 -->
+	<select id="ASS010400DAO.atldManageDetail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			 SELECT T1.ASSETS_NO                                /* 자산번호 */
+			       ,T3.ASSETS_CL_CODE                          /* 자산분류코드 */
+			       ,T4.ASSETS_CL_NM                            /* 자산분류명 */
+			       ,T3.ASSETS_SE                               /* 자산구분 */
+			       ,T3.ASSETS_NM                               /* 자산명 */
+			       ,NVL(T1.DISUSE_AMOUNT,0) AS DISUSE_AMOUNT   /* 불용금액 */
+			       ,T1.DISUSE_SE_CODE                          /* 불용구분코드 */
+			       ,T1.DISUSE_PRVONSH                          /* 불용사유 */
+			       ,T3.UNTPC                                   /* 단가 */
+			       ,T3.QY                                      /* 수량 */
+			       ,T3.UNIT                                    /* 단위 */
+			       ,T3.STNDRD                                  /* 규격 */
+			       ,NVL(T3.ACQS_AMOUNT,0) AS ACQS_AMOUNT                       /* 취득금액 */
+			       ,NVL(T2.DPRC_ACMTL_AMOUNT,0) AS DPRC_ACMTL_AMOUNT           /* 상각누계금액 */
+			       ,NVL(T3.GOVSUBY_ACQS_AMOUNT,0) AS GOVSUBY_ACQS_AMOUNT                /* 국고보조금취득가액 */
+			       ,NVL(T2.GOVSUBY_DPRC_ACMTL_AMOUNT,0) AS GOVSUBY_DPRC_ACMTL_AMOUNT    /* 국고보조금_상각누계금액 */
+			       ,NVL(T2.TRMEND_BLCE,0) AS TRMEND_BLCE /* 장부가액 */
+			       ,T1.REQST_YEAR
+			       ,T1.ODR
+			       ,NVL(T1.DISUSE_CONFM_AT, '0')                 AS DISUSE_CONFM_AT     /* 불용승인여부 */
+			       ,NVL(T1.DISUSE_PROCESS_AT, '0')               AS DISUSE_PROCESS_AT   /* 불용처리여부 */
+			       ,T1.DISUSE_CONFM_DE                           AS DISUSE_CONFM_DE     /* 불용승인일자 */
+			FROM   TBASS_ATLD_MANAGE_DETAIL T1
+			       LEFT OUTER JOIN (SELECT ASSETS_NO
+			                               ,MIN(DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS DPRC_ACMTL_AMOUNT
+			                               ,MIN(GOVSUBY_DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS GOVSUBY_DPRC_ACMTL_AMOUNT
+			                               ,MIN(TRMEND_BLCE) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS TRMEND_BLCE
+			                        FROM TBASS_DPRC
+			                        GROUP BY ASSETS_NO
+			                       ) T2
+			                    ON T1.ASSETS_NO = T2.ASSETS_NO
+			       ,TBASS_ASSETS_MASTR T3
+			       ,TBASS_ASSETS_CL T4
+			WHERE 1=1
+			  AND T1.REQST_YEAR     = #REQST_YEAR#
+			  AND T1.ODR            = #ODR#
+			  AND T1.ASSETS_NO      = T3.ASSETS_NO
+			  AND T3.ASSETS_CL_CODE = T4.ASSETS_CL_CODE
+			ORDER BY T1.ASSETS_NO
+			]]>	
+    </select>    
+    
+	<!-- 불용품대상 조회 -->
+	<select id="ASS010400DAO.atldTrgetList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT '0' AS CHK
+			       ,T1.ASSETS_NO                     /* 자산번호 */
+			       ,T1.ASSETS_CL_CODE               /* 자산분류코드 */
+			       ,T3.ASSETS_CL_NM                 /* 자산분류명 */
+			       ,T1.ASSETS_SE                    /* 자산구분 */
+			       ,T1.ASSETS_NM                    /* 자산명 */
+			       ,T1.UNTPC                        /* 단가 */
+			       ,T1.QY                           /* 수량 */
+			       ,T1.UNIT                         /* 단위 */
+			       ,T1.STNDRD                       /* 규격 */
+			       ,NVL(T1.ACQS_AMOUNT,0) AS ACQS_AMOUNT                /* 취득금액 */
+			       ,NVL(T2.DPRC_ACMTL_AMOUNT,0) AS DPRC_ACMTL_AMOUNT           /* 상각누계금액 */
+			       ,NVL(T1.GOVSUBY_ACQS_AMOUNT,0) AS GOVSUBY_ACQS_AMOUNT          /* 국고보조금취득가액 */
+			       ,NVL(T2.GOVSUBY_DPRC_ACMTL_AMOUNT,0) AS GOVSUBY_DPRC_ACMTL_AMOUNT    /* 국고보조금_상각누계금액 */
+			       ,NVL(T2.TRMEND_BLCE,0) AS TRMEND_BLCE /* 장부가액 */
+			       ,T4.BIZPLC_NM
+			FROM   TBASS_ASSETS_MASTR T1
+			       LEFT OUTER JOIN (SELECT ASSETS_NO
+			                               ,MIN(DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS DPRC_ACMTL_AMOUNT
+			                               ,MIN(GOVSUBY_DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS GOVSUBY_DPRC_ACMTL_AMOUNT
+			                               ,MIN(TRMEND_BLCE) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS TRMEND_BLCE
+			                        FROM TBASS_DPRC
+			                        GROUP BY ASSETS_NO
+			                       ) T2
+			                    ON T1.ASSETS_NO = T2.ASSETS_NO
+			       LEFT OUTER JOIN TBASS_ASSETS_CL T3
+			         ON T1.ASSETS_CL_CODE = T3.ASSETS_CL_CODE
+			       LEFT OUTER JOIN TBHRM_BIZPLC T4
+			         ON T1.BIZPLC_CODE = T4.BIZPLC_CODE
+			       
+			WHERE 1=1
+		]]>	
+		<isNotEmpty property="DEPT_CODE">
+		     AND T1.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="ASSETS_CL_CODE">
+		     AND T1.ASSETS_CL_CODE =#ASSETS_CL_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="ASSETS_NM">
+		     AND T1.ASSETS_NM LIKE '%' || #ASSETS_NM# || '%'
+		</isNotEmpty>
+			  AND NOT EXISTS (
+							  SELECT S2.ASSETS_NO
+							  FROM TBASS_ATLD_MANAGE_DETAIL S2
+							       INNER JOIN TBASS_ATLD_MANAGE S3
+							               ON  S2.REQST_YEAR = S3.REQST_YEAR
+							              AND S2.ODR        = S3.ODR
+							  WHERE T1.ASSETS_NO = S2.ASSETS_NO
+							    AND (
+							         S2.DISUSE_CONFM_AT = '1' /*불용승인*/
+							        )
+							 )		  
+
+		<![CDATA[
+		    ORDER BY T1.ASSETS_NO
+		]]>
+    </select>       
+  
+     <!-- 불용품관리 입력 -->
+	<insert id="ASS010400DAO.atldManageC" parameterClass="java.util.HashMap">
+	<![CDATA[       
+		INSERT INTO TBASS_ATLD_MANAGE (
+		     REQST_YEAR
+		    ,ODR
+		    ,DISUSE_PLAN_DE
+		    ,REQUST_DEPT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		) VALUES (
+		     #REQST_YEAR#
+		    ,(SELECT NVL(MAX(TO_NUMBER(ODR)),0)+1 FROM TBASS_ATLD_MANAGE WHERE REQST_YEAR = #REQST_YEAR#)
+		    ,#DISUSE_PLAN_DE#
+		    ,#REQUST_DEPT#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+    
+     <!-- 불용품관리상세 입력 -->
+    <insert id="ASS010400DAO.atldManageDetailC" parameterClass="java.util.HashMap">
+        <![CDATA[       
+	       INSERT INTO TBASS_ATLD_MANAGE_DETAIL (
+	                    REQST_YEAR
+	                   ,ODR
+	                   ,ASSETS_NO
+	                   ,DISUSE_SE_CODE
+	                   ,DISUSE_PRVONSH
+	                   ,DISUSE_AMOUNT
+	                   ,REGISTER_ID
+	                   ,REGIST_DT
+	                   ,UPDUSR_ID
+	                   ,UPDT_DT
+	                   
+	             ) VALUES (
+	                	#REQST_YEAR#
+	                   ,#ODR#
+	                   ,#ASSETS_NO#
+	                   ,#DISUSE_SE_CODE#
+	                   ,#DISUSE_PRVONSH#
+	                   ,NVL(#DISUSE_AMOUNT#,0)
+	                   ,#S_USER_ID#
+	                   ,SYSDATE
+	                   ,#S_USER_ID#
+	                   ,SYSDATE
+	             )
+        ]]>
+    </insert>    
+    
+    <!-- 불용품관리 수정-->
+	<update id="ASS010400DAO.atldManageU" parameterClass="java.util.HashMap">
+	<![CDATA[
+		UPDATE    TBASS_ATLD_MANAGE
+		SET       DISUSE_PLAN_DE       = #DISUSE_PLAN_DE#
+		         ,REQUST_DEPT          = #REQUST_DEPT#
+		         ,UPDUSR_ID            = #S_USER_ID#
+		         ,UPDT_DT              = SYSDATE
+		WHERE  	REQST_YEAR 	  = #REQST_YEAR# 
+		AND       ODR         = #ODR#    
+	]]>
+	</update>
+
+	<!-- 불용품관리상세 수정-->
+	<update id="ASS010400DAO.atldManageDetailU" parameterClass="java.util.HashMap">
+	<![CDATA[
+		UPDATE    TBASS_ATLD_MANAGE_DETAIL
+		SET       DISUSE_PRVONSH       = #DISUSE_PRVONSH#
+		         ,DISUSE_AMOUNT        = NVL(#DISUSE_AMOUNT#,0)
+		         ,DISUSE_CONFM_AT      = NVL(#DISUSE_CONFM_AT#,0)
+		         ,DISUSE_CONFM_DE      = #DISUSE_CONFM_DE#
+		         ,UPDUSR_ID            = #S_USER_ID#
+		         ,UPDT_DT              = SYSDATE                  
+		WHERE  	REQST_YEAR 	  = #REQST_YEAR#
+		AND       ODR           = #ODR#
+		AND       ASSETS_NO     = #ASSETS_NO#      
+	]]>
+	</update>
+    
+    <!-- 불용품관리상세 삭제(부모삭제시 자식일괄삭제) -->
+	<delete id="ASS010400DAO.atldManageD01" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE FROM TBASS_ATLD_MANAGE_DETAIL 
+		WHERE REQST_YEAR  = #REQST_YEAR# 
+		  AND ODR         = #ODR#    
+	]]>
+	</delete>
+	
+    <!-- 불용품관리 삭제 -->
+	<delete id="ASS010400DAO.atldManageD02" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE FROM TBASS_ATLD_MANAGE 
+		WHERE REQST_YEAR  = #REQST_YEAR# 
+		  AND ODR         = #ODR#    
+	]]>
+	</delete>
+    
+    <!-- 불용품관리상세 삭제 -->
+	<delete id="ASS010400DAO.atldManageDetailD" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE FROM TBASS_ATLD_MANAGE_DETAIL 
+		WHERE REQST_YEAR  = #REQST_YEAR#
+		AND ODR           = #ODR#
+		AND ASSETS_NO     = #ASSETS_NO#     
+	]]>
+	</delete>
+    
+</sqlMap>

@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj03">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBACC_ACCNUT_ACNT_SBJECT		회계계정과목
+		 R   : TBPRJ_PRMPC_ACNT_MAPNG		원가계정맵핑
+		 R   : TBACC_CHIT_MASTR				전표마스터
+		 R   : TBACC_CHIT_DETAIL			전표상세
+		CRUD : TBPRJ_ACMSLT_PRMPC_SM		실적원가집계
+
+		 R   : TBACC_EXP_DSN_MASTR			지출결의
+	-->
+
+	<!--  조회 -->
+	<select id="PRJ030201.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 BC.BSNS_CODE			/* 사업코드 */
+	,BC.BSNS_NM				/* 사업명 */
+	,BC.BSNS_TY				/* 사업유형 */
+	,B.STRWRK_DE			/* 착공일자 */
+	,B.COMPET_DE			/* 준공일자 */
+	,B.TOT_WCT				/* 총사업비 */
+	,ROUND(C.AMT /100000000,2) AS AMT		/* 총사업비(억원) */
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+JOIN TBPRJ_BSNS_SUMRY B ON B.BSNS_CODE = BC.BSNS_CODE			/* 사업개요 */
+LEFT JOIN (
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+	SELECT
+		 A.ACCNUT_YEAR
+		,A.BSNS_CODE
+		,SUM(A.ACMSLT_AMOUNT) AS AMT
+	FROM TBPRJ_ACMSLT_PRMPC_SM A				/* 실적원가집계 */
+	GROUP BY A.ACCNUT_YEAR, A.BSNS_CODE
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 원장 : 회계-전표 */
+	SELECT
+		 A.ACCNUT_YEAR
+		,A.BSNS_CODE
+		,SUM(A.AMT) AS AMT		/* 집계 */
+	FROM (
+	<include refid="pms_prj.v_prj_acc_detail"/>
+	) A				/* 실적원가집계 */
+	GROUP BY A.ACCNUT_YEAR, A.BSNS_CODE
+</isEqual>
+) C ON C.BSNS_CODE = BC.BSNS_CODE
+   AND C.ACCNUT_YEAR = #ACCNUT_YEAR#
+WHERE BC.BSNS_TY != 'Z'				/* 간접비 */
+  AND B.TOT_WCT IS NOT NULL
+<isNotEmpty property="BSNS_GB" >
+  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+</isNotEmpty>
+ORDER BY BC.BSNS_CODE
+	</select>
+
+	<!-- 실적원가집계 삭제 -->
+	<delete id="PRJ030201.mD" parameterClass="map">
+DELETE FROM TBPRJ_ACMSLT_PRMPC_SM			/* 실적원가집계 */
+WHERE ACCNUT_YEAR = #ACCNUT_YEAR#		/* 회계년도 */
+	</delete>
+
+	<!--  조회 -->
+	<select id="PRJ030201.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.ACCNUT_YEAR			/* 회계년도 */
+	,A.BSNS_CODE			/* 사업코드 */
+	,A.BSNS_YM				/* 사업년월 */
+	,A.AMT					/* 실적금액 */
+FROM (
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+	SELECT
+		 A.ACCNUT_YEAR			/* 회계년도 */
+		,A.BSNS_CODE			/* 사업코드 */
+		,A.BSNS_YM				/* 사업년월 */
+
+		,SUM(A.ACMSLT_AMOUNT) AS AMT		/* 실적금액 */
+	FROM TBPRJ_ACMSLT_PRMPC_SM A 			/* 실적원가집계 */
+	GROUP BY A.ACCNUT_YEAR, A.BSNS_CODE, A.BSNS_YM
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 원장 : 회계-전표 */
+	SELECT
+		 A.ACCNUT_YEAR
+		,A.BSNS_CODE
+		,SUBSTR(A.DT, 1, 6) AS BSNS_YM		/* 사업년월 */
+		,SUM(A.AMT) AS AMT					/* 집계(억원) */
+	FROM (
+	<include refid="pms_prj.v_prj_acc_detail"/>
+	) A				/* 실적원가집계 */
+	GROUP BY A.ACCNUT_YEAR, A.BSNS_CODE
+		,SUBSTR(A.DT, 1, 6)
+</isEqual>
+) A
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#
+  AND A.BSNS_CODE = #BSNS_CODE#
+ORDER BY 1,2,3
+	</select>
+
+	<!--  조회 -->
+	<select id="PRJ030201.r2List" parameterClass="map" resultClass="hashmap">
+SELECT 
+	 A.ACCNUT_YEAR			/* 회계년도 */
+	,A.STD_PRMPC_CODE		/* 표준원가코드 */
+<!-- 
+	,A.ACCNUT_ACNT_CODE		/* 회계계정코드 */
+-->
+
+	,A.AMT					/* 실적금액 */
+	,ROUND(100 * RATIO_TO_REPORT(A.AMT) OVER (PARTITION BY A.ACCNUT_YEAR,A.BSNS_CODE,A.BSNS_YM), 2)		/* : Test */
+	 AS RT					/* 구성비 */
+
+	,B.CL_SE
+	,DECODE(B.CL_SE, 1, B.LCLAS_NM, 2, B.MLSFC_NM, B.SCLAS_NM) AS CODE_NM
+	,A.ACCNUT_ACNT_NM
+FROM (
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+	SELECT
+		 A.ACCNUT_YEAR
+		,A.BSNS_CODE
+		,A.BSNS_YM
+		,A.STD_PRMPC_CODE
+		,SUM(A.ACMSLT_AMOUNT) AS AMT
+<!-- 
+		,SUM(A.CMPNTRT) AS RT
+		,'' AS ACCNUT_ACNT_CODE		/* TODO: 제거(테스트) */
+		,'' AS ACCNUT_ACNT_NM
+-->
+	FROM TBPRJ_ACMSLT_PRMPC_SM A			/* 실적원가집계 */
+	GROUP BY A.ACCNUT_YEAR,A.BSNS_CODE,A.BSNS_YM,A.STD_PRMPC_CODE
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 원장 : 회계-전표 */
+	SELECT
+		 A.ACCNUT_YEAR
+		,A.BSNS_CODE
+		,SUBSTR(A.DT, 1, 6) AS BSNS_YM		/* 사업년월 */
+		,A.STD_PRMPC_CODE
+		,SUM(A.AMT) AS AMT					/* 집계 */
+
+<!-- 
+		,A.ACCNUT_ACNT_CODE		/* TODO: 제거(테스트) */
+		,AC.ACCNUT_ACNT_NM
+-->
+	FROM (
+	<include refid="pms_prj.v_prj_acc_detail"/>
+	) A				/* 실적원가집계 */
+	LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT AC		/* 회계계정과목 */
+	  ON AC.ACCNUT_YEAR = A.ACCNUT_YEAR
+	 AND AC.ACCNUT_ACNT_CODE = A.ACCNUT_ACNT_CODE
+	GROUP BY A.ACCNUT_YEAR,A.BSNS_CODE,SUBSTR(A.DT, 1, 6),A.STD_PRMPC_CODE
+<!-- 
+		,A.ACCNUT_ACNT_CODE,AC.ACCNUT_ACNT_NM		/* TODO: 제거(테스트) */
+-->
+</isEqual>
+) A
+<!-- 
+LEFT /* TODO: 제거(맵핑체크) */
+-->
+JOIN TBPRJ_PRMPC_CODE B ON A.STD_PRMPC_CODE = B.STD_PRMPC_CODE
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#
+  AND A.BSNS_CODE = #BSNS_CODE#
+  AND A.BSNS_YM = #BSNS_YM#
+ORDER BY 1,2,3
+	</select>
+
+	<!-- 직접비 생성 -->
+	<insert id="PRJ030201.make" parameterClass="map">
+INSERT INTO TBPRJ_ACMSLT_PRMPC_SM (			/* 실적원가집계 */
+	 ACCNUT_YEAR			/* 회계년도 */
+	,BSNS_CODE				/* 사업코드 */
+	,BSNS_YM				/* 사업년월 */
+	,STD_PRMPC_CODE			/* 표준원가코드 */
+	,ACCNUT_ACNT_CODE		/* 회계계정코드 */
+
+	,ACMSLT_AMOUNT			/* 실적금액 */
+	,CMPNTRT				/* 구성비 */
+
+	,REGISTER_ID
+	,REGIST_DT
+	,UPDUSR_ID
+	,UPDT_DT
+)
+SELECT
+	 A.ACCNUT_YEAR				/* 회계년도 */
+	,A.BSNS_CODE				/* 사업코드 */
+	,A.BSNS_YM					/* 기준년월 */
+	,A.STD_PRMPC_CODE			/* 표준원가코드 */
+	,A.ACCNUT_ACNT_CODE			/* 회계계정코드 */
+
+	,A.AMT						/* 실적금액 */
+<!-- 
+	,ROUND(100 * RATIO_TO_REPORT(A.AMT) OVER (PARTITION BY A.ACCNUT_YEAR,A.BSNS_CODE,A.BSNS_YM,A.STD_PRMPC_CODE), 2)						/* TODO: 제거(테스트) */
+-->
+	,0 AS RT						/* 구성비 */
+
+	,#S_USER_ID#
+	,SYSDATE
+	,#S_USER_ID#
+	,SYSDATE
+FROM (
+	SELECT
+		 A.ACCNUT_YEAR					/* 회계년도 */
+		,A.BSNS_CODE					/* 사업코드 */
+		,SUBSTR(A.DT, 1, 6) AS BSNS_YM		/* 사업년월 */
+		,A.STD_PRMPC_CODE				/* 표준원가코드 */
+		,A.ACCNUT_ACNT_CODE			/* 회계계정코드 */
+
+		,SUM(A.AMT) AS AMT					/* 집계 */
+
+	FROM (
+	<include refid="pms_prj.v_prj_acc_detail"/>
+	) A				/* 실적원가집계 */
+
+	LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT AC		/* 회계계정과목 */
+	  ON AC.ACCNUT_YEAR = A.ACCNUT_YEAR
+	 AND AC.ACCNUT_ACNT_CODE = A.ACCNUT_ACNT_CODE
+	GROUP BY A.ACCNUT_YEAR,A.BSNS_CODE,SUBSTR(A.DT, 1, 6),A.STD_PRMPC_CODE
+		,A.ACCNUT_ACNT_CODE
+) A
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#
+  AND A.STD_PRMPC_CODE IS NOT NULL
+  AND A.ACCNUT_ACNT_CODE IS NOT NULL
+ORDER BY 1,2,3,4,5
+	</insert>
+
+</sqlMap>

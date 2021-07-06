@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH030305_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 조직별 평가내역 집계 정보  조회 -->
+	<select id="ACH030305DAO.selectListMst" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        WITH V_QLEVAL_EVL AS (
+                            	SELECT   AA.EVL_YEAR    AS EVL_YEAR
+                            	       , AA.ODR_SE      AS ODR_SE
+                            	       , AA.IX_CODE     AS IX_CODE
+                            	       , AA.ORGNZT_CODE AS ORGNZT_CODE
+                            	       , AA.SEQ         AS SEQ
+                            	       , ROUND(AVG(NVL(EVL_SCORE,0)),2) AS A_EVL_SCORE
+                                       , COUNT(*)                       AS CNT
+                            	  FROM TBACH_QLEVAL_EVL AA 
+                            	 WHERE 1=1 
+                            	 GROUP   BY AA.EVL_YEAR
+                            	       , AA.ODR_SE
+                            	       , AA.IX_CODE
+                            	       , AA.ORGNZT_CODE
+                            	       , AA.SEQ 
+                            	HAVING 1=1 
+                                   AND AA.EVL_YEAR = #EVL_YEAR#
+                                   AND AA.ODR_SE = #ODR_SE#
+                                <isNotEmpty property="ORGNZT_CODE">							       
+                                   AND AA.ORGNZT_CODE = #ORGNZT_CODE#
+                                </isNotEmpty>
+                                   AND AA.SEQ = #SEQ#
+        )
+        SELECT   E.EVL_YEAR 			AS EVL_YEAR
+               , E.ODR_SE 				AS ODR_SE
+               , E.IX_CODE 				AS IX_CODE
+        	   , '[ ' || E.IX_CODE || ' ] ' || SFACH_GET_IXNM(E.EVL_YEAR, E.ODR_SE, E.IX_CODE) 	AS IX_CDNM			     
+               , E.ORGNZT_CODE 			AS ORGNZT_CODE
+               , B.ORGNZT_NM            AS ORGNZT_NM
+               , B.EVL_GROUP_SE         AS EVL_GROUP_SE
+               , A.EVL_WGHTVAL			AS EVL_WGHTVAL
+               , (CASE WHEN C.CNT = D.CNT
+                       THEN C.A_EVL_SCORE
+                       ELSE NULL
+                       END
+                   ) AS EVL_SCORE
+               , (CASE WHEN C.CNT = D.CNT
+                       THEN ROUND(NVL(C.A_EVL_SCORE, 0) * NVL(A.EVL_WGHTVAL, 0) / 100, 2)
+                       ELSE NULL
+                       END
+                   ) AS RSLT_SCORE_C
+               , A.ATCH_FID             AS ATCH_FID    
+               , A.SEQ        			AS SEQ
+          FROM TBACH_WGHTVAL E
+               LEFT OUTER JOIN TBACH_QLEVAL_RESULT A
+                            ON E.EVL_YEAR = A.EVL_YEAR
+                           AND E.ODR_SE   = A.ODR_SE
+                           AND E.IX_CODE  = A.IX_CODE
+                           AND E.ORGNZT_CODE = A.ORGNZT_CODE                    
+                           AND (
+                                 A.SEQ = #SEQ#
+                                 OR
+                                 (A.SEQ = '0' AND NOT EXISTS (SELECT 1
+                                                              FROM TBACH_QLEVAL_RESULT
+                                                              WHERE EVL_YEAR  = a.EVL_YEAR
+                                                              AND ODR_SE      = a.ODR_SE
+                                                              AND IX_CODE     = a.IX_CODE
+                                                              AND ORGNZT_CODE = A.ORGNZT_CODE
+                                                              AND SEQ = #SEQ#
+                                                             )
+                                 )
+                                )
+               LEFT OUTER JOIN V_QLEVAL_EVL C
+                            ON A.EVL_YEAR    = C.EVL_YEAR
+                           AND A.ODR_SE      = C.ODR_SE
+                           AND A.IX_CODE     = C.IX_CODE
+                           AND A.ORGNZT_CODE = C.ORGNZT_CODE
+               LEFT OUTER JOIN (SELECT EVL_YEAR
+                                      ,ODR_SE
+                                      ,IX_CODE
+                                      ,COUNT(*) AS CNT
+                                FROM  TBACH_QLE_EVL_MAN_CNNC
+                                GROUP BY EVL_YEAR, ODR_SE, IX_CODE
+                                )D
+                            ON A.EVL_YEAR = D.EVL_YEAR
+                           AND A.ODR_SE   = D.ODR_SE
+                           AND A.IX_CODE  = D.IX_CODE                             
+               ,TBACH_EVL_TRGET_ORGNZT B
+               ,TBACH_KPI F
+         WHERE 1=1
+           AND E.EVL_YEAR = B.EVL_YEAR
+           AND E.ODR_SE = B.ODR_SE
+           AND E.ORGNZT_CODE = B.ORGNZT_CODE
+           AND E.EVL_YEAR = #EVL_YEAR#
+           AND E.ODR_SE = #ODR_SE#
+        <isNotEmpty property="ORGNZT_CODE">			  
+           AND A.ORGNZT_CODE = #ORGNZT_CODE#
+        </isNotEmpty>
+           AND E.EVL_YEAR = F.EVL_YEAR
+           AND E.ODR_SE = F.ODR_SE
+           AND E.IX_CODE = F.IX_CODE
+           AND F.USE_AT = '1'
+           AND F.IX_CHARCT = '001'
+           AND F.IX_SE = '004'
+         ORDER BY E.ORGNZT_CODE, E.IX_CODE
+    </select>
+    
+    <!-- 조직/지표/평가자별 평가내역 상세 정보  조회 -->
+	<select id="ACH030305DAO.selectListDtl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.EVL_YEAR 					AS EVL_YEAR
+		       , A.ODR_SE 					AS ODR_SE
+		       , A.IX_CODE 					AS IX_CODE		       
+		       , A.ORGNZT_CODE 				AS ORGNZT_CODE
+               , B.ORGNZT_NM                AS ORGNZT_NM
+               , B.EVL_GROUP_SE             AS EVL_GROUP_SE
+               , A.EVL_WGHTVAL				AS EVL_WGHTVAL
+               , A.ATCH_FID                 AS ATCH_FID
+               , D.EVL_MAN_NO               AS EVL_MAN_NO
+               ,( SELECT QM.EVL_RSPOFC_SE 
+                    FROM TBACH_QLE_EVL_MAN QM
+                   WHERE 1=1
+                     AND QM.EVL_YEAR = A.EVL_YEAR
+                     AND QM.ODR_SE = A.ODR_SE
+                     AND QM.EVL_MAN_NO = D.EVL_MAN_NO ) AS EVL_RSPOFC_SE              
+		       , D.EVL_GRAD 				AS EVL_GRAD
+		       , D.EVL_SCORE 				AS EVL_SCORE 
+		       , NVL(D.EVL_SCORE, 0) * NVL(A.EVL_WGHTVAL, 0) / 100   AS RSLT_SCORE_C   
+			   , D.EVL_PRVONSH				AS EVL_RESN
+			   , D.SEQ  					AS SEQ
+		  FROM TBACH_QLEVAL_RESULT A
+		       , TBACH_EVL_TRGET_ORGNZT B
+               , TBACH_QLE_EVL_MAN_CNNC C
+		       , TBACH_QLEVAL_EVL D
+		 WHERE 1=1
+           AND A.EVL_YEAR = B.EVL_YEAR
+           AND A.ODR_SE = B.ODR_SE
+           AND A.ORGNZT_CODE = B.ORGNZT_CODE
+           AND A.EVL_YEAR = C.EVL_YEAR
+           AND A.ODR_SE = C.ODR_SE
+           AND A.IX_CODE = C.IX_CODE
+           AND A.EVL_YEAR = D.EVL_YEAR
+           AND A.ODR_SE = D.ODR_SE
+           AND A.IX_CODE = D.IX_CODE
+           AND A.ORGNZT_CODE = D.ORGNZT_CODE
+           AND A.SEQ = D.SEQ
+           AND C.EVL_MAN_NO = D.EVL_MAN_NO
+		   AND A.EVL_YEAR = #EVL_YEAR#
+		   AND A.ODR_SE = #ODR_SE#
+		   AND A.IX_CODE = #IX_CODE#
+           AND A.ORGNZT_CODE = #ORGNZT_CODE#
+           AND D.SEQ = #SEQ#
+		 ORDER BY D.EVL_MAN_NO
+    </select>    
+
+</sqlMap>

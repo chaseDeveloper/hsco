@@ -1,0 +1,977 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM080301_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- iterate를 위한 원격교육코드목록 조회 -->
+	<select id="HRM080301DAO.selectRemoteEdcCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		SELECT YEAR
+		     , CODE
+		     , CODE_NM
+		     , SUBSTR(CODE,1,1) AS CODE_GRP
+		     , DECODE(GNRL_JSSFC_2, '1', '2급', 'NULL')  AS JSSFC2
+		     , DECODE(GNRL_JSSFC_3, '1', '3급', 'NULL')  AS JSSFC3
+		     , DECODE(GNRL_JSSFC_4, '1', '4급', 'NULL')  AS JSSFC4
+		     , DECODE(GNRL_JSSFC_5, '1', '5급', 'NULL')  AS JSSFC5
+		     , DECODE(GNRL_JSSFC_6, '1', '6급', 'NULL')  AS JSSFC6
+		     , DECODE(CNTRCT_JSSFC, '1', 'ETC', 'NULL')  AS ETC
+		     , DECODE(NEW_ECNY, '1', 'NEW', 'NULL')      AS NEW
+		FROM TBHRM_REMOTE_EDC_CODE
+		WHERE USE_AT = '1'
+		  AND YEAR = #YEAR#
+		ORDER BY CODE_ORDR
+    </select>  
+    
+	<!-- 의무교육이수현황 조회 -->
+	<select id="HRM080301DAO.selectEdcDutyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080301DAO.selectEdcDutyList*/]]>
+		<![CDATA[
+			WITH temp1 AS (
+			    SELECT t1.EMPNO
+			          ,t1.EMPNM
+			          ,t1.ECNY_DE
+			          ,t1.RETIRE_DE
+			          ,DECODE(t2.GNFD_DE, NULL, t1.ECNY_DE, t2.GNFD_DE)          AS LAST_GNFD_DE
+			          ,DECODE(t2.DEPT_CODE, NULL, t1.DEPT_CODE, t2.DEPT_CODE)    AS DEPT_CODE
+			          ,DECODE(t2.STTUS_SE, NULL, t1.STTUS_SE, t2.STTUS_SE)       AS STTUS_SE
+			          ,DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE)       AS JSSFC_SE
+			          ,DECODE(t2.HR_CLSF_SE, NULL, t1.HR_CLSF_SE, t2.HR_CLSF_SE) AS HR_CLSF_SE
+			          ,DECODE(t2.OFCPS_SE, NULL, t1.OFCPS_SE, t2.OFCPS_SE)       AS OFCPS_SE
+			    FROM TBHRM_HR_MASTR t1
+			    LEFT OUTER JOIN (SELECT t1.*
+			                           ,t1.CLSF_SE AS HR_CLSF_SE
+			                           ,SFHRM_GET_STTUS_SE(t1.GNFD_SE) AS STTUS_SE2
+			                       FROM TBHRM_GNFD_DTLS t1
+			                          , (SELECT A.EMPNO
+			                                  , A.GNFD_DE
+			                                  , MAX(A.GNFD_SEQ) AS GNFD_SEQ
+			                             FROM TBHRM_GNFD_DTLS A
+			                                , (SELECT EMPNO
+			                                       ,  MAX(GNFD_DE)  AS GNFD_DE
+			                                     FROM TBHRM_GNFD_DTLS
+			                                     WHERE SUBSTR(GNFD_DE,1,6) < #YEAR# || '12'
+			                                     AND DCSN_AT = '1'
+			                                     GROUP BY EMPNO
+			                                  ) B
+			                             WHERE A.EMPNO    = B.EMPNO
+			                               AND A.GNFD_DE  = B.GNFD_DE
+			                             GROUP BY A.EMPNO, A.GNFD_DE
+			                            ) t2
+			                       WHERE 1         =1
+			                       AND t1.EMPNO    = t2.EMPNO
+			                       AND t1.GNFD_DE  = t2.GNFD_DE
+			                       AND t1.GNFD_SEQ = t2.GNFD_SEQ
+			                    )t2
+			                 ON t1.EMPNO = t2.EMPNO
+			    WHERE 1=1
+			    AND DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE) <> '08'         /*파견직 제외(직종)*/
+			    AND SUBSTR(t1.ECNY_DE,1,4) <= #YEAR# 	/*조회년도*/
+			    AND NOT EXISTS (SELECT 1
+			                    FROM TBHRM_HR_MASTR t9
+			                    WHERE t9.STTUS_SE = '009'
+			                    AND (SUBSTR(t9.RETIRE_DE,1,6) < #YEAR# || '12' OR t9.RETIRE_DE IS NULL) /*조회년도 12월 이전이거나 NULL인 퇴직자는 현황에서 제외*/
+			                    AND t1.EMPNO = t9.EMPNO
+			                   )
+			)
+			SELECT m3.DEPT_NM
+			   , m2.HR_CLSF_NM
+			   , m2.CUR_OFCPS_NM
+			   , m2.EMPNM
+			   , m2.CHANGE_PRVONSH
+			   , m2.EDC_COMPL_TIME
+			   , m2.EDC_RCOGN_TIME
+			   , m2.COMPL_AT
+			   , m2.CHA_EDC_TIME
+			FROM
+			  (
+			  SELECT m1.*
+			       , CASE WHEN (m1.EDC_RCOGN_TIME - m1.EDC_COMPL_TIME) >= 0 THEN '1' /*0:미이수, 1:이수, 2:제외자*/
+			              WHEN m1.EDC_COMPL_TIME = 0 THEN '2'
+			              ELSE '0' 
+			              END AS COMPL_AT
+			       , m1.EDC_RCOGN_TIME - m1.EDC_COMPL_TIME AS CHA_EDC_TIME
+			  FROM (
+			      SELECT t2.EMPNO
+			           , MAX(t2.DEPT_CODE) AS DEPT_CODE
+			           , MAX(t2.HR_CLSF_SE) AS HR_CLSF_SE
+			           , MAX(t2.OFCPS_SE) AS OFCPS_SE
+			           , SFCOM_CODE_NM('HRM002', MAX(t2.HR_CLSF_SE), 'CODE_NM') AS HR_CLSF_NM
+			           , SFCOM_CODE_NM('HRM003', MAX(t2.OFCPS_SE), 'CODE_NM')   AS CUR_OFCPS_NM
+			           , MAX(t2.EMPNM) AS EMPNM
+			           , MAX(t4.CHANGE_PRVONSH) AS CHANGE_PRVONSH
+			           , DECODE(MAX(t4.COMPL_TIME), NULL, SFHRM_GET_EDC_COMPL_TIME(#YEAR#, 'D2', MAX(t2.HR_CLSF_SE)), MAX(t4.COMPL_TIME)) AS EDC_COMPL_TIME
+			           , SUM(NVL(t1.EDC_RCOGN_TIME,0)) AS EDC_RCOGN_TIME
+			      FROM temp1 t2
+			           LEFT OUTER JOIN TBHRM_EDC_MANAGE t1
+			                   ON t1.YEAR = #YEAR#
+			                  AND t1.EMPNO = t2.EMPNO
+			                  AND t1.CONFM_AT = '1'
+			           LEFT OUTER JOIN TBHRM_EDC_COMPL_CHANGE_MANAGE t4
+			                   ON t4.YEAR = #YEAR#
+			                  AND t2.EMPNO = t4.EMPNO
+			      WHERE 1=1
+			      GROUP BY t2.EMPNO
+			    ) m1
+			  ) m2
+			LEFT OUTER JOIN TBHRM_DEPT m3
+			     ON m2.DEPT_CODE = m3.DEPT_CODE
+			LEFT OUTER JOIN VWHRM_DEPT m4
+			     ON m3.DEPT_CODE = m4.DEPT_CODE
+			WHERE 1=1
+		]]>
+			<isNotEmpty property="DEPT_CODE">
+			  AND m2.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNO">
+			  AND m2.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="COMPL_AT">
+			  AND m2.COMPL_AT = #COMPL_AT#
+			</isNotEmpty>
+		<![CDATA[
+			ORDER BY m2.HR_CLSF_SE ASC, m4.OUTPT_ORDR ASC, m2.EMPNM
+		]]>
+	</select>
+	
+	<!-- 지정학습이수현황 조회 -->
+	<select id="HRM080301DAO.selectEdcAppnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080301DAO.selectEdcAppnList*/]]>
+		<![CDATA[
+			WITH temp1 AS (
+			    SELECT t1.EMPNO
+			          ,t1.EMPNM
+			          ,t1.ECNY_DE
+			          ,t1.RETIRE_DE
+			          ,DECODE(t2.GNFD_DE, NULL, t1.ECNY_DE, t2.GNFD_DE)          AS LAST_GNFD_DE
+			          ,DECODE(t2.DEPT_CODE, NULL, t1.DEPT_CODE, t2.DEPT_CODE)    AS DEPT_CODE
+			          ,DECODE(t2.STTUS_SE, NULL, t1.STTUS_SE, t2.STTUS_SE)       AS STTUS_SE
+			          ,DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE)       AS JSSFC_SE
+			          ,DECODE(t2.HR_CLSF_SE, NULL, t1.HR_CLSF_SE, t2.HR_CLSF_SE) AS HR_CLSF_SE
+			          ,DECODE(t2.OFCPS_SE, NULL, t1.OFCPS_SE, t2.OFCPS_SE)       AS OFCPS_SE
+			    FROM TBHRM_HR_MASTR t1
+			    LEFT OUTER JOIN (SELECT t1.*
+			                           ,t1.CLSF_SE AS HR_CLSF_SE
+			                           ,SFHRM_GET_STTUS_SE(t1.GNFD_SE) AS STTUS_SE2
+			                       FROM TBHRM_GNFD_DTLS t1
+			                          , (SELECT A.EMPNO
+			                                  , A.GNFD_DE
+			                                  , MAX(A.GNFD_SEQ) AS GNFD_SEQ
+			                             FROM TBHRM_GNFD_DTLS A
+			                                , (SELECT EMPNO
+			                                       ,  MAX(GNFD_DE)  AS GNFD_DE
+			                                     FROM TBHRM_GNFD_DTLS
+			                                     WHERE SUBSTR(GNFD_DE,1,6) < #YEAR# || '12'
+			                                     AND DCSN_AT = '1'
+			                                     GROUP BY EMPNO
+			                                  ) B
+			                             WHERE A.EMPNO    = B.EMPNO
+			                               AND A.GNFD_DE  = B.GNFD_DE
+			                             GROUP BY A.EMPNO, A.GNFD_DE
+			                            ) t2
+			                       WHERE 1         =1
+			                       AND t1.EMPNO    = t2.EMPNO
+			                       AND t1.GNFD_DE  = t2.GNFD_DE
+			                       AND t1.GNFD_SEQ = t2.GNFD_SEQ
+			                    )t2
+			                 ON t1.EMPNO = t2.EMPNO
+			    WHERE 1=1
+			    AND DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE) <> '08'         /*파견직 제외(직종)*/
+			    AND SUBSTR(t1.ECNY_DE,1,4) <= #YEAR# 	/*조회년도*/
+			    AND NOT EXISTS (SELECT 1
+			                    FROM TBHRM_HR_MASTR t9
+			                    WHERE t9.STTUS_SE = '009'
+			                    AND (SUBSTR(t9.RETIRE_DE,1,6) < #YEAR# || '12' OR t9.RETIRE_DE IS NULL) /*조회년도 12월 이전이거나 NULL인 퇴직자는 현황에서 제외*/
+			                    AND t1.EMPNO = t9.EMPNO
+			                   )
+			)
+			SELECT m3.DEPT_NM
+			   , m2.HR_CLSF_NM
+			   , m2.CUR_OFCPS_NM
+			   , m2.EMPNM
+			   , m2.CHANGE_PRVONSH
+			   , m2.EDC_COMPL_TIME
+			   , m2.EDC_RCOGN_TIME
+			   , m2.COMPL_AT
+			   , m2.CHA_EDC_TIME
+			FROM
+			  (
+			  SELECT m1.*
+			       , CASE WHEN (m1.EDC_RCOGN_TIME - m1.EDC_COMPL_TIME) >= 0 THEN '1' 
+			              WHEN m1.EDC_COMPL_TIME = 0 THEN '2'
+			              ELSE '0' 
+			              END AS COMPL_AT
+			       , m1.EDC_RCOGN_TIME - m1.EDC_COMPL_TIME AS CHA_EDC_TIME
+			  FROM (
+			      SELECT t2.EMPNO
+			           , MAX(t2.DEPT_CODE) AS DEPT_CODE
+			           , MAX(t2.HR_CLSF_SE) AS HR_CLSF_SE
+			           , MAX(t2.OFCPS_SE) AS OFCPS_SE
+			           , SFCOM_CODE_NM('HRM002', MAX(t2.HR_CLSF_SE), 'CODE_NM') AS HR_CLSF_NM
+			           , SFCOM_CODE_NM('HRM003', MAX(t2.OFCPS_SE), 'CODE_NM')   AS CUR_OFCPS_NM
+			           , MAX(t2.EMPNM) AS EMPNM
+			           , MAX(t4.CHANGE_PRVONSH) AS CHANGE_PRVONSH
+			           , DECODE(MAX(t4.COMPL_TIME_APPN), NULL, SFHRM_GET_EDC_COMPL_TIME(#YEAR#, 'D3', MAX(t2.HR_CLSF_SE)), MAX(t4.COMPL_TIME_APPN)) AS EDC_COMPL_TIME
+			           , SUM(NVL(t1.EDC_RCOGN_TIME,0)) AS EDC_RCOGN_TIME
+			      FROM temp1 t2
+			           LEFT OUTER JOIN TBHRM_EDC_MANAGE t1
+			                   ON t1.APPN_LRN_AT = '1'
+			                  AND t1.CONFM_AT = '1'
+			                  AND t1.YEAR = #YEAR#
+			                  AND t1.EMPNO = t2.EMPNO
+			           LEFT OUTER JOIN TBHRM_EDC_COMPL_CHANGE_MANAGE t4
+			                   ON t4.YEAR = #YEAR#
+			                  AND t2.EMPNO = t4.EMPNO
+			      WHERE 1=1
+			      GROUP BY t2.EMPNO
+			    ) m1
+			  ) m2
+			LEFT OUTER JOIN TBHRM_DEPT m3
+			     ON m2.DEPT_CODE = m3.DEPT_CODE
+			LEFT OUTER JOIN VWHRM_DEPT m4
+			     ON m3.DEPT_CODE = m4.DEPT_CODE
+			WHERE 1=1
+		]]>
+			<isNotEmpty property="DEPT_CODE">
+			  AND m2.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNO">
+			  AND m2.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="COMPL_AT">
+			  AND m2.COMPL_AT = #COMPL_AT#
+			</isNotEmpty>
+		<![CDATA[
+			ORDER BY m2.HR_CLSF_SE ASC, m4.OUTPT_ORDR ASC, m2.EMPNM
+		]]>
+	</select>
+	
+	<!-- 원격교육이수현황 조회 -->
+	<select id="HRM080301DAO.selectEdcRemoteList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		<![CDATA[/*HRM080301DAO.selectEdcRemoteList*/]]>
+		<![CDATA[
+			WITH m1 AS (    /*원격교육 대상자 조회*/
+			  SELECT T1.*
+			       , CASE WHEN T1.JSSFC_SE = '02' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN SFCOM_CODE_NM('HRM002', T1.HR_CLSF_SE, 'CODE_NM')
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '401' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '2급'
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '402' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '3급'
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '403' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '4급'
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '404' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '5급'
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '405' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '6급'
+			              WHEN ((T1.JSSFC_SE <> '02' AND T1.JSSFC_SE <> '04') OR T1.JBLN_SE = '12') AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN 'ETC'
+			              WHEN T1.STTUS_SE NOT IN ('000') OR SUBSTR(T1.ECNY_DE, 1, 6) = #YEAR#||'12' THEN 'EXCL'
+			              END SE
+			       , CASE WHEN T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) BETWEEN #YEAR#-1||'12' AND #YEAR# || '11' THEN 'NEW'
+			              ELSE 'OLD'
+			              END NEW_SE
+			  FROM (SELECT t1.EMPNO
+			              ,t1.EMPNM
+			              ,t1.ECNY_DE
+			              ,t1.RETIRE_DE
+			              ,DECODE(t2.GNFD_DE, NULL, t1.ECNY_DE, t2.GNFD_DE)          AS LAST_GNFD_DE
+			              ,DECODE(t2.DEPT_CODE, NULL, t1.DEPT_CODE, t2.DEPT_CODE)    AS DEPT_CODE
+			              ,DECODE(t2.STTUS_SE, NULL, t1.STTUS_SE, t2.STTUS_SE)       AS STTUS_SE
+			              ,DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE)       AS JSSFC_SE
+			              ,DECODE(t2.HR_CLSF_SE, NULL, t1.HR_CLSF_SE, t2.HR_CLSF_SE) AS HR_CLSF_SE
+			              ,DECODE(t2.OFCPS_SE, NULL, t1.OFCPS_SE, t2.OFCPS_SE)       AS OFCPS_SE
+			              ,NVL(DECODE(t2.JBLN_SE, NULL, t1.JBLN_SE, t2.JBLN_SE),'0') AS JBLN_SE
+			        FROM TBHRM_HR_MASTR t1
+			        LEFT OUTER JOIN (SELECT t1.*
+			                               ,t1.CLSF_SE AS HR_CLSF_SE
+			                               ,SFHRM_GET_STTUS_SE(t1.GNFD_SE) AS STTUS_SE2
+			                           FROM TBHRM_GNFD_DTLS t1
+			                              , (SELECT A.EMPNO
+			                                      , A.GNFD_DE
+			                                      , MAX(A.GNFD_SEQ) AS GNFD_SEQ
+			                                 FROM TBHRM_GNFD_DTLS A
+			                                    , (SELECT EMPNO
+			                                           ,  MAX(GNFD_DE)  AS GNFD_DE
+			                                         FROM TBHRM_GNFD_DTLS
+			                                         WHERE SUBSTR(GNFD_DE,1,6) < #YEAR# || '12'
+			                                         AND DCSN_AT = '1'
+			                                         GROUP BY EMPNO
+			                                      ) B
+			                                 WHERE A.EMPNO    = B.EMPNO
+			                                   AND A.GNFD_DE  = B.GNFD_DE
+			                                 GROUP BY A.EMPNO, A.GNFD_DE
+			                                ) t2
+			                           WHERE 1         =1
+			                           AND t1.EMPNO    = t2.EMPNO
+			                           AND t1.GNFD_DE  = t2.GNFD_DE
+			                           AND t1.GNFD_SEQ = t2.GNFD_SEQ
+			                        )t2
+			                     ON t1.EMPNO = t2.EMPNO
+			        WHERE 1=1
+			        AND DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE) > '01'          /*일반직 이하(직종)*/
+			        AND DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE) <> '08'         /*파견직 제외(직종)*/
+			        AND SUBSTR(t1.ECNY_DE,1,4) <= #YEAR# 	/*조회년도*/
+			        AND NOT EXISTS (SELECT 1
+			                        FROM TBHRM_HR_MASTR t9
+			                        WHERE t9.STTUS_SE = '009'
+			                        AND (SUBSTR(t9.RETIRE_DE,1,6) < #YEAR# || '12' OR t9.RETIRE_DE IS NULL) /*조회년도 12월 이전이거나 NULL인 퇴직자는 현황에서 제외*/
+			                        AND t1.EMPNO = t9.EMPNO
+			                       )
+			  ) T1
+			),
+			m2 AS(    /*대상자별 교육 현황 조회*/
+				SELECT MAX(t2.DEPT_CODE)  AS DEPT_CODE
+				     , MAX(t2.JSSFC_SE)   AS JSSFC_SE
+				     , MAX(t2.HR_CLSF_SE) AS HR_CLSF_SE
+				     , MAX(t2.OFCPS_SE)   AS OFCPS_SE
+				     , MAX(t2.STTUS_SE)   AS STTUS_SE
+				     , SFCOM_CODE_NM('HRM001', MAX(t2.JSSFC_SE), 'CODE_NM')   AS JSSFC_NM
+				     , SFCOM_CODE_NM('HRM002', MAX(t2.HR_CLSF_SE), 'CODE_NM') AS HR_CLSF_NM
+				     , SFCOM_CODE_NM('HRM003', MAX(t2.OFCPS_SE), 'CODE_NM')   AS CUR_OFCPS_NM
+				     , SFCOM_CODE_NM('HRM005', MAX(t2.STTUS_SE), 'CODE_NM')   AS STTUS_NM
+				     , t2.EMPNO
+				     , MAX(t2.SE)        AS SE
+				     , MAX(t2.EMPNM)     AS EMPNM
+				     , MAX(t2.ECNY_DE)   AS ECNY_DE
+				     , MAX(t2.RETIRE_DE) AS RETIRE_DE
+		]]>
+				<iterate property="codeList" open="," conjunction=",">
+				<![CDATA[
+				  MAX(DECODE(t1.REMOTE_EDC_CRSE_SE, #codeList[].CODE#, t1.CNT, 0)) AS $codeList[].CODE$_CNT
+				]]>
+				</iterate>
+				<iterate property="codeList" open="," conjunction=",">
+				<![CDATA[
+				  MAX(CASE WHEN (#codeList[].JSSFC2# = t2.SE OR #codeList[].JSSFC3# = t2.SE OR #codeList[].JSSFC4# = t2.SE OR #codeList[].JSSFC5# = t2.SE OR #codeList[].JSSFC6# = t2.SE OR #codeList[].ETC# = t2.SE OR #codeList[].NEW# = t2.NEW_SE) AND #codeList[].CODE# = t1.REMOTE_EDC_CRSE_SE THEN 'Y'
+				           WHEN (#codeList[].JSSFC2# <> t2.SE AND #codeList[].JSSFC3# <> t2.SE AND #codeList[].JSSFC4# <> t2.SE AND #codeList[].JSSFC5# <> t2.SE AND #codeList[].JSSFC6# <> t2.SE AND #codeList[].ETC# <> t2.SE AND #codeList[].NEW# <> t2.NEW_SE) OR t2.SE = 'EXCL' THEN 'P'
+				           ELSE 'N'
+				           END ) AS $codeList[].CODE$
+				]]>
+				</iterate>
+		<![CDATA[
+				FROM m1 t2
+				LEFT OUTER JOIN (SELECT EMPNO, REMOTE_EDC_CRSE_SE, COUNT(*) AS CNT
+				                   FROM TBHRM_EDC_MANAGE
+				                  WHERE YEAR = #YEAR#   /*조회년도*/
+				                    AND CONFM_AT = '1'  /*승인여부*/
+				                    AND REMOTE_EDC_CRSE_SE IS NOT NULL
+				                  GROUP BY YEAR, EMPNO, REMOTE_EDC_CRSE_SE
+				                )t1
+				        ON t2.EMPNO = t1.EMPNO
+				WHERE 1=1
+				GROUP BY t2.EMPNO
+			),
+			m3 as (
+			  SELECT m2.EMPNO
+			        
+		]]>
+			       ,NVL( 
+			    <iterate property="codeList" open="" conjunction="+" close="">
+			      <isNotEqual property="codeList[].CODE_GRP" compareValue="B">
+			         DECODE(MAX($codeList[].CODE$), 'N', 1, 0)
+			      </isNotEqual>
+			    </iterate>
+			        , 0) AS UNCOMPL_CNT
+			        
+			<isEqual property="B_CODE_YN" compareValue="Y">
+			
+			       ,NVL(
+			    <iterate property="codeList" open="" conjunction="+" close="">
+			      <isEqual property="codeList[].CODE_GRP" compareValue="B">
+			         DECODE(MAX($codeList[].CODE$), 'P', 0, 1)
+			      </isEqual>
+			    </iterate>
+			        , 0) AS B_CNT
+			        
+			       ,NVL( 
+			    <iterate property="codeList" open="" conjunction="+" close="">
+			      <isEqual property="codeList[].CODE_GRP" compareValue="B">
+			         NVL(MAX($codeList[].CODE$_CNT), 0)
+			      </isEqual>
+			    </iterate>
+			        , 0) AS B_COMPL_CNT
+			        
+			</isEqual>
+			
+			<isEqual property="B_CODE_YN" compareValue="N">
+			       ,0 AS B_CNT
+			       ,2 AS B_COMPL_CNT
+			</isEqual>
+		<![CDATA[
+			        
+			  FROM m2
+			  GROUP BY m2.EMPNO
+			)
+			SELECT m4.DEPT_NM
+			     , m2.JSSFC_SE
+			     , m2.JSSFC_NM
+			     , m2.HR_CLSF_SE
+			     , m2.HR_CLSF_NM
+			     , m2.OFCPS_SE
+			     , m2.CUR_OFCPS_NM
+			     , m2.EMPNM
+		]]>
+				<iterate property="codeList" open="," conjunction=",">
+				  DECODE(m2.$codeList[].CODE$, 'Y', TO_CHAR(m2.$codeList[].CODE$_CNT), m2.$codeList[].CODE$) AS $codeList[].CODE$
+				</iterate>   
+		<![CDATA[
+			     , m2.UNCOMPL_CNT
+			     , m2.COMPL_AT
+			     , m2.CHANGE_PRVONSH
+			FROM (SELECT m2.*
+				       , DECODE(m3.B_CNT, 0, m3.UNCOMPL_CNT, m3.UNCOMPL_CNT + CASE WHEN m3.B_COMPL_CNT >= 2 THEN 0 ELSE 1 END) AS UNCOMPL_CNT
+				       , CASE WHEN m2.SE = 'EXCL' THEN '2'                              /*0:미이수, 1:이수, 2:제외자*/
+				              WHEN m2.SE <> 'EXCL' AND DECODE(m3.B_CNT, 0, m3.UNCOMPL_CNT, m3.UNCOMPL_CNT + CASE WHEN m3.B_COMPL_CNT >= 2 THEN 0 ELSE 1 END) = 0 THEN '1'
+				              ELSE '0'
+				              END AS COMPL_AT
+				       , m4.CHANGE_PRVONSH AS CHANGE_PRVONSH
+				  FROM m2
+				  LEFT OUTER JOIN m3
+				          ON m2.EMPNO = m3.EMPNO
+				  LEFT OUTER JOIN TBHRM_EDC_COMPL_CHANGE_MANAGE m4
+				          ON m4.YEAR = #YEAR#
+				         AND m2.EMPNO = m4.EMPNO
+				  ) m2
+			LEFT OUTER JOIN TBHRM_DEPT m4
+			     ON m2.DEPT_CODE = m4.DEPT_CODE
+			LEFT OUTER JOIN VWHRM_DEPT m5
+			     ON m4.DEPT_CODE = m5.DEPT_CODE
+			WHERE 1=1
+		]]>
+			<isNotEmpty property="DEPT_CODE">
+			  AND m2.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNO">
+			  AND m2.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="COMPL_AT" >
+			  AND m2.COMPL_AT = #COMPL_AT#
+			</isNotEmpty>
+		<![CDATA[
+			ORDER BY m2.HR_CLSF_SE ASC, m5.OUTPT_ORDR ASC, m2.EMPNM
+		]]>
+	</select>
+	
+	<!-- 의무교육이수현황 총괄표 조회 -->
+	<select id="HRM080301DAO.selectEdcDutyPtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080301DAO.selectEdcDutyPtList*/]]>
+		<![CDATA[
+			WITH temp1 AS (
+			    SELECT t1.EMPNO
+			          ,t1.EMPNM
+			          ,t1.ECNY_DE
+			          ,t1.RETIRE_DE
+			          ,DECODE(t2.GNFD_DE, NULL, t1.ECNY_DE, t2.GNFD_DE)          AS LAST_GNFD_DE
+			          ,DECODE(t2.DEPT_CODE, NULL, t1.DEPT_CODE, t2.DEPT_CODE)    AS DEPT_CODE
+			          ,DECODE(t2.STTUS_SE, NULL, t1.STTUS_SE, t2.STTUS_SE)       AS STTUS_SE
+			          ,DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE)       AS JSSFC_SE
+			          ,DECODE(t2.HR_CLSF_SE, NULL, t1.HR_CLSF_SE, t2.HR_CLSF_SE) AS HR_CLSF_SE
+			          ,DECODE(t2.OFCPS_SE, NULL, t1.OFCPS_SE, t2.OFCPS_SE)       AS OFCPS_SE
+			    FROM TBHRM_HR_MASTR t1
+			    LEFT OUTER JOIN (SELECT t1.*
+			                           ,t1.CLSF_SE AS HR_CLSF_SE
+			                           ,SFHRM_GET_STTUS_SE(t1.GNFD_SE) AS STTUS_SE2
+			                       FROM TBHRM_GNFD_DTLS t1
+			                          , (SELECT A.EMPNO
+			                                  , A.GNFD_DE
+			                                  , MAX(A.GNFD_SEQ) AS GNFD_SEQ
+			                             FROM TBHRM_GNFD_DTLS A
+			                                , (SELECT EMPNO
+			                                       ,  MAX(GNFD_DE)  AS GNFD_DE
+			                                     FROM TBHRM_GNFD_DTLS
+			                                     WHERE SUBSTR(GNFD_DE,1,6) < #YEAR# || '12'
+			                                     AND DCSN_AT = '1'
+			                                     GROUP BY EMPNO
+			                                  ) B
+			                             WHERE A.EMPNO    = B.EMPNO
+			                               AND A.GNFD_DE  = B.GNFD_DE
+			                             GROUP BY A.EMPNO, A.GNFD_DE
+			                            ) t2
+			                       WHERE 1         =1
+			                       AND t1.EMPNO    = t2.EMPNO
+			                       AND t1.GNFD_DE  = t2.GNFD_DE
+			                       AND t1.GNFD_SEQ = t2.GNFD_SEQ
+			                    )t2
+			                 ON t1.EMPNO = t2.EMPNO
+			    WHERE 1=1
+			    AND DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE) <> '08'         /*파견직 제외(직종)*/
+			    AND SUBSTR(t1.ECNY_DE,1,4) <= #YEAR# 	/*조회년도*/
+			    AND NOT EXISTS (SELECT 1
+			                    FROM TBHRM_HR_MASTR t9
+			                    WHERE t9.STTUS_SE = '009'
+			                    AND (SUBSTR(t9.RETIRE_DE,1,6) < #YEAR# || '12' OR t9.RETIRE_DE IS NULL) /*조회년도 12월 이전이거나 NULL인 퇴직자는 현황에서 제외*/
+			                    AND t1.EMPNO = t9.EMPNO
+			                   )
+			),
+			temp2 AS (
+			  SELECT m1.*
+			       , CASE WHEN (m1.EDC_RCOGN_TIME - m1.EDC_COMPL_TIME) >= 0 THEN '1' /*0:미이수, 1:이수, 2:제외자*/
+			              WHEN m1.EDC_COMPL_TIME = 0 THEN '2'
+			              ELSE '0' 
+			              END AS COMPL_AT
+			       , m1.EDC_RCOGN_TIME - m1.EDC_COMPL_TIME AS CHA_EDC_TIME
+			  FROM (
+			      SELECT t2.EMPNO
+			           , MAX(t2.HR_CLSF_SE) AS HR_CLSF_SE
+			           , MAX(t2.OFCPS_SE) AS OFCPS_SE
+			           , DECODE(MAX(t4.COMPL_TIME), NULL, SFHRM_GET_EDC_COMPL_TIME(#YEAR#, 'D2', MAX(t2.HR_CLSF_SE)), MAX(t4.COMPL_TIME)) AS EDC_COMPL_TIME
+			           , SUM(NVL(t1.EDC_RCOGN_TIME,0)) AS EDC_RCOGN_TIME
+			      FROM temp1 t2
+			           LEFT OUTER JOIN TBHRM_EDC_MANAGE t1
+			                   ON t1.YEAR = #YEAR#
+			                  AND t1.EMPNO = t2.EMPNO
+			                  AND t1.CONFM_AT = '1'
+			           LEFT OUTER JOIN TBHRM_EDC_COMPL_CHANGE_MANAGE t4
+			                   ON t4.YEAR = #YEAR#
+			                  AND t2.EMPNO = t4.EMPNO
+			      WHERE 1=1
+			      GROUP BY t2.EMPNO
+			    ) m1
+			),
+			temp3 AS (
+			  /* 임원현황 */  
+			  SELECT '1' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE = '101'
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 2~3급, 가~나급 */
+			  SELECT '2' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE IN ('201', '202', '401', '402')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 4급, 다급 */
+			  SELECT '3' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE IN ('203', '403')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 5급, 라급 */
+			  SELECT '4' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE IN ('204', '404')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 6급, 마급 */
+			  SELECT '5' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE IN ('205', '405')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 그외 나머지 */
+			  SELECT '6' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE = '301' OR t1.HR_CLSF_SE > '405'
+			  GROUP BY 1
+			)
+			SELECT t1.SE
+			     , NVL(t2.CNT,0) AS CNT
+			     , NVL(t2.COMPL_CNT,0) AS COMPL_CNT
+			     , NVL(t2.UNCOMPL_CNT,0) AS UNCOMPL_CNT
+			     , ROUND(NVL((t2.COMPL_CNT/t2.CNT),0)*100, 1) AS COMPL_PT
+			FROM (SELECT TO_CHAR(ROWNUM) SE
+			        FROM DUAL
+			      CONNECT BY LEVEL <= 6
+			      )t1
+			LEFT OUTER JOIN temp3 t2
+			        ON t1.SE = t2.SE
+			ORDER BY t1.SE
+		]]>
+	</select>
+	
+	<!-- 지정학습이수현황 총괄표 조회 -->
+	<select id="HRM080301DAO.selectEdcAppnPtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080301DAO.selectEdcAppnPtList*/]]>
+		<![CDATA[
+			WITH temp1 AS (
+			    SELECT t1.EMPNO
+			          ,t1.EMPNM
+			          ,t1.ECNY_DE
+			          ,t1.RETIRE_DE
+			          ,DECODE(t2.GNFD_DE, NULL, t1.ECNY_DE, t2.GNFD_DE)          AS LAST_GNFD_DE
+			          ,DECODE(t2.DEPT_CODE, NULL, t1.DEPT_CODE, t2.DEPT_CODE)    AS DEPT_CODE
+			          ,DECODE(t2.STTUS_SE, NULL, t1.STTUS_SE, t2.STTUS_SE)       AS STTUS_SE
+			          ,DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE)       AS JSSFC_SE
+			          ,DECODE(t2.HR_CLSF_SE, NULL, t1.HR_CLSF_SE, t2.HR_CLSF_SE) AS HR_CLSF_SE
+			          ,DECODE(t2.OFCPS_SE, NULL, t1.OFCPS_SE, t2.OFCPS_SE)       AS OFCPS_SE
+			    FROM TBHRM_HR_MASTR t1
+			    LEFT OUTER JOIN (SELECT t1.*
+			                           ,t1.CLSF_SE AS HR_CLSF_SE
+			                           ,SFHRM_GET_STTUS_SE(t1.GNFD_SE) AS STTUS_SE2
+			                       FROM TBHRM_GNFD_DTLS t1
+			                          , (SELECT A.EMPNO
+			                                  , A.GNFD_DE
+			                                  , MAX(A.GNFD_SEQ) AS GNFD_SEQ
+			                             FROM TBHRM_GNFD_DTLS A
+			                                , (SELECT EMPNO
+			                                       ,  MAX(GNFD_DE)  AS GNFD_DE
+			                                     FROM TBHRM_GNFD_DTLS
+			                                     WHERE SUBSTR(GNFD_DE,1,6) < #YEAR# || '12'
+			                                     AND DCSN_AT = '1'
+			                                     GROUP BY EMPNO
+			                                  ) B
+			                             WHERE A.EMPNO    = B.EMPNO
+			                               AND A.GNFD_DE  = B.GNFD_DE
+			                             GROUP BY A.EMPNO, A.GNFD_DE
+			                            ) t2
+			                       WHERE 1         =1
+			                       AND t1.EMPNO    = t2.EMPNO
+			                       AND t1.GNFD_DE  = t2.GNFD_DE
+			                       AND t1.GNFD_SEQ = t2.GNFD_SEQ
+			                    )t2
+			                 ON t1.EMPNO = t2.EMPNO
+			    WHERE 1=1
+			    AND DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE) <> '08'         /*파견직 제외(직종)*/
+			    AND SUBSTR(t1.ECNY_DE,1,4) <= #YEAR# 	/*조회년도*/
+			    AND NOT EXISTS (SELECT 1
+			                    FROM TBHRM_HR_MASTR t9
+			                    WHERE t9.STTUS_SE = '009'
+			                    AND (SUBSTR(t9.RETIRE_DE,1,6) < #YEAR# || '12' OR t9.RETIRE_DE IS NULL) /*조회년도 12월 이전이거나 NULL인 퇴직자는 현황에서 제외*/
+			                    AND t1.EMPNO = t9.EMPNO
+			                   )
+			),
+			temp2 AS (
+			  SELECT m1.*
+			       , CASE WHEN (m1.EDC_RCOGN_TIME - m1.EDC_COMPL_TIME) >= 0 THEN '1' 
+			              WHEN m1.EDC_COMPL_TIME = 0 THEN '2'
+			              ELSE '0' 
+			              END AS COMPL_AT
+			       , m1.EDC_RCOGN_TIME - m1.EDC_COMPL_TIME AS CHA_EDC_TIME
+			  FROM (
+			      SELECT t2.EMPNO
+			           , MAX(t2.HR_CLSF_SE) AS HR_CLSF_SE
+			           , MAX(t2.OFCPS_SE) AS OFCPS_SE
+			           , DECODE(MAX(t4.COMPL_TIME_APPN), NULL, SFHRM_GET_EDC_COMPL_TIME(#YEAR#, 'D3', MAX(t2.HR_CLSF_SE)), MAX(t4.COMPL_TIME_APPN)) AS EDC_COMPL_TIME
+			           , SUM(NVL(t1.EDC_RCOGN_TIME,0)) AS EDC_RCOGN_TIME
+			      FROM temp1 t2
+			           LEFT OUTER JOIN TBHRM_EDC_MANAGE t1
+			                   ON t1.APPN_LRN_AT = '1'
+			                  AND t1.CONFM_AT = '1'
+			                  AND t1.YEAR = #YEAR#
+			                  AND t1.EMPNO = t2.EMPNO
+			           LEFT OUTER JOIN TBHRM_EDC_COMPL_CHANGE_MANAGE t4
+			                   ON t4.YEAR = #YEAR#
+			                  AND t2.EMPNO = t4.EMPNO
+			      WHERE 1=1
+			      GROUP BY t2.EMPNO
+			    ) m1
+			),
+			temp3 AS (
+			  /* 임원현황 */  
+			  SELECT '1' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE = '101'
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 2~3급, 가~나급 */
+			  SELECT '2' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE IN ('201', '202', '401', '402')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 4급, 다급 */
+			  SELECT '3' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE IN ('203', '403')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 5급, 라급 */
+			  SELECT '4' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE IN ('204', '404')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 6급, 마급 */
+			  SELECT '5' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE IN ('205', '405')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 그외 나머지 */
+			  SELECT '6' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM temp2 t1
+			  WHERE t1.HR_CLSF_SE = '301' OR t1.HR_CLSF_SE > '405'
+			  GROUP BY 1
+			)
+			SELECT t1.SE
+			     , NVL(t2.CNT,0) AS CNT
+			     , NVL(t2.COMPL_CNT,0) AS COMPL_CNT
+			     , NVL(t2.UNCOMPL_CNT,0) AS UNCOMPL_CNT
+			     , ROUND(NVL((t2.COMPL_CNT/t2.CNT),0)*100, 1) AS COMPL_PT
+			FROM (SELECT TO_CHAR(ROWNUM) SE
+			        FROM DUAL
+			      CONNECT BY LEVEL <= 6
+			      )t1
+			LEFT OUTER JOIN temp3 t2
+			        ON t1.SE = t2.SE
+			ORDER BY t1.SE
+		]]>
+	</select>
+	
+	<!-- 원격교육이수현황 총괄표 조회 -->
+	<select id="HRM080301DAO.selectEdcRemotePtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		<![CDATA[/*HRM080301DAO.selectEdcRemotePtList*/]]>
+		<![CDATA[
+			WITH m1 AS (    /*원격교육 대상자 조회*/
+			  SELECT T1.*
+			       , CASE WHEN T1.JSSFC_SE = '02' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN SFCOM_CODE_NM('HRM002', T1.HR_CLSF_SE, 'CODE_NM')
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '401' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '2급'
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '402' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '3급'
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '403' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '4급'
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '404' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '5급'
+			              WHEN T1.JSSFC_SE = '04' AND T1.HR_CLSF_SE = '405' AND T1.JBLN_SE <> '12' AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN '6급'
+			              WHEN ((T1.JSSFC_SE <> '02' AND T1.JSSFC_SE <> '04') OR T1.JBLN_SE = '12') AND T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) < #YEAR#||'12' THEN 'ETC'
+			              WHEN T1.STTUS_SE NOT IN ('000') OR SUBSTR(T1.ECNY_DE, 1, 6) = #YEAR#||'12' THEN 'EXCL'
+			              END SE
+			       , CASE WHEN T1.STTUS_SE IN ('000') AND SUBSTR(T1.ECNY_DE, 1, 6) BETWEEN #YEAR#-1||'12' AND #YEAR# || '11' THEN 'NEW'
+			              ELSE 'OLD'
+			              END NEW_SE
+			  FROM (SELECT t1.EMPNO
+			              ,t1.EMPNM
+			              ,t1.ECNY_DE
+			              ,t1.RETIRE_DE
+			              ,DECODE(t2.GNFD_DE, NULL, t1.ECNY_DE, t2.GNFD_DE)          AS LAST_GNFD_DE
+			              ,DECODE(t2.DEPT_CODE, NULL, t1.DEPT_CODE, t2.DEPT_CODE)    AS DEPT_CODE
+			              ,DECODE(t2.STTUS_SE, NULL, t1.STTUS_SE, t2.STTUS_SE)       AS STTUS_SE
+			              ,DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE)       AS JSSFC_SE
+			              ,DECODE(t2.HR_CLSF_SE, NULL, t1.HR_CLSF_SE, t2.HR_CLSF_SE) AS HR_CLSF_SE
+			              ,DECODE(t2.OFCPS_SE, NULL, t1.OFCPS_SE, t2.OFCPS_SE)       AS OFCPS_SE
+			              ,NVL(DECODE(t2.JBLN_SE, NULL, t1.JBLN_SE, t2.JBLN_SE),'0') AS JBLN_SE
+			        FROM TBHRM_HR_MASTR t1
+			        LEFT OUTER JOIN (SELECT t1.*
+			                               ,t1.CLSF_SE AS HR_CLSF_SE
+			                               ,SFHRM_GET_STTUS_SE(t1.GNFD_SE) AS STTUS_SE2
+			                           FROM TBHRM_GNFD_DTLS t1
+			                              , (SELECT A.EMPNO
+			                                      , A.GNFD_DE
+			                                      , MAX(A.GNFD_SEQ) AS GNFD_SEQ
+			                                 FROM TBHRM_GNFD_DTLS A
+			                                    , (SELECT EMPNO
+			                                           ,  MAX(GNFD_DE)  AS GNFD_DE
+			                                         FROM TBHRM_GNFD_DTLS
+			                                         WHERE SUBSTR(GNFD_DE,1,6) < #YEAR# || '12'
+			                                         AND DCSN_AT = '1'
+			                                         GROUP BY EMPNO
+			                                      ) B
+			                                 WHERE A.EMPNO    = B.EMPNO
+			                                   AND A.GNFD_DE  = B.GNFD_DE
+			                                 GROUP BY A.EMPNO, A.GNFD_DE
+			                                ) t2
+			                           WHERE 1         =1
+			                           AND t1.EMPNO    = t2.EMPNO
+			                           AND t1.GNFD_DE  = t2.GNFD_DE
+			                           AND t1.GNFD_SEQ = t2.GNFD_SEQ
+			                        )t2
+			                     ON t1.EMPNO = t2.EMPNO
+			        WHERE 1=1
+			        AND DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE) > '01'          /*일반직 이하(직종)*/
+			        AND DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE) <> '08'         /*파견직 제외(직종)*/
+			        AND SUBSTR(t1.ECNY_DE,1,4) <= #YEAR# 	/*조회년도*/
+			        AND NOT EXISTS (SELECT 1
+			                        FROM TBHRM_HR_MASTR t9
+			                        WHERE t9.STTUS_SE = '009'
+			                        AND (SUBSTR(t9.RETIRE_DE,1,6) < #YEAR# || '12' OR t9.RETIRE_DE IS NULL) /*조회년도 12월 이전이거나 NULL인 퇴직자는 현황에서 제외*/
+			                        AND t1.EMPNO = t9.EMPNO
+			                       )
+			  ) T1
+			),
+			m2 AS(    /*대상자별 교육 현황 조회*/
+				SELECT MAX(t2.DEPT_CODE)  AS DEPT_CODE
+				     , MAX(t2.JSSFC_SE)   AS JSSFC_SE
+				     , MAX(t2.HR_CLSF_SE) AS HR_CLSF_SE
+				     , MAX(t2.OFCPS_SE)   AS OFCPS_SE
+				     , MAX(t2.STTUS_SE)   AS STTUS_SE
+				     , SFCOM_CODE_NM('HRM001', MAX(t2.JSSFC_SE), 'CODE_NM')   AS JSSFC_NM
+				     , SFCOM_CODE_NM('HRM002', MAX(t2.HR_CLSF_SE), 'CODE_NM') AS HR_CLSF_NM
+				     , SFCOM_CODE_NM('HRM003', MAX(t2.OFCPS_SE), 'CODE_NM')   AS CUR_OFCPS_NM
+				     , SFCOM_CODE_NM('HRM005', MAX(t2.STTUS_SE), 'CODE_NM')   AS STTUS_NM
+				     , t2.EMPNO
+				     , MAX(t2.SE)        AS SE
+				     , MAX(t2.EMPNM)     AS EMPNM
+				     , MAX(t2.ECNY_DE)   AS ECNY_DE
+				     , MAX(t2.RETIRE_DE) AS RETIRE_DE
+		]]>
+				<iterate property="codeList" open="," conjunction=",">
+				<![CDATA[
+				  MAX(DECODE(t1.REMOTE_EDC_CRSE_SE, #codeList[].CODE#, t1.CNT, 0)) AS $codeList[].CODE$_CNT
+				]]>
+				</iterate>
+				<iterate property="codeList" open="," conjunction=",">
+				<![CDATA[
+				  MAX(CASE WHEN (#codeList[].JSSFC2# = t2.SE OR #codeList[].JSSFC3# = t2.SE OR #codeList[].JSSFC4# = t2.SE OR #codeList[].JSSFC5# = t2.SE OR #codeList[].JSSFC6# = t2.SE OR #codeList[].ETC# = t2.SE OR #codeList[].NEW# = t2.NEW_SE) AND #codeList[].CODE# = t1.REMOTE_EDC_CRSE_SE THEN 'Y'
+				           WHEN (#codeList[].JSSFC2# <> t2.SE AND #codeList[].JSSFC3# <> t2.SE AND #codeList[].JSSFC4# <> t2.SE AND #codeList[].JSSFC5# <> t2.SE AND #codeList[].JSSFC6# <> t2.SE AND #codeList[].ETC# <> t2.SE AND #codeList[].NEW# <> t2.NEW_SE) OR t2.SE = 'EXCL' THEN 'P'
+				           ELSE 'N'
+				           END ) AS $codeList[].CODE$
+				]]>
+				</iterate>
+		<![CDATA[
+				FROM m1 t2
+				LEFT OUTER JOIN (SELECT EMPNO, REMOTE_EDC_CRSE_SE, COUNT(*) AS CNT
+				                   FROM TBHRM_EDC_MANAGE
+				                  WHERE YEAR = #YEAR#   /*조회년도*/
+				                    AND CONFM_AT = '1'  /*승인여부*/
+				                    AND REMOTE_EDC_CRSE_SE IS NOT NULL
+				                  GROUP BY YEAR, EMPNO, REMOTE_EDC_CRSE_SE
+				                )t1
+				        ON t2.EMPNO = t1.EMPNO
+				WHERE 1=1
+				GROUP BY t2.EMPNO
+			),
+			m3 as (
+			  SELECT m2.EMPNO
+		]]>
+			       ,NVL( 
+			    <iterate property="codeList" open="" conjunction="+" close="">
+			      <isNotEqual property="codeList[].CODE_GRP" compareValue="B">
+			         DECODE(MAX($codeList[].CODE$), 'N', 1, 0)
+			      </isNotEqual>
+			    </iterate>
+			        , 0) AS UNCOMPL_CNT
+			        
+			<isEqual property="B_CODE_YN" compareValue="Y">
+			
+			       ,NVL(
+			    <iterate property="codeList" open="" conjunction="+" close="">
+			      <isEqual property="codeList[].CODE_GRP" compareValue="B">
+			         DECODE(MAX($codeList[].CODE$), 'P', 0, 1)
+			      </isEqual>
+			    </iterate>
+			        , 0) AS B_CNT
+			        
+			       ,NVL( 
+			    <iterate property="codeList" open="" conjunction="+" close="">
+			      <isEqual property="codeList[].CODE_GRP" compareValue="B">
+			         NVL(MAX($codeList[].CODE$_CNT), 0)
+			      </isEqual>
+			    </iterate>
+			        , 0) AS B_COMPL_CNT
+			        
+			</isEqual>
+			
+			<isEqual property="B_CODE_YN" compareValue="N">
+			       ,0 AS B_CNT
+			       ,2 AS B_COMPL_CNT
+			</isEqual>
+		<![CDATA[
+			  FROM m2
+			  GROUP BY m2.EMPNO
+			),
+			m4 as (
+			  SELECT m2.*
+			       , DECODE(m3.B_CNT, 0, m3.UNCOMPL_CNT, m3.UNCOMPL_CNT + CASE WHEN m3.B_COMPL_CNT >= 2 THEN 0 ELSE 1 END) AS UNCOMPL_CNT
+			       , CASE WHEN m2.SE = 'EXCL' THEN '2'                              /*0:미이수, 1:이수, 2:제외자*/
+			              WHEN m2.SE <> 'EXCL' AND DECODE(m3.B_CNT, 0, m3.UNCOMPL_CNT, m3.UNCOMPL_CNT + CASE WHEN m3.B_COMPL_CNT >= 2 THEN 0 ELSE 1 END) = 0 THEN '1'
+			              ELSE '0'
+			              END AS COMPL_AT
+			  FROM m2
+			  LEFT OUTER JOIN m3
+			          ON m2.EMPNO = m3.EMPNO
+			),
+			m5 AS (
+			  /* 2~3급, 가~나급 */
+			  SELECT '2' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM m4 t1
+			  WHERE t1.SE IN ('2급', '3급')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 4급, 다급 */
+			  SELECT '3' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM m4 t1
+			  WHERE t1.SE IN ('4급')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 5급, 라급 */
+			  SELECT '4' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM m4 t1
+			  WHERE t1.SE IN ('5급')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 6급, 마급 */
+			  SELECT '5' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM m4 t1
+			  WHERE t1.SE IN ('6급')
+			  GROUP BY 1
+			  
+			  UNION ALL
+			  /* 그외 나머지 */
+			  SELECT '6' AS SE
+			       , COUNT(*) AS CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 1, 0)) AS COMPL_CNT
+			       , SUM(DECODE(t1.COMPL_AT, '1', 0, 1)) AS UNCOMPL_CNT
+			  FROM m4 t1
+			  WHERE t1.SE = 'ETC'
+			  GROUP BY 1
+			)
+			SELECT t1.SE
+			     , NVL(t2.CNT,0) AS CNT
+			     , NVL(t2.COMPL_CNT,0) AS COMPL_CNT
+			     , NVL(t2.UNCOMPL_CNT,0) AS UNCOMPL_CNT
+			     , ROUND(NVL((t2.COMPL_CNT/t2.CNT),0)*100, 1) AS COMPL_PT
+			FROM (SELECT TO_CHAR(ROWNUM) SE
+			        FROM DUAL
+			      CONNECT BY LEVEL <= 6
+			      )t1
+			LEFT OUTER JOIN m5 t2
+			        ON t1.SE = t2.SE
+			WHERE t1.SE > '1'
+			ORDER BY t1.SE
+		]]>
+	</select>	
+	
+</sqlMap>

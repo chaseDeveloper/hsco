@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PRJ010128_SQL">
+	
+	<!-- 사업비현황조회 -->
+	<select id="PRJ010128DAO.selectDs_Main" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT *
+		FROM   (
+		        SELECT t1.BSNS_CODE
+		              ,t1.BSNS_NM
+		              ,t2.TOT_WCT
+		              ,NVL(t2.BDN_LDCS,0) + NVL(t2.BDN_MUXP,0)      AS TOT_PLN
+		              ,NVL(t2.BDN_LDCS,0)                           AS BDN_LDCS_PLN
+		              ,NVL(t2.BDN_MUXP,0)                           AS BDN_MUXP_PLN
+		              ,NVL(t3.BDN_LDCS,0) + NVL(t3.BDN_MUXP,0)      AS TOT_ACMSLT
+		              ,NVL(t3.BDN_LDCS,0)                           AS BDN_LDCS_ACMSLT
+		              ,NVL(t3.BDN_MUXP,0)                           AS BDN_MUXP_ACMSLT
+		              ,NVL(t2.BDN_LDCS,0) + NVL(t2.BDN_MUXP,0) - NVL(t3.BDN_LDCS,0) - NVL(t3.BDN_MUXP,0)                        AS DFFRNC_AMOUNT
+		              ,DECODE(t2.TOT_WCT, 0, NULL, ROUND((NVL(t2.BDN_LDCS,0) + NVL(t2.BDN_MUXP,0)) / t2.TOT_WCT * 100,2))       AS ACHIV_RT
+		              <![CDATA[
+		              ,CASE WHEN NVL(t2.TOT_WCT,0) = 0                                                                                                  THEN ''
+		                    WHEN DECODE(t2.TOT_WCT, 0, NULL, ROUND((NVL(t2.BDN_LDCS,0) + NVL(t2.BDN_MUXP,0)) / t2.TOT_WCT * 100, 2)) > 95               THEN '1'
+		                    WHEN DECODE(t2.TOT_WCT, 0, NULL, ROUND((NVL(t2.BDN_LDCS,0) + NVL(t2.BDN_MUXP,0)) / t2.TOT_WCT * 100, 2)) BETWEEN 90 AND 95  THEN '2'
+		                    WHEN DECODE(t2.TOT_WCT, 0, NULL, ROUND((NVL(t2.BDN_LDCS,0) + NVL(t2.BDN_MUXP,0)) / t2.TOT_WCT * 100, 2)) < 90               THEN '3' END     AS STTUS
+		              ]]>
+		        FROM   TBPRJ_BSNS_CODE t1
+		               LEFT OUTER JOIN TBPRJ_BSNS_SUMRY t2
+		                    ON t1.BSNS_CODE = t2.BSNS_CODE
+		               LEFT OUTER JOIN (
+		                                SELECT s3.BSNS_CODE
+		                                      ,SUM(CASE WHEN s2.BUDGET_ACNT_NM IN ('용지비','자산취득비등') THEN NVL(s1.CRDIT_AMOUNT,0) ELSE 0 END)                            AS BDN_LDCS
+		                                      ,SUM(CASE WHEN s2.BUDGET_ACNT_NM IN ('조성비', '건설비','이전금','운영경비','판매비','반환금') THEN NVL(s1.CRDIT_AMOUNT,0) ELSE 0 END) AS BDN_MUXP
+		                                FROM   TBACC_CHIT_DETAIL s1
+		                                  LEFT OUTER JOIN TBACC_CHIT_MASTR s3
+		                                    ON  s1.ACCNUT_YEAR = s3.ACCNUT_YEAR
+		                                    AND s1.CHIT_NO     = s3.CHIT_NO
+		                                  LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE s2
+		                                    ON  s3.BUDGET_YEAR      = s2.YEAR
+		                                    AND s3.BSNS_SE          = s2.BSNS_SE
+		                                    AND s3.BALC_SE          = s2.BALC_SE
+		                                    AND s3.BUDGET_ACNT_CODE = s2.BUDGET_ACNT_CODE
+		                                WHERE s3.BSNS_CODE     IS NOT NULL
+		                                GROUP BY s3.BSNS_CODE
+		                               ) t3
+		                    ON t1.BSNS_CODE = t3.BSNS_CODE
+		              )
+	<isNotEmpty property="BSNS_STTUS">
+		WHERE  STTUS = #BSNS_STTUS#
+	</isNotEmpty>
+	</select>
+	
+</sqlMap>

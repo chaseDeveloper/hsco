@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC070301_SQL">	
+
+	<select id="ACC070301DAO.selectIncList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH TM_INC_DSN_MASTR AS (
+		    SELECT t1.BUDGET_YEAR
+		         , t1.BSNS_SE
+		         , t1.BALC_SE
+		         , t1.INC_BUDGET_ARNG_RGIST /*청구일자*/
+		         , t2.CHIT_DE               /*입금일자*/
+		         , t1.DECSN_NO 
+		         , t1.BUDGET_ACNT_CODE
+		         , t1.SUMRY1 AS SUMRY
+		         , t1.DEPT_CODE
+		         , t3.DECSN_AMOUNT
+		      FROM TBACC_INC_DSN_MASTR t1
+		           LEFT OUTER JOIN TBACC_CHIT_MASTR t2
+		                ON t1.DECSN_YEAR = t2.DECSN_YEAR
+		               AND t1.DECSN_NO   = t2.DECSN_NO
+		               AND t2.CHIT_SE = '2' /*수입*/
+		               AND t2.CHIT_TY = '2' /*확정전표*/
+		               AND t2.CHIT_CONFM_AT = '1'
+		           LEFT OUTER JOIN (
+		              SELECT DECSN_YEAR
+		                   , DECSN_NO
+		                   , SUM(DECSN_AMOUNT) AS DECSN_AMOUNT
+		              FROM TBACC_INC_DSN_DETAIL
+		              GROUP BY DECSN_YEAR
+		                     , DECSN_NO
+		           ) t3
+		                ON t1.DECSN_YEAR = t3.DECSN_YEAR
+		               AND t1.DECSN_NO   = t3.DECSN_NO
+		    WHERE t1.BUDGET_YEAR = SUBSTR(#SRCH_ST_DE#,1,4)
+		    AND   t1.HSCO_INC_ACNUT_AT = '1' /*공사수입(사업소 수입제외)*/
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+			AND   t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+			AND   t1.BSNS_CODE = #BSNS_CODE#
+		</isNotEmpty>
+		) 
+		, TM_INC_DSN_MASTR_BEF AS ( /*전월수입*/
+		    SELECT BUDGET_YEAR
+		         , SUM(DECSN_AMOUNT) AS DECSN_AMOUNT_BEF
+		    FROM TM_INC_DSN_MASTR
+		    WHERE 1=1
+		<isEqual property="SRCH_DS" compareValue="1">
+		    /*조회조건 :: 청구일자*/
+		    AND INC_BUDGET_ARNG_RGIST BETWEEN SUBSTR(#SRCH_ST_DE#,1,4) || '0101' AND #SRCH_ST_DE#-1
+		</isEqual>
+		<isEqual property="SRCH_DS" compareValue="2"> 
+		    /*조회조건 :: 입금일자*/
+		    AND CHIT_DE BETWEEN SUBSTR(#SRCH_ST_DE#,1,4) || '0101' AND #SRCH_ST_DE#-1 
+		</isEqual>
+		    GROUP BY BUDGET_YEAR
+		)
+		, TM_RESULT AS (
+			SELECT NULL AS BUDGET_YEAR
+			     , NULL AS INC_BUDGET_ARNG_RGIST /*청구일자*/
+			     , NULL AS CHIT_DE               /*입금일자*/
+			     , NULL AS DECSN_NO 
+			     , NULL AS BUDGET_ACNT_CODE
+			     , '*** 전 월 이 월 ***' AS SUMRY
+			     , DECSN_AMOUNT_BEF
+			     , NULL AS DECSN_AMOUNT_THIS
+			     , NULL AS YESAN_NM
+			     , NULL AS MOK_NM
+			     , 0	AS RNUM
+			FROM TM_INC_DSN_MASTR_BEF
+			UNION ALL
+			SELECT *
+			FROM (
+			    SELECT t1.BUDGET_YEAR
+			         , t1.INC_BUDGET_ARNG_RGIST /*청구일자*/
+			         , t1.CHIT_DE               /*입금일자*/
+			         , t1.DECSN_NO 
+			         , t1.BUDGET_ACNT_CODE
+			         , t1.SUMRY
+			         , NULL AS DECSN_AMOUNT_BEF
+			         , t1.DECSN_AMOUNT AS DECSN_AMOUNT_THIS
+			         , t2.GWAN_NM || '-' || t2.HANG_NM                 AS YESAN_NM
+			         , t2.SEHANG_NM || '-' || t2.MOK_NM || '-' || t2.SEMOK_NM AS MOK_NM
+			    <isEqual property="SRCH_DS" compareValue="1"> 
+			         , ROW_NUMBER() OVER(ORDER BY t1.BUDGET_YEAR, t1.INC_BUDGET_ARNG_RGIST ASC, TO_NUMBER(t1.DECSN_NO) ASC,t1.DEPT_CODE ASC, t1.BUDGET_ACNT_CODE ASC) AS RNUM
+			    </isEqual>
+			    <isEqual property="SRCH_DS" compareValue="2">
+			    	 , ROW_NUMBER() OVER(ORDER BY t1.BUDGET_YEAR, t1.CHIT_DE ASC, TO_NUMBER(t1.DECSN_NO) ASC,t1.DEPT_CODE ASC, t1.BUDGET_ACNT_CODE ASC) AS RNUM
+			    </isEqual>
+			    FROM TM_INC_DSN_MASTR t1
+			        LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t2
+			            ON t1.BUDGET_YEAR      = t2.YEAR
+			           AND t1.BSNS_SE          = t2.BSNS_SE
+			           AND t1.BALC_SE          = t2.BALC_SE
+			           AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+			    WHERE  1=1
+			    <isEqual property="SRCH_DS" compareValue="1"> 
+			      AND t1.INC_BUDGET_ARNG_RGIST BETWEEN #SRCH_ST_DE# AND #SRCH_ED_DE# /*수입예산정리부등기: 청구일자*/
+			    </isEqual>
+			    <isEqual property="SRCH_DS" compareValue="2">
+			      AND t1.CHIT_DE BETWEEN #SRCH_ST_DE# AND #SRCH_ED_DE#	/*조회조건 :: 입금일자 */ 
+			    </isEqual>
+			) t1
+		)
+		SELECT t1.*
+		      ,SUM(NVL(t1.DECSN_AMOUNT_THIS,t1.DECSN_AMOUNT_BEF)) OVER(ORDER BY t1.RNUM) AS DECSN_AMOUNT_SUM
+		FROM TM_RESULT t1
+		ORDER BY t1.RNUM
+	</select>
+	
+
+</sqlMap>

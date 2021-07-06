@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01070500_SQL">	
+   <!--  설명  : 지원금청구
+		작성자 : 지효정 -->
+	<!-- 지원금 상세체납 목록 -->
+	<select id="RNT01070500DAO.rentSportDelintList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ ]]>
+  SELECT   B.RENT_HOUSE_NM,
+           A.RENT_HOUSE_CODE,
+           A.DONG,
+           A.HO,
+           MAX(C.AEA) AS AEA ,
+           MAX(D.NM) AS NM,
+           MAX(D.TELNO) AS TELNO,
+           MAX(D.MBTLNO) AS MBTLNO,
+		   (SELECT ZIP FROM TBRNT_RENT_HOUSE_DONG X WHERE X.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE AND X.DONG = A.DONG) AS ZIP,
+           (SELECT ADRES || ADRES_DETAIL FROM TBRNT_RENT_HOUSE_DONG X WHERE X.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE AND X.DONG = A.DONG) AS ADRES,           
+           MAX(A.CANCL_DE) AS CANCL_DE,
+           SUM(A.CNTRCT_AMOUNT) + SUM(A.SURLUS) AS GTN,
+           SUM(F.RQEST_AMOUNT) AS RQEST_AMOUNT,
+           SFCOM_NUMTOHANGUL(SUM(F.RQEST_AMOUNT) , '1') AS HANGLE,
+           TO_CHAR(SUM(F.RQEST_AMOUNT) , 'Fm999,999,999,990') AS RQEST_AMOUNT2,
+           MAX(F.PAY_TMLMT) AS PAY_TMLMT,
+           A.CNTRCTR_NO,
+           '' AS IN_BANK_CD,
+           '' AS IN_ACCT_NO,
+           'BS' AS IN_CRT_DIV,
+           A.CNTRCTR_NO AS IN_CRT_ID,
+           'BS' AS IN_CORT_CODE,
+           MAX(F.SPORT_NO) AS IN_PAY_NUM,
+           '0' AS IN_REC_CLASS,
+           MAX(F.SN) AS IN_REC_SEQ,
+           MAX(F.PAY_TMLMT) AS IN_PAYEND_DATE,
+           SUM(F.RQEST_AMOUNT) AS IN_BILL_AMT,
+           SUM(F.RQEST_AMOUNT) AS IN_PAY_AMT,
+           0 AS IN_SALE_AMT,
+           0 AS IN_INT_AMT,
+           'A' AS IN_BILL_DIV,
+           'A' AS IN_BJ_YN,
+    	   MAX(Z.BANK_CD) AS BANK_CD,
+    	   SFCOM_CODE_NM('COM021' , MAX(Z.BANK_CD) , 'CODE_NM') AS BANK_NM,
+    	   MAX(Z.VACCT_NO) AS VACCT_NO,
+    	   (SELECT CHRCTR_PREPAR_VALUE_2 FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'PCOM05' AND CODE = '02') AS GIGWAN_CODE           
+		FROM  
+			 TBRNT_RENT_CNTRCT A
+		    ,TBRNT_RENT_HOUSE B
+		    ,TBRNT_RENT_HOUSE_BILD C
+		    ,TBRNT_PRMANENT_RENT_CSTMR D
+		    ,TBRNT_GTN_SPORT F
+		    ,VA_MAST Z
+		    ,(
+		    	SELECT CNTRCTR_NO
+            	FROM TBRNT_GTN_SPORT
+        	 	WHERE (RCIV_DE IS NULL OR RCIV_DE <![CDATA[>]]> #stdrDe#) 
+               	AND   PAY_TMLMT BETWEEN #stPayTmlmt# AND #edPayTmlmt#
+             	GROUP BY CNTRCTR_NO
+        		HAVING COUNT(1) BETWEEN #stOvdintrCnt# AND #edOvdintrCnt#
+				AND SUM( NVL(RQEST_AMOUNT,0)) BETWEEN #stOvdintr# AND #edOvdintr#
+         	 )G
+		WHERE A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		AND   A.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		AND   A.DONG = C.DONG
+		AND   A.HO = C.HO
+		AND   A.PRMANENT_CSTMR_NO = D.PRMANENT_CSTMR_NO
+		AND   A.CNTRCTR_NO = F.CNTRCTR_NO
+		AND   A.CNTRCTR_NO = G.CNTRCTR_NO
+		AND   B.HOUSE_SE = 'R1'
+		AND   (F.RCIV_DE IS NULL OR F.RCIV_DE <![CDATA[>]]> #stdrDe#)
+        AND   F.PAY_TMLMT BETWEEN #stPayTmlmt# AND #edPayTmlmt#
+        AND   Z.CUST_CD = A.CNTRCTR_NO
+        AND   Z.OPT1 = '1'
+        AND   Z.CRT_DIV = 'BS'	        
+		<isNotEmpty property="rentHouseCode">
+		AND   A.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND   A.DONG = LPAD(#dong#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND   A.HO = LPAD(#ho#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+		AND   D.NM LIKE '%' || #nm# || '%'
+		</isNotEmpty>
+		<isEqual property="canclSe" compareValue="1">
+		AND A.CANCL_DE IS NULL
+		</isEqual>
+		<isEqual property="canclSe" compareValue="0">
+		AND A.CANCL_DE IS NOT NULL
+		</isEqual>
+		GROUP BY A.CNTRCTR_NO, A.RENT_HOUSE_CODE, B.RENT_HOUSE_NM, A.DONG, A.HO       		
+		ORDER BY A.RENT_HOUSE_CODE, TO_NUMBER(A.DONG), TO_NUMBER(A.HO), A.CNTRCTR_NO
+	</select>	
+
+	<!-- 지원금 합산체납 목록 -->
+	<select id="RNT01070500DAO.rentSportDelintList1" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ ]]>
+		SELECT 
+		     B.RENT_HOUSE_NM
+		    ,A.DONG
+		    ,A.HO
+		    ,C.AEA
+		    ,D.NM
+		    ,D.TELNO
+		    ,D.MBTLNO
+		    ,A.CANCL_DE
+		    ,A.CNTRCT_AMOUNT + A.SURLUS AS GTN
+		    ,F.RQEST_AMOUNT
+		    ,F.PAY_TMLMT
+		    ,A.CNTRCTR_NO
+		    ,'' AS IN_BANK_CD
+		    ,'' AS IN_ACCT_NO
+		    ,'BS' AS IN_CRT_DIV
+		    ,A.CNTRCTR_NO AS IN_CRT_ID
+		    ,RANK() OVER(PARTITION BY A.RENT_HOUSE_CODE, A.DONG, A.HO, A.CNTRCTR_NO ORDER BY F.PAY_TMLMT ASC) AS IN_BILL_SEQ
+		    ,'BS' AS IN_CORT_CODE
+		    ,F.SPORT_NO AS IN_PAY_NUM
+		    ,'0' AS IN_REC_CLASS
+    		,F.SN AS IN_REC_SEQ
+    		,F.PAY_TMLMT AS IN_PAYEND_DATE
+    		,F.RQEST_AMOUNT AS IN_BILL_AMT
+    		,F.RQEST_AMOUNT AS IN_PAY_AMT
+    		,0 AS IN_SALE_AMT
+    		,0 AS IN_INT_AMT
+    		,'A' AS IN_BILL_DIV
+    		,'A' AS IN_BJ_YN
+		FROM  
+			 TBRNT_RENT_CNTRCT A
+		    ,TBRNT_RENT_HOUSE B
+		    ,TBRNT_RENT_HOUSE_BILD C
+		    ,TBRNT_PRMANENT_RENT_CSTMR D
+		    ,TBRNT_GTN_SPORT F
+		    ,(
+		    	SELECT CNTRCTR_NO
+            	FROM TBRNT_GTN_SPORT
+        	 	WHERE (RCIV_DE IS NULL OR RCIV_DE <![CDATA[>]]> #stdrDe#) 
+               	AND   PAY_TMLMT BETWEEN #stPayTmlmt# AND #edPayTmlmt#
+             	GROUP BY CNTRCTR_NO
+        		HAVING COUNT(1) BETWEEN #stOvdintrCnt# AND #edOvdintrCnt#
+				AND SUM( NVL(RQEST_AMOUNT,0)) BETWEEN #stOvdintr# AND #edOvdintr#
+         	 )G
+		WHERE A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		AND   A.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		AND   A.DONG = C.DONG
+		AND   A.HO = C.HO
+		AND   A.PRMANENT_CSTMR_NO = D.PRMANENT_CSTMR_NO
+		AND   A.CNTRCTR_NO = F.CNTRCTR_NO
+		AND   A.CNTRCTR_NO = G.CNTRCTR_NO
+		AND   B.HOUSE_SE = 'R1'	
+		AND   (F.RCIV_DE IS NULL OR F.RCIV_DE <![CDATA[>]]> #stdrDe#)
+        AND   F.PAY_TMLMT BETWEEN #stPayTmlmt# AND #edPayTmlmt#
+		<isNotEmpty property="rentHouseCode">
+		AND   A.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND   A.DONG = LPAD(#dong#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND   A.HO = LPAD(#ho#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+		AND   D.NM LIKE '%' || #nm# || '%'
+		</isNotEmpty>
+		<isEqual property="canclSe" compareValue="1">
+		AND A.CANCL_DE IS NULL
+		</isEqual>
+		<isEqual property="canclSe" compareValue="0">
+		AND A.CANCL_DE IS NOT NULL
+		</isEqual>
+		ORDER BY A.RENT_HOUSE_CODE, TO_NUMBER(A.DONG), TO_NUMBER(A.HO), A.CNTRCTR_NO, F.PAY_TMLMT
+	</select>	
+
+	
+	<parameterMap id="sp_va_bill_uid_param" class="java.util.HashMap">
+		<parameter property="IN_FLAG"     		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_BANK_CD"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_ACCT_NO"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_TR_DATE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_TR_SDATE" 		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_TR_EDATE" 		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CRT_DIV"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CRT_ID"   		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_BILL_SEQ"		jdbcType="VARCHAR"	javaType="string"  	mode="IN" />
+		<parameter property="IN_CORT_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAY_NUM"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_REC_CLASS"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_REC_SEQ"		jdbcType="VARCHAR"	javaType="string"   mode="IN" />
+		<parameter property="IN_PAYEND_DATE"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_BILL_AMT"		jdbcType="VARCHAR"	javaType="string"   mode="IN" />
+		<parameter property="IN_PAY_AMT"		jdbcType="VARCHAR"	javaType="string"	mode="IN" />
+		<parameter property="IN_SALE_AMT"		jdbcType="VARCHAR"	javaType="string"	mode="IN" />
+		<parameter property="IN_INT_AMT"		jdbcType="VARCHAR"	javaType="string"	mode="IN" />
+		<parameter property="IN_BILL_DIV"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="S_USER_ID"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_BJ_YN"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />		
+	</parameterMap>
+
+	<procedure id="RNT01070500DAO.SP_VA_BILL_UID" parameterMap="sp_va_bill_uid_param">
+		{ call SP_VA_BILL_UID(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+	</procedure>
+</sqlMap>

@@ -1,0 +1,1013 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM060203_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+
+    <!--집계내역조회 -->
+	<select id="HRM060203DAO.selectCrevalSmList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				SELECT B.DEVA_YEAR                                                 AS DEVA_YEAR
+				      ,B.ODR_SE                                                    AS ODR_SE
+				      ,A.SEQ                                                       AS SEQ
+				      ,B.EMPNO                                                     AS EMPNO
+				      ,SFSAL_GETEMPNO_01(B.EMPNO)                                  AS EMPNM
+				      ,B.DEPT_CODE                                                 AS DEPT_CODE
+				      ,NVL(SFSAL_GETDEPTNM_01(B.DEPT_CODE), SFHRM_GET_DEPTNM(B.DEPT_CODE, '0'))   AS DEPT_NM
+				      ,SFHRM_GET_JSSFC(B.JSSFC_SE)                                 AS JSSFC_NM
+				      ,B.JSSFC_SE                                                  AS JSSFC_SE
+				      ,B.CLSF_SE                                                   AS CLSF_SE
+				      ,B.STDR_DE                                                   AS STDR_DE
+				      ,A.TOT_DEVA_SCORE                                            AS TOT_DEVA_SCORE      /*총점*/
+				      ,B.BA_HFFC_MONTH_CO                                          AS BA_HFFC_MONTH_CO    /*기본-재직월수*/
+				      ,B.BA_LMTT_MONTH_CO                                          AS BA_LMTT_MONTH_CO    /*기본-징계월수*/
+				      ,TO_NUMBER(B.BA_HFFC_MONTH_CO)-TO_NUMBER(B.BA_LMTT_MONTH_CO) AS BA_APPL_MONTH_CO /*기본-적용월수*/
+				      ,A.BASS_CAREER_GRADE                                         AS BASS_CAREER_GRADE   /*기본-평점*/
+				      ,B.EX_HFFC_MONTH_CO                                          AS EX_HFFC_MONTH_CO    /*초과-재직월수*/
+				      ,B.EX_LMTT_MONTH_CO                                          AS EX_LMTT_MONTH_CO    /*초과-징계월수*/
+				      ,TO_NUMBER(B.EX_HFFC_MONTH_CO)-TO_NUMBER(B.EX_LMTT_MONTH_CO) AS EX_APPL_MONTH_CO /*초과-적용월수*/
+				      ,A.EXCESS_CAREER_GRADE                                       AS EXCESS_CAREER_GRADE /*초과-평점*/
+				      ,NVL2(DECODE(B.EX_HFFC_PD_BGNDE, 0, NULL, B.EX_HFFC_PD_BGNDE), 0, NVL(C.APP_DD,0))                  AS APP_DD              /*유사-월수*/
+				      ,A.SIMILR_CAREER_GRADE                                       AS SIMILR_CAREER_GRADE /*유사-평점*/
+				      ,TO_NUMBER(A.BASS_CAREER_GRADE)+TO_NUMBER(A.EXCESS_CAREER_GRADE)+TO_NUMBER(A.SIMILR_CAREER_GRADE) AS CAREER_GRADE /*기본+초과+유사 평점*/
+				      ,A.EDC_ADDPNT                                                AS EDC_ADDPNT          /*교육가점*/
+				      ,A.RWARD_ADDPNT                                              AS RWARD_ADDPNT        /*포상가점*/
+				      ,A.PROPSE_ADDPNT                                             AS PROPSE_ADDPNT       /*제안가점*/
+				      ,A.DSCPL_DMRTR                                               AS DSCPL_DMRTR         /*징계감점*/
+				      ,NVL(A.DCSN_AT,0)                                            AS DCSN_AT             /*확정여부*/
+				      ,A.DCSN_DE                                                   AS DCSN_DE             /*확정일자*/
+				      ,D.DEVA_ALLOT                                                AS DEVA_ALLOT
+				FROM (
+              SELECT MAX(DEVA_YEAR)                                     AS DEVA_YEAR
+                    ,MAX(ODR_SE)                                        AS ODR_SE
+                    ,MAX(EMPNO)                                         AS EMPNO
+                    ,MAX(JSSFC_SE)                                      AS JSSFC_SE
+                    ,MAX(CLSF_SE)                                       AS CLSF_SE
+                    ,MAX(DEPT_CODE)                                     AS DEPT_CODE
+                    ,MAX(STDR_DE)                                       AS STDR_DE
+                    ,NVL(MAX(DECODE(SEQ, '1', HFFC_MONTH_CO, NULL)),0)  AS BA_HFFC_MONTH_CO
+                    ,NVL(MAX(DECODE(SEQ, '1', LMTT_MONTH_CO, NULL)),0)  AS BA_LMTT_MONTH_CO
+                    ,NVL(MAX(DECODE(SEQ, '2', HFFC_MONTH_CO, NULL)),0)  AS EX_HFFC_MONTH_CO
+                    ,NVL(MAX(DECODE(SEQ, '2', LMTT_MONTH_CO, NULL)),0)  AS EX_LMTT_MONTH_CO
+                    ,MAX(DECODE(SEQ, '2', HFFC_PD_BGNDE, NULL)) AS EX_HFFC_PD_BGNDE
+              FROM TBHRM_CREVAL
+              WHERE 1=1
+              GROUP BY DEVA_YEAR, ODR_SE, EMPNO
+              )B
+				LEFT OUTER JOIN TBHRM_CREVAL_SM A
+				 ON B.DEVA_YEAR = A.DEVA_YEAR
+				 AND B.ODR_SE = A.ODR_SE
+				 AND B.EMPNO = A.EMPNO
+				LEFT OUTER JOIN (
+				                SELECT EMPNO, SUM(ROUND(APP_DD)) AS APP_DD
+				                  FROM VIHRM_CAREER_TRANS
+				                 WHERE RATE_SE ='2' 
+                         GROUP BY EMPNO
+				                )C
+				 ON B.EMPNO = C.EMPNO
+				LEFT OUTER JOIN(
+							SELECT DEVA_YEAR
+							       ,ODR_SE
+							       ,DEVA_ALLOT
+							FROM TBHRM_CREVAL_STDR
+							WHERE DEVA_YEAR=#DEVA_YEAR#
+							AND ODR_SE=#ODR_SE#
+							AND DEVA_SE='001'
+				               ) D
+				 ON B.DEVA_YEAR = D.DEVA_YEAR
+				 AND B.ODR_SE = D.ODR_SE
+				WHERE 1=1
+				AND   B.DEVA_YEAR  =  #DEVA_YEAR#
+				AND   B.ODR_SE     =  #ODR_SE#
+		]]>	
+		<isNotEmpty property="CLSF_SE">
+			AND  B.CLSF_SE = #CLSF_SE#
+		</isNotEmpty>
+		<isNotEmpty property="JSSFC_SE">
+			AND  B.JSSFC_SE = #JSSFC_SE#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			AND  B.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		<![CDATA[
+			ORDER BY B.DEPT_CODE, B.CLSF_SE, B.JSSFC_SE, A.EMPNO
+		]]>
+    </select>
+
+    <!-- 기초자료생성 (기본경력) -->
+    <insert id="HRM060203DAO.bassCrevalSmC" parameterClass="java.util.HashMap">
+        <![CDATA[
+			INSERT INTO TBHRM_CREVAL
+				( DEVA_YEAR
+				 ,ODR_SE
+				 ,STDR_DE
+				 ,EMPNO
+				 ,STDR_CODE
+				 ,SEQ
+				 ,JSSFC_SE
+				 ,CLSF_SE
+				 ,DEPT_CODE
+				 ,HFFC_PD_BGNDE
+				 ,HFFC_MONTH_CO
+				 ,LMTT_MONTH_CO
+				 ,REGISTER_ID
+				 ,REGIST_DT
+				 ,UPDUSR_ID
+				 ,UPDT_DT)
+			SELECT  DEVA_YEAR         AS DEVA_YEAR
+			       ,ODR_SE            AS ODR_SE
+			       ,STDR_DE           AS STDR_DE
+			       ,EMPNO             AS EMPNO
+			       ,'007'             AS STDR_CODE
+			       ,'1'               AS SEQ           /*1기본경력 2초과경력*/
+			       ,JSSFC_SE          AS JSSFC_SE
+			       ,CLSF_SE           AS CLSF_SE
+			       ,DEPT_CODE         AS DEPT_CODE
+			       ,HFFC_PD_BGNDE     AS HFFC_PD_BGNDE /*재직기간 시작일자*/
+			       ,DECODE(SIGN(NVL(TRUNC(MONTHS_BETWEEN(TO_DATE(STDR_DE, 'YYYYMMDD'), TO_DATE(HFFC_PD_BGN_MON, 'YYYYMMDD'))),0)),-1,0,NVL(TRUNC(MONTHS_BETWEEN(TO_DATE(STDR_DE, 'YYYYMMDD'), TO_DATE(HFFC_PD_BGN_MON, 'YYYYMMDD'))),0))  AS HFFC_MONTH_CO  /*기본경력(재직개월수)*/
+			       ,NVL(DECODE(SIGN(DSC_MONTH),-1,0,DSC_MONTH)+LMTT_PD,0)  AS LMTT_MONTH_CO  /*기본경력(제한개월수)*/
+			       ,#S_USER_ID#       AS REGISTER_ID
+			       ,SYSDATE           AS REGIST_DT
+			       ,#S_USER_ID#       AS UPDUSR_ID
+			       ,SYSDATE           AS UPDT_DT
+			FROM(
+			      SELECT   THM.DEVA_YEAR     AS DEVA_YEAR
+			              ,THM.ODR_SE        AS ODR_SE
+			              ,THM.EMPNO         AS EMPNO
+			              ,THM.DEPT_CODE     AS DEPT_CODE
+			              ,THM.JSSFC_SE      AS JSSFC_SE
+			              ,THM.CLSF_SE       AS CLSF_SE
+			              ,T.BGN_DE          AS HFFC_PD_BGNDE /*재직기간 시작일자*/
+			              ,TO_CHAR(CASE WHEN LAST_DAY(TO_DATE(T.BGN_DE)) - TO_DATE(T.BGN_DE) >= 15 THEN TRUNC(TO_DATE(T.BGN_DE), 'MON') ELSE ADD_MONTHS(TRUNC(TO_DATE(T.BGN_DE), 'MON'), 1) END, 'YYYYMMDD') HFFC_PD_BGN_MON
+			              ,T1.DSC_MONTH      AS DSC_MONTH
+			              ,T1.LMTT_PD        AS LMTT_PD
+			              ,TT.STDR_DE        AS STDR_DE
+			      FROM  TBHRM_PEREVA_TRGTER THM 
+			        LEFT OUTER JOIN(
+			                        SELECT A.EMPNO
+			                              ,A.CLSF_SE
+			                              ,MIN(A.GNFD_DE) AS BGN_DE
+			                              ,(CASE WHEN LEAD(MIN(A.EMPNO), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE) = A.EMPNO THEN LEAD(MIN(A.GNFD_DE), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE)
+			                                     ELSE NULL
+			                                     END) AS BEFORE_BGN_DE
+			                        FROM TBHRM_GNFD A
+			                          RIGHT OUTER JOIN TBHRM_HR_MASTR B
+			                           ON  A.EMPNO    = B.EMPNO
+			                           AND A.JSSFC_SE = B.JSSFC_SE
+			                        GROUP BY A.EMPNO, A.CLSF_SE
+			                        ORDER BY A.EMPNO, A.CLSF_SE
+			                       ) T
+			         ON THM.EMPNO    = T.EMPNO
+			         AND THM.CLSF_SE = T.CLSF_SE
+			        LEFT OUTER JOIN(
+			                        SELECT A.CLSF_SE
+			                               ,D.EMPNO
+			                               ,A.BGN_DE
+			                               ,SUM(LMTT_PD) AS LMTT_PD /*제한개월수*/
+			                               ,SUM(TRUNC(MONTHS_BETWEEN(ROUND(TO_DATE((CASE WHEN DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_ENDDE,D.RE_DSPS_ENDDE)>=TTST.STDR_DE THEN TTST.STDR_DE ELSE DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_ENDDE,D.RE_DSPS_ENDDE) END), 'YYYYMMDD'),'MONTH'),ROUND(TO_DATE(DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_BGNDE,D.RE_DSPS_BGNDE), 'YYYYMMDD'),'MONTH')))) AS DSC_MONTH /*징계개월수*/
+			                        FROM TBHRM_DSCPL_DSPS D
+			                          LEFT OUTER JOIN(
+			                                          SELECT A.EMPNO
+			                                                 ,A.CLSF_SE
+			                                                 ,MIN(A.GNFD_DE) AS BGN_DE
+			                                                 ,(CASE WHEN LEAD(MIN(A.EMPNO), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE) = A.EMPNO THEN LEAD(MIN(A.GNFD_DE), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE)
+			                                                        ELSE NULL
+			                                                        END) AS BEFORE_BGN_DE
+			                                          FROM TBHRM_GNFD A
+			                                          GROUP BY A.EMPNO ,A.CLSF_SE
+			                                          ORDER BY A.EMPNO ,A.CLSF_SE
+			                                         ) A
+			                            ON D.EMPNO = A.EMPNO
+			                        ,(
+			                          SELECT DEVA_YEAR
+			                                 ,ODR_SE
+			                                 ,STDR_DE
+			                          FROM TBHRM_CREVAL_STDR
+			                          WHERE 1 = 1
+			                          AND DEVA_YEAR = #DEVA_YEAR#
+			                          AND ODR_SE    = #ODR_SE#
+			                          AND DEVA_SE   = '001'  /*경력평정*/
+			                        ) TTST
+			                        WHERE  A.BGN_DE     <= DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_BGNDE,D.RE_DSPS_BGNDE)
+			                          AND  DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_BGNDE,D.RE_DSPS_BGNDE) <= TTST.STDR_DE
+			                        GROUP BY A.CLSF_SE ,D.EMPNO ,A.BGN_DE
+			             ) T1
+			          ON  THM.EMPNO   = T1.EMPNO
+			          AND THM.CLSF_SE = T1.CLSF_SE
+			        INNER JOIN (
+			                     SELECT DEVA_YEAR
+			                            ,ODR_SE
+			                            ,TO_CHAR(CASE WHEN LAST_DAY(TO_DATE(STDR_DE)) - TO_DATE(STDR_DE) >= 15 THEN TRUNC(TO_DATE(STDR_DE), 'MON') ELSE ADD_MONTHS(TRUNC(TO_DATE(STDR_DE), 'MON'), 1) END, 'YYYYMMDD') STDR_DE
+			                     FROM TBHRM_CREVAL_STDR
+			                     WHERE 1 = 1
+			                     AND DEVA_YEAR = #DEVA_YEAR#
+			                     AND ODR_SE    = #ODR_SE#
+			                     AND DEVA_SE   = '001'  /*경력평정*/
+			                   ) TT
+			          ON  THM.DEVA_YEAR = TT.DEVA_YEAR
+			          AND THM.ODR_SE    = TT.ODR_SE
+			      WHERE THM.DEVA_YEAR = #DEVA_YEAR#
+			      AND   THM.ODR_SE    = #ODR_SE#
+			      AND   NVL(THM.EXCL_AT,0)    =  '0'
+			)
+        ]]>
+    </insert>
+
+    <!-- 기초자료생성 (초과경력) -->
+    <insert id="HRM060203DAO.excessCrevalSmC" parameterClass="java.util.HashMap">
+        <![CDATA[
+			INSERT INTO TBHRM_CREVAL
+				( DEVA_YEAR
+				 ,ODR_SE
+				 ,STDR_DE
+				 ,EMPNO
+				 ,STDR_CODE
+				 ,SEQ
+				 ,JSSFC_SE
+				 ,CLSF_SE
+				 ,DEPT_CODE
+				 ,HFFC_PD_BGNDE
+				 ,HFFC_PD_ENDDE
+				 ,HFFC_MONTH_CO
+				 ,LMTT_MONTH_CO
+				 ,REGISTER_ID
+				 ,REGIST_DT
+				 ,UPDUSR_ID
+				 ,UPDT_DT)
+			SELECT	DEVA_YEAR           AS DEVA_YEAR
+			        ,ODR_SE              AS ODR_SE
+			        ,STDR_DE              AS STDR_DE
+			        ,EMPNO               AS EMPNO
+			        ,'007'                   AS STDR_CODE
+			        ,'2'                     AS SEQ /*1기본경력 2초과경력*/
+			        ,JSSFC_SE            AS JSSFC_SE
+			        ,CLSF_SE             AS CLSF_SE
+			        ,DEPT_CODE           AS DEPT_CODE
+			        ,BEFORE_BGN_DE       AS HFFC_PD_BGNDE   /*종전직급 재직기간시작일자 = 종전직급 승급일*/
+			        ,BGN_DE                AS HFFC_PD_ENDDE   /*종전직급 종료일자 = 현직급 승급일*/
+			        ,NVL(TRUNC(MONTHS_BETWEEN(TO_DATE(HFFC_PD_END_MON, 'YYYYMMDD'), TO_DATE(HFFC_PD_BGN_MON, 'YYYYMMDD'))),0)   AS HFFC_MONTH_CO /*초과경력(재직개월수)*/
+			        ,LMTT_MONTH_CO
+			        ,#S_USER_ID#             AS REGISTER_ID
+				       ,SYSDATE                 AS REGIST_DT
+				       ,#S_USER_ID#             AS UPDUSR_ID
+				       ,SYSDATE                 AS UPDT_DT
+			FROM	(
+						SELECT  THM.DEVA_YEAR           AS DEVA_YEAR
+						       ,THM.ODR_SE              AS ODR_SE
+						       ,TT.STDR_DE              AS STDR_DE
+						       ,THM.EMPNO               AS EMPNO
+						       ,THM.JSSFC_SE            AS JSSFC_SE
+						       ,THM.CLSF_SE             AS CLSF_SE
+						       ,THM.DEPT_CODE           AS DEPT_CODE
+							   ,T.BEFORE_BGN_DE         /*종전직급 재직기간시작일자 = 종전직급 승급일*/
+						       ,T.BGN_DE                 /*종전직급 종료일자 = 현직급 승급일*/
+							   ,TO_CHAR(CASE WHEN LAST_DAY(TO_DATE(T.BEFORE_BGN_DE)) - TO_DATE(T.BEFORE_BGN_DE) >= 15 THEN TRUNC(TO_DATE(T.BEFORE_BGN_DE), 'MON') ELSE ADD_MONTHS(TRUNC(TO_DATE(T.BEFORE_BGN_DE), 'MON'), 1) END, 'YYYYMMDD') HFFC_PD_BGN_MON
+							   ,TO_CHAR(CASE WHEN LAST_DAY(TO_DATE(T.BGN_DE)) - TO_DATE(T.BGN_DE) >= 15 THEN TRUNC(TO_DATE(T.BGN_DE), 'MON') ELSE ADD_MONTHS(TRUNC(TO_DATE(T.BGN_DE), 'MON'), 1) END, 'YYYYMMDD') HFFC_PD_END_MON
+							   ,NVL(NVL(DECODE(SIGN(T2.DSC_MONTH),-1,0,T2.DSC_MONTH)+T2.LMTT_PD,0),0)   AS LMTT_MONTH_CO /*초과경력(제한개월수)*/
+						FROM TBHRM_PEREVA_TRGTER THM 
+						  LEFT OUTER JOIN (
+						                   SELECT A.EMPNO
+						                         ,A.CLSF_SE
+						                         ,MIN(A.GNFD_DE) AS BGN_DE
+						                         ,(CASE WHEN LEAD(MIN(A.EMPNO), 1) OVER (ORDER BY A.EMPNO, MAX(GNFD_DE) DESC, A.CLSF_SE) = A.EMPNO
+												         THEN LEAD(MIN(A.GNFD_DE), 1) OVER (ORDER BY A.EMPNO, MAX(GNFD_DE) DESC,A.CLSF_SE)
+						                                 ELSE NULL
+						                                 END) AS BEFORE_BGN_DE
+											     , A.JSSFC_SE
+						                   FROM TBHRM_GNFD A
+						                     RIGHT OUTER JOIN TBHRM_HR_MASTR B
+						                      ON A.EMPNO = B.EMPNO
+						                   GROUP BY A.EMPNO, A.JSSFC_SE,A.CLSF_SE
+						                   ORDER BY A.EMPNO, MAX(GNFD_DE) DESC, A.CLSF_SE
+						                  ) T
+						   ON THM.EMPNO = T.EMPNO
+						   AND THM.CLSF_SE = T.CLSF_SE
+						   AND THM.JSSFC_SE = T.JSSFC_SE
+						  LEFT OUTER JOIN (
+						                   SELECT  A.CLSF_SE
+						                          ,D.EMPNO
+						                          ,A.BGN_DE
+						                          ,A.BEFORE_BGN_DE
+						                          ,SUM(LMTT_PD) AS LMTT_PD /*제한개월수*/
+						                          ,SUM(TRUNC(MONTHS_BETWEEN(ROUND(TO_DATE((CASE WHEN DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_ENDDE,D.RE_DSPS_ENDDE)>=A.BGN_DE THEN A.BGN_DE ELSE DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_ENDDE,D.RE_DSPS_ENDDE) END), 'YYYYMMDD'),'MONTH'),ROUND(TO_DATE(DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_BGNDE,D.RE_DSPS_BGNDE), 'YYYYMMDD'),'MONTH')))) AS DSC_MONTH /*징계개월수*/
+						                   FROM TBHRM_DSCPL_DSPS D
+						                     LEFT OUTER JOIN (
+						                                      SELECT  A.EMPNO
+						                                             ,A.CLSF_SE
+						                                             ,MIN(A.GNFD_DE) AS BGN_DE
+						                                             ,(CASE WHEN LEAD(MIN(A.EMPNO), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE) = A.EMPNO THEN LEAD(MIN(A.GNFD_DE), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE)
+						                                                    ELSE NULL
+						                                                    END) AS BEFORE_BGN_DE
+						                                      FROM TBHRM_GNFD A
+						                                      GROUP BY A.EMPNO ,A.CLSF_SE
+						                                      ORDER BY A.EMPNO ,A.CLSF_SE
+						                                  ) A
+						                      ON D.EMPNO = A.EMPNO
+						                   WHERE  A.BEFORE_BGN_DE <= DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_BGNDE,D.RE_DSPS_BGNDE)
+						                   AND   DECODE(D.RETRIAL_DCSN_DE,NULL,D.DSPS_BGNDE,D.RE_DSPS_BGNDE)    <= A.BGN_DE
+						                   GROUP BY A.CLSF_SE ,D.EMPNO ,A.BGN_DE ,A.BEFORE_BGN_DE
+						                  ) T2
+						   ON THM.EMPNO = T2.EMPNO
+						   AND THM.CLSF_SE = T2.CLSF_SE
+						     LEFT OUTER JOIN(
+						                     SELECT DEVA_YEAR
+						                            ,ODR_SE
+						                            ,TO_CHAR(CASE WHEN LAST_DAY(TO_DATE(STDR_DE)) - TO_DATE(STDR_DE) >= 15 THEN TRUNC(TO_DATE(STDR_DE), 'MON') ELSE ADD_MONTHS(TRUNC(TO_DATE(STDR_DE), 'MON'), 1) END, 'YYYYMMDD') STDR_DE
+						                     FROM TBHRM_CREVAL_STDR
+						                     WHERE 1 = 1
+						                     AND DEVA_YEAR = #DEVA_YEAR#
+						                     AND ODR_SE    = #ODR_SE#
+						                     AND DEVA_SE   = '001' /*경력평정*/
+						                    ) TT
+						      ON  THM.DEVA_YEAR = TT.DEVA_YEAR
+						      AND THM.ODR_SE    = TT.ODR_SE
+						WHERE THM.DEVA_YEAR = #DEVA_YEAR#
+						AND   THM.ODR_SE    = #ODR_SE#
+						AND   NVL(THM.EXCL_AT,0)    =  '0'
+					)
+        ]]>
+    </insert>
+    
+    <!-- 기초자료 삭제 -->
+    <delete id="HRM060203DAO.CrevalSmD" parameterClass="java.util.HashMap">
+    <![CDATA[
+        DELETE FROM TBHRM_CREVAL
+        WHERE DEVA_YEAR      = #DEVA_YEAR#
+        AND   ODR_SE         = #ODR_SE#
+    ]]>
+    </delete> 
+    
+    <!-- 집계자료 삭제 -->
+    <delete id="HRM060203DAO.CrevalSmListD" parameterClass="java.util.HashMap">
+    <![CDATA[
+        DELETE FROM TBHRM_CREVAL_SM
+        WHERE DEVA_YEAR      = #DEVA_YEAR#
+        AND   ODR_SE         = #ODR_SE#
+    ]]>
+    </delete> 
+    
+     <!-- 집계자료 생성-->
+    <insert id="HRM060203DAO.CrevalSmListC" parameterClass="java.util.HashMap">
+        <![CDATA[
+			INSERT INTO TBHRM_CREVAL_SM
+				( DEVA_YEAR
+				 ,ODR_SE
+				 ,EMPNO
+				 ,STDR_DE
+				 ,STDR_CODE
+				 ,SEQ
+				 ,TOT_DEVA_SCORE
+				 ,BASS_CAREER_GRADE
+				 ,EXCESS_CAREER_GRADE
+				 ,SIMILR_CAREER_GRADE
+				 ,EDC_ADDPNT
+				 ,RWARD_ADDPNT
+				 ,PROPSE_ADDPNT
+				 ,DSCPL_DMRTR
+				 ,REGISTER_ID
+				 ,REGIST_DT
+				 ,UPDUSR_ID
+				 ,UPDT_DT)
+					SELECT  DEVA_YEAR               AS DEVA_YEAR
+					       ,ODR_SE                  AS ODR_SE
+					       ,EMPNO                   AS EMPNO
+					       ,STDR_DE                 AS STDR_DE
+					       ,STDR_CODE               AS STDR_CODE
+					       ,'1'                     AS SEQ
+					       ,(BASS_CAREER_GRADE+EXCESS_CAREER_GRADE+SIMILR_CAREER_GRADE+EDC_ADDPNT)+(CASE WHEN(RWARD_ADDPNT+PROPSE_ADDPNT)> 7 THEN 6 WHEN (RWARD_ADDPNT+PROPSE_ADDPNT)< 7 THEN(RWARD_ADDPNT+PROPSE_ADDPNT) ELSE (RWARD_ADDPNT+PROPSE_ADDPNT) END)-DSCPL_DMRTR AS TOT_DEVA_SCORE
+					       ,BASS_CAREER_GRADE       AS BASS_CAREER_GRADE
+					       ,EXCESS_CAREER_GRADE     AS EXCESS_CAREER_GRADE
+					       ,SIMILR_CAREER_GRADE     AS SIMILR_CAREER_GRADE
+					       ,EDC_ADDPNT              AS EDC_ADDPNT
+					       ,RWARD_ADDPNT            AS RWARD_ADDPNT
+					       ,PROPSE_ADDPNT           AS PROPSE_ADDPNT
+					       ,DSCPL_DMRTR             AS DSCPL_DMRTR
+					       ,#S_USER_ID#             AS REGISTER_ID
+					       ,SYSDATE                 AS REGIST_DT
+					       ,#S_USER_ID#             AS UPDUSR_ID
+					       ,SYSDATE                 AS UPDT_DT
+					       
+					FROM(
+					    SELECT TBC.DEVA_YEAR  AS DEVA_YEAR
+					          ,TBC.ODR_SE     AS ODR_SE
+					          ,TBC.EMPNO      AS EMPNO
+					          ,TBC.STDR_DE    AS STDR_DE
+					          ,TBC.STDR_CODE  AS STDR_CODE
+					          ,TO_NUMBER(CASE  WHEN (TO_NUMBER(TBC.BA_HFFC_MONTH_CO)-TO_NUMBER(TBC.BA_LMTT_MONTH_CO))*T5.UNIT_SCORE_001 > T5.UPLMT_SCORE_001 THEN T5.UPLMT_SCORE_001 
+					                  WHEN (TO_NUMBER(TBC.BA_HFFC_MONTH_CO)-TO_NUMBER(TBC.BA_LMTT_MONTH_CO))*T5.UNIT_SCORE_001 < NVL(T5.LWLT_SCORE_001,0) THEN  NVL(T5.LWLT_SCORE_001,0)
+					                  ELSE (TO_NUMBER(TBC.BA_HFFC_MONTH_CO)-TO_NUMBER(TBC.BA_LMTT_MONTH_CO))*T5.UNIT_SCORE_001
+					             END)                    AS BASS_CAREER_GRADE /*기본경력(평점-조정후)*/
+					          ,TO_NUMBER(CASE  WHEN (TO_NUMBER(TBC.EX_HFFC_MONTH_CO)-TO_NUMBER(TBC.EX_LMTT_MONTH_CO))*T5.UNIT_SCORE_002 > T5.UPLMT_SCORE_002 THEN T5.UPLMT_SCORE_002 
+					                  WHEN (TO_NUMBER(TBC.EX_HFFC_MONTH_CO)-TO_NUMBER(TBC.EX_LMTT_MONTH_CO))*T5.UNIT_SCORE_002 < NVL(T5.LWLT_SCORE_002,0) THEN  NVL(T5.LWLT_SCORE_002,0)
+					                  ELSE (TO_NUMBER(TBC.EX_HFFC_MONTH_CO)-TO_NUMBER(TBC.EX_LMTT_MONTH_CO))*T5.UNIT_SCORE_002
+					             END)                    AS EXCESS_CAREER_GRADE /*초과경력(평점-조정후)*/
+					          ,TO_NUMBER(NVL(CASE  WHEN  NVL2(DECODE(TBC.EX_HFFC_PD_BGNDE, 0, NULL, TBC.EX_HFFC_PD_BGNDE), 0, NVL(C.APP_DD,0)) * T5.UNIT_SCORE_003 >  T5.UPLMT_SCORE_003 THEN T5.UPLMT_SCORE_003 
+					                  WHEN  NVL2(DECODE(TBC.EX_HFFC_PD_BGNDE, 0, NULL, TBC.EX_HFFC_PD_BGNDE), 0, NVL(C.APP_DD,0)) * T5.UNIT_SCORE_003 < NVL(T5.LWLT_SCORE_003,0) THEN NVL(T5.LWLT_SCORE_003,0)
+					                  ELSE  NVL2(DECODE(TBC.EX_HFFC_PD_BGNDE, 0, NULL, TBC.EX_HFFC_PD_BGNDE), 0, NVL(C.APP_DD,0)) * T5.UNIT_SCORE_003
+					             END,0))                 AS SIMILR_CAREER_GRADE /*유사경력(평점-조정후)*/
+					          ,TO_NUMBER(NVL(T6.EDC_ADDPNT ,0))                                          AS EDC_ADDPNT     /*교육가점*/
+					          ,TO_NUMBER(NVL(D.RWARD_GRADE,0))                                           AS RWARD_ADDPNT   /*포상가점*/
+					          ,0/*TO_NUMBER(NVL(F.EVL_GRADE,0))*/                                             AS PROPSE_ADDPNT  /*제안가점*/
+					          ,TO_NUMBER(NVL(G.DMRTR_SCORE,0))                                           AS DSCPL_DMRTR    /*징계감점*/
+					    FROM (
+					            SELECT MAX(DEVA_YEAR)                                AS DEVA_YEAR
+					                  ,MAX(ODR_SE)                                   AS ODR_SE
+					                  ,MAX(EMPNO)                                    AS EMPNO
+					                  ,MAX(JSSFC_SE)                                 AS JSSFC_SE
+					                  ,MAX(CLSF_SE)                                  AS CLSF_SE
+					                  ,MAX(DEPT_CODE)                                AS DEPT_CODE
+					                  ,MAX(STDR_DE)                                  AS STDR_DE
+					                  ,MAX(STDR_CODE)                                AS STDR_CODE
+					                  ,NVL(MAX(DECODE(SEQ, '1', HFFC_MONTH_CO, NULL)),0)  AS BA_HFFC_MONTH_CO
+					                  ,NVL(MAX(DECODE(SEQ, '1', LMTT_MONTH_CO, NULL)),0)  AS BA_LMTT_MONTH_CO
+					                  ,NVL(MAX(DECODE(SEQ, '2', HFFC_MONTH_CO, NULL)),0)  AS EX_HFFC_MONTH_CO
+					                  ,NVL(MAX(DECODE(SEQ, '2', LMTT_MONTH_CO, NULL)),0)  AS EX_LMTT_MONTH_CO
+					                  ,MAX(DECODE(SEQ, '2', HFFC_PD_BGNDE, NULL)) AS EX_HFFC_PD_BGNDE
+					            FROM TBHRM_CREVAL
+					            WHERE 1=1
+					            AND DEVA_YEAR = #DEVA_YEAR#
+					            AND ODR_SE    = #ODR_SE#
+					            GROUP BY DEVA_YEAR, ODR_SE, EMPNO
+					        )TBC
+					      LEFT OUTER JOIN(
+					                      SELECT 
+					                         a.DEVA_YEAR                                          AS DEVA_YEAR
+					                        ,a.ODR_SE                                             AS ODR_SE
+					                        ,SUM(DECODE(a.STDR_CODE, '001', a.UPLMT_SCORE, 0))    AS UPLMT_SCORE_001
+					                        ,SUM(DECODE(a.STDR_CODE, '001', a.LWLT_SCORE, 0) )    AS LWLT_SCORE_001
+					                        ,SUM(DECODE(a.STDR_CODE, '001', a.UNIT_SCORE, 0))     AS UNIT_SCORE_001
+					                        ,SUM(DECODE(a.STDR_CODE, '002', a.UPLMT_SCORE, 0))    AS UPLMT_SCORE_002
+					                        ,SUM(DECODE(a.STDR_CODE, '002', a.LWLT_SCORE, 0) )    AS LWLT_SCORE_002
+					                        ,SUM(DECODE(a.STDR_CODE, '002', a.UNIT_SCORE, 0))     AS UNIT_SCORE_002
+					                        ,SUM(DECODE(a.STDR_CODE, '003', a.UPLMT_SCORE, 0))    AS UPLMT_SCORE_003
+					                        ,SUM(DECODE(a.STDR_CODE, '003', a.LWLT_SCORE, 0))     AS LWLT_SCORE_003
+					                        ,SUM(DECODE(a.STDR_CODE, '003', a.UNIT_SCORE, 0))     AS UNIT_SCORE_003    
+					                      FROM TBHRM_CREVAL_STDR_DETAIL a
+					                        ,TBHRM_CREVAL_STDR b
+					                      WHERE 1=1
+					                      AND a.DEVA_YEAR     = b.DEVA_YEAR
+					                      AND a.ODR_SE     = b.ODR_SE
+					                      AND a.DEVA_SE     = b.DEVA_SE
+					                      AND a.DEVA_YEAR     = #DEVA_YEAR#
+					                      AND a.ODR_SE     = #ODR_SE#
+					                      AND a.DEVA_SE     = '001'
+					                      GROUP BY a.DEVA_YEAR, a.ODR_SE
+					                     )T5
+					       ON TBC.DEVA_YEAR = T5.DEVA_YEAR
+					       AND TBC.ODR_SE = T5.ODR_SE
+					     LEFT OUTER JOIN(
+								SELECT	CASE WHEN ABSENCE_MON + EXCEPT_MON >= 12 THEN 0
+								            ELSE TO_NUMBER(NVL(CASE WHEN CRTFC_TIME >= (UNIT_SCORE*((12-ABSENCE_MON-EXCEPT_MON)/12)) THEN DEVA_ALLOT
+													                                    ELSE ROUND((CRTFC_TIME / (UNIT_SCORE*((12-ABSENCE_MON-EXCEPT_MON)/12)))*10 , 2)
+													                                    END ,0)) END                               AS EDC_ADDPNT     /*교육가점*/
+										,EMPNO
+										,DEVA_YEAR
+										,ODR_SE
+								FROM (
+										SELECT  t1.EMPNO
+					                            ,t3.DEVA_YEAR
+					                            ,t3.ODR_SE
+					                            ,t3.UNIT_SCORE
+					                            ,t4.DEVA_ALLOT
+												,NVL(MAX(T5.ABSENCE_MON), 0) AS ABSENCE_MON	/* 휴직개월 */
+												,CASE WHEN MAX(CHK_STDR_DE) > TO_DATE(MAX(T4.BGNDE)) THEN MONTHS_BETWEEN(MAX(CHK_STDR_DE), TO_DATE(MAX(T4.BGNDE))) ELSE 0 END EXCEPT_MON	/* 입사전 제외개월 */
+					                            ,SUM(t1.CRTFC_TIME)             AS CRTFC_TIME
+					                      FROM   (	SELECT EMPNO, BGNDE, ENDDE, CRTFC_TIME
+													FROM TBHRM_EDC_TRAING_COMPL
+													UNION ALL
+													SELECT
+														PRTCPNT_EMPNO, BGNDE, ENDDE, PRTCPNT_RCOGN_SRVC_TIME
+													FROM
+														TBHRM_RESRCE_SRVC A,
+														TBHRM_RESRCE_SRVC_PRTCPNT B
+													WHERE
+														A.SN = B.SN
+														AND A.CONFM_AT = '1'
+													UNION ALL
+													SELECT	REPORT_MAN_EMPNO, BGNDE, ENDDE, TIME
+													FROM	TBHRM_EDC_BSRP_REPORT A
+													WHERE	SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT) IN ('256')
+												) t1	/* 교육 완료, 봉사활동 시간, 교육출장보고서 */
+					                             LEFT OUTER JOIN (SELECT	ST1.*
+																		, CASE WHEN LAST_DAY(TO_DATE(ST1.STDR_DE, 'YYYYMMDD')) - TO_DATE(ST1.STDR_DE, 'YYYYMMDD') >= 15 THEN TRUNC(TO_DATE(ST1.STDR_DE, 'YYYYMMDD'), 'MON') ELSE ADD_MONTHS(TRUNC(TO_DATE(ST1.STDR_DE, 'YYYYMMDD'), 'MON'), 1) END AS CHK_STDR_DE
+																		, NVL((
+																			  SELECT AA.JSSFC_SE
+																			  FROM TBHRM_GNFD AA
+																			  WHERE AA.SEQ = (
+																								SELECT SEQ
+																								FROM (
+																									SELECT ROW_NUMBER() OVER (PARTITION BY EMPNO ORDER BY GNFD_DE DESC, SEQ DESC) R_NUM, SEQ, EMPNO
+																									FROM TBHRM_GNFD BB
+																									WHERE BB.GNFD_DE <= (SELECT ENDDE FROM TBHRM_CREVAL_STDR WHERE DEVA_YEAR = #DEVA_YEAR# AND ODR_SE = #ODR_SE# AND DEVA_SE = '002')
+																								) BB
+																								WHERE R_NUM = 1
+																								AND AA.EMPNO = BB.EMPNO
+																							  )
+																			  AND   AA.EMPNO = ST1.EMPNO
+																		 ), ST1.JSSFC_SE) AS LAST_JSSFC_SE
+																		, NVL((
+																			  SELECT AA.CLSF_SE
+																			  FROM TBHRM_GNFD AA
+																			  WHERE AA.SEQ = (
+																								SELECT SEQ
+																								FROM (
+																									SELECT ROW_NUMBER() OVER (PARTITION BY EMPNO ORDER BY GNFD_DE DESC, SEQ DESC) R_NUM, SEQ, EMPNO
+																									FROM TBHRM_GNFD BB
+																									WHERE BB.GNFD_DE <= (SELECT ENDDE FROM TBHRM_CREVAL_STDR WHERE DEVA_YEAR = #DEVA_YEAR# AND ODR_SE = #ODR_SE# AND DEVA_SE = '002')
+																								) BB
+																								WHERE R_NUM = 1
+																								AND AA.EMPNO = BB.EMPNO
+																							  )
+																			  AND   AA.EMPNO = ST1.EMPNO
+																		 ), ST1.HR_CLSF_SE) AS LAST_CLSF_SE
+																FROM TBHRM_HR_MASTR ST1) t2 /* 교육은 기준의 교육 기간중 마지막 일자의 직급과 직종을 기준으로 산출 */
+					                                  ON t1.EMPNO = t2.EMPNO
+					                             LEFT OUTER JOIN TBHRM_CREVAL_STDR_DETAIL t3
+					                                 ON t3.RM = (
+					                                             CASE WHEN T2.LAST_JSSFC_SE = '003' THEN T2.LAST_JSSFC_SE
+					                                                  WHEN TO_NUMBER(t2.LAST_CLSF_SE) > TO_NUMBER('03') THEN '03'
+					                                                  ELSE t2.LAST_CLSF_SE END
+					                                            )
+					                             LEFT OUTER JOIN TBHRM_CREVAL_STDR t4
+					                                  ON t3.DEVA_YEAR = t4.DEVA_YEAR
+					                                 AND t3.ODR_SE    = t4.ODR_SE
+					                                 AND t3.DEVA_SE   = t4.DEVA_SE
+												 LEFT OUTER JOIN (SELECT	DEVA_YEAR, ODR_SE, EMPNO
+																			, SUM(MONTHS_BETWEEN(TO_CHAR(CASE WHEN LAST_DAY(ENDDT) - ENDDT >= 15 THEN TRUNC(ENDDT, 'MON') ELSE ADD_MONTHS(TRUNC(ENDDT, 'MON'), 1) END, 'YYYYMMDD'), TO_CHAR(CASE WHEN LAST_DAY(BGNDT) - BGNDT >= 15 THEN TRUNC(BGNDT, 'MON') ELSE ADD_MONTHS(TRUNC(BGNDT, 'MON'), 1) END, 'YYYYMMDD'))) ABSENCE_MON
+																	FROM	(
+																				 SELECT DEVA_YEAR
+																					 , ODR_SE
+																					 , TMDD.EMPNO
+																					 , CASE WHEN TMDD.BGNDT < TO_DATE(TCS.BGNDE, 'YYYYMMDD') THEN TO_DATE(TCS.BGNDE, 'YYYYMMDD') ELSE TMDD.BGNDT END AS BGNDT
+																					 , CASE WHEN TMDD.ENDDT > TO_DATE(TCS.ENDDE, 'YYYYMMDD') THEN TO_DATE(TCS.ENDDE, 'YYYYMMDD') ELSE TMDD.ENDDT END AS ENDDT
+																				  FROM TBHRM_WRKCP TMDD
+																					 , TBHRM_HR_MASTR THM
+																					 , TBHRM_CREVAL_STDR TCS
+																				 WHERE 1=1
+																				   AND SFCOM_GET_APPRSTS(TMDD.SANCTN_NO,TMDD.REGIST_DT)   = '256'
+																				   AND TMDD.CANCEL_SE IS NULL
+																				   AND TMDD.EMPNO = THM.EMPNO
+																				   AND TMDD.DCLZ_SE = '216'
+																				   AND TCS.DEVA_SE = '002'
+																				   AND  ((TMDD.BGNDT <= TO_DATE(TCS.BGNDE || '000000','YYYYMMDD HH24MISS') AND TMDD.ENDDT >= TO_DATE(TCS.BGNDE || '235959','YYYYMMDD HH24MISS'))
+																					OR (TMDD.BGNDT <= TO_DATE(TCS.ENDDE || '000000','YYYYMMDD HH24MISS') AND TMDD.ENDDT >= TO_DATE(TCS.ENDDE || '235959','YYYYMMDD HH24MISS'))
+																					OR (TMDD.BGNDT >= TO_DATE(TCS.BGNDE || '000000','YYYYMMDD HH24MISS') AND TMDD.ENDDT <= TO_DATE(TCS.ENDDE || '235959','YYYYMMDD HH24MISS'))
+																					OR (TO_DATE(TCS.BGNDE || '000000','YYYYMMDD HH24MISS') >= TMDD.BGNDT AND TO_DATE(TCS.ENDDE || '235959','YYYYMMDD HH24MISS') <= TMDD.ENDDT))
+																			)
+																	GROUP BY DEVA_YEAR, ODR_SE, EMPNO) T5 /* 근평별 교육기간에 따른 휴직개월 수 */
+													ON t3.DEVA_YEAR = t5.DEVA_YEAR
+					                                 AND t3.ODR_SE  = t5.ODR_SE
+													 AND t1.EMPNO   = t5.EMPNO
+					                      WHERE  1=1
+					                      AND    t1.ENDDE BETWEEN t4.BGNDE AND t4.ENDDE
+					                      AND    t3.DEVA_SE = '002'
+					                      GROUP BY t1.EMPNO
+					                              ,t3.DEVA_YEAR
+					                              ,t3.ODR_SE
+					                              ,t3.UNIT_SCORE
+					                              ,t4.DEVA_ALLOT
+										)
+					              )T6		/* 교육가점 */
+					       ON TBC.DEVA_YEAR = T6.DEVA_YEAR
+					       AND TBC.ODR_SE   = T6.ODR_SE
+					       AND TBC.EMPNO    = T6.EMPNO
+					      LEFT OUTER JOIN (
+					                      SELECT EMPNO, ROUND(SUM(APP_DD)) AS APP_DD
+					                        FROM VIHRM_CAREER_TRANS
+					                       WHERE RATE_SE ='2' 
+					                       GROUP BY EMPNO
+					                      )C
+					       ON TBC.EMPNO = C.EMPNO
+					      LEFT OUTER JOIN(
+					                      SELECT	A.EMPNO            AS EMPNO
+													,MAX(A.RWARD_GRADE) AS RWARD_GRADE
+											FROM 	TBHRM_RWARD_CNFER A
+												LEFT OUTER JOIN TBHRM_CREVAL C
+													ON A.EMPNO = C.EMPNO
+												LEFT JOIN TBHRM_CREVAL_STDR D
+													ON C.DEVA_YEAR = D.DEVA_YEAR
+													AND C.ODR_SE = D.ODR_SE
+											WHERE A.RWARD_DE BETWEEN C.HFFC_PD_BGNDE AND D.STDR_DE
+											AND C.DEVA_YEAR = #DEVA_YEAR#
+											AND C.ODR_SE = #ODR_SE#
+											AND C.SEQ = '1'
+											AND D.DEVA_SE = '004'
+											GROUP BY A.EMPNO
+					      )D	/* 포상가점 */
+					      ON TBC.EMPNO = D.EMPNO
+					     LEFT OUTER JOIN(
+					                      SELECT A.EMPNO            AS EMPNO
+					                          ,SUM(A.EVL_GRADE)   AS EVL_GRADE
+					                      FROM TBHRM_PROPSE_WNPZ A
+					                       LEFT OUTER JOIN(    
+					                                       SELECT B1.EMPNO
+					                                             ,B1.CLSF_SE
+					                                             ,A1.BGN_DE   AS GNFD_DE
+					                                       FROM   TBHRM_CREVAL B1
+					                                         LEFT OUTER JOIN(
+					                                                      SELECT A.EMPNO
+					                                                                      , A.CLSF_SE
+					                                                                      , MIN(A.GNFD_DE) AS BGN_DE
+					                                                                      , (CASE WHEN LEAD(MIN(A.EMPNO), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE) = A.EMPNO THEN LEAD(MIN(A.GNFD_DE), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE)
+					                                                                              ELSE NULL
+					                                                                              END) AS BEFORE_BGN_DE
+					                                                                 FROM TBHRM_GNFD A
+					                                                                 GROUP BY A.EMPNO ,A.CLSF_SE 
+					                                                                   ORDER BY A.EMPNO ,A.CLSF_SE 
+					                                                       )A1
+					                                           ON B1.EMPNO = A1.EMPNO
+					                                           AND B1.CLSF_SE = A1.CLSF_SE
+					                                       WHERE B1.DEVA_YEAR = #DEVA_YEAR#
+					                                       AND B1.ODR_SE = #ODR_SE#
+					                                       GROUP BY B1.EMPNO,B1.CLSF_SE,A1.BGN_DE
+					                                     )C
+					                       ON A.EMPNO = C.EMPNO
+					                      WHERE A.WNPZ_DE  >= C.GNFD_DE
+					                      GROUP BY A.EMPNO
+					                     )F
+					      ON TBC.EMPNO = F.EMPNO
+					     LEFT OUTER JOIN(
+					                    SELECT TBC.EMPNO         AS EMPNO ,
+											   NVL(CASE WHEN(CASE WHEN SUM(DMRTR_SCORE_1) > 1 THEN 1 ELSE SUM(DMRTR_SCORE_1) END) + SUM(DMRTR_SCORE_2) > MAX(D.DEVA_ALLOT) THEN MAX(D.DEVA_ALLOT) ELSE 
+                          							    (CASE WHEN SUM(DMRTR_SCORE_1) > 1 THEN 1 ELSE SUM(DMRTR_SCORE_1) END) + SUM(DMRTR_SCORE_2)
+                           					   END,0)		 	 AS DMRTR_SCORE
+					                      FROM TBHRM_CREVAL TBC
+                                			   LEFT OUTER JOIN 
+                                			   		(
+                            			   			 SELECT EMPNO,
+															B.DEVA_ALLOT,
+															DCSN_DSCPL_SE,
+															CASE WHEN DMRTR_APPLC_DE BETWEEN B.BGNDE AND B.STDR_DE THEN A.DMRTR_SCORE_1 ELSE 0 END AS DMRTR_SCORE_1,
+															CASE WHEN  DMRTR_APPLC_ENDE >= B.STDR_DE  THEN A.DMRTR_SCORE_2 ELSE 0 END AS DMRTR_SCORE_2 
+		                                			   FROM (
+							                                 SELECT EMPNO,
+																	CASE WHEN B.ETC_1 = '0' AND B.ETC_2 = '0' THEN A.DMRTR_SCORE ELSE 0 END AS DMRTR_SCORE_1,
+																	CASE WHEN B.ETC_1 = '0' AND B.ETC_2 = '0' THEN 0 ELSE A.DMRTR_SCORE END AS DMRTR_SCORE_2,
+																	NVL(DMRTR_APPLC_DE,DSPS_BGNDE) AS DMRTR_APPLC_DE,
+																	TO_CHAR((ADD_MONTHS(TO_DATE(DMRTR_APPLC_DE,'YYYYMMDD'),DECODE(A.RECV_AT, '0', B.ETC_1, B.ETC_2) *12)),'YYYYMMDD') AS DMRTR_APPLC_ENDE,
+																	DCSN_DSCPL_SE,
+																	DECODE(A.RECV_AT, '0', B.ETC_1, B.ETC_2) AS DMRTR_TMLMT_YYCNT
+															   FROM TBHRM_DSCPL_DSPS A
+																	LEFT OUTER JOIN TBHRM_CREVAL_STDR_DETAIL B
+																	  ON A.DCSN_DSCPL_SE = B.STDR_CODE
+															  WHERE A.DMRTR_SCORE <> 0
+																AND B.DEVA_YEAR = #DEVA_YEAR#
+																AND B.ODR_SE = #ODR_SE#
+																AND B.DEVA_SE   = '004'
+		                       							     ) A,
+		                       								 (
+		                       								  SELECT DEVA_ALLOT,
+		                       								   		 BGNDE, 
+		                       								 		 STDR_DE
+		                       								    FROM TBHRM_CREVAL_STDR 
+		                                             		   WHERE 1         =1
+										                         AND DEVA_YEAR = #DEVA_YEAR#
+										                         AND ODR_SE    = #ODR_SE#
+										                         AND DEVA_SE   = '004'
+		                       								 ) B
+                       								) D
+                                				 ON TBC.EMPNO = D.EMPNO
+                                			   LEFT OUTER JOIN TBHRM_DSCPL_STDR C
+                               					 ON	D.DCSN_DSCPL_SE = C.DSLRC_CODE
+			                       WHERE TBC.DEVA_YEAR  = #DEVA_YEAR#
+			                         AND TBC.ODR_SE     = #ODR_SE#
+			                         AND TBC.SEQ        = '1'
+			                       GROUP BY TBC.EMPNO
+					      		  )G
+					      ON TBC.EMPNO = G.EMPNO
+					)
+        ]]>
+    </insert>
+
+	 <!--확정처리 -->
+     <update id="HRM060203DAO.setDcsnList" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBHRM_CREVAL_SM 
+               SET     
+				 DCSN_AT                =              '1'
+				,DCSN_DE               =              TO_CHAR(SYSDATE,'YYYYMMDD')
+				,UPDUSR_ID             =              #S_USER_ID#
+				,UPDT_DT               =              SYSDATE
+             WHERE 1=1
+               AND DEVA_YEAR           =              #DEVA_YEAR#
+               AND ODR_SE              =              #ODR_SE#
+        ]]>
+    </update>
+    
+    <!--경력평정서 - 기본경력내역-->
+	<select id="HRM060203DAO.tbhrmAcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				 SELECT NVL(SFSAL_GETDEPTNM_01(DEPT_CODE), SFHRM_GET_DEPTNM(DEPT_CODE, '0'))   AS DEPT_NM
+				       ,CLSF_SE                                                                AS CLSF_SE
+				       ,SFHRM_GET_JSSFC(JSSFC_SE)                                              AS JSSFC_NM
+				       ,BGN_DE                                                                 AS BGN_DE
+				       ,BEFORE_BGN_DE                                                          AS END_DE
+				FROM(
+				 SELECT A.EMPNO
+				       , A.CLSF_SE
+				       , A.DEPT_CODE
+				       , A.JSSFC_SE
+				       , MIN(A.GNFD_DE) AS BGN_DE
+				       ,A.SEQ
+				       , (CASE WHEN LEAD(MIN(A.EMPNO), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE,A.SEQ) = A.EMPNO THEN LEAD(MIN(A.GNFD_DE), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE,A.SEQ)
+				               ELSE NULL
+				               END) AS BEFORE_BGN_DE
+				    FROM TBHRM_GNFD A
+				    WHERE A.EMPNO = #EMPNO#
+				    AND A.CLSF_SE = #CLSF_SE#
+				    GROUP BY A.EMPNO ,A.CLSF_SE, A.DEPT_CODE ,A.JSSFC_SE,A.SEQ
+				    ORDER BY A.SEQ
+				)
+		]]>
+    </select>
+
+    <!--경력평정서 - 기본경력내역평정기준-->
+	<select id="HRM060203DAO.tbhrmBcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				SELECT B.HFFC_MONTH_CO               AS HFFC_MONTH_CO
+				      ,A.UNIT_SCORE                  AS UNIT_SCORE
+				      ,B.BASS_CAREER_GRADE           AS BASS_CAREER_GRADE
+				      ,A.UPLMT_SCORE                 AS UPLMT_SCORE
+				FROM TBHRM_CREVAL_STDR_DETAIL A
+				 LEFT OUTER JOIN (
+				               SELECT A.DEVA_YEAR
+				                        ,A.ODR_SE
+				                        ,A.EMPNO
+				                        ,A.HFFC_MONTH_CO
+				                        ,B.BASS_CAREER_GRADE
+				                    FROM TBHRM_CREVAL A
+				                     LEFT OUTER JOIN (
+				                                      SELECT DEVA_YEAR
+				                                            ,ODR_SE
+				                                            ,EMPNO
+				                                            ,BASS_CAREER_GRADE
+				                                      FROM TBHRM_CREVAL_SM
+				                                      WHERE EMPNO = #EMPNO#
+				                                         AND  DEVA_YEAR = #DEVA_YEAR#
+				                                         AND  ODR_SE    = #ODR_SE#
+				                                      )B
+				                       ON A.DEVA_YEAR = B.DEVA_YEAR
+				                       AND A.ODR_SE = B.ODR_SE
+				                    WHERE A.EMPNO = #EMPNO#
+				                     AND  A.DEVA_YEAR = #DEVA_YEAR#
+				                     AND  A.ODR_SE    = #ODR_SE#
+				                     AND  A.SEQ  = '1'
+				                  ) B 
+				  ON A.DEVA_YEAR = B.DEVA_YEAR
+				  AND A.ODR_SE = B.ODR_SE
+				WHERE A.DEVA_YEAR = #DEVA_YEAR#
+				AND A.ODR_SE    = #ODR_SE#
+				AND A.DEVA_SE   = '001'  /*경력평정*/
+				AND A.STDR_CODE = '001' /*기본경력*/
+		]]>
+    </select>
+    
+    <!--경력평정서 - 초과경력내역-->
+	<select id="HRM060203DAO.tbhrmCcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				 SELECT NVL(SFSAL_GETDEPTNM_01(DEPT_CODE), SFHRM_GET_DEPTNM(DEPT_CODE, '0'))   AS EX_DEPT_NM
+				       ,CLSF_SE                                                                AS EX_CLSF_SE
+				       ,SFHRM_GET_JSSFC(JSSFC_SE)                                              AS EX_JSSFC_NM
+				       ,BGN_DE                                                                 AS EX_BGN_DE
+				       ,BEFORE_BGN_DE                                                          AS EX_END_DE
+				FROM(
+					 SELECT  A.EMPNO        AS EMPNO
+					       , A.CLSF_SE      AS CLSF_SE
+					       , A.DEPT_CODE    AS DEPT_CODE
+					       , A.JSSFC_SE     AS JSSFC_SE
+					       , MIN(A.GNFD_DE) AS BGN_DE
+					       , A.SEQ
+					       , (CASE WHEN LEAD(MIN(A.EMPNO), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE,A.SEQ) = A.EMPNO THEN LEAD(MIN(A.GNFD_DE), 1) OVER (ORDER BY A.EMPNO,A.CLSF_SE,A.SEQ)
+					               ELSE NULL
+					               END) AS BEFORE_BGN_DE
+					    FROM TBHRM_GNFD A
+					     LEFT OUTER JOIN (
+					                      SELECT EMPNO,CLSF_SE
+					                        FROM TBHRM_GNFD t
+					                        WHERE GNFD_DE = (
+					                                  SELECT MAX(GNFD_DE) as maxde
+					                                  FROM TBHRM_GNFD a
+					                                  WHERE (
+					                                          SELECT MIN(GNFD_DE) as minde
+					                                          FROM TBHRM_GNFD
+					                                          WHERE EMPNO= #EMPNO#
+					                                          AND CLSF_SE = #CLSF_SE#
+					                                         ) > a.GNFD_DE
+					                                      AND EMPNO=#EMPNO#
+					                        )
+					                        AND EMPNO=#EMPNO#
+					                      )B
+					      ON A.EMPNO = B.EMPNO
+					      AND A.CLSF_SE = B.CLSF_SE
+					    WHERE A.EMPNO=#EMPNO#
+					    AND A.CLSF_SE =B.CLSF_SE
+					    GROUP BY A.EMPNO ,A.CLSF_SE, A.DEPT_CODE ,A.JSSFC_SE,A.SEQ
+					    ORDER BY A.SEQ
+				)
+		]]>
+    </select>
+    
+    <!--경력평정서 - 초과경력내역평정기준-->
+	<select id="HRM060203DAO.tbhrmDcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+					SELECT B.HFFC_MONTH_CO         AS EX_HFFC_MONTH_CO
+					      ,A.UNIT_SCORE            AS EX_UNIT_SCORE
+					      ,B.EXCESS_CAREER_GRADE   AS EX_EXCESS_CAREER_GRADE
+					      ,A.UPLMT_SCORE           AS UPLMT_SCORE
+					FROM TBHRM_CREVAL_STDR_DETAIL A
+					 LEFT OUTER JOIN (
+					               SELECT A.DEVA_YEAR
+					                        ,A.ODR_SE
+					                        ,A.EMPNO
+					                        ,A.HFFC_MONTH_CO
+					                        ,B.EXCESS_CAREER_GRADE
+					                    FROM TBHRM_CREVAL A
+					                     LEFT OUTER JOIN (
+					                                      SELECT DEVA_YEAR
+					                                            ,ODR_SE
+					                                            ,EMPNO
+					                                            ,EXCESS_CAREER_GRADE
+					                                      FROM TBHRM_CREVAL_SM
+					                                      WHERE EMPNO = #EMPNO#
+					                                         AND  DEVA_YEAR =#DEVA_YEAR#
+					                                         AND  ODR_SE    = #ODR_SE#
+					                                      )B
+					                       ON A.DEVA_YEAR = B.DEVA_YEAR
+					                       AND A.ODR_SE = B.ODR_SE
+					                    WHERE A.EMPNO = #EMPNO#
+					                     AND  A.DEVA_YEAR =#DEVA_YEAR#
+					                     AND  A.ODR_SE    = #ODR_SE#
+					                     AND  A.SEQ  = '2'
+					                  ) B 
+					  ON A.DEVA_YEAR = B.DEVA_YEAR
+					  AND A.ODR_SE = B.ODR_SE
+					WHERE A.DEVA_YEAR = #DEVA_YEAR#
+					AND A.ODR_SE    =#ODR_SE#
+					AND A.DEVA_SE   = '001'  /*경력평정*/
+					AND A.STDR_CODE = '002' /*초과경력*/
+		]]>
+    </select>
+    
+    <!--경력평정서 - 유사경력내역-->
+	<select id="HRM060203DAO.tbhrmEcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				 SELECT WRKPLC_NM        AS WRKPLC_NM
+				        ,ECNY_DE         AS ECNY_DE
+				        ,RETIRE_DE       AS RETIRE_DE
+				 FROM TBHRM_HR_CAREER
+				 WHERE EMPNO= #EMPNO#
+				 ORDER BY ECNY_DE
+		]]>
+    </select>
+    
+    <!--경력평정서 - 유사경력내역평정-->
+	<select id="HRM060203DAO.tbhrmFcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				SELECT C.APP_DD               AS SI_APP_DD
+				      ,A.UNIT_SCORE           AS SI_UNIT_SCORE
+				      ,B.SIMILR_CAREER_GRADE  AS SI_SIMILR_CAREER_GRADE
+				      ,A.UPLMT_SCORE          AS UPLMT_SCORE
+				FROM TBHRM_CREVAL_STDR_DETAIL A
+				 LEFT OUTER JOIN (
+				               SELECT A.DEVA_YEAR
+				                        ,A.ODR_SE
+				                        ,A.EMPNO
+				                        ,B.SIMILR_CAREER_GRADE
+				                    FROM TBHRM_CREVAL A
+				                     LEFT OUTER JOIN (
+				                                      SELECT DEVA_YEAR
+				                                            ,ODR_SE
+				                                            ,EMPNO
+				                                            ,SIMILR_CAREER_GRADE
+				                                      FROM TBHRM_CREVAL_SM
+				                                      WHERE EMPNO = #EMPNO#
+				                                         AND  DEVA_YEAR =#DEVA_YEAR#
+				                                         AND  ODR_SE    = #ODR_SE#
+				                                      )B
+				                       ON A.DEVA_YEAR = B.DEVA_YEAR
+				                       AND A.ODR_SE = B.ODR_SE
+				                    WHERE A.EMPNO = #EMPNO#
+				                     AND  A.DEVA_YEAR =#DEVA_YEAR#
+				                     AND  A.ODR_SE    = #ODR_SE#
+				                     AND  A.SEQ  = '1'
+				                  ) B 
+				  ON A.DEVA_YEAR = B.DEVA_YEAR
+				  AND A.ODR_SE = B.ODR_SE
+				   LEFT OUTER JOIN(
+				                    SELECT EMPNO, SUM(ROUND(APP_DD)) AS APP_DD
+								            FROM VIHRM_CAREER_TRANS
+								            WHERE RATE_SE ='2' 
+				                    GROUP BY EMPNO
+				   )C
+				  ON B.EMPNO = C.EMPNO
+				WHERE A.DEVA_YEAR = #DEVA_YEAR#
+				AND A.ODR_SE    =#ODR_SE#
+				AND A.DEVA_SE   = '001'  /*경력평정*/
+				AND A.STDR_CODE = '003' /*유사경력*/
+		]]>
+    </select>
+    
+    <!--경력평정서 - 교육내역-->
+	<select id="HRM060203DAO.tbhrmGcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				SELECT t1.EDC_CRSE_NM           AS EDC_CRSE_NM
+				      ,t1.EDC_NM                AS EDC_NM
+				      ,t1.BGNDE                 AS BGNDE
+				      ,t1.ENDDE                 AS ENDDE
+				      ,t1.CALC_SCORE            AS CALC_SCORE
+				FROM   TBHRM_EDC_TRAING_COMPL t1
+				       LEFT OUTER JOIN TBHRM_HR_MASTR t2        
+				            ON t1.EMPNO = t2.EMPNO
+				       LEFT OUTER JOIN TBHRM_CREVAL_STDR_DETAIL t3
+				           ON t3.RM = (
+				                       CASE WHEN T2.JSSFC_SE = '003' THEN T2.JSSFC_SE
+				                            WHEN TO_NUMBER(t2.HR_CLSF_SE) > TO_NUMBER('03') THEN '03'
+				                            ELSE t2.HR_CLSF_SE END
+				                      )
+				       LEFT OUTER JOIN TBHRM_CREVAL_STDR t4
+				            ON t3.DEVA_YEAR = t4.DEVA_YEAR
+				           AND t3.ODR_SE    = t4.ODR_SE
+				           AND t3.DEVA_SE   = t4.DEVA_SE
+				WHERE  1=1
+				AND    t1.ENDDE BETWEEN t4.BGNDE AND t4.ENDDE
+				AND    t3.DEVA_SE = '002'
+				AND    t1.EMPNO = #EMPNO#
+				AND    t3.DEVA_YEAR = #DEVA_YEAR#
+				AND    t3.ODR_SE = #ODR_SE#
+				ORDER BY t1.BGNDE
+		]]>
+    </select>
+    
+    <!--경력평정서 - 교육내역평점-->
+	<select id="HRM060203DAO.tbhrmHcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				SELECT A.DEVA_ALLOT     AS DEVA_ALLOT
+				      ,A.CRTFC_TIME     AS CRTFC_TIME
+				      ,B.EDC_ADDPNT     AS EDC_ADDPNT
+				FROM (
+				SELECT  t1.EMPNO
+				        ,t3.DEVA_YEAR
+				        ,t3.ODR_SE
+				        ,t3.UNIT_SCORE
+				        ,t4.DEVA_ALLOT
+				        ,SUM(t1.CRTFC_TIME)             AS CRTFC_TIME
+				  FROM   TBHRM_EDC_TRAING_COMPL t1
+				         LEFT OUTER JOIN TBHRM_HR_MASTR t2        
+				              ON t1.EMPNO = t2.EMPNO
+				         LEFT OUTER JOIN TBHRM_CREVAL_STDR_DETAIL t3
+				             ON t3.RM = (
+				                         CASE WHEN T2.JSSFC_SE = '003' THEN T2.JSSFC_SE
+				                              WHEN TO_NUMBER(t2.HR_CLSF_SE) > TO_NUMBER('03') THEN '03'
+				                              ELSE t2.HR_CLSF_SE END
+				                        )
+				         LEFT OUTER JOIN TBHRM_CREVAL_STDR t4
+				              ON t3.DEVA_YEAR = t4.DEVA_YEAR
+				             AND t3.ODR_SE    = t4.ODR_SE
+				             AND t3.DEVA_SE   = t4.DEVA_SE
+				  WHERE  1=1
+				  AND    t1.ENDDE BETWEEN t4.BGNDE AND t4.ENDDE
+				  AND    t3.DEVA_SE = '002'
+				  AND    t1.EMPNO = #EMPNO#
+				  AND    t3.DEVA_YEAR = #DEVA_YEAR#
+				  AND    t3.ODR_SE = #ODR_SE#
+				  GROUP BY t1.EMPNO
+				          ,t3.DEVA_YEAR
+				          ,t3.ODR_SE
+				          ,t3.UNIT_SCORE
+				          ,t4.DEVA_ALLOT
+				)A
+				LEFT OUTER JOIN TBHRM_CREVAL_SM B
+				 ON A.DEVA_YEAR = B.DEVA_YEAR
+				 AND A.ODR_SE = B.ODR_SE
+				 AND A.EMPNO = B.EMPNO
+		]]>
+    </select>
+ 
+    <!--경력평정서 - 포상-->
+	<select id="HRM060203DAO.tbhrmIcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				SELECT RWARD_INSTT_NM    AS RWARD_INSTT_NM
+				      ,PBLEN_SUMRY       AS PBLEN_SUMRY
+				      ,RWARD_DE          AS RWARD_DE
+				      ,RWARD_GRADE       AS RWARD_GRADE
+				FROM TBHRM_RWARD_CNFER
+				WHERE EMPNO = #EMPNO#
+				ORDER BY RWARD_DE
+		]]>
+    </select>
+    
+    <!--경력평정서 - 제안-->
+	<select id="HRM060203DAO.tbhrmJcreval" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+				SELECT  B.CODE_NM                  AS WNPZ_GRAD_SE
+				       ,A.PROPSE_SUMRY             AS PROPSE_SUMRY
+				       ,A.WNPZ_DE                  AS WNPZ_DE
+				       ,A.EVL_GRADE                AS EVL_GRADE
+				FROM TBHRM_PROPSE_WNPZ A
+				 LEFT OUTER JOIN(SELECT CODE,CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE='SUP007')B
+				 ON A.WNPZ_GRAD_SE = B.CODE
+				WHERE A.EMPNO = #EMPNO#
+				ORDER BY A.WNPZ_DE
+		]]>
+    </select>
+</sqlMap>

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050416_SQL">	
+    
+	<!-- 차입금 명세서 조회 -->
+	<select id="ACC050416DAO.selectPbncdList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC050416DAO.selectPbncdList*/ ]]>
+		<![CDATA[
+			WITH TM_FUN_PBNCD_T AS (
+			        SELECT   B.PBNCD_NO                                       AS PBNCD_NO
+			               , C.BSNS_CODE                                      AS BSNS_CODE
+			               , NVL(C.BSNS_NM,B.BRRW_ACNUT_NM)                   AS BSNS_NM
+			               , DECODE(SUBSTR(B.CPTAL_KND, 2,2),'01', '04'
+                                                      ,'03', '04'
+                                                      ,'05', '07'
+                                                      , SUBSTR(B.CPTAL_KND, 2,2))  AS CPTAL_KND
+			               , B.BRRW_AMOUNT                                    AS PRNCPAL_AMOUNT
+                           , NVL(F.PRNCPAL_AMOUNT_NOW_YR,0)                   AS PRNCPAL_AMOUNT_NOW_YR
+			               , NVL(F.PRNCPAL_AMOUNT_BACK_YR1,0)                 AS PRNCPAL_AMOUNT_BACK_YR1
+                           , NVL(F.PRNCPAL_AMOUNT_BACK_YR2,0)                 AS PRNCPAL_AMOUNT_BACK_YR2
+                           , NVL(F.PRNCPAL_AMOUNT_BACK_YR3,0)                 AS PRNCPAL_AMOUNT_BACK_YR3
+			        FROM   TBFUN_PBNCD_CONFM A
+			               ,(SELECT *
+			                 FROM TBFUN_PBNCD
+			                 WHERE SUBSTR(EXPRTN_DE, 1,4) > #NOW_YEAR#
+			                ) B
+			                LEFT OUTER JOIN TBPRJ_BSNS_CODE C
+			                             ON B.BSNS_CODE = C.BSNS_CODE
+			                LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                        ,NVL(SUM(RPAY_AMOUNT),0)                                                                AS PRNCPAL_AMOUNT
+                                                    ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) <= #NOW_YEAR# THEN RPAY_AMOUNT ELSE 0 END),0)    AS PRNCPAL_AMOUNT_NOW_YR   
+			                                        ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR1# THEN RPAY_AMOUNT ELSE 0 END),0)   AS PRNCPAL_AMOUNT_BACK_YR1
+                                                    ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR2# THEN RPAY_AMOUNT ELSE 0 END),0)   AS PRNCPAL_AMOUNT_BACK_YR2
+                                                    ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) > #BACK_YEAR2# THEN RPAY_AMOUNT ELSE 0 END),0)   AS PRNCPAL_AMOUNT_BACK_YR3
+			                                 FROM   TBFUN_PBNCD_PRNCPAL_RPAY_PLAN
+			                                 GROUP BY PBNCD_NO) F
+			                             ON B.PBNCD_NO = F.PBNCD_NO                                       
+			        WHERE  1 = 1
+			          AND  A.CONFM_NO = B.CONFM_NO
+			]]>
+			<isNotEmpty property="BRRW_BGNDE">
+				<![CDATA[
+		              AND  B.BRRW_DE >= #BRRW_BGNDE#
+		        ]]>
+		    </isNotEmpty> 
+		    <isNotEmpty property="BRRW_ENDDE">
+		    	<![CDATA[ 
+		              AND  B.BRRW_DE <= #BRRW_ENDDE#
+		        ]]>
+		    </isNotEmpty>
+			<![CDATA[
+            )
+			SELECT   T1.CPTAL_LEVEL                              AS CPTAL_LEVEL
+			       , T1.CPTAL_KND                                AS CPTAL_KND
+                   , DECODE(T1.CPTAL_LEVEL, '2', T3.DETAIL_CODE_NM || ' 소계'
+                                          , '3', T3.DETAIL_CODE_NM
+                           )                                     AS CPTAL_KND_NM
+			       , T1.PBNCD_NO                                 AS PBNCD_NO
+			       , T1.BSNS_CODE                                AS BSNS_CODE
+			       , T1.BSNS_NM                                  AS BSNS_NM
+			       , NVL(T1.PRNCPAL_AMOUNT,0)                    AS PRNCPAL_AMOUNT
+			       , NVL(T1.PRNCPAL_AMOUNT_NOW_YR,0)             AS PRNCPAL_AMOUNT_NOW_YR
+                   , NVL(T1.PRNCPAL_AMOUNT_BACK_YR1,0)           AS PRNCPAL_AMOUNT_BACK_YR1
+                   , NVL(T1.PRNCPAL_AMOUNT_BACK_YR2,0)           AS PRNCPAL_AMOUNT_BACK_YR2
+                   , NVL(T1.PRNCPAL_AMOUNT_BACK_YR3,0)           AS PRNCPAL_AMOUNT_BACK_YR3
+			       , T2.BRRW_DE                                  AS BRRW_DE
+			       , T2.EXPRTN_DE                                AS EXPRTN_DE
+			       , DECODE(T2.INTRT, NULL, NULL, T2.INTRT||'%') AS INTRT
+			       , T2.BRWOFC                                   AS BRWOFC
+			FROM   (SELECT '3' AS CPTAL_LEVEL
+			               ,T1.* 
+			        FROM TM_FUN_PBNCD_T T1
+			        
+	                UNION ALL
+	                
+	                SELECT '2'                                   AS CPTAL_LEVEL
+	                       ,NULL                                 AS PBNCD_NO
+	                       ,NULL                                 AS BSNS_CODE
+	                       ,NULL                                 AS BSNS_NM
+	                       ,S2.*
+	                FROM   (SELECT   S1.CPTAL_KND                             AS CPTAL_KND
+	                               , NVL(SUM(S1.PRNCPAL_AMOUNT),0)            AS PRNCPAL_AMOUNT
+	                               , NVL(SUM(S1.PRNCPAL_AMOUNT_NOW_YR),0)     AS PRNCPAL_AMOUNT_NOW_YR
+	                               , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1),0)   AS PRNCPAL_AMOUNT_BACK_YR1
+	                               , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR2),0)   AS PRNCPAL_AMOUNT_BACK_YR2
+                                   , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR3),0)   AS PRNCPAL_AMOUNT_BACK_YR3
+	                        FROM TM_FUN_PBNCD_T S1
+	                        GROUP BY S1.CPTAL_KND
+	                       ) S2
+                    ) T1
+                    LEFT OUTER JOIN TBFUN_PBNCD T2
+			                     ON T1.PBNCD_NO = T2.PBNCD_NO
+                    LEFT OUTER JOIN (SELECT SUBSTR(DETAIL_CODE,2,2) AS CPTAL_KND
+                                          , DETAIL_CODE_NM AS DETAIL_CODE_NM
+                                     FROM   TBFUN_CPTAL_DETAIL_CODE
+                                     WHERE CODE_SE = '000'
+                                       AND CODE = 'A'
+                                    ) T3
+                                 ON T1.CPTAL_KND = T3.CPTAL_KND                        
+		ORDER BY T1.CPTAL_KND, T1.BSNS_CODE, T2.BRRW_DE
+	    ]]>
+    </select>     
+
+</sqlMap>

@@ -1,0 +1,1532 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01070300_SQL">	
+   <!--  설명  : 지원금청구
+		작성자 : 지효정 -->
+	<!-- 청구자료 목록 -->
+	<select id="RNT01070300DAO.rentNhtOutptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 A.MDAT_YM				/*조정년월*/
+			,'임대료' AS PAY_DIV
+			,A.CNTRCTR_NO
+			,C.RENT_HOUSE_CODE
+			,D.RENT_HOUSE_NM
+			,C.DONG
+			,C.HO
+			,E.NM
+			,A.RNTCHRG				/*임대료*/
+			,A.OVDINTR				/*연체이자*/
+			,A.PAY_TMLMT			
+			,DECODE(A.ATCNG_AT,'1','자납','일반') AS ATCNG_AT	/*자동이체유무*/
+			,A.ACNUTNO				/*계좌번호*/
+		FROM 
+			TBRNT_RENT_NHT_OUTPT A	/*임대고지서출력*/
+			,(
+				SELECT DISTINCT 
+					CNTRCTR_NO
+					,ACNUTNO
+					,DPSTR
+				FROM TBPMS_ATCNG	/*자동이체정보(지원금)*/
+				WHERE JOB_SE = 'R1'
+				  AND PAY_SE = '02'
+				AND ATCNG_CANCL_DE IS NULL 
+			) B
+			,TBRNT_RENT_CNTRCT C
+			,TBRNT_RENT_HOUSE D
+			,TBRNT_PRMANENT_RENT_CSTMR E
+		WHERE A.MDAT_YM      = #mdatYm#
+		AND   A.NTIC_SE = '2'
+		AND   A.CNTRCTR_NO       = B.CNTRCTR_NO(+)
+		AND   A.ACNUTNO = B.ACNUTNO(+)
+		AND   A.CNTRCTR_NO  = C.CNTRCTR_NO
+		AND   C.RENT_HOUSE_CODE  = D.RENT_HOUSE_CODE
+		AND   C.PRMANENT_CSTMR_NO = E.PRMANENT_CSTMR_NO
+		ORDER BY C.RENT_HOUSE_CODE, C.DONG, C.HO
+	</select>	
+	
+	<!-- 청구자료 카운터 -->
+	<select id="RNT01070300DAO.rentNhtOutptCnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT COUNT(*) AS CNT
+		FROM 
+			 TBRNT_RENT_NHT_OUTPT A	/*임대고지서출력*/
+			,TBRNT_RENT_CNTRCT B
+			,TBRNT_RENT_HOUSE C
+		WHERE A.MDAT_YM = #mdatYm#
+		AND   A.NTIC_SE = '2'
+		AND   A.CNTRCTR_NO = B.CNTRCTR_NO
+		AND   B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		AND   INSTR('R1,R3',C.HOUSE_SE) > 0
+	</select>
+	
+	<!-- 청구자료생성 -->
+	<insert id="RNT01070300DAO.rentNhtOutptC" parameterClass="java.util.HashMap">
+		INSERT INTO TBRNT_RENT_NHT_OUTPT( 
+			 CNTRCTR_NO
+			,NTIC_SE
+			,MDAT_YM
+		    ,PAY_SE
+		    ,RNTCHRG
+		    ,OVDINTR
+		    ,PAY_TMLMT
+		    ,ATCNG_AT
+		    ,ACNUTNO
+			,REGISTER_ID
+		    ,REGIST_DT  
+		    ,UPDUSR_ID  
+		    ,UPDT_DT
+		)
+		SELECT 
+		    DISTINCT A.CNTRCTR_NO
+			,'2'
+			,#mdatYm#
+		    ,'9'
+            ,(CASE WHEN F.RQEST_AMOUNT IS NULL THEN G.RQEST_AMOUNT ELSE F.RQEST_AMOUNT END) AS RQEST_AMOUNT
+            ,0
+            ,(CASE WHEN F.PAY_TMLMT IS NULL THEN TO_CHAR(LAST_DAY(TO_DATE(#mdatYm#, 'YYYYMM')),'YYYYMMDD') ELSE F.PAY_TMLMT END) AS PAY_TMLMT
+		    ,DECODE (B.ACNUTNO, NULL, '0', '1')
+		    ,B.ACNUTNO
+		    ,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		FROM 
+			TBRNT_GTN_SPORT A
+			,(
+		    	SELECT 
+		        	CNTRCTR_NO
+		            , MAX(ACNUTNO) AS ACNUTNO
+		        FROM TBPMS_ATCNG D
+		        WHERE ATCNG_CANCL_DE IS NULL
+		    	GROUP BY CNTRCTR_NO
+		    ) B
+		    ,TBRNT_RENT_CNTRCT C
+			,TBRNT_RENT_HOUSE D
+		    ,TBRNT_RENT_RESCI E
+		    ,(SELECT * FROM TBRNT_GTN_SPORT WHERE RQEST_YM = #mdatYm# AND RCIV_DE IS NULL) F
+		    ,(SELECT CNTRCTR_NO , SUM(RQEST_AMOUNT) AS RQEST_AMOUNT FROM TBRNT_GTN_SPORT WHERE RQEST_YM <![CDATA[  <= ]]> #mdatYm# AND RCIV_DE IS NULL GROUP BY CNTRCTR_NO) G
+		WHERE A.RCIV_DE IS NULL
+		AND   A.CNTRCTR_NO = B.CNTRCTR_NO(+)
+		AND   A.CNTRCTR_NO = C.CNTRCTR_NO
+		AND   A.CNTRCTR_NO = E.CNTRCTR_NO(+)
+		AND   A.CNTRCTR_NO = F.CNTRCTR_NO(+)
+		AND   A.RQEST_YM <![CDATA[  <= ]]> #mdatYm#
+		AND   E.CANCL_DE IS NULL
+		AND   C.RENT_HOUSE_CODE = D.RENT_HOUSE_CODE
+		AND   INSTR('R1,R3',D.HOUSE_SE) > 0
+		AND   A.RQEST_AMOUNT > 0
+	</insert>
+	
+	<!-- 청구자료삭제 -->
+	<delete id="RNT01070300DAO.rentNhtOutptD" parameterClass="java.util.HashMap">
+		DELETE FROM TBRNT_RENT_NHT_OUTPT 
+		WHERE MDAT_YM = #mdatYm# 
+		AND   NTIC_SE = '2' 
+		AND   CNTRCTR_NO IN(
+				SELECT A.CNTRCTR_NO 
+		    	FROM
+		       		 TBRNT_RENT_CNTRCT A
+		      		,TBRNT_RENT_HOUSE B
+			    WHERE A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+			    AND   INSTR('R1,R3',B.HOUSE_SE) > 0 
+			    AND   A.CNTRCTR_NO = TBRNT_RENT_NHT_OUTPT.CNTRCTR_NO
+			  )
+		
+	</delete>
+	
+	
+	<!-- 출력용파일 -->
+	<select id="RNT01070300DAO.rentPrintFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+		<![CDATA[
+			SELECT B.RENT_HOUSE_CODE
+			      ,B.DONG
+			      ,B.HO
+			      ,Z.NM
+			      ,SUBSTR(REPLACE(B1.ZIP, '-', ''), 1, 3) || '-' || SUBSTR(REPLACE(B1.ZIP, '-', ''), 4, 3) AS POSTNO
+			      ,D.RENT_HOUSE_NM || ' ' || TRIM(TO_NUMBER(B.DONG) || '-' || TO_NUMBER(B.HO)) AS ADDR1
+			      ,TRIM(B1.ADRES) || ' ' || TRIM(B1.ADRES_DETAIL) AS ADDR2
+			      ,A.MDAT_YM
+			      ,TO_CHAR(TO_DATE(SFCOM_GET_TREDATE(#payTmlmt#)),'YYYY-MM-DD') PAY_TMLMT
+			      ,'주택(아파트)' AS C_TITLE1
+			      ,D.RENT_HOUSE_NM AS C_CONT1
+			      ,'동   호   수' AS C_TITLE2
+			      ,TRIM(TO_NUMBER(B.DONG) || '-' || TO_NUMBER(B.HO)) AS C_CONT2
+			      ,'납   부   자' AS C_TITLE3
+			      ,Z.NM AS C_CONT3
+			      ,'  ' AS C_TITLE4
+			      ,'  ' AS C_CONT4
+			      ,'납부대상금액' AS A_TITLE1
+			      ,C.RENT_AMT AS A_AMT1
+			      ,'차감금액' AS A_TITLE2
+			      ,C.CHA_AMT AS A_AMT2
+			      ,'연체금액' AS A_TITLE3
+			      ,C.APAY_AMT AS A_AMT3
+			      ,'  ' AS A_TITLE4
+			      ,0 AS A_AMT4
+			      ,C.RENT_AMT + C.CHA_AMT + C.APAY_AMT AS A_AMT5
+			      ,'0' AS MIN_RATIO
+			      ,'0' AS MAX_RATIO
+			      ,F.O_ZIP AS OPOST_NO
+			      ,F.O_ADRES AS OADDR1
+			      ,F.OADDR2
+			      ,F.O_TEL_NO AS OTEL_NO
+			      ,F.O_FAX_NO AS OFAX_NO
+			      ,DECODE(S.CNTRCTR_NO, '', V.BANK1, '') AS BANK1
+			      ,DECODE(S.CNTRCTR_NO, '', V.ACCT_NO1, '') AS ACCT_NO1
+			      ,DECODE(S.CNTRCTR_NO, '', V.BANK2, '') AS BANK2
+			      ,DECODE(S.CNTRCTR_NO, '', V.ACCT_NO2, '') AS ACCT_NO2
+			      ,DECODE(S.CNTRCTR_NO, '', V.BANK3, '') AS BANK3
+			      ,DECODE(S.CNTRCTR_NO, '', V.ACCT_NO3, '') AS ACCT_NO3
+			      ,DECODE(S.CNTRCTR_NO, '', V.BANK4, '') AS BANK4
+			      ,DECODE(S.CNTRCTR_NO, '', V.ACCT_NO4, '') AS ACCT_NO4
+			      ,DECODE(S.CNTRCTR_NO, '', V.BANK5, '') AS BANK5
+			      ,DECODE(S.CNTRCTR_NO, '', V.ACCT_NO5, '') AS ACCT_NO5
+			      ,DECODE(S.CNTRCTR_NO, '', V.BANK6, '') AS BANK6
+			      ,DECODE(S.CNTRCTR_NO, '', V.ACCT_NO6, '') AS ACCT_NO6
+			      ,R.RCIV_DE AS REC_DATE
+			      ,R.RCIV_AMOUNT AS REC_AMT
+			      ,S.BANK_NM 
+			      ,S.ACNUTNO
+			      ,S.DPSTR
+			      ,C.*
+			      ,(SELECT CHRCTR_PREPAR_VALUE_2 AS AUTO_NO
+                      FROM TBCOM_CMMN_CODE
+                     WHERE GRP_CODE = 'PCOM05'
+                       AND CODE = '02') AS AUTO_NO			
+			  FROM (SELECT *
+			          FROM TBRNT_RENT_NHT_OUTPT /* 임대고지서출력 */
+			         WHERE MDAT_YM = #mdatYm#
+			           AND NTIC_SE = '2') A
+			      ,TBRNT_RENT_HOUSE D
+			      ,TBRNT_RENT_CNTRCT B
+			      ,TBRNT_RENT_HOUSE_DONG B1
+			      ,(SELECT A.CNTRCTR_NO
+			              ,MAX(RCIV_DE) AS RCIV_DE
+			              ,SUM(RCIV_AMOUNT) AS RCIV_AMOUNT
+			          FROM TBRNT_RENT_SPRMNY_RCIV A
+			         WHERE A.RCIV_DE = SFCOM_GET_TREDATE(#reivDt#)
+			           AND A.NTIC_SE = '2'
+			         GROUP BY CNTRCTR_NO) R
+			      ,(SELECT CNTRCTR_NO
+			              ,SFCMP_GET_CODENM('COM021', BANK_CODE) AS BANK_NM
+			              ,ACNUTNO
+			              ,DPSTR
+			          FROM TBPMS_ATCNG
+			         WHERE ATCNG_CANCL_DE IS NULL
+			           AND JOB_SE = 'RN1'
+			           AND PAY_SE = '02'
+			        /* AND ATCNG_JOB_SE = '02' */
+			        ) S
+			      ,(SELECT CNTRCTR_NO
+			              ,SUM(RENT_AMT) AS RENT_AMT
+			              ,SUM(CHA_AMT) AS CHA_AMT
+			              ,SUM(ARQEST_AMOUNT) AS APAY_AMT
+			              ,SUM(TOT_AMT) AS TOT_AMT
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT1), 'YYYYMMDD'), 'YYYY-MM') AS MONTH1
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT1), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE1
+			              ,SUM(RENT_AMT1) AS RENT_AMT1
+			              ,SUM(CHA_AMT1) AS CHA_AMT1
+			              ,SUM(ARQEST_AMOUNT1) AS APAY_AMT1
+			              ,SUM(RENT_AMT1 + CHA_AMT1 + ARQEST_AMOUNT1) AS TOT_AMT1
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT2), 'YYYYMMDD'), 'YYYY-MM') AS MONTH2
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT2), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE2
+			              ,SUM(RENT_AMT2) AS RENT_AMT2
+			              ,SUM(CHA_AMT2) AS CHA_AMT2
+			              ,SUM(ARQEST_AMOUNT2) AS APAY_AMT2
+			              ,SUM(RENT_AMT2 + CHA_AMT2 + ARQEST_AMOUNT2) AS TOT_AMT2
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT3), 'YYYYMMDD'), 'YYYY-MM') AS MONTH3
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT3), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE3
+			              ,SUM(RENT_AMT3) AS RENT_AMT3
+			              ,SUM(CHA_AMT3) AS CHA_AMT3
+			              ,SUM(ARQEST_AMOUNT3) AS APAY_AMT3
+			              ,SUM(RENT_AMT3 + CHA_AMT3 + ARQEST_AMOUNT3) AS TOT_AMT3
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT4), 'YYYYMMDD'), 'YYYY-MM') AS MONTH4
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT4), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE4
+			              ,SUM(RENT_AMT4) AS RENT_AMT4
+			              ,SUM(CHA_AMT4) AS CHA_AMT4
+			              ,SUM(ARQEST_AMOUNT4) AS APAY_AMT4
+			              ,SUM(RENT_AMT4 + CHA_AMT4 + ARQEST_AMOUNT4) AS TOT_AMT4
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT5), 'YYYYMMDD'), 'YYYY-MM') AS MONTH5
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT5), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE5
+			              ,SUM(RENT_AMT5) AS RENT_AMT5
+			              ,SUM(CHA_AMT5) AS CHA_AMT5
+			              ,SUM(ARQEST_AMOUNT5) AS APAY_AMT5
+			              ,SUM(RENT_AMT5 + CHA_AMT5 + ARQEST_AMOUNT5) AS TOT_AMT5
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT6), 'YYYYMMDD'), 'YYYY-MM') AS MONTH6
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT6), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE6
+			              ,SUM(RENT_AMT6) AS RENT_AMT6
+			              ,SUM(CHA_AMT6) AS CHA_AMT6
+			              ,SUM(ARQEST_AMOUNT6) AS APAY_AMT6
+			              ,SUM(RENT_AMT6 + CHA_AMT6 + ARQEST_AMOUNT6) AS TOT_AMT6
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT7), 'YYYYMMDD'), 'YYYY-MM') AS MONTH7
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT7), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE7
+			              ,SUM(RENT_AMT7) AS RENT_AMT7
+			              ,SUM(CHA_AMT7) AS CHA_AMT7
+			              ,SUM(ARQEST_AMOUNT7) AS APAY_AMT7
+			              ,SUM(RENT_AMT7 + CHA_AMT7 + ARQEST_AMOUNT7) AS TOT_AMT7
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT8), 'YYYYMMDD'), 'YYYY-MM') AS MONTH8
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT8), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE8
+			              ,SUM(RENT_AMT8) AS RENT_AMT8
+			              ,SUM(CHA_AMT8) AS CHA_AMT8
+			              ,SUM(ARQEST_AMOUNT8) AS APAY_AMT8
+			              ,SUM(RENT_AMT8 + CHA_AMT8 + ARQEST_AMOUNT8) AS TOT_AMT8
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT9), 'YYYYMMDD'), 'YYYY-MM') AS MONTH9
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT9), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE9
+			              ,SUM(RENT_AMT9) AS RENT_AMT9
+			              ,SUM(CHA_AMT9) AS CHA_AMT9
+			              ,SUM(ARQEST_AMOUNT9) AS APAY_AMT9
+			              ,SUM(RENT_AMT9 + CHA_AMT9 + ARQEST_AMOUNT9) AS TOT_AMT9
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT10), 'YYYYMMDD'), 'YYYY-MM') AS MONTH10
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT10), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE10
+			              ,SUM(RENT_AMT10) AS RENT_AMT10
+			              ,SUM(CHA_AMT10) AS CHA_AMT10
+			              ,SUM(ARQEST_AMOUNT10) AS APAY_AMT10
+			              ,SUM(RENT_AMT10 + CHA_AMT10 + ARQEST_AMOUNT10) AS TOT_AMT10
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT11), 'YYYYMMDD'), 'YYYY-MM') AS MONTH11
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT11), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE11
+			              ,SUM(RENT_AMT11) AS RENT_AMT11
+			              ,SUM(CHA_AMT11) AS CHA_AMT11
+			              ,SUM(ARQEST_AMOUNT11) AS APAY_AMT11
+			              ,SUM(RENT_AMT11 + CHA_AMT11 + ARQEST_AMOUNT11) AS TOT_AMT11
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT12), 'YYYYMMDD'), 'YYYY-MM') AS MONTH12
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT12), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE12
+			              ,SUM(RENT_AMT12) AS RENT_AMT12
+			              ,SUM(CHA_AMT12) AS CHA_AMT12
+			              ,SUM(ARQEST_AMOUNT12) AS APAY_AMT12
+			              ,SUM(RENT_AMT12 + CHA_AMT12 + ARQEST_AMOUNT12) AS TOT_AMT12
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT13), 'YYYYMMDD'), 'YYYY-MM') AS MONTH13
+			              ,TO_CHAR(TO_DATE(MAX(PAY_TMLMT13), 'YYYYMMDD'), 'YYYY-MM-DD') AS PAYEND_DATE13
+			              ,SUM(RENT_AMT13) AS RENT_AMT13
+			              ,SUM(CHA_AMT13) AS CHA_AMT13
+			              ,SUM(ARQEST_AMOUNT13) AS APAY_AMT13
+			              ,SUM(RENT_AMT13 + CHA_AMT13 + ARQEST_AMOUNT13) AS TOT_AMT13
+			          FROM (SELECT C.CNTRCTR_NO
+			                      ,RENT_AMT
+			                      ,CHA_AMT
+			                      ,ARQEST_AMOUNT
+			                      ,RENT_AMT + CHA_AMT + ARQEST_AMOUNT AS TOT_AMT
+			                      ,DECODE(RQEST_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT1
+			                      ,DECODE(RQEST_YM, #mdatYm#, RENT_AMT, 0) AS RENT_AMT1
+			                      ,DECODE(RQEST_YM, #mdatYm#, CHA_AMT, 0) AS CHA_AMT1
+			                      ,DECODE(RQEST_YM, #mdatYm#, ARQEST_AMOUNT, 0) AS ARQEST_AMOUNT1
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-1)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT2
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-1)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT2
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-1)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT2
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-1)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT2
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-2)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT3
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-2)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT3
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-2)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT3
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-2)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT3
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-3)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT4
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-3)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT4
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-3)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT4
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-3)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT4
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-4)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT5
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-4)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT5
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-4)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT5
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-4)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT5
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-5)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT6
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-5)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT6
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-5)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT6
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-5)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT6
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-6)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT7
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-6)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT7
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-6)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT7
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-6)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT7
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-7)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT8
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-7)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT8
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-7)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT8
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-7)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT8
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-8)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT9
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-8)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT9
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-8)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT9
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-8)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT9
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-9)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT10
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-9)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT10
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-9)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT10
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-9)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT10
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-10)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT11
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-10)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT11
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-10)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT11
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-10)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT11
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-11)
+			                                     ,'YYYYMM')
+			                             ,PAY_TMLMT
+			                             ,NULL) AS PAY_TMLMT12
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-11)
+			                                     ,'YYYYMM')
+			                             ,RENT_AMT
+			                             ,0) AS RENT_AMT12
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-11)
+			                                     ,'YYYYMM')
+			                             ,CHA_AMT
+			                             ,0) AS CHA_AMT12
+			                      ,DECODE(RQEST_YM
+			                             ,TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                        ,'YYYYMMDD')
+			                                                ,-11)
+			                                     ,'YYYYMM')
+			                             ,ARQEST_AMOUNT
+			                             ,0) AS ARQEST_AMOUNT12
+			                      ,CASE
+			                         WHEN RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                                    ,'YYYYMMDD')
+			                                                            ,-12)
+			                                                 ,'YYYYMM') THEN
+			                          PAY_TMLMT
+			                       END AS PAY_TMLMT13
+			                      ,CASE
+			                         WHEN RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                                    ,'YYYYMMDD')
+			                                                            ,-12)
+			                                                 ,'YYYYMM') THEN
+			                          RENT_AMT
+			                         ELSE
+			                          0
+			                       END AS RENT_AMT13
+			                      ,CASE
+			                         WHEN RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                                    ,'YYYYMMDD')
+			                                                            ,-12)
+			                                                 ,'YYYYMM') THEN
+			                          CHA_AMT
+			                         ELSE
+			                          0
+			                       END AS CHA_AMT13
+			                      ,CASE
+			                         WHEN RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(#mdatYm# || '01'
+			                                                                    ,'YYYYMMDD')
+			                                                            ,-12)
+			                                                 ,'YYYYMM') THEN
+			                          ARQEST_AMOUNT
+			                         ELSE
+			                          0
+			                       END AS ARQEST_AMOUNT13
+			                  FROM (SELECT CNTRCTR_NO
+			                              ,RQEST_YM
+			                              ,PAY_TMLMT
+			                              ,RQEST_AMOUNT AS RENT_AMT
+			                              ,0            AS ARQEST_AMOUNT
+			                              ,0            AS CHA_AMT
+			                          FROM TBRNT_GTN_SPORT C
+			                         WHERE C.RQEST_YM <= #mdatYm#
+			                           AND C.RCIV_DE IS NULL
+			                           AND EXISTS (SELECT 1
+			                                  FROM VA_BILL V
+			                                 WHERE CRT_DIV = 'BS'
+			                                   AND BILL_DIV = 'A'
+			                                   AND V.CRT_ID = C.CNTRCTR_NO)
+			                           AND INSTR(PAY_TMLMT, '/') = 0) C)
+			         GROUP BY CNTRCTR_NO) C
+			      ,(SELECT MIN(INTRT) AS MIN_RATIO, MAX(INTRT) AS MAX_RATIO
+			          FROM TBPMS_INTRT_INFO A
+			         WHERE 1 = 1
+			           AND APPLC_DE =
+			               (SELECT MAX(APPLC_DE) FROM TBPMS_INTRT_INFO B WHERE JOB_SE = 'RN1')
+					   AND JOB_SE = 'RN1') E
+			      ,(
+	      		    SELECT CHRCTR_PREPAR_VALUE_0 AS O_ZIP
+		                 , CHRCTR_PREPAR_VALUE_1 AS O_ADRES
+		                 , CHRCTR_PREPAR_VALUE_2 AS OADDR2
+		                 , '전화 : ' || CHRCTR_PREPAR_VALUE_3 AS O_TEL_NO
+		                 , '팩스 : ' || CHRCTR_PREPAR_VALUE_4 AS O_FAX_NO
+		              FROM TBCOM_CMMN_CODE
+		             WHERE GRP_CODE = 'PCOM07'
+		               AND CODE = 'RN1012') F
+			      ,(SELECT * FROM VI_VA_MAST WHERE CRT_DIV = 'BS' AND OPT1 = '1') V
+			      ,TBRNT_PRMANENT_RENT_CSTMR Z
+			 WHERE D.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+			   AND A.CNTRCTR_NO = B.CNTRCTR_NO
+			   AND B.CNTRCTR_NO = C.CNTRCTR_NO
+			   /* AND B.RENT_HOUSE_CODE = E.RENT_HOUSE_CODE(+) */
+			   AND B.RENT_HOUSE_CODE = B1.RENT_HOUSE_CODE(+)
+			   AND B.DONG = B1.DONG(+)
+			   AND EXISTS (SELECT 1
+			          FROM VA_BILL V
+			         WHERE CRT_DIV = 'BS'
+			           AND BILL_DIV = 'A'
+			           AND V.CRT_ID = B.CNTRCTR_NO)
+			   AND B.CNTRCTR_NO = V.CRT_ID
+			   AND B.CNTRCTR_NO = R.CNTRCTR_NO(+)
+			   AND B.CNTRCTR_NO = S.CNTRCTR_NO(+)
+			   AND B.PRMANENT_CSTMR_NO = Z.PRMANENT_CSTMR_NO
+			 ORDER BY 1, 2, 3
+			 
+		]]>
+	
+	</select>
+	
+	
+	<!-- 납부서출력 -->
+	<select id="RNT01070300DAO.rentPaymentBillPrint" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+		<![CDATA[
+		
+			SELECT A.RENT_HOUSE_CODE
+			      ,A.DONG
+			      ,A.HO
+			      ,Z.NM
+			      ,B.RENT_HOUSE_NM || ' ' ||
+			       TRIM(TO_NUMBER(A.DONG) || '-' || TO_NUMBER(A.HO)) AS APT_ADDR
+			      ,SUBSTR(REPLACE(B1.ZIP, '-', ''), 1, 3) || ' - ' ||
+			       SUBSTR(REPLACE(B1.ZIP, '-', ''), 4, 3) AS ZIP
+			      ,B1.ZIP
+			      ,TRIM(B1.ADRES) || ' ' || TRIM(B1.ADRES_DETAIL) AS ADRES
+			      ,B.RENT_HOUSE_NM || ' ' ||
+			       TRIM(TO_NUMBER(A.DONG) || '-' || TO_NUMBER(A.HO)) AS ADRES_DETAIL
+			      ,SUBSTR(D.PAY_TMLMT1, 0, 6) AS RQEST_YM
+			      ,D.PAY_TMLMT1 AS PAY_TMLMT
+			      ,'주택(아파트)' AS C_TITLE1
+			      ,B.RENT_HOUSE_NM AS C_CONT1
+			      ,'납   부   자' AS C_TITLE2
+			      ,Z.NM AS C_CONT2
+			      ,'자동이체코드' AS C_TITLE3
+			      ,A.RENT_HOUSE_CODE || '-' || A.DONG || '-' || A.HO AS C_CONT3
+			      ,'기 관  코 드' AS C_TITLE4
+			      ,'1460000' AS C_CONT4
+			      ,'지 원 금' AS A_TITLE1
+			      ,D.RQEST_AMOUNT AS A_AMT1
+			      ,'연체금액' AS A_TITLE2
+			      ,D.ARQEST_AMOUNT AS A_AMT2
+			      ,'  ' AS A_TITLE3
+			      ,0 AS A_AMT3
+			      ,'  ' AS A_TITLE4
+			      ,0 AS A_AMT4
+			      ,D.RQEST_AMOUNT + D.CHA_AMT + D.ARQEST_AMOUNT AS A_AMT5
+			      ,E.MIN_RATIO
+			      ,E.MAX_RATIO
+			      ,F.O_ZIP
+			      ,F.O_ADRES
+			      ,F.O_DEPT_NM
+			      ,F.O_TEL_NO
+			      ,F.O_FAX_NO
+			      ,DECODE(S.CNTRCTR_NO
+			             ,''
+			             ,V.BANK1 || DECODE(V.BANK1, '', '', '-' || V.ACCT_NO1)
+			             ,'은 행 명: ' || S.BANK_NM) AS BANK1
+			      ,DECODE(S.CNTRCTR_NO
+			             ,''
+			             ,V.BANK1 || DECODE(V.BANK1, '', '', '-' || V.ACCT_NO1)
+			             ,'자동이체 고객입니다.') AS BANK11
+			      ,DECODE(S.CNTRCTR_NO, '', '지원금', '지원금(자동이체)') AS BANK12
+			      ,DECODE(S.CNTRCTR_NO
+			             ,''
+			             ,V.BANK2 || DECODE(V.BANK2, '', '', '-' || V.ACCT_NO2)
+			             ,'예 금 주: ' || S.DPSTR) AS BANK2
+			      ,DECODE(S.CNTRCTR_NO
+			             ,''
+			             ,V.BANK3 || DECODE(V.BANK3, '', '', '-' || V.ACCT_NO3)
+			             ,'계좌번호: ') AS BANK3
+			      ,DECODE(S.CNTRCTR_NO
+			             ,''
+			             ,V.BANK4 || DECODE(V.BANK4, '', '', '-' || V.ACCT_NO4)
+			             ,'수 납 일: ' || SUBSTR(#reivDt#,1,4) || '-' || SUBSTR(#reivDt#,5,2) || '-' || SUBSTR(#reivDt#,7,2)) AS BANK4
+			      ,DECODE(S.CNTRCTR_NO
+			             ,''
+			             ,V.BANK5 || DECODE(V.BANK5, '', '', '-' || V.ACCT_NO5)
+			             ,'수 납 액: ' || TO_CHAR(NVL(R.RCIV_AMOUNT, 0), '9,999,999')) AS BANK5
+			      ,DECODE(S.CNTRCTR_NO
+			             ,''
+			             ,V.BANK6 || DECODE(V.BANK6, '', '', '-' || V.ACCT_NO6)
+			             ,'') AS BANK6
+			      ,D.RQEST_AMOUNT AS RQEST_AMOUNT
+			      ,D.CHA_AMT
+			      ,D.ARQEST_AMOUNT
+			      ,D.TOT_AMT
+			      ,D.MONTH1
+			      ,D.PAY_TMLMT1 AS PAY_TMLMT1
+			      ,D.RQEST_AMOUNT1
+			      ,D.CHA_AMT1
+			      ,D.ARQEST_AMOUNT1
+			      ,D.TOT_AMT1
+			      ,D.MONTH2
+			      ,D.PAY_TMLMT2 AS PAY_TMLMT2
+			      ,D.RQEST_AMOUNT2
+			      ,D.CHA_AMT2
+			      ,D.ARQEST_AMOUNT2
+			      ,D.TOT_AMT2
+			      ,D.MONTH3
+			      ,D.PAY_TMLMT3 AS PAY_TMLMT3
+			      ,D.RQEST_AMOUNT3
+			      ,D.CHA_AMT3
+			      ,D.ARQEST_AMOUNT3
+			      ,D.TOT_AMT3
+			      ,D.MONTH4
+			      ,D.PAY_TMLMT4 AS PAY_TMLMT4
+			      ,D.RQEST_AMOUNT4
+			      ,D.CHA_AMT4
+			      ,D.ARQEST_AMOUNT4
+			      ,D.TOT_AMT4
+			      ,D.MONTH5
+			      ,D.PAY_TMLMT5 AS PAY_TMLMT5
+			      ,D.RQEST_AMOUNT5
+			      ,D.CHA_AMT5
+			      ,D.ARQEST_AMOUNT5
+			      ,D.TOT_AMT5
+			      ,D.MONTH6
+			      ,D.PAY_TMLMT6 AS PAY_TMLMT6
+			      ,D.RQEST_AMOUNT6
+			      ,D.CHA_AMT6
+			      ,D.ARQEST_AMOUNT6
+			      ,D.TOT_AMT6
+			      ,D.MONTH7
+			      ,D.PAY_TMLMT7 AS PAY_TMLMT7
+			      ,D.RQEST_AMOUNT7
+			      ,D.CHA_AMT7
+			      ,D.ARQEST_AMOUNT7
+			      ,D.TOT_AMT7
+			      ,D.MONTH8
+			      ,D.PAY_TMLMT8 AS PAY_TMLMT8
+			      ,D.RQEST_AMOUNT8
+			      ,D.CHA_AMT8
+			      ,D.ARQEST_AMOUNT8
+			      ,D.TOT_AMT8
+			      ,D.MONTH9
+			      ,D.PAY_TMLMT9 AS PAY_TMLMT9
+			      ,D.RQEST_AMOUNT9
+			      ,D.CHA_AMT9
+			      ,D.ARQEST_AMOUNT9
+			      ,D.TOT_AMT9
+			      ,D.MONTH10
+			      ,D.PAY_TMLMT10 AS PAY_TMLMT10
+			      ,D.RQEST_AMOUNT10
+			      ,D.CHA_AMT10
+			      ,D.ARQEST_AMOUNT10
+			      ,D.TOT_AMT10
+			      ,D.MONTH11
+			      ,D.PAY_TMLMT11 AS PAY_TMLMT11
+			      ,D.RQEST_AMOUNT11
+			      ,D.CHA_AMT11
+			      ,D.ARQEST_AMOUNT11
+			      ,D.TOT_AMT11
+			      ,D.MONTH12
+			      ,D.PAY_TMLMT12 AS PAY_TMLMT12
+			      ,D.RQEST_AMOUNT12
+			      ,D.CHA_AMT12
+			      ,D.ARQEST_AMOUNT12
+			      ,D.TOT_AMT12
+			      ,D.MONTH13
+			      ,D.PAY_TMLMT13 AS PAY_TMLMT13
+			      ,D.RQEST_AMOUNT13
+			      ,D.CHA_AMT13
+			      ,D.ARQEST_AMOUNT13
+			      ,D.TOT_AMT13
+			      ,'' AS RCIV_DE
+			      ,0 AS RCIV_AMOUNT
+			      ,S.BANK_NM
+			      ,S.ACNUTNO
+			      ,S.DPSTR
+			      ,A.RENT_HOUSE_CODE || '-' || A.DONG || '-' || A.HO AS AUTO_CODE
+			      ,'1460000' AS BIZ_NO
+			      ,B.RENT_HOUSE_NM || ' ' ||
+			       TRIM(TO_NUMBER(A.DONG) || '-' || TO_NUMBER(A.HO)) AS APT_ADDR
+			      ,SUBSTR(D.PAY_TMLMT1, 0, 4) BILL_YEAR
+			      ,SUBSTR(D.PAY_TMLMT1, 5, 2) BILL_MONTH
+			      ,SUBSTR(C.TR_DATE, 1, 4) AS CAL_YEAR
+			      ,SUBSTR(C.TR_DATE, 5, 2) AS CAL_MONTH
+			      ,SUBSTR(C.TR_DATE, 7, 2) AS CAL_DAY
+			      ,SUBSTR(C.TR_EDATE, 1, 4) AS END_YEAR
+			      ,SUBSTR(C.TR_EDATE, 5, 2) AS END_MONTH
+			      ,SUBSTR(C.TR_EDATE, 7, 2) AS END_DAY
+			      ,C.BILL_DIV
+			      ,C.TR_DATE
+			      ,C.TR_NO
+			      ,D.BANK_CD
+			      ,D.VACCT_NO
+			      ,A.CNTRCTR_NO
+			      ,'RN' AS CRT_DIV
+			      ,DECODE(S.CNTRCTR_NO, '', '지원금', '지원금(자동이체)') AS TITLE
+			  FROM TBRNT_RENT_CNTRCT A /* 계약정보 */
+			      ,TBRNT_RENT_HOUSE B /* 임대주택 */
+			      ,TBRNT_RENT_HOUSE_DONG B1 /* 임대주택동 */
+			      ,VA_BILL C /* 가상계좌 청구내역 */
+			      ,(SELECT B.CNTRCTR_NO
+			              ,B.BANK_CD
+			              ,B.VACCT_NO
+			              ,MAX(DECODE(C.RQEST_YM, A.YYYYMM, C.PAY_TMLMT, '')) AS MONTH1
+			              ,MAX(DECODE(C.RQEST_YM, A.YYYYMM, C.PAY_TMLMT, '')) AS PAY_TMLMT1
+			              ,SUM(DECODE(C.RQEST_YM, A.YYYYMM, RENT_AMT, NULL)) AS RQEST_AMOUNT1
+			              ,SUM(DECODE(C.RQEST_YM, A.YYYYMM, CHA_AMT, NULL)) AS CHA_AMT1
+			              ,SUM(DECODE(C.RQEST_YM, A.YYYYMM, DELAY_AMT, NULL)) AS ARQEST_AMOUNT1
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,A.YYYYMM
+			                         ,RENT_AMT + CHA_AMT + DELAY_AMT
+			                         ,NULL)) AS TOT_AMT1
+			               
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-1)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH2
+			               
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-1)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT2
+			               
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-1)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT2
+			               
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-1)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT2
+			               
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-1)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT2
+			               
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-1)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT2
+			               
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-2)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH3
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-2)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT3
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-2)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT3
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-2)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT3
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-2)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT3
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-2)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT3
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-3)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH4
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-3)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT4
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-3)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT4
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-3)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT4
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-3)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT4
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-3)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT4
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-4)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH5
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-4)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT5
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-4)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT5
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-4)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT5
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-4)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT5
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-4)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT5
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-5)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH6
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-5)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT6
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-5)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT6
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-5)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT6
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-5)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT6
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-5)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT6
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-6)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH7
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-6)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT7
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-6)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT7
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-6)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT7
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-6)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT7
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-6)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT7
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-7)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH8
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-7)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT8
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-7)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT8
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-7)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT8
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-7)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT8
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-7)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT8
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-8)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH9
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-8)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT9
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-8)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT9
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-8)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT9
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-8)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT9
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-8)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT9
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-9)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH10
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-9)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT10
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-9)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT10
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-9)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT10
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-9)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT10
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-9)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT10
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-10)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH11
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-10)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT11
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-10)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT11
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-10)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT11
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-10)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT11
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-10)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT11
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-11)
+			                                 ,'YYYYMM')
+			                         ,SUBSTR(C.PAY_TMLMT, 0, 6)
+			                         ,'')) AS MONTH12
+			              ,MAX(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-11)
+			                                 ,'YYYYMM')
+			                         ,C.PAY_TMLMT
+			                         ,'')) AS PAY_TMLMT12
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-11)
+			                                 ,'YYYYMM')
+			                         ,RENT_AMT
+			                         ,NULL)) AS RQEST_AMOUNT12
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-11)
+			                                 ,'YYYYMM')
+			                         ,CHA_AMT
+			                         ,NULL)) AS CHA_AMT12
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-11)
+			                                 ,'YYYYMM')
+			                         ,DELAY_AMT
+			                         ,NULL)) AS ARQEST_AMOUNT12
+			              ,SUM(DECODE(C.RQEST_YM
+			                         ,TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                    ,'YYYYMMDD')
+			                                            ,-11)
+			                                 ,'YYYYMM')
+			                         ,TOT_AMT
+			                         ,NULL)) AS TOT_AMT12
+			              ,MAX(CASE
+			                     WHEN C.RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                                  ,'YYYYMMDD')
+			                                                          ,-12)
+			                                               ,'YYYYMM') THEN
+			                      SUBSTR(C.PAY_TMLMT, 0, 6)
+			                   END) AS MONTH13
+			              ,MAX(CASE
+			                     WHEN C.RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                                  ,'YYYYMMDD')
+			                                                          ,-12)
+			                                               ,'YYYYMM') THEN
+			                      C.PAY_TMLMT
+			                   END) AS PAY_TMLMT13
+			              ,MAX(CASE
+			                     WHEN C.RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                                  ,'YYYYMMDD')
+			                                                          ,-12)
+			                                               ,'YYYYMM') THEN
+			                      RENT_AMT
+			                   END) AS RQEST_AMOUNT13
+			              ,MAX(CASE
+			                     WHEN C.RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                                  ,'YYYYMMDD')
+			                                                          ,-12)
+			                                               ,'YYYYMM') THEN
+			                      CHA_AMT
+			                   END) AS CHA_AMT13
+			              ,MAX(CASE
+			                     WHEN C.RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                                  ,'YYYYMMDD')
+			                                                          ,-12)
+			                                               ,'YYYYMM') THEN
+			                      DELAY_AMT
+			                   END) AS ARQEST_AMOUNT13
+			              ,MAX(CASE
+			                     WHEN C.RQEST_YM <= TO_CHAR(ADD_MONTHS(TO_DATE(A.YYYYMM || '01'
+			                                                                  ,'YYYYMMDD')
+			                                                          ,-12)
+			                                               ,'YYYYMM') THEN
+			                      TOT_AMT
+			                   END) AS TOT_AMT13
+			               
+			              ,SUM(RENT_AMT) AS RQEST_AMOUNT
+			              ,SUM(NVL(CHA_AMT, 0)) AS CHA_AMT
+			              ,SUM(DELAY_AMT) AS ARQEST_AMOUNT
+			              ,SUM(NVL(RENT_AMT, 0) + NVL(CHA_AMT, 0) + NVL(DELAY_AMT, 0)) AS TOT_AMT
+			          FROM (SELECT CRT_ID AS CNTRCTR_NO
+			                      ,TO_CHAR(MAX(NVL(PAYEND_DATE, SYSDATE)), 'YYYYMM') AS YYYYMM
+			                  FROM VA_BILL_DETAIL /* 가상계좌 청구내역(상세) */
+			                 WHERE BANK_CD = '031'
+			               
+			                 GROUP BY CRT_ID) A
+			              ,(SELECT CRT_ID AS CNTRCTR_NO
+			                      ,PAYEND_DATE
+			                      ,TO_CHAR(NVL(PAYEND_DATE, SYSDATE), 'YYYYMMDD') AS PAY_TMLMT
+			                      ,BANK_CD
+			                      ,VACCT_NO
+			                  FROM VA_BILL_DETAIL
+			                 WHERE BANK_CD = '031'
+			               
+			                ) B
+			              ,(SELECT CNTRCTR_NO
+			                      ,RQEST_YM
+			                      ,PAY_TMLMT
+			                      ,NVL(RQEST_AMOUNT, 0) AS RENT_AMT
+			                      ,0 AS DELAY_AMT
+			                      ,0 AS CHA_AMT
+			                      ,NVL(RQEST_AMOUNT, 0) AS TOT_AMT
+			                  FROM TBRNT_GTN_SPORT /* 보증금지원 */
+			                 WHERE 1 = 1
+			               
+			                ) C
+			
+			         WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+			           AND B.CNTRCTR_NO = C.CNTRCTR_NO
+			           AND B.PAY_TMLMT = C.PAY_TMLMT
+			        
+			         GROUP BY B.CNTRCTR_NO, B.BANK_CD, B.VACCT_NO) D
+			       
+			      ,(SELECT MIN(ARRRG_INTRT) AS MIN_RATIO, MAX(ARRRG_INTRT) AS MAX_RATIO
+			          FROM TBRNT_RNT_ARRRG_INTRT A
+			         WHERE 1 = 1
+			           AND APPLC_DE =
+			               (SELECT MAX(APPLC_DE) FROM TBRNT_RNT_ARRRG_INTRT B)
+			           AND SN =
+			               (SELECT MAX(SN)
+			                  FROM TBRNT_RNT_ARRRG_INTRT B
+			                 WHERE 1 = 1
+			                   AND APPLC_DE =
+			                       (SELECT MAX(APPLC_DE) FROM TBRNT_RNT_ARRRG_INTRT C))) E
+			      ,(SELECT T.CHRCTR_PREPAR_VALUE_0 AS O_ZIP
+			              ,T.CHRCTR_PREPAR_VALUE_1 AS O_ADRES
+			              ,T.CHRCTR_PREPAR_VALUE_2 AS O_DEPT_NM
+			              ,'전화:' || (SELECT T.CHRCTR_PREPAR_VALUE_0
+			                           FROM TBCOM_CMMN_CODE T
+			                          WHERE T.GRP_CODE = 'COM027'
+			                            AND T.CODE_NM = 'RN') AS O_TEL_NO
+			              ,'FAX :' || (SELECT T.CHRCTR_PREPAR_VALUE_1
+			                             FROM TBCOM_CMMN_CODE T
+			                            WHERE T.GRP_CODE = 'COM027'
+			                              AND T.CODE_NM = 'RN') AS O_FAX_NO
+			          FROM TBCOM_CMMN_CODE T
+			         WHERE T.GRP_CODE = 'COM027'
+			           AND T.CODE = 'RN') F
+			      ,(SELECT CNTRCTR_NO
+			              ,SFCMP_GET_CODENM('COM021', BANK_CODE) AS BANK_NM
+			              ,ACNUTNO
+			              ,DPSTR
+			          FROM TBPMS_ATCNG /* 자동이체 */
+			         WHERE USE_AT = '1') S
+			      ,VI_VA_MAST V
+			      ,(SELECT CNTRCTR_NO, SUM(RCIV_AMOUNT) AS RCIV_AMOUNT
+			          FROM TBRNT_RENT_SPRMNY_RCIV /* 임대료지원금수납 */
+			         WHERE RCIV_DE = SFCOM_GET_TREDATE(#reivDt#)
+			           AND PAYMTHD = 'A'
+			         GROUP BY CNTRCTR_NO) R
+			      ,TBRNT_PRMANENT_RENT_CSTMR Z
+			 
+			      ,(SELECT A.CNTRCTR_NO
+			          FROM TBRNT_RENT_NHT_OUTPT A
+			              ,(SELECT DISTINCT CNTRCTR_NO, ACNUTNO, DPSTR
+			                  FROM TBPMS_ATCNG
+			                 WHERE ATCNG_CANCL_DE IS NULL
+			                   AND USE_AT <> '9') B
+			              ,TBRNT_RENT_HOUSE C
+			              ,TBRNT_RENT_CNTRCT D
+			              ,TBRNT_PRMANENT_RENT_CSTMR E
+			         WHERE A.MDAT_YM = #mdatYm#
+			           AND A.CNTRCTR_NO = B.CNTRCTR_NO(+)
+			           AND A.ACNUTNO = B.ACNUTNO(+)
+			           AND D.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+			           AND INSTR('R1,R2,R3', C.HOUSE_SE) > 0
+			           AND A.CNTRCTR_NO = D.CNTRCTR_NO
+			           AND D.PRMANENT_CSTMR_NO = E.PRMANENT_CSTMR_NO
+			           AND A.NTIC_SE = '2' /* 고지구구분 : 1:임대료, 2:지원금, 3:관리비  */
+			        ) X
+			
+			 WHERE A.CNTRCTR_NO = C.CRT_ID
+			   AND A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE(+)
+			   AND C.BANK_CD = D.BANK_CD
+			   AND C.VACCT_NO = D.VACCT_NO
+			   AND C.CRT_ID = D.CNTRCTR_NO
+			
+			   AND A.RENT_HOUSE_CODE = B1.RENT_HOUSE_CODE(+)
+			   AND A.DONG = B1.DONG(+)
+			   AND A.CNTRCTR_NO = S.CNTRCTR_NO(+)
+			   AND A.CNTRCTR_NO = V.CRT_ID
+			   AND V.CRT_DIV = 'BS'
+			   AND C.CRT_DIV = 'BS'
+			   AND A.CNTRCTR_NO = R.CNTRCTR_NO(+)
+			   AND A.PRMANENT_CSTMR_NO = Z.PRMANENT_CSTMR_NO(+)
+			   
+			   AND A.CNTRCTR_NO = X.CNTRCTR_NO
+   
+		]]>
+	
+	</select>
+	
+</sqlMap>

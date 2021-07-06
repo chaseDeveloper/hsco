@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM080202_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 교육실적총괄 조회 -->
+	<select id="HRM080302DAO.selectTbhrmEdcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080302DAO.selectTbhrmEdcList*/]]>
+		<![CDATA[
+			WITH temp1 AS (
+			   SELECT t1.EMPNO
+			         ,t1.EMPNM
+			         ,t1.ECNY_DE
+			         ,t1.RETIRE_DE
+			         ,DECODE(t2.GNFD_DE, NULL, t1.ECNY_DE, t2.GNFD_DE)          AS LAST_GNFD_DE
+			         ,DECODE(t2.DEPT_CODE, NULL, t1.DEPT_CODE, t2.DEPT_CODE)    AS DEPT_CODE
+			         ,DECODE(t2.STTUS_SE, NULL, t1.STTUS_SE, t2.STTUS_SE)       AS STTUS_SE
+			         ,DECODE(t2.JSSFC_SE, NULL, t1.JSSFC_SE, t2.JSSFC_SE)       AS JSSFC_SE
+			         ,DECODE(t2.HR_CLSF_SE, NULL, t1.HR_CLSF_SE, t2.HR_CLSF_SE) AS HR_CLSF_SE
+			         ,DECODE(t2.OFCPS_SE, NULL, t1.OFCPS_SE, t2.OFCPS_SE)       AS OFCPS_SE
+			   FROM TBHRM_HR_MASTR t1
+			   LEFT OUTER JOIN (SELECT t1.*
+			                          ,t1.CLSF_SE AS HR_CLSF_SE
+			                          ,SFHRM_GET_STTUS_SE(t1.GNFD_SE) AS STTUS_SE2
+			                      FROM TBHRM_GNFD_DTLS t1
+			                         , (SELECT A.EMPNO
+			                                 , A.GNFD_DE
+			                                 , MAX(A.GNFD_SEQ) AS GNFD_SEQ
+			                            FROM TBHRM_GNFD_DTLS A
+			                               , (SELECT EMPNO
+			                                      ,  MAX(GNFD_DE)  AS GNFD_DE
+			                                    FROM TBHRM_GNFD_DTLS
+			                                    WHERE SUBSTR(GNFD_DE,1,6) < #YEAR# || '12'
+			                                    AND DCSN_AT = '1'
+			                                    GROUP BY EMPNO
+			                                 ) B
+			                            WHERE A.EMPNO    = B.EMPNO
+			                              AND A.GNFD_DE  = B.GNFD_DE
+			                            GROUP BY A.EMPNO, A.GNFD_DE
+			                           ) t2
+			                      WHERE 1         =1
+			                      AND t1.EMPNO    = t2.EMPNO
+			                      AND t1.GNFD_DE  = t2.GNFD_DE
+			                      AND t1.GNFD_SEQ = t2.GNFD_SEQ
+			                   )t2
+			                ON t1.EMPNO = t2.EMPNO
+			)
+			SELECT t1.YEAR
+			     , t1.EDC_TY_SN                                             /*교육구분코드*/
+			     , t2.EDC_TY_MLSFC || ' - ' || t2.EDC_TY_SCLAS AS EDC_TY_NM /*교육구분명*/
+			     , t1.EDC_CL_SN                                             /*교육분류코드*/
+			     , t3.ABILITY_SE || t3.ABILITY_NM AS EDC_NM
+			     , t1.EMPNO
+			     , t4.EMPNM                                                 /*성명*/
+			     , t4.DEPT_CODE
+			     , t5.DEPT_NM                                               /*부서*/
+			     , t4.HR_CLSF_SE                                            /*직급*/
+			     , t6.CODE_NM AS HR_CLSF_NM
+			     , t1.EDC_INSTT	                                            /*교육기관*/
+			     , t1.CRSE_NM	                                            /*과정명*/
+			     , t1.EDC_PLACE	                                            /*교육장소*/
+			     , t1.RELATE_DTY	                                        /*관련직무*/
+			     , CASE WHEN t1.EDC_BGNDE IS NULL THEN t1.RM
+			            ELSE TO_CHAR(TO_DATE(t1.EDC_ENDDE), 'YYYY.MM.DD') || CASE WHEN t1.EDC_ENDDE IS NOT NULL THEN '~' || TO_CHAR(TO_DATE(t1.EDC_ENDDE), 'YYYY.MM.DD') ELSE '' END 
+			            END AS EDC_BGNDE_TXT                                /*교육기간*/
+			     , t1.EDC_DAYCNT	                                        /*교육일수*/
+			     , t1.EDC_RCOGN_TIME	                                    /*교육시간*/
+			     , CASE WHEN t1.YEAR > '2016'/*조건 고정값*/ THEN t1.RM 
+			            ELSE '' 
+			            END AS RM
+			FROM TBHRM_EDC_MANAGE t1
+			     LEFT OUTER JOIN TBHRM_EDC_TY_RCOGN_TIME t2
+			             ON t1.YEAR = t2.YEAR 
+			            AND t1.EDC_TY_SN = t2.SN
+			     LEFT OUTER JOIN TBHRM_ABILITY_CODE_MANAGE t3
+			             ON t1.YEAR   = t3.YEAR
+			            AND t1.EDC_CL_SN = t3.SN
+			     LEFT OUTER JOIN temp1 t4
+			             ON  t1.EMPNO = t4.EMPNO
+			     LEFT OUTER JOIN VWHRM_DEPT t5
+					         ON t4.DEPT_CODE = t5.DEPT_CODE
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+			             ON t6.GRP_CODE = 'HRM002'
+			            AND t4.HR_CLSF_SE = t6.CODE
+			WHERE t1.YEAR = #YEAR#  /*검색조건*/
+			  AND t1.CONFM_AT = '1' /*승인여부*/
+			  AND t1.EDC_TY_SN < '16' /*개인학습은 현황에서 제외*/
+		]]>
+			<isNotEmpty property="DEPT_CODE">
+			  <isNotEqual property="DEPT_CODE" compareValue="000000">
+			  	AND t4.DEPT_CODE = #DEPT_CODE#
+			  </isNotEqual>
+			</isNotEmpty>
+			<isNotEmpty property="EMPNO">
+			  AND t1.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="EDC_TY_SN">
+			  AND t1.EDC_TY_SN = #EDC_TY_SN#
+			</isNotEmpty>
+			<isEqual property="APPN_LRN_AT" compareValue="1">
+			  AND t1.APPN_LRN_AT = #APPN_LRN_AT#
+			</isEqual>
+		<![CDATA[
+			ORDER BY t1.YEAR, t4.EMPNM, t1.EDC_TY_SN
+		]]>
+	</select>
+	
+</sqlMap>

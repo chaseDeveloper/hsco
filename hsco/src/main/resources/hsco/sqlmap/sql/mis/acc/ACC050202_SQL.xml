@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050202_SQL">	
+	
+	<!-- 총계정원장 -->
+	<select id="ACC050202DAO.totAcntLedgrList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT t1.ACCNUT_ACNT_CODE
+		     , t1.ACCNUT_ACNT_NM
+		     , NVL(SUM(t1.CYFD_AMT),0) AS BEF_CYFD_AMT  /*전기이월*/
+		     , NVL(SUM(t1.DR_AMT),0)   AS DR_AMT        /*차변*/
+		     , NVL(SUM(t1.CR_AMT),0)   AS CR_AMT        /*대변*/
+		     , NVL(SUM(JAN_AMT),0)     AS PRE_CYFD_AMT  /*계정잔액(차기이월)*/
+		FROM (
+		    SELECT t2.ACCNUT_ACNT_CODE
+		         , t3.ACCNUT_ACNT_NM
+		         , 0                AS CYFD_AMT
+		         , NVL(t2.DEBTOR_AMOUNT,0) AS DR_AMT    
+		         , NVL(t2.CRDIT_AMOUNT,0)  AS CR_AMT
+		         , DECODE(t3.DBRT_SE, 'D', NVL(t2.DEBTOR_AMOUNT,0) - NVL(t2.CRDIT_AMOUNT,0), 'C', NVL(t2.CRDIT_AMOUNT,0) - NVL(t2.DEBTOR_AMOUNT,0), 0/*잔액이 0 이면 차화성분 확인*/) AS JAN_AMT
+		    FROM TBACC_CHIT_MASTR t1
+		      INNER JOIN TBACC_CHIT_DETAIL t2
+		      ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		      AND t1.CHIT_NO     = t2.CHIT_NO
+		      INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		      ON  t2.ACCNUT_YEAR      = t3.ACCNUT_YEAR
+		      AND t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		    WHERE 1=1
+		    AND   t1.CHIT_DE     BETWEEN #SRCH_FROM_DE# AND #SRCH_TO_DE#
+		    AND   t1.CHIT_CONFM_AT = '1'  /*승인*/
+		    <isNotEmpty property="SE_ACCNUT_ACNT_CODE" prepend="AND   ">t1.BSNS_CODE = #SE_ACCNUT_ACNT_CODE#</isNotEmpty>
+		    UNION ALL
+		    SELECT t1.ACCNUT_ACNT_CODE
+		         , t1.ACCNUT_ACNT_NM
+		         , DECODE(t1.DBRT_SE, 'D', (NVL(t1.DEBTOR_AMOUNT,0)+NVL(B.DEBTOR_AMOUNT,0)) - (NVL(t1.CRDIT_AMOUNT,0)+NVL(B.CRDIT_AMOUNT,0)), 'C', (NVL(t1.CRDIT_AMOUNT,0)+NVL(B.CRDIT_AMOUNT,0)) - (NVL(t1.DEBTOR_AMOUNT,0)+NVL(B.DEBTOR_AMOUNT,0)), 0) AS CYFD_AMT  /*이월금액*/
+		         , 0 AS DR_AMT    /*차변*/
+		         , 0 AS CR_AMT     /*대변*/
+		         , DECODE(t1.DBRT_SE, 'D', (NVL(t1.DEBTOR_AMOUNT,0)+NVL(B.DEBTOR_AMOUNT,0)) - (NVL(t1.CRDIT_AMOUNT,0)+NVL(B.CRDIT_AMOUNT,0)), 'C', (NVL(t1.CRDIT_AMOUNT,0)+NVL(B.CRDIT_AMOUNT,0)) - (NVL(t1.DEBTOR_AMOUNT,0)+NVL(B.DEBTOR_AMOUNT,0)), 0) AS JAN_AMT
+		    FROM (SELECT t1.ACCNUT_YEAR, 
+ 		                t1.ACCNUT_ACNT_CODE , 
+ 		                t2.ACCNUT_ACNT_NM , 
+ 		                t2.DBRT_SE, 
+ 		                NVL(SUM(t1.DEBTOR_AMOUNT),0) AS DEBTOR_AMOUNT, 
+ 		                NVL(SUM(t1.CRDIT_AMOUNT),0) AS CRDIT_AMOUNT 
+ 		           FROM TBACC_ACCNUT_STACNT t1 
+ 		            INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t2 
+ 		                ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR 
+ 		                AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE 
+ 		          WHERE t1.ACCNUT_YEAR = SUBSTR(#SRCH_TO_DE#,1,4) 
+ 		          AND   t1.ACCNUT_MT = '00'
+ 		          <isNotEmpty property="SE_ACCNUT_ACNT_CODE" prepend="AND   ">t1.BSNS_CODE = #SE_ACCNUT_ACNT_CODE#</isNotEmpty> 
+ 		          GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE, t2.ACCNUT_ACNT_NM, t2.DBRT_SE 
+ 		         ) t1 
+                 LEFT OUTER JOIN 
+	             (SELECT B.ACCNUT_YEAR, 
+	                    B.ACCNUT_ACNT_CODE, 
+	                    SUM(B.DEBTOR_AMOUNT) AS DEBTOR_AMOUNT, 
+	                    SUM(B.CRDIT_AMOUNT) AS CRDIT_AMOUNT 
+	               FROM TBACC_CHIT_MASTR A, 
+	                    TBACC_CHIT_DETAIL B 
+	              WHERE A.ACCNUT_YEAR = B.ACCNUT_YEAR 
+	                    AND A.CHIT_NO = B.CHIT_NO 
+	                    AND A.CHIT_DE <![CDATA[<=]]> 
+	                    (SELECT MAX(CHIT_DE) 
+	                      FROM TBACC_CHIT_MASTR A, 
+	                           TBACC_CHIT_DETAIL B 
+	                     WHERE A.CHIT_DE <![CDATA[<]]> #SRCH_FROM_DE# 
+	                           AND A.CHIT_DE <![CDATA[>=]]> SUBSTR(#SRCH_TO_DE#,1,4)||'0101'
+	                           AND A.ACCNUT_YEAR = B.ACCNUT_YEAR 
+	                           AND A.CHIT_NO = B.CHIT_NO 
+	                    ) 
+	                    AND A.CHIT_CONFM_AT = '1' 
+	                    <isNotEmpty property="SE_ACCNUT_ACNT_CODE" prepend="AND   ">A.BSNS_CODE = #SE_ACCNUT_ACNT_CODE#</isNotEmpty>
+	              GROUP BY B.ACCNUT_YEAR, 
+	                    B.ACCNUT_ACNT_CODE
+	             ) B 
+	             ON t1.ACCNUT_YEAR = B.ACCNUT_YEAR 
+	             AND t1.ACCNUT_ACNT_CODE = B.ACCNUT_ACNT_CODE
+		) t1
+		WHERE 1=1
+		GROUP BY t1.ACCNUT_ACNT_CODE
+		       , t1.ACCNUT_ACNT_NM
+		ORDER BY t1.ACCNUT_ACNT_CODE
+	</select>
+	
+	<select id="ACC050202DAO.totAcntLedgrDtlsList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+     	SELECT t1.ACCNUT_ACNT_CODE
+	         , t2.ACCNUT_ACNT_NM
+	         , SUM(DECODE(t2.DBRT_SE, 'D', NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0), 'C', NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0), 0)) AS CYFD_AMT  /*이월금액*/
+	         , 0 AS DR_AMT    /*차변*/
+	         , 0 AS CR_AMT    /*대변*/
+	         , SUM(DECODE(t2.DBRT_SE, 'D', NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0), 'C', NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0), 0)) AS JAN_AMT
+	         , '전기이월' AS SUMRY_1
+         	 , t1.PRMPC_CODE
+         	 , t4.ACCNUT_ACNT_NM AS PRMPC_NM
+         	 , NULL AS CHIT_DE
+	    FROM TBACC_ACCNUT_STACNT t1
+	      	 INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+	      	 ON  t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+	      	 AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+	      	 LEFT OUTER JOIN TBPRJ_BSNS_CODE t3
+	      	 ON  t1.BSNS_CODE = t3.BSNS_CODE
+	      	 LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t4
+	      	 ON  t4.ACCNUT_YEAR =  CASE WHEN SUBSTR(#SRCH_TO_DE#,1,4) <![CDATA[<]]> '2016' THEN '2016' ELSE SUBSTR(#SRCH_TO_DE#,1,4) END
+	      	 AND t1.PRMPC_CODE = t4.ACCNUT_ACNT_CODE 
+	    WHERE t1.ACCNUT_YEAR = SUBSTR(#SRCH_TO_DE#,1,4)
+	    AND   t1.ACCNUT_MT   = '00'
+	    AND   t1.ACCNUT_ACNT_CODE = #ACCNUT_ACNT_CODE#
+	    GROUP BY t1.ACCNUT_ACNT_CODE
+				,t2.ACCNUT_ACNT_NM
+				,t1.PRMPC_CODE
+				,t4.ACCNUT_ACNT_NM
+ 		UNION ALL
+		SELECT t2.ACCNUT_ACNT_CODE
+	         , t3.ACCNUT_ACNT_NM
+	         , 0                AS CYFD_AMT
+	         , SUM(t2.DEBTOR_AMOUNT) AS DR_AMT    
+	         , SUM(t2.CRDIT_AMOUNT)  AS CR_AMT
+	         , SUM(DECODE(t3.DBRT_SE, 'D', NVL(t2.DEBTOR_AMOUNT,0) - NVL(t2.CRDIT_AMOUNT,0), 'C', NVL(t2.CRDIT_AMOUNT,0) - NVL(t2.DEBTOR_AMOUNT,0), 0/*잔액이 0 이면 차화성분 확인*/)) AS JAN_AMT
+	         , t1.SUMRY_1
+         	 , t2.PRMPC_CODE
+         	 , t5.ACCNUT_ACNT_NM AS PRMPC_NM
+         	 , t1.CHIT_DE
+	    FROM TBACC_CHIT_MASTR t1
+	      INNER JOIN TBACC_CHIT_DETAIL t2
+	      ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+	      AND t1.CHIT_NO     = t2.CHIT_NO
+	      INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+	      ON  t2.ACCNUT_YEAR      = t3.ACCNUT_YEAR
+	      AND t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+	      LEFT OUTER JOIN TBPRJ_BSNS_CODE t4
+      	  ON t2.BSNS_CODE = t4.BSNS_CODE
+      	  LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t5
+      	  ON  t2.PRMPC_YEAR = t5.ACCNUT_YEAR
+      	  AND t2.PRMPC_CODE = t5.ACCNUT_ACNT_CODE
+	    WHERE 1=1
+	    AND	  t1.ACCNUT_YEAR = SUBSTR(#SRCH_TO_DE#,1,4)
+	    AND   t1.CHIT_DE     BETWEEN #SRCH_FROM_DE# AND #SRCH_TO_DE#
+	    AND   t2.ACCNUT_ACNT_CODE = #ACCNUT_ACNT_CODE#
+	    GROUP BY 
+				t2.ACCNUT_ACNT_CODE
+				,t3.ACCNUT_ACNT_NM
+				,t1.SUMRY_1
+				,t2.PRMPC_CODE
+				,t5.ACCNUT_ACNT_NM
+				,t1.CHIT_DE
+	    ORDER BY CHIT_DE NULLS FIRST
+	</select>
+	
+</sqlMap>

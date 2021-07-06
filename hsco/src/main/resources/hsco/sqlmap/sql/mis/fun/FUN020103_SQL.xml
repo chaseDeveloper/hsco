@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN020103_SQL">
+	
+	<!-- 공사채 내역 조회 -->
+	<select id="FUN020103DAO.selectPbncdList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT A.PBNCD_NO                                                                           AS PBNCD_NO
+			       ,C.CODE_NM                                                                           AS CPTAL_KND_NM
+			       ,A.CPTAL_KND                                                                         AS CPTAL_KND
+			       ,A.FNNC_INSTT_SPOT_CODE                                                              AS FNNC_INSTT_CODE
+			       ,B.BSNS_CODE                                                                         AS BSNS_CODE  
+			       ,B.BSNS_NM                                                                           AS BSNS_NM
+			       ,A.BRRW_AMOUNT                                                                       AS BRRW_AMOUNT
+			       ,A.BRRW_ACNUT_NM                                                                     AS BRRW_ACNUT_NM
+			       ,A.INTRT                                                                             AS INTRT
+			       ,A.INRST_SE                                                                          AS INRST_SE
+			       ,A.BRRW_DE                                                                           AS BRRW_DE
+			       ,A.EXPRTN_DE                                                                         AS EXPRTN_DE
+			       ,CEIL(MONTHS_BETWEEN(TO_DATE(A.EXPRTN_DE,'YYYYMMDD'),TO_DATE(A.BRRW_DE,'YYYYMMDD'))) AS RPAY_PD
+			       ,A.EXPRTN_AT                                                                         AS EXPRTN_AT
+			       ,A.REGISTER_ID                                                                       AS REGISTER_ID
+			       ,TO_CHAR(A.REGIST_DT, 'YYYYMMDD')                                                    AS REGIST_DT
+				   ,A.UPDUSR_ID                                                                         AS UPDUSR_ID
+				   ,TO_CHAR(A.UPDT_DT, 'YYYYMMDD')                                                      AS UPDT_DT
+			  FROM TBFUN_PBNCD A
+				   LEFT OUTER JOIN (SELECT DETAIL_CODE    AS CODE
+								         , DETAIL_CODE_NM AS CODE_NM
+								    FROM TBFUN_CPTAL_DETAIL_CODE
+								    WHERE CODE_SE = '000') C
+				                ON A.CPTAL_KND = C.CODE
+		           LEFT OUTER JOIN TBPRJ_BSNS_CODE B
+		                        ON A.BSNS_CODE = B.BSNS_CODE       
+			 WHERE 1=1
+			   AND TO_DATE(A.BRRW_DE,'YYYYMMDD') >= TO_DATE(#BRRW_BGNDE#,'YYYYMMDD')
+			   AND TO_DATE(A.BRRW_DE,'YYYYMMDD') <= TO_DATE(#BRRW_ENDDE#,'YYYYMMDD')
+		]]>
+		<isNotEmpty property="CPTAL_KND">
+		       AND A.CPTAL_KND = #CPTAL_KND#
+		</isNotEmpty>
+		<isNotEmpty property="FNNC_INSTT">
+		       AND A.FNNC_INSTT_SPOT_CODE = #FNNC_INSTT#
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+		       AND B.BSNS_CODE = #BSNS_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="INRST_SE">
+		       AND A.INRST_SE = #INRST_SE#
+		</isNotEmpty>		
+		<![CDATA[
+		     ORDER BY A.BRRW_DE, A.PBNCD_NO
+		]]>	        	     
+    </select>
+    
+	<!-- 공사채금리변동 내역 조회 -->
+	<select id="FUN020103DAO.selectPbncdInrstList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT A.PBNCD_NO                         AS PBNCD_NO
+			       ,A.SN                              AS SN
+			       ,A.INRST                           AS INRST
+			       ,A.APPLC_DE                        AS APPLC_DE  
+			       ,A.RM                              AS RM
+			       ,A.REGISTER_ID                     AS REGISTER_ID
+			       ,TO_CHAR(A.REGIST_DT, 'YYYYMMDD')  AS REGIST_DT
+				   ,A.UPDUSR_ID                       AS UPDUSR_ID
+				   ,TO_CHAR(A.UPDT_DT, 'YYYYMMDD')    AS UPDT_DT
+			  FROM TBFUN_PBNCD_INRST A	       
+			 WHERE 1=1
+			   AND A.PBNCD_NO = #PBNCD_NO#
+		     ORDER BY A.SN
+		]]>	        	     
+    </select>	
+    
+    <!-- 공사채금리 등록 -->
+    <insert id="FUN020103DAO.PbncdInrstC" parameterClass="java.util.HashMap">
+        <![CDATA[
+            INSERT INTO TBFUN_PBNCD_INRST (
+                PBNCD_NO
+                ,SN
+                ,INRST
+                ,APPLC_DE
+                ,RM
+                ,REGISTER_ID
+                ,REGIST_DT
+                ,UPDUSR_ID
+                ,UPDT_DT
+             ) VALUES (
+                #PBNCD_NO#
+                ,(SELECT NVL(MAX(A.SN),0) + 1
+                    FROM TBFUN_PBNCD_INRST A
+                   WHERE 1=1
+                     AND A.PBNCD_NO = #PBNCD_NO#
+                 )
+                ,#INRST#
+        		,#APPLC_DE#
+        		,#RM#
+                ,#S_USER_ID#
+                ,SYSDATE
+                ,#S_USER_ID#
+                ,SYSDATE
+             )
+        ]]>
+    </insert>
+
+
+    <!-- 공사채금리 수정 -->
+    <update id="FUN020103DAO.PbncdInrstU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBFUN_PBNCD_INRST 
+               SET INRST       = #INRST#
+                   ,APPLC_DE   = #APPLC_DE#
+                   ,RM         = #RM#
+                   ,UPDUSR_ID  = #S_USER_ID#
+                   ,UPDT_DT	   = SYSDATE
+             WHERE 1=1
+               AND PBNCD_NO = #PBNCD_NO#
+               AND SN = #SN#
+        ]]>
+    </update>
+
+
+    <!-- 공사채금리 삭제 -->
+    <delete id="FUN020103DAO.PbncdInrstD" parameterClass="java.util.HashMap">
+        <![CDATA[
+            DELETE 
+              FROM TBFUN_PBNCD_INRST 
+             WHERE 1=1
+               AND PBNCD_NO = #PBNCD_NO#
+               AND SN = #SN#
+        ]]>
+    </delete>
+    
+    <!-- 공사채 마스터 테이블 금리 사항 수정 -->
+    <update id="FUN020103DAO.PbncdU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBFUN_PBNCD 
+			   SET INTRT = (SELECT INRST 
+			                  FROM TBFUN_PBNCD_INRST 
+			                 WHERE 1 = 1 
+			                   AND PBNCD_NO = #PBNCD_NO# 
+			                   AND SN = (SELECT Max(SN) 
+			                               FROM TBFUN_PBNCD_INRST 
+			                              WHERE 1 = 1 
+			                                AND PBNCD_NO = #PBNCD_NO#)) 
+			       ,UPDUSR_ID = #S_USER_ID# 
+			       ,UPDT_DT   = SYSDATE 
+			 WHERE 1 = 1 
+			   AND PBNCD_NO = #PBNCD_NO#
+        ]]>
+    </update>    
+    
+</sqlMap>

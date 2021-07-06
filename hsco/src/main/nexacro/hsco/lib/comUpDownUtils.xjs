@@ -1,0 +1,976 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/*****************************************************************************
+ * 프로그램명 		: 	pmsUpDownUtils.xjs
+ * 작  성  자  	: 	이상준
+ * 작  성  일   	: 	2015.08.21
+ * 설      명  		:   메인화면 File Upload Download Manager
+ * 수  정  자  	: 	정윤원
+ * 수 정 이력  	: 	pms_lib --> lib 이동 및 파일명 변경
+ * 사용방법	    :   include "lib::pmsUpDownUtils.xjs"
+						...
+						this.pmsUpDownUtils.METHOD()
+******************************************************************************/
+
+
+this.fileUpDownManager = function(oForm, sysSe, jobSe){
+
+	this.DEBUG = false;
+	this.TYPE_UPLOADER = "ExtFileUpload";
+	this.TYPE_DOWNLOADER = "ExtFileDownload";
+	this.DEF_UPLOAD_URL = "hsco/cmm/file/uploadFile.do";
+	this.DEF_DOWNLOAD_URL = "hsco/cmm/download/fileDownload.do";
+	this.DEF_ALLOW_TYPE = ["jpg","jpeg","gif","png","bmp","txt","zip","7z","gzip","doc","docx","ppt","pptx","xls","xlsx","pdf", "hwp", "hwt", "ini", "dwg"];
+	this.DATASET_NAME_UP = "ds_upFiles";
+	this.DATASET_NAME_DOWN = "ds_downFiles";
+	this.DATASET_COLUMN_UP = ["FILE_SN"			// 파일일련번호
+							, "FILE_ORDR"		// 파일순차
+							, "FILE_STRE_COURS"	// 파일저장경로
+							, "STRE_FILE_NM"	// 저장파일명
+							, "ORGINL_FILE_NM"	// 원본파일명
+							, "FILE_EXTSN"		// 파일확장자
+							, "FILE_CN"			// 파일내용
+							, "FILE_MG"			// 파일크기
+							, "USE_AT"			// 사용여부
+							, "FILE_ID"			// 
+							, "FILE_TY"			// 
+							// 파일 마스터
+							, "SN"				// 파일 ID
+							, "SYS_SE_CODE"		// 시스템구분코드
+							, "JOB_SE"			// 업부구분코드 JOB_SE_CODE
+							// 운영 정보
+							, "FILE_IMAGE"		//
+							, "PROGRS"			//
+							, "TRNSMIS_FILE_SIZE"	//
+							, "DELETE_IMAGE"	//
+							, "STTUS"			//
+							];
+							
+	this.DATASET_COLUMN_DOWN = ["FILE_SN"			// 파일일련번호
+								, "FILE_ORDR"		// 파일순차
+								];
+	this.maxCount = 10;
+	this.maxSize = "1000MB";			// 단위 MB
+	this.maxTotalSize = "1000MB";	// 단위 MB
+								
+	this._form = oForm;
+	this._sysSe = sysSe;
+	this._jobSe = jobSe;
+	
+	this._uploader = null;
+	this._downloader = null;
+	
+	this._host = null;
+	this._uploadUrl = null;
+	this._downloadUrl = null;
+		
+	this._allowTypes = null;
+	this._useMultiUpload = false;
+	this._transferType = "all";				// transferType 전송유형.(all: 대상파일을 한번에 전송(defalut), each: 개별 전송)
+	
+	this._userOnChange = null;				// 사용자 파일선택 후 이벤트 처리 함수
+	this._userOnSuccess = null;				// 사용자 성공 이벤트 처리 함수
+	this._userOnError = null;				// 사용자 실패 이벤트 처리 함수
+	this._userOnProgress = null;			// 사용자 상태변경 이벤트 처리 함수
+	this._userOnReadyStateChange = null;	// 사용자 프로그래스 이벤트 처리 함수
+	
+	this._userOnCancelFile = null;			// 사용자 선택파일 취소 이벤트 처리 함수
+	
+	this._ds_upFile = null;
+	this._ds_downFile = null;
+	
+	this._fileSn = null;					// 파일 일련번호
+	
+	this._responseGrid = null;
+	this._responseArea = null;
+	
+	this.init = function(oConfig){
+		if(this._sysSe == null || this._jobSe == null){
+			alert("파일업/다운로드 : 시스템구분 또는 업무구분 값이 없습니다.");
+			return;
+		}
+	
+		// 업/다운로드용 데이터셋 생성
+		var createUpDs = this._createFileDataset(this.TYPE_UPLOADER, this.DATASET_NAME_UP, this.DATASET_COLUMN_UP);
+		if(!createUpDs){
+			alert("파일 업로드 데이터셋 생성 실패");
+			return;
+		}
+		
+		var createDownDs = this._createFileDataset(this.TYPE_DOWNLOADER, this.DATASET_NAME_DOWN, this.DATASET_COLUMN_DOWN);
+		if(!createDownDs){
+			alert("파일 다운로드 데이터셋 생성 실패");
+			return;
+		}
+	
+		// 업로드 컴포넌트
+		var upName = Eco.getUniqueId("extUpload_");
+		this._uploader = new nexacro.ExtFileUpload(upName, this._form);
+		this._form.addChild(upName, this._uploader);
+		
+		// 다운로드 컴포넌트 설정
+		var downName = Eco.getUniqueId("extDownload_");
+		this._downloader = new nexacro.ExtFileDownload(downName, this._form);
+		this._form.addChild(downName, this._downloader);
+		
+		// 설정값 반영
+		this._setConfig(oConfig);		// 사용자 설정 적용
+	};
+	
+	this.setUploadUrl = function(url){
+	    this.DEF_UPLOAD_URL = url;
+	};
+	
+	this.setDownloadUrl = function(url){
+	    this.DEF_DOWNLOAD_URL = url;
+	};
+	
+	this._setConfig = function(oConfig){
+	
+		// 기본 설정
+		this._host = oConfig && oConfig["host"] ? oConfig["host"] : application.gv_host;
+		this._uploadUrl = oConfig && oConfig["uploadUrl"] ? oConfig["uploadUrl"] : this.DEF_UPLOAD_URL;
+		this._downloadUrl = oConfig && oConfig["downloadUrl"] ? oConfig["downloadUrl"] : this.DEF_DOWNLOAD_URL;
+		this._allowTypes = oConfig && oConfig["allowTypes"] ? oConfig["allowTypes"] : this.DEF_ALLOW_TYPE;
+		this._useMultiUpload = oConfig && oConfig["useMultiUpload"] ? oConfig["useMultiUpload"] : false;
+
+		this._responseGrid = oConfig && oConfig["responseGrid"] ? oConfig["responseGrid"] : null;
+		this._responseArea = oConfig && oConfig["responseArea"] ? oConfig["responseArea"] : null;
+
+		this._userOnChange = oConfig && oConfig["onChange"] ? oConfig["onChange"] : null;								// 사용자 파일 선택 이벤트 처리 함수
+		this._userOnSuccess = oConfig && oConfig["onSuccess"] ? oConfig["onSuccess"] : null;							// 사용자 성공 이벤트 처리 함수
+		this._userOnError = oConfig && oConfig["onError"] ? oConfig["onError"] : null;									// 사용자 실패 이벤트 처리 함수
+		this._userOnProgress = oConfig && oConfig["onProgress"] ? oConfig["onProgress"] : null;							// 사용자 상태변경 이벤트 처리 함수
+		this._userOnReadyStateChange = oConfig && oConfig["onReadyStateChange"] ? oConfig["onReadyStateChange"] : null;	// 사용자 프로그래스 이벤트 처리 함수
+
+		this._userOnCancelFile = oConfig && oConfig["onCancel"] ? oConfig["onCancel"] : null;							// 사용자 파일 선택 취소 이벤트 처리 함수
+
+		this._uploader.set_multiselect(this._useMultiUpload);	// 사용자가 다중 파일업로드시 처리
+		
+		if(this._uploader.support.FileAPI){
+			if(this._responseArea != null && this._responseGrid != null){
+				this._uploader.setResponseZone(this._form, this._responseArea, this._responseGrid);	// 드래그 & 드롭
+			}
+		}else{
+		    if(this._responseArea != null){
+			     this._responseArea.set_visible(false);
+			}
+		}
+		
+		if(this._host.indexOf("local") > -1){
+			this.DEBUG = true;
+		}
+				
+		// 업로드 이벤트 설정
+		this._uploader.addEventHandler("onchange", this.onChangeHandler, this);						// 파일 선택시 발행 이벤트
+		this._uploader.addEventHandler("onsuccess", this.onSuccessHandler, this);					// 통신 성공시 발생 이벤트
+		this._uploader.addEventHandler("onerror", this.onErrorHandler, this);						// 통신 오류시 발생 이벤트
+		this._uploader.addEventHandler("onprogress", this.onProgressHandler, this);					// 프로그래스 이벤트 : HTML5 Only : XMLHttpRequest가 데이터를 보내거나 받는 동안 서버에서 정의된 간격으로 발생
+		this._uploader.addEventHandler("onreadystatechange", this.onReadystateChangeHandler, this);	// readystate 변경 이벤트 : HTML5 Only : XMLHttpRequest 통신시 readystate 속성 변경
+		this._uploader.show();
+		
+		// 다운로드 이벤트 설정
+		this._downloader.addEventHandler("onsuccess", this.onSuccessHandler, this);					// 통신 성공시 발생 이벤트
+		this._downloader.addEventHandler("onerror", this.onErrorHandler, this);						// 통신 오류시 발생 이벤트
+		this._downloader.addEventHandler("onprogress", this.onProgressHandler, this);				// 프로그래스 이벤트 : HTML5 Only : XMLHttpRequest가 데이터를 보내거나 받는 동안 서버에서 정의된 간격으로 발생
+		this._downloader.show();
+
+		//this.debug("fileManager Ready!!");
+	};
+	
+	//==================================================
+	// 기능 처리 부분 
+	//==================================================
+	
+	/**
+	 * 현재 선택된 파일 수 반환
+	 */
+	this.getfileCount = function(){
+		return this._ds_upFile.getRowCount();
+	};
+	
+	this.hasFile = function(){
+		return this._ds_upFile.getRowCount() > 0 ? true : false;
+	};
+
+	/**
+	 * 업로드 파일 선택
+	 */
+	this.addFiles = function(allowTypes, useMultiUpload){
+		//this.debug("[BEGIN] fileManager.addFiles ==========");
+		
+		this._allowTypes = allowTypes ? allowTypes : this.DEF_ALLOW_TYPE;
+		var reUseMultiUpload = useMultiUpload ? useMultiUpload : this._useMultiUpload;
+		
+		//this.debug("파일 다중선택 = 기본 : " + this._useMultiUpload + " :: 임시변경 : " + reUseMultiUpload);
+		
+		// 단일 파일 선택일 경우 기존 파일 취소 처리
+		if(!reUseMultiUpload){
+			this.cancelAllFile();		// 전체 파일 취소
+		}
+		
+		this._uploader.set_multiselect(reUseMultiUpload);		// 업로드 파일 다중 선택여부 재 설정
+		
+		this._uploader.addFiles();
+		
+		//this.debug("[ END ] fileManager.addFiles ==========");
+	};
+	
+	/**
+	 * 파일 업로드 선택 파일 취소 처리
+	 * @param fileName 파일명
+	 * @return void
+	 */
+	this.cancelFiles = function(fileName){
+		
+		//this.debug("[BEGIN] fileManager.cancelFiles ==========");
+		
+		var result = false;
+		var dsIndex = -1;
+		var fileId = null;
+		if(this.isArray(fileName)){
+			var nameLeng = fileName.length;
+			for(var i = 0; i < nameLeng; i++){
+				dsIndex = this._ds_upFile.findRow("ORGINL_FILE_NM", fileName);
+				fileId = this._ds_upFile.getColumn(dsIndex, "FILE_ID");
+				
+				result = this._cancelFile(fileId, dsIndex);
+				if(!result){
+					break;
+				}
+			}
+			
+			if(!result){
+				var confirmMsg = "선택파일 취소(삭제) 중 오류가 발생하였습니다.\n전체 파일을 취소(삭제)하시겟습니까?";
+				if(confirm(confirmMsg)){
+					this.cancelAllFile();
+				}
+			}
+		}else{
+			dsIndex = this._ds_upFile.findRow("ORGINL_FILE_NM", fileName);
+			fileId = this._ds_upFile.getColumn(dsIndex, "FILE_ID");
+			
+			result = this._cancelFile(fileId, dsIndex);
+		}
+		
+		/*
+		if(this._userOnCancelFile != null){
+			if(typeof this._userOnCancelFile == "function"){
+				this._userOnCancelFile.call(this._form, result);
+			}else{
+				this._form[this._userOnCancelFile](result);
+			}
+		}*/
+		//this.debug("	fileManager.cancelFiles : result = " + result);
+		//this.debug("[ END ] fileManager.cancelFiles ==========");
+		
+		return result;
+	};
+	
+	/**
+	 * 대상 파일 삭제 처리(단건)
+	 */
+	this._cancelFile = function(fileId, dsIndex){
+	
+		var result = this._ds_upFile.deleteRow(dsIndex);
+		if(result){
+			this._uploader.removeFile(fileId);
+		}else{
+			this._ds_upFile.reset();
+		}
+		
+		return result;
+	};
+	
+	/**
+	 * 선택파일 전체 취소(삭제)처리
+	 */
+	this.cancelAllFile = function(){
+		var result = false;
+		
+		this._uploader.removeAll();
+		this._ds_upFile.clearData();
+		
+		var fileLeng = this._uploader.getAddedFileLength();
+		var dsLeng = this._ds_upFile.getRowCount();
+		
+		//this.debug("fileLeng = " + fileLeng + " :: dsLeng = " + dsLeng);
+		
+		if(fileLeng == 0 && fileLeng == dsLeng){
+			result = true;
+		}
+		
+		return result;
+	};
+	
+	//==================================================
+	// 이벤트 Handler 부분 
+	//==================================================
+	
+	/**
+	 * 파일 다이얼로그 파일 선택 후 발생 이벤트 핸들러
+	 * - 업로더 전용
+	 * obj:nexacro.ExtFileUpload, e:nexacro.ExtFileUploadChangeEventInfo
+	 */
+	this.onChangeHandler = function(obj, e){
+		
+		//this.debug("[BEGIN] fileManager.onChangeHandler ==========");
+		
+		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+		var objType = obj._type_name;
+		
+		var newFileIndex = e.index;		// 신규 추가 파일 Idx;
+		
+		var index = e.index;
+		var fileList = e.files;
+		var fileCount = fileList.length;
+		var fileSupport = (this._uploader.support.XHR2 && this._uploader.support.FileAPI);
+		
+		//this.debug("fileSupport = " + fileSupport);
+		if(this.DEBUG){
+			var fileObj = fileList[fileCount-1];
+			for(var sKey in fileObj){
+				//trace("fileList[" + sKey + "] = " + fileObj[sKey]);
+			}
+		}
+		
+		//this.debug("멀티선택 가능 = " + this._uploader.multiselect + " :: " + (fileCount > 1 ? "다건 선택" : "단건 선택"));
+		
+		// 파일 적용처리
+		var checkResult = this._checkAllowFileList(fileList);
+		
+		// 적용 파일기준 업로드 파일정보 설정
+		var fileItem = null;
+		var addidx = null;
+		var addIdxArr = [];
+
+		var newInDsList = checkResult["allow"];
+		var newInDsListLeng = newInDsList == null ? 0 : newInDsList.length;
+		for(var i = 0; i < newInDsListLeng; i++){
+			fileItem = newInDsList[i];
+			addidx = this._putFileInfoToDs(fileItem);
+			addIdxArr.push(addidx);
+		}
+
+		// Debug용
+		var fileLeng = this._uploader.getAddedFileLength();
+		var dsLeng = this._ds_upFile.getRowCount();
+		//this.debug("fileLeng = " + fileLeng + " :: dsLeng = " + dsLeng + " :: newInDsListLeng = " + newInDsListLeng + " :: addIdxArr = " + addIdxArr);
+		
+		// 파일추가 사용자 이벤트 발생
+		if(this._userOnChange != null){
+		
+			//this.debug("Call User onChange Event Handler");
+			
+			var isMultiSelect = this._uploader.multiselect;
+			
+			//this.debug("isMultiSelect = " + isMultiSelect);
+			
+			var result = null;
+			var resultFileItem = null;
+			if(isMultiSelect){
+				result = [];
+				for(var i = 0; i < newInDsListLeng; i++){
+					resultFileItem = newInDsList[i];
+					//orgFileName = this._ds_upFile.getColumn(i, "ORGINL_FILE_NM");
+					var orgFileName = resultFileItem["name"];
+					result.push(orgFileName);
+				}
+			}else{
+				resultFileItem = newInDsList[0];
+				result = resultFileItem["name"];//this._ds_upFile.getColumn(0, "ORGINL_FILE_NM");
+			}
+			
+			if(this._userOnChange != null){
+				if(typeof this._userOnChange == "function"){
+					this._userOnChange.call(this._form, objType, result);
+				}else{
+					this._form[this._userOnChange](objType, result);
+				}
+			}
+			
+		}
+		
+		//this.debug("[ END ] fileManager.onChangeHandler ==========");
+	};
+	
+	// 업로드 대상 파일목록에서 허용확장자, 용량. 중복여부를 판단한다. 
+	this._checkAllowFileList = function(fileList){
+	
+		var result = {};
+		var rejectList = [];
+		var allowList = [];
+		
+		var maxSingleSize = this.sizeToByte(this.maxSize);
+		var maxTotalSize = this.sizeToByte(this.maxTotalSize);
+		
+		var allowTotalSize = 0;
+		var fileListSize = fileList == null ? 0 : fileList.length;
+		var i = 0;
+		for(i = 0; i < fileListSize; i++){
+		
+			var fileInfo = fileList[i];
+			
+			var selFileId = fileInfo["id"];
+			var selFileFullNm = fileInfo["name"];
+			var selFileSize = fileInfo["size"];
+			var selFileType = fileInfo["type"];
+			var selFileNm = selFileFullNm.substring(0, selFileFullNm.lastIndexOf('.'));
+			var selFileExt = selFileFullNm.substring(selFileFullNm.lastIndexOf('.') + 1, selFileFullNm.length);
+			
+			// 확장자 확인
+			var isAllowType = this._isAllowType(selFileExt);
+			if(!isAllowType){
+				alert("파일확장자가 "+selFileExt+"인 파일은 등록 할 수 없습니다.");
+				rejectList.push(selFileId);
+				continue;
+			}
+			
+			// 용량확인
+			var isAllowSize = selFileSize <= maxSingleSize ? true : false;
+			if(!isAllowSize){
+				alert("첨부파일은 "+this.maxSize+"를 넘을 수 없습니다.");
+				rejectList.push(selFileId);
+				continue;
+			}
+			
+			// 중복확인 - Dataset 비교
+			var inDsIndex = this._ds_upFile.findRow("ORGINL_FILE_NM", selFileFullNm);
+			if(inDsIndex > -1){
+				//this.debug("파일 중복 (" + selFileFullNm + ")");
+				rejectList.push(selFileId);
+				continue;
+			}
+			
+			// 전체용량확인
+			allowTotalSize += selFileSize;
+			if(allowTotalSize == null || allowTotalSize == undefined)
+			    allowTotalSize = 0;
+			if(allowTotalSize > maxTotalSize){
+				rejectList.push(selFileId);
+				continue;
+			}
+			
+			allowList.push(fileInfo);
+		}
+		
+		//this.debug("allowList = " + allowList.toString());
+		//this.debug("rejectList = " + rejectList.toString());
+		
+		// 제외대상을 실제 업로드 목록에서 제거한다.
+		var rejectLeng = rejectList == null ? 0 : rejectList.length;
+		for(i = 0; i < rejectLeng; i++){
+			var rejectId = rejectList[i];
+			this._uploader.removeFile(rejectId);
+		}
+		
+		result["allow"] = allowList;
+		result["reject"] = rejectList;
+		
+		return result;
+	};
+	
+	/**
+	 * 허용확장자 확인
+	 *  - 허용확장자일 경우 true 반환
+	 * @param fileType
+	 * @return Boolean
+	 */
+	this._isAllowType = function(fileType){
+		var result = false;
+		var allowLeng = this._allowTypes.length;
+		for(var i = 0; i < allowLeng; i++){
+			var allowType = this._allowTypes[i];
+			if(fileType.toLowerCase() == allowType){
+				result = true;
+				break;
+			}
+		}
+		return result;
+	}
+	
+	/**
+	 * 파일 일련번호 설정
+	 * 기존의 파일일련번호로 파일을 업로드 할 경우를 위해 업로드 시 설정
+	 */
+	this.setFileSn = function(value)
+	{
+		this._fileSn = value;
+	}
+	
+	/*
+	 * 통신 성공시에 발생하는 이벤트입니다
+	 * - 업/다운로더 공용
+	 * obj:nexacro.ExtFileUpload(ExtFileDownload), e:nexacro.ExtFileLoadEventInfo(ExtFileLoadEventInfo)
+	 */
+	this.onSuccessHandler = function(obj, e){
+  		
+  		//this.debug("[BEGIN] fileManager.onSuccessHandler ==========");
+  		
+  		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+  		
+  		this._fileSn = null;	// 완료되었으므로 초기화
+  		
+  		var errorCode = e.errorcode;
+		var errorMsg = e.errormsg;
+  		var objType = obj._type_name;
+  		switch(objType){
+  		
+			case this.TYPE_UPLOADER :	// 파일 업로더
+			
+				//this.debug("	" + this.TYPE_UPLOADER + " onSuccess!");
+							
+				if(errorCode < 0){				
+					this._form.gfn_callBackMsg("fileUpload", errorCode, errorMsg);
+				}
+				
+				var fileLeng = this._uploader.getAddedFileLength();
+				var dsLeng = this._ds_upFile.getRowCount();
+				
+				//this.debug("	fileLeng = " + fileLeng + " :: dsLeng = " + dsLeng);
+				if(fileLeng == 0 && fileLeng != dsLeng){
+					this._ds_upFile.clearData();	// 데이터 초기화
+				}
+				
+				break;
+			
+			case this.TYPE_DOWNLOADER :	// 파일 다운로더
+			
+				this.debug("	" + this.TYPE_DOWNLOADER + " onSuccess!");
+			
+				break;
+				
+			default :
+				break;
+		}
+		
+		// 사용자 Success Event Handler 호출
+		if(errorCode < 0){
+			if(this._userOnError != null){
+					
+				//this.debug("Call User onError Event Handler");
+				
+				if(typeof this._userOnError == "function"){
+					this._userOnError.call(this._form, objType, e);
+				}else{
+					this._form[this._userOnError](objType, e);
+				}
+			}
+		}else{
+			if(this._userOnSuccess != null){
+						
+				//this.debug("Call User onSuccess Event Handler");
+				
+				if(typeof this._userOnSuccess == "function"){
+					this._userOnSuccess.call(this._form, objType, e);
+				}else{
+					this._form[this._userOnSuccess](objType, e);
+				}
+			}
+		}
+		
+		//this.debug("[ END ] fileManager.onSuccessHandler ==========");
+	};
+	
+	/**
+	 * 통신 오류 시 발생하는 이벤트입니다
+	 * - 업/다운로드 공용
+	 * obj:nexacro.ExtFileUpload(ExtFileDownload), e:nexacro.ExtFileErrorEventInfo(ExtFileErrorEventInfo)
+	 */
+	this.onErrorHandler = function(obj, e){
+	
+		//this.debug("[BEGIN] fileManager.onErrorHandler ==========");
+	
+
+		
+		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+		
+		var objType = obj._type_name;
+		var errorCode = e.errorcode;
+		var errorMsg = e.errormsg;
+		switch(objType){
+			
+			case this.TYPE_UPLOADER :	// 업로더
+				
+				//this.debug("	" + this.TYPE_UPLOADER + " onError!");
+				
+				break;
+				
+			case this.TYPE_DOWNLOADER :	// 다운로더
+			
+				//this.debug("	" + this.TYPE_DOWNLOADER + " onError!");
+			
+				if(errorCode < 0){				
+					this._form.gfn_callBackMsg("fileDownload", errorCode, errorMsg);
+				}
+			
+				break;
+				
+			default :
+				break;
+				
+		}
+		
+		// 사용자 OnError Handler 호출
+		if(errorCode < 0){
+			if(this._userOnError != null){
+						
+				//this.debug("Call User onError Event Handler");
+				
+				if(typeof this._userOnError == "function"){
+					this._userOnError.call(this._form, objType, e);
+				}else{
+					this._form[this._userOnError](objType, e);
+				}
+			}
+		}
+		
+		//this.debug("[ END ] fileManager.onErrorHandler ==========");
+	};
+	
+	/**
+	 * [HTML5 Only] XMLHttpRequest가 데이터를 보내거나 받는 동안 서버에서 정의된 간격으로 발생합니다.
+	 * - 업/다운로드 공용
+	 * file upload & download 진행시 progress bar 처리용
+	 * @param {ExtFileUpload} obj ExtFileUpload
+	 * @param {ExtFileProgress} e ExtFileProgress
+	 * obj:nexacro.ExtFileUpload, e:nexacro.ExtFileProgress
+	 */
+	this.onProgressHandler = function(obj, e){
+	
+		//this.debug("[BEGIN] fileManager.onProgressHandler ==========");
+	
+		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+		
+		var objType = obj._type_name;
+		switch(objType){
+			
+			case this.TYPE_UPLOADER :	// 업로더
+	
+				//this.debug("	" + this.TYPE_UPLOADER + " onProgress!");
+	
+				if(this._userOnProgress != null){
+				
+					//this.debug("Call User onProgress Event Handler");
+				
+					if(typeof this._userOnProgress == "function"){
+						this._userOnProgress.call(this._form, objType, e);
+					}else{
+						this._form[this._userOnProgress](objType, e);
+					}
+				}
+				
+				break;
+			
+			case this.TYPE_DOWNLOADER :	// 다운로더
+			
+				//this.debug("	" + this.TYPE_DOWNLOADER + " onProgress!");
+			
+				break;
+				
+			default :
+				break;
+		}
+		
+		//this.debug("[ END ] fileManager.onProgressHandler ==========");
+	};
+	
+	/**
+	 * [HTML5 Only] XMLHttpRequest 통신시 readystate 속성 변경 event
+	 * - 업로더 전용
+	 * @param {ExtFileUpload} obj ExtFileUpload
+	 * @param {ExtFileReadystateChangEventInfo} e ExtFileReadystateChangEventInfo
+	 * obj:nexacro.ExtFileUpload, e:nexacro.ExtFileReadystateChangEventInfo
+	 */
+	this.onReadystateChangeHandler = function(obj, e){
+		
+		//this.debug("[BEGIN] fileManager.onReadystateChangeHandler ==========");
+	
+		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+		
+		var objType = obj._type_name;
+		if(this._userOnReadyStateChange != null){
+		
+			//this.debug("Call User onReadyStateChange Event Handler");
+		
+			if(typeof this._userOnReadyStateChange == "function"){
+				this._userOnReadyStateChange.call(this._form, objType, e.readyState, e.status, e);
+			}else{
+				this._form[this._userOnReadyStateChange](objType, e.readyState, e.status, e);
+			}
+		}
+		
+		//this.debug("[ END ] fileManager.onReadystateChangeHandler ==========");
+	};
+	
+	//==================================================
+	// 실행 부분 
+	//==================================================
+	
+	/**
+	 * 파일업로드 실행
+	 * transferType 전송유형.(all: 대상파일을 한번에 전송(defalut), each: 개별 전송)
+	 */
+	this.upload = function(sCtrl, sInDs, sOutDs){
+	
+		//this.debug("[BEGIN] fileManager.upload ==========");
+		
+		//this.debug("	sCtrl = " + sCtrl);
+		//this.debug("	sInDs = " + sInDs);
+		//this.debug("	sOutDs = " + sOutDs);
+		
+		//this.debug("	fileSn = " + this._fileSn);
+		if(this._fileSn != null){
+			this._setUpFileSn();	// 파일 정보에 파일일련번호 값 설정
+		}
+	
+		// var url = this.fileConfig.host + this.fileConfig.uploadUrl;
+		var uploadUrl = this._host + (sCtrl ? sCtrl : this._uploadUrl);
+		
+		var sInFileDatasets = "inputFile=" + this._ds_upFile.name;
+		if(sInDs){
+			sInFileDatasets += " " + sInDs;
+		}
+		
+		//this.debug("sInFileDatasets = " + sInFileDatasets);
+		
+		var baseInDatasets = Ex.core.setTranBaseInfo(this._form, "fileUpload", sCtrl, sInFileDatasets, sOutDs);
+		var sInDatasets = baseInDatasets["strInDatasets"] + sInFileDatasets;
+		
+		//this.debug("sendDatasets = " + sInDatasets);
+		
+		var sOutDatasets = sOutDs ? sOutDs : "";
+		var transferType = this._transferType;
+		
+		//  @param {string} path upload url 정보. default는 상단의 extUp.set_uploadurl()에서 설정한 정보.
+		//  @param {string} inDatasetsParam input dataset 정보
+		//  @param {string} outDatasetsParam output dataset 정보
+		//  @param {string} transferType 전송유형.(all: 대상파일을 한번에 전송(defalut), each: 개별 전송)
+		//  @param {number} datatype data 전송방식. 0:XML, 1:Binary(Runtime only), 2:SSV
+		this._uploader.upload(uploadUrl, sInDatasets, sOutDatasets, transferType, 0);
+		
+		//this.debug("[ END ] fileManager.upload ==========");
+	};
+	
+	/**
+	 * 파일 다운로드 실행
+	 * @param fileSn 파일일련번호
+	 * @param fileOrder 파일순차 - 없을 경우 파일일련번호에 해당하는 모든 파일을 다운로드
+	 * @param fileName 파일명
+	 * return void
+	 */
+	this.download = function(fileSn, fileOrder, fileName){
+		//this.debug("[BEGIN] fileManager.download ==========");
+		
+		//this.debug("	fileSn = " + fileSn);
+		//this.debug("	fileOrder = " + fileOrder);
+		//this.debug("	fileName = " + fileName);
+	
+		//this._ds_downFile.reset();
+		this._ds_downFile.clearData();
+		
+		var addIdx = this._ds_downFile.addRow();
+		this._ds_downFile.setColumn(addIdx, "FILE_SN", fileSn);
+		this._ds_downFile.setColumn(addIdx, "FILE_ORDR", fileOrder);
+	
+		//var downloadUrl = this.fileConfig.host + this.fileConfig.downloadUrl;
+		var sUrl = this._host + this._downloadUrl;
+		
+		var sInFileDatasets = "input1=" + this._ds_downFile.name;
+		var baseInDatasets = Ex.core.setTranBaseInfo(this._form, "fileDownload", this._downloadUrl, sInFileDatasets, "");
+		var sInDatasets = baseInDatasets["strInDatasets"] + sInFileDatasets;
+		
+		// ExtFileUploadSupport.XHR2 지원여부
+		//var enabledXHR = this._ds_downFile.support.XHR2 && (this._ds_downFile.support.Download || this._ds_downFile.support.MSSave);
+		
+		//this.debug("ExtFileUploadSupport.XHR2 = " + enabledXHR);
+		
+		this._downloader.download(sUrl, fileName, sInDatasets);
+		
+		//var downloadUrl = sUrl + "?FILE_SN=" + fileSn + "&FILE_ORDR=" + fileOrder;
+		//this._downloader.download(downloadUrl, fileName);
+		
+		//this.debug("[ END ] fileManager.download ==========");
+	};
+	
+	this.dataFileDownload = function(sController, sInDatasets, fileName){
+		
+		//this.debug("[BEGIN] fileManager.dataFiledownload ==========");
+		
+		var sUrl = this._host + sController;
+		var baseInDatasets = Ex.core.setTranBaseInfo(this._form, "fileDownload", this._downloadUrl, sInDatasets, "");
+		var sDatasets = baseInDatasets["strInDatasets"] + sInDatasets;
+		
+		//this.debug("sDatasets = " + sDatasets);
+		
+		this._downloader.download(sUrl, fileName, sDatasets);
+		
+		//this.debug("[ END ] fileManager.dataFiledownload ==========");
+	};
+	
+	//==================================================
+	// 데이터셋 처리 부분 
+	//==================================================
+	
+	/**
+	 * 파일 데이터셋에 파일정보 설정
+	 */
+	this._putFileInfoToDs = function(fileInfo){
+		
+		//this.debug("[BEGIN] fileManager._putFileInfoToDs ==========");
+		
+		var selFileId = fileInfo["id"];
+		var selFileFullNm = fileInfo["name"];
+		var selFileSize = fileInfo["size"];
+		var selFileType = fileInfo["type"];
+
+		var selFileNm = selFileFullNm.substring(0, selFileFullNm.lastIndexOf('.'));
+        var selFileExt = selFileFullNm.substring(selFileFullNm.lastIndexOf('.') + 1, selFileFullNm.length);
+		
+		//this.debug("NM = " + selFileNm + " : EXTENSION = " + selFileExt);
+		
+		var addidx = this._ds_upFile.addRow();
+			
+		// 파일일련번호 - 기본적으로 서버에서 처리하며, 파일일련번호가 있을 경우 업로드전 별도처리
+		this._ds_upFile.setColumn(addidx, "ORGINL_FILE_NM", selFileFullNm);	// 실제 파일명(full)
+		if(selFileSize > 0){
+			this._ds_upFile.setColumn(addidx, "FILE_MG", selFileSize);		// 파일사이즈
+		}
+		this._ds_upFile.setColumn(addidx, "FILE_EXTSN", selFileExt);			// 파일 확장자
+		this._ds_upFile.setColumn(addidx, "USE_AT", '1');						// 사용여부
+		this._ds_upFile.setColumn(addidx, "FILE_ID", selFileId);				// 파일ID(로컬)
+		this._ds_upFile.setColumn(addidx, "FILE_TY", selFileType);			// 파일타입
+		this._ds_upFile.setColumn(addidx, "PROGRS", 0);						// 프로그래스
+		this._ds_upFile.setColumn(addidx, "SYS_SE_CODE", this._sysSe);		// 시스템구분
+		this._ds_upFile.setColumn(addidx, "JOB_SE", this._jobSe);				// 업무구분
+		//this._ds_upFile.setColumn(addidx, "SN", selFileId);					// 파일 순번
+		//if(fileSn > 0)_ds_upFile.setColumn(addidx, "FILE_SN", fileSn);			// 파일일련번호
+		//this._ds_upFile.setColumn(addidx, "DELETE_IMAGE", this.fileConfig.delImage);
+		
+		//this.debug("[ END ] fileManager._putFileInfoToDs ==========");
+		
+		return addidx;
+	};
+
+	/**
+	 * File Dataset을 생성.
+	 * @param null
+	 * @return Boolean
+	 */
+	this._createFileDataset = function(type, dsName, columnInfo){
+		
+		//this.debug("[BEGIN] fileManager._createFileDataset ==========");
+		
+		try{
+			// 데이터 전달용 DataSet이 있는지 확인.
+			var fileDs =  this._form.objects[dsName];
+			var noFileDs = fileDs ? false : true;
+
+			//this.debug("	" + type + " 파일 정보 Dataset 없음? = " + noFileDs);
+
+			if(noFileDs){
+			
+				//this.debug("	" + type + " 파일 정보 Dataset 생성");
+				
+				fileDs = new Dataset;
+				fileDs.set_name(dsName);
+				
+				// 컬럼정보 설정
+				var columnLeng = columnInfo.length;
+				for(var i = 0; i < columnLeng; i++){
+					fileDs.addColumn(columnInfo[i], "string");
+				}
+				
+			}else{
+			
+				//this.debug("	" + type + " 파일 정보 Dataset 초기화(clearData)");
+			
+				fileDs.clearData();	// 데이터셋 초기화 - 데이터 삭제
+			}
+			
+			if(noFileDs){
+				this._form.addChild(dsName, fileDs);
+			}
+			
+			if(type == this.TYPE_UPLOADER){
+				this._ds_upFile = fileDs;
+			}else if(type == this.TYPE_DOWNLOADER){
+				this._ds_downFile = fileDs;
+			}
+			
+			//this.debug("[ END ] fileManager._createFileDataset ==========");
+			
+			return true;
+		}catch(ex){
+		
+			//this.debug("	" + type + " 파일 정보 Dataset 생성/초기화 실패");
+		
+			//trace(ex.message + "\n" +ex.description);
+			
+			//this.debug("[ END ] fileManager._createFileDataset ==========");
+			
+			return false;
+		}
+	};
+	
+	/**
+	 * 파일 일련번호를 업로드 대상 파일정보에 추가한다.
+	 */
+	this._setUpFileSn = function(){
+		
+		if(this._fileSn == null){
+			return;
+		}
+		
+		var dsRowCnt = this._ds_upFile.getRowCount();
+		for(var i = 0; i < dsRowCnt; i++){
+			this._ds_upFile.setColumn(i, "FILE_SN", this._fileSn);
+		}
+	};
+	
+	//==================================================
+	// Utillity 부분 
+	//==================================================
+	
+	/**
+	 * 값이 Array인지 여부를 나타내는 메소드
+	 * @param value Object
+	 * @return Boolean
+	 */
+	this.isArray = function(value){
+		var ARRAY_CLASS = "[object Array]";
+		var typeClass = Object.prototype.toString.call(value);
+		return typeClass === ARRAY_CLASS;
+	};
+	
+	/**
+	 * size를 byte로 변환처리한다.
+	 * @param {number} fileSize file size
+	 * @return {number} file size
+	 */
+	this.sizeToByte = function(sFileSize){
+		var unit = sFileSize.match(/[^\d]+/g);
+		var size = sFileSize.match(/\d+/);
+		
+		unit = unit ? unit[0].toLowerCase() : "";
+		size = size ? size[0] : sFileSize;
+		
+		if(unit == "mb"){
+			return size * 1024 * 1024;
+		}else if(unit == "gb"){
+			return size * 1024 * 1024 * 1024;
+		}else if(unit == "tb"){
+			return size * 1024 * 1024 * 1024 * 1024;
+		}else if(unit == ""){
+			return size;
+		}else{
+			return sFileSize;
+		}
+	}
+	
+	this.debug = function(strValue){
+		if(this.DEBUG){
+			trace(strValue);
+		}
+	};
+};
+]]></Script>

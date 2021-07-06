@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS110101DAO">	
+
+<!--
+SQL File Name : SLS110101_SQL.xml
+Description : 토지공급관리대장조회
+Modification Information
+수정일			수정자		Version	Query Id
+2015.09.30	이상준		1.0		최초 생성
+-->
+   
+    <!-- 쿼리명 : 토지공급내역 조회
+	설명 : 토지공급내역 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.30	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.30
+	-->
+	<select id="SLS110101DAO.selectLadSuplyDtlsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT /* SLS110101DAO.selectLadSuplyDtlsList 토지공급내역 목록 조회 */
+			   a1.LAD_CODE					/* 토지코드 */
+		     , a1.BLCK						/* 블럭 */
+		     , a1.LOT						/* 롯트 */
+		     , a1.LOT_TY					/* 롯트 타입 */
+		     , a1.LOCPLC_ZIP				/* 소재지우편번호 */
+		     , a1.LOCPLC_ADRES				/* 소재지주소 */
+		     , a1.LOCPLC_ZIP_LNM			/* 소재지우편번호지번 */
+		     , a1.LOCPLC_ADRES_LNM			/* 소재지주소지번 */
+		     , a1.CLASSIFICATION_SE			/* 급지구분 대상 : 산업용지 */
+		     , c1.CODE_NM AS CLASSIFICATION_SE_NM	/* 급지구분명 */
+		     , a1.PRPOS_SE					/* 용도구분 */
+		     , b1.CODE_NM AS PRPOS_SE_NM	/* 용도구분명 */
+		     , a1.BGNN_AR					/* 당초면적[권리면적] */
+		     , a1.BGNN_UNTPC				/* 당초단가 */
+		     , a1.BGNN_AMOUNT				/* 당초금액[권리금액] */
+		     , a1.DCSN_UNTPC				/* 확정단가 */
+		     , a1.DCSN_AMOUNT				/* 확정금액 */
+		     , a1.DCSN_AR					/* 확정면적 */
+		     , a1.DB_AMT					/* 확정금액 - 당초금액 */
+		     , a1.BLCK_SUM					/* 조회용 B.L.T 값 */
+		     , a1.SUPLY_CODE				/* 공급코드 */
+		     , d1.CODE_NM AS SUPLY_CODE_NM	/* 공급코드명 */
+		  FROM (SELECT a.LAD_CODE
+		             , a.BLCK
+		             , a.LOT
+		             , a.LOT_TY
+		             , a.LOCPLC_ZIP
+		             , a.LOCPLC_BASS_ADRES || LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES
+		             , a.LOCPLC_ZIP_LNM
+		             , a.LOCPLC_BASS_ADRES_LNM || a.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM
+		             , a.CLASSIFICATION_SE
+		             , a.PRPOS_SE
+		             , a.BGNN_AR
+		             , a.BGNN_UNTPC
+		             , a.BGNN_AMOUNT
+		             , a.DCSN_UNTPC
+		             , a.DCSN_AMOUNT
+		             , a.DCSN_AR
+		             , (a.DCSN_AMOUNT - BGNN_AMOUNT) AS DB_AMT
+		             , LPAD(a.BLCK, 3,'0')||LPAD(a.LOT, 3, '0')||LPAD(a.LOT_TY, 2, '0') AS BLCK_SUM
+		        	 , a.SUPLY_CODE
+		          FROM TBSLS_LAD_DETAIL_INFO a 		/* 토지상세정보 : lnt_ln_infomst 공급토지상세정보 */
+		         WHERE 1 = 1
+		           AND a.LAD_CODE = #LAD_CODE#		/* 토지코드 LN_CODE */
+		         <isNotEmpty property="PRPOS_SE">
+		           AND a.PRPOS_SE = #PRPOS_SE#		/* 용도구분 USE_CODE */
+		         </isNotEmpty>
+		  	   ) a1
+		     , (SELECT CODE
+		             , CODE_NM
+		          FROM TBCOM_CMMN_CODE
+		         WHERE GRP_CODE = 'LAD003'	/* 토지용도구분 */
+		       ) b1
+		     , (SELECT CODE
+		     		 , CODE_NM
+		  		  FROM TBCOM_CMMN_CODE
+			     WHERE GRP_CODE = 'LAD0B5'	/* 토지급지구분 */
+		       ) c1
+		     , (SELECT CODE
+		     		 , CODE_NM
+		  		  FROM TBCOM_CMMN_CODE
+			     WHERE GRP_CODE = 'LAD004'	/* 공급구분 */
+		       ) d1
+		 WHERE 1 = 1
+		   AND a1.PRPOS_SE = b1.CODE(+)
+		   AND a1.CLASSIFICATION_SE = c1.CODE(+)
+   		   AND a1.SUPLY_CODE = d1.CODE(+)
+   	   
+   	   <!--  2016.06.20 -->
+   	   <isNotEmpty property="BLCK_FM">
+   	  	   AND a1.BLCK = #BLCK_FM#
+   	   </isNotEmpty>
+   	   <isNotEmpty property="LOT_FM">
+   	  	   AND a1.LOT = #LOT_FM#
+   	   </isNotEmpty>
+   	   <isNotEmpty property="LOT_TY_FM">
+   	  	   AND a1.LOT_TY = #LOT_TY_FM#
+   	   </isNotEmpty>
+   	   
+   	   <!--  2016.06.20
+   	   <isNotEmpty property="BLT_FM">
+		<isNotEmpty property="BLT_TO">
+		   AND a1.BLCK_SUM BETWEEN #BLT_FM# AND #BLT_TO#	
+		</isNotEmpty>
+		<isEmpty property="BLT_TO">
+		   <![CDATA[
+		   AND a1.BLCK_SUM >= #BLT_FM#
+		   ]]>
+		</isEmpty>
+      </isNotEmpty>
+      <isEmpty property="BLT_FM">
+      	<isNotEmpty property="BLT_TO">
+      	   <![CDATA[
+      	   AND a1.BLCK_SUM <= #BLT_TO#
+      	   ]]>
+      	</isNotEmpty>
+      </isEmpty>
+      -->
+		 ORDER BY LPAD(a1.BLCK, 3, '0')
+		        , LPAD(a1.LOT, 3, '0')
+		        , LPAD(a1.LOT_TY, 2, '0')
+    </select>
+    
+    <!-- 쿼리명 : 현재계약자내역 조회
+	설명 : 현재계약자내역 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.30	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.30
+	-->
+    <select id="SLS110101DAO.selectNowCntrctrDtlsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	WITH V_LCNTRCTR AS
+		(
+		<include refid="COM000000.v_sls_lcntrctr_info"/>
+		)
+		SELECT /* SLS110101DAO.selectNowCntrctrDtlsList 현재계약자내역 */
+		       a.CNTRCTR_NO			/* 계약자번호 */
+		     , a.LAD_CODE			/* 토지코드 */
+		     , a.BLCK				/* 블록 */
+		     , a.LOT				/* 롯트 */
+		     , a.LOT_TY				/* 롯트타입 */
+		     , a.CSTMR_NM					/* 성명 */
+		     , a.LAD_CSTMR_NO		/* 토지고객번호(SQ_TBSLS_LAD_CSTMR_1) */
+<!-- 		     , SUBSTR(SFCOM_DEC_ALL(a.IHIDNUM),0,7)||'******' AS IHIDNUM	 -->
+		     , SFCOM_DEC_ALL(a.IHIDNUM) AS IHIDNUM /* 주민등록번호 */
+		     , a.ZIP				/* 우편번호 */
+		     , a.ADRES				/* 주소 */
+		     , a.ADRES_DETAIL		/* 주소_상세 */
+		     , a.ADRES || a.ADRES_DETAIL AS ADRES_ALL
+		     , a.TELNO				/* 전화번호 */
+		     , a.MBTLNO				/* 휴대폰번호 */
+		     , a.CNTRCT_DE			/* 계약일자 */
+		     , a.RENT_BGNDE			/* 임대시작일자 */
+		     , a.RENT_ENDDE			/* 임대종료일자 */
+		     , a.SUPLY_SE			/* 공급구분 */
+		     , a.CNTRCT_TY			/* 계약타입 */
+		     , a.CANCL_DE			/* 해약일자 */
+		     , b.PRPOS_SE			/* 용도구분 */
+		  FROM V_LCNTRCTR a				/* 토지계약자 : LNT_CT_INFO 계약자정보 */
+		     , TBSLS_LAD_DETAIL_INFO b	/* 토지상세정보 */
+		 WHERE 1 = 1
+		   AND a.CNTRCTR_NO IS NOT NULL		/* 계약자번호 */
+		   AND a.LAD_CODE = b.LAD_CODE
+		   AND a.BLCK = b.BLCK
+		   AND a.LOT = b.LOT
+		   AND a.LOT_TY = b.LOT_TY
+		   AND a.LAD_CODE = #LAD_CODE#		/* 토지코드 */
+		   AND a.BLCK = #BLCK#				/* 블록 */
+		   AND a.LOT = #LOT#				/* 롯드 */
+		   AND a.LOT_TY = #LOT_TY#			/* 롯트구분 */
+		   AND b.PRPOS_SE = #PRPOS_SE#		/* 용도구분 */
+		 ORDER BY CNTRCT_DE
+    </select>
+    
+    <!-- 쿼리명 : 공급받는자 조회
+	설명 : 공급받는자 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.30	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.30
+	-->
+    <select id="SLS110101DAO.selectSuplyRcivePersonList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS110101DAO.selectSuplyRcivePersonList 공급받는자 */
+		       a1.CNTRCTR_NO				/* 계약자번호 */
+		     , a1.CHANGE_SN					/* 변경일련번호 */
+		     , a1.CHANGE_SE					/* 변경구분 */
+		     , b1.CODE_NM AS CHANGE_SE_NM	/* 변경구분명 */
+		     , a1.CHANGE_DE					/* 변경일 */
+		     , a1.CSTMR_NM					/* 성명 */
+		     , a1.LAD_CSTMR_NO				/* 토지고객번호 */
+		     , a1.IHIDNUM					/* 주민등록번호 */
+		     , a1.ZIP						/* 우편번호 */
+		     , a1.ADRES						/* 주소 */
+		     , a1.ADRES_DETAIL				/* 주소_상세 */
+		     , a1.ADRES_ALL					/* 전체 주소 */
+		     , a1.TELNO						/* 전화번호 */
+		     , a1.MBTLNO					/* 휴대폰번호 */
+		     , a1.CHGHY						/* 변경사유 */
+		     , a1.CONFM_COMPT_AT			/* 승인완료여부 */
+		     , a1.RM						/* 비고 */
+		  FROM (SELECT a.CNTRCTR_NO
+		             , a.CHANGE_SN
+		             , LPAD(a.CHANGE_SE, 2, '0') AS CHANGE_SE
+		             , a.CHANGE_DE
+		             , b.CSTMR_NM
+		             , b.LAD_CSTMR_NO
+		             <!-- , SUBSTR(SFCOM_DEC_ALL(b.IHIDNUM), 1, 7) || '******' AS IHIDNUM -->
+		             , SFCOM_DEC_ALL(b.IHIDNUM) AS IHIDNUM
+		             , b.ZIP
+		             , b.ADRES
+		             , b.ADRES_DETAIL
+		             , b.ADRES || b.ADRES_DETAIL AS ADRES_ALL
+		             , b.TELNO
+		             , b.MBTLNO
+		             , a.CHGHY
+		             , a.CONFM_COMPT_AT
+		             , a.RM
+		          FROM TBSLS_LCNTRCTR_NMCHANGE a	/* 토지계약자명의변경 */
+		             , TBSLS_LAD_CSTMR b			/* 토지고객 */
+		             , TBSLS_LCNTRCTR c				/* 토지계약자 */
+             		 , TBSLS_LAD_DETAIL_INFO d 		/* 토지상세정보 */
+		         WHERE 1 = 1
+		           AND a.CHANGE_SN > 0
+		           AND a.LAD_CSTMR_NO = b.LAD_CSTMR_NO(+)
+		           AND a.CNTRCTR_NO = c.CNTRCTR_NO
+		           AND c.LAD_CODE = d.LAD_CODE
+		           AND c.BLCK = d.BLCK
+		           AND c.LOT = d.LOT
+		           AND c.LOT_TY = d.LOT_TY
+		         <isNotEmpty property="LAD_CODE">
+		           AND d.LAD_CODE = #LAD_CODE#
+		         </isNotEmpty>
+		         <isNotEmpty property="BLCK">
+		           AND d.BLCK = #BLCK#
+		         </isNotEmpty>
+		         <isNotEmpty property="LOT">
+		           AND d.LOT = #LOT#
+		         </isNotEmpty>
+		         <isNotEmpty property="LOT_TY">
+		           AND d.LOT_TY = #LOT_TY#
+		         </isNotEmpty>
+		         <isNotEmpty property="PRPOS_SE">
+		           AND d.PRPOS_SE = #PRPOS_SE#
+		         </isNotEmpty>
+		         <isNotEmpty property="CNTRCTR_NO">
+		           AND a.CNTRCTR_NO = #CNTRCTR_NO#
+		         </isNotEmpty>
+		       ) a1
+		     , (SELECT CODE
+		             , CODE_NM
+		          FROM TBCOM_CMMN_CODE
+		         WHERE GRP_CODE = 'LAD005'	/* 변경구분 */
+		       ) b1
+		 WHERE 1 = 1
+		   AND a1.CHANGE_SE = b1.CODE(+)
+    </select>
+    
+    <!-- 쿼리명 : 대금수납현황 조회
+	설명 : 대금수납현황 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.30	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.30
+	-->
+    <select id="SLS110101DAO.selectPricRcivSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS110101DAO.selectPricRcivSttusList 대금수납현황 */
+			   a1.CNTRCTR_NO				/* 계약자번호 */
+		     , a1.PAY_NO					/* 납부번호 */
+		     , a1.PAY_CODE					/* 납부코드 */
+		     , c1.CODE_NM AS PAY_CODE_NM	/* 납부코드명 */
+		     , a1.PAYAMT					/* 납부금액(분양금액) */
+		     , b1.RCIV_DE					/* 수납일자 */
+		     , b1.RCIV_AMOUNT				/* 수납금액 */
+		     , a1.PAY_TMLMT					/* 납부기한일 */
+		     , a1.PAY_STDR_DE				/* 납부기준일자 */
+		     , a1.INSTLMT_INTR				/* 할부이자 */
+		     , a1.ARRRG_AMOUNT				/* 연체금액(연체이자) */
+		     , a1.TOT_AMOUNT				/* 총금액 */
+		     , a1.RM						/* 비고 */
+		  FROM (SELECT a.CNTRCTR_NO
+		             , a.PAY_NO
+		             , a.PAY_CODE
+		             , a.PAYAMT
+		             , a.PAY_TMLMT
+		             , a.PAY_STDR_DE
+		             , a.INSTLMT_INTR
+		             , a.ARRRG_AMOUNT
+		             , a.PAYAMT + a.INSTLMT_INTR + a.ARRRG_AMOUNT AS TOT_AMOUNT
+		             , a.RM
+		          FROM TBSLS_LCNTRCTR_PAY a		/* 토지계약자납부 LNT_CT_VOTE 계약자 납부정보(일반) */
+		             , TBSLS_LCNTRCTR b			/* 토지계약자 */
+             		 , TBSLS_LAD_DETAIL_INFO c 	/* 토지상세정보 : lnt_ln_infomst 공급토지상세정보 */
+		         WHERE 1 = 1
+		           AND a.CNTRCTR_NO = b.CNTRCTR_NO
+		           AND b.LAD_CODE = c.LAD_CODE
+		           AND b.BLCK = c.BLCK
+		           AND b.LOT = c.LOT
+		           AND b.LOT_TY = c.LOT_TY
+		         <isNotEmpty property="LAD_CODE">
+		           AND c.LAD_CODE = #LAD_CODE#
+		         </isNotEmpty>
+		         <isNotEmpty property="BLCK">
+		           AND c.BLCK = #BLCK#
+		         </isNotEmpty>
+		         <isNotEmpty property="LOT">
+		           AND c.LOT = #LOT#
+		         </isNotEmpty>
+		         <isNotEmpty property="LOT_TY">
+		           AND c.LOT_TY = #LOT_TY#
+		         </isNotEmpty>
+		         <isNotEmpty property="PRPOS_SE">
+		           AND c.PRPOS_SE = #PRPOS_SE#
+		         </isNotEmpty>
+		         <isNotEmpty property="CNTRCTR_NO">
+		           AND a.CNTRCTR_NO = #CNTRCTR_NO#
+		         </isNotEmpty>
+		  	   ) a1
+		     , TBSLS_LAD_RCIV_PSTMRK b1	/* 토지수납 : LNT_CT_RECEIPT 계약자 수납정보_징수 */
+		     , (SELECT x.CODE
+		             , x.CODE_NM
+		          FROM TBCOM_CMMN_CODE x
+		         WHERE x.GRP_CODE = 'LAD0A1'	/* 납부구분 */
+		       ) c1
+		 WHERE 1 = 1
+		   AND a1.CNTRCTR_NO = b1.CNTRCTR_NO(+)
+		   AND a1.PAY_NO = b1.PAY_NO(+)
+		   AND a1.PAY_CODE = c1.CODE(+)
+		 ORDER BY CNTRCTR_NO
+		 		, PAY_TMLMT
+ 				, RCIV_DE
+ 				, PAY_NO
+    </select>
+    
+    <!-- 레포트용 -->
+    
+    <!-- 쿼리명 : 토지공급관리대장 - 토지의 표시 내역 조회
+	설명 : 토지공급관리대장의 토지의 표시 내역을 조회한다.
+	수정일  		수정자  	수정내용
+	2016.02.11	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.11
+	-->
+    <select id="SLS110101DAO.selectLadSuplyDtlsInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS110101DAO.selectLadSuplyDtlsInfo 토지공급관리대장  토지의 표시 내역 조회 */
+			   a1.LAD_CODE					/* 토지코드 */
+			 , a1.LAD_NM					/* 토지명 */
+		     , a1.BLCK						/* 블럭 */
+		     , a1.LOT						/* 롯트 */
+		     , a1.LOT_TY					/* 롯트 타입 */
+             , a1.BLCK || ' - ' || a1.LOT ||' - ' || a1.LOT_TY AS BLT_ALL
+             , a1.LAD_NM || ' ' || a1.BLCK || ' - ' || a1.LOT ||' - ' || a1.LOT_TY AS LAD_NM_ALL
+		     , a1.LOCPLC_ZIP				/* 소재지우편번호 */
+		     , a1.LOCPLC_ADRES				/* 소재지주소 */
+		     , a1.LOCPLC_ZIP_LNM			/* 소재지우편번호지번 */
+		     , a1.LOCPLC_ADRES_LNM			/* 소재지주소지번 */
+		     , DECODE(TRIM(a1.LOCPLC_ADRES_LNM), NULL, a1.LOCPLC_ADRES, a1.LOCPLC_ADRES_LNM) AS LOCPLC_ADRES_ALL	/* 소재지 주소 */
+		     , a1.CLASSIFICATION_SE			/* 급지구분 대상 : 산업용지 */
+		     , c1.CODE_NM AS CLASSIFICATION_SE_NM	/* 급지구분명 */
+		     , a1.PRPOS_SE					/* 용도구분 */
+		     , b1.CODE_NM AS PRPOS_SE_NM	/* 용도구분명 */
+		     , a1.BGNN_AR					/* 당초면적[권리면적] */
+		     , a1.BGNN_UNTPC				/* 당초단가 */
+		     , a1.BGNN_AMOUNT				/* 당초금액[권리금액] */
+		     , a1.DCSN_UNTPC				/* 확정단가 */
+		     , a1.DCSN_AMOUNT				/* 확정금액 */
+		     , a1.DCSN_AR					/* 확정면적 */
+             , a1.TOT_AR					/* 정산 : 확정면적 - 당초면적 */
+             , a1.TOT_AMT					/* 정산 : 확정금액 - 당초금액 */
+             , '' AS GUBUN_DATE				/* 구분일자 : null */
+             , a1.CNTRCT_DE					/* 계약일자(최초계약일자) */
+             , e1.USE_CONFM_ISSU_DE			/* 사용승낙발급일자 */
+             , '' AS SUP_DATE				/* 공급일자(공급통보) */
+             , f1.EXCCLC_DE					/* 정산일자 */
+             , e1.OWNSHIP_BEFORE_DE			/* 소유권이전일자 */
+             /* 기타정보  */
+             , a1.CNTRCTR_NO				/* 토지계약자 번호 */
+             , f1.EXCCLC_AMOUNT				/* 정산금액 */
+		     , a1.BLCK_SUM					/* 조회용 B.L.T 값 */
+		     , a1.SUPLY_CODE				/* 공급코드 */
+		     , d1.CODE_NM AS SUPLY_CODE_NM	/* 공급코드명 */
+		  FROM (SELECT a.LAD_CODE
+		             , a.BLCK
+		             , a.LOT
+		             , a.LOT_TY
+		             , b.LAD_NM
+		             , a.LOCPLC_ZIP
+		             , a.LOCPLC_BASS_ADRES || '   ' || a.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES
+		             , a.LOCPLC_ZIP_LNM
+		             , a.LOCPLC_BASS_ADRES_LNM || '   ' || a.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM
+		             , a.CLASSIFICATION_SE
+		             , a.PRPOS_SE
+		             , a.BGNN_AR
+		             , a.BGNN_UNTPC
+		             , a.BGNN_AMOUNT
+		             , a.DCSN_UNTPC
+		             , a.DCSN_AMOUNT
+		             , a.DCSN_AR
+		             , CASE WHEN NVL(a.DCSN_AR, 0) > 0
+                            THEN a.DCSN_AR - a.BGNN_AR
+                            ELSE 0
+                       END AS TOT_AR 		/* 정산 : 확정면적 - 당초면적 */
+                     , CASE WHEN NVL(a.DCSN_AMOUNT, 0) > 0
+                            THEN a.DCSN_AMOUNT - a.BGNN_AMOUNT
+                            ELSE 0
+                       END AS TOT_AMT 		/* 정산 : 확정금액 - 당초금액 */
+                     , c.CNTRCT_DE			/* 계약일자(최초계약일자) */
+		             , LPAD(a.BLCK, 3,'0')||LPAD(a.LOT, 3, '0')||LPAD(a.LOT_TY, 2, '0') AS BLCK_SUM
+		        	 , a.SUPLY_CODE
+					, (CASE WHEN c.CNTRCT_DE IS NULL
+                    		THEN (SELECT MAX(CNTRCTR_NO)
+                                    FROM TBSLS_LCNTRCTR		/* 토지계약자 */
+                                   WHERE LAD_CODE = c.LAD_CODE
+                                     AND BLCK = c.BLCK
+                                     AND LOT = c.LOT
+                                     AND LOT_TY = c.LOT_TY
+                                     AND CNTRCT_DE IS NULL
+                				 )
+                            ELSE (SELECT CNTRCTR_NO
+                                    FROM TBSLS_LCNTRCTR		/* 토지계약자 */
+                                   WHERE LAD_CODE = c.LAD_CODE
+                                     AND BLCK = c.BLCK
+                                     AND LOT = c.LOT
+                                     AND LOT_TY = c.LOT_TY
+                                     AND CNTRCT_DE = c.CNTRCT_DE)
+                        END) AS CNTRCTR_NO			/* 토지계약자번호 */
+		          FROM TBSLS_LAD_DETAIL_INFO a 		/* 토지상세정보 : lnt_ln_infomst 공급토지상세정보 */
+                     , TBSLS_LAD_INFO b				/* 토지정보 */
+                     , (SELECT x.LAD_CODE
+                             , x.BLCK
+                             , x.LOT
+                             , x.LOT_TY
+                             , MAX(x.CNTRCT_DE) AS CNTRCT_DE	/* 한토지에 해약자/계약자 정보가 존재하여 최종 계약정보를 기준으로 함 */
+                          FROM TBSLS_LCNTRCTR x		/* 토지계약자 */
+                         WHERE 1 = 1
+                         GROUP BY x.LAD_CODE
+                                , x.BLCK
+                                , x.LOT
+                                , x.LOT_TY
+                       ) c
+		         WHERE 1 = 1
+                   AND a.LAD_CODE = b.LAD_CODE
+                   AND a.LAD_CODE = c.LAD_CODE(+)
+                   AND a.BLCK = c.BLCK(+)
+                   AND a.LOT = c.LOT(+)
+                   AND a.LOT_TY = c.LOT_TY(+)
+                   AND a.LAD_CODE = #LAD_CODE#		/* 토지코드 LN_CODE */
+                   AND a.BLCK = #BLCK#
+                   AND a.LOT = #LOT#
+                   AND a.LOT_TY = #LOT_TY#
+                 <isNotEmpty property="PRPOS_SE">
+		           AND a.PRPOS_SE = #PRPOS_SE#		/* 용도구분 USE_CODE */
+		         </isNotEmpty>
+		  	   ) a1
+		     , (SELECT CODE
+		             , CODE_NM
+		          FROM TBCOM_CMMN_CODE
+		         WHERE GRP_CODE = 'LAD003'	/* 토지용도구분 */
+		       ) b1
+		     , (SELECT CODE
+		     		 , CODE_NM
+		  		  FROM TBCOM_CMMN_CODE
+			     WHERE GRP_CODE = 'LAD0B5'	/* 토지급지구분 */
+		       ) c1
+		     , (SELECT CODE
+		     		 , CODE_NM
+		  		  FROM TBCOM_CMMN_CODE
+			     WHERE GRP_CODE = 'LAD004'	/* 공급구분 */
+		       ) d1
+             , TBSLS_LCNTRCTR_ETC_INFO e1	/* 토지계약자기타정보 */
+             , (SELECT /* 한토지에 다 건의 정산 정보가 존재하여 최종 정산정보를 기준으로 함 */
+             		   DISTINCT
+             	       CNTRCTR_NO
+                     , MAX(EXCCLC_DE) OVER(PARTITION BY CNTRCTR_NO  ORDER BY CNTRCTR_NO) EXCCLC_DE
+                     , MIN(EXCCLC_AMOUNT) OVER(PARTITION BY CNTRCTR_NO  ORDER BY CNTRCTR_NO) EXCCLC_AMOUNT
+                  FROM TBSLS_LAD_EXCCLC		/* 토지정산 */
+               ) f1
+		 WHERE 1 = 1
+		   AND a1.PRPOS_SE = b1.CODE(+)
+		   AND a1.CLASSIFICATION_SE = c1.CODE(+)
+   		   AND a1.SUPLY_CODE = d1.CODE(+)
+           AND a1.CNTRCTR_NO = e1.CNTRCTR_NO(+)
+           AND a1.CNTRCTR_NO = f1.CNTRCTR_NO(+)
+		 ORDER BY LPAD(a1.BLCK, 3, '0')
+		        , LPAD(a1.LOT, 3, '0')
+		        , LPAD(a1.LOT_TY, 2, '0')
+    </select>
+    
+</sqlMap>

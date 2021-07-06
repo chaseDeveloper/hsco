@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM060504_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+
+    <!--집계내역조회 -->
+	<select id="HRM060504DAO.selectPersonalAtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+					WITH T_TEMP AS (
+				    SELECT T1.EVL_YEAR
+				           , T1.HT_SE
+				           , SFCOM_CODE_NM('HRM002', T1.HR_CLSF_SE) AS CLSF_NM
+				           , T1.EMPNO
+				           , T1.HR_CLSF_SE
+				           , T1.QESITM_NO
+				           , T1.SCORE_1 
+				           , T1.SCORE_2
+				           , T1.SCORE_1 + T1.SCORE_2 AS SCORE       
+				  	FROM (
+				        SELECT T1.EVL_YEAR
+				               , T1.HT_SE
+				               , T1.EMPNO
+				               , T1.HR_CLSF_SE
+				               , T1.QESITM_NO
+				               , MAX(CASE WHEN T1.APRSR_SE = '1' THEN  T1.SCORE ELSE 0 END) AS SCORE_1
+				               , MAX(CASE WHEN T1.APRSR_SE = '2' THEN  T1.SCORE ELSE 0 END) AS SCORE_2
+				        FROM ( SELECT T1.EVL_YEAR
+				                    , T1.HT_SE
+				                    , T1.EMPNO
+				                    , T1.HR_CLSF_SE
+				                    , T1.APRSR_SE
+				                    , T1.QESITM_NO
+				                    , TRUNC(AVG(T1.SCORE) * 0.5,2) AS SCORE
+				               FROM (
+				                       SELECT T1.EVL_YEAR
+                                            , T1.HT_SE
+                                            , T1.EMPNO
+                                            , T1.APRSR_NO
+                                            , T1.APRSR_SE
+                                            , T2.HR_CLSF_SE
+                                            , T3.QESITM_NO
+                                            , NVL(T4.SCORE,0) AS SCORE
+                                      FROM TBHRM_MLSS_APRSR T1 
+                                      LEFT OUTER JOIN TBHRM_MLSS_APRSEE T2
+                                      ON T1.EVL_YEAR = T2.EVL_YEAR
+                                         AND T1.HT_SE = T2.HT_SE
+                                         AND T1.EMPNO = T2.EMPNO
+                                      LEFT OUTER JOIN TBHRM_MLSS_EVL_TABLE T3
+                                        ON T1.EVL_YEAR = T3.EVL_YEAR
+                                         AND T1.HT_SE = T3.HT_SE
+                                         AND T2.HR_CLSF_SE = T3.HR_CLSF_SE
+                                         AND T3.QESITM_NO IS NOT NULL
+                                      LEFT OUTER JOIN TBHRM_MLSS_SCORE T4
+                                      ON T1.EVL_YEAR = T4.EVL_YEAR
+                                         AND T1.HT_SE = T4.HT_SE
+                                         AND T1.EMPNO = T4.EMPNO
+                                         AND T1.APRSR_NO = T4.APRSR_NO
+                                         AND T3.QESITM_NO = T4.QESITM_NO
+                                      WHERE T1.PRSEN_AT = '1'
+                                      ORDER BY T1.EVL_YEAR
+                                               , T1.HT_SE
+                                               , T1.EMPNO
+                                               , T1.APRSR_NO
+                                               , T1.APRSR_SE
+                                                ,T2.HR_CLSF_SE
+                                               , T4.QESITM_NO
+				                       ) T1
+				              GROUP BY T1.EVL_YEAR
+				                       , T1.HT_SE
+				                       , T1.EMPNO
+				                       , T1.HR_CLSF_SE
+				                       , T1.APRSR_SE
+				                       , T1.QESITM_NO
+				              ORDER BY T1.EVL_YEAR
+				                       , T1.HT_SE
+				                       , T1.EMPNO
+				                       , T1.HR_CLSF_SE
+				                       , T1.APRSR_SE
+				                       , T1.QESITM_NO
+				               ) T1
+				    GROUP BY T1.EVL_YEAR
+				             , T1.HT_SE
+				             , T1.EMPNO
+				             , T1.HR_CLSF_SE
+				             , T1.QESITM_NO
+				    ) T1   
+				)
+				SELECT   T1.EVL_YEAR
+				       , T1.HT_SE
+				       , SFCOM_CODE_NM('HRM002', T1.HR_CLSF_SE) AS CLSF_NM
+				       , T1.QESITM_NO
+				       , T1.EVL_SE
+				       , T1.EVL_IEM
+				       , T1.GHVR_IX
+				       , TRUNC(NVL(T2.SCORE, 0),2) AS HR_CLSF_SCORE
+				       , TRUNC(NVL(T3.SCORE, 0),2) AS MY_SCORE
+				FROM TBHRM_MLSS_APRSEE T_MAIN
+				INNER JOIN TBHRM_MLSS_EVL_TABLE T1
+				ON T_MAIN.EVL_YEAR = T1.EVL_YEAR
+				   AND T_MAIN.HT_SE = T1.HT_SE
+				   AND T_MAIN.HR_CLSF_SE = T1.HR_CLSF_SE
+				LEFT OUTER JOIN (
+				    SELECT T1.EVL_YEAR
+				           , T1.HT_SE
+				           , T1.HR_CLSF_SE
+				           , T1.QESITM_NO
+				           , AVG(T1.SCORE) AS SCORE
+				    FROM T_TEMP T1
+				    GROUP BY T1.EVL_YEAR
+				             , T1.HT_SE
+				             , T1.HR_CLSF_SE
+				             , T1.QESITM_NO
+				) T2
+				ON T1.EVL_YEAR = T2.EVL_YEAR
+				   AND T1.HT_SE = T2.HT_SE
+				   AND T1.HR_CLSF_SE = T2.HR_CLSF_SE
+				   AND T1.QESITM_NO = T2.QESITM_NO
+				LEFT OUTER JOIN T_TEMP T3
+				ON T1.EVL_YEAR = T3.EVL_YEAR
+				   AND T1.HT_SE = T3.HT_SE
+				   AND T1.HR_CLSF_SE = T3.HR_CLSF_SE
+				   AND T1.QESITM_NO = T3.QESITM_NO
+				   AND T3.EMPNO = #EMPNO#
+				INNER JOIN TBHRM_MLSS_BSIS T4
+				ON T1.EVL_YEAR = T4.EVL_YEAR
+				   AND T1.HT_SE = T4.HT_SE
+				   AND T4.DCSN_DE<![CDATA[<=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')
+				WHERE T_MAIN.EVL_YEAR = #EVL_YEAR#
+				      AND T_MAIN.HT_SE = #HT_SE#
+				      AND T_MAIN.EMPNO = #EMPNO#
+				ORDER BY T1.EVL_YEAR
+				         , T1.HT_SE
+				         , T1.HR_CLSF_SE
+				         , T1.QESITM_NO
+	</select>
+	
+	<select id="HRM060504DAO.selectPersonalAtList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/*HRM060504DAO.selectPersonalAtList2(다면평가결과(2020년 이상))*/
+		WITH TEMP AS (
+		    SELECT T1.EVL_YEAR
+		         , T1.HT_SE
+		         , T1.EMPNO
+		         , CASE WHEN T1.HR_CLSF_SE = '401' THEN '201'
+		                WHEN T1.HR_CLSF_SE = '402' THEN '202'
+		                WHEN T1.HR_CLSF_SE = '403' THEN '203'
+		                WHEN T1.HR_CLSF_SE = '404' THEN '204'
+		                WHEN T1.HR_CLSF_SE = '405' THEN '205'
+		                ELSE T1.HR_CLSF_SE
+		           END AS HR_CLSF_SE
+		         , T2.APRSR_NO
+		         , T3.QESITM_NO
+		         , NVL(T4.SCORE, 0) AS SCORE
+		         , T5.CNT AS CNT
+		      FROM TBHRM_MLSS_APRSEE T1
+		           INNER JOIN TBHRM_MLSS_APRSR T2
+		                ON T1.EVL_YEAR = T2.EVL_YEAR
+		               AND T1.HT_SE = T2.HT_SE
+		               AND T1.EMPNO = T2.EMPNO
+		           INNER JOIN TBHRM_MLSS_EVL_TABLE T3
+		                ON T1.EVL_YEAR   = T3.EVL_YEAR
+		               AND T1.HT_SE      = T3.HT_SE
+		               AND CASE WHEN T1.HR_CLSF_SE = '401' THEN '201'
+		                        WHEN T1.HR_CLSF_SE = '402' THEN '202'
+		                        WHEN T1.HR_CLSF_SE = '403' THEN '203'
+		                        WHEN T1.HR_CLSF_SE = '404' THEN '204'
+		                        WHEN T1.HR_CLSF_SE = '405' THEN '205'
+		                        ELSE T1.HR_CLSF_SE
+		                   END = T3.HR_CLSF_SE
+		           INNER JOIN TBHRM_MLSS_SCORE T4
+		                ON T1.EVL_YEAR  = T4.EVL_YEAR
+		               AND T1.HT_SE     = T4.HT_SE
+		               AND T1.EMPNO     = T4.EMPNO
+		               AND T2.APRSR_NO  = T4.APRSR_NO
+		               AND T3.QESITM_NO = T4.QESITM_NO
+		           INNER JOIN (
+		                       SELECT EVL_YEAR
+		                            , HT_SE
+		                            , EMPNO
+		                            , COUNT(1) AS CNT
+		                         FROM TBHRM_MLSS_APRSR
+		                        WHERE PRSEN_AT = '1'
+		                       GROUP BY EVL_YEAR
+		                              , HT_SE
+		                              , EMPNO
+		                      ) T5
+		                 ON  T1.EVL_YEAR = T5.EVL_YEAR
+		                 AND T1.HT_SE    = T5.HT_SE
+		                 AND T1.EMPNO   = T5.EMPNO
+		     WHERE T1.EVL_YEAR = #EVL_YEAR#
+		       AND T1.HT_SE    = #HT_SE#
+		       AND T2.PRSEN_AT = '1'
+		)
+		, TEMP2 AS (
+		    SELECT EVL_YEAR
+		         , HT_SE
+		         , EMPNO
+		         , HR_CLSF_SE
+		         , QESITM_NO
+		         , SUM(SCORE) AS SCORE
+		         , CNT
+		      FROM TEMP
+		    GROUP BY EVL_YEAR
+		           , HT_SE
+		           , EMPNO
+		           , HR_CLSF_SE
+		           , QESITM_NO
+		           , CNT
+		    ORDER BY EVL_YEAR
+		           , HT_SE
+		           , EMPNO
+		           , HR_CLSF_SE
+		           , QESITM_NO
+		           , CNT
+		)
+		, TEMP3 AS (
+		    SELECT EVL_YEAR
+		         , HT_SE
+		         , EMPNO
+		         , HR_CLSF_SE
+		         , QESITM_NO
+		         , CNT
+		         , TRUNC(SUM(SCORE) / CNT, 2) AS SCORE
+		      FROM TEMP2
+		    GROUP BY EVL_YEAR
+		           , HT_SE
+		           , EMPNO
+		           , HR_CLSF_SE
+		           , QESITM_NO
+		           , CNT
+		)
+		SELECT T1.EVL_YEAR
+		     , T1.HT_SE
+		     , SFCOM_CODE_NM('HRM002', T1.HR_CLSF_SE) AS CLSF_NM
+		     , T1.QESITM_NO
+		     , T3.EVL_SE
+		     , T3.EVL_IEM
+		     , T3.GHVR_IX
+		     , TRUNC(NVL(T4.SCORE, 0), 2) AS HR_CLSF_SCORE
+		     , TRUNC(NVL(T1.SCORE, 0), 2) AS MY_SCORE
+		  FROM TEMP3 T1
+		       INNER JOIN TBHRM_MLSS_APRSEE T2
+		            ON T1.EVL_YEAR = T2.EVL_YEAR
+		           AND T1.HT_SE    = T2.HT_SE
+		           AND T1.EMPNO    = T2.EMPNO
+		       INNER JOIN TBHRM_MLSS_EVL_TABLE T3
+		            ON T1.EVL_YEAR   = T3.EVL_YEAR
+		           AND T1.HT_SE      = T3.HT_SE
+		           AND T1.HR_CLSF_SE = T3.HR_CLSF_SE
+		           AND T1.QESITM_NO  = T3.QESITM_NO
+		       LEFT OUTER JOIN (
+		                        SELECT EVL_YEAR
+		                             , HT_SE
+		                             , HR_CLSF_SE
+		                             , QESITM_NO
+		                             , AVG(SCORE) AS SCORE
+		                          FROM TEMP3
+		                        GROUP BY EVL_YEAR
+		                               , HT_SE
+		                               , HR_CLSF_SE
+		                               , QESITM_NO
+		                       ) T4
+		            ON T1.EVL_YEAR   = T4.EVL_YEAR
+		           AND T1.HT_SE      = T4.HT_SE
+		           AND T1.HR_CLSF_SE = T4.HR_CLSF_SE
+		           AND T1.QESITM_NO  = T4.QESITM_NO
+		       INNER JOIN TBHRM_MLSS_BSIS T5
+		            ON T1.EVL_YEAR   = T5.EVL_YEAR
+		           AND T1.HT_SE      = T5.HT_SE
+		           AND T5.DCSN_DE <![CDATA[<=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')
+		 WHERE T1.EMPNO = #EMPNO#
+		ORDER BY QESITM_NO
+	</select>
+
+</sqlMap>

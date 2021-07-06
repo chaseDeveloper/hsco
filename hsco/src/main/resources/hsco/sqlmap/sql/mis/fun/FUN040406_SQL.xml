@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN040406_SQL">	
+	
+	<!-- 지출처별 집계 지출내역조회 -->
+	<select id="FUN040406DAO.selectExpndtrDtlsList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*FUN040406DAO.selectExpndtrDtlsList*/ ]]>
+        <![CDATA[
+			SELECT CASE 
+			         WHEN H_DECRYPT(t3.BIZRNO) = 'Z000000000000' THEN NULL 
+			         WHEN LENGTH(H_DECRYPT(t3.BIZRNO)) = 13 THEN SUBSTR(H_DECRYPT(t3.BIZRNO), 1, 6) 
+			                                                     ||'-' 
+			                                                     ||SUBSTR(H_DECRYPT(t3.BIZRNO), 7) 
+			         WHEN LENGTH(H_DECRYPT(t3.BIZRNO)) = 10 THEN SUBSTR(H_DECRYPT(t3.BIZRNO), 1, 3) 
+			                                                     ||'-' 
+			                                                     ||SUBSTR(H_DECRYPT(t3.BIZRNO), 4, 2) 
+			                                                     ||'-' 
+			                                                     ||SUBSTR(H_DECRYPT(t3.BIZRNO), 6) 
+			         ELSE H_DECRYPT(T3.BIZRNO) 
+			       END                      AS BIZRNO  /*사업자등록번호*/
+			       ,T3.BCNC_CODE            AS BCNC_CODE
+			       ,MAX(T3.BCNC_NM)         AS BCNC_NM /*상호*/ 
+			       ,T1.BSNS_SE 
+			        || T1.BALC_SE           AS BSNS_BALC_SE 
+			       ,MAX(T6.CODE_NM)         AS BSNS_BALC_NM 
+			       ,T1.BUDGET_ACNT_CODE     AS BUDGET_ACNT_CODE 
+			       ,MAX(T4.BUDGET_ACNT_NM)  AS BUDGET_ACNT_NM 
+			       ,T1.EXPNDTR_UNIT_CODE    AS EXPNDTR_UNIT_CODE			       
+			       ,'('||T1.EXPNDTR_UNIT_CODE||')'||SFBDG_BUDGET_NAME(MAX(t1.BUDGET_YEAR), t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE) AS EXPNDTR_UNIT_NM
+			       ,SUM(t1.DECSN_AMOUNT)    AS DECSN_AMOUNT/*결의금액*/ 
+			  FROM TBACC_EXP_DSN_MASTR t1 
+			       LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t2 
+			                    ON t1.DECSN_YEAR = t2.DECSN_YEAR 
+			                       AND t1.DECSN_NO = t2.DECSN_NO 
+			                       AND t2.SEQ = '1' 
+			       LEFT OUTER JOIN TBCTR_BCNC_MASTR t3 
+			                    ON t2.BCNC_CODE = t3.BCNC_CODE 
+			       LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t4 
+			                    ON t1.BUDGET_YEAR = t4.YEAR 
+			                       AND t1.BSNS_SE = t4.BSNS_SE 
+			                       AND t1.BALC_SE = t4.BALC_SE 
+			                       AND t1.BUDGET_ACNT_CODE = t4.BUDGET_ACNT_CODE 
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE t6 
+			                    ON t6.GRP_CODE = 'BDG017' 
+			                       AND t6.USE_AT = '1' 
+			                       AND t1.BSNS_SE = SUBSTR(t6.CODE, 1, 1) 
+			                       AND T1.BALC_SE = SUBSTR(T6.CODE, 2, 1) 
+			 WHERE T1.DECSN_YEAR = SUBSTR(#SRCH_ED_DT#, 1, 4) /* 결의년도     */  
+	    ]]>
+		<isNotEmpty property="BSNS_BALC_SE">			/* 계정구분 	*/
+		  	   AND t1.BSNS_SE = SUBSTR(#BSNS_BALC_SE#,1,1)
+		  	   AND t1.BALC_SE = SUBSTR(#BSNS_BALC_SE#,2,1)
+		</isNotEmpty>
+		<isEqual property="STDR_DE" compareValue="1">	/* 지출결의일자 */
+		  	   AND t1.ITNC_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="2">	/* 채무확정일자 */
+		  	   AND t1.DET_DCSN_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="3">	/* 자금지출일자 */
+		  	   AND t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		</isEqual>
+		<isNotEmpty property="BCNC_CODE">				/* 거래처코드 	*/
+		  	   AND t2.BCNC_CODE = #BCNC_CODE#
+		</isNotEmpty>
+		<![CDATA[
+			 GROUP BY H_DECRYPT(T3.BIZRNO)
+			          ,T3.BCNC_CODE
+			          ,T1.BSNS_SE
+			          ,T1.BALC_SE 
+			          ,T1.BUDGET_ACNT_CODE 
+			          ,T1.EXPNDTR_UNIT_CODE 
+			 ORDER BY H_DECRYPT(T3.BIZRNO) ASC
+			          ,T3.BCNC_CODE ASC
+			          ,T1.BSNS_SE || T1.BALC_SE ASC
+			          ,T1.BUDGET_ACNT_CODE ASC
+			          ,T1.EXPNDTR_UNIT_CODE ASC
+		]]>
+	</select>
+	
+	<!-- 지출처별 상세 지출내역조회 -->
+	<select id="FUN040406DAO.selectExpndtrDtlsDetailList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*FUN040406DAO.selectExpndtrDtlsDetailList*/ ]]>
+        <![CDATA[
+			SELECT CASE 
+			         WHEN H_DECRYPT(t3.BIZRNO) = 'Z000000000000' THEN NULL 
+			         WHEN LENGTH(H_DECRYPT(t3.BIZRNO)) = 13 THEN SUBSTR(H_DECRYPT(t3.BIZRNO), 1, 6) 
+			                                          ||'-' 
+			                                          ||SUBSTR(H_DECRYPT(t3.BIZRNO), 7) 
+			         WHEN LENGTH(H_DECRYPT(t3.BIZRNO)) = 10 THEN SUBSTR(H_DECRYPT(t3.BIZRNO), 1, 3) 
+			                                          ||'-' 
+			                                          ||SUBSTR(H_DECRYPT(t3.BIZRNO), 4, 2) 
+			                                          ||'-' 
+			                                          ||SUBSTR(H_DECRYPT(t3.BIZRNO), 6) 
+			         ELSE H_DECRYPT(t3.BIZRNO) 
+			       END                   AS BIZRNO /*사업자등록번호*/ 
+			       ,T3.BCNC_NM           AS BCNC_NM /*상호*/ 
+			       ,t1.ITNC_DE           AS ITNC_DE /* 발의일자(결의일자) */ 
+			       ,T7.DEPT_CODE         AS DEPT_CODE 
+			       ,T7.DEPT_NM           AS DEPT_NM 
+			       ,t1.BSNS_SE
+			        || t1.BALC_SE        AS BSNS_BALC_SE 
+			       ,t6.CODE_NM           AS BSNS_BALC_NM 
+			       ,t1.BUDGET_ACNT_CODE  AS BUDGET_ACNT_CODE 
+			       ,t4.BUDGET_ACNT_NM    AS BUDGET_ACNT_NM 
+			       ,t1.EXPNDTR_UNIT_CODE AS EXPNDTR_UNIT_CODE
+			       ,SFBDG_BUDGET_NAME(t1.BUDGET_YEAR, t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE) AS EXPNDTR_UNIT_NM
+			       ,t1.DECSN_AMOUNT      AS DECSN_AMOUNT/*결의금액*/ 
+			  FROM TBACC_EXP_DSN_MASTR t1 
+			       LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t2 
+			                    ON t1.DECSN_YEAR = t2.DECSN_YEAR 
+			                       AND t1.DECSN_NO = t2.DECSN_NO 
+			                       AND t2.SEQ = '1' 
+			       LEFT OUTER JOIN TBCTR_BCNC_MASTR t3 
+			                    ON t2.BCNC_CODE = t3.BCNC_CODE 
+			       LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t4 
+			                    ON t1.BUDGET_YEAR = t4.YEAR 
+			                       AND t1.BSNS_SE = t4.BSNS_SE 
+			                       AND t1.BALC_SE = t4.BALC_SE 
+			                       AND t1.BUDGET_ACNT_CODE = t4.BUDGET_ACNT_CODE
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE t6 
+			                    ON t6.GRP_CODE = 'BDG017' 
+			                       AND t6.USE_AT = '1' 
+			                       AND t1.BSNS_SE = SUBSTR(t6.CODE, 1, 1) 
+			                       AND t1.BALC_SE = SUBSTR(t6.CODE, 2, 1) 
+			       LEFT OUTER JOIN VWHRM_DEPT t7 
+			                    ON t1.DEPT_CODE = t7.DEPT_CODE 
+			 WHERE t1.DECSN_YEAR = SUBSTR(#SRCH_ED_DT#, 1, 4) /* 결의년도     */  
+	    ]]>
+		<isEqual property="STDR_DE" compareValue="1">	/* 지출결의일자 */
+		  	   AND t1.ITNC_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="2">	/* 채무확정일자 */
+		  	   AND t1.DET_DCSN_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="3">	/* 자금지출일자 */
+		  	   AND t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		</isEqual>
+		<![CDATA[
+		       AND t2.BCNC_CODE         = #BCNC_CODE# 			/* 거래처코드 	*/
+		       AND t1.BSNS_SE           = SUBSTR(#BSNS_BALC_SE#,1,1)
+		  	   AND t1.BALC_SE           = SUBSTR(#BSNS_BALC_SE#,2,1) /* 계정구분 	*/
+			   AND t1.BUDGET_ACNT_CODE  =  #BUDGET_ACNT_CODE# /* 계정과목코드 	*/
+			   AND t1.EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE# /* 지출단위코드 	*/
+			 ORDER BY H_DECRYPT(T3.BIZRNO) ASC
+			          ,T3.BCNC_CODE ASC
+			          ,t1.ITNC_DE ASC
+			          ,T7.DEPT_CODE ASC
+			          ,T1.BSNS_SE || T1.BALC_SE ASC
+			          ,T1.BUDGET_ACNT_CODE ASC
+			          ,T1.EXPNDTR_UNIT_CODE ASC
+		]]>
+	</select>
+	
+</sqlMap>

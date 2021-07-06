@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PRJ010131_SQL">
+	
+	<!-- 사업분류별 계약현황 목록 조회 -->
+	<select id="PRJ010131DAO.selectBsnsClCntrctList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		       t2.CL_SE
+		     , MAX(t3.CODE_NM)                                                                                    AS BSNS_CL			/*사업분류*/
+		     , COUNT(t1.CNTRCT_NO)                                                                                AS TOT_CO             /*전체건수*/
+		     , NVL(SUM(t1.CNTRCT_AMOUNT),0)                                                                       AS TOT_CNTRWK_AM      /*총공사비*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('100', '101', '102','104') THEN 1 ELSE 0 END)                       AS PBCWRK_CO          /*토목공사_건수*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('100', '101', '102','104') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END) AS PBCWRK_AM          /*토목공사_금액*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('103') THEN 1 ELSE 0 END)                                           AS BILDNG_CNTRWK_CO   /*건축공사_건수*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('103') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                     AS BILDNG_CNTRWK_AM   /*건축공사_금액*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('107') THEN 1 ELSE 0 END)                                           AS ETWR_CO            /*전기공사_건수*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('107') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                     AS ETWR_AM            /*전기공사_금액*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('108') THEN 1 ELSE 0 END)                                           AS IMNST_CO           /*통신공사_건수*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('108') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                     AS IMNST_AM           /*통신공사_금액*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('105') THEN 1 ELSE 0 END)                                           AS LDHC_CNTRWK_CO     /*조경공사_건수*/
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('105') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                     AS LDHC_CNTRWK_AM     /*조경공사_금액*/
+		     , SUM(CASE WHEN t1.CNTRCT_SE = '2' THEN 1 ELSE 0 END)                                                AS SERVC_CO           /*용역_건수*/                                         
+		     , SUM(CASE WHEN t1.CNTRCT_SE = '2' THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                          AS SERVC_AM           /*용역_금액*/
+		     , SUM(CASE WHEN t1.CNTRCT_SE = '3' AND t1.DETAIL_SE = '300' THEN 1 ELSE 0 END)                       AS PYMNT_MTRIL_CO     /*지급자재_건수*/
+		     , SUM(CASE WHEN t1.CNTRCT_SE = '3' AND t1.DETAIL_SE = '300' THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END) AS PYMNT_MTRIL_AM 	/*지급자재_금액*/
+		FROM (  SELECT 
+	                 s1.CNTRCT_NO
+	                ,s1.DETAIL_SE
+	                ,s1.CNTRCT_SE
+	                ,s1.BSNS_CODE
+	                ,s1.COMPET_DE
+	                ,ROUND(s1.CNTRCT_AMOUNT/NVL(#UNIT#, 1), 0) AS CNTRCT_AMOUNT
+            	FROM TBCTR_CNTRCT s1
+       		 ) t1
+		  INNER JOIN TBPRJ_BSNS_CODE t2
+		    ON  t1.BSNS_CODE = t2.BSNS_CODE
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		    ON t2.CL_SE = t3.CODE
+		  AND  t3.GRP_CODE = 'PRJ010'
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		    ON t1.DETAIL_SE = t4.CODE
+		  AND  t4.GRP_CODE = 'CTR023'
+		WHERE 1=1
+		  <isNotEmpty property="BGNDE">
+			<![CDATA[
+				AND t1.COMPET_DE >= #BGNDE#
+		  	]]>
+		  </isNotEmpty>
+		  <isNotEmpty property="ENDDE">
+			<![CDATA[
+				AND t1.COMPET_DE <= #ENDDE#
+		  	]]>
+		  </isNotEmpty>
+		  <isNotEmpty property="CNTRCT_MUMM_AMOUNT">
+		 	<![CDATA[
+		 	 AND t1.CNTRCT_AMOUNT >= #CNTRCT_MUMM_AMOUNT#
+		 	]]>
+		  </isNotEmpty>
+		  <isNotEmpty property="CNTRCT_MXMM_AMOUNT">
+		 	<![CDATA[
+		 	 AND t1.CNTRCT_AMOUNT <= #CNTRCT_MXMM_AMOUNT#
+		 	]]>
+		  </isNotEmpty>
+		GROUP BY t2.CL_SE
+		ORDER BY t2.CL_SE
+	</select>
+	
+	<!-- 사업분류별 계약현황 목록 조회 -->
+	<select id="PRJ010131DAO.selectBsnsDstrcCntrctList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT	
+			   t1.BSNS_CODE
+		     , MAX(t2.BSNS_NM)                                                                                      AS BSNS_NM
+		     , COUNT(t1.CNTRCT_NO)                                                                                  AS TOT_CO             /*전체건수*/    
+		     , NVL(SUM(t1.CNTRCT_AMOUNT),0)                                                                         AS TOT_CNTRWK_AM      /*총공사비*/    
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('100', '101', '102','104') THEN 1 ELSE 0 END)                         AS PBCWRK_CO          /*토목공사_건수*/ 
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('100', '101', '102','104') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)   AS PBCWRK_AM          /*토목공사_금액*/ 
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('103') THEN 1 ELSE 0 END)                                             AS BILDNG_CNTRWK_CO   /*건축공사_건수*/ 
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('103') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                       AS BILDNG_CNTRWK_AM   /*건축공사_금액*/ 
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('107') THEN 1 ELSE 0 END)                                             AS ETWR_CO            /*전기공사_건수*/ 
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('107') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                       AS ETWR_AM            /*전기공사_금액*/ 
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('108') THEN 1 ELSE 0 END)                                             AS IMNST_CO           /*통신공사_건수*/ 
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('108') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                       AS IMNST_AM           /*통신공사_금액*/ 
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('105') THEN 1 ELSE 0 END)                                             AS LDHC_CNTRWK_CO     /*조경공사_건수*/ 
+		     , SUM(CASE WHEN t1.DETAIL_SE IN ('105') THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                       AS LDHC_CNTRWK_AM     /*조경공사_금액*/ 
+		     , SUM(CASE WHEN t1.CNTRCT_SE = '2' THEN 1 ELSE 0 END)                                                  AS SERVC_CO           /*용역_건수*/     
+		     , SUM(CASE WHEN t1.CNTRCT_SE = '2' THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)                            AS SERVC_AM           /*용역_금액*/   
+		     , SUM(CASE WHEN t1.CNTRCT_SE = '3' AND t1.DETAIL_SE = '300' THEN 1 ELSE 0 END)                         AS PYMNT_MTRIL_CO     /*지급자재_건수*/ 
+		     , SUM(CASE WHEN t1.CNTRCT_SE = '3' AND t1.DETAIL_SE = '300' THEN NVL(t1.CNTRCT_AMOUNT,0) ELSE 0 END)   AS PYMNT_MTRIL_AM 	  /*지급자재_금액*/ 
+		FROM (  SELECT 
+	                 s1.CNTRCT_NO
+	                ,s1.DETAIL_SE
+	                ,s1.CNTRCT_SE
+	                ,s1.BSNS_CODE
+	                ,s1.COMPET_DE
+	                ,ROUND(s1.CNTRCT_AMOUNT/NVL(#UNIT#, 1), 0) AS CNTRCT_AMOUNT
+            	FROM TBCTR_CNTRCT s1
+       		 ) t1
+		  INNER JOIN TBPRJ_BSNS_CODE t2
+		    ON  t1.BSNS_CODE = t2.BSNS_CODE
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		    ON t2.CL_SE = t3.CODE
+		  AND  t3.GRP_CODE = 'PRJ010'
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		    ON t1.DETAIL_SE = t4.CODE
+		  AND  t4.GRP_CODE = 'CTR023'
+		WHERE t2.CL_SE = #CL_SE# /*검색조건 : 사업분류*/
+		  <isNotEmpty property="BGNDE">
+			<![CDATA[
+				AND t1.COMPET_DE >= #BGNDE#
+		  	]]>
+		  </isNotEmpty>
+		  <isNotEmpty property="ENDDE">
+			<![CDATA[
+				AND t1.COMPET_DE <= #ENDDE#
+		  	]]>
+		  </isNotEmpty>
+		  <isNotEmpty property="CNTRCT_MUMM_AMOUNT">
+		 	<![CDATA[
+		 	 AND t1.CNTRCT_AMOUNT >= #CNTRCT_MUMM_AMOUNT#
+		 	]]>
+		  </isNotEmpty>
+		  <isNotEmpty property="CNTRCT_MXMM_AMOUNT">
+		 	<![CDATA[
+		 	 AND t1.CNTRCT_AMOUNT <= #CNTRCT_MXMM_AMOUNT#
+		 	]]>
+		  </isNotEmpty>
+		GROUP BY t1.BSNS_CODE
+		ORDER BY t1.BSNS_CODE DESC
+	</select>
+	
+</sqlMap>

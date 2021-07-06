@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR060200_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 계약통계현황 : 총괄 -->
+	<select id="CTR060800DAO.allSelect" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR060800DAO.allSelect*/]]>
+	<![CDATA[
+		SELECT SUBSTR(CNTRCT_NO,1,4)                                                AS CNTRCT_YEAR
+		      ,CNTRCT_SE
+		      ,MAX(CNTRCT_SE_NM)                                                    AS CNTRCT_SE_NM
+		      ,INFRML_CNTRCT_AT
+		      ,MAX(INFRML_CNTRCT_AT_NM)                                             AS INFRML_CNTRCT_AT_NM
+		      ,COUNT(1)                                                             AS TOT_CNT
+		      ,NVL(SUM(CNTRCT_AMOUNT),0)                                            AS TOT_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', 1, 0)),0)                                                                    AS PROGRS_CNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', CNTRCT_AMOUNT)),0)                                                           AS PROGRS_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', DECSN_AMOUNT)),0)                                                            AS PROGRS_DECSN_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', CNTRCT_AMOUNT)) - SUM(DECODE(PROGRS_STTUS_SE, '001', DECSN_AMOUNT)),0)       AS PROGRS_REMAIN_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', 1, 0)),0)                                                                    AS COMPT_CNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', CNTRCT_AMOUNT)),0)                                                           AS COMPT_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', DECSN_AMOUNT)),0)                                                            AS COMPT_DECSN_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', CNTRCT_AMOUNT)) - SUM(DECODE(PROGRS_STTUS_SE, '001', DECSN_AMOUNT)),0)       AS COMPT_REMAIN_AMOUNT
+		FROM   (
+		        SELECT s1.CNTRCT_NO
+		              ,s1.CNTRCT_SE
+		              ,s3.CODE_NM                                                                                           AS CNTRCT_SE_NM
+		              ,NVL(s1.INFRML_CNTRCT_AT,'0')                                                                         AS INFRML_CNTRCT_AT
+		              ,DECODE(s1.INFRML_CNTRCT_AT,'1', '간이계약','정식계약')                                                    AS INFRML_CNTRCT_AT_NM
+		              ,CASE WHEN TO_CHAR(SYSDATE,'YYYYMMDD') >= SFCTR_COMPET_DE(s1.CNTRCT_NO) THEN '002' ELSE '001' END     AS PROGRS_STTUS_SE
+		              ,SFCTR_CNTRCT_AMOUNT(s1.CNTRCT_NO,NULL)                                                               AS CNTRCT_AMOUNT
+		              ,NVL(s2.DECSN_AMOUNT,0)                                                                               AS DECSN_AMOUNT
+		        FROM   TBCTR_CNTRCT s1
+		               LEFT OUTER JOIN (
+		                                SELECT r1.CNTRCT_NO
+		                                      ,SUM(r2.DECSN_AMOUNT)     AS DECSN_AMOUNT
+		                                FROM   TBCTR_CNTRCT_DECSN r1
+		                                       INNER JOIN VHACC_EXP_DSN_MASTR r2
+		                                            ON r1.CNTRCT_DECSN_YEAR = r2.BUDGET_YEAR
+		                                           AND r1.DECSN_NO = r2.DECSN_NO
+		                                WHERE  1=1
+		                                GROUP BY r1.CNTRCT_NO
+		                               ) s2
+		                    ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		               LEFT OUTER JOIN TBCOM_CMMN_CODE s3
+		                    ON s1.CNTRCT_SE = s3.CODE
+		                   AND s3.GRP_CODE = 'CTR022'
+		        WHERE  1=1
+		       )
+		WHERE  SUBSTR(CNTRCT_NO,1,4) = #CNTRCT_YEAR#
+		GROUP BY SUBSTR(CNTRCT_NO,1,4), CNTRCT_SE, INFRML_CNTRCT_AT
+		ORDER BY SUBSTR(CNTRCT_NO,1,4), CNTRCT_SE, INFRML_CNTRCT_AT
+	]]>
+	</select>
+	
+	<!-- 계약통계현황 : 사업별 -->
+	<select id="CTR060800DAO.businessSelect" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT BSNS_CODE
+		      ,BSNS_NM
+		      ,COUNT(1)                                                                                                             AS TOT_CNT
+		      ,NVL(SUM(CNTRCT_AMOUNT),0)                                                                                            AS TOT_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', 1, 0)),0)                                                                     AS PROGRS_CNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', CNTRCT_AMOUNT)),0)                                                            AS PROGRS_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', DECSN_AMOUNT)),0)                                                             AS PROGRS_DECSN_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', CNTRCT_AMOUNT)) - SUM(DECODE(PROGRS_STTUS_SE, '001', DECSN_AMOUNT)),0)        AS PROGRS_REMAIN_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', 1, 0)),0)                                                                     AS COMPT_CNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', CNTRCT_AMOUNT)),0)                                                            AS COMPT_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', DECSN_AMOUNT)),0)                                                             AS COMPT_DECSN_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', CNTRCT_AMOUNT)) - SUM(DECODE(PROGRS_STTUS_SE, '001', DECSN_AMOUNT)),0)        AS COMPT_REMAIN_AMOUNT
+		FROM   (
+		        SELECT s1.BSNS_CODE
+		              ,NVL(s4.BSNS_NM, '알수없음')                                                                          AS BSNS_NM
+		              ,s1.CNTRCT_NO
+		              ,s1.CNTRCT_NM
+		              ,s1.CNTRCT_SE
+		              ,s3.CODE_NM                                                                                           AS CNTRCT_SE_NM
+		              ,NVL(s1.INFRML_CNTRCT_AT,'0')                                                                         AS INFRML_CNTRCT_AT
+		              ,DECODE(s1.INFRML_CNTRCT_AT,'1', '간이계약','정식계약')                                                    AS INFRML_CNTRCT_AT_NM
+		              ,CASE WHEN TO_CHAR(SYSDATE,'YYYYMMDD') >= SFCTR_COMPET_DE(s1.CNTRCT_NO) THEN '002' ELSE '001' END     AS PROGRS_STTUS_SE
+		              ,SFCTR_CNTRCT_AMOUNT(s1.CNTRCT_NO,NULL)                                                               AS CNTRCT_AMOUNT
+		              ,s1.CNTRCT_DE                                                                                         AS CNTRCT_DE
+		              ,s1.STRWRK_DE                                                                                         AS STRWRK_DE
+		              ,SFCTR_COMPET_DE(s1.CNTRCT_NO)                                                                        AS COMPET_DE
+		              ,NVL(s2.DECSN_AMOUNT,0)                                                                               AS DECSN_AMOUNT
+		        FROM   TBCTR_CNTRCT s1
+		               LEFT OUTER JOIN (
+		                                SELECT r1.CNTRCT_NO
+		                                      ,SUM(r2.DECSN_AMOUNT)     AS DECSN_AMOUNT
+		                                FROM   TBCTR_CNTRCT_DECSN r1
+		                                       INNER JOIN VHACC_EXP_DSN_MASTR r2
+		                                            ON r1.CNTRCT_DECSN_YEAR = r2.BUDGET_YEAR
+		                                           AND r1.DECSN_NO = r2.DECSN_NO
+		                                WHERE  1=1
+		                                GROUP BY r1.CNTRCT_NO
+		                               ) s2
+		                    ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		               LEFT OUTER JOIN TBCOM_CMMN_CODE s3
+		                    ON s1.CNTRCT_SE = s3.CODE
+		                   AND s3.GRP_CODE = 'CTR022'
+		               LEFT OUTER JOIN TBPRJ_BSNS_CODE s4
+		                    ON s1.BSNS_CODE = s4.BSNS_CODE
+		        WHERE  SUBSTR(s1.CNTRCT_NO,1,4) = #CNTRCT_YEAR#
+		        ORDER BY SUBSTR(s1.CNTRCT_NO,1,4), CNTRCT_SE
+		       )
+		WHERE  1=1
+		GROUP BY BSNS_CODE, BSNS_NM
+		ORDER BY BSNS_CODE
+	</select>
+	
+	
+	<!-- 사업별 완료/진행 계약 -->
+	<select id="CTR060800DAO.businessSelectDetail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.BSNS_CODE
+		      ,t1.BSNS_NM
+		      ,t1.CNTRCT_NO
+		      ,t1.CNTRCT_NM
+		      ,t1.CNTRCT_SE
+		      ,t1.CNTRCT_SE_NM
+		      ,t1.INFRML_CNTRCT_AT
+		      ,t1.INFRML_CNTRCT_AT_NM
+		      ,t1.PROGRS_STTUS_SE
+		      ,t1.CNTRCT_AMOUNT
+		      ,t1.CNTRCT_DE
+		      ,t1.STRWRK_DE
+		      ,t1.COMPET_DE
+		      ,t1.DECSN_AMOUNT
+		FROM   (
+		        SELECT s1.BSNS_CODE
+		              ,NVL(s4.BSNS_NM, '알수없음')                                                                          AS BSNS_NM
+		              ,s1.CNTRCT_NO
+		              ,s1.CNTRCT_NM
+		              ,s1.CNTRCT_SE
+		              ,s3.CODE_NM                                                                                           AS CNTRCT_SE_NM
+		              ,NVL(s1.INFRML_CNTRCT_AT,'0')                                                                         AS INFRML_CNTRCT_AT
+		              ,DECODE(s1.INFRML_CNTRCT_AT,'1', '간이계약','정식계약')                                                    AS INFRML_CNTRCT_AT_NM
+		              ,CASE WHEN TO_CHAR(SYSDATE,'YYYYMMDD') >= SFCTR_COMPET_DE(s1.CNTRCT_NO) THEN '002' ELSE '001' END     AS PROGRS_STTUS_SE
+		              ,SFCTR_CNTRCT_AMOUNT(s1.CNTRCT_NO,NULL)                                                               AS CNTRCT_AMOUNT
+		              ,s1.CNTRCT_DE                                                                                         AS CNTRCT_DE
+		              ,s1.STRWRK_DE                                                                                         AS STRWRK_DE
+		              ,SFCTR_COMPET_DE(s1.CNTRCT_NO)                                                                        AS COMPET_DE
+		              ,NVL(s2.DECSN_AMOUNT,0)                                                                               AS DECSN_AMOUNT
+		        FROM   TBCTR_CNTRCT s1
+		               LEFT OUTER JOIN (
+		                                SELECT r1.CNTRCT_NO
+		                                      ,SUM(r2.DECSN_AMOUNT)     AS DECSN_AMOUNT
+		                                FROM   TBCTR_CNTRCT_DECSN r1
+		                                       INNER JOIN VHACC_EXP_DSN_MASTR r2
+		                                            ON r1.CNTRCT_DECSN_YEAR = r2.BUDGET_YEAR
+		                                           AND r1.DECSN_NO = r2.DECSN_NO
+		                                WHERE  1=1
+		                                GROUP BY r1.CNTRCT_NO
+		                               ) s2
+		                    ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		               LEFT OUTER JOIN TBCOM_CMMN_CODE s3
+		                    ON s1.CNTRCT_SE = s3.CODE
+		                   AND s3.GRP_CODE = 'CTR022'
+		               LEFT OUTER JOIN TBPRJ_BSNS_CODE s4
+		                    ON s1.BSNS_CODE = s4.BSNS_CODE
+		        WHERE  1=1
+		       ) t1
+		WHERE  t1.BSNS_CODE       = #BSNS_CODE#
+		AND    t1.PROGRS_STTUS_SE = #PROGRS_STTUS_SE#
+		AND    SUBSTR(t1.CNTRCT_NO,1,4) = #CNTRCT_YEAR#
+		ORDER BY t1.CNTRCT_NO
+	]]>
+	</select>
+
+
+	<!-- 진행중계약현황 -->
+	<select id="CTR060800DAO.ongoingSelect" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT BSNS_CODE
+		      ,BSNS_NM
+		      ,COUNT(1)                                                                                                 AS TOT_CNT
+		      ,NVL(SUM(CNTRCT_AMOUNT),0)                                                                                AS TOT_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(CNTRCT_SE, '001', 1, 0)),0)                                                               AS SE_01_CNT
+		      ,NVL(SUM(DECODE(CNTRCT_SE, '001', CNTRCT_AMOUNT)),0)                                                      AS SE_01_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(CNTRCT_SE, '001', CNTRCT_AMOUNT)) - SUM(DECODE(CNTRCT_SE, '001', DECSN_AMOUNT)),0)        AS SE_01_REMAIN_AMOUNT
+		      ,NVL(SUM(DECODE(CNTRCT_SE, '002', 1, 0)),0)                                                               AS SE_02_CNT
+		      ,NVL(SUM(DECODE(CNTRCT_SE, '002', CNTRCT_AMOUNT)),0)                                                      AS SE_02_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(CNTRCT_SE, '002', CNTRCT_AMOUNT)) - SUM(DECODE(CNTRCT_SE, '002', DECSN_AMOUNT)),0)        AS SE_02_REMAIN_AMOUNT
+		      ,NVL(SUM(DECODE(CNTRCT_SE, '003', 1, 0)),0)                                                               AS SE_03_CNT
+		      ,NVL(SUM(DECODE(CNTRCT_SE, '003', CNTRCT_AMOUNT)),0)                                                      AS SE_03_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(CNTRCT_SE, '003', CNTRCT_AMOUNT)) - SUM(DECODE(CNTRCT_SE, '003', DECSN_AMOUNT)),0)        AS SE_03_REMAIN_AMOUNT
+		FROM   (
+		        SELECT s1.BSNS_CODE
+		              ,NVL(s4.BSNS_NM, '알수없음')                                                                          AS BSNS_NM
+		              ,s1.CNTRCT_NO
+		              ,s1.CNTRCT_NM
+		              ,s1.CNTRCT_SE
+		              ,s3.CODE_NM                                                                                           AS CNTRCT_SE_NM
+		              ,NVL(s1.INFRML_CNTRCT_AT,'0')                                                                         AS INFRML_CNTRCT_AT
+		              ,DECODE(s1.INFRML_CNTRCT_AT,'1', '간이계약','정식계약')                                                    AS INFRML_CNTRCT_AT_NM
+		              ,CASE WHEN TO_CHAR(SYSDATE,'YYYYMMDD') >= SFCTR_COMPET_DE(s1.CNTRCT_NO) THEN '002' ELSE '001' END     AS PROGRS_STTUS_SE
+		              ,SFCTR_CNTRCT_AMOUNT(s1.CNTRCT_NO,NULL)                                                               AS CNTRCT_AMOUNT
+		              ,s1.CNTRCT_DE                                                                                         AS CNTRCT_DE
+		              ,s1.STRWRK_DE                                                                                         AS STRWRK_DE
+		              ,SFCTR_COMPET_DE(s1.CNTRCT_NO)                                                                        AS COMPET_DE
+		              ,NVL(s2.DECSN_AMOUNT,0)                                                                               AS DECSN_AMOUNT
+		        FROM   TBCTR_CNTRCT s1
+		               LEFT OUTER JOIN (
+		                                SELECT r1.CNTRCT_NO
+		                                      ,SUM(r2.DECSN_AMOUNT)     AS DECSN_AMOUNT
+		                                FROM   TBCTR_CNTRCT_DECSN r1
+		                                       INNER JOIN VHACC_EXP_DSN_MASTR r2
+		                                            ON r1.CNTRCT_DECSN_YEAR = r2.BUDGET_YEAR
+		                                           AND r1.DECSN_NO = r2.DECSN_NO
+		                                WHERE  1=1
+		                                GROUP BY r1.CNTRCT_NO
+		                               ) s2
+		                    ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		               LEFT OUTER JOIN TBCOM_CMMN_CODE s3
+		                    ON s1.CNTRCT_SE = s3.CODE
+		                   AND s3.GRP_CODE = 'CTR022'
+		               LEFT OUTER JOIN TBPRJ_BSNS_CODE s4
+		                    ON s1.BSNS_CODE = s4.BSNS_CODE
+		        WHERE  SUBSTR(s1.CNTRCT_NO,1,4) = #CNTRCT_YEAR#
+		       )
+		WHERE  PROGRS_STTUS_SE = #PROGRS_STTUS_SE#
+		GROUP BY BSNS_CODE, BSNS_NM
+		ORDER BY BSNS_CODE
+	]]>
+	</select>
+
+
+	<!-- 계약통계현황 : 부서별 -->
+	<select id="CTR060800DAO.deptSelect" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT MNG_DEPT_CODE
+		      ,MNG_DEPT_NM
+		      ,CNTRCT_SE
+		      ,CNTRCT_SE_NM
+		      ,COUNT(1)                                                                                                             AS TOT_CNT
+		      ,NVL(SUM(CNTRCT_AMOUNT),0)                                                                                            AS TOT_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', 1, 0)),0)                                                                     AS PROGRS_CNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', CNTRCT_AMOUNT)),0)                                                            AS PROGRS_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', DECSN_AMOUNT)),0)                                                             AS PROGRS_DECSN_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', CNTRCT_AMOUNT)) - SUM(DECODE(PROGRS_STTUS_SE, '001', DECSN_AMOUNT)),0)        AS PROGRS_REMAIN_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', 1, 0)),0)                                                                     AS COMPT_CNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', CNTRCT_AMOUNT)),0)                                                            AS COMPT_CNTRCT_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', DECSN_AMOUNT)),0)                                                             AS COMPT_DECSN_AMOUNT
+		      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', CNTRCT_AMOUNT)) - SUM(DECODE(PROGRS_STTUS_SE, '001', DECSN_AMOUNT)),0)        AS COMPT_REMAIN_AMOUNT
+		FROM   (
+		        SELECT s1.MNG_DEPT_CODE
+		              ,NVL(s4.DEPT_NM, '알수없음')      AS MNG_DEPT_NM
+		              ,s1.CNTRCT_NO
+		              ,s1.CNTRCT_NM
+		              ,s1.CNTRCT_SE
+		              ,s3.CODE_NM                                                                                           AS CNTRCT_SE_NM
+		              ,NVL(s1.INFRML_CNTRCT_AT,'0')                                                                         AS INFRML_CNTRCT_AT
+		              ,DECODE(s1.INFRML_CNTRCT_AT,'1', '간이계약','정식계약')                                                    AS INFRML_CNTRCT_AT_NM
+		              ,CASE WHEN TO_CHAR(SYSDATE,'YYYYMMDD') >= SFCTR_COMPET_DE(s1.CNTRCT_NO) THEN '002' ELSE '001' END     AS PROGRS_STTUS_SE
+		              ,SFCTR_CNTRCT_AMOUNT(s1.CNTRCT_NO,NULL)                                                               AS CNTRCT_AMOUNT
+		              ,s1.CNTRCT_DE                                                                                         AS CNTRCT_DE
+		              ,s1.STRWRK_DE                                                                                         AS STRWRK_DE
+		              ,SFCTR_COMPET_DE(s1.CNTRCT_NO)                                                                        AS COMPET_DE
+		              ,NVL(s2.DECSN_AMOUNT,0)                                                                               AS DECSN_AMOUNT
+		        FROM   TBCTR_CNTRCT s1
+		               LEFT OUTER JOIN (
+		                                SELECT r1.CNTRCT_NO
+		                                      ,SUM(r2.DECSN_AMOUNT)     AS DECSN_AMOUNT
+		                                FROM   TBCTR_CNTRCT_DECSN r1
+		                                       INNER JOIN VHACC_EXP_DSN_MASTR r2
+		                                            ON r1.CNTRCT_DECSN_YEAR = r2.BUDGET_YEAR
+		                                           AND r1.DECSN_NO = r2.DECSN_NO
+		                                WHERE  1=1
+		                                GROUP BY r1.CNTRCT_NO
+		                               ) s2
+		                    ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		               LEFT OUTER JOIN TBCOM_CMMN_CODE s3
+		                    ON s1.CNTRCT_SE = s3.CODE
+		                   AND s3.GRP_CODE = 'CTR022'
+		               LEFT OUTER JOIN TBHRM_DEPT s4
+		                    ON s1.MNG_DEPT_CODE = s4.DEPT_CODE
+		        WHERE  SUBSTR(s1.CNTRCT_NO,1,4) = #CNTRCT_YEAR#
+		        ORDER BY SUBSTR(s1.CNTRCT_NO,1,4), CNTRCT_SE
+		       )
+		WHERE  1=1
+		GROUP BY MNG_DEPT_CODE, MNG_DEPT_NM, CNTRCT_SE, CNTRCT_SE_NM
+		ORDER BY MNG_DEPT_CODE, CNTRCT_SE
+	]]>
+	</select>
+
+</sqlMap>

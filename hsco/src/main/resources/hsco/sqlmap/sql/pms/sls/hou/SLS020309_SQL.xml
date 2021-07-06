@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS020309DAO">	
+	
+    <!-- 쿼리명 : 동적 그리드 해드 날짜 조회
+	설명 : 동적 그리드 해드 날짜 조회 쿼리
+	수정일              수정자  수정내용
+    2016-01-26  이광원  1.시작일부터 종요일까지 전체 월별 일짜 출력으로 변경
+	작성자 : 변승우
+	최초작성일 : 2015.10.16
+	-->
+	<select id="SLS020309DAO.selectHeadDateList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+     <![CDATA[
+		SELECT TO_CHAR(ADD_MONTHS(TO_DATE(#DAY01#, 'YYYYMM'), LEVEL - 1) , 'YYYYMM') AS RQEST_YM
+		FROM DUAL 
+		CONNECT BY MONTHS_BETWEEN(TO_DATE(#DAY02#, 'YYYYMM'), TO_DATE(#DAY01#, 'YYYYMM')) + 1 >= LEVEL 	
+	 ]]> 
+
+    </select>	
+    
+    <!-- 쿼리명 : 토지수납현황 조회
+	설명 : 기간(월)별 토지수납현황 조회
+	  수정일          수정자  수정내용
+	2016-01-26  이광원  1.합계 추가
+	2016-02-01  이상준  1.쿼리수정
+	작성자 : 변승우
+	최초작성일 : 2015.10.16
+	-->
+	<!-- 로우 조회용 -->
+    <select id="SLS020309DAO.selectLadReceiveList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+
+WITH VI_SL_VOTE_REC
+       AS (  SELECT   x.CNTRCTR_NO,        /* 계약자번호 */                                                      
+                      x.PAY_TMLMT,         /* 납부기한일 */                                                     
+                      TO_CHAR (TO_DATE (nvl(x.RCIV_DE,x.pay_tmlmt), 'YYYYMMDD'), 'YYYYMM') AS PAY_MONTH, /*  수납일자, 납부기한일 */
+                      x.PAY_CODE,            /* 납부코드 */
+                      x.PAYAMT,              /* 납부금액 */
+                      x.RCIV_DE,             /* 수납일자 */                                                   
+                      DECODE (x.RCIV_DE, NULL, '2', '1') AS RCIV_SE /*   1:수납,  2:미납 */
+               FROM   TBSLS_HOUSE_LTTOT_PAY x                                                               
+              WHERE       1 = 1
+           )                                                               
+                 SELECT   a.CNTRCTR_NO,
+                          a.HOUSE_CODE,
+                          a.DONG,
+                          a.HO,
+                          B.HOUSE_TY_CODE,
+                          a.DONG || '-' || a.HO AS DONG_HO,
+                          m.HOUSE_NM,                          
+                          d.TY_AEA AS HOUSE_TY_NAME,
+                          NVL(C1.PAYAMT_NULL,0) PAYAMT_NULL
+                   FROM   TBSLS_HCNTRCTR a,                    
+                          TBSLS_HOUSE_INFO m,                                      
+                          TBSLS_HOUSE_DONG_HO b,                                                                                      
+                          TBSLS_HOUSE_TY d,
+                          (SELECT distinct CNTRCTR_NO
+                             FROM VI_SL_VOTE_REC 
+                            WHERE 1 = 1
+                              AND (PAY_MONTH BETWEEN #DAY01# AND #DAY02# OR PAY_MONTH IS NULL)                              
+                            <isNotEmpty property="RCIV_SE">
+                                AND RCIV_SE = #RCIV_SE#
+                            </isNotEmpty>
+                          ) c,
+                          (SELECT CNTRCTR_NO, SUM (nvl(PAYAMT,0)) AS PAYAMT_NULL
+                             FROM VI_SL_VOTE_REC 
+                            WHERE 1 = 1
+                              AND PAY_MONTH IS NULL
+                            <isNotEmpty property="RCIV_SE">
+                                AND RCIV_SE = #RCIV_SE#
+                            </isNotEmpty>
+                            GROUP BY CNTRCTR_NO
+                          ) c1
+                  WHERE   1 = 1
+                          AND a.CNTRCTR_NO = c.CNTRCTR_NO                    
+                          AND a.HOUSE_CODE = m.HOUSE_CODE
+                          AND a.HOUSE_CODE = b.HOUSE_CODE
+                          AND a.DONG = b.DONG
+                          AND a.HO = b.HO
+                          AND b.HOUSE_CODE like #HOUSE_CODE# || '%'
+                           /* 조회조건 */
+                         <isNotEmpty property="DONG">
+                          AND a.DONG = #DONG#
+                         </isNotEmpty>
+                         <isNotEmpty property="HO">
+                          AND a.HO = #HO#
+                         </isNotEmpty>                                                   
+                       <isNotEmpty property="TY_AREA_LIST">
+                         <iterate property="TY_AREA_LIST" open="AND b.TY_AREA IN (" close=")" conjunction=",">
+                           #TY_AREA_LIST[]#
+                         </iterate>
+                       </isNotEmpty>
+                          AND b.HOUSE_CODE = d.HOUSE_CODE(+) 
+                          AND b.HOUSE_TY_CODE = d.HOUSE_TY_CODE(+)
+                          AND a.CNTRCTR_NO = c1.CNTRCTR_NO(+)                                                    
+               ORDER BY   a.HOUSE_CODE,
+                          a.DONG,
+                          a.HO     
+
+ 	
+    </select>
+    
+    <!-- 동적컬럼값 조회용 -->
+    <select id="SLS020309DAO.selectLadReceiveList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+
+WITH VI_SL_VOTE_REC
+       AS (  SELECT   x.CNTRCTR_NO,        /* 계약자번호 */                                                      
+                      x.PAY_TMLMT,         /* 납부기한일 */                                                     
+                      TO_CHAR (TO_DATE (nvl(x.RCIV_DE,x.pay_tmlmt), 'YYYYMMDD'), 'YYYYMM') AS PAY_MONTH, /*  수납일자, 납부기한일 */
+                      x.PAY_CODE,            /* 납부코드 */
+                      x.PAYAMT,              /* 납부금액 */
+                      x.RCIV_DE,             /* 수납일자 */                                                   
+                      DECODE (x.RCIV_DE, NULL, '2', '1') AS RCIV_SE /*   1:수납,  2:미납 */
+               FROM   TBSLS_HOUSE_LTTOT_PAY x                                                               
+              WHERE       1 = 1
+           )           
+        SELECT SUM(NVL(PAYAMT,0)) AS PAY_MONTH_PAYAMT                      
+          FROM VI_SL_VOTE_REC a            /* 토지계약자 */
+         WHERE CNTRCTR_NO = #CNTRCTR_NO#
+           AND PAY_MONTH = #RQEST_YM#
+           <isNotEmpty property="RCIV_SE">
+           AND RCIV_SE = #RCIV_SE#
+ 		   </isNotEmpty>     
+    </select>
+    
+
+     
+    <!-- 쿼리명 : 해당조건 날짜 조회
+	설명 : 해당조건 날짜 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 변승우
+	최초작성일 : 2015.10.16
+	-->
+    <select id="SLS020309DAO.selectDateQueryList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT 
+				  DISTINCT
+				  TO_CHAR(TO_DATE(RQEST_YM, 'YYYYMM'),'YYYY-MM') RQEST_YM
+		 FROM TBSLS_LAD_DETAIL_INFO T1
+				     , TBSLS_LCNTRCTR T2
+				     , TBSLS_LCNTRCTR_PAY T3
+		 WHERE T1.LAD_CODE = T2.LAD_CODE
+				   AND T1.BLCK = T2.BLCK
+				   AND T1.LOT = T2.LOT
+				   AND T1.LOT_TY = T2.LOT_TY
+				   AND T2.CNTRCTR_NO = T3.CNTRCTR_NO
+				   AND T1.LAD_CODE = #LAD_CODE#
+				   AND DECODE(RQEST_YM,'000000', NULL, RQEST_YM) BETWEEN #DAY01# AND #DAY02#
+		 ORDER BY RQEST_YM
+    </select>
+    	
+</sqlMap>

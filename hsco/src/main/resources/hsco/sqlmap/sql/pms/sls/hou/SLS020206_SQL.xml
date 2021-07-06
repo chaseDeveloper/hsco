@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS060206_SQL">	
+   
+	<select id="SLS020206DAO.intrtR" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT INTRT
+		FROM TBPMS_INTRT_INFO
+		WHERE INTRT_KND = #HOUSE_CODE#
+		AND   INTRT_SE = 'R02'
+		AND   JOB_SE = 'HOU'
+    </select>
+    
+    <select id="SLS020206DAO.applcYmList"  parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT B.APPLC_YM
+		FROM 
+			 TBSLS_HCNTRCTR A
+			,TBSLS_HCNTRCTR_RNTCHRG_CHANGE B
+		WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+		AND   A.HOUSE_CODE = #HOUSE_CODE#
+		GROUP BY B.APPLC_YM
+    </select>
+    
+    <select id="SLS020206DAO.selectApplcDe"  parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT APPLC_DE
+		FROM 
+			 TBSLS_HOUSE_RNTCHRG
+		WHERE 1=1
+		AND   CNTRCTR_NO = #CNTRCTR_NO#
+		AND   APPLC_DE = #APPLC_DE#
+    </select>
+    
+    
+    
+    <select id="SLS020206DAO.rntchrgChangeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	       SELECT
+		        CNTRCTR_NO
+		        ,APPLC_DE
+		        ,NVL(RNTCHRG,0) AS RNTCHRG
+		        ,IRDS_INTRT
+		        ,NVL(BASS_IRDS_AM,0) AS BASS_IRDS_AM
+		        ,NVL(INDVDL_IRDS_AM,0) AS INDVDL_IRDS_AM
+		        ,RM
+		        ,NVL((BASS_IRDS_AM - RNTCHRG),0) AS DIFFRENTPAY
+		    FROM TBSLS_HOUSE_RNTCHRG
+		    WHERE 1=1
+		        AND CNTRCTR_NO = #CNTRCTR_NO#
+		    ORDER BY APPLC_DE DESC
+    </select>	
+    
+    <select id="SLS020206DAO.houseRntchrgList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT 
+		A.*
+	    ,CEIL(TRUNC(A.BASS_RNTCHRG - (A.INDVDL_ADIT_AMT * (5.5 / 100) / 12)) * 0.1) / 0.1 AS RENT_AMT	/* 이율적용임대료 */
+	    ,A.RNTCHRG - CEIL(TRUNC(A.BASS_RNTCHRG - (A.INDVDL_ADIT_AMT * (5.5 / 100) / 12)) * 0.1) / 0.1 AS RENT_CHA_AMT /* 차액 */
+		FROM(
+		SELECT 
+			 A.CNTRCTR_NO		/* 계약자번호 */
+		    ,B.HOUSE_NM			/* 주택명 */
+		    ,A.DONG				/* 동 */
+		    ,A.HO				/* 호 */
+		    ,C.CSTMR_NM				/* 계약자명 */
+		    ,D.BASS_LTTOT_AMOUNT/* 기본분양금액 */
+		    ,F.PAYAMT			/* 실보증금 */
+		    ,F.PAYAMT - D.BASS_LTTOT_AMOUNT AS INDVDL_ADIT_AMT/* 개인증액보증금 */
+		    ,D.BASS_RNTCHRG 	/* 기본임대료 */
+		    ,E.RNTCHRG			/* 실임대료 */
+		FROM
+			TBSLS_HCNTRCTR A
+		    ,TBSLS_HOUSE_INFO B
+		    ,TBSLS_HOUSE_CSTMR C
+		    ,TBSLS_HOUSE_DONG_HO D
+		    ,(
+		      SELECT 
+		      	 CNTRCTR_NO     
+				,APPLC_DE       
+				,RNTCHRG        
+				,IRDS_INTRT     
+				,BASS_IRDS_AM   
+				,INDVDL_IRDS_AM 
+				,RM             
+		      FROM TBSLS_HOUSE_RNTCHRG A
+		      WHERE APPLC_DE = (	
+		    				SELECT MAX (B.APPLC_DE)
+							FROM TBSLS_HOUSE_RNTCHRG B
+		                    WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+		                    AND   B.APPLC_DE <![CDATA[<=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')
+		                 	)
+		    )E
+		    ,(
+		      SELECT CNTRCTR_NO, SUM(PAYAMT) AS PAYAMT
+		      FROM TBSLS_HOUSE_LTTOT_PAY
+		      WHERE PAY_CODE LIKE 'R%' AND RCIV_DE IS NOT NULL
+		      GROUP BY CNTRCTR_NO
+		    )F
+		WHERE A.CNTRCTR_STTUS_CODE = '01' 
+		AND   B.HOUSE_CODE = A.HOUSE_CODE
+		AND   C.HOUSE_CSTMR_NO = A.HOUSE_CSTMR_NO
+		AND   D.HOUSE_CODE = A.HOUSE_CODE
+		AND   D.DONG = A.DONG
+		AND   D.HO = A.HO
+		AND   E.CNTRCTR_NO = A.CNTRCTR_NO
+		AND   F.CNTRCTR_NO = A.CNTRCTR_NO
+		AND   A.HOUSE_CODE = #HOUSE_CODE#
+		ORDER BY A.DONG, A.HO
+		) A
+    </select>
+    
+    
+
+    <select id="SLS020206DAO.houseRntchrgInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+		    TB.APPLC_DE          /* 적용일자 */
+		    ,TB.RATIO            /* 전환이율 */
+		    ,TB.BASS_GTN         /* 기본보증금 */
+		    ,TB.TOTL_RCIV_AMOUNT /* 총 납부보증금 */
+		    ,TB.BASS_REMAIN_PAY  /* 추가납부 보증금 */
+		    ,TB.BASS_RNTCHRG     /* 기본임대료 */
+		    ,TB.RENTAMT          /* 전환 후 임대료 */
+		    ,(TB.BASS_RNTCHRG - TB.RENTAMT) AS DIFFAMT /* 차액 */
+		FROM (
+		
+		    SELECT  
+		          T1.RCIV_DE AS APPLC_DE 
+		        , SFPMS_GET_INTRT_RATE('HOU', T2.HOUSE_CODE, 'R2', T1.RCIV_DE,0) as RATIO 
+		        , DECODE (T3.BASS_GTN, 0, T3.BASS_LTTOT_AMOUNT, T3.BASS_GTN) AS BASS_GTN                 
+		        , T1.TOTL_RCIV_AMOUNT AS TOTL_RCIV_AMOUNT                                 
+		        ,(T1.TOTL_RCIV_AMOUNT - DECODE(T3.BASS_GTN,0,T3.BASS_LTTOT_AMOUNT,T3.BASS_GTN)) AS BASS_REMAIN_PAY  
+		        ,T3.BASS_RNTCHRG  
+		        , SFSLS_HOU_RNTCHRG_DOWN_CAL(T2.CNTRCTR_NO,T1.RCIV_DE,T3.BASS_GTN,(T1.TOTL_RCIV_AMOUNT - DECODE(T3.BASS_GTN,0,T3.BASS_LTTOT_AMOUNT,T3.BASS_GTN)) ,T3.BASS_RNTCHRG ) as RENTAMT   
+		     FROM TBSLS_HCNTRCTR T2,
+		          TBSLS_HOUSE_DONG_HO T3,
+		          (SELECT CNTRCTR_NO, MAX(RCIV_DE) AS RCIV_DE, SUM(CASE WHEN RCIV_DE IS NOT NULL THEN PAYAMT ELSE 0 END) AS TOTL_RCIV_AMOUNT  
+		               FROM TBSLS_HOUSE_LTTOT_PAY
+		              WHERE PAY_CODE LIKE 'R%' 
+		              GROUP BY CNTRCTR_NO
+		          ) T1    
+		     WHERE 1=1
+		        AND T2.CNTRCTR_NO = #CNTRCTR_NO#
+		        AND T2.CNTRCTR_NO = T1.CNTRCTR_NO
+		        AND T2.HOUSE_CODE = T3.HOUSE_CODE
+		        AND T2.DONG = T3.DONG
+		        AND T2.HO = T3.HO
+		) TB
+    </select>
+    
+   <!-- 쿼리명 : 상호전환 임대료 조회
+		설명 : 주택 상호전환 등록
+		수정일  수정자  수정내용
+		
+		작성자 : 손연옥
+		최초작성일 : 2016.12.08
+   -->
+		 
+   <select id="SLS020206DAO.getRntchrg" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT SFSLS_HOU_RNTCHRG_DOWN_CAL(#CNTRCTR_NO#,#APPLC_DE#,#BASS_IRDS_AM#,#INDVDL_IRDS_AM# ,#RNTCHRG# ) 
+		             AS RNTCHRG
+		    FROM DUAL
+    </select>    
+    
+   <!-- 쿼리명 : 주택 상호전환 등록
+		설명 : 주택 상호전환 등록
+		수정일  수정자  수정내용
+		
+		작성자 : 최인석
+		최초작성일 : 2016.08.07
+	-->	
+    <insert id="SLS020206DAO.insertRntchrg" parameterClass="java.util.Map">
+		INSERT INTO TBSLS_HOUSE_RNTCHRG
+		(
+			  CNTRCTR_NO
+			, APPLC_DE
+			, RNTCHRG
+			, IRDS_INTRT
+			, BASS_IRDS_AM
+			, INDVDL_IRDS_AM
+			, RM
+			, REGISTER_ID
+			, REGIST_DT
+			, UPDUSR_ID
+			, UPDT_DT
+
+		) VALUES (
+			  #CNTRCTR_NO#
+			, #APPLC_DE#
+			, #RNTCHRG#
+			, #IRDS_INTRT#
+			, #BASS_IRDS_AM#
+			, #INDVDL_IRDS_AM#
+			, #RM#
+			, #S_USER_ID#
+			, SYSDATE
+			, #S_USER_ID#
+			, SYSDATE
+	 )
+	</insert>
+	
+	
+   <!-- 쿼리명 : 주택 상호전환 등록
+		설명 : 주택 상호전환 등록
+		수정일  수정자  수정내용
+		
+		작성자 : 최인석
+		최초작성일 : 2016.08.07
+	-->	
+	<update id="SLS020206DAO.updateRntchrg" parameterClass="java.util.Map">
+		UPDATE TBSLS_HOUSE_RNTCHRG
+		   SET
+			  APPLC_DE = #APPLC_DE#
+			, RNTCHRG = #RNTCHRG#
+			, IRDS_INTRT = #IRDS_INTRT#
+			, BASS_IRDS_AM = #BASS_IRDS_AM#
+			, INDVDL_IRDS_AM = #INDVDL_IRDS_AM#
+			, RM = #RM#
+			, UPDUSR_ID = #S_USER_ID#
+			, UPDT_DT = SYSDATE
+		 WHERE 1 = 1
+		   AND CNTRCTR_NO = #CNTRCTR_NO#
+		   AND APPLC_DE = #APPLC_DE#
+	</update>
+	
+	<!-- 쿼리명 : 보증금환불처리
+	설명 : 보증금환불처리 프로시저
+	수정일  		수정자  	수정내용
+	2016.12.12	손연옥	최초생성
+	작성자 : 손연옥
+	최초작성일 : 2016.12.12
+	-->
+    <procedure id="SLS020206DAO.saveReturnGtn"  parameterClass="java.util.Map">
+		{ call SPSLS_HOUSE_RNTCHRG_IU(#IN_CNTRCTR_NO#, #IN_APPLC_DE#, #IN_RNTCHRG#, #IN_IRDS_INTRT#, #IN_BASS_IRDS_AM#, #IN_ADD_AMT#, #IN_RETURN_AMT#, #S_USER_ID#,#OUT_RESULT_CD#,#OUT_RESULT_MSG#) }
+	</procedure>    
+	
+	
+</sqlMap>

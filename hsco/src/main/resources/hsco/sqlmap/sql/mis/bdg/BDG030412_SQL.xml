@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG030412_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+
+	<!-- 예산총괄표 조회(수익의부) -->
+	<select id="BDG030412DAO.selectTotalBudget1" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG030412DAO.selectTotalBudget1*/]]>
+		WITH BUDGET_ACNT_TREE AS (
+		    SELECT ROWNUM AS RNUM
+		          ,r1.YEAR
+		          ,r1.BSNS_SE
+		          ,r1.BALC_SE
+		          ,r1.BUDGET_ACNT_CODE
+		          ,r1.BUDGET_ACNT_NM
+		          ,r1.BUDGET_ACNT_NM2
+		          ,r1.ACNT_LEVEL
+		          ,r1.UPPER_ACNT_CODE
+		          ,r2.BUDGET_AM
+		    FROM   (
+		            SELECT a1.YEAR
+		                  ,a1.BSNS_SE
+		                  ,a1.BALC_SE
+		                  ,a1.BUDGET_ACNT_CODE
+		                  ,a1.BUDGET_ACNT_NM
+		                  ,(CASE WHEN a1.ACNT_LEVEL &lt; '4' THEN SUBSTR(a1.BUDGET_ACNT_CODE, 1, 3)
+		                         WHEN SUBSTR(a1.BUDGET_ACNT_CODE, 6) = '00' THEN SUBSTR(a1.BUDGET_ACNT_CODE, 1, 3)||'-'||SUBSTR(a1.BUDGET_ACNT_CODE, 4, 2)
+		                         ELSE SUBSTR(a1.BUDGET_ACNT_CODE, 1, 3)||'-'||SUBSTR(a1.BUDGET_ACNT_CODE, 4)    END) ||'.'|| a1.BUDGET_ACNT_NM     AS BUDGET_ACNT_NM2
+		                  ,DECODE(a1.ACNT_LEVEL,'7', '4',a1.ACNT_LEVEL)                                     AS ACNT_LEVEL
+		                  ,a1.UPPER_ACNT_CODE
+		            FROM   TBBDG_BUDGET_ACNT_CODE a1
+		            WHERE  a1.YEAR = #YEAR#
+		            AND    a1.BALC_SE = '1'
+		           ) r1
+		           LEFT OUTER JOIN (
+		                            SELECT YEAR
+		                                  ,BSNS_SE
+		                                  ,BALC_SE
+		                                  ,BUDGET_ACNT_CODE
+		                                  ,SUM(DECODE(#BUDGET_SE#,'1',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)
+		                                      ,'2',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)
+                                              ,'3',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)
+                                              ,'4',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)+NVL(RVSPBGT_4_ODR,0)
+                                              ,'5',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)+NVL(RVSPBGT_4_ODR,0)+NVL(RVSPBGT_5_ODR,0)
+                                              ,'6',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)+NVL(RVSPBGT_4_ODR,0)+NVL(RVSPBGT_5_ODR,0)+NVL(RVSPBGT_6_ODR,0)
+                                              ,'7',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)+NVL(RVSPBGT_4_ODR,0)+NVL(RVSPBGT_5_ODR,0)+NVL(RVSPBGT_6_ODR,0)+NVL(RVSPBGT_7_ODR,0)
+                                              ,NVL(ORIBDGT,0))) AS BUDGET_AM
+		                            FROM   TBBDG_EXECUT_BUDGET
+		                            GROUP BY YEAR
+		                                    ,BSNS_SE
+		                                    ,BALC_SE
+		                                    ,BUDGET_ACNT_CODE
+		                           ) r2
+		                ON r1.YEAR = r2.YEAR
+		               AND r1.BSNS_SE = r2.BSNS_SE
+		               AND r1.BALC_SE = r2.BALC_SE
+		               AND r1.BUDGET_ACNT_CODE = r2.BUDGET_ACNT_CODE
+		    WHERE  1=1
+		    START WITH r1.UPPER_ACNT_CODE IS NULL
+		    CONNECT BY PRIOR (r1.YEAR||r1.BSNS_SE||r1.BALC_SE||r1.BUDGET_ACNT_CODE) = (r1.YEAR||r1.BSNS_SE||r1.BALC_SE||r1.UPPER_ACNT_CODE)
+		    ORDER SIBLINGS BY r1.YEAR
+		                     ,r1.BSNS_SE
+		                     ,r1.BALC_SE
+		                     ,r1.BUDGET_ACNT_CODE
+		)
+		SELECT s1.YEAR                              AS YEAR
+		      ,s1.BSNS_SE                           AS BSNS_SE
+		      ,s1.BALC_SE                           AS BALC_SE
+		      ,s1.BUDGET_ACNT_CODE                  AS BUDGET_ACNT_CODE
+		      ,s1.BUDGET_ACNT_NM2                   AS BUDGET_ACNT_NM
+		      ,(
+		        SELECT (CASE WHEN MAX(BALC_SE) = '1' THEN TRUNC(SUM(NVL(BUDGET_AM,0))/1000)
+		                     WHEN MAX(BALC_SE) = '2' THEN CEIL(SUM(NVL(BUDGET_AM,0))/1000)
+		                     ELSE 0 END)
+		        FROM   BUDGET_ACNT_TREE s2
+		        START WITH (s2.YEAR||s2.BSNS_SE||s2.BALC_SE||s2.BUDGET_ACNT_CODE) = (s1.YEAR||s1.BSNS_SE||s1.BALC_SE||s1.BUDGET_ACNT_CODE)
+		        CONNECT BY PRIOR (s2.YEAR||s2.BSNS_SE||s2.BALC_SE||s2.BUDGET_ACNT_CODE) = (s2.YEAR||s2.BSNS_SE||s2.BALC_SE||s2.UPPER_ACNT_CODE)
+		       )        AS BUDGET_AM
+		FROM   BUDGET_ACNT_TREE s1
+		WHERE  ACNT_LEVEL = '2'
+		ORDER BY s1.RNUM
+	</select>
+
+
+	<!-- 예산총괄표 조회(비용의부) -->
+	<select id="BDG030412DAO.selectTotalBudget2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG030412DAO.selectTotalBudget2*/]]>
+		WITH BUDGET_ACNT_TREE AS (
+		    SELECT ROWNUM AS RNUM
+		          ,r1.YEAR
+		          ,r1.BSNS_SE
+		          ,r1.BALC_SE
+		          ,r1.BUDGET_ACNT_CODE
+		          ,r1.BUDGET_ACNT_NM
+		          ,r1.BUDGET_ACNT_NM2
+		          ,r1.ACNT_LEVEL
+		          ,r1.UPPER_ACNT_CODE
+		          ,r2.BUDGET_AM
+		    FROM   (
+		            SELECT a1.YEAR
+		                  ,a1.BSNS_SE
+		                  ,a1.BALC_SE
+		                  ,a1.BUDGET_ACNT_CODE
+		                  ,a1.BUDGET_ACNT_NM
+		                  ,(CASE WHEN a1.ACNT_LEVEL &lt; '4' THEN SUBSTR(a1.BUDGET_ACNT_CODE, 1, 3)
+		                         WHEN SUBSTR(a1.BUDGET_ACNT_CODE, 6) = '00' THEN SUBSTR(a1.BUDGET_ACNT_CODE, 1, 3)||'-'||SUBSTR(a1.BUDGET_ACNT_CODE, 4, 2)
+		                         ELSE SUBSTR(a1.BUDGET_ACNT_CODE, 1, 3)||'-'||SUBSTR(a1.BUDGET_ACNT_CODE, 4)    END) ||'.'|| a1.BUDGET_ACNT_NM     AS BUDGET_ACNT_NM2
+		                  ,DECODE(a1.ACNT_LEVEL,'7', '4',a1.ACNT_LEVEL)                                     AS ACNT_LEVEL
+		                  ,a1.UPPER_ACNT_CODE
+		            FROM   TBBDG_BUDGET_ACNT_CODE a1
+		            WHERE  a1.YEAR = #YEAR#
+		            AND    a1.BALC_SE = '2'
+		           ) r1
+		           LEFT OUTER JOIN (
+		                            SELECT YEAR
+		                                  ,BSNS_SE
+		                                  ,BALC_SE
+		                                  ,BUDGET_ACNT_CODE
+		                                  ,SUM(DECODE(#BUDGET_SE#,'1',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)
+		                                      ,'2',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)
+                                              ,'3',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)
+                                              ,'4',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)+NVL(RVSPBGT_4_ODR,0)
+                                              ,'5',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)+NVL(RVSPBGT_4_ODR,0)+NVL(RVSPBGT_5_ODR,0)
+                                              ,'6',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)+NVL(RVSPBGT_4_ODR,0)+NVL(RVSPBGT_5_ODR,0)+NVL(RVSPBGT_6_ODR,0)
+                                              ,'7',NVL(ORIBDGT,0)+NVL(RVSPBGT_1_ODR,0)+NVL(RVSPBGT_2_ODR,0)+NVL(RVSPBGT_3_ODR,0)+NVL(RVSPBGT_4_ODR,0)+NVL(RVSPBGT_5_ODR,0)+NVL(RVSPBGT_6_ODR,0)+NVL(RVSPBGT_7_ODR,0)
+                                              ,NVL(ORIBDGT,0))) AS BUDGET_AM
+		                            FROM   TBBDG_EXECUT_BUDGET
+		                            GROUP BY YEAR
+		                                    ,BSNS_SE
+		                                    ,BALC_SE
+		                                    ,BUDGET_ACNT_CODE
+		                           ) r2
+		                ON r1.YEAR = r2.YEAR
+		               AND r1.BSNS_SE = r2.BSNS_SE
+		               AND r1.BALC_SE = r2.BALC_SE
+		               AND r1.BUDGET_ACNT_CODE = r2.BUDGET_ACNT_CODE
+		    WHERE  1=1
+		    START WITH r1.UPPER_ACNT_CODE IS NULL
+		    CONNECT BY PRIOR (r1.YEAR||r1.BSNS_SE||r1.BALC_SE||r1.BUDGET_ACNT_CODE) = (r1.YEAR||r1.BSNS_SE||r1.BALC_SE||r1.UPPER_ACNT_CODE)
+		    ORDER SIBLINGS BY r1.YEAR
+		                     ,r1.BSNS_SE
+		                     ,r1.BALC_SE
+		                     ,r1.BUDGET_ACNT_CODE
+		)
+		SELECT s1.YEAR                              AS YEAR
+		      ,s1.BSNS_SE                           AS BSNS_SE
+		      ,s1.BALC_SE                           AS BALC_SE
+		      ,s1.BUDGET_ACNT_CODE                  AS BUDGET_ACNT_CODE
+		      ,s1.BUDGET_ACNT_NM2                   AS BUDGET_ACNT_NM
+		      ,(
+		        SELECT (CASE WHEN MAX(BALC_SE) = '1' THEN TRUNC(SUM(NVL(BUDGET_AM,0))/1000)
+		                     WHEN MAX(BALC_SE) = '2' THEN CEIL(SUM(NVL(BUDGET_AM,0))/1000)
+		                     ELSE 0 END)
+		        FROM   BUDGET_ACNT_TREE s2
+		        START WITH (s2.YEAR||s2.BSNS_SE||s2.BALC_SE||s2.BUDGET_ACNT_CODE) = (s1.YEAR||s1.BSNS_SE||s1.BALC_SE||s1.BUDGET_ACNT_CODE)
+		        CONNECT BY PRIOR (s2.YEAR||s2.BSNS_SE||s2.BALC_SE||s2.BUDGET_ACNT_CODE) = (s2.YEAR||s2.BSNS_SE||s2.BALC_SE||s2.UPPER_ACNT_CODE)
+		       )        AS BUDGET_AM
+		FROM   BUDGET_ACNT_TREE s1
+		WHERE  ACNT_LEVEL = '2'
+		ORDER BY s1.RNUM
+	</select>
+
+</sqlMap>

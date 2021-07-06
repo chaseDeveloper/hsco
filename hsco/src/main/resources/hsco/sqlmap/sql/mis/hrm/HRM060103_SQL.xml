@@ -1,0 +1,923 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM060103_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 평정자정보 조회 -->
+	<select id="HRM060103DAO.selectEvlManInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM060103DAO.selectEvlManInfo(평정자정보 조회)*/]]>
+		SELECT EVL_YEAR
+		     , HT_SE
+		     , EVL_MAN_EMPNO
+		     , EVL_MAN_DEPT_CODE
+		     , EVL_MAN_CLSF_SE
+		     , EVL_MAN_OFCPS_SE
+		     , CASE WHEN EVL_MAN_OFCPS_SE IN ('03','04','35','36','37','38','31','14','39') THEN 'Y' /*실처장이상*/
+		            ELSE 'N'
+		       END AS SUPRR_AT /*상급자여부*/
+		  FROM (
+		        SELECT EVL_YEAR
+		             , HT_SE
+		             , EVL_MAN_1_EMPNO               AS EVL_MAN_EMPNO
+		             , MAX(EVL_MAN_1_DEPT_CODE)      AS EVL_MAN_DEPT_CODE
+		             , MAX(EVL_MAN_1_CLSF_SE)        AS EVL_MAN_CLSF_SE
+		             , MAX(EVL_MAN_1_OFCPS_SE)       AS EVL_MAN_OFCPS_SE
+		          FROM TBHRM_WORK_EVL_TRGTER
+		         WHERE EVL_YEAR        = #EVL_YEAR#
+		           AND HT_SE           = #HT_SE#
+		           AND EVL_MAN_1_EMPNO = #EVL_MAN_1_EMPNO#
+		        GROUP BY EVL_YEAR
+		               , HT_SE
+		               , EVL_MAN_1_EMPNO
+		       )
+	</select>
+
+	<!-- 평정기간 조회 -->
+	<select id="HRM060103DAO.selectWorkEvlPd" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*HRM060103DAO.selectWorkEvlPd(평정기간 조회)*/]]>
+	<![CDATA[
+		SELECT NVL(MAX(ENABLE_AT),'0')                                AS ENABLE_AT
+		      ,NVL(MAX(PD_STR),'평정기간 정보가 존재하지 않습니다')    AS PD_STR
+		FROM   (
+		        SELECT CASE WHEN TO_CHAR(SYSDATE, 'YYYYMMDD') BETWEEN EVL_MAN_BGNDE AND EVL_MAN_ENDDE THEN '1' ELSE '0' END                                                         AS ENABLE_AT
+		              ,'평정가능기간 (' || TO_CHAR(TO_DATE(EVL_MAN_BGNDE,'YYYYMMDD'),'YYYY. MM. DD.') || ' ~ ' || TO_CHAR(TO_DATE(EVL_MAN_ENDDE,'YYYYMMDD'),'YYYY. MM. DD.') || ')'   AS PD_STR
+		        FROM   TBHRM_WORK_EVL_PD
+		        WHERE  EVL_YEAR = #EVL_YEAR#
+		        AND    HT_SE    = #HT_SE#
+		       )
+		WHERE  1=1
+	]]>
+	</select>
+
+
+	<!-- 평정대상자 조회 -->
+	<select id="HRM060103DAO.selectWorkEvlTrgter" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*HRM060103DAO.selectWorkEvlTrgter(평정대상자 조회)*/]]>
+	<![CDATA[
+		WITH CLSF_GNFD_DTLS_TM AS ( /*현직급 임용일*/
+		    SELECT EMPNO
+		          ,CLSF_SE
+		          ,MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM   TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, CLSF_SE
+		), WORK_EVL_SCORE_TM AS (
+		    SELECT EVL_YEAR
+		          ,HT_SE
+		          ,EMPNO
+		          ,SUM(DECODE(EVL_MAN_SE, '01', NVL(EVL_SCORE,0), 0))    AS EVL_1_SCORE
+		          ,SUM(DECODE(EVL_MAN_SE, '02', NVL(EVL_SCORE,0), 0))    AS EVL_2_SCORE
+		          ,SUM(DECODE(EVL_MAN_SE, '03', NVL(EVL_SCORE,0), 0))    AS EVL_3_SCORE
+		    FROM   TBHRM_WORK_SCRE_EVL_MANAGE
+		    WHERE  1=1
+		    GROUP BY EVL_YEAR, HT_SE, EMPNO
+		)
+		SELECT r1.EVL_YEAR
+		      ,r1.HT_SE
+		      ,r1.EMPNO
+		      ,r1.CLSF_TY
+		      ,r1.JSSFC_SE
+		      ,r1.CLSF_SE
+		      ,CASE WHEN r1.EVL_YEAR < 2020 THEN COUNT(1) OVER(PARTITION BY r1.EVL_STEP_SE, r1.JSSFC_SE, r1.CLSF_SE)
+		            ELSE CASE WHEN r4.OFCPS_SE IN ('01','02','03','04','35','36','37','38','31','14','39') THEN COUNT(1) OVER(PARTITION BY r1.EVL_STEP_SE, r1.JSSFC_SE, r1.CLSF_SE) /*상급자*/
+		                      ELSE COUNT(1) OVER(PARTITION BY r1.EVL_STEP_SE, r1.JSSFC_SE)
+		                 END
+		       END AS CLSF_CNT
+		      ,NVL(r3.NOW_CLSF_EMPLMN_DE, r2.CLSF_GNFD_DE) AS CLSF_GNFD_DE
+		      ,r1.EMPNM
+		      ,r1.JSSFC_NM
+		      ,r1.CLSF_NM
+		      ,r1.OFCPS_NM
+		      ,r1.JBLN_NM
+		      ,r1.DEPT_CODE
+		      ,r1.DEPT_NM
+		      ,r1.EVL_MAN_1_EMPNO
+		      ,r1.EVL_MAN_2_EMPNO
+		      ,r1.CNFRMR_EMPNO
+		      ,r1.EVL_1_SCORE
+		      ,r1.EVL_STEP_SE
+		FROM   (
+		        SELECT t1.EVL_YEAR
+		              ,t1.HT_SE
+		              ,t1.EMPNO
+		              ,CASE WHEN t1.EVL_YEAR < 2020 THEN t1.JSSFC_SE
+		                    ELSE DECODE(t1.JSSFC_SE, '04', '02', t1.JSSFC_SE)
+		               END AS JSSFC_SE /*일반직에 계약직 포함*/
+		              ,CASE WHEN t1.EVL_YEAR < 2020 THEN t1.CLSF_SE
+		                    ELSE CASE WHEN t1.CLSF_SE = '401' THEN '201'
+		                              WHEN t1.CLSF_SE = '402' THEN '202'
+		                              WHEN t1.CLSF_SE = '403' THEN '203'
+		                              WHEN t1.CLSF_SE = '404' THEN '204'
+		                              WHEN t1.CLSF_SE = '405' THEN '205'
+		                              ELSE t1.CLSF_SE
+		                         END
+		               END AS CLSF_SE
+		              ,SFSAL_GETEMPNO_01(t1.EMPNO)                        AS EMPNM
+		              ,SFCOM_CODE_NM('HRM001', CASE WHEN t1.EVL_YEAR < 2020 THEN t1.JSSFC_SE
+		                                            ELSE DECODE(t1.JSSFC_SE, '04', '02', t1.JSSFC_SE)
+		                                       END, 'CODE_NM')    AS JSSFC_NM
+		              ,SFCOM_CODE_NM('HRM002', CASE WHEN t1.EVL_YEAR < 2020 THEN t1.CLSF_SE
+		                                            ELSE CASE WHEN t1.CLSF_SE = '401' THEN '201'
+		                                                      WHEN t1.CLSF_SE = '402' THEN '202'
+		                                                      WHEN t1.CLSF_SE = '403' THEN '203'
+		                                                      WHEN t1.CLSF_SE = '404' THEN '204'
+		                                                      WHEN t1.CLSF_SE = '405' THEN '205'
+		                                                      ELSE t1.CLSF_SE
+		                                                 END
+		                                       END, 'CODE_NM')    AS CLSF_NM
+		              ,SFCOM_CODE_NM('HRM003', t1.OFCPS_SE, 'CODE_NM')    AS OFCPS_NM
+		              ,SFCOM_CODE_NM('HRM004', t1.JBLN_SE,  'CODE_NM')    AS JBLN_NM
+		              ,t1.DEPT_CODE
+		              ,SFSAL_GETDEPTNM_01(t1.DEPT_CODE)                   AS DEPT_NM
+		              ,(
+		                CASE WHEN t1.CLSF_SE IN ('201', '202', '401', '402')                         THEN '일반직3급이상'
+		                     WHEN t1.CLSF_SE IN ('203', '204', '205', '301', '403', '404', '405')    THEN '일반직4급이하'
+		                     WHEN t1.CLSF_SE IN ('501', '601', '901')                                THEN '시설관리원등'
+		                END
+		               )    AS CLSF_TY
+		              ,t1.EVL_MAN_1_EMPNO
+		              ,t1.EVL_MAN_2_EMPNO
+		              ,t1.CNFRMR_EMPNO
+		              ,DECODE(NVL(t3.EVL_1_SCORE,0), 0, '', t3.EVL_1_SCORE || ' 점')     AS EVL_1_SCORE
+		              ,t1.EVL_STEP_SE
+		        FROM   TBHRM_WORK_EVL_TRGTER t1
+		               LEFT OUTER JOIN TBHRM_WORK_EVL_PD t2
+		                    ON t1.EVL_YEAR = t2.EVL_YEAR
+		                   AND t1.HT_SE = t2.HT_SE
+		               LEFT OUTER JOIN WORK_EVL_SCORE_TM t3
+		                    ON t1.EVL_YEAR = t3.EVL_YEAR
+		                   AND t1.HT_SE = t3.HT_SE
+		                   AND t1.EMPNO = t3.EMPNO
+		        WHERE  t1.EVL_YEAR = #EVL_YEAR#
+		        AND    t1.HT_SE = #HT_SE#
+		        AND    t1.EVL_MAN_1_EMPNO = #EVL_MAN_1_EMPNO#
+	]]>
+	<isEqual property="YEAR_SE" compareValue="01">
+		<isNotEmpty property="JSSFC_SE">
+		        AND    t1.JSSFC_SE = #JSSFC_SE#
+		</isNotEmpty>
+		<isNotEmpty property="CLSF_SE">
+		        AND    t1.CLSF_SE = #CLSF_SE#
+		</isNotEmpty>
+	</isEqual>
+	<isEqual property="YEAR_SE" compareValue="02">
+		<isNotEmpty property="JSSFC_SE">
+		        AND    DECODE(t1.JSSFC_SE, '04', '02', t1.JSSFC_SE) = #JSSFC_SE#
+		</isNotEmpty>
+		<isNotEmpty property="CLSF_SE">
+		        AND    CASE WHEN t1.CLSF_SE = '401' THEN '201'
+		                    WHEN t1.CLSF_SE = '402' THEN '202'
+		                    WHEN t1.CLSF_SE = '403' THEN '203'
+		                    WHEN t1.CLSF_SE = '404' THEN '204'
+		                    WHEN t1.CLSF_SE = '405' THEN '205'
+		                    ELSE t1.CLSF_SE
+		               END = #CLSF_SE#
+		</isNotEmpty>
+	</isEqual>
+	<isNotEmpty property="EMPNM">
+		        AND    SFSAL_GETEMPNO_01(t1.EMPNO) LIKE '%' || #EMPNM# || '%'
+	</isNotEmpty>
+		       ) r1
+		       LEFT OUTER JOIN CLSF_GNFD_DTLS_TM r2
+		            ON r1.EMPNO = r2.EMPNO
+		           AND r1.CLSF_SE = r2.CLSF_SE
+		       LEFT OUTER JOIN TBHRM_HR_MASTR r3
+		            ON r1.EMPNO = r3.EMPNO
+		       LEFT OUTER JOIN TBHRM_HR_MASTR r4
+		            ON r1.EVL_MAN_1_EMPNO = r4.EMPNO
+		WHERE  1=1
+		ORDER BY r1.EVL_STEP_SE
+	<isEqual property="YEAR_SE" compareValue="01">
+		<isNotEmpty property="JSSFC_SE">
+		       , r1.JSSFC_SE
+		</isNotEmpty>
+	</isEqual>
+	<isEqual property="YEAR_SE" compareValue="02">
+		<isNotEmpty property="JSSFC_SE">
+		       , DECODE(r1.JSSFC_SE, '04', '02', r1.JSSFC_SE)
+		</isNotEmpty>
+	</isEqual>
+		       , r1.CLSF_SE
+		       , r1.EMPNO
+	</select>
+
+	<!-- 등급분포표 조회 -->
+	<select id="HRM060103DAO.selectGradDistrbTable" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		<![CDATA[/*HRM060103DAO.selectGradDistrbTable(등급분포표 조회)*/
+		WITH T_GRAD AS (
+		    SELECT #EVL_YEAR# AS EVL_YEAR
+		         , #HT_SE# AS HT_SE
+		         , LEVEL AS GRAD
+		         , '02' AS GRAD_SE
+		      FROM DUAL
+		    CONNECT BY LEVEL <= 4
+		    UNION ALL
+		    SELECT #EVL_YEAR# AS EVL_YEAR
+		         , #HT_SE# AS HT_SE
+		         , LEVEL AS GRAD
+		         , '03' AS GRAD_SE
+		      FROM DUAL
+		    CONNECT BY LEVEL <= 4
+		)
+		]]>
+		, T_SCORE AS (
+		    SELECT T1.EVL_YEAR
+		         , T1.HT_SE
+		         , DECODE(T1.JSSFC_SE, '04', '02', T1.JSSFC_SE) AS JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		         , CASE WHEN T1.EVL_YEAR <![CDATA[<]]> 2020 THEN T1.CLSF_SE
+		                ELSE CASE WHEN T1.CLSF_SE = '401' THEN '201'
+		                          WHEN T1.CLSF_SE = '402' THEN '202'
+		                          WHEN T1.CLSF_SE = '403' THEN '203'
+		                          WHEN T1.CLSF_SE = '404' THEN '204'
+		                          WHEN T1.CLSF_SE = '405' THEN '205'
+		                          ELSE T1.CLSF_SE
+		                     END
+		           END AS CLSF_SE
+		</isEqual>
+		<![CDATA[
+		         , T1.EMPNO
+		         , SUM(T2.EVL_SCORE) AS EVL_SCORE
+		         , CASE WHEN T1.EVL_STEP_SE = '02'
+		                     THEN CASE WHEN SUM(T2.EVL_SCORE) >= 40
+		                                    THEN '1'
+		                               WHEN SUM(T2.EVL_SCORE) >= 35
+		                                    THEN '2'
+		                               WHEN SUM(T2.EVL_SCORE) >= 30
+		                                    THEN '3'
+		                               ELSE '4'
+		                          END
+		                ELSE CASE WHEN SUM(T2.EVL_SCORE) >= 26.7
+		                               THEN '1'
+		                          WHEN SUM(T2.EVL_SCORE) >= 23.4
+		                               THEN '2'
+		                          WHEN SUM(T2.EVL_SCORE) >= 20
+		                               THEN '3'
+		                          ELSE '4'
+		                     END
+		           END AS GRAD
+		         , T1.EVL_STEP_SE AS GRAD_SE
+		      FROM TBHRM_WORK_EVL_TRGTER T1
+		           LEFT OUTER JOIN TBHRM_WORK_SCRE_EVL_MANAGE T2
+		                ON T1.EVL_YEAR        = T2.EVL_YEAR
+		               AND T1.HT_SE           = T2.HT_SE
+		               AND T1.EMPNO           = T2.EMPNO
+		               AND T1.EVL_MAN_1_EMPNO = T2.EVL_MAN_EMPNO
+		               AND T2.EVL_MAN_SE      = '01'
+		     WHERE T1.EVL_YEAR        = #EVL_YEAR#
+		       AND T1.HT_SE           = #HT_SE#
+		       AND T1.EVL_MAN_1_EMPNO = #EVL_MAN_1_EMPNO#
+		    GROUP BY T1.EVL_YEAR
+		           , T1.HT_SE
+		           , T1.EVL_STEP_SE
+		           , DECODE(T1.JSSFC_SE, '04', '02', T1.JSSFC_SE)
+		]]>
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		           , CASE WHEN T1.EVL_YEAR <![CDATA[<]]> 2020 THEN T1.CLSF_SE
+		                  ELSE CASE WHEN T1.CLSF_SE = '401' THEN '201'
+		                            WHEN T1.CLSF_SE = '402' THEN '202'
+		                            WHEN T1.CLSF_SE = '403' THEN '203'
+		                            WHEN T1.CLSF_SE = '404' THEN '204'
+		                            WHEN T1.CLSF_SE = '405' THEN '205'
+		                            ELSE T1.CLSF_SE
+		                       END
+		             END
+		</isEqual>
+		           , T1.EMPNO
+		)
+		, T_GRAD_INFO AS (
+		    SELECT T1.EVL_YEAR
+		         , T1.HT_SE
+		         , T1.GRAD
+		         , T1.GRAD_SE
+		         , T2.JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		         , T2.CLSF_SE
+		</isEqual>
+		         , T2.SE_02
+		         , T2.SE_03
+		      FROM T_GRAD T1
+		           INNER JOIN (
+		                       SELECT JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		                            , CLSF_SE
+		</isEqual>
+		                            , GRAD_SE
+		                            , SUM(CASE WHEN GRAD_SE = '02' THEN 1 ELSE 0 END) AS SE_02
+		                            , SUM(CASE WHEN GRAD_SE = '03' THEN 1 ELSE 0 END) AS SE_03
+		                         FROM T_SCORE
+		                       GROUP BY JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		                              , CLSF_SE
+		</isEqual>
+		                              , GRAD_SE
+		                      ) T2
+		                ON 1 = 1
+		)
+		, T_GRAD_SE_CNT AS (
+		    SELECT EVL_YEAR
+		         , HT_SE
+		         , GRAD_SE
+		         , JSSFC_SE
+		         , SUM(CASE WHEN GRAD_SE = '02' THEN SE_02 
+		                    WHEN GRAD_SE = '03' THEN SE_03
+		                    ELSE 0
+		               END) AS CNT
+		      FROM T_GRAD_INFO
+		    GROUP BY EVL_YEAR
+		           , HT_SE
+		           , GRAD_SE
+		           , JSSFC_SE
+		)
+		, T_INFO AS (
+		    SELECT T1.EVL_YEAR
+		         , T1.HT_SE
+		         , T1.JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		         , T1.CLSF_SE
+		</isEqual>
+		         , T4.TOT_NMPR
+		         , T1.GRAD
+		         , T1.GRAD_SE
+		         , T1.SE_02
+		         , T1.SE_03
+		         , CASE WHEN T1.GRAD_SE = '02' AND SE_02 > 0 THEN 'Y'
+		                WHEN T1.GRAD_SE = '03' AND SE_03 > 0 THEN 'Y'
+		                ELSE 'N'
+		           END PRINT_AT
+		         , NVL(T2.GRAD_CNT, 0) AS GRAD_CNT
+		         , CASE WHEN T1.GRAD = 1 AND T1.GRAD_SE = '02' THEN '수(40~45)'
+		                WHEN T1.GRAD = 2 AND T1.GRAD_SE = '02' THEN '우(35~39.9)'
+		                WHEN T1.GRAD = 3 AND T1.GRAD_SE = '02' THEN '양(30~34.9)'
+		                WHEN T1.GRAD = 4 AND T1.GRAD_SE = '02' THEN '가(29.9이하)'
+		                WHEN T1.GRAD = 1 AND T1.GRAD_SE = '03' THEN '수(26.7~30.0)'
+		                WHEN T1.GRAD = 2 AND T1.GRAD_SE = '03' THEN '우(23.4~26.6)'
+		                WHEN T1.GRAD = 3 AND T1.GRAD_SE = '03' THEN '양(20.0~23.3)'
+		                WHEN T1.GRAD = 4 AND T1.GRAD_SE = '03' THEN '가(19.9이하)'
+		           END AS GRAD_NM
+		         , CASE T1.GRAD WHEN 1 THEN FLOOR(T4.TOT_NMPR * T3.GRAD_1_RATE / 100)
+		                        WHEN 2 THEN FLOOR(T4.TOT_NMPR * T3.GRAD_2_RATE / 100)
+		                        WHEN 3 THEN FLOOR(T4.TOT_NMPR * T3.GRAD_3_RATE / 100)
+		                        WHEN 4 THEN FLOOR(T4.TOT_NMPR * T3.GRAD_4_RATE / 100)
+		           END AS MIN_NMPR_CNT
+		         , CASE T1.GRAD WHEN 1 THEN CEIL(T4.TOT_NMPR * T3.GRAD_1_RATE / 100)
+		                        WHEN 2 THEN CEIL(T4.TOT_NMPR * T3.GRAD_2_RATE / 100)
+		                        WHEN 3 THEN CEIL(T4.TOT_NMPR * T3.GRAD_3_RATE / 100)
+		                        WHEN 4 THEN CEIL(T4.TOT_NMPR * T3.GRAD_4_RATE / 100)
+		           END AS MAX_NMPR_CNT
+		      FROM T_GRAD_INFO T1
+		           LEFT OUTER JOIN (
+		                       SELECT EVL_YEAR
+		                            , HT_SE
+		                            , JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		                            , CLSF_SE
+		</isEqual>
+		                            , GRAD
+		                            , COUNT(1) AS GRAD_CNT
+		                         FROM T_SCORE
+		                       GROUP BY EVL_YEAR
+		                              , HT_SE
+		                              , JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		                              , CLSF_SE
+		</isEqual>
+		                              , GRAD
+		                      ) T2
+		                ON T1.EVL_YEAR = T2.EVL_YEAR
+		               AND T1.HT_SE    = T2.HT_SE
+		               AND T1.JSSFC_SE = T2.JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		               AND T1.CLSF_SE  = T2.CLSF_SE
+		</isEqual>
+		               AND T1.GRAD     = T2.GRAD
+		           LEFT OUTER JOIN TBHRM_GRAD_ACCTO_NMPR_RATE T3
+		                ON T1.EVL_YEAR = T3.EVL_YEAR
+		               AND T1.HT_SE    = T3.HT_SE
+		           LEFT OUTER JOIN (
+		                       SELECT EVL_YEAR
+		                            , HT_SE
+		                            , JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		                            , CLSF_SE
+		</isEqual>
+		                            , COUNT(1) AS TOT_NMPR
+		                         FROM T_SCORE
+		                       GROUP BY EVL_YEAR
+		                              , HT_SE
+		                              , JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		                              , CLSF_SE
+		</isEqual>
+		                      ) T4
+		                ON T1.EVL_YEAR = T4.EVL_YEAR
+		               AND T1.HT_SE    = T4.HT_SE
+		               AND T1.JSSFC_SE = T4.JSSFC_SE
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		               AND T1.CLSF_SE  = T4.CLSF_SE
+		</isEqual>
+		           LEFT OUTER JOIN T_GRAD_SE_CNT T5
+		                ON T1.EVL_YEAR = T5.EVL_YEAR
+		               AND T1.HT_SE    = T5.HT_SE
+		               AND T1.GRAD_SE  = T5.GRAD_SE
+		               AND T1.JSSFC_SE = T5.JSSFC_SE
+		     WHERE T5.CNT > 0
+		)
+		SELECT EVL_YEAR
+		     , HT_SE
+		     , JSSFC_SE
+		     , SFCOM_CODE_NM('HRM001', JSSFC_SE) AS JSSFC_NM
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		     , CLSF_SE
+		     , SFCOM_CODE_NM('HRM002', CLSF_SE)  AS CLSF_NM
+		</isEqual>
+		<![CDATA[
+		     , TOT_NMPR
+		     , GRAD
+		     , GRAD_SE
+		     , GRAD_NM
+		     , GRAD_CNT
+		     , MIN_NMPR_CNT
+		     , MAX_NMPR_CNT
+		     , CASE WHEN GRAD_CNT < MIN_NMPR_CNT OR GRAD_CNT > MAX_NMPR_CNT THEN 'red'
+		            ELSE ''
+		       END COLOR
+		  FROM T_INFO
+		ORDER BY JSSFC_SE
+		]]>
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		       , CLSF_SE
+		</isEqual>
+		       , GRAD
+	</select>
+
+	<!-- 근무성적평정 조회 -->
+	<select id="HRM060103DAO.selectEvlScreEvl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*HRM060103DAO.selectEvlScreEvl(근무성적평정 조회)*/]]>
+	<![CDATA[
+		SELECT t1.EVL_YEAR
+		      ,t1.HT_SE
+		      ,t1.SEQ
+		      ,t1.EVL_SE
+		      ,t3.CODE_NM                    AS EVL_SE_NM
+		      ,t1.EVL_IEM_CODE
+		      ,t4.CODE_NM                    AS EVL_IEM_NM
+		      ,#EMPNO#                       AS EMPNO
+		      ,'01'                          AS EVL_MAN_SE
+		      ,#EVL_MAN_EMPNO#               AS EVL_MAN_EMPNO
+		      ,t1.IEM_GRAD1_SCORE
+		      ,t1.IEM_GRAD2_SCORE
+		      ,t1.IEM_GRAD3_SCORE
+		      ,t1.IEM_GRAD4_SCORE
+		      ,t1.IEM_GRAD5_SCORE
+		      ,t2.EVL_GRAD1_AT
+		      ,t2.EVL_GRAD2_AT
+		      ,t2.EVL_GRAD3_AT
+		      ,t2.EVL_GRAD4_AT
+		      ,t2.EVL_GRAD5_AT
+		      ,t2.EVL_GRAD
+		      ,t2.EVL_SCORE
+		FROM   TBHRM_EVL_SCRE_EVL_IX t1
+		       LEFT OUTER JOIN (
+		                        SELECT EVL_YEAR
+		                              ,HT_SE
+		                              ,EMPNO
+		                              ,EVL_MAN_SE
+		                              ,EVL_SE
+		                              ,EVL_IEM_CODE
+		                              ,EVL_MAN_EMPNO
+		                              ,EVL_GRAD
+		                              ,EVL_SCORE
+		                              ,DECODE(EVL_GRAD, '1', '1')           AS EVL_GRAD1_AT
+		                              ,DECODE(EVL_GRAD, '2', '1')           AS EVL_GRAD2_AT
+		                              ,DECODE(EVL_GRAD, '3', '1')           AS EVL_GRAD3_AT
+		                              ,DECODE(EVL_GRAD, '4', '1')           AS EVL_GRAD4_AT
+		                              ,DECODE(EVL_GRAD, '5', '1')           AS EVL_GRAD5_AT
+		                              ,DECODE(EVL_GRAD, '1', EVL_SCORE)     AS EVL_GRAD1_SCORE
+		                              ,DECODE(EVL_GRAD, '2', EVL_SCORE)     AS EVL_GRAD2_SCORE
+		                              ,DECODE(EVL_GRAD, '3', EVL_SCORE)     AS EVL_GRAD3_SCORE
+		                              ,DECODE(EVL_GRAD, '4', EVL_SCORE)     AS EVL_GRAD4_SCORE
+		                              ,DECODE(EVL_GRAD, '5', EVL_SCORE)     AS EVL_GRAD5_SCORE
+		                        FROM   TBHRM_WORK_SCRE_EVL_MANAGE
+		                        WHERE  EVL_MAN_SE    = '01'      /*평정1차*/
+		                        AND    EVL_MAN_EMPNO = #EVL_MAN_EMPNO#
+		                        AND    EMPNO         = #EMPNO#
+		                       ) t2
+		            ON t1.EVL_YEAR = t2.EVL_YEAR
+		           AND t1.HT_SE = t2.HT_SE
+		           AND t1.EVL_SE = t2.EVL_SE
+		           AND t1.EVL_IEM_CODE = t2.EVL_IEM_CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		            ON t1.EVL_SE = t3.CODE
+		           AND t3.GRP_CODE = 'HRM051'
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		            ON t1.EVL_IEM_CODE = t4.CODE
+		           AND t4.GRP_CODE = 'HRM052'
+		WHERE  t1.EVL_YEAR = #EVL_YEAR#
+		AND    t1.HT_SE    = #HT_SE#
+		AND    t1.EVL_STEP_SE = #EVL_STEP_SE#
+		ORDER BY t1.EVL_YEAR
+		        ,t1.HT_SE
+		        ,t1.SEQ
+		        ,t1.EVL_SE
+		        ,t1.EVL_IEM_CODE
+	]]>
+	</select>
+
+
+	<!-- 근무성적평정의견 조회 -->
+	<select id="HRM060103DAO.selectWorkScreEvlOpinion" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*HRM060103DAO.selectWorkScreEvlOpinion(근무성적평정의견 조회)*/]]>
+	<![CDATA[
+		SELECT r1.EVL_YEAR
+		      ,r1.HT_SE
+		      ,r1.EMPNO
+		      ,'01'                                                                                                                        AS EVL_MAN_SE
+		      ,r1.EVL_MAN_1_EMPNO                                                                                                          AS EVL_MAN_1_EMPNO
+		      ,SFSAL_GETEMPNO_01(r1.EVL_MAN_1_EMPNO)                                                                                       AS EVL_1_MAN_EMPNM
+		      ,SFSAL_GETDEPTNM_01(r1.EVL_MAN_1_DEPT_CODE) ||' '|| SFCOM_CODE_NM('HRM002',r1.EVL_MAN_1_CLSF_SE,'CODE_NM') ||' '|| SFCOM_CODE_NM('HRM003',r1.EVL_MAN_1_OFCPS_SE,'CODE_NM')    AS EVL_1_MAN_PSITN
+		      ,r1.EVL_MAN_2_EMPNO                                                                                                          AS EVL_MAN_2_EMPNO
+		      ,SFSAL_GETEMPNO_01(r1.EVL_MAN_2_EMPNO)                                                                                       AS EVL_2_MAN_EMPNM
+		      ,SFSAL_GETDEPTNM_01(r1.EVL_MAN_2_DEPT_CODE) ||' '|| SFCOM_CODE_NM('HRM002',r1.EVL_MAN_2_CLSF_SE,'CODE_NM') ||' '|| SFCOM_CODE_NM('HRM003',r1.EVL_MAN_2_OFCPS_SE,'CODE_NM')    AS EVL_2_MAN_PSITN
+		      ,r1.CNFRMR_EMPNO                                                                                                             AS EVL_3_MAN_EMPNO
+		      ,SFSAL_GETEMPNO_01(r1.CNFRMR_EMPNO)                                                                                          AS EVL_3_MAN_EMPNM
+		      ,SFSAL_GETDEPTNM_01(r1.CNFRMR_DEPT_CODE)    ||' '|| SFCOM_CODE_NM('HRM002',r1.CNFRMR_CLSF_SE,'CODE_NM')    ||' '|| SFCOM_CODE_NM('HRM003',r1.CNFRMR_OFCPS_SE,'CODE_NM')       AS EVL_3_MAN_PSITN
+		      ,r2.EVL_1_OPINION
+		      ,r2.EVL_2_OPINION
+		      ,r2.EVL_3_OPINION
+		FROM   TBHRM_WORK_EVL_TRGTER r1
+		       LEFT OUTER JOIN (
+		                        SELECT EVL_YEAR
+		                              ,HT_SE
+		                              ,EMPNO
+		                              ,MAX(DECODE(t1.EVL_MAN_SE, '01', t1.EVL_OPINION))         AS EVL_1_OPINION
+		                              ,MAX(DECODE(t1.EVL_MAN_SE, '02', t1.EVL_OPINION))         AS EVL_2_OPINION
+		                              ,MAX(DECODE(t1.EVL_MAN_SE, '03', t1.EVL_OPINION))         AS EVL_3_OPINION
+		                        FROM   TBHRM_WORK_SCRE_EVL_OPINION t1
+		                        WHERE  1=1
+		                        GROUP BY EVL_YEAR
+		                              ,HT_SE
+		                              ,EMPNO
+		                       ) r2
+		            ON r1.EVL_YEAR = r2.EVL_YEAR
+		           AND r1.HT_SE = r2.HT_SE
+		           AND r1.EMPNO = r2.EMPNO
+		       LEFT OUTER JOIN TBHRM_WORK_EVL_PD r3
+		            ON r1.EVL_YEAR = r3.EVL_YEAR
+		           AND r1.HT_SE = r3.HT_SE
+		WHERE  r1.EVL_YEAR = #EVL_YEAR#
+		AND    r1.HT_SE    = #HT_SE#
+		AND    r1.EMPNO    = #EMPNO#
+	]]>
+	</select>
+
+	<!-- 평정인원분포 조회 -->
+	<select id="HRM060103DAO.selectGradNmpr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*HRM060103DAO.selectGradNmpr(평정인원분포 조회)*/]]>
+	<![CDATA[
+		SELECT r1.EVL_YEAR
+		      ,r1.HT_SE
+		      ,r1.TOT_NMPR
+		      ,r1.GRAD_SE
+		      ,r1.GRAD_NM
+		      ,r1.GRAD_NMPR
+		      ,r1.GRAD_NMPR_ACMTL1
+		      ,r1.GRAD_NMPR_ACMTL2
+		      ,r2.SCORE_RNK
+		      ,r2.EVL_SCORE
+		      ,r2.EMPNO
+		      ,r2.EMPNM
+		FROM   (
+		        SELECT EVL_YEAR
+		              ,HT_SE
+		              ,TOT_NMPR
+		              ,GRAD_SE
+		              ,DECODE(GRAD_SE, '1', '수', '2', '우', '3', '양', '4', '가')         AS GRAD_NM
+		              ,SFHRM_GET_EVL_NMPR(EVL_YEAR, HT_SE, TOT_NMPR, GRAD_SE)           AS GRAD_NMPR
+		              ,NVL(SUM(SFHRM_GET_EVL_NMPR(EVL_YEAR, HT_SE, TOT_NMPR, GRAD_SE-1)) OVER (PARTITION BY EVL_YEAR, HT_SE ORDER BY GRAD_SE),0)+1  AS GRAD_NMPR_ACMTL1
+		              ,NVL(SUM(SFHRM_GET_EVL_NMPR(EVL_YEAR, HT_SE, TOT_NMPR, GRAD_SE  )) OVER (PARTITION BY EVL_YEAR, HT_SE ORDER BY GRAD_SE),0)    AS GRAD_NMPR_ACMTL2
+		        FROM   (
+		                SELECT #EVL_YEAR#      AS EVL_YEAR
+		                      ,#HT_SE#         AS HT_SE
+		                      ,#TOT_NMPR#      AS TOT_NMPR
+		                      ,LEVEL           AS GRAD_SE
+		                FROM   DUAL
+		                CONNECT BY LEVEL <= 4
+		               )
+		        WHERE  1=1
+		       ) r1
+		       LEFT OUTER JOIN (
+		                        SELECT s1.EVL_YEAR
+		                              ,s1.HT_SE
+		                              ,s1.EMPNO
+		                              ,SFSAL_GETEMPNO_01(s1.EMPNO)  AS EMPNM
+		                              ,s1.EVL_SCORE
+		                              ,RANK() OVER(PARTITION BY s1.EVL_YEAR, s1.HT_SE ORDER BY s1.EVL_SCORE DESC) AS SCORE_RNK
+		                        FROM   (
+		                                SELECT EVL_YEAR
+		                                      ,HT_SE
+		                                      ,EMPNO
+		                                      ,SUM(EVL_SCORE)       AS EVL_SCORE
+		                                FROM   TBHRM_WORK_SCRE_EVL_MANAGE
+		                                WHERE  EVL_MAN_SE = '01'
+		                                AND    EVL_YEAR = #EVL_YEAR#
+		                                AND    HT_SE = #HT_SE#
+		                                GROUP BY EVL_YEAR
+		                                        ,HT_SE
+		                                        ,EMPNO
+		                               ) s1
+		                               INNER JOIN TBHRM_WORK_EVL_TRGTER s2
+		                                    ON s1.EVL_YEAR = s2.EVL_YEAR
+		                                   AND s1.HT_SE = s2.HT_SE
+		                                   AND s1.EMPNO = s2.EMPNO
+		                        WHERE  s2.JSSFC_SE = #JSSFC_SE#
+		                        AND    s2.EVL_MAN_1_EMPNO = #EVL_MAN_EMPNO#
+		                       ) r2
+		            ON r1.EVL_YEAR = r2.EVL_YEAR
+		           AND r1.HT_SE = r2.HT_SE
+		           AND r2.SCORE_RNK BETWEEN r1.GRAD_NMPR_ACMTL1 AND r1.GRAD_NMPR_ACMTL2
+		WHERE  1=1
+		ORDER BY r1.EVL_YEAR, r1.HT_SE, r1.GRAD_SE, r2.SCORE_RNK
+	]]>
+	</select>
+
+	<!-- 평정인원분포 조회(2020년 이상) -->
+	<select id="HRM060103DAO.selectCrevalNmprDistrb" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		<![CDATA[/*HRM060103DAO.selectCrevalNmprDistrb(평정인원분포 조회(2020년 이상))*/]]>
+		WITH T_SCORE AS (
+		    SELECT T1.EVL_YEAR
+		         , T1.HT_SE
+		         , T1.EMPNO
+		         , SUM(T1.EVL_SCORE) AS EVL_SCORE
+		      FROM TBHRM_WORK_SCRE_EVL_MANAGE T1
+		     WHERE T1.EVL_YEAR      = #EVL_YEAR#
+		       AND T1.HT_SE         = #HT_SE#
+		       AND T1.EVL_MAN_SE    = '01'
+		       AND T1.EVL_MAN_EMPNO = #EVL_MAN_EMPNO#
+		    GROUP BY T1.EVL_YEAR
+		           , T1.HT_SE
+		           , T1.EMPNO
+		)
+		SELECT T1.EVL_YEAR
+		     , T1.HT_SE
+		     , DECODE(T2.JSSFC_SE, '04', '02', T2.JSSFC_SE) AS JSSFC_SE
+		     , T4.CODE_NM AS JSSFC_NM
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		     , CASE WHEN T2.CLSF_SE = '401' THEN '201'
+		            WHEN T2.CLSF_SE = '402' THEN '202'
+		            WHEN T2.CLSF_SE = '403' THEN '203'
+		            WHEN T2.CLSF_SE = '404' THEN '204'
+		            WHEN T2.CLSF_SE = '405' THEN '205'
+		            ELSE T2.CLSF_SE
+		       END AS CLSF_SE
+		     , T6.CODE_NM AS CLSF_NM
+		</isEqual>
+		<![CDATA[
+		     , T1.EMPNO
+		     , T3.EMPNM
+		     , T1.EVL_SCORE
+		     , CASE WHEN T2.EVL_STEP_SE = '02'
+		                 THEN CASE WHEN T1.EVL_SCORE >= 40
+		                                THEN '1'
+		                           WHEN T1.EVL_SCORE >= 35
+		                                THEN '2'
+		                           WHEN T1.EVL_SCORE >= 30
+		                                THEN '3'
+		                           ELSE '4'
+		                      END
+		            ELSE CASE WHEN T1.EVL_SCORE >= 26.7
+		                           THEN '1'
+		                      WHEN T1.EVL_SCORE >= 23.4
+		                           THEN '2'
+		                      WHEN T1.EVL_SCORE >= 20
+		                           THEN '3'
+		                      ELSE '4'
+		                 END
+		       END AS GRAD
+		     , CASE WHEN T2.EVL_STEP_SE = '02'
+		                 THEN CASE WHEN T1.EVL_SCORE >= 40
+		                                THEN '수'
+		                           WHEN T1.EVL_SCORE >= 35
+		                                THEN '우'
+		                           WHEN T1.EVL_SCORE >= 30
+		                                THEN '양'
+		                           ELSE '가'
+		                      END
+		            ELSE CASE WHEN T1.EVL_SCORE >= 26.7
+		                           THEN '수'
+		                      WHEN T1.EVL_SCORE >= 23.4
+		                           THEN '우'
+		                      WHEN T1.EVL_SCORE >= 20
+		                           THEN '양'
+		                      ELSE '가'
+		                 END
+		       END AS GRAD_NM
+		  FROM T_SCORE T1
+		       LEFT OUTER JOIN TBHRM_WORK_EVL_TRGTER T2
+		            ON T1.EVL_YEAR = T2.EVL_YEAR
+		           AND T1.HT_SE    = T2.HT_SE
+		           AND T1.EMPNO    = T2.EMPNO
+		       LEFT OUTER JOIN TBHRM_HR_MASTR T3
+		            ON T1.EMPNO = T3.EMPNO
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T4
+		            ON DECODE(T2.JSSFC_SE, '04', '02', T2.JSSFC_SE) = T4.CODE
+		           AND T4.GRP_CODE = 'HRM001'
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T5
+		            ON T2.OFCPS_SE = T5.CODE
+		           AND T5.GRP_CODE = 'HRM003'
+		]]>
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T6
+		            ON CASE WHEN T2.CLSF_SE = '401' THEN '201'
+		                    WHEN T2.CLSF_SE = '402' THEN '202'
+		                    WHEN T2.CLSF_SE = '403' THEN '203'
+		                    WHEN T2.CLSF_SE = '404' THEN '204'
+		                    WHEN T2.CLSF_SE = '405' THEN '205'
+		                    ELSE T2.CLSF_SE
+		               END         = T6.CODE
+		           AND T6.GRP_CODE = 'HRM002'
+		</isEqual>
+		 WHERE DECODE(T2.JSSFC_SE, '04', '02', T2.JSSFC_SE) = #JSSFC_SE#
+		ORDER BY DECODE(T2.JSSFC_SE, '04', '02', T2.JSSFC_SE)
+		<isEqual property="SUPRR_AT" compareValue="Y">
+		       , CASE WHEN T2.CLSF_SE = '401' THEN '201'
+		              WHEN T2.CLSF_SE = '402' THEN '202'
+		              WHEN T2.CLSF_SE = '403' THEN '203'
+		              WHEN T2.CLSF_SE = '404' THEN '204'
+		              WHEN T2.CLSF_SE = '405' THEN '205'
+		              ELSE T2.CLSF_SE
+		         END
+		</isEqual>
+		       , T1.EVL_SCORE DESC
+		       , T5.CODE_ORDR
+	</select>
+
+	<!-- 근무성적평정 입력 -->
+	<update id="HRM060103DAO.updateEvlScreEvl" parameterClass="java.util.HashMap">
+	<![CDATA[
+		MERGE INTO TBHRM_WORK_SCRE_EVL_MANAGE
+		USING DUAL
+		ON (
+		    EVL_YEAR      = #EVL_YEAR#      AND
+		    HT_SE         = #HT_SE#         AND
+		    EMPNO         = #EMPNO#         AND
+		    EVL_MAN_SE    = #EVL_MAN_SE#    AND
+		    EVL_SE        = #EVL_SE#        AND
+		    EVL_IEM_CODE  = #EVL_IEM_CODE#
+		)
+		WHEN MATCHED THEN
+		    UPDATE 
+		    SET    EVL_MAN_EMPNO = #EVL_MAN_EMPNO#
+		          ,EVL_GRAD      = #EVL_GRAD#
+		          ,EVL_SCORE     = #EVL_SCORE#
+		          ,UPDUSR_ID     = #S_USER_ID#
+		          ,UPDT_DT       = SYSDATE
+		WHEN NOT MATCHED THEN
+		    INSERT (
+		         EVL_YEAR
+		        ,HT_SE
+		        ,EMPNO
+		        ,EVL_MAN_SE
+		        ,EVL_SE
+		        ,EVL_IEM_CODE
+		        ,EVL_MAN_EMPNO
+		        ,EVL_GRAD
+		        ,EVL_SCORE
+		        ,REGISTER_ID
+		        ,REGIST_DT
+		        ,UPDUSR_ID
+		        ,UPDT_DT
+		    )
+		    VALUES (
+		         #EVL_YEAR#
+		        ,#HT_SE#
+		        ,#EMPNO#
+		        ,#EVL_MAN_SE#
+		        ,#EVL_SE#
+		        ,#EVL_IEM_CODE#
+		        ,#EVL_MAN_EMPNO#
+		        ,#EVL_GRAD#
+		        ,#EVL_SCORE#
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		    )
+	]]>
+	</update>
+
+
+	<!-- 일용직근로자계좌 입력 -->
+	<update id="HRM060103DAO.updateWorkScreEvlOpinion" parameterClass="java.util.Map">
+	<![CDATA[
+		MERGE INTO TBHRM_WORK_SCRE_EVL_OPINION
+		USING DUAL
+		ON (
+		    EVL_YEAR     = #EVL_YEAR#    AND
+		    HT_SE        = #HT_SE#       AND
+		    EMPNO        = #EMPNO#       AND
+		    EVL_MAN_SE   = #EVL_MAN_SE#
+		)
+		WHEN MATCHED THEN
+		    UPDATE
+		    SET    EVL_MAN_EMPNO = DECODE(#EVL_MAN_SE#, '01', #EVL_MAN_1_EMPNO#, '02', #EVL_MAN_2_EMPNO#, '03', #EVL_MAN_3_EMPNO#)
+		          ,EVL_OPINION   = DECODE(#EVL_MAN_SE#, '01', #EVL_1_OPINION#, '02', #EVL_2_OPINION#, '03', #EVL_3_OPINION#)
+		          ,UPDUSR_ID     = #S_USER_ID#
+		          ,UPDT_DT       = SYSDATE
+		WHEN NOT MATCHED THEN
+		    INSERT (
+		         EVL_YEAR
+		        ,HT_SE
+		        ,EMPNO
+		        ,EVL_MAN_SE
+		        ,EVL_MAN_EMPNO
+		        ,EVL_OPINION
+		        ,REGISTER_ID
+		        ,REGIST_DT
+		        ,UPDUSR_ID
+		        ,UPDT_DT
+		    )
+		    VALUES (
+		         #EVL_YEAR#
+		        ,#HT_SE#
+		        ,#EMPNO#
+		        ,#EVL_MAN_SE#
+		        ,DECODE(#EVL_MAN_SE#, '01', #EVL_MAN_1_EMPNO#, '02', #EVL_MAN_2_EMPNO#, '03', #EVL_MAN_3_EMPNO#)
+		        ,DECODE(#EVL_MAN_SE#, '01', #EVL_1_OPINION#, '02', #EVL_2_OPINION#, '03', #EVL_3_OPINION#)
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		    )
+	]]>
+	</update>
+
+
+	<!-- (Popop) 평정자 선택대상 조회 -->
+	<select id="HRM060103DAO.selectEvlManPopup" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT r1.*
+		FROM   (
+		        SELECT s1.EVL_YEAR
+		              ,s1.HT_SE
+		              ,s1.EVL_MAN_EMPNO                                           AS EVL_MAN_EMPNO
+		              ,SFSAL_GETEMPNO_01(s1.EVL_MAN_EMPNO)                        AS EVL_MAN_EMPNM
+		              ,s1.EVL_MAN_DEPT_CODE                                       AS DEPT_CODE
+		              ,SFSAL_GETDEPTNM_01(s1.EVL_MAN_DEPT_CODE)                   AS DEPT_NM
+		              ,s1.EVL_MAN_CLSF_SE                                         AS CLSF_SE
+		              ,SFCOM_CODE_NM('HRM002', s1.EVL_MAN_CLSF_SE, 'CODE_NM')     AS CLSF_NM
+		              ,s1.EVL_MAN_OFCPS_SE                                        AS OFCPS_SE
+		              ,SFCOM_CODE_NM('HRM003', s1.EVL_MAN_OFCPS_SE, 'CODE_NM')    AS OFCPS_NM
+		              ,CASE WHEN s1.EVL_MAN_OFCPS_SE IN ('01','02','03','04','35','36','37','38','31','14','39') THEN 'Y'
+                            ELSE 'N'
+                       END AS SUPRR_AT /*상급자여부*/
+		              ,NVL(s1.EVL_EMPL_CNT,0)                                     AS EVL_EMPL_CNT
+		        FROM   (
+		                SELECT EVL_YEAR
+		                      ,HT_SE
+	]]>
+	<isEqual property="EVL_MAN_SE" compareValue="01">
+		                      ,EVL_MAN_1_EMPNO               AS EVL_MAN_EMPNO
+		                      ,MAX(EVL_MAN_1_DEPT_CODE)      AS EVL_MAN_DEPT_CODE
+		                      ,MAX(EVL_MAN_1_CLSF_SE)        AS EVL_MAN_CLSF_SE
+		                      ,MAX(EVL_MAN_1_OFCPS_SE)       AS EVL_MAN_OFCPS_SE
+	</isEqual>
+	<isEqual property="EVL_MAN_SE" compareValue="02">
+		                      ,EVL_MAN_2_EMPNO               AS EVL_MAN_EMPNO
+		                      ,MAX(EVL_MAN_2_DEPT_CODE)      AS EVL_MAN_DEPT_CODE
+		                      ,MAX(EVL_MAN_2_CLSF_SE)        AS EVL_MAN_CLSF_SE
+		                      ,MAX(EVL_MAN_2_OFCPS_SE)       AS EVL_MAN_OFCPS_SE
+	</isEqual>
+	<isEqual property="EVL_MAN_SE" compareValue="03">
+		                      ,CNFRMR_EMPNO                  AS EVL_MAN_EMPNO
+		                      ,MAX(CNFRMR_DEPT_CODE)         AS EVL_MAN_DEPT_CODE
+		                      ,MAX(CNFRMR_CLSF_SE)           AS EVL_MAN_CLSF_SE
+		                      ,MAX(CNFRMR_OFCPS_SE)          AS EVL_MAN_OFCPS_SE
+	</isEqual>
+	<![CDATA[
+		                      ,COUNT(1)                      AS EVL_EMPL_CNT
+		                FROM   TBHRM_WORK_EVL_TRGTER
+		                GROUP BY EVL_YEAR
+		                        ,HT_SE
+	]]>
+		                        <isEqual property="EVL_MAN_SE" compareValue="01">,EVL_MAN_1_EMPNO</isEqual>
+		                        <isEqual property="EVL_MAN_SE" compareValue="02">,EVL_MAN_2_EMPNO</isEqual>
+		                        <isEqual property="EVL_MAN_SE" compareValue="03">,CNFRMR_EMPNO</isEqual>
+	<![CDATA[
+		               ) s1
+		               LEFT OUTER JOIN TBHRM_WORK_EVL_PD s2
+		                    ON s1.EVL_YEAR = s2.EVL_YEAR
+		                   AND s1.HT_SE = s2.HT_SE
+		        WHERE  s1.EVL_YEAR = #EVL_YEAR#
+		        AND    s1.HT_SE = #HT_SE#
+		        AND    s1.EVL_MAN_EMPNO IS NOT NULL
+		       ) r1
+		       LEFT OUTER JOIN VWHRM_DEPT r2
+		            ON r1.DEPT_CODE = r2.DEPT_CODE
+		WHERE  1=1
+		ORDER BY r2.OUTPT_ORDR, r1.CLSF_SE, r1.OFCPS_SE
+	]]>
+	</select>
+
+
+</sqlMap>

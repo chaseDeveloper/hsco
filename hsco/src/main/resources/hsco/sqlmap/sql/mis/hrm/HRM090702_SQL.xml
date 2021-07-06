@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM090702_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 사원별 자원봉사현황 조회-->
+	<select id="HRM090702DAO.selectSrvcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	        SELECT  t4.DEPT_NM
+	               ,t1.PRTCPNT_EMPNO
+	               ,t3.EMPNM
+	               ,COUNT(t1.SN) AS CNT
+	               ,SUM(t2.RCOGN_SRVC_TIME) AS SRVC_TIME
+	               ,#SRCH_YM# AS SRCH_YM
+	          FROM TBHRM_RESRCE_SRVC_PRTCPNT t1
+	          LEFT OUTER JOIN TBHRM_RESRCE_SRVC t2
+	               ON t1.SN = t2.SN
+	               AND t2.CONFM_AT = '1'
+	          LEFT OUTER JOIN TBHRM_HR_MASTR t3
+	               ON t1.PRTCPNT_EMPNO = t3.EMPNO
+	          LEFT OUTER JOIN TBHRM_DEPT t4
+	               ON t3.DEPT_CODE = t4.DEPT_CODE
+	         WHERE SUBSTR(t2.ENDDE, 1, 6) = #SRCH_YM#
+	         GROUP BY t4.DEPT_NM, t1.PRTCPNT_EMPNO, t3.EMPNM, t3.DEPT_CODE, t3.OFCPS_SE
+	         ORDER BY t3.DEPT_CODE, t3.OFCPS_SE, t3.EMPNM
+    </select>
+    
+    <!-- 사원별 자원봉사참여내역 조회 -->
+	<select id="HRM090702DAO.selectSrvcDtlList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT TRS.BGNDE
+                 , SUBSTR(TRS.BEGIN_TM, 1, 2) || SUBSTR(TRS.BEGIN_TM, 4, 2)    AS BEGIN_TM
+                 , NVL(TRS.ENDDE, TRS.BGNDE)                                   AS ENDDE 
+                 , SUBSTR(TRS.END_TM, 1, 2) || SUBSTR(TRS.END_TM, 4, 2)        AS END_TM
+                 , TRS.REQRE_TIME
+                 , TRS.SRVC_AREA_NM
+                 , TRS.SRVC_ACT_DTLS
+                 , THM.DEPT_CODE
+                 , NVL(SFSAL_GETDEPTNM_01(THM.DEPT_CODE), SFHRM_GET_DEPTNM(THM.DEPT_CODE, '0'))     AS DEPT_NM
+                 , TRS.RSPNBER_EMPNO
+                 , THM.EMPNM                                                   AS RSPNBER_EMPNM
+                 , TRS.RCOGN_SRVC_TIME
+              FROM TBHRM_RESRCE_SRVC TRS
+              LEFT OUTER JOIN TBHRM_HR_MASTR THM
+                   ON TRS.RSPNBER_EMPNO = THM.EMPNO
+             INNER JOIN (
+                     SELECT SN
+                     FROM TBHRM_RESRCE_SRVC_PRTCPNT TRS_DTL
+                       LEFT OUTER JOIN TBHRM_HR_MASTR TRS_DTL_HRM
+                        ON TRS_DTL.PRTCPNT_EMPNO = TRS_DTL_HRM.EMPNO
+                     WHERE 1=1
+					<isNotEmpty property="EMPNO" prepend="AND">
+						TRS_DTL.PRTCPNT_EMPNO = #EMPNO#
+					</isNotEmpty>
+                    GROUP BY SN
+				 ) TRS_DTL
+				    ON TRS.SN                = TRS_DTL.SN
+             WHERE 1=1
+             AND TRS.CONFM_AT ='1'
+			 AND SUBSTR(TRS.ENDDE, 1, 6) = #SRCH_YM#
+			ORDER BY TRS.SN
+    </select>
+</sqlMap>

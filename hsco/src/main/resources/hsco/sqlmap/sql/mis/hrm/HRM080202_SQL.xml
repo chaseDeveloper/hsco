@@ -1,0 +1,674 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM080202_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 마스터 조회 -->
+	<!-- 수요조사 목록 조회 -->
+	<select id="HRM080202DAO.selectDmandExaminList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.selectDmandExaminList*/]]>
+			SELECT T1.YEAR
+				 , T1.DMAND_EXAMIN_NO
+				 , T1.YEAR || '-' || T1.DMAND_EXAMIN_NO                                                                                         AS YEAR_DMAND_EXAMIN_NO
+				 , T1.DMAND_EXAMIN_NM
+				 , T1.DMAND_EXAMIN_NM || '(' || SUBSTR(T1.BGNDE, 1, 4) || '.' || SUBSTR(T1.BGNDE, 5, 2) || '.' || SUBSTR(T1.BGNDE, 7) 
+				                      || '~' || SUBSTR(T1.ENDDE, 1, 4) || '.' || SUBSTR(T1.ENDDE, 5, 2) || '.' || SUBSTR(T1.ENDDE, 7) || ')'    AS DMAND_EXAMIN_NM2
+				 , T1.DMAND_EXAMIN_CN
+				 , T1.BGNDE
+				 , T1.ENDDE
+				 , CASE WHEN TO_CHAR(SYSDATE, 'YYYYMMDD') BETWEEN T1.BGNDE AND T1.ENDDE THEN '1' ELSE '0' END                                   AS INP_YN
+				 , T1.SANCTN_NO
+				 , T1.CONFM_AT
+				 , NVL(T2.EMPNM, '알수없음')            AS REGISTER_NM
+				 , TO_CHAR(T1.REGIST_DT, 'YYYYMMDD')    AS REGIST_DT
+			  FROM TBHRM_DMAND_EXAMIN_MANAGE T1
+				   LEFT OUTER JOIN TBHRM_HR_MASTR T2
+				        ON T1.REGISTER_ID = T2.EMPNO
+			 WHERE 1=1
+			   AND CONFM_AT = '1'
+			<isNotEmpty property="YEAR">
+			   AND T1.YEAR = #YEAR#
+			</isNotEmpty>
+			ORDER BY T1.YEAR
+				   , T1.DMAND_EXAMIN_NO
+	</select>
+	
+	<!-- 탭 조회 -->
+	<!-- (T01) 운영방안의견 조회 -->
+	<select id="HRM080202DAO.selectOperMethodOpinion" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.selectOperMethodOpinion*/]]>
+			SELECT T1.YEAR
+			     , T1.EDC_SE_CODE
+			     , T1.EDC_SE_NM
+			     , NVL(T2.DMAND_EXAMIN_NO, #DMAND_EXAMIN_NO#)    AS DMAND_EXAMIN_NO
+			     , T3.DMAND_EXAMIN_NM
+			     , NVL(T2.DEPT_CODE, #DEPT_CODE#)                AS DEPT_CODE
+			     , T4.DEPT_NM
+			     , T2.CUR_SYSTEM
+			     , T2.IMPRVM_OPINION
+			     , T2.IMPRVM_PRVONSH
+			  FROM TBHRM_DMAND_EXAMIN_EDC_MANAGE T1
+			       LEFT OUTER JOIN TBHRM_OPER_METHOD_OPINION T2
+			            ON T1.YEAR            = T2.YEAR
+			           AND T1.EDC_SE_CODE     = T2.EDC_SE_CODE
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+			           AND T2.DEPT_CODE = #DEPT_CODE#
+				</isNotEqual>
+			</isNotEmpty>
+			           AND T2.DMAND_EXAMIN_NO = SUBSTR(#YEAR_DMAND_EXAMIN_NO#, 6)
+			       LEFT OUTER JOIN TBHRM_DMAND_EXAMIN_MANAGE T3
+			            ON T1.YEAR            = T3.YEAR
+			           AND T2.DMAND_EXAMIN_NO = T3.DMAND_EXAMIN_NO
+			           AND T3.CONFM_AT        = '1'
+			       LEFT OUTER JOIN TBHRM_DEPT T4
+			            ON NVL(T2.DEPT_CODE, #DEPT_CODE#) = T4.DEPT_CODE
+			 WHERE T1.USE_AT = '1'
+			   AND T1.YEAR   = SUBSTR(#YEAR_DMAND_EXAMIN_NO#, 1, 4)
+	</select>
+	
+	<!-- (T01) 운영방안의견 저장 -->
+	<update id="HRM080202DAO.updateOperMethodOpinion" parameterClass="java.util.HashMap">
+	<![CDATA[/*HRM080202DAO.updateOperMethodOpinion*/]]>
+		MERGE INTO TBHRM_OPER_METHOD_OPINION
+		USING DUAL
+		ON    (
+			       YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND DEPT_CODE       = #DEPT_CODE#
+			   AND EDC_SE_CODE     = #EDC_SE_CODE#
+		      )
+		WHEN MATCHED THEN
+			UPDATE
+			   SET CUR_SYSTEM     = #CUR_SYSTEM#
+			     , IMPRVM_OPINION = #IMPRVM_OPINION#
+			     , IMPRVM_PRVONSH = #IMPRVM_PRVONSH#
+			     , UPDUSR_ID      = #S_USER_ID#
+			     , UPDT_DT        = SYSDATE
+		WHEN NOT MATCHED THEN
+			INSERT (
+				   YEAR
+				 , DMAND_EXAMIN_NO
+				 , DEPT_CODE
+				 , EDC_SE_CODE
+				 , CUR_SYSTEM
+				 , IMPRVM_OPINION
+				 , IMPRVM_PRVONSH
+				 , REGISTER_ID
+				 , REGIST_DT
+				 , UPDUSR_ID
+				 , UPDT_DT
+			)
+			VALUES (
+				   #YEAR#
+				 , #DMAND_EXAMIN_NO#
+				 , #DEPT_CODE#
+				 , #EDC_SE_CODE#
+				 , #CUR_SYSTEM#
+				 , #IMPRVM_OPINION#
+				 , #IMPRVM_PRVONSH#
+				 , #S_USER_ID#
+				 , SYSDATE
+				 , #S_USER_ID#
+				 , SYSDATE
+			)
+	</update>
+	
+	<!-- (T02) 희망신규교육 조회 -->
+	<select id="HRM080202DAO.selectHopeNewEdc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.selectHopeNewEdc*/]]>
+			SELECT T1.YEAR
+			     , T1.DMAND_EXAMIN_NO
+			     , T1.SN
+			     , T1.DEPT_CODE
+			     , NVL(T2.DEPT_NM, '알수없음')    AS DEPT_NM
+			     , T1.EDC_TRGET_SE
+			     , T1.CRSE_NM
+			     , T1.EDC_CN
+			     , T1.EDC_MTH_SE
+			     , T1.EDC_PD
+			     , T1.HOPE_EDC_INSTT
+			     , T1.EDC_PRVONSH
+			     , T1.EDC_TRGET_JBLN
+			     , T1.DETAIL_JOB
+			     , T1.REGISTER_ID
+			  FROM TBHRM_HOPE_NEW_EDC T1
+			       LEFT OUTER JOIN TBHRM_DEPT T2
+			            ON T1.DEPT_CODE = T2.DEPT_CODE
+			 WHERE 1=1
+			   AND T1.YEAR || '-' || T1.DMAND_EXAMIN_NO = #YEAR_DMAND_EXAMIN_NO#
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+			        AND T1.DEPT_CODE = #DEPT_CODE#
+				</isNotEqual>
+			</isNotEmpty>
+			ORDER BY T1.SN
+	</select>
+	
+	<!-- (T02) 희망신규교육 추가 -->
+	<insert id="HRM080202DAO.insertHopeNewEdc" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.insertHopeNewEdc*/]]>
+			INSERT INTO TBHRM_HOPE_NEW_EDC (
+				   YEAR
+				 , DMAND_EXAMIN_NO
+				 , SN
+				 , DEPT_CODE
+				 , EDC_TRGET_SE
+				 , CRSE_NM
+				 , EDC_CN
+				 , EDC_MTH_SE
+				 , EDC_PD
+				 , HOPE_EDC_INSTT
+				 , EDC_PRVONSH
+				 , EDC_TRGET_JBLN
+				 , DETAIL_JOB
+				 , REGISTER_ID
+				 , REGIST_DT
+				 , UPDUSR_ID
+				 , UPDT_DT
+				)
+			VALUES (
+				  #YEAR#
+				, #DMAND_EXAMIN_NO#
+				, (SELECT NVL(MAX(SN), 0) + 1 FROM TBHRM_HOPE_NEW_EDC WHERE YEAR = #YEAR# AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#)
+				, #DEPT_CODE#
+				, #EDC_TRGET_SE#
+				, #CRSE_NM#
+				, #EDC_CN#
+				, #EDC_MTH_SE#
+				, #EDC_PD#
+				, #HOPE_EDC_INSTT#
+				, #EDC_PRVONSH#
+				, #EDC_TRGET_JBLN#
+				, #DETAIL_JOB#
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+			)
+	</insert>
+	
+	<!-- (T02) 희망신규교육 수정 -->
+	<update id="HRM080202DAO.updateHopeNewEdc" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.updateHopeNewEdc*/]]>
+			UPDATE TBHRM_HOPE_NEW_EDC
+			   SET EDC_TRGET_SE   = #EDC_TRGET_SE#
+			     , CRSE_NM        = #CRSE_NM#
+			     , EDC_CN         = #EDC_CN#
+			     , EDC_MTH_SE     = #EDC_MTH_SE#
+			     , EDC_PD         = #EDC_PD#
+			     , HOPE_EDC_INSTT = #HOPE_EDC_INSTT#
+			     , EDC_PRVONSH    = #EDC_PRVONSH#
+			     , EDC_TRGET_JBLN = #EDC_TRGET_JBLN#
+			     , DETAIL_JOB     = #DETAIL_JOB#
+			     , UPDUSR_ID      = #S_USER_ID#
+			     , UPDT_DT        = SYSDATE
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</update>
+	
+	<!-- (T02) 희망신규교육 삭제 -->
+	<delete id="HRM080202DAO.deleteHopeNewEdc" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.deleteHopeNewEdc*/]]>
+			DELETE
+			  FROM TBHRM_HOPE_NEW_EDC
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</delete>
+	
+	<!-- (T03) 희망위탁교육 조회 -->
+	<select id="HRM080202DAO.selectHopeTruedu" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.selectHopeTruedu*/]]>
+			SELECT T1.YEAR
+			     , T1.DMAND_EXAMIN_NO
+			     , T1.SN
+			     , T1.DEPT_CODE
+			     , NVL(T2.DEPT_NM, '알수없음')    AS DEPT_NM
+			     , T1.EDC_TRGET
+			     , T1.EDC_CRSE
+			     , T1.EXPECT_CT
+			     , T1.EDC_PD
+			     , T1.INSTT_NM
+			     , T1.EDC_PRVONSH
+			     , T1.REGISTER_ID
+			  FROM TBHRM_HOPE_TRUEDU T1
+			       LEFT OUTER JOIN TBHRM_DEPT T2
+			            ON T1.DEPT_CODE = T2.DEPT_CODE
+			 WHERE 1=1
+			   AND T1.YEAR || '-' || T1.DMAND_EXAMIN_NO = #YEAR_DMAND_EXAMIN_NO#
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+			        AND T1.DEPT_CODE = #DEPT_CODE#
+				</isNotEqual>
+			</isNotEmpty>
+			ORDER BY T1.SN
+	</select>
+	
+	<!-- (T03) 희망위탁교육 추가 -->
+	<insert id="HRM080202DAO.insertHopeTruedu" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.insertHopeTruedu*/]]>
+			INSERT INTO TBHRM_HOPE_TRUEDU (
+				   YEAR
+				 , DMAND_EXAMIN_NO
+				 , SN
+				 , DEPT_CODE
+				 , EDC_TRGET
+				 , EDC_CRSE
+				 , EXPECT_CT
+				 , EDC_PD
+				 , INSTT_NM
+				 , EDC_PRVONSH
+				 , REGISTER_ID
+				 , REGIST_DT
+				 , UPDUSR_ID
+				 , UPDT_DT
+				)
+			VALUES (
+				  #YEAR#
+				, #DMAND_EXAMIN_NO#
+				, (SELECT NVL(MAX(SN), 0) + 1 FROM TBHRM_HOPE_TRUEDU WHERE YEAR = #YEAR# AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#)
+				, #DEPT_CODE#
+				, #EDC_TRGET#
+				, #EDC_CRSE#
+				, #EXPECT_CT#
+				, #EDC_PD#
+				, #INSTT_NM#
+				, #EDC_PRVONSH#
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+			)
+	</insert>
+	
+	<!-- (T03) 희망위탁교육 수정 -->
+	<update id="HRM080202DAO.updateHopeTruedu" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.updateHopeTruedu*/]]>
+			UPDATE TBHRM_HOPE_TRUEDU
+			   SET EDC_TRGET      = #EDC_TRGET#
+			     , EDC_CRSE       = #EDC_CRSE#
+			     , EXPECT_CT      = #EXPECT_CT#
+			     , EDC_PD         = #EDC_PD#
+			     , INSTT_NM       = #INSTT_NM#
+			     , EDC_PRVONSH    = #EDC_PRVONSH#
+			     , UPDUSR_ID      = #S_USER_ID#
+			     , UPDT_DT        = SYSDATE
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</update>
+	
+	<!-- (T03) 희망위탁교육 삭제 -->
+	<delete id="HRM080202DAO.deleteHopeTruedu" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.deleteHopeTruedu*/]]>
+			DELETE
+			  FROM TBHRM_HOPE_TRUEDU
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</delete>
+	
+	<!-- (T04) 환경개선의견 조회 -->
+	<select id="HRM080202DAO.selectEnvrnImprvmOpinion" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.selectEnvrnImprvmOpinion*/]]>
+			SELECT T1.YEAR
+			     , T1.DMAND_EXAMIN_NO
+			     , T1.SN
+			     , T1.DEPT_CODE
+			     , NVL(T2.DEPT_NM, '알수없음')    AS DEPT_NM
+			     , T1.EDC_ENVRN_SE
+			     , T1.CUR_MATTER
+			     , T1.IMPRVM_METHOD
+			     , T1.IMPRVM_PRVONSH
+			     , T1.IMPRVM_BASIS
+			     , T1.REGISTER_ID
+			  FROM TBHRM_ENVRN_IMPRVM_OPINION T1
+			       LEFT OUTER JOIN TBHRM_DEPT T2
+			            ON T1.DEPT_CODE = T2.DEPT_CODE
+			 WHERE 1=1
+			   AND T1.YEAR || '-' || T1.DMAND_EXAMIN_NO = #YEAR_DMAND_EXAMIN_NO#
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+			        AND T1.DEPT_CODE = #DEPT_CODE#
+				</isNotEqual>
+			</isNotEmpty>
+			ORDER BY T1.SN
+	</select>
+	
+	<!-- (T04) 환경개선의견 추가 -->
+	<insert id="HRM080202DAO.insertEnvrnImprvmOpinion" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.insertEnvrnImprvmOpinion*/]]>
+			INSERT INTO TBHRM_ENVRN_IMPRVM_OPINION (
+				   YEAR
+				 , DMAND_EXAMIN_NO
+				 , SN
+				 , DEPT_CODE
+				 , EDC_ENVRN_SE
+				 , CUR_MATTER
+				 , IMPRVM_METHOD
+				 , IMPRVM_PRVONSH
+				 , IMPRVM_BASIS
+				 , REGISTER_ID
+				 , REGIST_DT
+				 , UPDUSR_ID
+				 , UPDT_DT
+				)
+			VALUES (
+				  #YEAR# 
+				, #DMAND_EXAMIN_NO# 
+				, (SELECT NVL(MAX(SN), 0) + 1 FROM TBHRM_ENVRN_IMPRVM_OPINION WHERE YEAR = #YEAR# AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#)
+				, #DEPT_CODE#
+				, #EDC_ENVRN_SE# 
+				, #CUR_MATTER# 
+				, #IMPRVM_METHOD# 
+				, #IMPRVM_PRVONSH# 
+				, #IMPRVM_BASIS# 
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+			)
+	</insert>
+	
+	<!-- (T04) 환경개선의견 수정 -->
+	<update id="HRM080202DAO.updateEnvrnImprvmOpinion" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.updateEnvrnImprvmOpinion*/]]>
+			UPDATE TBHRM_ENVRN_IMPRVM_OPINION
+			   SET EDC_ENVRN_SE   = #EDC_ENVRN_SE#
+			     , CUR_MATTER     = #CUR_MATTER#
+			     , IMPRVM_METHOD  = #IMPRVM_METHOD#
+			     , IMPRVM_PRVONSH = #IMPRVM_PRVONSH#
+			     , IMPRVM_BASIS   = #IMPRVM_BASIS#
+			     , UPDUSR_ID      = #S_USER_ID#
+			     , UPDT_DT        = SYSDATE
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</update>
+	
+	<!-- (T04) 환경개선의견 삭제 -->
+	<delete id="HRM080202DAO.deleteEnvrnImprvmOpinion" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.deleteEnvrnImprvmOpinion*/]]>
+			DELETE
+			  FROM TBHRM_ENVRN_IMPRVM_OPINION
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</delete>
+	
+	<!-- (T05) 희망위탁교육기관 조회 -->
+	<select id="HRM080202DAO.selectHopeTrueduInstt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.selectHopeTrueduInstt*/]]>
+			SELECT T1.YEAR
+			     , T1.DMAND_EXAMIN_NO
+			     , T1.SN
+			     , T1.DEPT_CODE
+			     , NVL(T2.DEPT_NM, '알수없음')    AS DEPT_NM
+			     , T1.INSTT_NM
+			     , T1.LOCPLC
+			     , T1.EDC_REALM
+			     , T1.RECOMMEND_PRVONSH
+			     , T1.REGISTER_ID
+			  FROM TBHRM_HOPE_TRUEDU_INSTT T1
+			       LEFT OUTER JOIN TBHRM_DEPT T2
+			            ON T1.DEPT_CODE = T2.DEPT_CODE
+			 WHERE 1=1
+			   AND T1.YEAR || '-' || T1.DMAND_EXAMIN_NO = #YEAR_DMAND_EXAMIN_NO#
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+			        AND T1.DEPT_CODE = #DEPT_CODE#
+				</isNotEqual>
+			</isNotEmpty>
+			ORDER BY T1.SN
+	</select>
+	
+	<!-- (T05) 희망위탁교육기관 추가 -->
+	<insert id="HRM080202DAO.insertHopeTrueduInstt" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.insertHopeTrueduInstt*/]]>
+			INSERT INTO TBHRM_HOPE_TRUEDU_INSTT (
+				   YEAR
+				 , DMAND_EXAMIN_NO
+				 , SN
+				 , DEPT_CODE
+				 , INSTT_NM
+				 , LOCPLC
+				 , EDC_REALM
+				 , RECOMMEND_PRVONSH
+				 , REGISTER_ID
+				 , REGIST_DT
+				 , UPDUSR_ID
+				 , UPDT_DT
+				)
+			VALUES (
+				  #YEAR# 
+				, #DMAND_EXAMIN_NO# 
+				, (SELECT NVL(MAX(SN), 0) + 1 FROM TBHRM_HOPE_TRUEDU_INSTT WHERE YEAR = #YEAR# AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#)
+				, #DEPT_CODE#
+				, #INSTT_NM# 
+				, #LOCPLC# 
+				, #EDC_REALM# 
+				, #RECOMMEND_PRVONSH# 
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+			)
+	</insert>
+	
+	<!-- (T05) 희망위탁교육기관 수정 -->
+	<update id="HRM080202DAO.updateHopeTrueduInstt" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.updateHopeTrueduInstt*/]]>
+			UPDATE TBHRM_HOPE_TRUEDU_INSTT
+			   SET INSTT_NM          = #INSTT_NM#
+			     , LOCPLC            = #LOCPLC#
+			     , EDC_REALM         = #EDC_REALM#
+			     , RECOMMEND_PRVONSH = #RECOMMEND_PRVONSH#
+			     , UPDUSR_ID         = #S_USER_ID#
+			     , UPDT_DT           = SYSDATE
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</update>
+	
+	<!-- (T05) 희망위탁교육기관 삭제 -->
+	<delete id="HRM080202DAO.deleteHopeTrueduInstt" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.deleteHopeTrueduInstt*/]]>
+			DELETE
+			  FROM TBHRM_HOPE_TRUEDU_INSTT
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</delete>
+	
+	<!-- (T06) 희망강사 조회 -->
+	<select id="HRM080202DAO.selectHopeInstrctr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.selectHopeInstrctr*/]]>
+			SELECT T1.YEAR
+			     , T1.DMAND_EXAMIN_NO
+			     , T1.SN
+			     , T1.DEPT_CODE
+			     , NVL(T2.DEPT_NM, '알수없음')    AS DEPT_NM
+			     , T1.EDC_CRSE
+			     , T1.INSTRCTR_NM
+			     , T1.INSTRCTR_INFO
+			     , T1.RECOMMEND_PRVONSH
+			     , T1.REGISTER_ID
+			  FROM TBHRM_HOPE_INSTRCTR T1
+			       LEFT OUTER JOIN TBHRM_DEPT T2
+			            ON T1.DEPT_CODE = T2.DEPT_CODE
+			 WHERE 1=1
+			   AND T1.YEAR || '-' || T1.DMAND_EXAMIN_NO = #YEAR_DMAND_EXAMIN_NO#
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+			        AND T1.DEPT_CODE = #DEPT_CODE#
+				</isNotEqual>
+			</isNotEmpty>
+			ORDER BY T1.SN
+	</select>
+	
+	<!-- (T06) 희망강사 추가 -->
+	<insert id="HRM080202DAO.insertHopeInstrctr" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.insertHopeInstrctr*/]]>
+			INSERT INTO TBHRM_HOPE_INSTRCTR (
+				   YEAR
+				 , DMAND_EXAMIN_NO
+				 , SN
+				 , DEPT_CODE
+				 , EDC_CRSE 
+				 , INSTRCTR_NM 
+				 , INSTRCTR_INFO 
+				 , RECOMMEND_PRVONSH 
+				 , REGISTER_ID
+				 , REGIST_DT
+				 , UPDUSR_ID
+				 , UPDT_DT
+				)
+			VALUES (
+				  #YEAR# 
+				, #DMAND_EXAMIN_NO# 
+				, (SELECT NVL(MAX(SN), 0) + 1 FROM TBHRM_HOPE_INSTRCTR WHERE YEAR = #YEAR# AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#)
+				, #DEPT_CODE#
+				, #EDC_CRSE# 
+				, #INSTRCTR_NM# 
+				, #INSTRCTR_INFO# 
+				, #RECOMMEND_PRVONSH# 
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+			)
+	</insert>
+	
+	<!-- (T06) 희망강사 수정 -->
+	<update id="HRM080202DAO.updateHopeInstrctr" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.updateHopeInstrctr*/]]>
+			UPDATE TBHRM_HOPE_INSTRCTR
+			   SET EDC_CRSE          = #EDC_CRSE#
+			     , INSTRCTR_NM       = #INSTRCTR_NM#
+			     , INSTRCTR_INFO     = #INSTRCTR_INFO#
+			     , RECOMMEND_PRVONSH = #RECOMMEND_PRVONSH#
+			     , UPDUSR_ID         = #S_USER_ID#
+			     , UPDT_DT           = SYSDATE
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</update>
+	
+	<!-- (T06) 희망강사 삭제 -->
+	<delete id="HRM080202DAO.deleteHopeInstrctr" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.deleteHopeInstrctr*/]]>
+			DELETE
+			  FROM TBHRM_HOPE_INSTRCTR
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</delete>
+	
+	<!-- (T07) 집단교육계획 조회 -->
+	<select id="HRM080202DAO.selectGrupEdcPlan" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.selectGrupEdcPlan*/]]>
+			SELECT T1.YEAR
+			     , T1.DMAND_EXAMIN_NO
+			     , T1.SN
+			     , T1.DEPT_CODE
+			     , NVL(T2.DEPT_NM, '알수없음')    AS DEPT_NM
+			     , T1.EDC_TRGET
+			     , T1.EDC_CRSE
+			     , T1.EDC_MTH_CODE
+			     , T1.EDC_PD
+			     , T1.EXPECT_CT
+			     , T1.OPERTN_BASIS
+			     , T1.REGISTER_ID
+			  FROM TBHRM_GRUP_EDC_PLAN T1
+				   LEFT OUTER JOIN TBHRM_DEPT T2
+				        ON T1.DEPT_CODE = T2.DEPT_CODE
+			 WHERE 1=1
+			   AND T1.YEAR || '-' || T1.DMAND_EXAMIN_NO = #YEAR_DMAND_EXAMIN_NO#
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+			        AND T1.DEPT_CODE = #DEPT_CODE#
+				</isNotEqual>
+			</isNotEmpty>
+			ORDER BY T1.SN
+	</select>
+	
+	<!-- (T07) 집단교육계획 추가 -->
+	<insert id="HRM080202DAO.insertGrupEdcPlan" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.insertGrupEdcPlan*/]]>
+			INSERT INTO TBHRM_GRUP_EDC_PLAN (
+				   YEAR
+				 , DMAND_EXAMIN_NO
+				 , SN
+				 , DEPT_CODE
+				 , EDC_TRGET
+				 , EDC_CRSE
+				 , EDC_MTH_CODE
+				 , EDC_PD
+				 , EXPECT_CT
+				 , OPERTN_BASIS
+				 , REGISTER_ID
+				 , REGIST_DT
+				 , UPDUSR_ID
+				 , UPDT_DT
+				)
+			VALUES (
+				  #YEAR# 
+				, #DMAND_EXAMIN_NO# 
+				, (SELECT NVL(MAX(SN), 0) + 1 FROM TBHRM_GRUP_EDC_PLAN WHERE YEAR = #YEAR# AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#)
+				, #DEPT_CODE#
+				, #EDC_TRGET#
+				, #EDC_CRSE#
+				, #EDC_MTH_CODE#
+				, #EDC_PD#
+				, #EXPECT_CT#
+				, #OPERTN_BASIS#
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+			)
+	</insert>
+	
+	<!-- (T07) 집단교육계획 수정 -->
+	<update id="HRM080202DAO.updateGrupEdcPlan" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.updateGrupEdcPlan*/]]>
+			UPDATE TBHRM_GRUP_EDC_PLAN
+			   SET EDC_TRGET         = #EDC_TRGET#
+			     , EDC_CRSE          = #EDC_CRSE#
+			     , EDC_MTH_CODE      = #EDC_MTH_CODE#
+			     , EDC_PD            = #EDC_PD#
+			     , EXPECT_CT         = #EXPECT_CT#
+			     , OPERTN_BASIS      = #OPERTN_BASIS#
+			     , UPDUSR_ID         = #S_USER_ID#
+			     , UPDT_DT           = SYSDATE
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</update>
+	
+	<!-- (T07) 집단교육계획 삭제 -->
+	<delete id="HRM080202DAO.deleteGrupEdcPlan" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080202DAO.deleteGrupEdcPlan*/]]>
+			DELETE
+			  FROM TBHRM_GRUP_EDC_PLAN
+			 WHERE 1=1
+			   AND YEAR            = #YEAR#
+			   AND DMAND_EXAMIN_NO = #DMAND_EXAMIN_NO#
+			   AND SN              = #SN#
+	</delete>
+	
+</sqlMap>

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PMS000002">
+
+	<!-- 쿼리명 : 자동이체 청구자료조회 설명 : 자동이체 청구자료조회 수정일 수정자 수정내용 작성자 : 이광원 최초작성일 : 2015.11.09 -->
+	<select id="PMS000002DAO.getList" parameterClass="java.util.HashMap"
+		resultClass="java.util.HashMap">
+		SELECT
+		A.JOB_SE
+		, A.PAY_SE
+		, SUBSTR(A.PAYER_NO, 1, 3) AS AREA_SE 														/* 임대주택코드 */
+		, (SELECT DECODE( #JOB_SE#, 'RN1', (SELECT RENT_HOUSE_NM FROM
+		TBRNT_RENT_HOUSE WHERE RENT_HOUSE_CODE = SUBSTR(A.PAYER_NO, 1, 3) ),
+		'RN2', (SELECT RENT_HOUSE_NM FROM TBRNT_PUCHAS_HOUSE WHERE
+		RENT_HOUSE_CODE = SUBSTR(A.PAYER_NO, 1, 3) ),
+		'RN3', (SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'RNT004' AND
+		CHRCTR_PREPAR_VALUE_1 = SUBSTR(A.PAYER_NO, 1, 3) ),
+		(SELECT HOUSE_NM FROM TBSLS_HOUSE_INFO WHERE HOUSE_CODE = SUBSTR(A.PAYER_NO,
+		1, 3) )) FROM DUAL) AS HOUSE_NM 															/* 지역 */
+		, SUBSTR(A.PAYER_NO, 4, 4) AS DONG															/* 동 */
+		, SUBSTR(A.PAYER_NO, 8, 4) AS HO 															/* 호 */
+		, B.DPSTR 																					/* 예금주 */
+		, A.DEFRAY_YM 																				/* 출금년월 */
+		, A.BANK_CODE 																				/* 은행코드 */
+		, A.ACNUTNO 																				/* 계좌번호 */
+		, A.DEFRAY_REQEST_AMOUNT 																	/* 출금의뢰금액 */
+		, A.DEFRAY_DE 																				/* 출금일자 */
+		, Z.ACNUTNO_CNT 																			/* 신청계좌수 */
+		, A.TRANSFR_FILE_SE 																		/* 이체파일구분 */
+		, A.DTA_SE 																					/* 자료구분 */
+		, A.DEFRAY_SN 																				/* 출금일련번호 */
+		, A.CNTRCTR_NO 																				/* 계약자번호 */
+		, A.CPTAL_SE 																				/* 자금부분 */
+		, Y.TOTAL_AMOUNT 																			/* 총 금액 */
+		, Y.TOTAL_CNT 																				/* 총 의뢰수 */
+		, SUBSTR(A.BANK_CODE , 2,2)AS BANK_CODE2
+		, SUBSTR(A.DEFRAY_YM , 3,4)AS DEFRAY_YM2
+		FROM TBPMS_ATCNG_RQEST_RCIV A
+		JOIN TBPMS_ATCNG B ON A.CNTRCTR_NO = B.CNTRCTR_NO AND A.JOB_SE = B.JOB_SE
+		AND A.PAY_SE = B.PAY_SE
+		JOIN (SELECT CNTRCTR_NO , DEFRAY_YM , JOB_SE, PAY_SE, COUNT(ACNUTNO) AS
+		ACNUTNO_CNT
+		FROM TBPMS_ATCNG_RQEST_RCIV
+		GROUP BY CNTRCTR_NO , DEFRAY_YM, JOB_SE, PAY_SE) Z ON A.CNTRCTR_NO =
+		Z.CNTRCTR_NO AND Z.DEFRAY_YM = A.DEFRAY_YM AND Z.JOB_SE = A.JOB_SE AND
+		Z.PAY_SE = A.PAY_SE
+		LEFT JOIN (SELECT COUNT(CNTRCTR_NO) AS TOTAL_CNT ,
+		SUM(DEFRAY_REQEST_AMOUNT) AS TOTAL_AMOUNT FROM TBPMS_ATCNG_RQEST_RCIV
+		WHERE DEFRAY_YM = #DEFRAY_YM# AND JOB_SE = #JOB_SE# AND PAY_SE =
+		#PAY_SE#) Y ON 1=1
+		WHERE 1=1
+		AND A.DEFRAY_YM = #DEFRAY_YM#
+		AND A.JOB_SE = #JOB_SE#
+		AND A.PAY_SE = #PAY_SE#
+		/*AND A.PROCESS_SE IS NULL*/
+		AND B.ATCNG_CANCL_DE IS NULL
+		AND B.ATCNG_REQST_DE = (select max(ATCNG_REQST_DE) from TBPMS_ATCNG D
+		where D.CNTRCTR_NO = B.CNTRCTR_NO
+          AND D.JOB_SE = #JOB_SE#
+          AND D.PAY_SE = #PAY_SE#
+          AND D.ATCNG_CANCL_DE IS NULL )
+		ORDER BY A.DEFRAY_SN
+	</select>
+
+	<!-- 쿼리명 : 자동이체 청구자료조회 설명 : 자동이체 청구자료조회 수정일 수정자 수정내용 작성자 : 이광원 최초작성일 : 2015.11.09 -->
+	<select id="PMS000002DAO.print" parameterClass="java.util.Map"
+		resultClass="java.util.HashMap">
+		SELECT
+		REGEXP_REPLACE(REVERSE(REGEXP_REPLACE( REVERSE(TO_CHAR(SUM(DEFRAY_REQEST_AMOUNT))) , '([0-9]{3})','\1,')), '^,','') AS TOT_AMOUNT
+		, COUNT(*) AS TOT_COUNT
+		FROM TBPMS_ATCNG_RQEST_RCIV
+		WHERE 1=1
+		AND DEFRAY_YM = #DEFRAY_YM#
+		AND JOB_SE = #JOB_SE#
+		AND PAY_SE = #PAY_SE#
+		AND PROCESS_SE IS NULL
+	</select>
+	
+
+	<!-- 쿼리명 : 월별 출금결과 기등록 조회-->
+	<select id="PMS000002DAO.selectAtcngRqestRcivChk" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT COUNT(*) FROM TBPMS_ATCNG_RQEST_RCIV 
+			WHERE 1=1
+		  	AND JOB_SE = #JOB_SE#
+		    AND PAY_SE = #PAY_SE#
+			AND DEFRAY_YM = #DEFRAY_YM#
+		    AND PROCESS_SE IS NOT NULL
+	</select>
+
+	<!-- 쿼리명 : 자동이체 청구자료생성 헤더 설명 : 자동이체 청구자료생성 헤더 수정일 수정자 수정내용 작성자 : 이광원 최초작성일 
+		: 2015.11.09 -->
+	<select id="PMS000002DAO.getListHead" parameterClass="java.util.Map"
+		resultClass="java.util.HashMap">
+		SELECT
+		SUBSTR(MAX(TRANSFR_REQEST_DE),3,8) AS TRANSFR_REQEST_DE
+		, SUBSTR(MAX(DEFRAY_DE),3,8) AS DEFRAY_DE
+		, SUBSTR(MAX(DEFRAY_YM),3,4) AS DEFRAY_YM
+		FROM TBPMS_ATCNG_RQEST_RCIV
+		WHERE DEFRAY_YM = #DEFRAY_YM#
+		AND JOB_SE = #JOB_SE#
+		AND PAY_SE = #PAY_SE#
+	</select>
+	<!-- 쿼리명 : 자동이체 청구자료생성프로시저 설명 : 자동이체 청구자료생성프로시저 수정일 수정자 수정내용 작성자 : 이광원 최초작성일 
+		: 2015.11.09 -->
+	<parameterMap id="sprnt_tbpms_autopay_demand_id" class="java.util.HashMap">
+		<parameter property="IN_BILL_YM" jdbcType="VARCHAR"
+			javaType="string" mode="IN" />
+		<parameter property="IN_REC_DATE" jdbcType="VARCHAR"
+			javaType="string" mode="IN" />
+		<parameter property="IN_TRANS_YMD" jdbcType="VARCHAR"
+			javaType="string" mode="IN" />
+		<parameter property="IN_REC_YMD" jdbcType="VARCHAR"
+			javaType="string" mode="IN" />
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string"
+			mode="IN" />
+		<parameter property="IN_JOB_SE" jdbcType="VARCHAR" javaType="string"
+			mode="IN" />
+		<parameter property="IN_PAY_SE" jdbcType="VARCHAR" javaType="string"
+			mode="IN" />
+	</parameterMap>
+
+	<procedure id="PMS000002DAO.SPRNT_TBPMS_AUTOPAY_DEMAND_ID"
+		parameterMap="sprnt_tbpms_autopay_demand_id">
+		{ CALL SPRNT_TBPMS_AUTOPAY_DEMAND_ID( ? , ? , ? , ? , ? , ? , ? )}
+	</procedure>
+
+</sqlMap>

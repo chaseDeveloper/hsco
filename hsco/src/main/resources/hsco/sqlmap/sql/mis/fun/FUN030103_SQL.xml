@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN030103_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 예금계좌 현황 리스트 조회 -->
+	<select id="FUN030103DAO.selectDpstAcnutList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT A.CPTAL_CODE                       AS CPTAL_CODE 
+			     , A.FNNC_INSTT_SPOT_CODE            AS FNNC_INSTT_CODE     /* 금융기관코드 */
+			     , A.FNNC_INSTT_SPOT_NM              AS FNNC_INSTT_SPOT_NM  /* 금융기관 지점명 */
+			     , A.ACNUTNO                         AS ACNUTNO 
+			     , A.EXPRTN_AT                       AS EXPRTN_AT 
+			     , A.DPST_INTRT                      AS DPST_INTRT 
+			     , A.CNTRCT_DE                       AS CNTRCT_DE 
+			     , A.EXPRTN_DE                       AS EXPRTN_DE 
+			     , NVL(B.RCPMNY,0) - NVL(B.DEFRAY,0) AS BLCE 
+			     , NVL(B.RCPMNY,0)                   AS RCPMNY 
+			     , NVL(B.DEFRAY,0)                   AS DEFRAY 
+			     , NVL(B.INTR,0)                     AS INTR 
+			     , NVL(B.CRRX,0)                     AS CRRX 
+			     , B.FRST_DELNG_DE                   AS FRST_DELNG_DE 
+			     , B.LAST_DELNG_DE                   AS LAST_DELNG_DE 
+			     , A.RM                              AS RM
+			     , A.REAL_ACNUTNO                    AS REAL_ACNUTNO
+			     , A.ACNUT_SE                        AS ACNUT_SE
+			     , A.BSNS_CODE
+			     , C.BSNS_NM
+			  FROM TBFUN_DPST_ACNUT A 
+			       LEFT OUTER JOIN (SELECT ACNUTNO              AS ACNUTNO 
+			                               ,MIN(DELNG_DE)       AS FRST_DELNG_DE 
+			                               ,MAX(DELNG_DE)       AS LAST_DELNG_DE 
+			                               ,SUM(NVL(RCPMNY, 0)) AS RCPMNY 
+			                               ,SUM(NVL(DEFRAY, 0)) AS DEFRAY 
+			                               ,SUM(NVL(INTR, 0))   AS INTR 
+			                               ,SUM(NVL(CRRX, 0))   AS CRRX 
+			                          FROM TBFUN_DPST_IPP_DTLS 
+			                         GROUP BY ACNUTNO)B 
+			                    ON A.ACNUTNO = B.ACNUTNO
+			       LEFT OUTER JOIN TBPRJ_BSNS_CODE C
+			                    ON A.BSNS_CODE = C.BSNS_CODE
+			 WHERE 1=1
+			   AND A.CNTRCT_DE >= #CNTRCT_BGNDE#
+			   AND A.CNTRCT_DE <= #CNTRCT_ENDDE#
+		]]>
+		<isNotEmpty property="CPTAL_KND">
+			   AND A.CPTAL_CODE = #CPTAL_KND#
+		</isNotEmpty>
+		<isNotEmpty property="FNNC_INSTT_CODE">	
+			   AND A.FNNC_INSTT_SPOT_CODE = #FNNC_INSTT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="EXPRTN_AT">
+		       AND A.EXPRTN_AT = #EXPRTN_AT#
+		</isNotEmpty>
+		<![CDATA[
+			 ORDER BY A.ACNUT_SE, A.CPTAL_CODE, A.FNNC_INSTT_SPOT_CODE, A.CNTRCT_DE DESC
+		]]>				 		        	     
+    </select>
+    
+ 	<!-- 예금계좌 입출금 내역 조회 -->
+	<select id="FUN030103DAO.selectDpstIppDtlsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT A.ACNUTNO                           	AS ACNUTNO
+			       ,A.SN                  				AS SN
+			       ,A.DELNG_DE                       	AS DELNG_DE
+			       ,NVL(A.RCPMNY,0)                     AS RCPMNY
+			       ,NVL(A.DEFRAY,0)                     AS DEFRAY
+			       ,(SELECT SUM(NVL(RCPMNY,0)) - SUM(NVL(DEFRAY,0))
+			           FROM TBFUN_DPST_IPP_DTLS 
+			          WHERE ACNUTNO = A.ACNUTNO 
+			            AND SN <= A.SN GROUP BY ACNUTNO
+			        )                                   AS BLCE
+			       ,NVL(A.INTR,0)                       AS INTR
+			       ,NVL(A.CRRX,0)                      	AS CRRX
+			       ,A.SUMRY         					AS SUMRY
+			       ,A.REGISTER_ID                      	AS REGISTER_ID
+			       ,TO_CHAR(A.REGIST_DT, 'YYYYMMDD')   	AS REGIST_DT
+			       ,A.UPDUSR_ID                        	AS UPDUSR_ID
+			       ,TO_CHAR(A.UPDT_DT, 'YYYYMMDD')     	AS UPDT_DT
+			  FROM TBFUN_DPST_IPP_DTLS A
+			 WHERE 1=1
+			   AND A.ACNUTNO = #ACNUTNO#
+		]]>	        	     
+    </select>    
+
+</sqlMap>

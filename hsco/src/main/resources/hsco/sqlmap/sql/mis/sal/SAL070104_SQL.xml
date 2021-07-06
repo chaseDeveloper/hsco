@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL070104_SQL">	
+	<!-- 기간제급여지출정보 목록조회 -->
+	
+	<select id="SAL070104DAO.selectPdWorkDclzExpndtrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT A.PYMNT_YM                                                                               AS PYMNT_YM
+		       , A.PYMNT_DE                                                                               AS PYMNT_DE
+		       , B.SANCTN_NO                                                                              AS SANCTN_NO
+		       , SFCOM_GET_DRFTSTS(B.SANCTN_NO, MIN(A.REGIST_DT))                                         AS DRFT_STS 		/* 기안상태  */
+		       , 'theme://images/sanctn/' || 'D' || NVL(SFCOM_GET_DRFTSTS(B.SANCTN_NO, MIN(A.REGIST_DT)), 0) || '.png' AS DRFT_STS_IMG 	/* 기안상태Img */
+		       , TO_CHAR(C.DRFT_DT, 'YYYY-MM-DD HH24:MI:SS')                                              AS DRFT_DT 		/* 기안일시  */
+		       , SFCOM_GET_APPRSTS(B.SANCTN_NO, MIN(A.REGIST_DT))                                              AS SANCTN_STS 	/* 결재상태  */
+		       , 'theme://images/sanctn/' || 'A' || SFCOM_GET_APPRSTS(B.SANCTN_NO, MIN(A.REGIST_DT)) || '.png' AS SANCTN_STS_IMG /* 결재상태Img */
+		       , TO_CHAR(C.LAST_SANCTN_DT, 'YYYY-MM-DD HH24:MI:SS')                                       AS LAST_SANCTN_DT /* 최종결재일시 */
+		    FROM TBSAL_PD_WORK_SALARY A
+		       , TBSAL_PD_WORK_SALARY_EXPNDTR B
+		       , TBCOM_ELCTRN_SANCTN_MASTR C
+		   WHERE A.PYMNT_YM               = B.PYMNT_YM(+)
+		     AND A.PYMNT_DE               = B.PYMNT_DE(+)
+		     AND B.SANCTN_NO              = C.SANCTN_NO(+)
+		     AND A.PD_WORK_SALARY_TYPE    = B.SALARY_SE(+)
+		     AND A.CLOS_AT                = '1'
+		     AND SUBSTR(A.PYMNT_YM, 1, 4) = #PYMNT_YEAR#
+		     AND A.EMPL_SE IN ('005')
+		     AND A.PD_WORK_SALARY_TYPE = #PD_WORK_SALARY_TYPE#
+		GROUP BY A.PYMNT_YM
+		       , A.PYMNT_DE
+		       , B.SANCTN_NO
+		       , C.DRFT_DT
+		       , C.LAST_SANCTN_DT
+		ORDER BY A.PYMNT_YM DESC
+		       , A.PYMNT_DE DESC
+    </select>  
+	    
+    <!-- 기간제급여지출 상세조회 -->
+	<select id="SAL070104DAO.selectPdWorkDclzExpndtr2List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			  SELECT A.PYMNT_YM
+			       , A.PYMNT_DE
+			       , A.EMPNO
+			       , A.EMPNM
+			       , A.EMPL_SE
+			       , A.DEPT_CODE
+			       , SFSAL_GETDEPTNM_01(A.DEPT_CODE) AS DEPT_NM
+			       , A.SLARY
+			       , A.REST_ALLWNC
+			       , A.YRYC_ALLWNC
+			       , A.BONUS
+			       , A.SALARY_EXCCLC
+			       , A.PYMNT_SM_AMOUNT
+			       , A.HLTHINS
+			       , A.NPN
+			       , A.EMPLYMINSRNC
+			       , A.INCMTAX
+			       , A.LCLTY_INCMTAX
+			       , A.FSTMP_PURCHS_DDC
+			       , A.DDC_SM_AMOUNT
+			       , A.REAL_PYMNT_AM
+			       , A.CLOS_AT
+			       , A.CLOS_DE
+			       , (
+			                SELECT B.WORK_DAYCNT
+			                  FROM TBSAL_PD_WORK_DCLZ B
+			                 WHERE B.EMPNO   = A.EMPNO
+			                   AND B.DCLZ_YM = A.PYMNT_YM
+			         )
+			         AS WORK_DAYCNT
+			       , (
+			                SELECT B.REST_DAYCNT
+			                  FROM TBSAL_PD_WORK_DCLZ B
+			                 WHERE B.EMPNO   = A.EMPNO
+			                   AND B.DCLZ_YM = A.PYMNT_YM
+			         )
+			         AS REST_DAYCNT
+			       , (
+			                SELECT B.YRYC_DAYCNT
+			                  FROM TBSAL_PD_WORK_DCLZ B
+			                 WHERE B.EMPNO   = A.EMPNO
+			                   AND B.DCLZ_YM = A.PYMNT_YM
+			         )
+			         AS YRYC_DAYCNT
+			       , A.MLSV_SBSIDY
+			       , A.TRNSPORT_SBSIDY
+			       , A.ETC_DDC
+			       , A.HLTHINS_EXCCLC
+			       , A.INCMTAX_EXCCLC
+			       , A.LCLTY_INCMTAX_EXCCLC
+			       , A.FAMILY_ALLWNC
+			       , A.SCHXPN_SBSIDY
+			       , A.TRAINING_COST
+			       , A.TAXT_AMOUNT
+			       , A.TAXXMPT_AMOUNT
+			       , A.PD_WORK_SALARY_TYPE
+			       , A.ANSLRY_AMOUNT /* 연봉 */
+			       , B.SALARY_BANK_CODE                             AS BANK_CD
+			       , SFCMP_GET_CODENM('COM021', B.SALARY_BANK_CODE) AS BANK_NM
+			       , B.SALARY_BANK_ACNUT                            AS SALARY_BANK_ACNUT
+			       , A.TIME_ELSE_ALLWNC
+			    FROM TBSAL_PD_WORK_SALARY A
+			       , TBSAL_EMPL_BANK_ACNUT B
+			   WHERE A.EMPNO               = B.EMPNO(+)
+			     AND A.PYMNT_YM            = #PYMNT_YM#
+			     AND A.PYMNT_DE            = #PYMNT_DE#
+			     AND A.CLOS_AT             = '1'
+			     AND A.PD_WORK_SALARY_TYPE = #PD_WORK_SALARY_TYPE#
+			ORDER BY A.PYMNT_YM
+			       , A.EMPNO
+		]]>	
+    </select>  
+    
+    <!-- 기간제급여지출정보 목록조회 -->
+	<select id="SAL070104DAO.selectPdWorkDclzExpndtr3List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		 SELECT 
+			      SUM(A.PYMNT_SM_AMOUNT) 											AS  TOT_PYMNTAMT  
+			     ,SFACC_AMOUNT_TRANS(SUM(A.PYMNT_SM_AMOUNT))						AS  TOT_PYMNTAMT_H       
+			     ,SUM(DDC_SM_AMOUNT)   												AS  DDC_TOTAMT
+			     ,SUM(PYMNT_SM_AMOUNT) - SUM(DDC_SM_AMOUNT) 						AS  RL_RECPT_AMOUNT
+			     ,(SELECT  TO_CHAR(TO_DATE(#PYMNT_DE#,'YYYYMMDD'), 'dy') FROM DUAL) AS DAY
+			     ,(SELECT 
+				    (SELECT EMPNM
+				     FROM (
+				          SELECT B.EMPNM
+				          FROM TBSAL_PD_WORK_SALARY A
+				              ,TBHRM_HR_MASTR B		
+				              ,VWHRM_DEPT C
+				          WHERE A.PYMNT_YM 	= #PYMNT_YM#
+				          AND A.PYMNT_DE 	= #PYMNT_DE#
+				          AND A.EMPNO 		= B.EMPNO
+				          AND B.DEPT_CODE 	= C.DEPT_CODE
+				          AND A.PYMNT_SM_AMOUNT > 0
+				          AND A.PD_WORK_SALARY_TYPE = #PD_WORK_SALARY_TYPE#
+				          ORDER BY C.DEPT_LEVEL_SE, C.DEPT_CODE, B.RSPOFC_SE, SFHRM_GET_OFCPSCD(B.EMPNO,B.JSSFC_SE,B.HR_CLSF_SE,B.ECNY_DE), B.PAY_CLSF_SE, B.JSSFC_SE, B.EMPNO) 
+				      WHERE ROWNUM = 1)
+				      || ' 외 ' ||
+				      (SELECT COUNT(B.EMPNM) -1
+				       FROM TBSAL_PD_WORK_SALARY A
+				           ,TBHRM_HR_MASTR B		
+				           ,VWHRM_DEPT C
+				        WHERE A.PYMNT_YM 	= #PYMNT_YM#
+				        AND A.PYMNT_DE 		= #PYMNT_DE#
+				        AND A.EMPNO 		= B.EMPNO
+				        AND B.DEPT_CODE 	= C.DEPT_CODE
+				        AND A.PYMNT_SM_AMOUNT > 0
+				        AND A.PD_WORK_SALARY_TYPE = #PD_WORK_SALARY_TYPE#
+				      ) || '명' AS EMPNM
+			      FROM DUAL)  														AS EMPNM
+			FROM TBSAL_PD_WORK_SALARY A
+			WHERE A.PYMNT_YM 	= #PYMNT_YM#
+			AND A.PYMNT_DE 		= #PYMNT_DE#
+			AND A.PD_WORK_SALARY_TYPE = #PD_WORK_SALARY_TYPE#
+			AND A.CLOS_AT		= '1'
+			GROUP BY A.PYMNT_YM, A.PYMNT_DE
+		]]>	
+    </select> 
+    
+    <!-- 기간제급여지출정보 목록조회 -->
+	<select id="SAL070104DAO.selectPdWorkDclzExpndtr4List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT A.PYMNT_YM  AS PYMNT_YM
+			     , A.PYMNT_DE  AS PYMNT_DE
+			     , A.SANCTN_NO AS SANCTN_NO
+			     , A.SALARY_SE AS SALARY_SE
+			  FROM TBSAL_PD_WORK_SALARY_EXPNDTR A
+			   INNER JOIN TBCOM_ELCTRN_SANCTN_MASTR B
+			           ON A.SANCTN_NO   = B.SANCTN_NO
+			          AND B.SANCTN_KND <> 0
+			 WHERE A.PYMNT_YM           = #PYMNT_YM#
+			   AND A.PYMNT_DE           = #PYMNT_DE#
+			   AND A.SALARY_SE          = #SALARY_SE#
+		]]>	
+    </select>
+    
+    <!-- 기간제급여지출정보 입력 -->
+    <insert id="SAL070104DAO.PdWorkDclzExpndtrC" parameterClass="java.util.HashMap">
+        MERGE INTO TBSAL_PD_WORK_SALARY_EXPNDTR
+        USING DUAL
+        ON (PYMNT_YM  = #PYMNT_YM#
+        AND SALARY_SE = #SALARY_SE#
+        AND PYMNT_DE  = #PYMNT_DE#
+        )WHEN MATCHED THEN
+            UPDATE SET SANCTN_NO = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+                      ,UPDUSR_ID = #S_USER_ID#
+                      ,UPDT_DT   = SYSDATE
+         WHEN NOT MATCHED THEN
+         INSERT (
+						 PYMNT_YM
+						,SALARY_SE
+						,PYMNT_DE
+						,CPTAL_ASIGN_REQST_DE
+						,CPTAL_ASIGN_CONFM_NO
+						,DRFT_DE
+						,INNER_SANCTN_ID
+						,EXPNDTR_DECSN_DE
+						,EXPNDTR_DECSN_NO
+						,PYMNT_AM_SM
+						,DDC_AM_SM
+						,ATCH_FILE_1
+						,ATCH_FILE_2
+						,ATCH_FILE_3
+						,ATCH_FILE_4
+						,SANCTN_NO
+						,REGISTER_ID
+						,REGIST_DT
+						,UPDUSR_ID
+						,UPDT_DT
+             ) VALUES (
+						 #PYMNT_YM#
+						,#SALARY_SE#
+						,#PYMNT_DE#
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,(SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+	                    ,#S_USER_ID#
+	                    ,SYSDATE
+	                    ,#S_USER_ID#
+	                    ,SYSDATE
+             )
+    </insert>
+
+    <!-- 기간제급여지출정보 수정 -->
+    <update id="SAL070104DAO.PdWorkDclzExpndtrU" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_PD_WORK_SALARY_EXPNDTR
+		   SET CPTAL_ASIGN_REQST_DE = #CPTAL_ASIGN_REQST_DE#
+		     , CPTAL_ASIGN_CONFM_NO = #CPTAL_ASIGN_CONFM_NO#
+		     , DRFT_DE              = #DRFT_DE#
+		     , INNER_SANCTN_ID      = #INNER_SANCTN_ID#
+		     , EXPNDTR_DECSN_DE     = #EXPNDTR_DECSN_DE#
+		     , EXPNDTR_DECSN_NO     = #EXPNDTR_DECSN_NO#
+		     , PYMNT_AM_SM          = #PYMNT_AM_SM#
+		     , DDC_AM_SM            = #DDC_AM_SM#
+		     , ATCH_FILE_1          = #ATCH_FILE_1#
+		     , ATCH_FILE_2          = #ATCH_FILE_2#
+		     , ATCH_FILE_3          = #ATCH_FILE_3#
+		     , ATCH_FILE_4          = #ATCH_FILE_4#
+		     , UPDUSR_ID            = #S_USER_ID#
+		     , UPDT_DT              = SYSDATE
+		 WHERE PYMNT_YM             = #PYMNT_YM#
+		   AND SALARY_SE            = #SALARY_SE#
+		   AND PYMNT_DE             = #PYMNT_DE#
+    </update>
+
+    <!-- 기간제급여지출정보 삭제 -->
+    <delete id="SAL070104DAO.PdWorkDclzExpndtrD" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_PD_WORK_SALARY_EXPNDTR
+		 WHERE PYMNT_YM  = #PYMNT_YM#
+		   AND SALARY_SE = #SALARY_SE#
+		   AND PYMNT_DE  = #PYMNT_DE#
+    </delete>    
+
+    <!-- 기간제여지출정보 결재취소 -->
+    <update id="SAL070104DAO.apprCancel" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_PD_WORK_SALARY_EXPNDTR
+		   SET SANCTN_NO     = NULL
+		     , OLD_SANCTN_NO = #SANCTN_NO#
+		     , UPDUSR_ID     = #S_USER_ID#
+		     , UPDT_DT       = SYSDATE
+		 WHERE PYMNT_YM      = #PYMNT_YM#
+		   AND SALARY_SE     = #SALARY_SE#
+		   AND PYMNT_DE      = #PYMNT_DE#
+    </update>
+    
+</sqlMap>

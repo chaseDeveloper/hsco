@@ -1,0 +1,1742 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/*****************************************************************************
+ * 프로그램명 		: 	misUtil.xjs
+ * 작  성  자  	: 	정윤원
+ * 작  성  일   	: 	2015.12.09
+ * 설      명  		:   MIS 고유기능 정의
+ * 수  정  자  	: 	
+ * 수 정 이력  	: 	
+ * 사용방법	    :   
+*******************************************************************************/
+
+this.ds_accClosAt;
+this.ds_salClosAt;
+this.ds_inDsBudgetInfo;
+this.ds_outDSBudgetInfo;
+this.ds_misTemp;
+this.ds_jxlsInfo;
+this.ds_sancInfo;
+this.ds_sancUrl;
+
+
+
+/*******************************************************************************
+ * 함수명  	: fn_misFormInit
+ * 설명 		: MIS Form을 초기화한다.
+ * params  		: 1. objForm    : 초기화할 Form 객체 (Object)
+ *				  2. e			: Event
+ * return Type 	: None
+ * 사용법		: this.fn_misFormInit(this);
+ ******************************************************************************/
+this.fn_misFormInit = function ($context)
+{
+	var isDropdown = false;
+	
+	
+	/****************************************
+	 * 함수 선언
+	*****************************************/
+	
+	// (case 1 호출) 동적으로 추가된 onkeyup Event
+	function fn_keyupOnAutoSearch(obj, e) {
+		if(e.keycode == 13) {
+			var isSearch = true;
+			if(obj.toString() == "[object Combo]") {	// Combobox의 경우 제외조건 : (dropdown Box가 열려있는 경우)
+				if(isDropdown) {
+					isSearch = false;
+					isDropdown = false;
+				}
+			}
+			
+			if(isSearch) {
+				$context.fn_search();
+			}
+		}
+	}
+	
+	// (case 1 호출) 동적으로 추가된 ondropdown Event
+	function fn_dropdownOnAutoSearch(obj, e) {
+		isDropdown = true;
+	}
+	
+	// (case 1 호출) 엔터키 재조회 이벤트추가 조건 탐색
+	function fn_autoSearch(_context) {
+		var _length = _context.components.length;
+		for(var dRow = 0; dRow < _length; dRow++) {
+			var _comp = _context.components[dRow];
+			if(_comp.name.toLowerCase().indexOf("div_search") > -1) {
+				_comp.set_taborder(0);
+				for(var fRow = 0; fRow < $context.components[dRow].components.length; fRow++) {
+					var innerComp = $context.components[dRow].components[fRow];
+					switch(innerComp.toString()) {
+						case "[object Edit]": case "[object MaskEdit]": case "[object Spin]": case "[object Calendar]": case "[object Div]":
+							innerComp.addEventHandler("onkeyup", fn_keyupOnAutoSearch, $context);
+							break;
+						case "[object Combo]":
+							// (별개의 keyup 이벤트가 존재하지 않는 경우)
+							if(!innerComp.getEventHandler("onkeyup",0)) {
+								innerComp.addEventHandler("onkeyup", fn_keyupOnAutoSearch, $context);
+								innerComp.addEventHandler("ondropdown", fn_dropdownOnAutoSearch, $context);
+							}
+							break;
+					}
+				}
+			}
+		}
+	}
+	
+	// (case 2 호출) 동적으로 추가된 onkeyup Event
+	fn_keyupToNextObj = function(obj, e) {
+		if(e.keycode == 13){
+			_fn_focus_nextComp(obj);
+		}
+	}
+	
+	// (case 2 호출) 다음 오브젝트 찾아서 이동
+	_fn_focus_nextComp = function(obj){
+		var stComp     = $context.getNextComponent(obj, true);
+		var nextComp   = stComp;
+		var fRow       = 0;
+		var compLength = $context.components.length
+		while(fRow < compLength ){
+			switch(nextComp.toString()){
+				case "[object Edit]":
+				case "[object MaskEdit]":
+				case "[object Spin]":
+				case "[object Calendar]":
+				case "[object Combo]":
+					nextComp.setFocus();
+					return true;
+				case "[object Form]":
+				case "[object Div]":
+				case "[object Tab]":
+				case "[object Div]":
+				case "[object Radio]":
+				case "[object CheckBox]":
+				case "[object Button]":
+					if(_fn_focus_nextComp(nextComp) == true){
+						return true;
+					}
+			}
+			nextComp = $context.getNextComponent(nextComp);
+			if(stComp == nextComp){
+				break;
+			}
+			fRow++;
+		}
+		return false;
+	}
+	
+	// (case 2 호출) 
+	fn_autoFindObj = function(_context){
+		if(_context == null){
+			return;
+		}
+		
+		for(var i = 0; i < _context.components.length; i++){
+			var item = _context.components.get_item(i);
+			switch(item.toString()){
+				case "[object Edit]":
+				case "[object MaskEdit]":
+				case "[object Spin]":
+				case "[object Calendar]":
+				case "[object Combo]":
+					item.addEventHandler("onkeyup", fn_keyupToNextObj, $context);		// Enter Key 이벤트 추가 대상선정
+					break;
+					
+				case "[object Div]":
+				case "[object Tab]":
+				case "[object Tabpage]":
+					if(item.name.toLowerCase().indexOf("div_search") < 0) {
+						fn_autoFindObj(item);											// child Object 탐색
+					}
+					break;
+				
+				case "[object Grid]":
+					item.set_nodatatext("자료가 존재하지 않습니다.");				// noData
+					item.set_autoenter("select");										// autoenter
+					item.set_cellsizingtype("col");										// cellsizing
+					item.set_cellmovingtype("col");										// cellmoving
+					break;
+			}
+		}
+	}
+	
+	// (case 3 호출) 동적으로 추가된 onload Event
+	function _onload(obj, e) {
+		try {
+			var innerComp = obj.getFirstComponent(true);
+			innerComp.setFocus();
+		} catch(e) {
+			trace("error : " + e.message);
+		}
+	}
+	
+	
+	/****************************************
+	 * 함수 호출
+	*****************************************/
+	
+	//if($context.name == "div_main") {
+		fn_autoSearch($context);								// (case 1) 검색조건 div에 대하여, 엔터키 입력시 자동 재조회
+		fn_autoFindObj($context);								// (case 2) 모든 오브젝트 탐색하여, object별 동작 초기화(Enter Key를 이용하여 자동으로 다음 오브젝트로 이동 / Grid 초기화)
+		//$context.addEventHandler("onload", _onload, $context);	// (case 3) div 혹은 Tab에 대하여, 첫번째 오브젝트에 Focus 처리
+	//}
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_misCallBackMsg
+ * 설명 		: 조회시 상태도움말을 설정 한다.
+ * params  		: 1. obj    : 체크할 dataset (Object)
+ * return Type 	: None
+ * 사용법		: this.fn_misCallBackMsg(this.dataset);
+ ******************************************************************************/
+this.fn_misCallBackMsg = function (obj)
+{
+	if(obj.getRowCount() == 0){
+		this.gfn_message("info.조회.데이터.없음");	// 조회 결과 데이터가 없습니다.
+	} else {
+		this.gfn_message("success.정상조회");			// 정상적으로 조회되었습니다.
+	}
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_autoFileSn
+ * 설명 		: 첨부파일 key 자동 채번 및 사용자테이블 반영
+ * params  		: 1. sysSe        : (String ) 업무대분류						ex> "MIS"
+ *                2. jobSe        : (String ) 업무구분							ex> "CTR"
+ *                3. fileManager  : (Object ) fileManager 오브젝트				ex> this.File_UpDownManager
+ *                4. fileDataset  : (Dataset) file표현을 위한 Dataset			ex> this.fileList
+ *                5. misDataset   : (Dataset) fileSn을 포함하는 Dataset		ex> this.ds_cntReqest
+ *                6. tableName    : (String ) fileSn을 저장하는 Table 명		ex> "TBCTR_CNTRCT_REQEST"
+ *                7. fileSnColumn : (String ) fileSn을 저장하는 Column명		ex> "FILE_SN"
+ *                8. tableKey     : (Array  ) fileSn을 저장하는 Table의 PK	ex> ["REQEST_NO", "REQEST_YEAR"]
+ * return Type 	: None
+ * 사용법		: this.fn_autoFileSn(sysSe, jobSe, fileManager, fileDataset, misDataset, tableName, fileSnColumn, tableKey)
+ ******************************************************************************/
+this.fn_autoFileSn = function (sysSe, jobSe, fileManager, fileDataset, misDataset, tableName, fileSnColumn, tableKey)
+{
+	try {
+		if(misDataset.rowposition < 0) {
+			this.gfn_message("comm.데이터.선택.없음");
+			return false;
+		}
+		
+		/*
+		var tableKeyStr = "WHERE 1=1"
+		for(var fRow = 0; fRow < tableKey.length; fRow++) {
+			var dsRow = misDataset.rowposition;
+			var tableValue = misDataset.getColumn(dsRow, tableKey[fRow]);
+			if(this.comUtils.isNull(tableValue)) {
+				tableKeyStr += " AND " + tableKey[fRow] + " = NULL";
+			} else {
+				tableKeyStr += " AND " + tableKey[fRow] + " = '" + tableValue + "'";
+			}
+		}
+		*/
+		
+		var fileSn = null;
+		if(fileDataset.getRowCount() > 0) {
+			var misFileSn = misDataset.getColumn(misDataset.rowposition, fileSnColumn);
+			if(this.comUtils.isNull(misFileSn)) {
+				fileSn = fileDataset.getColumn(0, "FILE_SN");
+			} else {
+				fileSn = misFileSn;
+			}
+		}
+		
+		var ds_fileInfo_tmp = new Dataset("ds_fileInfo_tmp");
+		ds_fileInfo_tmp.addColumn("SYS_SE_CODE",    "string");
+		ds_fileInfo_tmp.addColumn("JOB_SE",         "string");
+		ds_fileInfo_tmp.addColumn("DATASET_NAME",   "string");
+		ds_fileInfo_tmp.addColumn("DATASET_ROW",    "string");
+		ds_fileInfo_tmp.addColumn("TABLE_NAME",     "string");
+		ds_fileInfo_tmp.addColumn("FILE_SN_COLUMN", "string");
+		//ds_fileInfo_tmp.addColumn("TABLE_KEY",      "string");
+		ds_fileInfo_tmp.addColumn("SN_TYPE",        "string");
+		ds_fileInfo_tmp.addColumn("FILE_SN",        "string");
+		for(var fRow = 0; fRow < tableKey.length; fRow++) {
+			ds_fileInfo_tmp.addColumn(tableKey[fRow], "string");
+		}
+		ds_fileInfo_tmp.set_useclientlayout(true);
+		
+		var nRow = ds_fileInfo_tmp.addRow();
+		ds_fileInfo_tmp.setColumn(nRow, "SYS_SE_CODE",    sysSe);
+		ds_fileInfo_tmp.setColumn(nRow, "JOB_SE",         jobSe);
+		ds_fileInfo_tmp.setColumn(nRow, "TABLE_NAME",     tableName);
+		ds_fileInfo_tmp.setColumn(nRow, "FILE_SN_COLUMN", fileSnColumn);
+		//ds_fileInfo_tmp.setColumn(nRow, "TABLE_KEY",      tableKeyStr);
+		ds_fileInfo_tmp.setColumn(nRow, "DATASET_ROW",    misDataset.rowposition);
+		for(var fRow = 0; fRow < tableKey.length; fRow++) {
+			var dsRow = misDataset.rowposition;
+			var tableValue = misDataset.getColumn(dsRow, tableKey[fRow]);
+			if(!this.comUtils.isNull(tableValue)) {
+				ds_fileInfo_tmp.setColumn(nRow, tableKey[fRow], tableValue);
+			}
+		}
+		if(!this.comUtils.isNull(fileSn)) {
+			ds_fileInfo_tmp.setColumn(nRow, "FILE_SN", fileSn);
+		}
+		
+		
+		// CallBack After Object
+		if(!fileManager._form.af_fileManager) {
+			fileManager._form.addChild("af_fileManager", fileManager    );
+		}
+		if(!fileManager._form.af_fileDataset) {
+			fileManager._form.addChild("af_fileDataset", fileDataset    );
+		}
+		if(!fileManager._form.af_misDataset) {
+			fileManager._form.addChild("af_misDataset",  misDataset     );
+		}
+		if(!fileManager._form.af_ds_fileInfo) {
+			fileManager._form.addChild("af_ds_fileInfo",   ds_fileInfo_tmp);
+		}
+		
+		// Set to Object
+		fileManager._form.af_fileManager = fileManager;
+		fileManager._form.af_fileDataset = fileDataset;
+		fileManager._form.af_misDataset  = misDataset;
+		fileManager._form.af_ds_fileInfo = ds_fileInfo_tmp;
+		
+		fileManager.addFiles(fileManager._allowTypes, null);
+	} catch(e) {
+		alert(e.message);
+	}
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_addFilesOnManager
+ * 설명 		: 첨부파일 추가(addFiles에 callback 형태가 없으므로 한번 더 우회목적)
+ * params  		: 
+ * return Type 	: None
+ * 사용법		: this.fn_addFilesOnManager();
+ ******************************************************************************/
+this.fn_onFileSelected = function()
+{
+	var sSvcID       = "autoFileSn"
+	var sController  = "/hsco/mis/mis/MIS000000/saveAutoFileSn.do";
+	var sInDatasets  = "input1=af_ds_fileInfo";
+	var sOutDatasets = "af_ds_fileInfo=output1";
+	
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, null, "autoFileSnCallback");
+}
+
+
+/*******************************************************************************
+ * 함수명  	: autoFileSnCallback
+ * 설명 		: 첨부파일 fileSn 자동채번 후 업로드 동작을 실행한다
+ * params  		: 
+ * return Type 	: None
+ * 사용법		: this.autoFileSnCallback(this.dataset);
+ ******************************************************************************/
+this.autoFileSnCallback = function ()
+{
+	try {
+		var dsNm         = this.af_ds_fileInfo.getColumn(0, "DATASET_NAME");
+		var dsRow        = this.af_ds_fileInfo.getColumn(0, "DATASET_ROW");
+		var fileSnColumn = this.af_ds_fileInfo.getColumn(0, "FILE_SN_COLUMN");
+		var fileSn       = this.af_ds_fileInfo.getColumn(0, "FILE_SN");
+		var tableCnt     = this.af_ds_fileInfo.getColumn(0, "TABLE_CNT");
+		
+		// 원본 테이블에 데이터 반영
+		if(tableCnt != '0') {
+			this.af_misDataset.set_updatecontrol(false);
+		}
+		this.af_misDataset.set_enableevent(false);
+		this.af_misDataset.setColumn(dsRow, fileSnColumn, fileSn);
+		this.af_misDataset.set_enableevent(true);
+		if(tableCnt != '0') {
+			this.af_misDataset.set_updatecontrol(true);
+		}
+		
+		// 실제 데이터 업로드 작업을 여기서 진행
+		var hasAttFile = this.af_fileManager.hasFile();
+		if(hasAttFile) {
+			this.af_fileManager.setFileSn(fileSn);	// filsSn 세팅
+			
+			if(this.af_fileDataset.getRowCount() == 0) {
+				var nRow = this.af_fileDataset.addRow();
+				this.af_fileDataset.setColumn(nRow, "FILE_SN", fileSn);
+			}
+			
+			var sController = "hsco/mis/mis/MIS000000/fileUpload.do";
+			var oInDatasets = "";
+			var sOutDatasets = "af_fileDataset=fileList";
+			
+			this.af_fileManager.upload(sController, oInDatasets, sOutDatasets);
+		}
+	} catch(e) {
+		alert(e.message);
+	}
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_onFileSuccess
+ * 설명 		: 첨부파일 업로드 완료 이후 callback 함수(첨부파일 init 단계에서 다음과 같은 함수명을 사용해주어야 함)
+ * params  		: 
+ * return Type 	: None
+ * 사용법		: this.fn_onFileSuccess();
+ ******************************************************************************/
+this.fn_onFileSuccess = function()
+{
+	try{
+		var fileSn = this.af_fileDataset.getColumn(0, "FILE_SN");
+		this.fn_uploadCallback(fileSn);
+	} catch(e) {
+		if(this.af_fileDataset && this.File_UpDownManager) {
+			this.af_fileDataset.setColumn(0, "FILE_ORDR", null);	// 재조회목적(좋은 방법은 아니지만, 공통을 최대한 안바꾸려면)
+			
+			var strSvcId     = "selectAtchFile";
+			var sController  = "/hsco/cmm/file/selectAtchmnFileList.do";
+			var sInDatasets  = "input1=af_fileDataset";
+			var sOutDatasets = "af_fileDataset=output1";
+			
+			Ex.core.tran(this, strSvcId, sController, sInDatasets, sOutDatasets);
+		}
+	}
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_setDatasetType
+ * 설명 		: 데이터셋 전체의 행 타입을 변경한다.
+ * params  		: 1. (Dataset) 데이터셋
+				  2. (String)  변경할 타입 (I, U, D)
+ * return Type 	: None
+ * 사용법		: this.fn_setRowType(this.데이터셋, "I");
+ ******************************************************************************/
+this.fn_setDatasetType = function(ds:Dataset, type:String)
+{
+	ds.updatecontrol = false;
+	for(i = 0; i < ds.getRowCount(); i++) {
+		ds.setRowType(i, type);
+	}
+	ds.updatecontrol = true;
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_isAccClosAt
+ * 설명 		: 회계마감여부
+ * params  		: 1. (String)  회계년월
+				  2. (String)  전표마감(C), 결산마감(S), 구분회계마감(S2)
+ * return Type 	: Boolean
+ * 사용법		: this.fn_isAccClosAt("201601", "S");
+ ******************************************************************************/
+this.fn_isAccClosAt = function(yyyymm:String, type:String)
+{
+	if(typeof yyyymm == "undefined" || String(yyyymm).length < 6) {
+		trace("잘못된 회계년월");
+		return false;
+	}
+
+	this.ds_accClosAt = new Dataset("ds_accClosAt");
+	var sSvcID     	  = "accClosAt";
+	var sController   = "hsco/mis/acc/ACC000000/accClosAt.do";
+	var sInDatasets   = "";
+	var sOutDatasets  = "ds_accClosAt=output1";
+	var sArgs 		  = "YYYYMM=" + yyyymm;
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, sArgs, "", false, false); 
+	
+	if(this.ds_accClosAt.getRowCount() > 0) {
+		if(type == "C") {
+			return (this.ds_accClosAt.getColumn(0, "CHIT_CLOSE_AT") == "1");
+		} else if(type == "S") {
+			return (this.ds_accClosAt.getColumn(0, "STACNT_CLOS_AT") == "1");
+		} else if(type == "S2") {
+			return (this.ds_accClosAt.getColumn(0, "SE_ACCNUT_CLOS_AT") == "1");
+		} 
+	}
+	return false;
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_isSalClosAt
+ * 설명 		: 급여마감여부
+ * params  		: 1. (String)  급여지급년월
+				  2. (String)  지급순번
+ * return Type 	: Boolean
+ * 사용법		: this.fn_isSalClosAt("201601", "1");
+ ******************************************************************************/
+this.fn_isSalClosAt = function(pymntYm:String, sn:String)
+{
+	if(typeof pymntYm == "undefined" || String(pymntYm).length < 6) {
+		trace("잘못된 지급년월");
+		return false;
+	}
+
+	this.ds_salClosAt = new Dataset("ds_salClosAt");
+	var sSvcID     	  = "salClosAt";
+	var sController   = "hsco/mis/sal/SAL000000/salClosAt.do";
+	var sInDatasets   = "";
+	var sOutDatasets  = "ds_salClosAt=output1";
+	var sArgs 		  = "PYMNT_YM=" + pymntYm + ' SN=' + sn;
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, sArgs, "", false, false); 
+	
+	if(this.ds_salClosAt.getRowCount() > 0) {
+		return (this.ds_salClosAt.getColumn(0, "CLOS_AT") == "1");
+	} 
+	
+	return false;
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_getBudgetInfo
+ * 설명 		: 예산,지출단위 정보 조회
+ * params  		: 1. (Dataset) 	예산코드, 지출단위코드가 담긴 Dataset
+ * return Type 	: Boolean
+ * 사용법		: this.fn_getBudgetInfo(데이터셋);
+ ******************************************************************************/
+this.fn_getBudgetInfo = function(ds:Dataset)
+{
+	this.ds_inDsBudgetInfo 	= new Dataset("ds_inDsBudgetInfo");
+	this.ds_outDSBudgetInfo	= new Dataset("ds_outDSBudgetInfo");
+	
+	if(ds.getRowCount() > 0) {	
+		this.ds_inDsBudgetInfo.copyData(ds);
+		
+		var sSvcID     	   = "budgetInfo";
+		var sController    = "hsco/mis/acc/ACC000000/budgetInfo.do";
+		var sInDatasets    = "input1=ds_inDsBudgetInfo";
+		var sOutDatasets   = "ds_outDSBudgetInfo=output1";
+		Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, "", "", false, false); 
+	}
+	
+	return this.ds_outDSBudgetInfo;
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_telMask
+ * 설명 		: 전화번호 마스크를 구한다.
+ * params  		: 1. (String) 전화번호
+ * return Type 	: (String) 마스크
+ * 사용법		: this.fn_telMask(전화번호);
+ ******************************************************************************/
+this.fn_telMask = function(num) 
+{
+	var mask = "###########";
+	if(num == null || typeof num == "undefined") {
+		return mask;
+	}
+	
+	var	len  = num.length;
+	if(len < 2) {
+		return mask;
+	}
+	
+	if(num.slice(0,2) == '02') {
+		if(len == 9) {
+			mask = "##-###-####";
+		} else {
+			mask = "##-####-####";
+		}
+	} else {
+		if(len == 10) {
+			mask = "###-###-####";
+		} else if(len == 11) {
+			mask = "###-####-####";
+		} else if(len == 7) {
+			mask = "###-####";
+		} else {
+			mask = "###########";
+		}
+	}
+	
+	return mask;
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_getCusSmsMsg
+ * 설명 		: 고객 문자메시지 정보 조회
+ * params  		: 1. (String) 메시지ID
+ * return Type 	: (Dataset) 데이터셋
+ * 사용법		: this.fn_getCusSmsMsg(메시지ID);
+ ******************************************************************************/
+this.fn_getCusSmsMsg = function(msgId)
+{
+	var msg;
+
+	this.ds_misTemp = new Dataset("ds_misTemp");
+	this.ds_misTemp.addColumn("MSSAGE_ID", "string", 10);
+	this.ds_misTemp.addRow();
+	this.ds_misTemp.setColumn(0, "MSSAGE_ID", msgId);
+	
+	var sSvcID     	   = "cusSmsMsg";
+	var sController    = "hsco/mis/cus/CUS020107/mssageInfoR.do";
+	var sInDatasets    = "input1=ds_misTemp";
+	var sOutDatasets   = "ds_misTemp=output1";
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, "", "", false, false); 
+	
+	if(this.ds_misTemp.getRowCount() > 0) {
+		msg = this.ds_misTemp.getColumn(0, "MSSAGE_CN");
+	}
+	
+	return msg;
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_getCusMinwonSmsMsg
+ * 설명 		: 민원 문자메시지 정보 조회
+ * params  		: 1. (String) 메시지ID
+ * params  		: 1. (String) 접수번호
+ * params  		: 1. (String) 주관부서 1, 협조부서 0
+ * return Type 	: (Dataset) 데이터셋
+ * 사용법		: this.fn_getCusMinwonSmsMsg(메시지ID,접수번호,주관부서여부);
+ ******************************************************************************/
+this.fn_getCusMinwonSmsMsg = function(msgId, rceptNo, chrgAt)
+{
+	this.ds_misTemp = new Dataset("ds_misTemp");
+	this.ds_misTemp.addColumn("MSSAGE_ID"	, "string", 10);
+	this.ds_misTemp.addColumn("RCEPT_NO"	, "string", 10);
+	this.ds_misTemp.addColumn("CHRG_AT"		, "string", 10);
+	this.ds_misTemp.addRow();
+	this.ds_misTemp.setColumn(0, "MSSAGE_ID", msgId);
+	this.ds_misTemp.setColumn(0, "RCEPT_NO"	, rceptNo);
+	this.ds_misTemp.setColumn(0, "CHRG_AT"	, chrgAt);
+	
+	var sSvcID     	   = "cusSmsMsg";
+	var sController    = "hsco/mis/cus/CUS020107/mssageMinwonInfoR.do";
+	var sInDatasets    = "input1=ds_misTemp";
+	var sOutDatasets   = "ds_misTemp=output1";
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, "", "", false, false); 
+	
+	return this.ds_misTemp;
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_copyData
+ * 설명 		: 데이터셋 복사(대상 데이터셋의 칼럼정보 유지)
+ * params  		: 1. (Dataset) 원본 데이터셋
+ * params  		: 2. (Dataset) 대상 데이터셋
+ * return Type 	: 
+ * 사용법		: this.fn_copyData(ds_org,ds_trg);
+ ******************************************************************************/
+this.fn_copyData = function(orgDs:Dataset, trgDs:Dataset)
+{
+	trgDs.clearData();
+	for(i = 0; i < orgDs.getRowCount(); i++) {
+		var nRow = trgDs.addRow();
+		trgDs.copyRow(nRow, orgDs, i);
+	}
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_loadXml
+ * 설명 		: 데이터셋 로드 (대상 데이터셋의 칼럼정보 유지)
+ * params  		: 1. (String) xml
+ * params  		: 2. (Dataset) 대상 데이터셋
+ * return Type 	: 
+ * 사용법		: this.fn_loadXml(ds_org,ds_trg);
+ ******************************************************************************/
+this.fn_loadXml = function(orgXml:String, trgDs:Dataset)
+{
+	var orgDs = new Dataset();
+	orgDs.loadXML(orgXml);
+	this.fn_copyData(orgDs, trgDs);
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_setReadonly
+ * 설명 		: 지정한 컴포넌트 내의 모든 컴포넌트를 Readonly로 바꾼다.
+ * params  		: 1. (Object) Nexacro Component
+ * params  		: 2. (Array)  Readonly에서 제외할 대상ID
+ * return Type 	: 
+ * 사용법		: this.fn_setReadonly(this.div_detail, ["grd_name","edt_name", "msk_name"]);
+ ******************************************************************************/
+this.fn_setReadonly = function(component, except)
+{
+	if(except != null && except.indexOf(component.name) > -1) {
+		return;
+	}
+	
+	switch(component.constructor) {
+		case Grid:
+			component.set_readonly(true);
+			break;
+		case Edit:
+			component.set_cssclass("edt_WF_Readonly");
+			component.set_readonly(true);
+			break;
+		case MaskEdit:
+			component.set_cssclass("msk_WF_Readonly");
+			component.set_readonly(true);
+			break;
+		case Calendar:
+			component.set_cssclass("cal_WF_Readonly");
+			component.set_readonly(true);
+			break;
+		case Combo:
+			component.set_cssclass("cmb_WF_Readonly");
+			component.set_readonly(true);
+			break;
+		case TextArea:
+			component.set_cssclass("txt_WF_Readonly");
+			component.set_readonly(true);
+			break;
+		case Spin:
+			component.set_cssclass("spn_WF_Readonly");
+			component.set_readonly(true);
+			break;
+		case CheckBox:
+			component.set_readonly(true);
+			break;
+		case Button:
+			component.set_enable(false);
+			break;
+		case Tab:
+			for(var i = 0; i < component.getTabpageCount(); i++) {
+				this.fn_setReadonly(component.tabpages[i], except);
+			}
+			break;
+		case Form:
+		case Div:
+		case Tabpage:
+			var components = component.components;
+			for(var i = 0; i < components.length; i++) {
+				this.fn_setReadonly(components[i], except);
+			}
+			break;
+		default:
+			break;
+	}
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_getMisAuth 
+ * 설명 		: 해당권한 소유여부 조회
+ * params  		: 1. form
+ * params  		: 1. (String) 권한명
+ * return Type 	: Boolean
+ * 사용법		: this.fn_getMisAuth (this, "DEV_GRP");
+ ******************************************************************************/
+this.fn_getMisAuth = function(_form, _authGrpId)
+{
+	if(!_form.ds_misAuth) {
+		var ds_misAuthTemp = new Dataset("ds_misAuth");
+		_form.addChild("ds_misAuth", ds_misAuthTemp);
+		this.ds_misAuth.addColumn("AUTH_GRP_ID"	, "string", 10);
+		this.ds_misAuth.addColumn("AUTH_CNT"	, "string", 10);
+		this.ds_misAuth.set_useclientlayout(true);
+	}
+	_form.ds_misAuth.clearData();
+	var nRow = _form.ds_misAuth.addRow();
+	_form.ds_misAuth.setColumn(nRow, "AUTH_GRP_ID", _authGrpId);
+	
+	var sSvcID     	   = "getMisAuth";
+	var sController    = "hsco/mis/mis/MIS000000/getAuthGrp.do";
+	var sInDatasets    = "input01=ds_misAuth";
+	var sOutDatasets   = "ds_misAuth=output01";
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, "", "", false, false); 
+	
+	var authCnt = _form.ds_misAuth.getColumn(0, "AUTH_CNT");
+	return (authCnt=='1');
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_getCusMinwonSmsMsg
+ * 설명 		: 내부결재 최종결재 상태 조회
+ * params  		: 1. (String) 전자결재번호
+ * return Type 	: (String) 최종결재상태
+ * 사용법		: this.fn_getLastSanctnSttus(전자결재번호);
+ ******************************************************************************/
+this.fn_getLastSanctnSttus = function(innerSanctnId)
+{
+	this.ds_cond = new Dataset("ds_cond");
+	this.ds_cond.addColumn("INNER_SANCTN_ID"	, "string", 254);
+	this.ds_cond.addRow();
+	this.ds_cond.setColumn(0, "INNER_SANCTN_ID", innerSanctnId);
+	
+	this.ds_result	= new Dataset("ds_result");
+	
+	var sSvcID     	   = "innerSanctnId";
+	var sController    = "hsco/mis/mis/MIS000000/selectLastSanctnSttus.do";
+	var sInDatasets    = "input01=ds_cond";
+	var sOutDatasets   = "ds_result=output01";
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, "", "", false, false); 
+	
+	var lastSanctnSttus = this.ds_result.getColumn(0, "LAST_SANCTN_STTUS");
+	return lastSanctnSttus;
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_getEmpno 
+ * 설명 		: 사원번호 조회
+ * params  		: None
+ * return Type 	: String
+ * 사용법		: this.fn_getEmpno();
+ ******************************************************************************/
+this.fn_getEmpno = function()
+{
+	return application.gds_userInfo.getColumn(0, "EMPNO");
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_getEmpnm 
+ * 설명 		: 사원명 조회
+ * params  		: None
+ * return Type 	: String
+ * 사용법		: this.fn_getEmpnm();
+ ******************************************************************************/
+this.fn_getEmpnm = function()
+{
+	return application.gds_userInfo.getColumn(0, "USER_NM");
+}
+
+
+/*******************************************************************************
+ * 함수명  	: messenger_send
+ * 설명 		: 메신저 알리미를 전송한다.
+ * argument  	: 1. objForm	  : 호출한 form 객체							(예 : this )
+				  2. sEmpno	      : 수신자 사번			
+				  3. sEmpnm	      : 수신자 명				
+				  4. sSendempno	  : 발신자 사번						
+				  5. sSendempnm	  : 발신자 명						
+				  6. sMsge	      : 내용						
+				  7. sLinkaddr	  : 링크주소						
+				  8. sTitle	      : 제목					
+				  
+ * return Type 	: boolean(true/false)
+ * 사용법		: messenger_send(this, "20040169", "이동근", "20040172", "이지민","알리미내용","http://www.naver.com","알리미제목");
+		
+		var sEmpno     = "20040169";             //  수신자 사번			
+		var sEmpnm     = "이동근";	             //  수신자 명				
+		var sSendempno = this.gfn_getUserId();	 //  발신자 사번						
+		var sSendempnm = this.gfn_getUserName(); //  발신자 명						
+		var sMsge	   = "알리미내용";          //  내용						
+		var sLinkaddr  = "http://www.naver.com"; //  링크주소						
+		var sTitle     = "알리미제목";          //  제목	
+		
+		this.messenger_send(this, sEmpno, sEmpnm, sSendempno, sSendempnm, sMsge, sLinkaddr, sTitle);
+ 
+ * 작성자 		: 이수지
+ ******************************************************************************/
+this.mis_messenger_send = function(objForm, sEmpno, sEmpnm, sSendempno, sSendempnm, sMsge, sLinkaddr, sTitle) 
+{
+    try {  
+        
+        if(!sEmpno) {
+	         this.gfn_message("comm.항목.입력.을","수신자사번"); return false;
+	    }
+	    	
+        if(!sTitle) {
+	         this.gfn_message("comm.항목.입력.을","알림제목"); return false;
+	    }
+	    
+        
+        // DATASET 설정
+		var dsntcnSndng = new Dataset;
+	    dsntcnSndng.set_id("ds_messngr");
+	    if(!this.dsntcnSndng){
+			this.insertChild(0, "ds_messngr", dsntcnSndng);
+			dsntcnSndng.addColumn("RCVER_USER_ID",  "string", "256");
+			dsntcnSndng.addColumn("RCVER_USER_NM",  "string", "256");
+			dsntcnSndng.addColumn("SENDER_USER_ID", "string", "256");
+			dsntcnSndng.addColumn("SENDER_USER_NM", "string", "256");
+			dsntcnSndng.addColumn("NTCN_SJ",        "string", "256");
+			dsntcnSndng.addColumn("LINK_ADRES",     "string", "500");
+			dsntcnSndng.addColumn("NTCN_CN",        "string", "4000");
+		}
+		this.ds_messngr.clearData();
+		this.ds_messngr.addRow();
+		this.ds_messngr.setColumn(0, "RCVER_USER_ID",  sEmpno);     // 수신자사번
+		this.ds_messngr.setColumn(0, "RCVER_USER_NM",  sEmpnm);     // 수신자명
+		this.ds_messngr.setColumn(0, "SENDER_USER_ID", sSendempno); // 발신자사번
+		this.ds_messngr.setColumn(0, "SENDER_USER_NM", sSendempnm); // 발신자명(입력 안하면 '관지라'로 전송됨)
+		this.ds_messngr.setColumn(0, "NTCN_SJ",        sTitle);     // 제목
+		this.ds_messngr.setColumn(0, "LINK_ADRES",     sLinkaddr);  // 링크주소
+		this.ds_messngr.setColumn(0, "NTCN_CN",        sMsge);      // 내용
+		
+		
+		var sSvcID     	   = "mis_messenger_send";
+		var sController    = "hsco/mis/mis/MIS000000/NtcnSndngCUD.do";
+		var sInDatasets    = "input1=ds_messngr:U";
+		var sOutDatasets   = "";
+		Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, "", "", "fn_misCallBack", true);
+
+        
+    } catch(e) {
+		return false;
+	}
+
+}
+
+this.fn_misCallBack = function (strSvcId, nErrorCode, strErrorMsg){
+   if (nErrorCode != 0){
+       this.gfn_callback_message(strSvcId, nErrorCode, strErrorMsg);
+   } else {
+       switch (strSvcId) {
+			case "mis_messenger_send":			    
+			    this.gfn_message("success.알림발송.성공");
+				break;
+		}
+   }
+}
+
+
+
+/***********************************************************************************
+* 8자리 날짜 문자에 대한 형식 지정
+***********************************************************************************/
+
+this.fn_dateStr = function (inpDateStr, splitter, format)
+{
+	if(this.comUtils.isNull(inpDateStr)) {
+		return null;
+	}
+	
+	if(this.comUtils.isNull(splitter)) {
+		splitter = "-";
+	}
+	
+	if(inpDateStr.length != 8) {
+		return inpDateStr;
+	}
+	
+	if(!this.comUtils.isNull(format)) {
+		if(format == "YYYY") {
+			return inpDateStr.substr(0, 4);
+		} else if(format == "MM") {
+			return inpDateStr.substr(4, 2);
+		} else if(format == "DD") {
+			return inpDateStr.substr(6, 2);
+		} else if(format == "YYYYMM") {
+			return inpDateStr.substr(0, 4) + splitter + inpDateStr.substr(4, 2);
+		}
+	}
+	
+	return inpDateStr.substr(0, 4) + splitter + inpDateStr.substr(4, 2) + splitter + inpDateStr.substr(6, 2);
+}
+
+
+/***********************************************************************************
+* 설명	: 숫자를 한글로 변환
+***********************************************************************************/
+this.fn_numToHangul = function(num){
+
+	// 1 ~ 9 한글 표시
+	var arrNumberWord = new Array("","일","이","삼","사","오","육","칠","팔","구");
+	// 10, 100, 100 자리수 한글 표시
+	var arrDigitWord = new  Array("","십","백","천");
+	// 만단위 한글 표시
+	var arrManWord = new  Array("","만","억", "조");
+	
+	var isMinus = false;
+	var num_value = num.toString();
+	if(num < 0) {
+		isMinus = true;
+		num_value = num_value.substring(1);
+	}
+    if(isNaN(num_value) == true) {
+          return;
+    }
+    
+	var num_length = num_value.length;
+    var han_value = "";
+    var man_count = 0;      // 만단위 0이 아닌 금액 카운트.
+
+    for(i=0; i < num_value.length; i++) {
+          // 1단위의 문자로 표시.. (0은 제외)
+          var strTextWord = arrNumberWord[num_value.charAt(i)];
+
+          // 0이 아닌경우만, 십/백/천 표시
+          if(strTextWord != "") {
+                man_count++;
+                strTextWord += arrDigitWord[(num_length - (i+1)) % 4];
+          }
+
+          // 만단위마다 표시 (0인경우에도 만단위는 표시한다)
+          if(man_count != 0 && (num_length - (i+1)) % 4 == 0) {
+                man_count = 0;
+                strTextWord = strTextWord + arrManWord[(num_length - (i+1)) / 4];
+          }
+
+          han_value += strTextWord;
+    }
+
+    if(num_value != 0) {
+          han_value = han_value;
+    } 
+    if (isMinus) {
+       han_value = "△" + han_value;
+    }
+    
+   return han_value;
+
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_callHandySanc
+ * 설명 		: 결재데이터 갱신준비
+ * params  		: 
+ * return Type 	: 
+ * 사용법		: this.fn_callHandySanc(this, formId, mis데이터셋, 갱신테이블명, 테이블키배열, 갑지데이터배열, 을지데이터배열, 다중체크대상, 갱신대상컬럼);
+ * 작성자      : 정윤원
+ ******************************************************************************/
+this.fn_callHandySanc = function(context, sancFormId, misDataset, tableName, arrTableKey, arrSancData, arrSubData, multiChkKey, param_sanctnColumn, param_fileDataset)
+{
+	for(var a1Row = 0; a1Row < arrSancData.length; a1Row++) {	
+		var a1Data = arrSancData[a1Row];
+		if(this.comUtils.isNull(a1Data) || a1Data == "null" || a1Data == "undefined") {
+			arrSancData[a1Row] = "";
+		}
+	}
+	
+	if(arrSubData) {
+		for(var a2Row = 0; a2Row < arrSubData.length; a2Row++) {	
+			var a2Data = arrSubData[a2Row];
+			if(this.comUtils.isNull(a2Data) || a2Data == "null" || a2Data == "undefined") {
+				arrSubData[a2Row] = "";
+			}
+		}
+	}
+	
+	// sanctn column
+	var sancColumn = "SANCTN_NO";
+	if(!this.comUtils.isNull(param_sanctnColumn)) {
+		sancColumn = param_sanctnColumn;
+	}
+	
+	
+	// sanc param dataset
+	if(context.ds_handy_sanc) {
+		context.removeChild("ds_handy_sanc");
+	}
+	
+	// init sanc param dataset
+	var ds_handy_sanc_tmp = new Dataset("ds_handy_sanc_tmp");
+	ds_handy_sanc_tmp.addColumn("USER_ID",       "string");		// 근태기 사원번호
+	ds_handy_sanc_tmp.addColumn("EMP_CODE",      "string");		// 그룹웨어 사원번호
+	ds_handy_sanc_tmp.addColumn("DEPT_CODE",     "string");		// 그룹웨어 부서코드
+	ds_handy_sanc_tmp.addColumn("USER_KEY",      "string");		// 그룹웨어 세션키
+	ds_handy_sanc_tmp.addColumn("EMPNO",         "string");		// MIS 사원번호
+	ds_handy_sanc_tmp.addColumn("MIS_KEY_LIST",  "string");		// MIS 테이블 키 목록
+	ds_handy_sanc_tmp.addColumn("SANCTN_COLUMN", "string");		// 전자결재 컬럼명
+	ds_handy_sanc_tmp.set_useclientlayout(true);
+	
+	// add row
+	var nhRow = ds_handy_sanc_tmp.addRow();
+	
+	// set datasanc
+	var tableKeyList = arrTableKey.join("|");
+	ds_handy_sanc_tmp.setColumn(nhRow, "MIS_KEY_LIST",  tableKeyList);
+	ds_handy_sanc_tmp.setColumn(nhRow, "SANCTN_COLUMN", sancColumn);
+	
+	// add sanc param dataset
+	context.addChild("ds_handy_sanc",   ds_handy_sanc_tmp);
+	
+	// mis param dataset
+	if(context.ds_mis_param) {
+		context.removeChild("ds_mis_param");
+	}
+	
+	// init mis param dataset
+	var ds_mis_param_tmp = new Dataset("ds_mis_param_tmp");
+	ds_mis_param_tmp.addColumn(sancColumn,     "string");		// 전자결재번호
+	ds_mis_param_tmp.addColumn("TABLE_NAME",   "string");		// 갱신대상 테이블
+	ds_mis_param_tmp.addColumn("MIS_VAL_LIST", "string");		// 갱신대상 데이터
+	ds_mis_param_tmp.set_useclientlayout(true);
+	
+	// single data
+	if(this.comUtils.isNull(multiChkKey)) {
+		// misdataset rowposition
+		var dsRow = misDataset.rowposition;
+		
+		// add row
+		var nmRow = ds_mis_param_tmp.addRow();
+		
+		// set data
+		var sanctnNo = misDataset.getColumn(dsRow, sancColumn);
+		ds_mis_param_tmp.setColumn(nmRow, sancColumn,  sanctnNo);
+		ds_mis_param_tmp.setColumn(nmRow, "TABLE_NAME", tableName);
+		var arrMisValList = new Array();
+		for(var fRow = 0; fRow < arrTableKey.length; fRow++) {
+			var tableValue = misDataset.getColumn(dsRow, arrTableKey[fRow]);
+			arrMisValList[fRow] = tableValue;
+		}
+		
+		var misValList = arrMisValList.join("|");
+		ds_mis_param_tmp.setColumn(nmRow, "MIS_VAL_LIST", misValList);
+	} else {
+		for(var mRow = 0; mRow < misDataset.getRowCount(); mRow++) {
+			// checked row
+			var sancChk = misDataset.getColumn(mRow, multiChkKey);
+			if(sancChk == '1') {
+				// add row
+				var nmRow = ds_mis_param_tmp.addRow();
+				
+				// set data
+				var sanctnNo = misDataset.getColumn(mRow, sancColumn);
+				ds_mis_param_tmp.setColumn(nmRow, sancColumn,  sanctnNo);
+				ds_mis_param_tmp.setColumn(nmRow, "TABLE_NAME", tableName);
+				var arrMisValList = new Array();
+				for(var fRow = 0; fRow < arrTableKey.length; fRow++) {
+					var tableValue = misDataset.getColumn(mRow, arrTableKey[fRow]);
+					arrMisValList[fRow] = tableValue;
+				}
+				
+				var misValList = arrMisValList.join("|");
+				ds_mis_param_tmp.setColumn(nmRow, "MIS_VAL_LIST", misValList);
+			}
+		}
+		if(ds_mis_param_tmp.getRowCount() == 0) {
+			return false;
+		}
+	}
+	
+	// add mis param dataset
+	context.addChild("ds_mis_param", ds_mis_param_tmp);
+	
+	
+	var sSvcID     	   = "saveSanctnData";
+	var sController    = "hsco/cmm/sanc/sanctn.do";
+	var sInDatasets    = "input1=ds_handy_sanc:A input2=ds_mis_param:A";
+	var sOutDatasets   = "ds_handy_sanc=output1 ds_mis_param=output2";
+	
+	Ex.core.tran(context, sSvcID, sController, sInDatasets, sOutDatasets, "", "", true, false);	// 동기방식 전송
+	
+	if(context.ds_handy_sanc.getRowCount() == 0) {
+		return false;
+	}
+	
+	var sanctnNo    = context.ds_mis_param.getColumn(0, sancColumn);
+	var gw_formid   = sancFormId;
+	var gw_deptcode = context.ds_handy_sanc.getColumn(0, "DEPT_CODE");
+	var gw_empcode  = context.ds_handy_sanc.getColumn(0, "EMP_CODE");
+	var gw_miskey   = sanctnNo;
+	
+	if(this.comUtils.isNull(sanctnNo) || this.comUtils.isNull(gw_empcode)) {
+		this.gfn_message("info.처리불가", "결재 연동정보를 확인할 수 없습니다. 조회 후 결재 진행부탁드립니다.");
+		return false;
+	}
+	
+	var gw_data     = sanctnNo + "|" + arrSancData.join("|");
+	var gw_sub_data = null;
+	if(!this.comUtils.isNull(arrSubData)) {
+		gw_sub_data = arrSubData.join("|");
+	}
+	
+	
+	// 원본 테이블에 데이터 반영
+	if(this.comUtils.isNull(multiChkKey)) {
+		misDataset.set_updatecontrol(false);
+		misDataset.set_enableevent(false);
+		misDataset.setColumn(misDataset.rowposition, sancColumn, sanctnNo);
+		misDataset.set_enableevent(true);
+		misDataset.set_updatecontrol(true);
+	} else {
+		for(var mRow = 0; mRow < misDataset.getRowCount(); mRow++) {
+			// checked row
+			var sancChk = misDataset.getColumn(mRow, multiChkKey);
+			if(sancChk == '1') {
+				misDataset.set_updatecontrol(false);
+				misDataset.set_enableevent(false);
+				misDataset.setColumn(mRow, sancColumn, sanctnNo);
+				misDataset.set_enableevent(true);
+				misDataset.set_updatecontrol(true);
+			}
+		}
+	}
+	
+	// 전자결재 기안기 문서 호출
+	this.fn_showHandyDocument(context, gw_formid, gw_deptcode, gw_empcode, gw_miskey, gw_data, gw_sub_data, param_fileDataset);
+}
+
+/*******************************************************************************
+ * 함수명  	: fn_callHandySanc2
+ * 설명 		: 결재데이터 갱신준비
+ * params  		: 
+ * return Type 	: 
+ * 사용법		: this.fn_callHandySanc(this, formId, mis데이터셋, 갱신테이블명, 테이블키배열, 갑지데이터배열, 을지데이터배열, 다중체크대상, 갱신대상컬럼);
+ * 작성자      : 정윤원
+ ******************************************************************************/
+this.fn_callHandySanc2 = function(context, sancFormId, misDataset, tableName, arrTableKey, arrSancData, arrSubData, multiChkKey, param_sanctnColumn, param_fileDataset)
+{
+	for(var a1Row = 0; a1Row < arrSancData.length; a1Row++) {	
+		var a1Data = arrSancData[a1Row];
+		if(this.comUtils.isNullEmpty(a1Data) || a1Data == "null" || a1Data == "undefined") {
+			arrSancData[a1Row] = " ";
+		}
+	}
+	
+	if(arrSubData) {
+		for(var a2Row = 0; a2Row < arrSubData.length; a2Row++) {	
+			var a2Data = arrSubData[a2Row];
+			if(this.comUtils.isNullEmpty(a2Data) || a2Data == "null" || a2Data == "undefined") {
+				arrSubData[a2Row] = " ";
+			}
+		}
+	}
+	
+	// sanctn column
+	var sancColumn = "SANCTN_NO";
+	if(!this.comUtils.isNull(param_sanctnColumn)) {
+		sancColumn = param_sanctnColumn;
+	}
+	
+	
+	// sanc param dataset
+	if(context.ds_handy_sanc) {
+		context.removeChild("ds_handy_sanc");
+	}
+	
+	// init sanc param dataset
+	var ds_handy_sanc_tmp = new Dataset("ds_handy_sanc_tmp");
+	ds_handy_sanc_tmp.addColumn("USER_ID",       "string");		// 근태기 사원번호
+	ds_handy_sanc_tmp.addColumn("EMP_CODE",      "string");		// 그룹웨어 사원번호
+	ds_handy_sanc_tmp.addColumn("DEPT_CODE",     "string");		// 그룹웨어 부서코드
+	ds_handy_sanc_tmp.addColumn("USER_KEY",      "string");		// 그룹웨어 세션키
+	ds_handy_sanc_tmp.addColumn("EMPNO",         "string");		// MIS 사원번호
+	ds_handy_sanc_tmp.addColumn("MIS_KEY_LIST",  "string");		// MIS 테이블 키 목록
+	ds_handy_sanc_tmp.addColumn("SANCTN_COLUMN", "string");		// 전자결재 컬럼명
+	ds_handy_sanc_tmp.addColumn("FORM_ID", "string"); //form id
+	ds_handy_sanc_tmp.addColumn("SANCTN_SJ", "string"); //전자결재 제목
+	ds_handy_sanc_tmp.set_useclientlayout(true);
+	
+	// add row
+	var nhRow = ds_handy_sanc_tmp.addRow();
+	
+	// set datasanc
+	var tableKeyList = arrTableKey.join("|");
+	ds_handy_sanc_tmp.setColumn(nhRow, "MIS_KEY_LIST",  tableKeyList);
+	ds_handy_sanc_tmp.setColumn(nhRow, "SANCTN_COLUMN", sancColumn);
+	ds_handy_sanc_tmp.setColumn(nhRow, "FORM_ID", sancFormId);
+	if(arrSancData.length > 0) {
+		ds_handy_sanc_tmp.setColumn(nhRow, "SANCTN_SJ", arrSancData[0]);
+	}
+	
+	// add sanc param dataset
+	context.addChild("ds_handy_sanc",   ds_handy_sanc_tmp);
+	
+	// mis param dataset
+	if(context.ds_mis_param) {
+		context.removeChild("ds_mis_param");
+	}
+	
+	// init mis param dataset
+	var ds_mis_param_tmp = new Dataset("ds_mis_param_tmp");
+	ds_mis_param_tmp.addColumn(sancColumn,     "string");		// 전자결재번호
+	ds_mis_param_tmp.addColumn("TABLE_NAME",   "string");		// 갱신대상 테이블
+	ds_mis_param_tmp.addColumn("MIS_VAL_LIST", "string");		// 갱신대상 데이터
+	ds_mis_param_tmp.set_useclientlayout(true);
+	
+	// single data
+	if(this.comUtils.isNull(multiChkKey)) {
+		// misdataset rowposition
+		var dsRow = misDataset.rowposition;
+		
+		// add row
+		var nmRow = ds_mis_param_tmp.addRow();
+		
+		// set data
+		var sanctnNo = misDataset.getColumn(dsRow, sancColumn);
+		ds_mis_param_tmp.setColumn(nmRow, sancColumn,  sanctnNo);
+		ds_mis_param_tmp.setColumn(nmRow, "TABLE_NAME", tableName);
+		var arrMisValList = new Array();
+		for(var fRow = 0; fRow < arrTableKey.length; fRow++) {
+			var tableValue = misDataset.getColumn(dsRow, arrTableKey[fRow]);
+			arrMisValList[fRow] = tableValue;
+		}
+		
+		var misValList = arrMisValList.join("|");
+		ds_mis_param_tmp.setColumn(nmRow, "MIS_VAL_LIST", misValList);
+	} else {
+		for(var mRow = 0; mRow < misDataset.getRowCount(); mRow++) {
+			// checked row
+			var sancChk = misDataset.getColumn(mRow, multiChkKey);
+			if(sancChk == '1') {
+				// add row
+				var nmRow = ds_mis_param_tmp.addRow();
+				
+				// set data
+				var sanctnNo = misDataset.getColumn(mRow, sancColumn);
+				ds_mis_param_tmp.setColumn(nmRow, sancColumn,  sanctnNo);
+				ds_mis_param_tmp.setColumn(nmRow, "TABLE_NAME", tableName);
+				var arrMisValList = new Array();
+				for(var fRow = 0; fRow < arrTableKey.length; fRow++) {
+					var tableValue = misDataset.getColumn(mRow, arrTableKey[fRow]);
+					arrMisValList[fRow] = tableValue;
+				}
+				
+				var misValList = arrMisValList.join("|");
+				ds_mis_param_tmp.setColumn(nmRow, "MIS_VAL_LIST", misValList);
+			}
+		}
+		if(ds_mis_param_tmp.getRowCount() == 0) {
+			return false;
+		}
+	}
+	
+	// add mis param dataset
+	context.addChild("ds_mis_param", ds_mis_param_tmp);
+	
+	
+	var sSvcID     	   = "saveSanctnData";
+	var sController    = "hsco/cmm/sanc/sanctn.do";
+	var sInDatasets    = "input1=ds_handy_sanc:A input2=ds_mis_param:A";
+	var sOutDatasets   = "ds_handy_sanc=output1 ds_mis_param=output2";
+	
+	Ex.core.tran(context, sSvcID, sController, sInDatasets, sOutDatasets, "", "", true, false);	// 동기방식 전송
+	
+	if(context.ds_handy_sanc.getRowCount() == 0) {
+		return false;
+	}
+	
+	var sanctnNo    = context.ds_mis_param.getColumn(0, sancColumn);
+	var gw_formid   = sancFormId;
+	var gw_deptcode = context.ds_handy_sanc.getColumn(0, "DEPT_CODE");
+	var gw_empcode  = context.ds_handy_sanc.getColumn(0, "EMP_CODE");
+	var gw_miskey   = sanctnNo;
+	
+	if(this.comUtils.isNull(sanctnNo) || this.comUtils.isNull(gw_empcode)) {
+		this.gfn_message("info.처리불가", "결재 연동정보를 확인할 수 없습니다. 조회 후 결재 진행부탁드립니다.");
+		return false;
+	}
+	
+	var gw_data     = sanctnNo + "|" + arrSancData.join("|") + "|";
+	var gw_sub_data = null;
+	if(!this.comUtils.isNull(arrSubData)) {
+		gw_sub_data = arrSubData.join("|");
+		gw_sub_data += "|";
+	}
+	
+	
+	// 원본 테이블에 데이터 반영
+	if(this.comUtils.isNull(multiChkKey)) {
+		misDataset.set_updatecontrol(false);
+		misDataset.set_enableevent(false);
+		misDataset.setColumn(misDataset.rowposition, sancColumn, sanctnNo);
+		misDataset.set_enableevent(true);
+		misDataset.set_updatecontrol(true);
+	} else {
+		for(var mRow = 0; mRow < misDataset.getRowCount(); mRow++) {
+			// checked row
+			var sancChk = misDataset.getColumn(mRow, multiChkKey);
+			if(sancChk == '1') {
+				misDataset.set_updatecontrol(false);
+				misDataset.set_enableevent(false);
+				misDataset.setColumn(mRow, sancColumn, sanctnNo);
+				misDataset.set_enableevent(true);
+				misDataset.set_updatecontrol(true);
+			}
+		}
+	}
+	
+	// 전자결재 기안기 문서 호출
+	this.fn_showHandyDocument2(context, gw_formid, gw_deptcode, gw_empcode, gw_miskey, gw_data, gw_sub_data, param_fileDataset);
+}
+
+
+
+/*******************************************************************************
+ * 함수명  	: fn_showHandyDocument
+ * 설명 		: 전자결재 기안기 문서 호출
+ * params  		: 
+ * return Type 	: 
+ * 사용법		: this.fn_showHandyDocument(this, 폼아이디, 부서코드, 사원번호, 세션키, 데이터);
+ * 작성자      : 정윤원
+ ******************************************************************************/
+this.fn_showHandyDocument = function(context, param_formid, param_deptcode, param_empcode, param_miskey, param_firstvalue, param_secondvalue, param_fileDataset)
+{
+	var sUrl = "http://10.50.10.100:8888/qdb-linkage/GianCall.do";
+	if(this.wb_sanc) {
+		this.removeChild("wb_sanc");
+	}
+	
+	var objWb = new WebBrowser();  
+	objWb.init("wb_sanc", "absolute", 0, 0, 1, 1, null, null);
+	this.addChild("wb_sanc", objWb);
+	objWb.show(); 
+
+	// body
+	var iframeObj = document.getElementById(objWb._ifrm_elem._object_id);
+	var iFrameDoc;
+	var iFrameHead;
+	var iFrameBody;
+	if ( iframeObj.contentDocument ) 
+	{
+		iFrameDoc = iframeObj.contentDocument;
+		iFrameHead = iFrameDoc.getElementsByTagName('head')[0];
+		iFrameBody = iFrameDoc.getElementsByTagName('body')[0];
+	} else if ( iframeObj.contentWindow ) {
+		iFrameDoc = iframeObj.contentWindow.document;
+		iFrameHead = iFrameDoc.getElementsByTagName('head')[0];
+		iFrameBody = iFrameDoc.getElementsByTagName('body')[0];
+	}
+	
+	if(!iFrameHead) {
+		iFrameHead = iFrameDoc.createElement("head");
+		iFrameDoc.appendChild(iFrameHead);
+	}
+	if(!iFrameBody)
+	{
+		iFrameBody = iFrameDoc.createElement("body");
+		iFrameDoc.appendChild(iFrameBody);
+	}
+	
+	// meta
+	var meta = iFrameDoc.createElement("meta");
+	meta.httpEquiv = "Content-Type";
+	meta.content = "text/html; charset=utf-8";
+	iFrameHead.appendChild(meta);
+	
+	// form add
+	var form = iFrameDoc.createElement("form");
+	form.id = "sancForm";
+	form.name = "sancForm";
+	form.action = sUrl;
+	form.method = "post";
+	form.acceptCharset = "utf-8";
+	iFrameBody.appendChild(form);
+	
+	// formid add
+	var input_formid = iFrameDoc.createElement("input");
+	input_formid.type 	= "hidden";
+	input_formid.name 	= "formid";
+	input_formid.value	= param_formid;
+	form.appendChild(input_formid);
+	
+	// deptcode add
+	var input_deptcode = iFrameDoc.createElement("input");
+	input_deptcode.type 	= "hidden";
+	input_deptcode.name 	= "deptcode";
+	input_deptcode.value	= param_deptcode;
+	form.appendChild(input_deptcode);
+	
+	// empcode add
+	var input_empcode = iFrameDoc.createElement("input");
+	input_empcode.type 	= "hidden";
+	input_empcode.name 	= "empcode";
+	input_empcode.value	= param_empcode;
+	form.appendChild(input_empcode);
+	
+	// miskey add
+	var input_miskey = iFrameDoc.createElement("input");
+	input_miskey.type 	= "hidden";
+	input_miskey.name 	= "miskey";
+	input_miskey.value	= param_miskey;
+	form.appendChild(input_miskey);
+	
+	// firstvalue add
+	var input_firstvalue = iFrameDoc.createElement("input");
+	input_firstvalue.type 	= "hidden";
+	input_firstvalue.name 	= "firstvalue";
+	input_firstvalue.value	= param_firstvalue;
+	form.appendChild(input_firstvalue);
+	
+	// secondvalue add
+	if(!this.comUtils.isNull(param_secondvalue)) {
+		var input_secondvalue = iFrameDoc.createElement("input");
+		input_secondvalue.type 	= "hidden";
+		input_secondvalue.name 	= "secondvalue";
+		input_secondvalue.value	= param_secondvalue;
+		form.appendChild(input_secondvalue);
+	}
+	
+	if(param_fileDataset) {
+		for(var fRow = 0; fRow < param_fileDataset.getRowCount(); fRow++) {
+			var fileName = param_fileDataset.getColumn(fRow, "ORGINL_FILE_NM");
+			var fileSn   = param_fileDataset.getColumn(fRow, "FILE_SN");
+			var fileOrdr = param_fileDataset.getColumn(fRow, "FILE_ORDR");
+			
+			var input_attnames = iFrameDoc.createElement("input");
+			input_attnames.type 	= "hidden";
+			input_attnames.name 	= "attnames";
+			input_attnames.value	= fileName;
+			form.appendChild(input_attnames);
+			
+			var input_atturls = iFrameDoc.createElement("input");
+			input_atturls.type 	= "hidden";
+			input_atturls.name 	= "atturls";
+			input_atturls.value	= "http://10.50.10.145/hsco/cmm/download/viewImage.do?FILE_SN=" + fileSn + "&FILE_ORDR=" + fileOrdr + "";
+			form.appendChild(input_atturls);
+		}
+	}
+	
+	// submit
+	if(iFrameDoc.getElementById('sancForm')) {
+		var message = "결재 상신 후, 상단의 조회 버튼을 클릭하여 주시기 바랍니다.(상신된 건을 화면에서 수정하실 경우, 입력한 데이터가 유실될 수 있습니다)";
+		
+		iFrameDoc.getElementById('sancForm').submit();
+		
+		this.gfn_message("info.처리불가", message);
+	}
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_showHandyDocument2
+ * 설명 		: 전자결재 기안기 문서 호출
+ * params  		: 
+ * return Type 	: 
+ * 사용법		: this.fn_showHandyDocument(this, 폼아이디, 부서코드, 사원번호, 세션키, 데이터);
+ * 작성자      : 정윤원
+ ******************************************************************************/
+this.fn_showHandyDocument2 = function(context, param_formid, param_deptcode, param_empcode, param_miskey, param_firstvalue, param_secondvalue, param_fileDataset)
+{
+	//var sUrl = "http://10.50.10.100:8888/qdb-linkage/GianCall.do";
+	var sUrl = "http://10.50.10.100:8888/jsp/INCLoadHelp.jsp";
+	
+	if(this.wb_sanc) {
+		this.removeChild("wb_sanc");
+	}
+	
+	var objWb = new WebBrowser();  
+	objWb.init("wb_sanc", "absolute", 0, 0, 1, 1, null, null);
+	this.addChild("wb_sanc", objWb);
+	objWb.show(); 
+
+	// body
+	var iframeObj = document.getElementById(objWb._ifrm_elem._object_id);
+	var iFrameDoc;
+	var iFrameHead;
+	var iFrameBody;
+	if ( iframeObj.contentDocument ) 
+	{
+		iFrameDoc = iframeObj.contentDocument;
+		iFrameHead = iFrameDoc.getElementsByTagName('head')[0];
+		iFrameBody = iFrameDoc.getElementsByTagName('body')[0];
+	} else if ( iframeObj.contentWindow ) {
+		iFrameDoc = iframeObj.contentWindow.document;
+		iFrameHead = iFrameDoc.getElementsByTagName('head')[0];
+		iFrameBody = iFrameDoc.getElementsByTagName('body')[0];
+	}
+	
+	if(!iFrameHead) {
+		iFrameHead = iFrameDoc.createElement("head");
+		iFrameDoc.appendChild(iFrameHead);
+	}
+	if(!iFrameBody)
+	{
+		iFrameBody = iFrameDoc.createElement("body");
+		iFrameDoc.appendChild(iFrameBody);
+	}
+	
+	// meta
+	var meta = iFrameDoc.createElement("meta");
+	meta.httpEquiv = "Content-Type";
+	meta.content = "text/html; charset=utf-8";
+	iFrameHead.appendChild(meta);
+	
+	// form add
+	var form = iFrameDoc.createElement("form");
+	form.id = "sancForm";
+	form.name = "sancForm";
+	form.action = sUrl;
+	form.method = "post";
+	form.acceptCharset = "utf-8";
+	iFrameBody.appendChild(form);
+	
+	// formid add
+	var input_formid = iFrameDoc.createElement("input");
+	input_formid.type 	= "hidden";
+	input_formid.name 	= "FORMID";
+	input_formid.value	= param_formid;
+	form.appendChild(input_formid);
+	
+	// deptcode add
+	var input_deptcode = iFrameDoc.createElement("input");
+	input_deptcode.type 	= "hidden";
+	input_deptcode.name 	= "deptcode";
+	input_deptcode.value	= param_deptcode;
+	form.appendChild(input_deptcode);
+	
+	// empcode add
+	var input_empcode = iFrameDoc.createElement("input");
+	input_empcode.type 	= "hidden";
+	input_empcode.name 	= "EMPCD";
+	input_empcode.value	= param_empcode;
+	form.appendChild(input_empcode);
+	
+	// miskey add
+	var input_miskey = iFrameDoc.createElement("input");
+	input_miskey.type 	= "hidden";
+	input_miskey.name 	= "MISKEY";
+	input_miskey.value	= param_miskey;
+	form.appendChild(input_miskey);
+	
+	// firstvalue add
+	var input_firstvalue = iFrameDoc.createElement("input");
+	input_firstvalue.type 	= "hidden";
+	input_firstvalue.name 	= "DATAVALUE_A";
+	input_firstvalue.value	= param_firstvalue;
+	form.appendChild(input_firstvalue);
+	
+	// secondvalue add
+	if(!this.comUtils.isNull(param_secondvalue)) {
+		var input_secondvalue = iFrameDoc.createElement("input");
+		input_secondvalue.type 	= "hidden";
+		input_secondvalue.name 	= "DATAVALUE_B";
+		input_secondvalue.value	= param_secondvalue;
+		form.appendChild(input_secondvalue);
+	}
+	
+	if(param_fileDataset) {
+		var param_filevalue = "";
+	
+		for(var fRow = 0; fRow < param_fileDataset.getRowCount(); fRow++) {
+			var fileName = param_fileDataset.getColumn(fRow, "ORGINL_FILE_NM");
+			var fileSn   = param_fileDataset.getColumn(fRow, "FILE_SN");
+			var fileOrdr = param_fileDataset.getColumn(fRow, "FILE_ORDR");
+			
+			param_filevalue += fileName;
+			param_filevalue += "!";
+			param_filevalue += "http://10.50.10.145/hsco/cmm/download/viewImage.do?FILE_SN=" + fileSn + "&FILE_ORDR=" + fileOrdr + "";
+			param_filevalue += "|";
+		}
+		
+		if(param_filevalue != "") {
+			var input_filevalue = iFrameDoc.createElement("input");
+			input_filevalue.type 	= "hidden";
+			input_filevalue.name 	= "ATTACHFILE";
+			input_filevalue.value	= param_filevalue;
+			form.appendChild(input_filevalue);
+		}
+	}
+	
+	// submit
+	if(iFrameDoc.getElementById('sancForm')) {
+		var message = "결재 상신 후, 상단의 조회 버튼을 클릭하여 주시기 바랍니다.(상신된 건을 화면에서 수정하실 경우, 입력한 데이터가 유실될 수 있습니다)";
+		
+		iFrameDoc.getElementById('sancForm').submit();
+		
+		this.gfn_message("info.처리불가", message);
+	}
+}
+
+
+/*******************************************************************************
+ * 함수명  	: fn_getByte 
+ * 설명 		: 입력받은 값의 바이트 체크 
+ * params  		: sValue : 체크할 값 
+ * return Type 	: Number
+ * 사용법		: this.fn_getByte();
+ * 작성자      : 정 민 
+ ******************************************************************************/
+this.fn_getByte = function(sValue) 
+{ 
+	var buf = sValue.toString(); 
+	var Len = 0; 
+	var strText = ""; 
+
+	for(var i=0; i<buf.length; i++) { 
+		if (buf.charCodeAt(i) > 127) { 
+			Len += 2; 
+		} else { 
+			Len += 1; 
+		} 
+	} 
+	return Len; 
+} 
+
+
+/*******************************************************************************
+ * 함수명  	: fn_getStringCheckByte
+ * 설명 		: 바이트 체크한 문자열 받기
+ * params  		: 1. sValue  : 체크할 값
+			      2. sLength : 체크할 바이트 
+ * return Type 	: String
+ * 사용법		: this.fn_getStringCheckByte();
+ * 작성자      : 정 민 
+ ******************************************************************************/
+this.fn_getStringCheckByte = function(sValue, sLength) 
+{ 
+	var result = "";
+
+	if(!this.comUtils.isNull(sValue) && !this.comUtils.isNull(sLength)) {
+		var buf = sValue.toString(); 
+		var chkLen = nexacro.toNumber(sLength);
+		var len = 0; 
+	
+		for(var i=0; i<buf.length; i++) {
+			
+			if (buf.charCodeAt(i) > 127) { 
+				len += 2; 
+			} else { 
+				len += 1; 
+			} 
+			
+			if(len > chkLen) {
+				break;
+			}
+			
+			result += buf.charAt(i);
+		}
+	}
+	
+	return result;
+} 
+
+/*******************************************************************************
+ * 함수명  	: fn_jxlsDownload
+ * 설명 		: JXLS 엑셀 다운로드
+ * params  		: 1. template : 엑셀 템플릿
+			      2. filename : 저장파일명
+			      3. sDataset : jxls에서 사용할 입력 데이터셋 문자열
+			      4. params   : jxls에서 사용할 오브젝트
+ * return Type 	: 없음
+ * 사용법		: this.fn_jxlsDownload(
+						"SAL030110.xlsx"
+					   ,"급여대체의뢰서_2017년5월.xlsx"
+					   ,"input1=ds_dataset input2=ds_dataset2"
+					   , { name:'홍길동', age:'17' }
+				  );
+ * 작성자      : 이상명
+ ******************************************************************************/
+this.fn_jxlsDownload = function(template:String, filename:String, sDataset:String, params:Object)
+{
+    this.ds_jxlsInfo = new Dataset("ds_jxlsInfo");
+    this.ds_jxlsInfo.addColumn("__TEMPLATE", "string", "256");
+    this.ds_jxlsInfo.addColumn("__FILENAME", "string", "256");
+    for(var key in params) {
+	   this.ds_jxlsInfo.addColumn(key, "string", "256");
+    }
+   
+	this.ds_jxlsInfo.addRow();
+	this.ds_jxlsInfo.setColumn(0, "__TEMPLATE", template);
+	this.ds_jxlsInfo.setColumn(0, "__FILENAME", filename);
+	for(var key in params) {
+	   this.ds_jxlsInfo.setColumn(0, key, params[key]);
+    }
+    
+    sDataset += " __DS_JXLS_INFO__=ds_jxlsInfo";
+   
+	var downName = Eco.getUniqueId("jxlsDownload_");
+	var downloader = new nexacro.ExtFileDownload(downName, this);
+	this.addChild(downName, downloader);
+	var baseInDatasets = Ex.core.setTranBaseInfo(this, "jxlsDownload", "hsco/cmm/download/excel.do", sDataset, "");
+	var sInDatasets = baseInDatasets["strInDatasets"] + sDataset;
+	
+	downloader.show();
+	downloader.download(application.gv_host+"hsco/cmm/download/excel.do", filename, sInDatasets);      
+}
+
+this.fn_openSanc = function(sanctnNo)
+{
+	this.ds_sancInfo = new Dataset("ds_sancInfo");
+	this.ds_sancUrl  = new Dataset("ds_sancUrl");
+	this.ds_sancInfo.addColumn("SANCTN_NO", "string", "256")
+	this.ds_sancInfo.addRow();
+	this.ds_sancInfo.setColumn(0, "SANCTN_NO", sanctnNo);
+	
+	var sSvcID     	   = "sancURL";
+	var sController    = "hsco/cmm/sanc/getSancURL.do";
+	var sInDatasets    = "input1=ds_sancInfo";
+	var sOutDatasets   = "ds_sancUrl=output1";
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, "", "", false, false); 
+	
+	if(this.ds_sancUrl.getRowCount() > 0) {
+		var url = this.ds_sancUrl.getColumn(0, "LINK");
+		if(url) {
+			system.execBrowser(url);
+		}
+	}
+}]]></Script>

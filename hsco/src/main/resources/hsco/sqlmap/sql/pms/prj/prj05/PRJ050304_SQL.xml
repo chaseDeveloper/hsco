@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj05">
+
+	<!-- 
+		 R   : TBCTR_CNTRCT				계약정보
+		 R   : TBPRJ_BSNS_CNST_CODE		표준공종코드
+		 R   : TBPRJ_WIK_FAIR			주간공정		월간공정
+	-->
+
+	<!-- 계약정보 조회 -->
+	<select id="PRJ050304.ctrList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE									/* 사업코드 */
+			,A.CNTRCT_NO									/* 계약번호 */
+			,A.CNTRCT_NM									/* 계약명 */
+			,A.CNTRCT_DE									/* 계약일자 */
+			,A.STRWRK_DE									/* 착공일자 */
+			,A.COMPET_DE									/* 준공일자 */
+			,WF.RT_1										/* 공정율_계획 */
+			,WF.RT_2										/* 공정율_실적 */
+			,WF.RT_D										/* 대비 */
+		FROM TBCTR_CNTRCT A									/* 계약 */
+		LEFT JOIN
+		(
+			SELECT
+				 A.BSNS_CODE								/* 사업코드 */
+				,A.CNTRCT_NO								/* 계약번호 */
+				,SUM(A.FAIR_RT_PLAN) AS RT_1				/* 누계_계획 */
+				,SUM(A.FAIR_RT_ACMSLT) AS RT_2				/* 누계_실적 */
+				,SUM(A.FAIR_RT_PLAN)
+				-SUM(A.FAIR_RT_ACMSLT) AS RT_D				/* 누계 차이 */
+			FROM TBPRJ_WIK_FAIR A
+			WHERE A.WEEK_MT_SE = '2'						/* 주월구분 */
+			  AND #YM# >= A.REPORT_YM						/* 기준년월 */
+			GROUP BY A.BSNS_CODE, A.CNTRCT_NO
+		) WF
+		  ON WF.BSNS_CODE = A.BSNS_CODE
+		 AND WF.CNTRCT_NO = A.CNTRCT_NO
+		WHERE A.BSNS_CODE = #BSNS_CODE#						/* 사업코드 */
+		<isNotEmpty property="CNTRCT_NO" >
+		  AND A.CNTRCT_NO = #CNTRCT_NO#						/* 계약번호 */
+		</isNotEmpty>
+		ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 월간공정 조회 -->
+	<select id="PRJ050304.mList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE									/* 사업코드 */
+			,A.CNTRCT_NO									/* 계약번호 */
+			,A.CNST_CODE									/* 공종코드 */
+			,C.STRWRK_DE									/* 착공일자 */
+			,C.COMPET_DE									/* 준공일자 */
+			,NVL(A.RT_1,0) AS RT_1							/* 누계_계획 */
+			,NVL(A.RT_2,0) AS RT_2							/* 누계_실적 */
+			,NVL(A.RT_D,0) AS RT_D							/* 누계 차이 */
+			,DECODE(C.CL_SE, '1', C.CNST_NM_LRGE, C.CNST_NM_MIDDL) AS CODE_NM		/* 공종명 */
+		FROM TBPRJ_BSNS_CNST_CODE C
+		LEFT JOIN
+		(
+			SELECT
+				 A.BSNS_CODE								/* 사업코드 */
+				,A.CNTRCT_NO								/* 계약번호 */
+				,A.CNST_CODE								/* 공종코드 */
+				,SUM(A.FAIR_RT_PLAN) AS RT_1				/* 누계_계획 */
+				,SUM(A.FAIR_RT_ACMSLT) AS RT_2				/* 누계_실적 */
+				,SUM(A.FAIR_RT_PLAN)
+				-SUM(A.FAIR_RT_ACMSLT) AS RT_D				/* 누계 차이 */
+			FROM TBPRJ_WIK_FAIR A
+			WHERE A.WEEK_MT_SE = '2'						/* 주간월간구분 */
+		  GROUP BY A.BSNS_CODE, A.CNTRCT_NO,A.CNST_CODE
+		) A ON C.BSNS_CODE = A.BSNS_CODE
+		   AND C.CNTRCT_NO = A.CNTRCT_NO
+		   AND C.CNST_CODE = A.CNST_CODE
+		WHERE A.BSNS_CODE = #BSNS_CODE#						/* 사업코드 */
+		  AND A.CNTRCT_NO = #CNTRCT_NO#						/* 계약번호 */
+		  AND A.CNST_CODE LIKE '%'
+		<!-- 
+		  AND C.CL_SE = '1'									/* 분류구분 */
+		-->
+		ORDER BY 1,2,3,4,5
+	</select>
+
+
+	<!-- 월간공정 조회 -->
+	<select id="PRJ050304.rList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE									/* 사업코드 */
+			,A.CNTRCT_NO									/* 계약번호 */
+			,A.ODR											/* 차수 */
+			,A.BGNDE										/* 시작일자 */
+			,A.ENDDE										/* 종료일자 */
+			,A.FAIR_RT_PLAN AS RT_1							/* 공정율_계획 */
+			,A.FAIR_RT_ACMSLT AS RT_2						/* 공정율_실적 */
+			,A.FAIR_RT_PLAN
+			-A.FAIR_RT_ACMSLT AS RT_D						/* 공정율 차이 */
+		FROM TBPRJ_WIK_FAIR A								/* 주간공정 */
+		WHERE A.BSNS_CODE = #BSNS_CODE#						/* 사업코드 */
+		  AND A.CNTRCT_NO = #CNTRCT_NO#						/* 계약번호 */
+		  AND A.WEEK_MT_SE = '2'							/* 주월구분 */
+		  AND A.ODR LIKE '%'								/* 차수 */
+		<isNotEmpty property="CNST_CODE" >
+		  AND A.CNST_CODE = #CNST_CODE#						/* 공종코드 */
+		</isNotEmpty>
+		ORDER BY 1,2,3,4,5
+	</select>
+</sqlMap>

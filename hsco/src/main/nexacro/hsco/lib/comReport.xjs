@@ -1,0 +1,514 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/*****************************************************************************
+ * 프로그램명 		: 	comReport.xjs
+ * 작  성  자  	: 	송금준
+ * 작  성  일   	: 	2015.09.01
+ * 설      명  		:   UBI Report 관련 공통함수
+ * 수  정  자  	: 	
+ * 수 정 이력  	: 	
+ * 사용방법	    :   
+*******************************************************************************/
+
+
+this.gfn_ReportPopup = function(formObj, p_reportPth, p_dsPrint)
+{
+	// TODO : 파라미터 하나라도 없으면 쫓아내세요
+	if(formObj == null || formObj == undefined || formObj == "") {
+		return false;
+	}
+	if(p_reportPth == null || p_reportPth == undefined || p_reportPth == "") {
+		return false;
+	}
+	if(p_dsPrint == null || p_dsPrint == undefined || p_dsPrint == "") {
+		return false;
+	}
+	
+	var parm = {
+	     arg_0       : formObj
+	     , reportPth : p_reportPth
+	     , dsPrint	 : p_dsPrint
+	};
+	formObj.gfn_popup("reportPopup", 800, 530, "", parm, "com::reportPopup.xfdl", "fn_popupCallBack", true, true);
+}
+
+// 사용방법 : this.gfn_ReportOnWBControl(this, this.clipreport, "BDG/BDG030201.crf", this.ds_cond);
+this.gfn_ReportOnWBControl = function(objParent, objWb, sReportName, sDataset)
+{
+	if(nexacro.Browser == "Runtime"){
+		alert("runtime 버전은 지원하지 않습니다.");
+		return false;
+	} else if(nexacro.Browser == "IE" && nexacro.BrowserVersion == 8) {
+		alert("IE 8은 지원하지 않습니다");	// get만 지원가능하긴 하지만
+		return false;
+	}
+	
+	var nL = objWb.left;
+	var nT = objWb.top;
+	var nW = objWb.width;
+	var nH = objWb.height;
+	var nR = objWb.right;
+	var nB = objWb.bottom;
+	var sName = objWb.name;
+	
+	objParent.removeChild(objWb.name);
+	objWb.destroy();
+	objWb = null;
+	
+	objWb = new WebBrowser();  
+	objWb.init(sName, "absolute", nL, nT, nW, nH, nR, nB);
+	objParent.addChild(sName, objWb); 
+	objWb.show(); 
+
+	var iframeObj = document.getElementById(objWb._ifrm_elem._object_id);
+	var iFrameDoc;
+	var iFrameBody;
+	if ( iframeObj.contentDocument ) 
+	{
+		iFrameDoc = iframeObj.contentDocument;
+		iFrameBody = iFrameDoc.getElementsByTagName('body')[0];
+	} else if ( iframeObj.contentWindow ) {
+		iFrameDoc = iframeObj.contentWindow.document;
+		iFrameBody = iFrameDoc.getElementsByTagName('body')[0];
+	}	
+	if(!iFrameBody)
+	{
+		iFrameBody = iFrameDoc.createElement("body");
+		iFrameDoc.appendChild(iFrameBody);   
+	}
+	
+	var form = iFrameDoc.createElement("form");
+	form.id = "postform";
+	form.name = "postform";
+	form.action = application.services["svcurl"].url + "ClipReport4/clipreport.jsp";
+	form.method = "post";
+	iFrameBody.appendChild(form);   
+	
+	if(sDataset.getRowCount() != 1) {
+		alert("레포트를 출력하기 위한 검색조건이 존재하지 않습니다.");
+		return false;
+	}
+	
+	if(sReportName && sReportName.length > 0) {
+		var reportInput = iFrameDoc.createElement("input");
+		reportInput.id 	= "reportname";
+		reportInput.name 	= "reportname";
+		reportInput.type 	= "hidden";
+		reportInput.value	= sReportName;
+		form.appendChild(reportInput);
+	}
+	
+	for(var cCol = 0; cCol < sDataset.getColCount(); cCol++) {
+		var colId = sDataset.getColID(cCol);
+		var colVal = sDataset.getColumn(0, cCol);
+		
+		var sValue = colVal;
+		if(sValue && sValue.length > 0) {
+			var input = iFrameDoc.createElement("input");
+			input.id 	= colId;
+			input.name 	= colId;
+			input.type 	= "hidden";
+			input.value	= sValue;
+			form.appendChild(input);
+		}
+	}
+	
+	try {
+		var script = iFrameDoc.createElement('script');
+		script.type = 'text/javascript';
+		script.charset = 'utf-8';
+		script.defer = true;
+		script.async = true;
+		script.onload = function () {}
+		var sDomain = "document.domain = \"" + document.domain + "\";";
+		script.text = [sDomain].join('');
+		iFrameBody.appendChild(script);	
+	} catch (e) {
+	}
+	
+	if(iFrameDoc.getElementById('postform'))
+	{
+		iFrameDoc.getElementById('postform').submit();
+	}
+}
+
+
+// UbiReport에서 사용할 Options
+this.cf_Opts = function() {
+	this.toolbar = false;
+	this.arg = "";
+	this.flicking = false;
+	this.scrollpage = true;
+	this.scale = 100;
+	this.timeout = 60000;
+	this.ismultireport = false;
+	this.isStreaming = true;
+	this.multicount = null;
+	this.reportPath = "";
+	this.saveFilename = "";
+	this.dsLocals = [];
+	this.gridObj = undefined;
+	this.callback = "";
+	this.isvoiceye = true;
+
+	this.getToolbar = function () {return this.toolbar};
+	this.getArgs = function () {return this.arg};
+	this.getFlicking = function () {return this.flicking};
+	this.getScrollPage = function () {return this.scrollpage};
+	this.getScale = function () {return this.scale};
+	this.getTimeout = function () {return this.timeout};
+	this.getIsMultiReport = function () {return this.ismultireport};
+	this.getIsStreaming = function () {return this.isStreaming};
+	this.getMultiCount = function () {return this.multicount};
+	this.getReportPath = function () {return this.reportPath};
+	this.getSaveFilename = function () {return this.saveFilename};
+	this.getLocalDs = function () {return this.dsLocals};
+	this.getGrid = function () {return this.gridObj};
+	this.getCallback = function () {return this.callback};
+	this.getIsvoiceye = function () {return this.isvoiceye};
+	
+	this.setToolbar = function (value) {this.toolbar = value};
+	this.setArgs = function (name, value) {this.arg += name + "#" + value + "#"};
+	this.setFlicking = function (value) {this.flicking = value};
+	this.setScrollPage = function (value) {this.scrollpage = value};
+	this.setIsStreaming = function (value) {this.isStreaming = value};
+	this.setScale = function (value) {this.scale = value};
+	this.setTimeout = function (value) {this.timeout = value};
+	this.setIsMultiReport = function (value) {this.ismultireport = value};
+	this.setMultiCount = function (value) {this.multicount = value};
+	this.setReportPath = function (value) {this.reportPath = value};
+	this.setSaveFilename = function (value) {this.saveFilename = value};
+	//this.setLocalDs = function (values) {this.dsLocals.push(values)};
+	this.setLocalDs = function (values) {this.dsLocals.push(values)};
+	this.setIsvoiceye = function (value) {this.isvoiceye = value};
+	this.clearLocalDs = function () {
+						var nCnt = this.dsLocals.length;
+						for(var i = 0; i < nCnt; i++)
+						{
+							this.dsLocals.pop();
+						}
+					};
+	this.setGrid = function (obj) {this.gridObj = obj};
+	this.setCallback = function (value) {this.callback = value}
+};
+
+/*******************************************************************************
+ * 함수명  	: gfn_setLocalDs2Viewer
+ * 설명 		: UbiViewer에 JRF File을 입힌다.
+ * params  		: 1. ubi		: UBIViewer Component
+ *                2. opts		: UBIViewer Options
+ * return Type 	: None
+ * 사용법		: 
+ ******************************************************************************/
+this.gfn_setLocalDs2Viewer = function(ubi:HTMLUbiViewer, opts)
+{
+	this.gfn_initReport(ubi, opts);
+	this.gfn_setReport2Viewer(ubi, opts.getReportPath());
+
+	if (opts.dsLocals)
+	{
+		for (var i=0; i < opts.dsLocals.length; i++)
+		{
+			var dsInfo = opts.dsLocals[i];
+			
+			/* String XML 타입인지 ds 타입인지 체크하여 분기 처리 */
+			if(String.prototype.isPrototypeOf(dsInfo[1])) {
+			    var ds = new Dataset();
+			    ds.set_name(dsInfo[0].name);
+			    ds.loadXML(dsInfo[1], true);
+			    ubi.setDataset(dsInfo[0], ds);
+			} else {
+			    ubi.setDataset(dsInfo[0], dsInfo[1]);
+			}
+			
+		}
+	}
+	
+	var strCallback;
+	if(this.comUtils.isNullEmpty(opts.callback))
+	{
+		strCallback = "_retrieveEnd";
+	}
+
+	ubi.retrieve(this, strCallback);
+}
+
+/*******************************************************************************
+ * 함수명  	: gfn_setGrid2Viewer
+ * 설명 		: Grid의 내용을 그대로 Report를 구현한다.
+ * params  		: 1. ubi		: UBIViewer Component
+ *                2. opts		: 초기화에 필요한 옵션들
+ * return Type 	: None
+ * 사용법		: 
+ ******************************************************************************/
+this.gfn_setGrid2Viewer = function (ubi:HTMLUbiViewer, opts)
+{
+	var isRuntime = true;
+	var gridObj = opts.getGrid();
+
+	this.gfn_initReport(ubi, opts);
+	this.gfn_setReport2Viewer(ubi, opts.getReportPath());
+
+	if (isRuntime == true)
+	{
+		var formatRowCount = gridObj.getFormatRowCount();
+		var formatColCount = gridObj.getFormatColCount();
+		var widthArray = new Array;
+		var heightArray = new Array;
+
+		var headBgColor = "230.230.230";	// 헤더 배경색 
+		var summBgColor = "240.240.240";	// 합계 배경색 
+		var i=0;
+		var j=0;
+		var k=0;
+
+		// Grid의 Row의 높이를 도출
+		var subidx = 0;
+		var bandtype = "";
+		var prebandtype = "";
+		var bodyStartRow = 0;
+		var summStartRow = 0;
+		
+		for (i=0; i < formatRowCount; i++) {
+			bandtype = gridObj.getFormatRowProperty(i,"band");
+
+			if (bandtype == prebandtype) {
+				subidx++;
+			} else {
+				subidx = 0;
+			}
+			//modify 2016.08.31 - UBI
+			//heightArray[i] = gridObj.getRealRowSize(i, subidx, false);	// 기존
+			heightArray[i] = gridObj.getFormatRowSize(i, subidx, false); // 변경
+			//heightArray[i] = this.gridObj.getFormatRowSize(i);
+		
+			prebandtype = bandtype;
+		}
+		
+		// Grid의 Column 넓이 도출
+		for (i=0; i<formatColCount; i++) {
+			widthArray[i] = gridObj.getRealColSize(i);
+		}
+
+		var cellcount = 0;
+		var rowcount = 0;
+
+		// ------------------------------------------------------------
+		// 디자인정보를 담고있는 Dataset 생성
+		// ------------------------------------------------------------
+		// 추가 2015.03.10 : START
+		// 컬럼 생성
+		var designDataset = ubi.getDesignDataset(this);
+		
+		prebandtype = "";
+		var bandRow = 0;
+		var nRow = 0;
+		var rowidx = 0;
+		var colidx = 0;
+		var colspan = 0;
+		var rowspan = 0;
+		var colwidth = 0;
+		var colheight = 0;
+		var startIdx = 0;
+		var endIdx = 0;
+		var bgcolor = "";
+		
+		// 전체 높이와 넒이를 담은 Row 생성
+		nRow = designDataset.addRow();
+		designDataset.setColumn(nRow, "type", "widths");
+		designDataset.setColumn(nRow, "text", widthArray);
+		
+		// modify - 2016.08.31 UBI
+		designDataset.setColumn(nRow, "summarytype", gridObj.summarytype); //추가
+	    
+		nRow = designDataset.addRow();
+		designDataset.setColumn(nRow, "type", "heights");
+		designDataset.setColumn(nRow, "text", heightArray);
+		
+		for (i=0; i<formatRowCount; i++) {
+			bandtype = gridObj.getFormatRowProperty(i,"band");
+
+			if (bandtype != prebandtype) {
+				if (bandtype == "head") {
+					bandRow = -1;
+					bgcolor = headBgColor; 
+				} else if (bandtype == "body") {
+					bandRow = 0;
+					bgcolor = "";
+				} else if (bandtype == "summ") {
+					bandRow = -2;
+					bgcolor = summBgColor;
+				}
+				cellcount = gridObj.getCellCount(bandtype);
+
+				for (j=0; j<cellcount; j++) {
+					rowidx = gridObj.getCellProperty(bandtype,j,"row");
+					colidx = gridObj.getCellProperty(bandtype,j,"col");
+					rowspan = gridObj.getCellProperty(bandtype,j,"rowspan");
+					colspan = gridObj.getCellProperty(bandtype,j,"colspan");
+				
+					nRow = designDataset.addRow();
+					designDataset.setColumn(nRow, "type", bandtype);
+					designDataset.setColumn(nRow, "row", rowidx);
+					designDataset.setColumn(nRow, "col", colidx);
+					designDataset.setColumn(nRow, "rowspan", rowspan);
+					designDataset.setColumn(nRow, "colspan", colspan);
+					designDataset.setColumn(nRow, "align", gridObj.getCellProperty(bandtype,j,"align"));
+					if (bandRow != 0) {
+
+						designDataset.setColumn(nRow, "text", gridObj.getCellText(bandRow,j));
+
+					}
+					designDataset.setColumn(nRow, "bgcolor", bgcolor);
+
+					// 추가 2015.03.10 : START
+					// -----------------------------------------------------
+					// 속성변경 테스트
+					// Design Dataset 중 순서대로 margin 관련 속성까지만 반영되어 있음.
+					// -----------------------------------------------------
+// 					designDataset.setColumn(nRow, "linespace", "4");
+// 					if (j == 2)
+// 					{
+// 						designDataset.setColumn(nRow, "foreground", "255.0.0");
+// 						designDataset.setColumn(nRow, "suppressing", "true");
+// 						designDataset.setColumn(nRow, "fontexpr", "'궁서,1,12'");
+// 						// suppressing과 merge옵션을 함께 쓸 수 없으므로 둘 중 하나만 쓰도록 함.
+// 						//if (bandtype == "body")
+// 						//	designDataset.setColumn(nRow, "merge", "true");
+// 					}
+					// -----------------------------------------------------
+					// 추가 2015.03.10 : END
+				}
+
+			}
+			
+			prebandtype = bandtype;
+		}
+		this.addChild(designDataset.name, designDataset);
+		
+		// ------------------------------------------------------------
+		// 그리드의 텍스트를 Dataset으로 생성
+		// ------------------------------------------------------------
+		cellcount = gridObj.getCellCount("Body");
+		rowcount = gridObj.rowcount;
+		
+		var gridDataset = new Dataset("ds_ubiGrid", this);
+		this.addChild(gridDataset.name, gridDataset);
+
+		// column 생성
+		for (i=0; i<cellcount; i++) {
+			gridDataset.addColumn("column"+i, "string");
+		}
+
+		// 그리드 데이터 입력
+		for (j=0; j<rowcount; j++) {
+			gridDataset.addRow();
+			for (k=0; k<cellcount; k++) {
+				gridDataset.setColumn(j, k, gridObj.getCellText(j, k));
+
+			}
+
+		}
+
+		// ------------------------------------------------------------
+		// dataset SSV 전송에 필요한 정보 생성
+		ubi.setRuntimeData(designDataset, gridDataset);
+
+		// 동적으로 생성된 Dataset 제거
+		this.removeChild(designDataset.name);
+		this.removeChild(gridDataset.name);
+
+	}
+	 
+	// retrieve(parent, callback 함수명);
+	var strCallback;
+	if(this.comUtils.isNullEmpty(opts.getCallback()))
+	{
+		strCallback = "_retrieveEnd";
+	} 
+
+	ubi.retrieve(this, strCallback);
+
+}
+
+/*******************************************************************************
+ * 함수명  	: retrieveEnd
+ * 설명 		: Ubi Report Callback Function
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: 
+ ******************************************************************************/
+this._retrieveEnd = function()
+{
+	// None
+}
+
+/*******************************************************************************
+ * 함수명  	: gfn_initReport
+ * 설명 		: UBI Report를 초기화한다.
+ * params  		: 1. ubi		: UBIViewer Component
+ *                2. opts		: 초기화에 필요한 옵션들
+ * return Type 	: None
+ * 사용법		: this.gfn_initCondDs(this, this.div_SEARCH);
+ ******************************************************************************/
+this.gfn_initReport = function (ubi:HTMLUbiViewer, opts)
+{
+	var host = application.services["svcurl"].url;
+	var uvUri = "web/hsco/ur/";
+
+	ubi.set_resource(host + "ubireport/ajax/js4");
+	ubi.set_gatewayurl(host + "UbiGateway.do");
+
+	ubi.set_dataurl(host + "UbiData.do");
+	ubi.set_resid("UBIAJAX");
+    opts.setArgs("EMPNO", this.gfn_getUserId());
+	opts.setArgs("EMPNM", this.gfn_getUserName());
+	ubi.set_toolbar(opts.getToolbar());
+	ubi.set_arg(opts.getArgs());
+	ubi.set_flicking(opts.getFlicking());
+	ubi.set_scrollpage(opts.getScrollPage());
+	ubi.set_scale(opts.getScale());
+	ubi.set_ismultireport(opts.getIsMultiReport());
+	ubi.set_isStreaming(opts.getIsStreaming());
+	ubi.set_isvoiceye(opts.getIsvoiceye());
+
+	if(opts.getIsMultiReport())
+	{
+		if(opts.getMultiCount() != null){
+			ubi.set_multicount(opts.getMultiCount());
+		}
+	}
+
+	ubi.set_reporttitle(opts.getSaveFilename());
+}
+
+/*******************************************************************************
+ * 함수명  	: gfn_setReport2Viewer
+ * 설명 		: UbiViewer에 JRF File을 입힌다.
+ * params  		: 1. ubi		: UBIViewer Component
+ *                2. reportPath	: JRF File명
+ * return Type 	: None
+ * 사용법		: 
+ ******************************************************************************/
+this.gfn_setReport2Viewer = function(ubi:HTMLUbiViewer, reportPath)
+{
+	var reportPathArr = reportPath.split(",");
+	var reportPathArrLeng = reportPathArr.length;
+	var isMultiReport = reportPathArrLeng > 1 ? true : false;
+	
+	var viewReportPath = isMultiReport ? reportPathArr[0] : reportPath;
+	
+	var reportPathArray = viewReportPath.split("/");
+	var length = reportPathArray.length;
+	var reportId = reportPathArray[length-1];
+	var path = viewReportPath.replace(reportId, "");
+
+	var host = application.services["svcurl"].url;
+	var uvUri = "web/hsco/ur/";
+
+	var baseUrl = host + uvUri + path.substr(1);
+	var viewReportUrl = baseUrl;//isMultiReport ? baseUrl + "," + baseUrl : baseUrl;
+	
+	ubi.set_jrffile(reportPath);
+	ubi.set_reporturl(viewReportUrl);
+}
+]]></Script>

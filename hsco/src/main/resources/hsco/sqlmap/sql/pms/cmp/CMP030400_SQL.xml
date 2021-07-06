@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP030400_SQL">
+<!--  설명  : 보상액내역
+	작성자 : 지효정  -->
+
+	<!-- 물건 소유자 목록 -->
+	<select id="CMP030400DAO.thingOwnerList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT DISTINCT
+			 0 AS CHK
+			,ABC.BSNS_AREA_CODE	/* 사업지역코드 */
+			,ABC.OWNER_NO		/* 소유자 번호 */
+			,ABC.NM				/* 소유자 이름 */
+			,ABC.ADRES			/* 소유자 주소 */
+			,ABC.ZIP
+	        ,ABC.ADRES_DM
+	        ,ABC.ZIP_DM
+			,(SELECT COUNT(*) AS CNT FROM TBCMP_THING_OWNER T WHERE T.BSNS_AREA_CODE = ABC.BSNS_AREA_CODE AND T.OWNER_NO = ABC.OWNER_NO) AS PRT_CNT
+		FROM(
+			SELECT AB.*
+			FROM(
+				SELECT
+					 A.BSNS_AREA_CODE
+					,A.OWNER_NO
+					,A.THING_SN
+					,B.OWNER_NM AS NM
+					,B.ZIP
+                    ,B.ADRES||' '||B.ADRES_DETAIL AS ADRES 
+                    ,CASE 
+                         WHEN B.ADRES_DM_2 IS NULL 
+                         THEN B.ADRES_DM_1||' '||B.ADRES_DETAIL_DM_1 
+                         ELSE B.ADRES_DM_2||' '||B.ADRES_DETAIL_DM_2 
+                     END AS ADRES_DM 
+                    ,CASE 
+                         WHEN B.ZIP_DM_2 IS NULL 
+                         THEN B.ZIP_DM_1 
+                         ELSE B.ZIP_DM_2 
+                     END AS ZIP_DM					
+				FROM TBCMP_THING_OWNER A, TBCMP_OWNER B
+				WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+				AND   B.OWNER_SE = '1'
+				AND   A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				AND   A.OWNER_NO = B.OWNER_NO
+				<isNotEmpty property="NM">
+				AND   B.OWNER_NM LIKE '%' || #NM# || '%'
+				</isNotEmpty>
+				<isNotEmpty property="RQEST_SE">
+				AND   A.RQEST_SE = #RQEST_SE#
+				</isNotEmpty>
+			)AB,
+			(
+				SELECT BSNS_AREA_CODE, THING_SN
+				FROM TBCMP_THING_WTNNC
+				WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+				<isNotEmpty property="LOCPLC_CODE">
+				AND   LOCPLC_CODE = #LOCPLC_CODE#
+				</isNotEmpty>
+				<isNotEmpty property="REWARD_ODR">
+				AND   REWARD_ODR = #REWARD_ODR#
+				</isNotEmpty>
+				<isEqual property="SELECT" compareValue="0">
+				<isNotEmpty property="THING_CL">
+				AND	  THING_CL IN
+				<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+				#ARR_THING_CL[]#
+				</iterate>
+				</isNotEmpty>
+				</isEqual>											
+				<isNotEmpty property="LNM">
+				AND   LNM = #LNM#
+				</isNotEmpty>
+				<isNotEmpty property="SLNO">
+				AND   SLNO = #SLNO#
+				</isNotEmpty>
+				ORDER BY BSNS_AREA_CODE, THING_SN
+			)C
+			WHERE AB.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+			AND AB.THING_SN = C.THING_SN
+		)ABC
+		ORDER BY ABC.NM
+	</select>
+
+	<!-- 조서 목록 -->
+	<select id="CMP030400DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">	
+		SELECT
+			 A.*
+			,B.AR /* 소유자 면적 */
+			,B.RWMNY
+            ,A.REWARD_STLE|| 
+             A.BNDE_APPLC_GROUP||
+             CASE NVL(A.REWARD_STLE,'0') 
+                 WHEN '0' 
+                 THEN LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+                 ELSE 
+                     CASE 
+                         WHEN B.RWMNY > 0 
+                         THEN '00' 
+                         ELSE LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+                     END 
+             END AS SORT_ORDR
+		FROM(
+		SELECT
+		     BSNS_AREA_CODE	/* 사업지역코드 */
+		    ,THING_SN      	/* 물건일련번호 */
+		    ,LOCPLC_CODE   	/* 소재지코드 */
+		    ,SFCMP_GET_LOCPLC(BSNS_AREA_CODE, LOCPLC_CODE) || ' ' ||
+             DECODE(SLNO, NULL, LNM, LNM || '-' || SLNO) AS FULL_LOCPLC_CODE_NM
+		    ,LNM_SE
+		    ,LNM
+		    ,SLNO
+		    ,TRIM(THING_CL) AS THING_CL	/* 물건 분류 코드 */
+		    ,THING_NM      	/* 물건명 */
+            ,STRCT_STNDRD
+            ,LNDCGR_LGSTR
+            ,LNDCGR_INCRPR           
+		    ,REAL_LNDCGR   	/* 실제지목 */
+		    ,NOW_USE_STTUS 	/* 현재이용현황 */
+		    ,AR_LGSTR    	/* 면적_공부 */
+		    ,AR_INCRPR     	/* AR_INCRPR */
+		    ,UNIT          	/* 단위 코드 */		    
+		    ,DECODE(REWARD_STLE,'0', TRIM(TO_CHAR(THING_UNTPC,'999,999,999,999.999')), 
+                    SFCMP_GET_CODENM('CMP007', TRIM(REWARD_STLE))  
+                   ) AS UNTPC             /* 단가 */            
+		    ,RM_1 			/* 비고 */
+		    ,REWARD_STLE
+		    ,BNDE_APPLC_GROUP
+		FROM TBCMP_THING_WTNNC
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		<isEqual property="SELECT" compareValue="0">
+				<isNotEmpty property="THING_CL">
+				AND	  THING_CL IN
+				<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+				#ARR_THING_CL[]#
+				</iterate>
+				</isNotEmpty>
+		</isEqual>
+		)A,
+		(
+		SELECT THING_SN, AR, RWMNY
+		FROM TBCMP_THING_OWNER A
+		WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#
+		)B, TBCMP_LOCPLC_INFO X, TBCOM_CMMN_CODE Y
+		WHERE A.THING_SN = B.THING_SN
+		AND A.BSNS_AREA_CODE = X.BSNS_AREA_CODE AND A.LOCPLC_CODE = X.LOCPLC_CODE AND 'CMP001' = Y.GRP_CODE AND A.THING_CL = Y.CODE		
+		ORDER BY TO_NUMBER(A.LNM), TO_NUMBER(A.SLNO), SORT_ORDR, A.BNDE_APPLC_GROUP
+	</select>
+
+	<select id="CMP030400DAO.ownerThingList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT
+		     B.OWNER_NO
+		    ,A.THING_SN			/* 물건번호 */
+		    ,ROWNUM AS NUM		/* 순번 */
+		    ,SFCMP_GET_LOCPLC(A.BSNS_AREA_CODE, A.LOCPLC_CODE) || ' ' || DECODE(A.SLNO, NULL, A.LNM, A.LNM || '-' || A.SLNO) AS LOCPLC_ADRES
+		    ,SFCMP_GET_CODENM('CMP001', TRIM(A.THING_CL)) AS THING_CL       /* 물건분류 */
+		    , A.THING_NM 
+		    ,A.STRCT_STNDRD		/* 지목 구조및 규격 */
+		    ,A.AR_LGSTR			/* 지적 면적 */
+		    ,A.AR_INCRPR		/* 편입 수량 */
+		    ,B.AR               /* 소유 면적*/
+			,(  SELECT LNDCGR_NM
+				FROM TBCMP_LNDCGR_CODE
+				WHERE LNDCGR_CODE = A.REAL_LNDCGR
+		     ) AS REAL_LNDCGR_NM
+		    ,REAL_LNDCGR
+		    ,SFCMP_GET_CODENM('CMP002', TRIM(A.UNIT)) AS UNIT       /* 단위 */
+		    ,DECODE(REWARD_STLE,'0', TRIM(TO_CHAR(THING_UNTPC,'999,999,999,999.999')), 
+                    SFCMP_GET_CODENM('CMP007', TRIM(REWARD_STLE))  
+                   ) AS UNTPC             /* 단가 */
+		    ,NVL(B.RWMNY,0) AS RWMNY            /* 금액*/
+		    ,A.RM_1				/* 비고 */
+		    ,C.OWNER_NM AS NM	/* 소유자 이름 */
+		    ,C.ADRES || ' ' || C.ADRES_DETAIL AS ADRES	/* 소유자 주소 */
+		    ,A.REWARD_STLE|| 
+             A.BNDE_APPLC_GROUP||
+             CASE NVL(A.REWARD_STLE,'0') 
+                 WHEN '0' 
+                 THEN LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+                 ELSE 
+                     CASE 
+                         WHEN B.RWMNY > 0 
+                         THEN '00' 
+                         ELSE LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+                     END 
+             END AS SORT_ORDR  
+		    , A.BNDE_APPLC_GROUP   		    
+		FROM TBCMP_THING_WTNNC A, TBCMP_THING_OWNER B, TBCMP_OWNER C, TBCOM_CMMN_CODE Y
+		WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   B.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+		AND   B.THING_SN = A.THING_SN
+		<isNotEmpty property="OWNER_NO">
+				AND	  B.OWNER_NO IN
+				<iterate property="ARR_OWNER_NO"  open="(" close=")" conjunction="," >
+				#ARR_OWNER_NO[]#
+				</iterate>
+		</isNotEmpty>
+		       <isEqual property="SELECT" compareValue="0">
+				<isNotEmpty property="THING_CL">
+				AND	  A.THING_CL IN
+				<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+				#ARR_THING_CL[]#
+				</iterate>
+				</isNotEmpty>
+				</isEqual>
+		AND   C.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		AND   B.OWNER_NO = C.OWNER_NO
+		AND   C.OWNER_SE ='1'
+		AND 'CMP001' = Y.GRP_CODE AND A.THING_CL = Y.CODE
+		ORDER BY C.OWNER_NM, B.OWNER_NO
+		                ,TO_NUMBER(A.LNM), TO_NUMBER(A.SLNO), SORT_ORDR, A.BNDE_APPLC_GROUP
+	</select>
+</sqlMap>

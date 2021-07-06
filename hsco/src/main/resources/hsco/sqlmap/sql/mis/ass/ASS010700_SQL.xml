@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ASS010700_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 자산대장 조회 -->
+	<select id="ASS010700DAO.assetsMastrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ /* ASS010700DAO.assetsMastrList */ ]]>	
+				SELECT A.ASSETS_CL_CODE                                     /* 자산분류코드 명 */
+				      ,B.ASSETS_CL_NM                                       /* 자산분류 명 */
+				      ,A.ASSETS_NO                                          /* 자산번호 */
+				      ,A.ASSETS_NM                                          /* 자산명 명 */
+				      ,A.DEPT_CODE                                          /* 담당부서코드 */
+				      ,E.DEPT_NM                                            /* 담당부서명 */
+				      ,A.UNTPC                                              /* 단가 */
+				      ,NVL(A.GOVSUBY_ACQS_AMOUNT, 0) AS GOVSUBY_ACQS_AMOUNT /* 국고보조금취득가액 */
+				      ,A.ASSETS_SE                                          /* 자산구분 */
+				      ,A.UNIT                                               /* 단위 명 */
+				      ,A.STNDRD                                             /* 규격 명 */
+				      ,A.QY                                                 /* 수량 명 */
+				      ,A.ACQS_DE                                            /* 취득일자 */
+				      ,NVL(A.ACQS_SUPLY_AMOUNT, 0)  AS ACQS_SUPLY_AMOUNT    /* 공급가액 */
+				      ,NVL(A.MRN_CT, 0)             AS MRN_CT               /* 부대비용 */
+				      ,NVL(A.ACQS_VAT, 0)           AS ACQS_VAT             /* 부가세액 */
+				      ,NVL(A.ACQS_AMOUNT, 0)        AS ACQS_AMOUNT          /* 취득가액 */
+				      ,A.PUCHAS_BCNC                                        /* 매입거래처 */
+				      ,C.BCNC_NM                                            /* 매입거래처 명 */
+				      ,B.DPRC_MTH                                           /* 감가상각방법 */
+				      ,B.DPRC_RT                                            /* 감가상각율 */
+				      ,B.CN_YYCNT                                           /* 내용년수 */
+				      ,A.DPRT_COMPT_AT                                      /* 감가상각완료여부 */
+				      ,NVL(D.CNT,0)                 AS DPRT_CNT
+				      ,A.FILE_SN                    AS FILE_SN
+				      ,NVL(F.CNT, 0)                AS FILE_CNT
+				      ,G.DISUSE_PROCESS_AT
+				      ,H.BIZPLC_CODE
+				      ,H.BIZPLC_NM
+				      
+				FROM  TBASS_ASSETS_MASTR A
+				      LEFT OUTER JOIN TBCTR_BCNC_MASTR C
+				                   ON A.PUCHAS_BCNC = C.BCNC_CODE
+				      LEFT OUTER JOIN (SELECT ASSETS_NO, COUNT(*) AS CNT
+				                       FROM   TBASS_DPRC 
+				                       GROUP BY ASSETS_NO
+				                      ) D
+				                   ON A.ASSETS_NO = D.ASSETS_NO
+				      LEFT OUTER JOIN VWHRM_DEPT E
+				                   ON A.DEPT_CODE = E.DEPT_CODE  
+				      LEFT OUTER JOIN (SELECT FILE_SN, COUNT(*) AS CNT
+				                       FROM   TBCOM_CMMN_ATCHMNFL
+				                       GROUP BY FILE_SN
+				                      ) F
+				                   ON  A.FILE_SN = F.FILE_SN
+				      LEFT OUTER JOIN TBASS_ATLD_MANAGE_DETAIL G
+			                       ON A.ASSETS_NO = G.ASSETS_NO
+			          LEFT OUTER JOIN TBHRM_BIZPLC H
+			                       ON A.BIZPLC_CODE = H.BIZPLC_CODE   
+				  	  ,TBASS_ASSETS_CL B			  	  
+				WHERE A.ASSETS_CL_CODE = B.ASSETS_CL_CODE
+			<isNotEmpty property="ACQS_AMOUNT1">
+				<![CDATA[
+				  AND A.ACQS_AMOUNT >= #ACQS_AMOUNT1#
+				]]>	
+			</isNotEmpty>
+			<isNotEmpty property="ACQS_AMOUNT2">
+				<![CDATA[
+				  AND A.ACQS_AMOUNT <= #ACQS_AMOUNT2#
+				]]>	
+			</isNotEmpty>
+			<isNotEmpty property="ASSETS_CL_CODE">
+				  AND A.ASSETS_CL_CODE =#ASSETS_CL_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="ASSETS_NM">
+				  AND A.ASSETS_NM LIKE '%' || #ASSETS_NM# || '%'
+			</isNotEmpty>
+			<isNotEmpty property="ACQS_DE1">
+				<![CDATA[
+				  AND A.ACQS_DE >= #ACQS_DE1#
+				]]>	
+			</isNotEmpty>
+			<isNotEmpty property="ACQS_DE2">
+				<![CDATA[
+				  AND A.ACQS_DE <= #ACQS_DE2#
+				]]>	
+			</isNotEmpty>
+			<isNotEmpty property="DPRT_COMPT_AT">
+				<![CDATA[
+				  AND NVL(A.DPRT_COMPT_AT, '0') = #DPRT_COMPT_AT#
+				]]>	
+			</isNotEmpty>
+			<isNotEmpty property="DISUSE_PROCESS_AT">
+				<![CDATA[
+				  AND NVL(G.DISUSE_PROCESS_AT, '0') = #DISUSE_PROCESS_AT#
+				]]>	
+			</isNotEmpty>
+			<isNotEmpty property="REQUST_DEPT">
+				<![CDATA[
+				  AND A.DEPT_CODE = #REQUST_DEPT#
+				]]>	
+			</isNotEmpty>
+			<isNotEmpty property="REQUST_DEPT_NM">
+				<![CDATA[
+				  AND E.DEPT_NM = #REQUST_DEPT_NM#
+				]]>	
+			</isNotEmpty>
+			
+			    ORDER BY A.ASSETS_NO DESC
+    </select>
+    
+
+	<!-- 자산대장 감가상각내역 조회 -->
+	<select id="ASS010700DAO.assetsMastrR" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			  SELECT A.DPRC_YM                          AS DPRC_YM
+			        ,NVL(B.ACQS_AMOUNT,0)               AS ACQS_AMOUNT
+			        ,NVL(A.MT_DPRC_AMOUNT,0)            AS MT_DPRC_AMOUNT
+			        ,NVL(A.DPRC_ACMTL_AMOUNT,0)         AS DPRC_ACMTL_AMOUNT
+			        ,NVL(B.GOVSUBY_ACQS_AMOUNT,0)       AS GOVSUBY_ACQS_AMOUNT
+			        ,NVL(A.GOVSUBY_MT_DPRC_AMOUNT,0)    AS GOVSUBY_MT_DPRC_AMOUNT
+			        ,NVL(A.GOVSUBY_DPRC_ACMTL_AMOUNT,0) AS GOVSUBY_DPRC_ACMTL_AMOUNT
+			        ,NVL(A.TRMEND_BLCE,0)               AS TRMEND_BLCE				        
+			  FROM  TBASS_DPRC A
+			  	    ,TBASS_ASSETS_MASTR B				  	   
+			  WHERE A.ASSETS_NO = B.ASSETS_NO
+			    AND A.ASSETS_NO = #ASSETS_NO#
+			  ORDER BY A.DPRC_YM 		    
+		]]>	
+    </select>
+    
+    <!-- 자산대장 변경이력 조회 -->
+	<select id="ASS010700DAO.assetsMastrHist" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+              SELECT A.HIST_SN
+                     , A.HIST_SE
+                     , A.HIST_DTTM
+                     , A.ASSETS_CL_CODE                                     /* 자산분류코드 명 */
+                     , B.ASSETS_CL_NM                                       /* 자산분류 명 */
+                     , A.ASSETS_NM                                          /* 자산명 명 */
+                     , A.DEPT_CODE                                          /* 담당부서코드 */
+                     , D.DEPT_NM                                            /* 담당부서명 */
+                     , A.UNTPC                                              /* 단가 */
+                     , A.ASSETS_SE                                          /* 자산구분 */
+                     , A.QY                                                 /* 수량 */
+                     , A.PUCHAS_BCNC                                        /* 매입거래처 */
+                     , C.BCNC_NM                                            /* 매입거래처 명 */
+              FROM  (SELECT HIST_SN
+                            , HIST_DTTM
+                            , HIST_SE
+                            , ASSETS_NO
+                            , ASSETS_CL_CODE
+                            , ASSETS_NM
+                            , DEPT_CODE
+                            , UNTPC
+                            , ASSETS_SE
+                            , QY
+                            , PUCHAS_BCNC
+                            , DECODE(ASSETS_CL_CODE, NULL, 'NULL', ASSETS_CL_CODE) AS ASSETS_CL_CODE2
+                            , DECODE(ASSETS_NM, NULL, 'NULL', ASSETS_NM)           AS ASSETS_NM2
+                            , DECODE(DEPT_CODE, NULL, 'NULL', DEPT_CODE)           AS DEPT_CODE2
+                            , DECODE(UNTPC, NULL, 'NULL', UNTPC)                   AS UNTPC2
+                            , DECODE(ASSETS_SE, NULL, 'NULL', ASSETS_SE)           AS ASSETS_SE2
+                            , DECODE(QY, NULL, 'NULL', QY)                         AS QY2
+                            , DECODE(PUCHAS_BCNC, NULL, 'NULL', PUCHAS_BCNC)       AS PUCHAS_BCNC2
+                            , DECODE(LAG(ASSETS_CL_CODE, 1) OVER (ORDER BY HIST_SN), NULL, 'NULL', LAG(ASSETS_CL_CODE, 1) OVER (ORDER BY HIST_SN)) AS ASSETS_CL_CODE1
+                            , DECODE(LAG(ASSETS_NM, 1) OVER (ORDER BY HIST_SN), NULL, 'NULL', LAG(ASSETS_NM, 1) OVER (ORDER BY HIST_SN))           AS ASSETS_NM1
+                            , DECODE(LAG(DEPT_CODE, 1) OVER (ORDER BY HIST_SN), NULL, 'NULL', LAG(DEPT_CODE, 1) OVER (ORDER BY HIST_SN))           AS DEPT_CODE1
+                            , DECODE(LAG(UNTPC, 1) OVER (ORDER BY HIST_SN), NULL, 'NULL', LAG(UNTPC, 1) OVER (ORDER BY HIST_SN))                   AS UNTPC1
+                            , DECODE(LAG(ASSETS_SE, 1) OVER (ORDER BY HIST_SN), NULL, 'NULL', LAG(ASSETS_SE, 1) OVER (ORDER BY HIST_SN))           AS ASSETS_SE1
+                            , DECODE(LAG(QY, 1) OVER (ORDER BY HIST_SN), NULL, 'NULL', LAG(QY, 1) OVER (ORDER BY HIST_SN))                         AS QY1
+                            , DECODE(LAG(PUCHAS_BCNC, 1) OVER (ORDER BY HIST_SN), NULL, 'NULL', LAG(PUCHAS_BCNC, 1) OVER (ORDER BY HIST_SN))       AS PUCHAS_BCNC1
+                     FROM   TBASS_ASSETS_MASTR_HIST
+                    )A
+                    LEFT OUTER JOIN TBCTR_BCNC_MASTR C
+                                 ON A.PUCHAS_BCNC = C.BCNC_CODE
+                    LEFT OUTER JOIN VWHRM_DEPT D
+                                 ON A.DEPT_CODE = D.DEPT_CODE     
+                	,TBASS_ASSETS_CL B			  	  
+              WHERE A.ASSETS_CL_CODE = B.ASSETS_CL_CODE
+                AND (   A.ASSETS_CL_CODE2 <> A.ASSETS_CL_CODE1
+                     OR A.ASSETS_NM2 <> A.ASSETS_NM1
+                     OR A.DEPT_CODE2 <> A.DEPT_CODE1
+                     OR A.UNTPC2 <> A.UNTPC1
+                     OR A.ASSETS_SE2 <> A.ASSETS_SE1
+                     OR A.QY2 <> A.QY1
+                     OR A.PUCHAS_BCNC2 <> A.PUCHAS_BCNC1
+                    )
+                AND  A. ASSETS_NO = #ASSETS_NO#
+              ORDER BY A.HIST_SN				    
+		]]>	
+    </select>
+    
+    <!-- 자산대장 입력 -->
+    <insert id="ASS010700DAO.assetsMastrC" parameterClass="java.util.HashMap">
+        <![CDATA[
+      INSERT INTO TBASS_ASSETS_MASTR (
+                        ASSETS_CL_CODE
+                       ,ASSETS_NO
+                       ,ASSETS_NM
+                       ,QY
+                       ,UNIT
+                       ,STNDRD
+                       ,ACQS_DE
+                       ,ACQS_SUPLY_AMOUNT
+                       ,MRN_CT
+                       ,ACQS_VAT
+                       ,ACQS_AMOUNT
+                       ,PUCHAS_BCNC
+                       ,DEPT_CODE
+                       ,ASSETS_SE
+                       ,GOVSUBY_ACQS_AMOUNT
+                       ,UNTPC
+                       ,REGISTER_ID
+                       ,REGIST_DT
+                       ,UPDUSR_ID
+                       ,UPDT_DT
+             ) VALUES (
+        		     #ASSETS_CL_CODE#
+	                 ,(   
+                        SELECT NVL(MAX(TO_NUMBER(ASSETS_NO))+1,CONCAT(TO_CHAR(SYSDATE,'YYYY'),'000001'))
+                        FROM TBASS_ASSETS_MASTR
+                        WHERE SUBSTR(ASSETS_NO, 1,4) = TO_CHAR(SYSDATE,'YYYY')
+                     )
+	                 ,#ASSETS_NM#
+	                 ,#QY#
+	                 ,#UNIT#
+	                 ,#STNDRD#
+	                 ,#ACQS_DE#
+	                 ,#ACQS_SUPLY_AMOUNT#
+                     ,#MRN_CT#
+                     ,#ACQS_VAT#
+	                 ,#ACQS_AMOUNT#
+	                 ,#PUCHAS_BCNC#       
+	                 ,#DEPT_CODE#
+                     ,#ASSETS_SE#
+                     ,#GOVSUBY_ACQS_AMOUNT#
+                     ,#UNTPC#	                 
+	                 ,#S_USER_ID#         
+	                 ,SYSDATE
+              	     ,#S_USER_ID#               
+	                 ,SYSDATE
+             )
+        ]]>
+    </insert>
+    
+    <!-- 자산대장 삭제 -->
+    <delete id="ASS010700DAO.assetsMastrD" parameterClass="java.util.HashMap">
+        <![CDATA[
+            DELETE FROM TBASS_ASSETS_MASTR 
+            WHERE  ASSETS_NO = #ASSETS_NO#
+
+        ]]>
+    </delete>
+
+
+	<!-- 자산대장 수정 -->
+    <update id="ASS010700DAO.assetsMastrU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			  UPDATE TBASS_ASSETS_MASTR
+			  SET   ASSETS_CL_CODE        = #ASSETS_CL_CODE#
+			        ,ASSETS_NM            = #ASSETS_NM#
+			        ,QY                   = #QY#
+			        ,UNIT                 = #UNIT#
+			        ,STNDRD               = #STNDRD#
+			        ,ACQS_DE              = #ACQS_DE#
+			        ,ACQS_SUPLY_AMOUNT    = #ACQS_SUPLY_AMOUNT#
+                    ,MRN_CT               = #MRN_CT#
+                    ,ACQS_VAT             = #ACQS_VAT#
+			        ,ACQS_AMOUNT          = #ACQS_AMOUNT#
+			        ,PUCHAS_BCNC          = #PUCHAS_BCNC#
+			        ,DEPT_CODE            = #DEPT_CODE#
+			        ,ASSETS_SE            = #ASSETS_SE# 
+			        ,GOVSUBY_ACQS_AMOUNT  = #GOVSUBY_ACQS_AMOUNT#
+			        ,UNTPC                = #UNTPC#
+			  WHERE ASSETS_NO = #ASSETS_NO#
+        ]]>
+    </update>
+  
+   
+</sqlMap>

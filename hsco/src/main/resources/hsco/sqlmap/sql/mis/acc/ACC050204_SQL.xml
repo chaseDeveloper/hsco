@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050204_SQL">
+
+	<!-- 자금일보 조회 -->
+	<select id="ACC050204DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC050204DAO.select*/
+			WITH STACNT_TM AS (
+			    SELECT t2.ACCNUT_ACNT_CODE
+			      , t2.ACNUTNO
+			      , MAX(t1.ACNUT_NM)                             AS ACNUT_NM
+			      , NVL(SUM(t2.DEBTOR_AMOUNT), 0)                AS DEBTOR_AMOUNT
+			      , NVL(SUM(t2.CRDIT_AMOUNT), 0)                 AS CRDIT_AMOUNT
+			      , NVL(SUM(t2.DEBTOR_AMOUNT), 0) - NVL(SUM(t2.CRDIT_AMOUNT), 0) AS JAN_AMT
+			      , t1.PRPOS_CHANGE_CPTAL_AT
+			      , MAX(t1.EXPRTN_DE) AS EXPRTN_DE
+			      , MAX(t1.BSNS_SE) AS BSNS_SE /*사업구분*/
+			    FROM  TBFUN_BRANCH_ACNUT  t1
+			    LEFT OUTER JOIN TBACC_ACCNUT_STACNT t2
+			    ON  TRIM(t1.ACNUTNO) = TRIM(t2.ACNUTNO)
+			    WHERE t2.ACCNUT_YEAR = #YEAR#
+			    AND t2.ACCNUT_MT     = '00'
+			    AND (t2.ACCNUT_ACNT_CODE LIKE '11101%'
+			     OR t2.ACCNUT_ACNT_CODE LIKE '11102%'
+			     OR t2.ACCNUT_ACNT_CODE LIKE '21011%'
+			     OR t2.ACCNUT_ACNT_CODE LIKE '21012%'
+			     OR t2.ACCNUT_ACNT_CODE LIKE '22001%')
+			    AND t2.ACNUTNO <> '-'
+		]]>
+			      <isNotEmpty property="ACNUTNO">
+			        AND REPLACE(t2.ACNUTNO,'-','') LIKE '%'||REPLACE(#ACNUTNO#,'-','')||'%'
+			      </isNotEmpty>
+	<![CDATA[
+			    GROUP BY t2.ACCNUT_ACNT_CODE
+				       , t2.ACNUTNO
+				       , t1.PRPOS_CHANGE_CPTAL_AT
+			), STACNT_TM2 AS (
+			    SELECT NVL(m1.ACCNUT_ACNT_CODE, m2.ACCNUT_ACNT_CODE) AS ACCNUT_ACNT_CODE
+			         , SFACC_GET_ACNT_CODENM(#YEAR#, NVL(m1.ACCNUT_ACNT_CODE, m2.ACCNUT_ACNT_CODE)) AS ACCNUT_ACNT_NM
+			         , CASE WHEN NVL(m1.ACCNUT_ACNT_CODE, m2.ACCNUT_ACNT_CODE) LIKE '1%' THEN 'TYPE_A' /*예적금(채권)*/
+			                WHEN NVL(m1.ACCNUT_ACNT_CODE, m2.ACCNUT_ACNT_CODE) LIKE '2%' THEN 'TYPE_B' /*차입금(채무)*/
+			                ELSE '-'
+			           END AS ACNT_TYPE
+			         , NVL(m1.ACNUTNO, m2.ACNUTNO)           AS ACNUTNO
+			         , NVL(m1.ACNUT_NM, m2.ACNUT_NM)         AS ACNUT_NM
+			         , m1.BSNS_CODE
+			         , m2.BSNS_SE
+			         , m3.BSNS_NM
+			         , m1.EXPRTN_DE
+			         , NVL(m1.PRPOS_CHANGE_CPTAL_AT,m2.PRPOS_CHANGE_CPTAL_AT) AS PRPOS_CHANGE_CPTAL_AT
+			         , CASE WHEN m1.BSNS_CODE = 'A00010' THEN '04'
+			                WHEN NVL(m1.PRPOS_CHANGE_CPTAL_AT,m2.PRPOS_CHANGE_CPTAL_AT) = '1' THEN '05'
+			                WHEN m2.BSNS_SE IS NOT NULL THEN m2.BSNS_SE
+			                WHEN m3.BSNS_CODE LIKE 'A%' THEN '01'
+			                WHEN m3.BSNS_CODE LIKE 'B%' THEN '03'
+			                ELSE '06'
+			           END AS SE
+			         , CASE WHEN m1.BSNS_CODE = 'A00010' THEN '경영기획실'
+			                WHEN NVL(m1.PRPOS_CHANGE_CPTAL_AT,m2.PRPOS_CHANGE_CPTAL_AT) = '1' THEN '수입지출외현금'
+			                WHEN m2.BSNS_SE IS NOT NULL THEN SFCOM_CODE_NM('FUN036',m2.BSNS_SE, 'CODE_NM')
+			                WHEN m3.BSNS_CODE LIKE 'A%' THEN '대행사업'
+			                WHEN m3.BSNS_CODE LIKE 'B%' THEN '자체사업'
+			                ELSE '기타'
+			           END AS SE_NM
+			         , NVL(m1.JAN_AMT,0) + NVL(m2.JAN_AMT,0) - (NVL(m1.DEBTOR_AMOUNT,0) - NVL(m1.CRDIT_AMOUNT,0))	AS PRE_JAN_AMT
+			         , NVL(m1.DEBTOR_AMOUNT,0)               AS DEBTOR_AMOUNT
+			         , NVL(m1.CRDIT_AMOUNT,0)                AS CRDIT_AMOUNT
+			         , NVL(m1.JAN_AMT,0) + NVL(m2.JAN_AMT,0) AS JAN_AMT
+			    FROM (
+			        SELECT t2.ACCNUT_ACNT_CODE   AS ACCNUT_ACNT_CODE
+			             , t2.ACNUTNO            AS ACNUTNO
+			             , MAX(t3.ACNUT_NM)      AS ACNUT_NM
+			             , MAX(t3.BSNS_CODE)     AS BSNS_CODE
+			             , MAX(t3.EXPRTN_DE)     AS EXPRTN_DE
+			             , MAX(t3.PRPOS_CHANGE_CPTAL_AT) AS PRPOS_CHANGE_CPTAL_AT
+			             , NVL(SUM(CASE WHEN t1.CHIT_DE BETWEEN #ST_DT# AND #ED_DT# THEN t2.DEBTOR_AMOUNT ELSE 0 END),0) AS DEBTOR_AMOUNT
+			             , NVL(SUM(CASE WHEN t1.CHIT_DE BETWEEN #ST_DT# AND #ED_DT# THEN t2.CRDIT_AMOUNT ELSE 0 END),0) AS CRDIT_AMOUNT
+			             , NVL(SUM(t2.DEBTOR_AMOUNT), 0) - NVL(SUM(t2.CRDIT_AMOUNT), 0) AS JAN_AMT
+			        FROM TBACC_CHIT_MASTR t1
+			          LEFT OUTER JOIN TBACC_CHIT_DETAIL t2
+			            ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+			            AND t1.CHIT_NO     = t2.CHIT_NO
+			          LEFT OUTER JOIN TBFUN_BRANCH_ACNUT t3
+			            ON  TRIM(t2.ACNUTNO) = TRIM(t3.ACNUTNO)
+			        WHERE t1.CHIT_DE BETWEEN SUBSTR(#ED_DT#,1,4)||'0101' AND #ED_DT# /* 변수처리 : 기간 F ~ T*/
+			        AND   (t2.ACCNUT_ACNT_CODE LIKE '11101%' 
+			                  OR t2.ACCNUT_ACNT_CODE LIKE '11102%' 
+			                  OR t2.ACCNUT_ACNT_CODE LIKE '21011%' 
+			                  OR t2.ACCNUT_ACNT_CODE LIKE '21012%'
+			                  OR t2.ACCNUT_ACNT_CODE LIKE '22001%')
+		]]>
+			      <isNotEmpty property="ACNUTNO">
+			        AND REPLACE(t2.ACNUTNO,'-','') LIKE '%'||REPLACE(#ACNUTNO#,'-','')||'%'
+			      </isNotEmpty>
+	<![CDATA[
+			        GROUP BY t2.ACCNUT_ACNT_CODE
+			               , t2.ACNUTNO
+			    ) m1
+			      FULL OUTER JOIN STACNT_TM m2
+			        ON  m1.ACCNUT_ACNT_CODE = m2.ACCNUT_ACNT_CODE
+			        AND TRIM(m1.ACNUTNO)    = TRIM(m2.ACNUTNO)
+			      LEFT OUTER JOIN TBPRJ_BSNS_CODE m3
+			        ON  m1.BSNS_CODE = m3.BSNS_CODE
+			    WHERE (NVL(m1.EXPRTN_DE,m2.EXPRTN_DE) >= #ED_DT# OR NVL(m1.EXPRTN_DE,m2.EXPRTN_DE) IS NULL)
+			)
+			SELECT SE
+			     , SE_NM
+			     , ACCNUT_ACNT_CODE
+			     , ACCNUT_ACNT_NM
+			     , ACNT_TYPE
+			     , ACNUTNO
+			     , ACNUT_NM
+			     , BSNS_CODE
+			     , BSNS_SE
+			     , BSNS_NM
+			     , EXPRTN_DE
+			     , PRPOS_CHANGE_CPTAL_AT
+			     , PRE_JAN_AMT
+			     , DEBTOR_AMOUNT
+			     , CRDIT_AMOUNT
+			     , JAN_AMT
+			  FROM STACNT_TM2
+			ORDER BY SE
+			       , ACCNUT_ACNT_CODE ASC
+			       , BSNS_CODE ASC
+			       , ACNUTNO ASC
+	]]>
+	</select>
+</sqlMap>

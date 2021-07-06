@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS020205DAO">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+
+<!-- 
+      쿼리명    : 주택 분양전환 조회
+      설명       : 주택 분양전환 조회
+      작성자     : 이광원
+      최초작성일 : 2016.01.19
+
+      수정일  수정자  수정내용
+ -->        
+<select id="SLS020205DAO.changeHouseList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+SELECT  A.CNTRCTR_NO
+      , A.RENT_LTTOT_CNVRS_DE               
+      , A.DONG
+      , A.HO
+      , Z.CSTMR_NM
+      , J.HOUSE_NM
+      , E.PAYAMT 
+      , B.LTTOT_AMOUNT 
+      , C.KJF
+      , F.ALTRV_LON_DE
+      , H.PAY_TMLMT
+      , H.RCIV_DE
+      , H.PAYAMT AS JAN_PAYAMT
+      , DECODE(J.LOCPLC_ZIP,NULL,J.LOCPLC_ZIP_LNM,J.LOCPLC_ZIP_LNM) AS ZIP_LNM                                               
+      , DECODE(J.LOCPLC_ZIP,NULL,J.LOCPLC_BASS_ADRES_LNM,J.LOCPLC_BASS_ADRES) AS BASS_ADRES
+      , DECODE(J.LOCPLC_ZIP,NULL,J.LOCPLC_DETAIL_ADRES_LNM,J.LOCPLC_DETAIL_ADRES) 
+         ||' ' || TO_NUMBER(A.DONG) || '동 '|| TO_NUMBER(A.HO) ||'호' AS DETAIL_ADRES
+  FROM TBSLS_HCNTRCTR A
+  JOIN TBSLS_HOUSE_CSTMR Z ON A.HOUSE_CSTMR_NO = Z.HOUSE_CSTMR_NO
+  JOIN TBSLS_HOUSE_DONG_HO B ON A.HOUSE_CODE = B.HOUSE_CODE AND A.DONG = B.DONG AND A.HO = B.HO
+  JOIN TBSLS_HOUSE_TY C ON B.HOUSE_CODE = C.HOUSE_CODE AND B.HOUSE_TY_CODE = C.HOUSE_TY_CODE
+  JOIN TBSLS_HOUSE_TYBY_PAY D ON C.HOUSE_CODE = D.HOUSE_CODE AND B.LTTOT_TY_CODE = D.HOUSE_TY_CODE
+  JOIN (SELECT  CNTRCTR_NO
+              , SUM(PAYAMT) AS PAYAMT
+          FROM TBSLS_HOUSE_LTTOT_PAY
+         WHERE PAY_CODE LIKE 'R%'
+           AND RCIV_DE IS NOT NULL
+         GROUP BY CNTRCTR_NO) E ON A.CNTRCTR_NO = E.CNTRCTR_NO    
+  LEFT JOIN (SELECT  CNTRCTR_NO
+                   , ALTRV_LON_DE
+                   , KJF
+          FROM TBSLS_HCNTRCTR_KJF_PAY_CNFIRM
+         WHERE 1=1) F ON A.CNTRCTR_NO = F.CNTRCTR_NO  
+  LEFT JOIN (SELECT PAYAMT , CNTRCTR_NO
+          FROM TBSLS_HOUSE_LTTOT_PAY
+         WHERE 1=1
+           AND PAY_CODE = 'S0') G ON A.CNTRCTR_NO = G.CNTRCTR_NO
+  LEFT JOIN (SELECT PAYAMT , CNTRCTR_NO , RCIV_DE , PAY_TMLMT , PAY_SN
+          FROM TBSLS_HOUSE_LTTOT_PAY Z
+         WHERE 1=1
+           AND PAY_CODE = 'S9'
+           AND PAY_SN = (SELECT MAX(PAY_SN) FROM TBSLS_HOUSE_LTTOT_PAY 
+                          WHERE CNTRCTR_NO = Z.CNTRCTR_NO)) H ON A.CNTRCTR_NO = H.CNTRCTR_NO
+    LEFT JOIN (SELECT  CNTRCTR_NO , SUM(MT_RNTCHRG) AS RNTCHRG
+          FROM TBSLS_HOUSE_RENT_PAY
+         WHERE 1=1
+           AND RCIV_DE IS NULL
+         GROUP BY CNTRCTR_NO) I ON A.CNTRCTR_NO = I.CNTRCTR_NO          
+  JOIN TBSLS_HOUSE_INFO J ON A.HOUSE_CODE  = J.HOUSE_CODE                              
+ WHERE 1=1
+   AND A.HOUSE_CODE = #HOUSE_CODE#
+   AND A.CNTRCTR_STTUS_CODE = '01'
+ ORDER BY A.DONG , A.HO
+</select>
+
+<!-- 
+쿼리명 : 임대주택 분양전환 프로시저
+설명 : 임대주택 분양전환 프로시저
+수정일  		수정자  	수정내용
+작성자 : 이광원
+최초작성일 : 2016.1.19
+-->
+<parameterMap id="spsls_house_270_sr_change_param" class="java.util.HashMap">
+	<parameter property="IN_HOUSE_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_DONG"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_HO"			    jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+	<parameter property="IN_CHK_KJF"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_ALTRV_LON_DE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_DELNG_BANK"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_KJF"			jdbcType="VARCHAR"	javaType="string" 	    mode="IN" />	
+	<parameter property="IN_RENT_LTTOT_CNVRS_DE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_PAY_TMLMT"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="S_USER_ID"		    jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+</parameterMap>
+
+<procedure id="SLS020205DAO.SPSLS_HOUSE_270_SR_CHANGE" parameterMap="spsls_house_270_sr_change_param">
+	{ call SPSLS_HOUSE_270_SR_CHANGE(?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+</procedure>
+
+<!-- 
+쿼리명 : 임대주택 분양전환  취소 프로시저
+설명 : 임대주택 분양전환  취소 프로시저
+수정일  		수정자  	수정내용
+작성자 : 이광원
+최초작성일 : 2016.1.19
+-->
+<parameterMap id="spsls_house_270_sr_cancle_param" class="java.util.HashMap">
+	<parameter property="IN_HOUSE_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_DONG"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_HO"			    jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+	<parameter property="S_USER_ID"		    jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+</parameterMap>
+
+<procedure id="SLS020205DAO.SPSLS_HOUSE_270_SR_CANCEL" parameterMap="spsls_house_270_sr_cancle_param">
+	{ call SPSLS_HOUSE_270_SR_CANCEL(?, ?, ?, ?) }
+</procedure>
+
+
+<!-- 
+쿼리명 : 전세주택 분양전환  및 취소 프로시저
+설명 : 전세주택 분양전환 및 취소 프로시저
+수정일  		수정자  	수정내용
+작성자 : 이광원
+최초작성일 : 2016.1.19
+-->
+<parameterMap id="spsls_house_sr_change_jun_param" class="java.util.HashMap">
+	<parameter property="IN_FLAG"		    jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_CNTRCTR_NO"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_SR_CHG_DATE"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_PAYEND_DATE_S1"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+	<parameter property="IN_PAYEND_DATE_S9"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_APPLY_DATE_S9"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="S_USER_ID"		    jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+</parameterMap>
+
+<procedure id="SLS020205DAO.SPSLS_HOUSE_SR_CHANGE_JUN" parameterMap="spsls_house_sr_change_jun_param">
+	{ call SPSLS_HOUSE_SR_CHANGE_JUN(?, ?, ?, ?, ?, ?, ?) }
+</procedure>
+
+<!-- 
+쿼리명 : 타입코드 전환
+설명 : 타입코드 전환
+수정일  		수정자  	수정내용
+작성자 : 박태혁
+최초작성일 : 2016.8.3
+-->
+<update id="SLS020205DAO.typeCodeUpdate" parameterClass="java.util.HashMap" >
+UPDATE TBSLS_HOUSE_DONG_HO A
+   SET HOUSE_TY_CODE = LTTOT_TY_CODE
+ WHERE 1 = 1
+   AND HOUSE_CODE = #HOUSE_CODE#
+   AND LTTOT_TY_CODE IS NOT NULL
+   AND EXISTS (SELECT 1 FROM TBSLS_HCNTRCTR B
+   WHERE A.HOUSE_CODE = B.HOUSE_CODE
+     AND A.DONG = B.DONG
+     AND A.HO = B.HO
+     AND B.CNTRCTR_STTUS_CODE = '01'
+     AND B.RENT_LTTOT_CNVRS_DE IS NULL)   
+</update>
+
+<!-- 
+쿼리명 : 타입코드 복구 전환
+설명 : 타입코드 복구 전환
+수정일  		수정자  	수정내용
+작성자 : 박태혁
+최초작성일 : 2016.8.3
+-->
+<update id="SLS020205DAO.typeCodeCancel" parameterClass="java.util.HashMap" >
+UPDATE TBSLS_HOUSE_DONG_HO A
+   SET HOUSE_TY_CODE = RENT_TY_CODE
+ WHERE 1 = 1
+   AND HOUSE_CODE = #HOUSE_CODE#
+   AND LTTOT_TY_CODE IS NOT NULL
+   AND EXISTS (SELECT 1 FROM TBSLS_HCNTRCTR B
+   WHERE A.HOUSE_CODE = B.HOUSE_CODE
+     AND A.DONG = B.DONG
+     AND A.HO = B.HO
+     AND B.CNTRCTR_STTUS_CODE = '01'
+     AND B.RENT_LTTOT_CNVRS_DE IS NULL)   
+</update>
+
+<!-- 
+      쿼리명    : 주택 분양코드 조회
+      설명       : 주택 분양코드 조회
+      작성자     : 이광원
+      최초작성일 : 2016.01.13
+
+      수정일  수정자  수정내용
+ -->        
+<select id="SLS020205DAO.houseTypeCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+SELECT  A.LTTOT_TY_CODE
+      , A.DONG
+      , A.HO
+      , B.HOUSE_DVR_AR
+      , B.HOUSE_CMNUSE_AR
+      , B.HOUSE_PLOT_QOTA
+      , B.HOUSE_ETC_CMNUSE
+      , B.HOUSE_CNTRCT_AR
+      , B.AEA
+      , B.KJF
+      , B.SUPLY_AMOUNT
+  FROM TBSLS_HOUSE_DONG_HO A
+  JOIN TBSLS_HOUSE_TY B ON A.HOUSE_CODE = B.HOUSE_CODE AND A.LTTOT_TY_CODE = B.HOUSE_TY_CODE
+ WHERE 1=1
+   AND A.HOUSE_CODE = #HOUSE_CODE#
+ ORDER BY DONG , HO   
+</select>
+
+<!-- 
+      쿼리명    : 주택 분양코드 양식 조회
+      설명       : 주택 분양코드 양식 조회
+      작성자     : 이광원
+      최초작성일 : 2016.01.13
+
+      수정일  수정자  수정내용
+ -->        
+<select id="SLS020205DAO.houseTypeCodeExelList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT B.HOUSE_CODE AS IN_HOUSE_CODE,
+		       B.DONG AS IN_DONG,
+		       B.HO AS IN_HO,
+		       '' AS IN_KJF,
+		       '' AS IN_SUPLY_AMOUNT 
+		FROM TBSLS_HOUSE_INFO A,
+		     TBSLS_HOUSE_DONG_HO B,
+		     TBSLS_HCNTRCTR C
+		WHERE 1=1
+		  AND A.HOUSE_CODE = B.HOUSE_CODE
+		  AND B.HOUSE_CODE = C.HOUSE_CODE
+		  AND B.DONG       = C.DONG
+		  AND B.HO         = C.HO
+		  AND A.HOUSE_CODE = #HOUSE_CODE#
+		  AND C.RENT_LTTOT_CNVRS_DE IS NULL
+		 ORDER BY B.HOUSE_CODE, B.DONG, B.HO 
+
+<!-- 
+
+SELECT  A.HOUSE_CODE
+      , B.HOUSE_NM
+      , A.DONG
+      , A.HO
+      , C.TY_AEA           /* 타입 */
+      , C.AEA              /* 평형 */
+      , C.HOUSE_DVR_AR     /* 전용면적 */
+      , C.HOUSE_CMNUSE_AR  /* 공용면적 */ 
+      , C.HOUSE_ETC_CMNUSE /* 기타공영면적 */
+      , C.HOUSE_LTTOT_AR   /* 분양면적 */               
+      , C.HOUSE_CNTRCT_AR  /* 계약면적 */
+      , HOUSE_PLOT_QOTA    /* 주택대지지분 */
+  FROM TBSLS_HOUSE_DONG_HO A
+  JOIN TBSLS_HOUSE_INFO B ON A.HOUSE_CODE = B.HOUSE_CODE
+  JOIN TBSLS_HOUSE_TY C ON A.HOUSE_CODE = C.HOUSE_CODE AND A.HOUSE_TY_CODE = C.HOUSE_TY_CODE
+ WHERE 1=1
+   AND A.HOUSE_CODE = #HOUSE_CODE#
+ ORDER BY DONG , HO
+ -->
+  
+</select>
+
+<parameterMap id="spsls_house_type_code_i_param" class="java.util.HashMap">
+	<parameter property="IN_HOUSE_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_SUPLY_AMOUNT"	jdbcType="VARCHAR"	javaType="string" 	    mode="IN" />
+	<parameter property="IN_KJF"			jdbcType="VARCHAR"	javaType="string" 	    mode="IN" />	
+	<parameter property="IN_DONG"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	<parameter property="IN_HO"			    jdbcType="VARCHAR"	javaType="string" 	mode="IN" />		
+	<parameter property="S_USER_ID"		    jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+</parameterMap>
+
+<!-- 
+쿼리명 : 주택 동호별 분양코드 생성
+설명 : 주택 동호별 분양코드 생성 프로시저
+수정일  		수정자  	수정내용
+작성자 : 이광원
+최초작성일 : 2016.1.13
+-->
+<procedure id="SLS020205DAO.SPSLS_HOUSE_TYPE_CODE_I" parameterMap="spsls_house_type_code_i_param">
+	{ call SPSLS_HOUSE_TYPE_CODE_I(?, ?, ?, ?, ?, ?) }
+</procedure>
+
+<!-- 
+      쿼리명    : 전자결제 등록자 정보 조회
+      설명       : 전자결제 등록자 정보 조회
+      작성자     : 이광원
+      최초작성일 : 2016.01.21
+
+      수정일  수정자  수정내용
+ -->        
+<select id="SLS020205DAO.registerInfoR" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	SELECT  A.EMPNO AS EMPNO
+		  , (SFSAL_GETEMPNO_01(A.EMPNO)) AS EMPNM
+          , (SELECT DEPT_NM
+	  FROM VWHRM_DEPT B
+     WHERE B.DEPT_CODE = (SELECT DEPT_CODE
+	                        FROM TBHRM_HR_MASTR C
+	                       WHERE C.EMPNO = A.EMPNO)) AS DEPT_NM
+	      , DEPT_CODE
+	      , (SELECT DEPT_CODE
+			   FROM TBHRM_HR_MASTR C
+			  WHERE C.EMPNO = A.EMPNO) AS DEPT_CODE
+		  , (SELECT C.HR_CLSF_SE||'급'
+		       FROM TBHRM_HR_MASTR C
+		      WHERE C.EMPNO = A.EMPNO) AS CLSF_SE
+		  , (SELECT C.CODE_NM
+		       FROM TBCOM_CMMN_CODE C
+		      WHERE C.CODE =  (SFHRM_GET_OFCPSCD( A.EMPNO ,A.JSSFC_SE,A.HR_CLSF_SE,A.ECNY_DE))
+		        AND C.GRP_CODE = 'HRM021') AS OFCPS_NM
+		  , SFHRM_GET_OFCPSCD( A.EMPNO ,A.JSSFC_SE,A.HR_CLSF_SE,A.ECNY_DE)  AS OFCPS_SE
+	   FROM TBHRM_HR_MASTR A
+	  WHERE A.EMPNO =  #EMPNO#
+</select>
+
+<!-- 
+      쿼리명    : 전자결제 정보 조회
+      설명       : 전자결제 정보 조회
+      작성자     : 이광원
+      최초작성일 : 2016.01.21
+
+      수정일  수정자  수정내용
+ -->        
+<select id="SLS020205DAO.approveList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	SELECT  A.CNTRCTR_NO
+	      , A.PAY_TMLMT
+	      , B.RENT_LTTOT_CNVRS_DE
+	      , Z.CSTMR_NM
+	      , C.HOUSE_NM
+	      , A.PAY_CODE 
+	      , A.PAY_SN
+	      , ABS(A.PAYAMT) AS PAYAMT
+	      , A.ELCTRN_SANCTN_NO
+	      , D.DRFT_DT           /*기안일시*/                  
+	      , D.SANCTN_STTS       /*최종결제상태*/
+          , D.NM
+          , D.BANK_ACCOUNT
+          , REGEXP_SUBSTR(D.BANK_ACCOUNT,'[^ ]+', 1, 1) AS BANK_NM    /* 지출과목 */
+          , REGEXP_SUBSTR(D.BANK_ACCOUNT,'[^ ]+', 1, 2) AS ACCOUNT    /* 지출과목 */
+          , D.JICHUL      
+	 FROM TBSLS_HOUSE_LTTOT_PAY A
+	 JOIN TBSLS_HCNTRCTR B ON A.CNTRCTR_NO = B.CNTRCTR_NO
+	 JOIN TBSLS_HOUSE_INFO C ON B.HOUSE_CODE = C.HOUSE_CODE
+	 JOIN TBSLS_HOUSE_CSTMR Z ON B.HOUSE_CSTMR_NO = Z.HOUSE_CSTMR_NO
+	 LEFT JOIN (SELECT  SANCTN_NO
+	                  , EMPNO
+	                  , TO_CHAR(DRFT_DT, 'YYYYMMDD HH24MI') AS DRFT_DT    /* 기안일시 */
+	                  , LAST_SANCTN_STTUS AS SANCTN_STTS /* 최종결제 상태*/
+                      , REGEXP_SUBSTR(INTRLCK_DATA,'[^|]+', 1, 6) AS NM         /* 예금주 */
+                      , REGEXP_SUBSTR(INTRLCK_DATA,'[^|]+', 1, 8) AS BANK_ACCOUNT    
+                      , REGEXP_SUBSTR(INTRLCK_DATA,'[^|]+', 1, 10) AS JICHUL    /* 지출과목 */
+	              FROM TBCOM_ELCTRN_SANCTN_MASTR
+	             WHERE 1=1
+	               AND EMPNO = #EMPNO#) D ON A.ELCTRN_SANCTN_NO = D.SANCTN_NO
+	WHERE 1=1
+	  AND A.CNTRCTR_NO = #CNTRCTR_NO#
+	  AND A.PAY_CODE = 'S9'
+	  AND A.PAY_SN = #PAY_SN#     
+</select>	  
+
+
+<update id="SLS020205DAO.approveU" parameterClass="java.util.HashMap">
+	 UPDATE TBSLS_HOUSE_LTTOT_PAY A
+	    SET	 ELCTRN_SANCTN_NO  = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+	 	   , UPDUSR_ID  =  #S_USER_ID#
+	 	   , UPDT_DT	=  SYSDATE			  
+	    WHERE CNTRCTR_NO = #CNTRCTR_NO#
+	      AND PAY_CODE =  'S9'
+		  AND PAY_SN = #PAY_SN#	 
+</update>
+	  
+</sqlMap>

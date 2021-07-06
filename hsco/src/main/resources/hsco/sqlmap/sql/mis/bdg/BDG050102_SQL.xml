@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG050102_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+
+	<!-- 조기집행실적관리 조회 -->
+	<select id="BDG050102DAO.selectElpdExcut" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG050102DAO.selectElpdExcut*/]]>
+		WITH TM_BUDGET_ACNT_CODE AS (
+		    SELECT s1.*
+		         , s2.BUKIP_CODE    AS EXPNDTR_UNIT_CODE
+		         , s3.BUKIP_NM      AS EXPNDTR_UNIT_NM
+		      FROM TBBDG_BUDGET_ACNT_CODE s1
+		           LEFT OUTER JOIN TBBDG_BUDGET_BUKIP_MAPPING s2
+		                ON s1.YEAR             = s2.YEAR
+		               AND s1.BUDGET_ACNT_CODE = s2.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN TBBDG_BUKIP_CODE s3
+		                ON s2.BUKIP_CODE = s3.BUKIP_CODE
+		     WHERE s1.YEAR    = #YEAR#
+		       AND s1.BALC_SE = '2' /*지출:고정*/
+		    ORDER BY SUBSTR(s1.BUDGET_ACNT_CODE,0,1) DESC
+		           , s1.BUDGET_ACNT_CODE ASC
+		           , s2.BUKIP_CODE ASC
+		)
+		, TM_TODAY_CA_ACT_MASTR AS (
+		    SELECT s1.BUDGET_YEAR
+		         , s1.BSNS_SE
+		         , s1.BALC_SE
+		         , s1.BUDGET_ACNT_CODE
+		         , s1.EXPNDTR_UNIT_CODE
+		         , NVL(COUNT(s1.DECSN_AMOUNT),0)                                               AS DECSN_CNT
+		         , NVL(SUM(DECODE(s1.ANACT_KND,'05', s1.DECSN_AMOUNT*-1, s1.DECSN_AMOUNT)),0)  AS DECSN_AMOUNT /*반납금액은 차감*/
+		      FROM TBACC_EXP_DSN_MASTR s1
+		     WHERE s1.CYFD_SE           = '0' /*0:당해년도예산, 1:이월예산*/
+		       AND s1.EXPNDTR_CNFIRM_AT = '1' /*지출확인여부:고정*/
+		       AND s1.PYMNT_ITNC_DE     = #ED_DT#
+		    <isNotEmpty property="DEPT_CODE"><isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">s1.DEPT_CODE = #DEPT_CODE#</isNotEqual></isNotEmpty>
+		    <isNotEmpty property="BSNS_CODE" prepend="AND    ">s1.BSNS_CODE = #BSNS_CODE#</isNotEmpty>
+		    GROUP BY s1.BUDGET_YEAR
+		           , s1.BSNS_SE
+		           , s1.BALC_SE
+		           , s1.BUDGET_ACNT_CODE
+		           , s1.EXPNDTR_UNIT_CODE
+		)
+		, TM_SUM_CA_ACT_MASTR AS (
+		    SELECT s1.BUDGET_YEAR
+		         , s1.BSNS_SE
+		         , s1.BALC_SE
+		         , s1.BUDGET_ACNT_CODE
+		         , s1.EXPNDTR_UNIT_CODE
+		         , NVL(COUNT(s1.DECSN_AMOUNT),0) AS DECSN_CNT
+		         , NVL(SUM(DECODE(s1.ANACT_KND,'05', s1.DECSN_AMOUNT*-1, s1.DECSN_AMOUNT)),0) AS DECSN_AMOUNT /*반납금액은 차감*/
+		      FROM TBACC_EXP_DSN_MASTR s1
+		     WHERE s1.CYFD_SE           = '0' /*0:당해년도예산, 1:이월예산*/
+		       AND s1.EXPNDTR_CNFIRM_AT = '1' /*지출확인여부:고정*/
+		       AND s1.PYMNT_ITNC_DE BETWEEN #ST_DT# AND #ED_DT#
+		    <isNotEmpty property="DEPT_CODE"><isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">s1.DEPT_CODE = #DEPT_CODE#</isNotEqual></isNotEmpty>
+		    <isNotEmpty property="BSNS_CODE" prepend="AND    ">s1.BSNS_CODE = #BSNS_CODE#</isNotEmpty>
+		    GROUP BY s1.BUDGET_YEAR
+		           , s1.BSNS_SE
+		           , s1.BALC_SE
+		           , s1.BUDGET_ACNT_CODE
+		           , s1.EXPNDTR_UNIT_CODE
+		)
+		, TM_EXECUT_BUDGET AS (
+		    SELECT s1.YEAR
+		         , s1.BSNS_SE
+		         , s1.BALC_SE
+		         , s1.BUDGET_ACNT_CODE
+		         , s1.EXPNDTR_UNIT_CODE
+		         , NVL(SUM(s1.ORIBDGT),0)
+		           + NVL(SUM(s1.RVSPBGT_1_ODR),0)
+		           + NVL(SUM(s1.RVSPBGT_2_ODR),0)
+		           + NVL(SUM(s1.RVSPBGT_3_ODR),0)
+		           + NVL(SUM(s1.RVSPBGT_4_ODR),0)
+		           + NVL(SUM(s1.RVSPBGT_5_ODR),0)
+		           + NVL(SUM(s1.RVSPBGT_6_ODR),0)
+		           + NVL(SUM(s1.RVSPBGT_7_ODR),0)
+		           + NVL(SUM(s1.CYFD_BUDGET),0)
+		           + NVL(SUM(s1.MVMN_AM),0)
+		           + NVL(SUM(s1.BUKIP_MVMN_AM),0)
+		           + NVL(SUM(s1.DVR_AM),0)
+		           + NVL(SUM(s1.RSVFND_REQST_AM),0)
+		           + NVL(SUM(s1.TRSF_AM),0)       AS TOT_AM
+		         , NVL(SUM(s2.DECSN_CNT),0)       AS TODAY_DECSN_CNT
+		         , NVL(SUM(s2.DECSN_AMOUNT),0)    AS TODAY_DECSN_AMOUNT
+		         , NVL(SUM(s3.DECSN_CNT),0)       AS SUM_DECSN_CNT
+		         , NVL(SUM(s3.DECSN_AMOUNT),0)    AS SUM_DECSN_AMOUNT
+		         , NVL(SUM(s4.TRG_BDG_AMT),0)     AS TRG_BDG_AMT
+		      FROM TBBDG_EXECUT_BUDGET s1
+		           LEFT OUTER JOIN TM_TODAY_CA_ACT_MASTR s2
+		                ON s1.YEAR              = s2.BUDGET_YEAR
+		               AND s1.BSNS_SE           = s2.BSNS_SE
+		               AND s1.BALC_SE           = s2.BALC_SE
+		               AND s1.BUDGET_ACNT_CODE  = s2.BUDGET_ACNT_CODE
+		               AND s1.EXPNDTR_UNIT_CODE = s2.EXPNDTR_UNIT_CODE
+		           LEFT OUTER JOIN TM_SUM_CA_ACT_MASTR s3
+		                ON s1.YEAR              = s3.BUDGET_YEAR
+		               AND s1.BSNS_SE           = s3.BSNS_SE
+		               AND s1.BALC_SE           = s3.BALC_SE
+		               AND s1.BUDGET_ACNT_CODE  = s3.BUDGET_ACNT_CODE
+		               AND s1.EXPNDTR_UNIT_CODE = s3.EXPNDTR_UNIT_CODE
+		           LEFT OUTER JOIN (
+		                             SELECT T1.YEAR
+		                                  , T1.BSNS_SE
+		                                  , T1.BALC_SE
+		                                  , T1.BUDGET_ACNT_CODE
+		                                  , T1.EXPNDTR_UNIT_CODE
+		                                  , T1.DEPT_CODE
+		                                  , T1.DETAIL_BSNS_CODE
+		                                  , NVL(SUM(T1.ASIGN_AM_01),0)
+		                                    + NVL(SUM(T1.ASIGN_AM_02),0)
+		                                    + NVL(SUM(T1.ASIGN_AM_03),0)
+		                                    + NVL(SUM(T1.ASIGN_AM_04),0)
+		                                    + NVL(SUM(T1.ASIGN_AM_05),0)
+		                                    + NVL(SUM(T1.ASIGN_AM_06),0)
+		                                    AS TRG_BDG_AMT
+		                               FROM TBBDG_BUDGET_EXCUT_PLAN T1
+		                              WHERE T1.ELPD_EXCUT_RATE IS NOT NULL
+		    <![CDATA[
+		                                AND T1.ELPD_EXCUT_RATE > 0
+		    ]]>
+		    <isNotEmpty property="DEPT_CODE"><isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">T1.DEPT_CODE = #DEPT_CODE#</isNotEqual></isNotEmpty>
+		    <isNotEmpty property="BSNS_CODE" prepend="AND    ">T1.DETAIL_BSNS_CODE = #BSNS_CODE#</isNotEmpty>
+		                             GROUP BY T1.YEAR
+		                                    , T1.BSNS_SE
+		                                    , T1.BALC_SE
+		                                    , T1.BUDGET_ACNT_CODE
+		                                    , T1.EXPNDTR_UNIT_CODE
+		                                    , T1.DEPT_CODE
+		                                    , T1.DETAIL_BSNS_CODE
+		                             ORDER BY T1.YEAR
+		                                    , T1.BSNS_SE
+		                                    , T1.BALC_SE
+		                                    , T1.BUDGET_ACNT_CODE
+		                                    , T1.EXPNDTR_UNIT_CODE
+		                           ) s4
+		                ON s1.YEAR              = s4.YEAR
+		               AND s1.BSNS_SE           = s4.BSNS_SE
+		               AND s1.BALC_SE           = s4.BALC_SE
+		               AND s1.BUDGET_ACNT_CODE  = s4.BUDGET_ACNT_CODE
+		               AND s1.EXPNDTR_UNIT_CODE = s4.EXPNDTR_UNIT_CODE
+		               AND s1.DEPT_CODE         = s4.DEPT_CODE
+		               AND s1.DETAIL_BSNS_CODE  = s4.DETAIL_BSNS_CODE
+		     WHERE 1=1
+		    <isNotEmpty property="DEPT_CODE"><isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">s1.DEPT_CODE = #DEPT_CODE#</isNotEqual></isNotEmpty>
+		    <isNotEmpty property="BSNS_CODE" prepend="AND    ">s1.DETAIL_BSNS_CODE = #BSNS_CODE#</isNotEmpty>
+		    GROUP BY s1.YEAR
+		           , s1.BSNS_SE
+		           , s1.BALC_SE
+		           , s1.BUDGET_ACNT_CODE
+		           , s1.EXPNDTR_UNIT_CODE
+		)
+		SELECT tb1.BUDGET_YEAR
+		     , tb1.BSNS_SE
+		     , tb1.BALC_SE
+		     , tb1.DEPTH
+		     , tb1.BUDGET_ACNT_CODE
+		     , tb1.EXPNDTR_UNIT_CODE
+		     , tb1.EXPNDTR_UNIT_NM
+		     , tb1.TOT_AM
+		     , tb1.TRG_BDG_AMT
+		     , tb1.TODAY_DECSN_CNT
+		     , tb1.TODAY_DECSN_AMOUNT
+		     , tb1.SUM_DECSN_CNT
+		     , tb1.SUM_DECSN_AMOUNT
+		  FROM (
+		    SELECT '4'                                 AS DEPTH
+		         , t1.YEAR                             AS BUDGET_YEAR
+		         , t1.BSNS_SE
+		         , t1.BALC_SE
+		         , t1.BUDGET_ACNT_CODE
+		         , t1.EXPNDTR_UNIT_CODE
+		         , '        ' || t1.EXPNDTR_UNIT_NM    AS EXPNDTR_UNIT_NM
+		         , t2.TOT_AM
+		         , t2.TRG_BDG_AMT
+		         , t2.TODAY_DECSN_CNT
+		         , t2.TODAY_DECSN_AMOUNT
+		         , t2.SUM_DECSN_CNT
+		         , t2.SUM_DECSN_AMOUNT
+		      FROM TM_BUDGET_ACNT_CODE t1
+		           INNER JOIN TM_EXECUT_BUDGET t2
+		                ON t1.YEAR              = t2.YEAR
+		               AND t1.BSNS_SE           = t2.BSNS_SE
+		               AND t1.BALC_SE           = t2.BALC_SE
+		               AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+		               AND t1.EXPNDTR_UNIT_CODE = t2.EXPNDTR_UNIT_CODE
+		    UNION ALL
+		    SELECT '3'                                  AS DEPTH
+		         , t1.YEAR                              AS BUDGET_YEAR
+		         , t1.BSNS_SE
+		         , t1.BALC_SE
+		         , t1.BUDGET_ACNT_CODE
+		         , '0000'                               AS EXPNDTR_UNIT_CODE
+		         , '    ' || MAX(t3.BUDGET_ACNT_NM)     AS EXPNDTR_UNIT_NM
+		         , NVL(SUM(t2.TOT_AM),0)                AS TOT_AM
+		         , NVL(SUM(t2.TRG_BDG_AMT),0)           AS TRG_BDG_AMT
+		         , NVL(SUM(t2.TODAY_DECSN_CNT),0)       AS TODAY_DECSN_CNT
+		         , NVL(SUM(t2.TODAY_DECSN_AMOUNT),0)    AS TODAY_DECSN_AMOUNT
+		         , NVL(SUM(t2.SUM_DECSN_CNT),0)         AS SUM_DECSN_CNT
+		         , NVL(SUM(t2.SUM_DECSN_AMOUNT),0)      AS SUM_DECSN_AMOUNT
+		      FROM TM_BUDGET_ACNT_CODE t1
+		           INNER JOIN TM_EXECUT_BUDGET t2
+		                ON t1.YEAR              = t2.YEAR
+		               AND t1.BSNS_SE           = t2.BSNS_SE
+		               AND t1.BALC_SE           = t2.BALC_SE
+		               AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+		               AND t1.EXPNDTR_UNIT_CODE = t2.EXPNDTR_UNIT_CODE
+		           LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t3
+		                ON t1.YEAR             = t3.YEAR
+		               AND t1.BSNS_SE          = t3.BSNS_SE
+		               AND t1.BALC_SE          = t3.BALC_SE
+		               AND t1.BUDGET_ACNT_CODE = t3.BUDGET_ACNT_CODE
+		    GROUP BY t1.YEAR
+		           , t1.BSNS_SE
+		           , t1.BALC_SE
+		           , t1.BUDGET_ACNT_CODE
+		    UNION ALL
+		    SELECT '2'                                          AS DEPTH
+		         , t1.YEAR                                      AS BUDGET_YEAR
+		         , t1.BSNS_SE
+		         , t1.BALC_SE
+		         , SUBSTR(t1.BUDGET_ACNT_CODE,1,3) || '00000'   AS BUDGET_ACNT_CODE
+		         , '0000'                                       AS EXPNDTR_UNIT_CODE
+		         , MAX(t3.BUDGET_ACNT_NM)                       AS EXPNDTR_UNIT_NM
+		         , NVL(SUM(t2.TOT_AM),0)                        AS TOT_AM
+		         , NVL(SUM(t2.TRG_BDG_AMT),0)                   AS TRG_BDG_AMT
+		         , NVL(SUM(t2.TODAY_DECSN_CNT),0)               AS TODAY_DECSN_CNT
+		         , NVL(SUM(t2.TODAY_DECSN_AMOUNT),0)            AS TODAY_DECSN_AMOUNT
+		         , NVL(SUM(t2.SUM_DECSN_CNT),0)                 AS SUM_DECSN_CNT
+		         , NVL(SUM(t2.SUM_DECSN_AMOUNT),0)              AS SUM_DECSN_AMOUNT
+		      FROM TM_BUDGET_ACNT_CODE t1
+		           INNER JOIN TM_EXECUT_BUDGET t2
+		                ON t1.YEAR              = t2.YEAR
+		               AND t1.BSNS_SE           = t2.BSNS_SE
+		               AND t1.BALC_SE           = t2.BALC_SE
+		               AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+		               AND t1.EXPNDTR_UNIT_CODE = t2.EXPNDTR_UNIT_CODE
+		           LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t3
+		                ON t1.YEAR                                    = t3.YEAR
+		               AND t1.BSNS_SE                                 = t3.BSNS_SE
+		               AND t1.BALC_SE                                 = t3.BALC_SE
+		               AND SUBSTR(t1.BUDGET_ACNT_CODE,1,3) || '00000' = t3.BUDGET_ACNT_CODE
+		    GROUP BY t1.YEAR
+		           , t1.BSNS_SE
+		           , t1.BALC_SE
+		           , SUBSTR(t1.BUDGET_ACNT_CODE,1,3)
+		    UNION ALL
+		    SELECT '1'                                            AS DEPTH
+		         , t1.YEAR                                        AS BUDGET_YEAR
+		         , t1.BSNS_SE
+		         , t1.BALC_SE
+		         , SUBSTR(t1.BUDGET_ACNT_CODE,1,1) || '0000000'   AS BUDGET_ACNT_CODE
+		         , '0000'                                         AS EXPNDTR_UNIT_CODE
+		         , '[' || MAX(t3.BUDGET_ACNT_NM) || '소계]'       AS EXPNDTR_UNIT_NM
+		         , NVL(SUM(t2.TOT_AM),0)                          AS TOT_AM
+		         , NVL(SUM(t2.TRG_BDG_AMT),0)                     AS TRG_BDG_AMT
+		         , NVL(SUM(t2.TODAY_DECSN_CNT),0)                 AS TODAY_DECSN_CNT
+		         , NVL(SUM(t2.TODAY_DECSN_AMOUNT),0)              AS TODAY_DECSN_AMOUNT
+		         , NVL(SUM(t2.SUM_DECSN_CNT),0)                   AS SUM_DECSN_CNT
+		         , NVL(SUM(t2.SUM_DECSN_AMOUNT),0)                AS SUM_DECSN_AMOUNT
+		      FROM TM_BUDGET_ACNT_CODE t1
+		           INNER JOIN TM_EXECUT_BUDGET t2
+		                ON t1.YEAR              = t2.YEAR
+		               AND t1.BSNS_SE           = t2.BSNS_SE
+		               AND t1.BALC_SE           = t2.BALC_SE
+		               AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+		               AND t1.EXPNDTR_UNIT_CODE = t2.EXPNDTR_UNIT_CODE
+		           LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t3
+		                ON t1.YEAR                                      = t3.YEAR
+		               AND t1.BSNS_SE                                   = t3.BSNS_SE
+		               AND t1.BALC_SE                                   = t3.BALC_SE
+		               AND SUBSTR(t1.BUDGET_ACNT_CODE,1,1) || '0000000' = t3.BUDGET_ACNT_CODE
+		    GROUP BY t1.YEAR
+		           , t1.BSNS_SE
+		           , t1.BALC_SE
+		           , SUBSTR(t1.BUDGET_ACNT_CODE,1,1)
+		) tb1
+		ORDER BY SUBSTR(tb1.BUDGET_ACNT_CODE,1,1) DESC
+		       , tb1.BUDGET_ACNT_CODE ASC
+		       , tb1.DEPTH ASC
+		       , tb1.EXPNDTR_UNIT_CODE ASC
+	</select>
+	
+	<!-- 접속자 핸드폰번호 조회 -->
+	<select id="BDG050102DAO.selectTelno" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT H_DECRYPT(TELNO_2)    AS TELNO
+		  FROM TBHRM_HR_MASTR
+		 WHERE EMPNO = #EMPNO#
+	</select>
+
+</sqlMap>

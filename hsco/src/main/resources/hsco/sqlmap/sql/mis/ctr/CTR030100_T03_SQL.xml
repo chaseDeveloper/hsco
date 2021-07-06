@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR030100_T03_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 예산배정내역 조회 -->
+	<select id="CTR030100_T03DAO.selectCntrctBudget" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR030100_T03DAO.selectCntrctBudget*/]]>
+		SELECT T1.CNTRCT_NO
+		     , T1.SN
+		     , T3.BSNS_CODE
+		     , T3.MNG_DEPT_CODE             AS BUDGET_DEPT_CODE
+		     , T1.BUDGET_YEAR
+		     , T1.BSNS_SE
+		     , T1.BALC_SE
+		     , T1.BUDGET_ACNT_CODE
+		     , T2.BUDGET_ACNT_NM
+		     , (
+		        CASE WHEN T2.ACNT_LEVEL <![CDATA[<]]> '4' THEN SUBSTR(T1.BUDGET_ACNT_CODE, 1, 3)
+		             WHEN SUBSTR(T1.BUDGET_ACNT_CODE, 7) = '00' THEN SUBSTR(T1.BUDGET_ACNT_CODE, 1, 3) || '-' || SUBSTR(T1.BUDGET_ACNT_CODE, 4, 3)
+		             ELSE SUBSTR(T1.BUDGET_ACNT_CODE, 1, 3) || '-' || SUBSTR(T1.BUDGET_ACNT_CODE, 4)
+		        END
+		       ) || '.' || T2.BUDGET_ACNT_NM    AS BUDGET_ACNT_NM2
+		     , NVL(T4.BUDGET_AM, 0)    AS BUDGET_AM
+		     , T1.RM
+		     , T2.GWAN_NM
+		     , T2.HANG_NM
+		     , T2.SEHANG_NM
+		     , T2.MOK_NM
+		     , T2.SEMOK_NM
+		     , T2.GWAN_NM || '-' || T2.HANG_NM || '-' || T2.SEHANG_NM || '-' || T2.MOK_NM || '-' || T2.SEMOK_NM    AS BUDGET_ACNT_NM3
+		  FROM TBCTR_CNTRCT_BUDGET T1
+		       LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE T2
+		            ON T1.BUDGET_YEAR      = T2.YEAR
+		           AND T1.BSNS_SE          = T2.BSNS_SE
+		           AND T1.BALC_SE          = T2.BALC_SE
+		           AND T1.BUDGET_ACNT_CODE = T2.BUDGET_ACNT_CODE
+		       LEFT OUTER JOIN TBCTR_CNTRCT T3
+		            ON T1.CNTRCT_NO = T3.CNTRCT_NO
+		       LEFT OUTER JOIN (
+		                        SELECT YEAR
+		                             , BSNS_SE
+		                             , BALC_SE
+		                             , BSNS_CODE
+		                             , DEPT_CODE
+		                             , BUDGET_ACNT_CODE
+		                             , SUM(NVL(DCSN_AM,0) )    AS BUDGET_AM
+		                          FROM TBBDG_BUDGET_ASIGN
+		                         WHERE DCSN_AT = '1'
+		                        GROUP BY YEAR
+		                               , BSNS_SE
+		                               , BALC_SE
+		                               , BSNS_CODE
+		                               , DEPT_CODE
+		                               , BUDGET_ACNT_CODE
+		                       ) T4
+		            ON T1.BUDGET_YEAR      = T4.YEAR
+		           AND T1.BSNS_SE          = T4.BSNS_SE
+		           AND T1.BALC_SE          = T4.BALC_SE
+		           AND T3.BSNS_CODE        = T4.BSNS_CODE
+		           AND T3.MNG_DEPT_CODE    = T4.DEPT_CODE
+		           AND T1.BUDGET_ACNT_CODE = T4.BUDGET_ACNT_CODE
+		 WHERE T1.CNTRCT_NO = #CNTRCT_NO#
+		ORDER BY T1.SN
+	</select>
+
+
+	<!-- 예산배정내역 등록 -->
+	<insert id="CTR030100_T03DAO.CntrctBudgetC" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030100_T03DAO.CntrctBudgetC*/]]>
+		INSERT INTO TBCTR_CNTRCT_BUDGET (
+		     CNTRCT_NO
+		    ,SN
+		    ,BUDGET_YEAR
+		    ,BSNS_SE
+		    ,BALC_SE
+		    ,BUDGET_ACNT_CODE
+		    ,RM
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		) VALUES (
+		     #CNTRCT_NO#
+		    ,(SELECT NVL(MAX(SN), 0) + 1
+		      FROM   TBCTR_CNTRCT_BUDGET
+		      WHERE  CNTRCT_NO = #CNTRCT_NO#)
+		    ,#BUDGET_YEAR#
+		    ,#BSNS_SE#
+		    ,#BALC_SE#
+		    ,#BUDGET_ACNT_CODE#
+		    ,#RM#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	</insert>
+
+
+	<!-- 예산배정내역 수정 -->
+	<update id="CTR030100_T03DAO.CntrctBudgetU" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030100_T03DAO.CntrctBudgetU*/]]>
+		UPDATE TBCTR_CNTRCT_BUDGET
+		SET    BUDGET_YEAR      = #BUDGET_YEAR#
+		      ,BSNS_SE          = #BSNS_SE#
+		      ,BALC_SE          = #BALC_SE#
+		      ,BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		      ,RM               = #RM#
+		      ,UPDUSR_ID        = #S_USER_ID#
+		      ,UPDT_DT          = SYSDATE
+		WHERE  CNTRCT_NO        = #CNTRCT_NO#
+		AND    SN               = #SN#
+	</update>
+	
+	
+	<!-- 예산배정내역 삭제 -->
+	<delete id="CTR030100_T03DAO.CntrctBudgetD" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030100_T03DAO.CntrctBudgetD*/]]>
+		DELETE
+		FROM   TBCTR_CNTRCT_BUDGET
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+		AND    SN        = #SN#
+	</delete>
+
+
+	<!-- 예산배정내역 모두 삭제 -->
+	<delete id="CTR030100_T03DAO.CntrctBudgetAllD" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030100_T03DAO.CntrctBudgetAllD*/]]>
+		DELETE
+		FROM   TBCTR_CNTRCT_BUDGET
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+	</delete>
+
+
+</sqlMap>

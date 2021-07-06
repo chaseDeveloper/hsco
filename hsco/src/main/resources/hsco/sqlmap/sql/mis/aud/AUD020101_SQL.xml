@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUD020101_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!--법인카드사용내역 목록조회 -->
+	<select id="AUD020101DAO.selectCatsTmpApprovalList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.BANK_CD
+		     , t1.CARD_NO                          /*카드번호*/
+		     , TRIM(t1.APPR_DATE) AS APPR_DATE     /*승인일자*/
+		     , (SELECT NVL2(HVOF_DE,1,0) FROM TBHRM_HVOF_INFO WHERE TRIM(t1.APPR_DATE) = HVOF_DE) AS HVOF /*휴무일*/
+		     , t1.APPR_SEQ                         
+		     , DECODE(t4.DECSN_NO, NULL, '0', '1') 			AS DECSN_YN          	/*지출등록*/
+		     , NVL(t4.EXPNDTR_CNFIRM_AT, '0')      			AS EXPNDTR_CNFIRM_AT  	/*지출확인*/
+		     , DECODE(NVL(t7.CMPNSP_NO,'0'),'0','0','1') 	AS EXPNDTR_AT 			/*지출여부*/
+		     , t3.DEPT_CODE                     /*부서코드*/
+		     , t3.DEPT_NM                       /*부서명*/
+		     , t2.CARD_NM                       /*카드명*/
+		     , t1.CHAIN_NM                      /*가맹점*/
+		     , t1.BRANCHTYPE                    /*업종구분*/
+		     , t1.APPR_NO	                    /*승인번호*/
+		     , TRIM(t1.APPR_TIME) AS APPR_TIME  /*승인시간*/
+		     , CASE WHEN TRIM(t1.APPR_TIME) BETWEEN '080000' AND '230000' THEN '0' ELSE '1' END AS HVOF_TIME /*23~08시 결제*/
+		     , t1.APPR_AMT                      /*승인금액*/
+		     , t4.ITNC_DE                       /*결의일자*/
+		     , t1.REAL_USER                     /*실사용자*/
+		     , t8.EMPNM             AS REAL_USER_NM /*실사용자명*/
+		     , t1.ATNDNC_MAN        AS PEOPLE   /*참석자*/
+		     , t1.PRVONSH           AS REASON   /*사유*/
+		     , t4.BUDGET_ACNT_CODE              /*예산코드*/
+		     , t5.BUDGET_ACNT_NM                /*예산명*/
+		     , t4.DECSN_YEAR                    
+		     , t4.DECSN_NO                      /*결의번호*/
+		     , t4.CHECK_NO                      /*수표번호*/
+		     , t2.FNNC_INSTT_CODE               /*결재은행*/
+		     , t2.SETLE_ACNUTNO                 /*결재계좌번호*/
+		     , DECODE(TRIM(t1.CANCEL_YN),'Y','1','0') AS CANCEL_YN	/*취소여부*/
+		  FROM NH_APPR t1
+		       LEFT OUTER JOIN TBACC_CPR_CARD_MANAGE t2
+		            ON t1.CARD_NO = t2.CARD_NO
+		       LEFT OUTER JOIN VWHRM_DEPT t3
+		            ON t2.DEPT_CODE = t3.DEPT_CODE
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t4
+		            ON t1.DATAYEAR    = t4.DECSN_YEAR
+		           AND t1.SEQKEY      = t4.DECSN_NO
+		       LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t5
+		            ON t4.BUDGET_YEAR = t5.YEAR
+		           AND t4.BSNS_SE     = t5.BSNS_SE
+		           AND t4.BALC_SE     = t5.BALC_SE
+		           AND t4.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MTR_DET t6
+		            ON t4.BUDGET_YEAR = t6.DECSN_YEAR
+		           AND t4.DECSN_NO    = t6.DECSN_NO
+		       LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t7
+		            ON t4.DECSN_YEAR = t7.DECSN_YEAR
+		           AND t4.DECSN_NO   = t7.DECSN_NO
+		           AND t1.APPR_NO    = t7.APPR_NO
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t8
+		            ON t1.REAL_USER = t8.EMPNO
+		 WHERE TRIM(t1.APPR_DATE) <![CDATA[>=]]> #BGN_TRANS_DATE#
+		   AND TRIM(t1.APPR_DATE) <![CDATA[<=]]> #END_TRANS_DATE#
+		<isNotEqual property="CANCEL_YN" compareValue="1">
+		   AND t1.CANCEL_YN != 'Y'
+		</isNotEqual>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+			AND t3.DEPT_CODE = #DEPT_CODE#
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="CARD_NM">
+			AND t2.CARD_NM   LIKE '%'||#CARD_NM#||'%'
+		</isNotEmpty>
+		<isNotEmpty property="APPROVAL_BGN_TIME">
+			AND SUBSTR(TRIM(t1.APPR_TIME),0,4) <![CDATA[>=]]> NVL(TRIM(#APPROVAL_BGN_TIME#),'0000')
+		</isNotEmpty>
+		<isNotEmpty property="APPROVAL_END_TIME">
+			AND SUBSTR(TRIM(t1.APPR_TIME),0,4) <![CDATA[<=]]> NVL(TRIM(#APPROVAL_END_TIME#),'2400')
+		</isNotEmpty>
+		ORDER BY t2.DEPT_CODE, t1.CARD_NO, t1.APPR_DATE, t1.APPR_NO
+	</select>
+
+	<!--특이사항목록 조회 -->
+	<select id="AUD020101DAO.selectCardPartclrMatterList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT BANK_CD
+		     , t8.USE_SN
+		     , t8.RM
+		     , t1.CARD_NO                          /*카드번호*/
+		     , TRIM(t1.APPR_DATE) AS APPR_DATE     /*승인일자*/
+		     , t1.APPR_SEQ                         
+		     , DECODE(t4.DECSN_NO, NULL, '0', '1') 			AS DECSN_YN          	/*지출등록*/
+		     , NVL(t4.EXPNDTR_CNFIRM_AT, '0')      			AS EXPNDTR_CNFIRM_AT  	/*지출확인*/
+		     , DECODE(NVL(t7.CMPNSP_NO,'0'),'0','0','1') 	AS EXPNDTR_AT 			/*지출여부*/
+		     , t3.DEPT_CODE                     /*부서코드*/
+		     , t3.DEPT_NM                       /*부서명*/
+		     , t2.CARD_NM                       /*카드명*/
+		     , t1.CHAIN_NM                      /*가맹점*/
+		     , t1.APPR_NO	                    /*승인번호*/
+		     , TRIM(t1.APPR_TIME) AS APPR_TIME  /*승인시간*/
+		     , t1.APPR_AMT                      /*승인금액*/
+		     , t4.ITNC_DE                       /*결의일자*/
+		     , t1.ATNDNC_MAN        AS PEOPLE   /*참석자*/
+		     , t1.PRVONSH           AS REASON   /*사유*/
+		     , t4.BUDGET_ACNT_CODE              /*예산코드*/
+		     , t5.BUDGET_ACNT_NM                /*예산명*/
+		     , t4.DECSN_YEAR                    
+		     , t4.DECSN_NO                      /*결의번호*/
+		     , t4.CHECK_NO                      /*수표번호*/
+		     , t2.FNNC_INSTT_CODE               /*결재은행*/
+		     , t2.SETLE_ACNUTNO                 /*결재계좌번호*/
+		     , DECODE(TRIM(t1.CANCEL_YN),'Y','1','0') AS CANCEL_YN	/*취소여부*/
+		FROM NH_APPR t1
+		     LEFT OUTER JOIN TBACC_CPR_CARD_MANAGE t2
+		          ON t1.CARD_NO = t2.CARD_NO
+		     LEFT OUTER JOIN VWHRM_DEPT t3
+		          ON t2.DEPT_CODE = t3.DEPT_CODE
+		     LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t4
+		          ON t1.DATAYEAR    = t4.DECSN_YEAR
+		         AND t1.SEQKEY      = t4.DECSN_NO
+		     LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t5
+		          ON t4.BUDGET_YEAR = t5.YEAR
+		         AND t4.BSNS_SE     = t5.BSNS_SE
+		         AND t4.BALC_SE     = t5.BALC_SE
+		         AND t4.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		     LEFT OUTER JOIN TBACC_EXP_DSN_MTR_DET t6
+		          ON t4.BUDGET_YEAR = t6.DECSN_YEAR
+		         AND t4.DECSN_NO    = t6.DECSN_NO
+		     LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t7
+		          ON t4.DECSN_YEAR = t7.DECSN_YEAR
+		         AND t4.DECSN_NO   = t7.DECSN_NO
+		         AND t1.APPR_NO    = t7.APPR_NO
+		     INNER JOIN TBAUD_CPR_CARD_PARTCLR_MATTER t8
+		          ON t1.CARD_NO               = t8.CARD_NO
+		         AND TRIM(t1.APPR_DATE)       = REPLACE(t8.CONFM_DE,'-','')
+		         AND SUBSTR(t1.APPR_TIME,0,4) = t8.CONFM_TIME
+		         AND t1.CHAIN_NM              = t8.MRHST_NM
+		WHERE TRIM(t1.APPR_DATE) <![CDATA[>=]]> #BGN_TRANS_DATE#
+		  AND TRIM(t1.APPR_DATE) <![CDATA[<=]]> #END_TRANS_DATE#
+		<isEmpty property="CANCEL_YN">
+			/*취소된 카드내역 제외*/
+			AND   NOT EXISTS (
+			  SELECT 1 FROM CCM_APPR s1 
+			  WHERE s1.CARD_NO = t1.CARD_NO 
+			  AND   s1.APPR_NO = t1.APPR_NO
+			  AND   s1.CANCEL_YN = 'Y'
+			)
+		</isEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+			AND t3.DEPT_CODE = #DEPT_CODE#
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="CARD_NM">
+			AND t2.CARD_NM   LIKE '%'||#CARD_NM#||'%'
+		</isNotEmpty>
+		<isNotEmpty property="APPROVAL_BGN_TIME">
+			AND SUBSTR(TRIM(t1.APPR_TIME),0,4) <![CDATA[>=]]> NVL(TRIM(#APPROVAL_BGN_TIME#),'0000')
+		</isNotEmpty>
+		<isNotEmpty property="APPROVAL_END_TIME">
+			AND SUBSTR(TRIM(t1.APPR_TIME),0,4) <![CDATA[<=]]> NVL(TRIM(#APPROVAL_END_TIME#),'2400')
+		</isNotEmpty>
+		ORDER BY t2.DEPT_CODE, t1.CARD_NO, t1.APPR_DATE, t1.APPR_NO
+	</select>
+
+	<!-- 특이사항 관리 테이블  입력 -->
+	<insert id="AUD020101DAO.cardPartclrMatterC" parameterClass="java.util.HashMap">
+		<![CDATA[
+			INSERT INTO TBAUD_CPR_CARD_PARTCLR_MATTER (
+					 USE_SN             /*사용일련번호*/
+					,DEPT_CODE          /*부서코드*/
+					,EMPNO              /*사번*/
+					,CARD_NM            /*카드명*/
+					,CARD_NO            /*카드번호*/
+					,CONFM_DE           /*승인일자*/
+					,CONFM_TIME         /*승인시간*/
+					,MRHST_NM           /*가맹점명*/
+					,MRHST_ADRES        /*가맹점주소*/
+					,BIZRNO             /*사업자등록번호*/
+					,RESCI_SE           /*해약구분*/
+					,CONFM_AMOUNT       /*승인금액*/
+					,USE_CN             /*사용내용*/
+					,RM                 /*비고*/
+					,REGISTER_ID        /*등록자ID*/
+					,REGIST_DT          /*등록일시*/
+					,UPDUSR_ID          /*수정자ID*/
+					,UPDT_DT            /*수정일시*/
+				) VALUES (  
+					( SELECT CASE WHEN COUNT(USE_SN) = 0 THEN 1
+								  WHEN COUNT(USE_SN) > 0 THEN MAX(TO_NUMBER(USE_SN))+1
+								  ELSE NULL END 
+						FROM (SELECT NVL2(COUNT(USE_SN),MAX(TO_NUMBER(USE_SN)),1) AS USE_SN
+								FROM TBAUD_CPR_CARD_PARTCLR_MATTER)
+							GROUP BY USE_SN)      /*사용일련번호*/
+					,#DEPT_CODE#                  /*부서코드*/
+					,NULL                         /*사번*/
+					,#CARD_NM#                    /*카드명*/
+					,#CARD_NO#                    /*카드번호*/
+					,#APPR_DATE#                  /*승인일자*/
+					,SUBSTR(#APPR_TIME#,0,4)      /*승인시간*/
+					,#CHAIN_NM#                   /*가맹점명*/
+					,NULL                         /*가맹점주소*/
+					,NULL                         /*사업자등록번호*/
+					,NULL                         /*해약구분*/
+					,#APPR_AMT#                   /*승인금액*/
+					,#REASON#                     /*사용내용*/
+					,#RM#                         /*비고*/
+					,#S_USER_ID#                  /*등록자ID*/
+					,SYSDATE                      /*등록일시*/
+					,#S_USER_ID#                  /*수정자ID*/
+					,SYSDATE                      /*수정일시*/
+				)
+		]]>
+	</insert>
+
+	<!-- 특이사항 관리 테이블수정 -->
+	<update id="AUD020101DAO.cardPartclrMatterU" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBAUD_CPR_CARD_PARTCLR_MATTER SET
+				 RM          = #RM#
+				,UPDUSR_ID   = #S_USER_ID#
+				,UPDT_DT     = SYSDATE
+			 WHERE USE_SN = #USE_SN#
+		]]>
+	</update>
+
+	<!-- 감사계획 관리 테이블 삭제 -->
+	<delete id="AUD020101DAO.cardPartclrMatterD" parameterClass="java.util.HashMap">
+		<![CDATA[
+			DELETE FROM TBAUD_CPR_CARD_PARTCLR_MATTER
+			 WHERE  USE_SN = #USE_SN#
+		]]>
+	</delete>
+	
+	<!-- 알림대상  목록 조회 -->
+	<select id="AUD020101DAO.selectNtcnTrget" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*AUD020101DAO.selectNtcnTrget*/]]>
+			SELECT  t1.NTCN_SE
+			       ,t1.EMPNO
+			       ,t2.EMPNM
+			       ,H_DECRYPT(t2.TELNO_2)   AS TELNO_2
+			       ,t2.EMAIL
+			FROM TBAUD_NTCN_TRGET t1
+				LEFT OUTER JOIN TBHRM_HR_MASTR t2
+				  ON t1.EMPNO = t2.EMPNO
+			WHERE t1.NTCN_SE = '02'		/*알림구분(02:법인카드부당사례)*/
+	</select>
+	
+	<!-- 알림대상  추가 -->
+	<insert id="AUD020101DAO.ntcnTrgetC" parameterClass="java.util.HashMap">
+		<![CDATA[/*AUD020101DAO.ntcnTrgetC*/]]>
+			INSERT INTO TBAUD_NTCN_TRGET (
+					 NTCN_SE           /*알림구분*/
+					,EMPNO             /*사번*/
+					,REGISTER_ID       /*등록자ID*/
+					,REGIST_DT         /*등록일시*/
+					,UPDUSR_ID         /*수정자ID*/
+					,UPDT_DT           /*수정일시*/
+				) VALUES (
+					 '02'              /*알림구분(02:법인카드부당사례)*/
+					,#EMPNO#           /*사번*/
+					,#S_USER_ID#       /*등록자ID*/
+					,SYSDATE           /*등록일시*/
+					,#S_USER_ID#       /*수정자ID*/
+					,SYSDATE           /*수정일시*/
+				)
+	</insert>
+	
+	
+	<!-- 알림대상 삭제 -->
+	<update id="AUD020101DAO.ntcnTrgetD" parameterClass="java.util.HashMap">
+		<![CDATA[/*AUD020101DAO.ntcnTrgetD*/]]>
+			DELETE FROM TBAUD_NTCN_TRGET
+			 WHERE NTCN_SE = '02'           /*알림구분(02:법인카드부당사례)*/
+			   AND EMPNO   = #EMPNO#        /*사번*/
+	</update>
+</sqlMap>

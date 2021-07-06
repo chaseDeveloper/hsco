@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+
+<sqlMap namespace="MyMenu">
+    <!-- 바로가기메뉴 조회 -->
+	<select id="MyMenuDAO.selectMyMenuList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+        	  A.USER_ID			/* 사용자ID */
+        	, A.MENU_ID			    /* 메뉴ID */
+        	, B.MENU_NM			    /* 메뉴명 */
+        	, A.SORT_ORDR AS SORT    /* 정렬순서 */
+        	, B.SYS_SE_CODE
+        	, C.PAGE_URL
+        	, 'URL("theme://images/ico_treeitem.png")' AS IMAGE        	
+        	, 'URL("theme://images/ico_Grdcls.png")' AS DEL_IMAGE
+        	, '1' AS CHK
+        FROM TBCOM_GLAN_MENU A 			/* 바로가기메뉴 */
+         ,  TBCOM_MENU B 			/* 메뉴 */
+         , TBCOM_PAGE C
+        WHERE 1=1
+          AND A.MENU_ID = B.MENU_ID			/* 메뉴ID */
+          AND B.PAGE_ID = C.PAGE_ID
+          AND B.USE_AT = '1'			/* 사용여부 */
+          AND A.USER_ID = #V_USER_ID#			/* 메뉴ID */
+        ORDER BY A.SORT_ORDR
+	</select>
+	
+	<select id="MyMenuDAO.MyMenuList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+            A.USER_ID			/* 사용자ID */
+          , A.MENU_ID
+          , A.MENU_NM
+          , A.SORT_ORDR AS SORT    /* 정렬순서 */
+          , A.SYS_SE_CODE
+          , A.PAGE_URL
+          , A.IMAGE  
+          , A.DEL_IMAGE
+          , DECODE(MENU_0, NULL, '','ROOT', '', MENU_0 || ' > ') || DECODE(MENU_1, NULL, '', 'ROOT', '', MENU_1 || ' > ') || DECODE(MENU_2, NULL, '', 'ROOT', '', MENU_2 || ' > ') || MENU_3 AS MENU_PATH
+        FROM (
+             SELECT 
+                    E.MENU_ID AS MENU_ID0 , E.MENU_NM AS MENU_0
+                  , D.MENU_ID AS MENU_ID1 , D.MENU_NM AS MENU_1
+                  , C.MENU_ID AS MENU_ID2 , C.MENU_NM AS MENU_2
+                  , B.MENU_ID AS MENU_ID3 , B.MENU_NM AS MENU_3
+                  , F.MENU_ID
+                  , F.MENU_NM
+                  , A.USER_ID
+                  , A.SORT_ORDR
+                  , F.SYS_SE_CODE
+                  , F.PAGE_ID
+                  , G.PAGE_URL
+                  , 'URL("theme://images/ico_treeitem.png")' AS IMAGE        	
+                  , 'URL("theme://images/ico_Grdcls.png")' AS DEL_IMAGE
+                  , '1' AS CHK
+             FROM  TBCOM_GLAN_MENU A 			/* 바로가기메뉴 */
+                 , TBCOM_MENU F, TBCOM_MENU B, TBCOM_MENU C, TBCOM_MENU D , TBCOM_MENU E
+                 , TBCOM_PAGE G
+             WHERE A.MENU_ID = F.MENU_ID
+               AND F.PAGE_ID = G.PAGE_ID
+               AND F.UPPER_MENU = B.MENU_ID(+)
+               AND B.UPPER_MENU = C.MENU_ID(+)
+               AND C.UPPER_MENU = D.MENU_ID(+)
+               AND D.UPPER_MENU = E.MENU_ID(+)
+               AND A.USER_ID = #V_USER_ID#
+               <isNotEmpty property="MENU_NM"> 
+                   AND F.MENU_NM LIKE #MENU_NM# || '%'
+               </isNotEmpty> 
+             ORDER BY MENU_ID1 ASC, MENU_ID2 ASC, MENU_ID3, A.MENU_ID ASC
+         ) A
+
+        
+	</select>
+ 
+	<!-- 바로가기메뉴 추가 -->
+	<insert id="MyMenuDAO.insertMyMenu" parameterClass="java.util.HashMap">
+	INSERT INTO TBCOM_GLAN_MENU 
+	(	
+		USER_ID,
+		MENU_ID,
+		SORT_ORDR,
+		REGISTER_ID,
+		REGIST_DT,
+		UPDUSR_ID,
+		UPDT_DT
+	)
+	VALUES(
+		#V_USER_ID#,
+		#MENU_ID#,
+		NVL(DECODE(SIGN((SELECT MAX(SORT_ORDR) FROM TBCOM_GLAN_MENU WHERE USER_ID = #V_USER_ID#) -
+					(SELECT COUNT(SORT_ORDR) FROM TBCOM_GLAN_MENU WHERE USER_ID = #V_USER_ID#)) 
+			,1
+			, (SELECT MAX(SORT_ORDR) FROM TBCOM_GLAN_MENU WHERE USER_ID = #V_USER_ID#)+1
+			, (SELECT COUNT(SORT_ORDR) FROM TBCOM_GLAN_MENU WHERE USER_ID = #V_USER_ID#)+1
+		),1),
+		#V_USER_ID#,
+		SYSDATE,
+		#V_USER_ID#,
+		SYSDATE 
+	)
+	</insert>
+	<!-- 바로가기메뉴 추가 -->
+	<!--  <insert id="MyMenuDAO.insertMyMenu" parameterClass="java.util.HashMap">
+        MERGE INTO TBCOM_GLAN_MENU X
+        USING (
+               SELECT 
+                	  #V_USER_ID# AS USER_ID			/* 사용자ID */
+                	, #MENU_ID# AS MENU_ID			    /* 메뉴ID */
+                	, NVL(#SORT#, (SELECT 
+                                          NVL(MAX(SORT_ORDR) + 1, COUNT(*) + 1) 
+                                        FROM TBCOM_GLAN_MENU
+                                        WHERE USER_ID= #V_USER_ID#)) AS SORT_ORDR  /* 정렬순서 */
+                    , #S_USER_ID# AS REGISTER_ID
+                    , SYSDATE AS REGIST_DT
+                    , #S_USER_ID# AS UPDUSR_ID
+                    , SYSDATE AS UPDT_DT
+                FROM DUAL
+        ) Y
+        ON (
+              X.USER_ID = Y.USER_ID
+          AND X.MENU_ID = Y.MENU_ID
+        )
+        WHEN NOT MATCHED THEN INSERT
+        (
+              X.USER_ID
+            , X.MENU_ID
+            , X.SORT_ORDR
+            , X.REGISTER_ID
+            , X.REGIST_DT
+            , X.UPDUSR_ID
+            , X.UPDT_DT
+        )
+        VALUES(
+              Y.USER_ID
+            , Y.MENU_ID
+            , Y.SORT_ORDR
+            , Y.REGISTER_ID
+            , Y.REGIST_DT
+            , Y.UPDUSR_ID
+            , Y.UPDT_DT
+        )
+        WHEN MATCHED THEN UPDATE
+           SET X.SORT_ORDR = Y.SORT_ORDR
+             , X.UPDUSR_ID = Y.UPDUSR_ID
+             , X.UPDT_DT   = Y.UPDT_DT
+	</insert>
+-->
+	<!-- 바로가기메뉴 수정 -->
+	<update id="MyMenuDAO.updateMyMenu" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_GLAN_MENU			/* 바로가기메뉴 */
+          SET
+        	   SORT_ORDR   = #SORT#
+        	 , UPDUSR_ID   = #S_USER_ID#
+        	 , UPDT_DT     = SYSDATE
+        WHERE USER_ID     = #S_USER_ID#
+          AND MENU_ID     = #MENU_ID#
+    </update>
+        
+	
+	
+	<!-- 바로가기메뉴 삭제 -->
+	<delete id="MyMenuDAO.deleteMyMenu" parameterClass="java.util.HashMap">
+        DELETE FROM TBCOM_GLAN_MENU			/* 바로가기메뉴 */
+        WHERE USER_ID     = #S_USER_ID#
+          AND MENU_ID     = #MENU_ID#
+	</delete>
+</sqlMap>

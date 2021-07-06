@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM060125_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 직무수행감점기준 조회 -->
+	<select id="HRM060125DAO.selectDtyExcDmrtrStdr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.YEAR
+		     , t1.DMRTR_STDR_CODE
+		     , t1.DMRTR_STDR_NM
+		     , t1.DMRTR_SCORE
+		     , t1.RM 
+		     , t1.OUTPT_ORDR
+		     , NVL(t2.CONFM_AT, '0')    AS CONFM_AT
+		     , #HT_SE#                  AS HT_SE
+		     , #DEPT_CODE#              AS DEPT_CODE
+		  FROM TBHRM_DTY_EXC_DMRTR_STDR t1
+		       LEFT OUTER JOIN TBHRM_DTY_EXC_ATITD_CONFM t2
+		            ON t1.YEAR            = t2.EVL_YEAR
+		           AND t2.HT_SE           = #HT_SE#
+		           AND t2.DEPT_CODE       = #DEPT_CODE#
+		 WHERE t1.YEAR = #YEAR#
+		ORDER BY t1.OUTPT_ORDR ASC
+	]]>
+	</select>
+
+
+	<!-- 직무수행감점내역 조회 -->
+	<select id="HRM060125DAO.selectDtyExcAtitdDmrtr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH DSCPL_DSPS_TM AS (
+		    SELECT s1.EMPNO
+		          ,SUM(CASE WHEN s1.DCSN_DSCPL_SE = '191'           THEN 1 ELSE 0 END)     AS DSCPL1   /*불문경고*/
+		          ,SUM(CASE WHEN s1.DCSN_DSCPL_SE IN ('130', '180') THEN 1 ELSE 0 END)     AS DSCPL2   /*경고,훈계*/
+		          ,SUM(CASE WHEN s1.DCSN_DSCPL_SE = '160'           THEN 1 ELSE 0 END)     AS DSCPL3   /*주의*/
+		          ,SUM(CASE WHEN s1.DCSN_DSCPL_SE = '210'           THEN ROUND(NVL(MONTHS_BETWEEN(TO_DATE(s1.DSPS_ENDDE, 'YYYYMMDD'), TO_DATE(s1.DSPS_BGNDE, 'YYYYMMDD')),0),0) END)     AS DSCPL4   /*직위해제*/
+		          ,SUM(CASE WHEN s1.DCSN_DSCPL_SE = '170'           THEN 1 ELSE 0 END)     AS DSCPL5   /*견책*/
+		          ,SUM(CASE WHEN s1.DCSN_DSCPL_SE = '150'           THEN 1 ELSE 0 END)     AS DSCPL6   /*감봉*/
+		          ,SUM(CASE WHEN s1.DCSN_DSCPL_SE = '140'           THEN 1 ELSE 0 END)     AS DSCPL7   /*정직*/
+		    FROM   TBHRM_DSCPL_DSPS s1
+		           INNER JOIN TBHRM_WORK_EVL_PD s2
+		                ON s1.DSCPL_DCSN_DE BETWEEN s2.HT_BGNDE AND s2.HT_ENDDE
+		               AND s2.EVL_YEAR = #YEAR#
+		               AND s2.HT_SE = #HT_SE#
+		    WHERE  1=1
+		    GROUP BY s1.EMPNO
+		), DTY_EXC_ATITD_DMRTR_TM AS (
+		    SELECT EVL_YEAR
+		          ,HT_SE
+		          ,EMPNO
+		          ,LATEN_SRVIC_CO           /*지각복무_건수*/
+		          ,WTRMS_ABSENC_CO          /*무단결근_건수*/
+		          ,WTRMS_LRLY_CO            /*무단조회_건수*/
+		          ,WTRMS_GNOT_CO            /*무단외출_건수*/
+		          ,TWDCVLN_KD_IMPRTY_CO     /*대민불친절_건수*/
+		    FROM   TBHRM_DTY_EXC_ATITD_DMRTR
+		    WHERE  EVL_YEAR = #YEAR#
+		    AND    HT_SE = #HT_SE#
+		)
+		SELECT NVL(t2.EVL_YEAR, #YEAR#)         AS EVL_YEAR
+		      ,NVL(t2.HT_SE, #HT_SE#)           AS HT_SE
+		      ,t1.EMPNO
+		      ,t1.DEPT_CODE
+		      ,SFCOM_CODE_NM('HRM001', t1.JSSFC_SE, 'CODE_NM') ||
+		       DECODE(SFCOM_CODE_NM('HRM002', t1.CLSF_SE, 'CODE_NM'),'시설관리원','',SFCOM_CODE_NM('HRM002', t1.CLSF_SE, 'CODE_NM'))
+		       || ' ' || t4.EMPNM  AS EMPNM
+		      ,NVL(t2.LATEN_SRVIC_CO,0)         AS DMRTR_001  /*지각*/
+		      ,NVL(t2.WTRMS_ABSENC_CO,0)        AS DMRTR_002  /*무단결근*/
+		      ,NVL(t2.WTRMS_LRLY_CO,0)          AS DMRTR_003  /*무단조회*/
+		      ,NVL(t2.WTRMS_GNOT_CO,0)          AS DMRTR_004  /*무단외출 장시간무단이석*/
+		      ,NVL(t2.TWDCVLN_KD_IMPRTY_CO,0)   AS DMRTR_005  /*대민불친절*/
+		      ,NVL(t3.DSCPL1,0)                 AS DMRTR_006  /*불문경고*/
+		      ,NVL(t3.DSCPL2,0)                 AS DMRTR_007  /*훈계_경고포함*/
+		      ,NVL(t3.DSCPL3,0)                 AS DMRTR_008  /*주의*/
+		      ,NVL(t3.DSCPL4,0)                 AS DMRTR_009  /*직위해제*/
+		      ,NVL(t3.DSCPL5,0)                 AS DMRTR_010  /*견책*/
+		      ,NVL(t3.DSCPL6,0)                 AS DMRTR_011  /*감봉*/
+		      ,NVL(t3.DSCPL7,0)                 AS DMRTR_012  /*정직*/
+		FROM   TBHRM_WORK_EVL_TRGTER t1
+		       LEFT OUTER JOIN DTY_EXC_ATITD_DMRTR_TM t2
+		            ON t1.EMPNO = t2.EMPNO
+		       LEFT OUTER JOIN DSCPL_DSPS_TM t3
+		            ON t1.EMPNO = t3.EMPNO
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t4
+			      ON  t1.EMPNO = t4.EMPNO
+		WHERE  1=1
+		AND    t1.EVL_YEAR = #YEAR#
+		AND    t1.HT_SE = #HT_SE#
+		AND    t1.DEPT_CODE = #DEPT_CODE#
+		ORDER BY t1.OFCPS_SE
+		       , t1.JSSFC_SE
+		       , t1.CLSF_SE
+	]]>
+	</select>
+
+	<!-- 직무수행감점내역 수정 -->
+	<update id="HRM060125DAO.updateDtyExcAtitdDmrtr" parameterClass="java.util.HashMap">
+	<![CDATA[
+		MERGE INTO TBHRM_DTY_EXC_ATITD_DMRTR
+		USING DUAL
+		ON (
+		        EVL_YEAR = #EVL_YEAR#
+		    AND HT_SE    = #HT_SE#
+		    AND EMPNO    = #EMPNO#
+		   )
+		WHEN MATCHED THEN
+		    UPDATE 
+		    SET    LATEN_SRVIC_CO       = NVL(#DMRTR_001#,0)
+		          ,WTRMS_ABSENC_CO      = NVL(#DMRTR_002#,0)
+		          ,WTRMS_LRLY_CO        = NVL(#DMRTR_003#,0)
+		          ,WTRMS_GNOT_CO        = NVL(#DMRTR_004#,0)
+		          ,TWDCVLN_KD_IMPRTY_CO = NVL(#DMRTR_005#,0)
+		          ,UPDUSR_ID            = #S_USER_ID#
+		          ,UPDT_DT              = SYSDATE
+		WHEN NOT MATCHED THEN
+		    INSERT (
+		         EVL_YEAR
+		        ,HT_SE
+		        ,EMPNO
+		        ,LATEN_SRVIC_CO
+		        ,WTRMS_ABSENC_CO
+		        ,WTRMS_LRLY_CO
+		        ,WTRMS_GNOT_CO
+		        ,TWDCVLN_KD_IMPRTY_CO
+		        ,REGISTER_ID
+		        ,REGIST_DT
+		        ,UPDUSR_ID
+		        ,UPDT_DT
+		    )
+		    VALUES (
+		         #EVL_YEAR#
+		        ,#HT_SE#
+		        ,#EMPNO#
+		        ,NVL(#DMRTR_001#,0)
+		        ,NVL(#DMRTR_002#,0)
+		        ,NVL(#DMRTR_003#,0)
+		        ,NVL(#DMRTR_004#,0)
+		        ,NVL(#DMRTR_005#,0)
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		    )
+	]]>
+	</update>
+
+	<!-- 직무수행감점내역 수정 -->
+	<update id="HRM060125DAO.updateConfmAt01" parameterClass="java.util.HashMap">
+	<![CDATA[
+		MERGE INTO TBHRM_DTY_EXC_ATITD_CONFM s1
+		USING DUAL
+		ON (
+		        EVL_YEAR        = #YEAR#
+		    AND HT_SE           = #HT_SE#
+		    AND DEPT_CODE       = #DEPT_CODE#
+		   )
+		WHEN MATCHED THEN
+		    UPDATE
+		       SET CONFM_AT      = DECODE(#CONFM_AT#, '1', '0', '1')
+		         , UPDUSR_ID     = #S_USER_ID#
+		         , UPDT_DT       = SYSDATE
+		         , GRFRS_USER_ID = (SELECT MAX(t1.USER_ID)
+									FROM   TBCOM_USER_GRP t1
+									       LEFT OUTER JOIN TBCOM_USER t2
+									       ON t1.USER_ID = t2.USER_ID
+									       LEFT OUTER JOIN TBHRM_HR_MASTR t3
+									       ON t2.EMPNO = t3.EMPNO
+									WHERE  AUTH_GRP_ID = 'GRFRS'
+									AND    t3.DEPT_CODE = #DEPT_CODE#)
+		WHEN NOT MATCHED THEN
+		    INSERT (
+		           EVL_YEAR
+		         , HT_SE
+		         , DEPT_CODE
+		         , CONFM_AT
+		         , REGISTER_ID
+		         , REGIST_DT
+		         , UPDUSR_ID
+		         , UPDT_DT
+		         , GRFRS_USER_ID
+		    )
+		    VALUES (
+		           #YEAR#
+		         , #HT_SE#
+		         , #DEPT_CODE#
+		         , DECODE(#CONFM_AT#, '1', '0', '1')
+		         , #S_USER_ID#
+		         , SYSDATE
+		         , #S_USER_ID#
+		         , SYSDATE
+		         , (SELECT z1.USER_ID 
+		           FROM (SELECT MAX(t1.USER_ID) USER_ID
+						FROM   TBCOM_USER_GRP t1
+						       LEFT OUTER JOIN TBCOM_USER t2
+						       ON t1.USER_ID = t2.USER_ID
+						       LEFT OUTER JOIN TBHRM_HR_MASTR t3
+						       ON t2.EMPNO = t3.EMPNO
+						WHERE  AUTH_GRP_ID = 'GRFRS'
+						AND    t3.DEPT_CODE = #DEPT_CODE#) z1)
+		    )
+	]]>
+	</update>
+	
+	<!-- 직무수행감점내역 수정 -->
+	<update id="HRM060125DAO.updateConfmAt02" parameterClass="java.util.HashMap">
+	<![CDATA[
+		UPDATE TBHRM_DTY_EXC_ATITD_CONFM s1
+		SET    GRFRS_USER_ID = (
+		                        SELECT MAX(t1.USER_ID)
+		                        FROM   TBCOM_USER_GRP t1
+		                               LEFT OUTER JOIN TBCOM_USER t2
+		                               ON t1.USER_ID = t2.USER_ID
+		                               LEFT OUTER JOIN TBHRM_HR_MASTR t3
+		                               ON t2.EMPNO = t3.EMPNO
+		                        WHERE  AUTH_GRP_ID = 'GRFRS'
+		                        AND    t3.DEPT_CODE = s1.DEPT_CODE
+		                       )
+		WHERE EVL_YEAR   = #YEAR#
+		  AND HT_SE      = #HT_SE#
+		  AND DEPT_CODE  = #DEPT_CODE#
+	]]>
+	</update>
+
+</sqlMap>

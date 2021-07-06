@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH030303_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 조직별 평가대상 비계량지표 목록조회 -->
+	<select id="ACH030303DAO.selectList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">		 
+		SELECT   A.EVL_YEAR AS EVL_YEAR
+		       , A.ODR_SE   AS ODR_SE
+		       , A.IX_CODE  AS IX_CODE
+		       , '[ '
+				 || A.IX_CODE
+		         || ' ] '
+		         || SFACH_GET_IXNM(A.EVL_YEAR, A.ODR_SE, A.IX_CODE)     AS IX_CDNM
+		       , A.ORGNZT_CODE                                          AS ORGNZT_CODE
+		       , B.ORGNZT_NM                                            AS ORGNZT_NM
+		       , B.EVL_GROUP_SE                                         AS EVL_GROUP_SE
+		       , A.EVL_WGHTVAL                                          AS EVL_WGHTVAL
+		       , A.ATCH_FID                                             AS ATCH_FID
+		       , DECODE(D.EVL_MAN_NO, NULL, #EVL_MAN_NO#, D.EVL_MAN_NO) AS EVL_MAN_NO
+		       , D.EVL_GRAD                                             AS EVL_GRAD
+		       , D.EVL_SCORE                                            AS EVL_SCORE
+		       , NVL(D.EVL_SCORE, 0) * NVL(A.EVL_WGHTVAL, 0) / 100      AS RSLT_SCORE_C
+		       , D.EVL_PRVONSH                                          AS EVL_RESN
+		       , A.SEQ                                                  AS SEQ
+		       , NVL(A.CNFIRM_AT, '0')                                  AS CNFIRM_AT
+		  FROM TBACH_QLEVAL_RESULT A
+		       LEFT OUTER JOIN TBACH_QLEVAL_EVL D
+		                    ON A.EVL_YEAR    = D.EVL_YEAR
+		                   AND A.ODR_SE      = D.ODR_SE
+		                   AND A.IX_CODE     = D.IX_CODE
+		                   AND A.ORGNZT_CODE = D.ORGNZT_CODE
+		                   AND A.SEQ         = D.SEQ
+		                   AND D.EVL_MAN_NO  = #EVL_MAN_NO#
+		       , TBACH_EVL_TRGET_ORGNZT B
+		  WHERE 1 = 1
+		    AND A.EVL_YEAR    = B.EVL_YEAR
+		    AND A.ODR_SE      = B.ODR_SE
+		    AND A.ORGNZT_CODE = B.ORGNZT_CODE
+		    AND A.EVL_YEAR    = #EVL_YEAR#
+		    AND A.ODR_SE      = #ODR_SE#
+		    AND A.SEQ         = #SEQ#
+		 <isNotEmpty property="ORGNZT_CODE">			   
+		   	AND A.ORGNZT_CODE = #ORGNZT_CODE#
+		 </isNotEmpty>
+		    AND EXISTS (SELECT 1
+		                FROM   TBACH_QLE_EVL_MAN_CNNC
+		                WHERE  EVL_YEAR   = #EVL_YEAR#
+		                  AND  ODR_SE     = #ODR_SE#
+		                  AND  EVL_MAN_NO = #EVL_MAN_NO#
+		               )
+		  ORDER BY B.EVL_GROUP_SE, A.ORGNZT_CODE, A.IX_CODE
+    </select>
+       
+     <!-- 비계량평가자 등록 -->
+    <insert id="ACH030303DAO.dtlC" parameterClass="java.util.HashMap" >
+		<!--INSERT INTO TBACH_QLE_EVL_MAN_CNNC (
+					  EVL_YEAR
+					, ODR_SE
+					, EVL_MAN_EMPNO
+					, IX_CODE
+					, REGISTER_ID
+					, REGIST_DT
+					, UPDUSR_ID
+					, UPDT_DT
+				   )
+			  VALUES
+				   (
+					  #EVL_YEAR#
+					, #ODR_SE#
+					, #M_EVL_MAN_EMPNO#
+					, #IX_CODE#
+				    , #S_USER_ID#
+				    , SYSDATE
+				    , #S_USER_ID#
+				    , SYSDATE
+					)
+					-->
+    </insert>
+    
+    <!-- 평가내역 수정/신규 -->
+    <update id="ACH030303DAO.dtlU" parameterClass="java.util.HashMap" >
+		MERGE INTO TBACH_QLEVAL_EVL
+		USING DUAL ON (  
+		                  EVL_YEAR = #EVL_YEAR#
+				      AND ODR_SE = #ODR_SE#
+				      AND IX_CODE = #IX_CODE#
+				      AND ORGNZT_CODE = #ORGNZT_CODE#
+				      AND EVL_MAN_NO = #EVL_MAN_NO#
+				      AND SEQ = #SEQ#
+				      )
+		WHEN MATCHED THEN
+			UPDATE SET 
+					  EVL_GRAD 	= #EVL_GRAD#
+					, EVL_SCORE = #EVL_SCORE#
+					, EVL_PRVONSH 	= #EVL_RESN# 
+					, UPDUSR_ID = #S_USER_ID#
+					, UPDT_DT 	= SYSDATE
+		WHEN NOT MATCHED THEN
+			INSERT (
+				  EVL_YEAR
+				, ODR_SE
+				, IX_CODE
+				, ORGNZT_CODE
+				, EVL_MAN_NO
+				, SEQ
+				, EVL_GRAD
+				, EVL_SCORE
+				, EVL_PRVONSH
+				, RM
+				, REGISTER_ID
+				, REGIST_DT
+				, UPDUSR_ID
+				, UPDT_DT	
+				)
+			VALUES	(
+				 #EVL_YEAR#
+				, #ODR_SE#
+				, #IX_CODE#
+				, #ORGNZT_CODE#
+				, #EVL_MAN_NO#
+				, #SEQ#
+				, #EVL_GRAD#
+				, #EVL_SCORE#
+				, #EVL_RESN#
+				, #RM#
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+			)
+    </update>
+    
+    <!-- 비계량 실적 수정 -->
+    <update id="ACH030303DAO.dtl01U" parameterClass="java.util.HashMap" >
+			UPDATE  TBACH_QLEVAL_RESULT
+			SET     CNFIRM_AT 	= '1'
+				   ,CNFIRM_DE   = TO_CHAR(SYSDATE, 'YYYYMMDD')
+				   ,UPDUSR_ID 	= #S_USER_ID#
+				   ,UPDT_DT 	= SYSDATE
+			WHERE   EVL_YEAR    = #EVL_YEAR#
+		      AND   ODR_SE      = #ODR_SE#
+		      AND   IX_CODE     = #IX_CODE#
+		      AND   ORGNZT_CODE = #ORGNZT_CODE#
+		      AND   SEQ         = #SEQ#
+    </update>          
+    
+    <!-- 비계량평가자  삭제 -->
+    <delete id="ACH030303DAO.dtlD" parameterClass="java.util.HashMap" >
+	<!-- 	DELETE TBACH_QLEVAL_EVL		   
+		 WHERE 1=1
+		   AND EVL_YEAR = #EVL_YEAR#
+	       AND ODR_SE = #ODR_SE#
+	       AND IX_CODE = #IX_CODE#
+	       AND ORGNZT_CODE = #ORGNZT_CODE#
+	       AND EVL_MAN_NO = #EVL_MAN_NO#
+	       AND SEQ = 1
+	-->
+    </delete>    
+ 	
+ 	<!-- 평가자  조회 -->
+	<select id="ACH030303DAO.getQleEvlManList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+         SELECT A.EVL_YEAR	  AS EVL_YEAR
+              , A.ODR_SE	  AS ODR_SE
+              , A.EVL_MAN_NO  AS EVL_MAN_NO
+              , C.USER_NM     AS EVL_MAN_NM
+           FROM TBACH_QLE_EVL_MAN_CNNC A,
+              TBACH_QLE_EVL_MAN B,
+              TBCOM_USER C
+         WHERE 1=1
+             AND A.EVL_YEAR(+) = B.EVL_YEAR
+             AND A.ODR_SE(+) = B.ODR_SE
+             AND A.EVL_MAN_NO(+) = B.EVL_MAN_NO
+             AND C.USER_ID(+) = B.EVL_MAN_EMPNO
+             AND B.EVL_YEAR = #EVL_YEAR#
+             AND B.ODR_SE = #ODR_SE#
+           GROUP BY A.EVL_YEAR, A.ODR_SE, A.EVL_MAN_NO, C.USER_NM
+           ORDER BY A.EVL_MAN_NO
+    </select>
+    
+</sqlMap>

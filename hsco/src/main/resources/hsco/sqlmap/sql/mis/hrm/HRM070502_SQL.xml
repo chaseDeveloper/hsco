@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070502_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 현장체재비 마감일 기준 현황조회 -->
+	<select id="HRM070502DAO.selectSptScstClosList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[		
+			SELECT 
+			       A.STDR_YR
+			      ,A.STDR_YM
+			      ,A.REGIST_CLOS_DE
+			      ,A.APPLC_YN
+			      ,A.RM
+			 FROM TBHRM_SPT_SCST_CLOS_MANAGE A
+ 	        WHERE 1=1
+	]]>
+		<isNotEmpty property="YEAR">
+		 AND  A.STDR_YR = #YEAR#
+		</isNotEmpty>
+		ORDER BY A.STDR_YR ASC, A.STDR_YM ASC
+	</select>
+
+	<!--  현장체재비 마감일 수정-->
+    <update id="HRM070502DAO.tbhrmSptScstClosU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			  UPDATE TBHRM_SPT_SCST_CLOS_MANAGE
+			    SET	  REGIST_CLOS_DE = #REGIST_CLOS_DE#
+					 ,APPLC_YN       = #APPLC_YN#
+					 ,RM             = #RM#
+					 ,UPDUSR_ID   = #S_USER_ID#
+					 ,UPDT_DT     = SYSDATE
+		      WHERE STDR_YR = #STDR_YR#
+			  AND 	STDR_YM = #STDR_YM#
+        ]]>
+    </update>
+
+	<!--  현장체재비 마감일 기준 일괄생성 프로세스 -->
+    <update id="HRM070502DAO.newCloseDe" parameterClass="java.util.HashMap">
+        <![CDATA[
+			MERGE INTO TBHRM_SPT_SCST_CLOS_MANAGE T1
+			USING (SELECT #YEAR# AS YR
+			             ,CONCAT(#YEAR#,LPAD(LEVEL,2,0)) AS YR_MT
+			       FROM DUAL
+			       CONNECT BY LEVEL <= 12
+			) T2
+			ON (T1.STDR_YR = T2.YR AND T1.STDR_YM = T2.YR_MT)
+			WHEN MATCHED THEN
+			UPDATE SET 
+			       T1.REGIST_CLOS_DE =  NULL
+			      ,T1.APPLC_YN       =  NULL
+			      ,T1.RM             =  NULL
+			      ,T1.UPDUSR_ID      =  #S_USER_ID#
+			      ,T1.UPDT_DT        =  SYSDATE
+			WHEN NOT MATCHED THEN 
+			INSERT(
+			    T1.STDR_YR
+			   ,T1.STDR_YM 
+			   ,T1.REGISTER_ID
+			   ,T1.REGIST_DT
+			   ,T1.UPDUSR_ID
+			   ,T1.UPDT_DT
+			          
+			)VALUES(
+			    T2.YR
+			   ,T2.YR_MT
+			   ,#S_USER_ID#
+			   ,SYSDATE
+			   ,#S_USER_ID#
+			   ,SYSDATE
+			)
+        ]]>
+    </update>
+  </sqlMap>

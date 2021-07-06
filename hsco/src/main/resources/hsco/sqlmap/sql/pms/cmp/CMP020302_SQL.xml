@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP020302_SQL">
+<!--  설명  : 소유자별 조서정보 조회 
+	작성자 : 지효정  -->
+	
+	<!--  조서 목록  -->
+	<select id="CMP020302DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT 
+			 A.*
+			,ROWNUM AS NUM
+		FROM(
+			SELECT 
+				 DENSE_RANK() OVER(ORDER BY B.OWNER_NM) AS ORD
+	            ,A.BSNS_AREA_CODE 	/* 사업지역코드 */
+	            ,A.LOCPLC_CODE		/* 소재지 */
+	            ,SFCMP_GET_LOCPLC(A.BSNS_AREA_CODE, A.LOCPLC_CODE) || ' ' || 
+	             DECODE(A.SLNO, NULL, A.LNM, A.LNM || '-' || A.SLNO) AS FULL_LOCPLC_CODE_NM
+	            ,A.LNM_SE			/* 지번 종류 */
+	            ,A.LNM				/* 지번 */
+	            ,A.SLNO				/* 부번 */
+	            ,TRIM(A.THING_CL) AS THING_CL			/* 물건분류 */
+	            ,A.THING_NM			/* 물건명 */
+	            ,A.STRCT_STNDRD		/* 지목 구조및 규격 */
+	            ,A.REAL_LNDCGR		/* 용도 */
+	            ,A.NOW_USE_STTUS	/* 현실적 이용현황 */
+	            ,A.LAD_SE			/* 토지구분 */
+	            ,A.REMNDR_LAD_SE	/* 잔여지구분 */
+	            ,A.AR_LGSTR			/* 지적 면적 */
+	            ,A.AR_INCRPR		/* 편입 수량 */
+	            ,A.UNIT				/* 단위 */
+	            ,A.RM_1				/* 비고 */
+	            ,A.BGNN_LNM			/* 당초지번 */
+	            ,A.THING_SN			/* 물건번호 */
+	            ,A.RGIST_TRGET_AT	/* 등기대상 */
+	            ,B.POSESN_QOTA		/* 지분 */
+	            ,B.AR				/* 면적 */
+	           	,B.OWNER_NM			/* 소유자 이름 */
+	           	,B.OWNER_ADRES		/* 소유자 주소 */
+				,C.PARTCPNT_NM		/* 관계자 이름 */
+				,C.PARTCPNT_ADRES	/* 관계자 주소 */
+				,C.RELATE_KND		/* 관계종류 */
+				,B.OWNER_NO
+				,A.LNDCGR_LGSTR
+				,A.LNDCGR_INCRPR
+	            ,SFCMP_GET_CODENM('CMP002', A.UNIT) AS UNIT_NM
+	            ,SFCMP_GET_CODENM('CMP003', C.RELATE_KND) AS RELATE_KND_NM				
+	        FROM TBCMP_THING_WTNNC A, 
+			(
+				SELECT 
+				      A.THING_SN
+				     ,A.OWNER_SN		/* 소유자 일련번호 */
+				     ,A.POSESN_QOTA		/* 지분 */
+				     ,A.AR				/* 면적 */
+				     ,B.OWNER_NM AS OWNER_NM	/* 소유자 이름 */
+				     ,B.ADRES AS OWNER_ADRES			/* 소유자 주소 */
+				     ,A.OWNER_NO
+				FROM TBCMP_THING_OWNER A, TBCMP_OWNER B
+				WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+				AND   B.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+				AND   A.OWNER_NO = B.OWNER_NO
+				AND   '1' = B.OWNER_SE
+	  		) B,
+			(
+				SELECT 
+					A.THING_SN
+					,A.OWNER_SN
+					,A.RELATE_KND				/* 관계종류 */
+					,B.OWNER_NM AS PARTCPNT_NM		/* 관계자 이름 */
+					,B.ADRES AS PARTCPNT_ADRES	/* 관계자 주소 */
+				FROM TBCMP_THING_PARTCPNT A, TBCMP_OWNER B
+				WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+				AND   B.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+				AND   A.PARTCPNT_NO = B.OWNER_NO
+				AND   '2' = B.OWNER_SE
+			) C
+			WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			AND   A.THING_SN = B.THING_SN
+			AND   B.THING_SN = C.THING_SN(+)
+			AND   B.OWNER_SN = C.OWNER_SN(+)
+			<isEqual property="SELECT" compareValue="0">
+			<isNotEmpty property="THING_CL">
+			AND	  A.THING_CL IN
+			<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+			#ARR_THING_CL[]#
+			</iterate>
+			</isNotEmpty>
+			</isEqual>
+			<isNotEmpty property="LOCPLC_CODE">
+			 AND   A.LOCPLC_CODE = #LOCPLC_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="REWARD_ODR">
+			 AND   A.REWARD_ODR = #REWARD_ODR#
+			</isNotEmpty>
+			<isNotEmpty property="LNM">
+			 AND   A.LNM = #LNM#
+			</isNotEmpty>
+			<isNotEmpty property="SLNO">
+			 AND   A.SLNO = #SLNO#
+			</isNotEmpty>
+			<isNotEmpty property="OWNER_NM">
+			 AND   B.OWNER_NM LIKE '%'||#OWNER_NM#||'%'
+			</isNotEmpty>
+		) A, TBCMP_LOCPLC_INFO X, TBCOM_CMMN_CODE Y
+	WHERE A.BSNS_AREA_CODE = X.BSNS_AREA_CODE AND A.LOCPLC_CODE = X.LOCPLC_CODE AND 'CMP001' = Y.GRP_CODE AND A.THING_CL = Y.CODE
+	ORDER BY A.OWNER_NM, A.OWNER_ADRES,  X.SORT_ORDR, TO_NUMBER(A.LNM), TO_NUMBER(A.SLNO), Y.CODE_ORDR, A.THING_SN
+	</select>
+	
+	<select id="CMP020302DAO.ownerPartcpntList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT 
+		     A.THING_SN
+		    ,D.OWNER_NM AS NM
+		    ,D.ADRES || ' ' || D.ADRES_DETAIL AS ADRES
+		    ,SFCMP_GET_CODENM('CMP003', C.RELATE_KND) AS RELATE_KND
+		    ,B.OWNER_NO
+		FROM 
+			TBCMP_THING_WTNNC A
+		    ,TBCMP_THING_OWNER B
+		    ,TBCMP_THING_PARTCPNT C
+		    ,TBCMP_OWNER D
+		    
+		WHERE A.BSNS_AREA_CODE = 'A0303'
+		AND   A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		AND   A.THING_SN = B.THING_SN
+		AND   B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+		AND   B.THING_SN = C.THING_SN
+		AND   B.OWNER_SN = C.OWNER_SN
+		AND   C.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+		AND   C.PARTCPNT_NO = D.OWNER_NO
+		AND   '2' = D.OWNER_SE
+		<isNotEmpty property="ETC1">
+		<isNotEmpty property="THING_CL">
+		AND	  TRIM(A.THING_CL) = #THING_CL#
+		</isNotEmpty>
+		<isEmpty property="THING_CL">
+		AND   TRIM(A.THING_CL) IN (SELECT CODE
+								  FROM TBCOM_CMMN_CODE
+								  WHERE GRP_CODE = 'CMP001'
+								 <isEqual property="ETC1" compareValue="L">
+	  							  AND   CODE_ETC_1 = 'L'
+								 </isEqual>
+								 <isEqual property="ETC1" compareValue="NL">
+								  AND	 (CODE_ETC_1 != 'L' OR CODE_ETC_1 IS NULL)
+								 </isEqual> )
+		</isEmpty>
+		</isNotEmpty>
+		<isEmpty property="ETC1">
+		<isNotEmpty property="THING_CL">
+		 AND   TRIM(A.THING_CL) = #THING_CL#
+		</isNotEmpty>
+		</isEmpty>
+		<isNotEmpty property="LOCPLC_CODE">
+		 AND   A.LOCPLC_CODE = #LOCPLC_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="REWARD_ODR">
+		 AND   A.REWARD_ODR = #REWARD_ODR#
+		</isNotEmpty>
+		<isNotEmpty property="LNM">
+		 AND   A.LNM = #LNM#
+		</isNotEmpty>
+		<isNotEmpty property="SLNO">
+		 AND   A.SLNO = #SLNO#
+		</isNotEmpty>
+	</select>
+</sqlMap>

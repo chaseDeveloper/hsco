@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP050400_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	 <!-- 설  명  : 시행자제시정보
+		  작성자 : 변승우 -->
+
+	<!--  시행자제시정보 조회 -->
+	<select id="CMP050400DAO.selectEnforcemenPrsentList"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+		SELECT 
+		   WTNNC_APASMT.LOCPLC_CODE			/* 소재지코드*/
+		  ,WTNNC_APASMT.LOCPLC_CODE_NM		/* 소재지코드*/
+		  ,WTNNC_APASMT.LNM					/* 지번*/
+		  ,WTNNC_APASMT.THING_NM			/* 물건명*/
+		  ,WTNNC_APASMT.STRCT_STNDRD		/* 구조규격*/
+       	  ,WTNNC_APASMT.NOW_USE_STTUS		/* 현재이용현황*/
+		  ,WTNNC_APASMT.REAL_LNDCGR			/* 실제공부*/
+	      ,WTNNC_APASMT.AR_LGSTR			/* 면적공부*/
+		  ,WTNNC_APASMT.AR_INCRPR			/* 면적편입*/
+		  ,OWNER_PARTCPNT.POSESN_QOTA		/* 소유지분*/
+       	  ,OWNER_PARTCPNT.AR				/* 면적*/
+		  ,WTNNC_APASMT.EVL_AMOUNT1			/* 용역업체 평가금액1*/
+          ,WTNNC_APASMT.EVL_AMOUNT2			/* 용역업체 평가금액2*/
+		  ,WTNNC_APASMT.EVL_AMOUNT3			/* 용역업체 평가금액3*/
+		  ,WTNNC_APASMT.AVG_EVL_AMOUNT		/* 용역업체 평가금액 평균*/    	
+		  ,WTNNC_APASMT.UNTPC				/* 단가*/
+		  ,WTNNC_APASMT.RWMNY				/* 보상금*/
+		  ,OWNER_PARTCPNT.OWNER				/* 소유자*/
+		  ,OWNER_PARTCPNT.ADRES				/* 주소*/
+		  ,OWNER_PARTCPNT.ZIP_DM_1			/* 우편번호DM1*/
+		  ,OWNER_PARTCPNT.ADRES_DM			/* 주소DM*/
+		  ,OWNER_PARTCPNT.PARTCPNT			/* 관계인*/
+		  ,OWNER_PARTCPNT.PARTCPNT_ADRES	/* 관계인주소*/	
+		  ,OWNER_PARTCPNT.RELATE_KND		/* 관계종류*/
+		  ,WTNNC_APASMT.RM_1    			/* 비고1*/
+		FROM
+		(
+			SELECT
+				WTNNC.*
+				,APASMT.EVL_AMOUNT1			/* 용엽업체 평가금액1*/
+				,APASMT.EVL_AMOUNT2			/* 용엽업체 평가금액2*/	
+				,APASMT.EVL_AMOUNT3			/* 용엽업체 평가금액3*/
+				,APASMT.AVG_EVL_AMOUNT		/* 용엽업체 평가금액 평균*/          
+		 	FROM   
+		 	(
+		 		SELECT
+				   BSNS_AREA_CODE			/* 사업지역코드*/
+				   ,THING_SN				/* 물건일련번호*/
+				   ,LOCPLC_CODE				/* 소재지코드*/
+				   ,SFCMP_GET_LOCPLC(BSNS_AREA_CODE, LOCPLC_CODE) AS LOCPLC_CODE_NM
+				   ,LNM||'-'||SLNO AS LNM	/* 지번*/
+				   ,THING_NM				/* 물건명*/
+				   ,STRCT_STNDRD			/* 구조규격*/
+				   ,NOW_USE_STTUS			/* 현재이용현황*/
+				   ,REAL_LNDCGR				/* 실제지목*/
+				   ,AR_LGSTR				/* 면적공부*/	
+				   ,AR_INCRPR				/* 면적편입*/	
+				   ,ROUND(THING_UNTPC, 0) AS UNTPC /* 단가*/
+				   ,RWMNY					/* 보상금*/
+				   ,RM_1					/* 비고1*/
+				   ,THING_CL
+				   ,BNDE_APPLC_GROUP	
+				FROM TBCMP_THING_WTNNC 		
+				WHERE BSNS_AREA_CODE = #bsnsAreaCode# 
+				<isNotEmpty property="lnm"> 
+				AND  LNM = #lnm#
+				</isNotEmpty>
+				<isNotEmpty property="slno">
+				AND  SLNO = #slno#
+				</isNotEmpty>
+				<isNotEmpty property="locplcCode">
+				AND  LOCPLC_CODE = #locplcCode#
+				</isNotEmpty>
+				<isEqual property="ALL" compareValue="0">
+				<isNotEmpty property="THING_CL">
+				AND	  THING_CL IN 
+				<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+				#ARR_THING_CL[]#
+				</iterate>				
+				</isNotEmpty>
+				</isEqual>
+			)WTNNC
+			,(
+			    SELECT 
+					MAX(BSNS_AREA_CODE) AS BSNS_AREA_CODE			/* 사업지역코드*/
+					,THING_SN										/* 물건일련번호*/
+					,MAX(DECODE(BCNC_CODE, BCNC_CODE1, DECODE(EVL_AMOUNT, NULL, NULL, EVL_AMOUNT),0)) AS EVL_AMOUNT1	/* 용역업체 평가금액1*/
+					,MAX(DECODE(BCNC_CODE, BCNC_CODE2, DECODE(EVL_AMOUNT, NULL, NULL, EVL_AMOUNT),0)) AS EVL_AMOUNT2	/* 용역업체 평가금액2*/
+					,MAX(DECODE(BCNC_CODE, BCNC_CODE3, DECODE(EVL_AMOUNT, NULL, NULL, EVL_AMOUNT),0)) AS EVL_AMOUNT3	/* 용역업체 평가금액3*/
+					,ROUND(AVG(EVL_AMOUNT), 0) AS AVG_EVL_AMOUNT  /* 용역업체 평가금액 평균*/
+			   	FROM
+				(
+					SELECT 
+						B.*
+						,C.BCNC_CODE			/* 감정평가사 코드*/
+						,C.THING_UNTPC AS UNTPC	/* 단가*/
+						,C.EVL_AMOUNT			/* 평가금액*/
+						,C.THING_SN				/* 물건일련번호*/
+					FROM
+			        (
+			        	SELECT 
+							MAX(BSNS_AREA_CODE) AS BSNS_AREA_CODE		/* 사업지역코드*/
+							,MAX(DECODE(RNUM, 1, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE1		/* 용역업체코드1*/ 
+							,MAX(DECODE(RNUM, 2, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE2		/* 용역업체코드2*/
+							,MAX(DECODE(RNUM, 3, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE3		/* 용역업체코드3*/
+						FROM
+						(
+							SELECT 
+								RANK()OVER(ORDER BY SORT_ORDR) AS RNUM	/* ROW갯수*/							
+								,BCNC_CODE		/* 용역업체코드*/
+								,BSNS_AREA_CODE AS BSNS_AREA_CODE		/* 사업지역코드*/
+							FROM TBCMP_BSNSBY_PRPRAPR
+							WHERE BSNS_AREA_CODE = #bsnsAreaCode# 
+						)
+					)B
+					,TBCMP_APASMT C
+			        WHERE B.BSNS_AREA_CODE = C.BSNS_AREA_CODE(+)
+			        AND(C.BCNC_CODE IN(B.BCNC_CODE1, B.BCNC_CODE2, B.BCNC_CODE3))
+		        )
+		        GROUP BY THING_SN
+		    )APASMT
+			WHERE WTNNC.BSNS_AREA_CODE = APASMT.BSNS_AREA_CODE(+)
+			AND WTNNC.THING_SN = APASMT.THING_SN(+)
+		)WTNNC_APASMT
+		,(       
+			SELECT
+				OWNER.*
+				,PARTCPNT.PARTCPNT  			/* 관계인*/
+				,PARTCPNT.PARTCPNT_ADRES		/* 관계인주소*/
+				,PARTCPNT.RELATE_KND			/* 관계종류*/
+			FROM
+			(
+				SELECT 
+					A.BSNS_AREA_CODE		/* 사업지역코드*/
+					,A.OWNER_NO				/* 소유자번호*/
+					,A.OWNER_NM AS OWNER	/* 소유자*/
+					,A.ADRES||A.ADRES_DETAIL AS ADRES		/* 주소*/
+					,A.ZIP_DM_1				/* 우편번호DM*/
+					,A.ADRES_DM_1 || ADRES_DETAIL_DM_1 AS ADRES_DM		/* 주소DM*/
+					,B.POSESN_QOTA			/* 소유지분*/
+					,B.AR					/* 면적*/
+					,B.THING_SN				/* 물건일련번호*/
+					,B.OWNER_SN				/* 소유자일련번호*/
+					,B.RQEST_SE				/* 청구일련번호*/
+					,C.PYMNT_DE				/* 지급일자*/	
+					,C.RQEST_DE             /* 청구일자*/              		
+				FROM TBCMP_OWNER A , TBCMP_THING_OWNER B , TBCMP_RWMNY_PYMNT C
+				WHERE B.BSNS_AREA_CODE = #bsnsAreaCode# 
+				AND   B.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+				AND   B.OWNER_NO = A.OWNER_NO
+				AND   B.BSNS_AREA_CODE = C.BSNS_AREA_CODE(+)
+				AND   B.OWNER_NO = C.OWNER_NO(+)
+				AND   B.RQEST_SN = C.RQEST_SN(+)
+				<isNotEmpty property="owner"> 
+				AND   A.OWNER_NM LIKE '%' || #owner# || '%'
+				</isNotEmpty>
+				<isEqual property="rwmnyPymntSe" compareValue="1">
+				AND   C.RWMNY_PYMNT_SE = '0'
+				</isEqual>
+				<isEqual property="rqestSe" compareValue="1">
+				AND   B.RQEST_SE = '0'
+				</isEqual>
+				<isEqual property="aceptncAdjdcRegistOrdChk" compareValue="1">
+				AND   B.ACEPTNC_ADJDC_ODR = #aceptncAdjdcRegistOrd#
+				</isEqual>
+			)OWNER
+			,(
+				SELECT       
+					A.OWNER_NO				/* 소유자번호*/
+					,B.OWNER_SN				/* 소유자일련번호*/
+					,B.THING_SN				/* 물건일련번호*/
+					,A.BSNS_AREA_CODE		/* 사업지역코드*/	
+					,A.OWNER_NM AS PARTCPNT	/* 관계인명*/
+					,A.ADRES_DM_2 || ADRES_DETAIL_DM_2 AS PARTCPNT_ADRES		/* 관계인주소*/  
+					,B.RELATE_KND			/* 관계종류*/
+				FROM TBCMP_OWNER A, TBCMP_THING_PARTCPNT B
+				WHERE B.BSNS_AREA_CODE = #bsnsAreaCode#         
+				AND   B.BSNS_AREA_CODE = A.BSNS_AREA_CODE       
+				AND   B.PARTCPNT_NO = A.OWNER_NO
+			)PARTCPNT
+			WHERE OWNER.BSNS_AREA_CODE = PARTCPNT.BSNS_AREA_CODE(+)
+			AND OWNER.THING_SN = PARTCPNT.THING_SN(+)
+			AND OWNER.OWNER_SN = PARTCPNT.OWNER_SN(+)
+		)OWNER_PARTCPNT,
+	    TBCMP_LOCPLC_INFO C,
+	    TBCOM_CMMN_CODE D
+		WHERE WTNNC_APASMT.BSNS_AREA_CODE = OWNER_PARTCPNT.BSNS_AREA_CODE
+		AND WTNNC_APASMT.THING_SN = OWNER_PARTCPNT.THING_SN
+        AND WTNNC_APASMT.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+        AND WTNNC_APASMT.LOCPLC_CODE = C.LOCPLC_CODE
+        AND 'CMP001' = D.GRP_CODE
+        AND WTNNC_APASMT.THING_CL = D.CODE		
+		ORDER BY OWNER, C.SORT_ORDR, WTNNC_APASMT.LNM , D.CODE_ORDR, WTNNC_APASMT.THING_NM, WTNNC_APASMT.BNDE_APPLC_GROUP		
+	</select>
+</sqlMap>

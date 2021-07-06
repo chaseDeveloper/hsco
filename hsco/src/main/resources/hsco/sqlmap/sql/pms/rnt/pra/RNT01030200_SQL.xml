@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01030200_SQL">
+   <!--  설명  : 입주대기자 관리
+		작성자 : 지효정 -->
+
+
+	<!-- 입주대기자 목록 -->
+	<select id="RNT01030200DAO.mvnWaitrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.RENT_HOUSE_CODE   	/*임대주택코드*/
+			,A.RCEPT_DE          	/*접수일자*/
+			,A.RCEPT_SN          	/*접수번호(주택코드별 일련번호)*/
+			,A.PRMANENT_CSTMR_NO 	/*영구고객번호(SQ_TBRNT_PRMANENT_RENT_CSTMR_1)*/
+			,A.DONG              	/*동*/
+			,A.HO                	/*호*/
+			,A.FAMILY_CO         	/*가족수*/
+			,A.QUALF_SE          	/*자격구분*/
+			,A.HOPE_AEA          	/*희망평형*/
+			,A.GDCC_SNDNG_DE		/*안내문발송일자1*/
+			,A.RM                	/*비고*/
+			,A.WAIT_NO           	/*대기번호*/
+			,A.SPORT_TRGET_AT    	/*지원대상여부*/
+			,A.HOUSE_POSESN_AT		/*주택소유여부*/
+			,B.NM           		/*고객명*/
+			,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM  /*고객주민번호*/
+			,B.ZIP          		/*고객우편번호*/
+			,B.ADRES        		/*고객주소*/
+			,B.ADRES_DETAIL 		/*고객상세주소*/
+			,B.TELNO        		/*고객전화번호*/
+			,B.MBTLNO       		/*고객휴대전화번호*/
+			,C.RENT_HOUSE_NM		/*주택명*/
+			,'' AS CNTRCTR_NO		/*계약자번호*/
+		FROM
+			 TBRNT_MVN_WAITR A
+			,TBRNT_PRMANENT_RENT_CSTMR B
+			,TBRNT_RENT_HOUSE C
+		WHERE C.HOUSE_SE = 'R1'
+		<isNotEmpty property="rentHouseCode">
+		AND   A.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+		AND   B.NM LIKE '%' || #nm# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="stRceptYr">
+		AND   SUBSTR(A.RCEPT_DE, 0, 4) <![CDATA[>=]]> #stRceptYr#
+		</isNotEmpty>
+		<isNotEmpty property="edRceptYr">
+		AND   SUBSTR(A.RCEPT_DE, 0, 4) <![CDATA[<=]]> #edRceptYr#
+		</isNotEmpty>
+		<isNotEmpty property="ihidnum">
+		AND   SFCOM_DEC_ALL(B.IHIDNUM) like #ihidnum# || '%'
+		</isNotEmpty>
+		AND   A.CNTRCTR_NO IS NULL
+		AND   A.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO
+		AND   A.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		ORDER BY A.RCEPT_DE, A.RENT_HOUSE_CODE, A.HOPE_AEA, A.WAIT_NO
+	</select>
+
+
+	<!-- 건축물 정보 -->
+	<select id="RNT01030200DAO.rentHouseBildList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT01030200DAO.rentHouseBildList[건축물 정보] */
+		SELECT B.DONG,
+			   B.HO,
+			   B.DVR_AR,
+			   B.CMNUSE_AR,
+			   B.AEA,
+			   B.FLOOR,
+			   A.RENT_HOUSE_NM,
+			   B.DVR_AR + B.CMNUSE_AR AS TOT_AR,					/*총면적*/
+			   (SELECT X.ADRES || ' ' || X.ADRES_DETAIL
+				  FROM TBRNT_RENT_HOUSE_DONG X
+				 WHERE 1 = 1
+				   AND X.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+				   AND X.DONG = B.DONG
+			   ) AS RENT_HOUSE_ADRES,
+			   CASE WHEN A.RENT_HOUSE_CODE IN('600','603','604')
+					THEN DECODE(B.AEA,'12',72000 ,'15',90000,'19',114000)
+				END AS MANAGECT_PRECDNT,							/* 선수금 - 선수금없으며-> 입주시 관리사무소 별도 납부  */
+			   CASE WHEN A.RENT_HOUSE_CODE IN('600','603','604')
+					THEN DECODE(B.AEA,'12','금72,000원정' ,'15','금90,000원정','19','금114,000원정')
+					ELSE '입주시 관리사무소 별도 납부'
+				END AS MANAGECT_PRECDNT_CN,							/* 선수금 - 선수금없으며-> 입주시 관리사무소 별도 납부  */
+			   DECODE(A.RENT_HOUSE_CODE,'600','164-05-001-096-4' ,
+							              '603', '170-05-000347-1',
+							              '604', '182-04-000688-1',
+							              '') AS ACCT_NO
+		  FROM TBRNT_RENT_HOUSE A,
+			   TBRNT_RENT_HOUSE_BILD B
+		 WHERE A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		   AND B.CNTRCTR_NO IS NULL
+		   AND B.SUPLY_SE = '1'
+		   AND A.RENT_HOUSE_CODE = #rentHouseCode#
+		   AND B.AEA = #aea#
+	</select>
+
+
+	<!-- 임대고객가족목록 -->
+	<select id="RNT01030200DAO.rentCstmrFamilyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.SN
+			,A.PRMANENT_CSTMR_NO
+			,A.FAMILY_RELATE
+			,A.RM
+			,A.EXAMIN_ID
+			,A.FAMILY_NO
+			,A.PORTAL_REGIST_AT
+			,A.CNTRCTR_NO
+			,A.WAITR_CSTMR_NO
+			,A.CNTRCTR_CSTMR_NO
+			,B.NM
+			,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM
+			,B.ZIP
+			,B.ADRES
+			,B.ADRES_DETAIL
+			,B.TELNO
+			,B.MBTLNO
+			,B.EMAIL
+		FROM
+			TBRNT_RENT_FAMILY_MATTER A
+		   ,TBRNT_PRMANENT_RENT_CSTMR B
+		WHERE A.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO
+		  AND A.RENT_HOUSE_CODE = #rentHouseCode#
+          AND A.RCEPT_DE = #rceptDe#
+          AND A.RCEPT_SN = #rceptSn#
+	</select>
+
+
+	<!-- 임대료기준(영구) -->
+	<select id="RNT01030200DAO.rntchrgStdrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT QUALF_SE,
+		       RENT_GTN,
+		       MT_RNTCHRG
+		  FROM TBRNT_RNTCHRG_STDR
+		 WHERE STDR_YEAR = TO_CHAR(SYSDATE, 'YYYY')
+		   AND RENT_HOUSE_CODE = #rentHouseCode#
+		   AND AEA = #aea#
+		   AND FLOOR_SE = #floorSe#
+	</select>
+
+
+	<!-- 계약날짜 정보 -->
+	<select id="RNT01030200DAO.cntrctDeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 TO_CHAR(SYSDATE, 'YYYYMMDD') AS CNTRCT_DE
+			/* ,TO_CHAR(LAST_DAY(SYSDATE), 'YYYYMMDD') AS PAY_TMLMT */
+			,TO_CHAR(SYSDATE, 'YYYYMMDD') AS PAY_TMLMT
+			,TO_CHAR(SYSDATE + 7, 'YYYYMMDD') AS RENT_BGNDE
+			,TO_CHAR(ADD_MONTHS(SYSDATE, 24), 'YYYY') || DECODE(TO_CHAR(SYSDATE - 1, 'Q'), '1', '0331', '2', '0630', '3', '0930', '4', '1231') AS RENT_ENDDE
+		FROM DUAL
+	</select>
+
+
+	<!-- 임대종료일자 -->
+	<select id="RNT01030200DAO.rentEndde" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT01030200DAO.rentEndde[임대종료일자] */
+		SELECT CASE WHEN #rentHouseCode# = '604' AND '2016' = SUBSTR(#rentBgnde#,1,4) THEN TO_CHAR(ADD_MONTHS(TO_DATE(#rentBgnde#,'YYYYMMDD'), 36), 'YYYY')
+					 ELSE TO_CHAR(ADD_MONTHS(TO_DATE(#rentBgnde#,'YYYYMMDD'), 24), 'YYYY')
+			  	     END ||
+			         DECODE(TO_CHAR(TO_DATE(#rentBgnde#,'YYYYMMDD') - 1, 'Q'), '1', '0331', '2', '0630', '3', '0930', '4', '1231') AS RENT_ENDDE	/* 임대기간 - 종료 */
+			      ,  TO_CHAR(ADD_MONTHS(TO_DATE(#rentBgnde#,'YYYYMMDD'), 24), 'YYYY')
+			  	     ||
+			         DECODE(TO_CHAR(TO_DATE(#rentBgnde#,'YYYYMMDD') - 1, 'Q'), '1', '0331', '2', '0630', '3', '0930', '4', '1231') AS SPORT_ENDDE	/* 지원기간 - 종료 */
+		  FROM DUAL
+	</select>
+
+
+	<!-- 계약등록(영구) -->
+	<parameterMap id="SPRNT_RENT_CONTRACT_I_PARAM" class="map">
+		<parameter property="CNTRCTR_NO" 		jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RENT_HOUSE_CODE" 	jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="DONG" 				jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="HO" 				jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="PRMANENT_CSTMR_NO" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="CNTRCT_DE" 		jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="CNTRCT_CO" 		jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="QUALF_SE" 			jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RENT_BGNDE" 		jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RENT_ENDDE" 		jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="GTN" 				jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RNTCHRG" 			jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="PAY_TMLMT" 		jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RM" 				jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="FAMILY_CO" 		jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="FRST_CNTRCT_DE" 	jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="SPORT_TRGET_AT" 	jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="SPORT_AMOUNT" 		jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="S_USER_ID" 		jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RCEPT_DE" 			jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RCEPT_SN" 			jdbcType="VARCHAR" javaType="string" mode="IN" />
+	</parameterMap>
+	<procedure id="RNT01030200DAO.SPRNT_RENT_CONTRACT_I" parameterMap="SPRNT_RENT_CONTRACT_I_PARAM">
+		{ call SPRNT_RENT_CONTRACT_I(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+	</procedure>
+
+
+	<!-- 주택계약 후, 계약자번호 조회 -->
+	<select id="RNT01030200DAO.selectCntrctNO" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.CNTRCTR_NO
+		  FROM TBRNT_RENT_CNTRCT A
+			  ,TBRNT_PRMANENT_RENT_CSTMR B
+			  ,TBRNT_RENT_HOUSE C
+			  ,TBRNT_MVN_WAITR D
+		 WHERE D.PRMANENT_CSTMR_NO = #PRMANENT_CSTMR_NO#
+		   AND A.CNTRCTR_NO = D.CNTRCTR_NO
+		   AND A.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		   AND A.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO
+	</select>
+</sqlMap>

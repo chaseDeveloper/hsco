@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBPRJ_LAD_BLCK_INFO			토지블럭정보			토지이용계획 ~
+		CRUD : TBPRJ_LAD_SLE_PLAN_ACMSLT	토지판매계획및실적		토지판매회수계획 ~
+	-->
+
+	<!-- 토지블럭정보 ================================================== -->
+
+	<!-- 토지블럭정보 조회 -->
+	<select id="PRJ020501.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.*
+	,LC.LAD_CODE_NM
+	,SUBSTR(A.LTTOT_PLAN_YM, 1,4) AS YY
+	,SUBSTR(A.LTTOT_PLAN_YM, 5,2) AS MM
+	,DECODE(SUBSTR(A.PRPOS_CODE, 5,2), '00', C.MLSFC_NM, '') AS NM1		/* 중분류명 */
+	,DECODE(SUBSTR(A.PRPOS_CODE, 5,2), '00', '', C.SCLAS_NM) AS NM2		/* 소분류명 */
+FROM (
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.LAD_CODE				/* 토지코드 */
+	,A.PRPOS_CODE			/* 용도코드 */
+	,A.SUPLY_CODE			/* 공급코드 */
+	,A.BLCK					/* 블록 */
+	,SUM(A.LOT) AS LOT_C		/* 롯트 수 */
+	,SUM(A.AR_DCSN) AS AR_S		/* 면적_확정 */
+	,ROUND(AVG(A.UNTPC_DCSN)) AS UNTPC_A			/* 단가_확정 */
+	,MAX(A.LTTOT_PLAN_YM) AS LTTOT_PLAN_YM	/* 분양계획년월 */
+FROM TBPRJ_LAD_BLCK_INFO A			/* 토지블럭정보 */
+GROUP BY A.BSNS_CODE ,A.LAD_CODE ,A.PRPOS_CODE ,A.SUPLY_CODE ,A.BLCK
+) A
+JOIN TBPRJ_LAD_CODE LC
+  ON LC.BSNS_CODE = A.BSNS_CODE
+ AND LC.LAD_CODE = A.LAD_CODE
+LEFT JOIN TBPRJ_BSNS_CMMN_CODE C
+  ON C.BSNS_CL = '1'
+ AND C.BSNS_CMMN_CODE = A.PRPOS_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2,3,4,5
+	</select>
+
+	<!-- 토지블럭정보 수정 -->
+	<update id="PRJ020501.mU" parameterClass="map">
+UPDATE TBPRJ_LAD_BLCK_INFO			/* 토지블럭정보 */
+  SET
+	 LTTOT_PLAN_YM = #LTTOT_PLAN_YM#	/* 분양계획년월 */
+	,UPDUSR_ID = #S_USER_ID#			/* 수정자ID */
+	,UPDT_DT = SYSDATE					/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND LAD_CODE = #LAD_CODE#			/* 토지코드 */
+  AND PRPOS_CODE = #PRPOS_CODE#		/* 용도코드 */
+  AND SUPLY_CODE = #SUPLY_CODE#		/* 공급코드 */
+  AND BLCK = #BLCK#					/* 블록 */
+	</update>
+
+	<!-- 토지판매계획및실적 ================================================== -->
+
+	<!-- 토지판매계획및실적 조회 -->
+	<select id="PRJ020501.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.LAD_CODE				/* 토지코드 */
+	,A.PRPOS_CODE			/* 용도코드 */
+	,A.SUPLY_CODE			/* 공급코드 */
+	,A.PLAN_ACMSLT_SE		/* 계획실적구분 */
+	,A.BLCK					/* 블록 */
+	,A.LTTOT_YM				/* 분양년월 */
+	,A.WIK_ODR				/* 주간차수 */
+	,SUBSTR(A.LTTOT_YM, 1,4) AS YY
+	,SUBSTR(A.LTTOT_YM, 5,2) AS MM
+
+	,A.LOT_CO_PLAN			/* LOT수_계획 */
+	,A.AR_PLAN				/* 면적_계획 */
+	,A.PLAN_AMOUNT			/* 계획금액 */
+	,A.LTTOT_PRIC_PLAN		/* 분양대금_계획 */
+	,A.ATMPT_AMOUNT_PLAN	/* 미수금_계획 */
+
+	,A.LTTOT_PRIC_PLAN
+	+A.ATMPT_AMOUNT_PLAN
+	 AS AMT_S				/* 합계 */
+
+	,A.PLAN_AMOUNT			/* 계획금액 - 합계 */
+	-A.LTTOT_PRIC_PLAN
+	-A.ATMPT_AMOUNT_PLAN
+	 AS AMT_D				/* 차액 */
+
+FROM TBPRJ_LAD_SLE_PLAN_ACMSLT A		/* 토지판매계획및실적 */
+WHERE A.BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+  AND A.LAD_CODE = #LAD_CODE#				/* 토지코드 */
+  AND A.PRPOS_CODE = #PRPOS_CODE#			/* 용도코드 */
+  AND A.SUPLY_CODE = #SUPLY_CODE#			/* 공급코드 */
+  AND A.PLAN_ACMSLT_SE = #PLAN_ACMSLT_SE#	/* 계획실적구분 */
+  AND A.BLCK = #BLCK#						/* 블록 */
+  AND A.LTTOT_YM = #LTTOT_YM#				/* 분양년월 */
+ORDER BY 1,2,3,4,5,6,7,8
+	</select>
+
+	<!-- 토지판매계획및실적 추가 -->
+	<insert id="PRJ020501.rC" parameterClass="map">
+INSERT INTO TBPRJ_LAD_SLE_PLAN_ACMSLT (			/* 토지판매계획및실적 */
+	 BSNS_CODE				/* 사업코드 */
+	,LAD_CODE				/* 토지코드 */
+	,PRPOS_CODE				/* 용도코드 */
+	,SUPLY_CODE				/* 공급코드 */
+	,PLAN_ACMSLT_SE			/* 계획실적구분 */
+	,BLCK					/* 블록 */
+	,LTTOT_YM				/* 분양년월 */
+	,WIK_ODR				/* 주간차수 */
+	,LOT_CO_PLAN			/* LOT수_계획 */
+	,AR_PLAN				/* 면적_계획 */
+	,PLAN_AMOUNT			/* 계획금액 */
+	,LTTOT_PRIC_PLAN		/* 분양대금_계획 */
+	,ATMPT_AMOUNT_PLAN		/* 미수금_계획 */
+	,LOT_CO_ACMSLT			/* LOT수_실적 */
+	,AR_ACMSLT				/* 면적_실적 */
+	,ACMSLT_AMOUNT			/* 실적금액 */
+	,LTTOT_PRIC_ACMSLT		/* 분양대금_실적 */
+	,ATMPT_AMOUNT_ACMSLT	/* 미수금_실적 */
+	,REGISTER_ID			/* 등록자ID */
+	,REGIST_DT				/* 등록일시 */
+	,UPDUSR_ID				/* 수정자ID */
+	,UPDT_DT				/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#			/* 사업코드 */
+	,#LAD_CODE#				/* 토지코드 */
+	,#PRPOS_CODE#			/* 용도코드 */
+	,#SUPLY_CODE#			/* 공급코드 */
+	,#PLAN_ACMSLT_SE#		/* 계획실적구분 */
+	,#BLCK#					/* 블록 */
+	,#LTTOT_YM#				/* 분양년월 */
+	,#WIK_ODR#				/* 주간차수 */
+	,#LOT_CO_PLAN#			/* LOT수_계획 */
+	,#AR_PLAN#				/* 면적_계획 */
+	,#PLAN_AMOUNT#			/* 계획금액 */
+	,#LTTOT_PRIC_PLAN#		/* 분양대금_계획 */
+	,#ATMPT_AMOUNT_PLAN#	/* 미수금_계획 */
+	,#LOT_CO_ACMSLT#		/* LOT수_실적 */
+	,#AR_ACMSLT#			/* 면적_실적 */
+	,#ACMSLT_AMOUNT#		/* 실적금액 */
+	,#LTTOT_PRIC_ACMSLT#	/* 분양대금_실적 */
+	,#ATMPT_AMOUNT_ACMSLT#	/* 미수금_실적 */
+	,#S_USER_ID#			/* 등록자ID */
+	,SYSDATE				/* 등록일시 */
+	,#S_USER_ID#			/* 수정자ID */
+	,SYSDATE				/* 수정일시 */
+)
+	</insert>
+
+	<!-- 토지판매계획및실적 수정 -->
+	<update id="PRJ020501.rU" parameterClass="map">
+UPDATE TBPRJ_LAD_SLE_PLAN_ACMSLT			/* 토지판매계획및실적 */
+  SET
+	 LOT_CO_PLAN = #LOT_CO_PLAN#					/* LOT수_계획 */
+	,AR_PLAN = #AR_PLAN#							/* 면적_계획 */
+	,PLAN_AMOUNT = #PLAN_AMOUNT#					/* 계획금액 */
+	,LTTOT_PRIC_PLAN = #LTTOT_PRIC_PLAN#			/* 분양대금_계획 */
+	,ATMPT_AMOUNT_PLAN = #ATMPT_AMOUNT_PLAN#		/* 미수금_계획 */
+	,LOT_CO_ACMSLT = #LOT_CO_ACMSLT#				/* LOT수_실적 */
+	,AR_ACMSLT = #AR_ACMSLT#						/* 면적_실적 */
+	,ACMSLT_AMOUNT = #ACMSLT_AMOUNT#				/* 실적금액 */
+	,LTTOT_PRIC_ACMSLT = #LTTOT_PRIC_ACMSLT#		/* 분양대금_실적 */
+	,ATMPT_AMOUNT_ACMSLT = #ATMPT_AMOUNT_ACMSLT#	/* 미수금_실적 */
+	,UPDUSR_ID = #S_USER_ID#						/* 수정자ID */
+	,UPDT_DT = SYSDATE								/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+  AND LAD_CODE = #LAD_CODE#					/* 토지코드 */
+  AND PRPOS_CODE = #PRPOS_CODE#				/* 용도코드 */
+  AND SUPLY_CODE = #SUPLY_CODE#				/* 공급코드 */
+  AND PLAN_ACMSLT_SE = #PLAN_ACMSLT_SE#		/* 계획실적구분 */
+  AND BLCK = #BLCK#							/* 블록 */
+  AND LTTOT_YM = #LTTOT_YM#					/* 분양년월 */
+  AND WIK_ODR = #WIK_ODR#					/* 주간차수 */
+	</update>
+
+	<!-- 토지판매계획및실적 삭제 -->
+	<delete id="PRJ020501.rD" parameterClass="map">
+DELETE FROM TBPRJ_LAD_SLE_PLAN_ACMSLT			/* 토지판매계획및실적 */
+WHERE BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND LAD_CODE = #LAD_CODE#				/* 토지코드 */
+  AND PRPOS_CODE = #PRPOS_CODE#			/* 용도코드 */
+  AND SUPLY_CODE = #SUPLY_CODE#			/* 공급코드 */
+  AND PLAN_ACMSLT_SE = #PLAN_ACMSLT_SE#	/* 계획실적구분 */
+  AND BLCK = #BLCK#						/* 블록 */
+  AND LTTOT_YM = #LTTOT_YM#				/* 분양년월 */
+<isNotEmpty property="WIK_ODR" >
+  AND WIK_ODR = #WIK_ODR#				/* 주간차수 */
+</isNotEmpty>
+	</delete>
+
+</sqlMap>

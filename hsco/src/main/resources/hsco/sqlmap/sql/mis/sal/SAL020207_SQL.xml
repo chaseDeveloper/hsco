@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL020207_SQL">	
+	
+	<!-- 동호회 목록조회 -->
+	<select id="SAL020207DAO.selectClbList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 CLB_NO
+			,CLB_NM
+		FROM TBSAL_CLB_MANAGE
+		WHERE 1=1
+		<isEmpty prepend="AND" property="AUTH_GRP_ID" >
+			(CHIRMN_EMPNO = #LOGIN_EMPNO#  
+		   OR GRFR_EMPNO = #LOGIN_EMPNO#)
+		</isEmpty>
+		<isNotEmpty property="AUTH_GRP_ID" >
+			<isEqual prepend="AND" property="AUTH_GRP_ID" compareValue="0">
+				(CHIRMN_EMPNO = #LOGIN_EMPNO#  
+			   OR GRFR_EMPNO = #LOGIN_EMPNO#)
+			</isEqual>
+		</isNotEmpty>
+	</select>
+	
+	
+	<!-- 동호회 회원 목록조회 -->
+	<select id="SAL020207DAO.selectClbMberList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 t2.CLB_NO																						/*동호회일련번호*/
+			,t1.CLB_NM																						/*동호회명*/
+			,v1.DEPT_NM																						/*부서명*/
+			,t3.HR_CLSF_SE																					/*직급*/
+			,t2.EMPNO																						/*사원번호*/
+			,t3.EMPNM																						/*사원명*/
+			,CASE WHEN t2.SBSCRB_DE IS NOT NULL AND t2.SECSN_DE IS NULL THEN '1' ELSE '0' END AS SBSCRB_AT	/*가입여부*/
+			,t3.TELNO_1																						/*자택번호*/
+			,H_DECRYPT(t3.TELNO_2)   AS TELNO_2																/*휴대폰번호*/
+		FROM TBSAL_CLB_MANAGE t1
+			RIGHT OUTER JOIN TBSAL_CLB_MBER_MANAGE t2 ON t1.CLB_NO		= t2.CLB_NO
+			LEFT OUTER JOIN  TBHRM_HR_MASTR        t3 ON t2.EMPNO		= t3.EMPNO
+			INNER JOIN	(
+		                    SELECT NVL(MAX(SN), 0) AS SN
+		                          ,EMPNO
+		                          ,CLB_NO
+		                    FROM  TBSAL_CLB_MBER_MANAGE
+		                    GROUP BY EMPNO, CLB_NO
+		                ) 							t4 ON t2.EMPNO 		= t4.EMPNO 
+		           									  AND t2.CLB_NO	 	= t4.CLB_NO
+		           									  AND t2.SN     	= t4.SN
+		LEFT OUTER JOIN  VWHRM_DEPT                 v1 ON t3.DEPT_CODE  = v1.DEPT_CODE 
+		<dynamic prepend="WHERE">
+			<isNotEmpty prepend="AND" property="CLB_NO">
+				t2.CLB_NO = #CLB_NO#
+			</isNotEmpty>
+			<isNotEmpty prepend="AND" property="EMPNO">
+				t2.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty prepend="AND" property="SBSCRB_AT">
+				(CASE WHEN t2.SBSCRB_DE IS NOT NULL AND t2.SECSN_DE IS NULL THEN '1' ELSE '0' END) = #SBSCRB_AT#
+			</isNotEmpty>
+		</dynamic>
+		ORDER BY t2.SBSCRB_DE
+	</select>
+	
+	<!-- 동호회 회원 가입내역 조회 -->
+	<select id="SAL020207DAO.selectClbMberSbscrbList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 t2.CLB_NO		/*동호회일련번호*/
+			,t2.SN			/*순번*/
+			,SFHRM_GET_EMPL_INFO(t2.EMPNO, 'DEPT_NM', t2.SBSCRB_DE)    AS DEPT_NM		/*부서*/
+			,SFHRM_GET_EMPL_INFO(t2.EMPNO, 'CLSF_SE', t2.SBSCRB_DE)    AS HR_CLSF_SE	/*직급*/
+			,t2.EMPNO		/*사원번호*/
+			,t3.EMPNM		/*사원명*/
+			,t2.SBSCRB_DE	/*가입일자*/
+			,t2.SECSN_DE	/*탈퇴일자*/
+			,t2.RM			/*비고*/
+		FROM TBSAL_CLB_MANAGE t1
+			RIGHT OUTER JOIN TBSAL_CLB_MBER_MANAGE t2 ON t1.CLB_NO = t2.CLB_NO
+			LEFT OUTER JOIN  TBHRM_HR_MASTR        t3 ON t2.EMPNO  = t3.EMPNO
+		WHERE t2.CLB_NO = #CLB_NO#
+		  AND t2.EMPNO  = #EMPNO#
+		ORDER BY t2.SN
+	</select>
+	
+	
+	<!-- 동호회 회원 추가 -->
+	<insert id="SAL020207DAO.clbMberC" parameterClass="java.util.HashMap">
+		INSERT INTO TBSAL_CLB_MBER_MANAGE
+		(
+			 CLB_NO
+			,EMPNO
+			,SN
+			,SBSCRB_DE
+			,SECSN_DE
+			,RM
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)
+		SELECT		
+			 #CLB_NO#
+			,#EMPNO#
+			,NVL(MAX(SN), 0)+1
+			,#SBSCRB_DE#
+			,#SECSN_DE#
+			,#RM#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE 
+		FROM TBSAL_CLB_MBER_MANAGE
+		WHERE CLB_NO = #CLB_NO#
+		  AND EMPNO  = #EMPNO#
+	</insert>
+	
+	
+	<!-- 동호회 회원 수정  -->
+	<update id="SAL020207DAO.clbMberU" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_CLB_MBER_MANAGE
+		SET
+			 SBSCRB_DE = #SBSCRB_DE#
+			,SECSN_DE  = #SECSN_DE#
+			,RM		   = #RM#
+			,UPDUSR_ID = #S_USER_ID#
+			,UPDT_DT   = SYSDATE
+		WHERE  CLB_NO  = #CLB_NO#
+			AND EMPNO  = #EMPNO#
+			AND SN     = #SN#
+	</update>
+	
+	
+	<delete id="SAL020207DAO.clbMberD" parameterClass="java.util.HashMap">
+		DELETE FROM TBSAL_CLB_MBER_MANAGE
+		WHERE CLB_NO = #CLB_NO#
+		  AND EMPNO  = #EMPNO#
+		  AND SN     = #SN# 
+	</delete>
+	
+	
+	<delete id="SAL020207DAO.clbMberAllD" parameterClass="java.util.HashMap">
+		DELETE FROM TBSAL_CLB_MBER_MANAGE
+		WHERE CLB_NO = #CLB_NO#
+		  AND EMPNO  = #EMPNO#
+	</delete>
+	
+</sqlMap>

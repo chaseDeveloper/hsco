@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT030401">
+
+	<!-- 쿼리명 : 계약자 조회
+	설명 : 계약자 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.07.08
+	-->
+	<select id="RNT030401DAO.getList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+<![CDATA[
+SELECT
+      TLC.AREA_SE
+    , TLC.DONG
+    , TLC.HO
+    , TLRC.NM
+    , TLMR.LEVY_YM
+    , TLMR.CNTRCTR_NO
+    , TLMR.RQEST_NO
+    , TLMR.DEDT_DE
+    , TLMR.MDAT_DE
+    , TLMR.RESCI_TRMNAT_DE
+    , TLMR.RNTCHRG_THSMON + NVL(TLMR.RNTCHRG_RDCAMT,0) AS RNTCHRG_THSMON
+    , TLMR.RSVMNEY_THSMON + NVL(TLMR.RSVMNEY_RDCAMT,0) AS RSVMNEY_THSMON
+    , TLMR.RNTCHRG_RDCAMT
+    , TLMR.RSVMNEY_RDCAMT
+    , TLMR.OVDINTR    
+    , TLMR.RNTCHRG_THSMON 
+      + NVL(TLMR.RNTCHRG_RDCAMT,0) 
+      + TLMR.RSVMNEY_THSMON 
+      + NVL(TLMR.RSVMNEY_RDCAMT,0) 
+      + NVL(TLMR.OVDINTR , 0)  AS RNTCHRG
+    , C.RNTCHRG_NPYM
+    , C.RSVMNEY_NPYM
+    , C.OVDINTR_NPYM
+    , NVL(C.RNTCHRG_NPYM , 0) + NVL(C.RSVMNEY_NPYM , 0) + NVL(C.OVDINTR_NPYM , 0)  AS T_RNTCHRG_NPYM
+    , TLMR.RCIV_DE
+    , TLMR.RCIV_AMOUNT
+    , TLMR.PAYMTHD
+    , TLMR.OPERT_TY
+    , TLMR.CASH_RCIPT_REGIST_YM
+    , TLMR.CASH_RCIPT_SN
+    , TLMR.REGISTER_ID
+    , TLMR.REGIST_DT
+    , TLMR.UPDUSR_ID
+    , TLMR.UPDT_DT
+FROM TBRNT_LFSTS_MT_RNTCHRG TLMR 
+   , TBRNT_LFSTS_CNTRCT TLC
+   , TBRNT_LFSTS_CSTMR TLRC
+   , (SELECT A.CNTRCTR_NO
+     , B.RNTCHRG_THSMON
+     , B.OVDINTR_THSMON
+     , B.RSVMNEY_THSMON
+     , B.RNTCHRG_NPYM
+     , B.OVDINTR_NPYM
+     , B.RSVMNEY_NPYM
+FROM TBRNT_LFSTS_CNTRCT A
+    , (SELECT CNTRCTR_NO,
+               SUM(CASE WHEN LEVY_YM = #LEVY_YM# THEN RNTCHRG_THSMON + NVL(RNTCHRG_RDCAMT,0) ELSE 0 END) RNTCHRG_THSMON,
+               SUM(CASE WHEN LEVY_YM = #LEVY_YM# THEN OVDINTR ELSE 0 END) OVDINTR_THSMON,
+               SUM(CASE WHEN LEVY_YM = #LEVY_YM# THEN RSVMNEY_THSMON + NVL(RSVMNEY_RDCAMT,0) ELSE 0 END) RSVMNEY_THSMON,
+               SUM(CASE WHEN LEVY_YM < #LEVY_YM# THEN RNTCHRG_THSMON + NVL(RNTCHRG_RDCAMT,0) ELSE 0 END) RNTCHRG_NPYM,
+               SUM(CASE WHEN LEVY_YM < #LEVY_YM# THEN OVDINTR ELSE 0 END) OVDINTR_NPYM,
+               SUM(CASE WHEN LEVY_YM < #LEVY_YM# THEN RSVMNEY_THSMON + NVL(RSVMNEY_RDCAMT,0) ELSE 0 END) RSVMNEY_NPYM
+          FROM TBRNT_LFSTS_MT_RNTCHRG
+         WHERE LEVY_YM <= #LEVY_YM#
+           AND RCIV_DE IS NULL
+         GROUP BY CNTRCTR_NO) B
+]]>            
+WHERE A.CNTRCTR_NO = B.CNTRCTR_NO(+)         
+  AND NOT EXISTS( SELECT 1 FROM TBRNT_LFSTS_RESCI_TRMNAT Z WHERE A.CNTRCTR_NO = Z.CNTRCTR_NO AND A.CNTRCT_CO = Z.CNTRCTR_CO)) C  
+WHERE TLMR.CNTRCTR_NO = TLC.CNTRCTR_NO
+  AND TLC.LFSTS_CSTMR_NO = TLRC.LFSTS_CSTMR_NO
+  AND TLMR.CNTRCTR_NO = C.CNTRCTR_NO(+)
+  AND TLMR.LEVY_YM = #LEVY_YM#
+ORDER BY TLMR.CNTRCTR_NO
+	</select>
+	<!-- 쿼리명 : 월임대료 생성 프로시저
+	설명 : 월임대료 생성 프로시저
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.09.21
+	-->	
+<parameterMap id="sp_rn_mcost_rent_i" class="java.util.HashMap">
+	<parameter property="IN_AREA_SE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_DEC_DATE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_PAY_DATE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+</parameterMap>	
+	
+<procedure id="RNT030401DAO.SP_RN_MCOST_RENT_I" parameterMap="sp_rn_mcost_rent_i">
+<!--  { CALL SP_RN_MCOST_RENT_I(#AREA_SE# , #DEDT_DE# , #MDAT_DE# ,#S_USER_ID#)}-->
+{ CALL SP_RN_MCOST_RENT_I( ? , ? , ? , ?)}
+</procedure>
+	<!-- 쿼리명 : 체납이자 생성 프로시저
+	설명 : 월임대료 생성 프로시저
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.09.21
+	-->	
+<parameterMap id="sp_rn_mcost_delay_u" class="java.util.HashMap">
+	<parameter property="IN_AREA_SE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_CNTRCTR_NO" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_CREATEDATE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_PAYENDDATE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+</parameterMap>	
+	
+<procedure id="RNT030401DAO.SP_RN_MCOST_DELAY_U" parameterMap="sp_rn_mcost_delay_u">
+<!--  { CALL SP_RN_MCOST_RENT_I(#AREA_SE# , #DEDT_DE# , #MDAT_DE# ,#S_USER_ID#)}-->
+{ CALL SP_RN_MCOST_DELAY_U( ? , ? , ? , ? , ?)}
+</procedure>
+
+
+</sqlMap>

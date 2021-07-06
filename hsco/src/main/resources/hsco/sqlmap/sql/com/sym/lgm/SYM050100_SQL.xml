@@ -1,0 +1,944 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM050100_SQL">
+	
+
+	<!-- 시스템로그 목록조회 -->
+	<select id="SYM050100DAO.getListSysLog" parameterClass="hashmap" resultClass="outmap">
+		SELECT T.*
+		      ,#PAGE_NO#         AS PAGE_NO
+		      ,#SHOW_CNT#        AS SHOW_CNT
+		FROM   (
+		        SELECT TT.*
+		              ,ROWNUM   AS ORD_RN  
+		        FROM   (
+		                SELECT TT.*
+		                      ,COUNT(*) OVER()        AS TOT_CNT
+		                FROM   (
+		                        SELECT ROWNUM AS ROWNO
+		                              ,TTT.*
+		                        FROM   (
+		                                SELECT /*+ PARALLEL(4) A */
+		                                       A.REQUST_ID
+		                                      ,TO_CHAR(A.OCCRRNC_DT, 'YYYY-MM-DD HH24:MI:SS') AS OCCRRNC_DT
+		                                      ,A.RQESTER_IP
+		                                      ,A.RQESTER_ID
+		                                      ,C.USER_NM        AS RQESTER_NM
+		                                      ,A.MENU_ID
+		                                      ,B.MENU_NM
+		                                      ,B.SYS_SE_CODE
+		                                      ,B.JOB_SE
+		                                      ,B.MENU_NM_PTH
+		                                      ,A.SVC_ID
+		                                      ,SUBSTR(A.SVC_ID, INSTR(A.SVC_ID, '.', -1)+1) AS SVC_NM
+		                                      ,A.OPRTIN_NM
+		                                      ,D.SQL_NM
+		                                      ,A.URI
+		                                      ,A.CONECT_MTHD
+		                                      ,A.PROCESS_TIME
+		                                      ,NVL(A.RSPNS_CODE, 0) AS RSPNS_CODE
+		                                      ,A.ERROR_MSSAGE
+		                                      ,A.INSTN_ID
+		                                      ,A.REGISTER_ID
+		                                      ,TO_CHAR(A.REGIST_DT, 'YYYY-MM-DD HH24:MI:SS') AS REGIST_DT
+		                                      ,A.UPDUSR_ID
+		                                      ,TO_CHAR(A.UPDT_DT, 'YYYY-MM-DD HH24:MI:SS') AS UPDT_DT
+		                                FROM   TBCOM_SYS_LOG A
+		                                       LEFT OUTER JOIN (
+		                                                        SELECT MENU_ID
+		                                                              ,MENU_NM
+		                                                              ,SYS_SE_CODE
+		                                                              ,JOB_SE
+		                                                              ,MENU_LVL
+		                                                              ,SUBSTR(SYS_CONNECT_BY_PATH(MENU_NM, ' > '), 4)   AS MENU_NM_PTH
+		                                                        FROM   TBCOM_MENU
+		                                                        WHERE  1=1
+		                                                        CONNECT BY PRIOR MENU_ID = UPPER_MENU
+		                                                        START WITH MENU_LVL = '0'
+		                                                        ORDER SIBLINGS BY MENU_ORDR
+		                                                       ) B
+		                                            ON A.MENU_ID = B.MENU_ID
+		                                       LEFT OUTER JOIN TBCOM_USER C
+		                                            ON A.RQESTER_ID = C.USER_ID
+		                                       LEFT OUTER JOIN (
+		                                                        SELECT C1.PAGE_ID
+		                                                              ,C2.MENU_ID
+		                                                              ,C1.SQL_ID
+		                                                              ,SUBSTR(C1.SQL_ID,INSTR(C1.SQL_ID,'.' )+1) AS OPRTIN_NM
+		                                                              ,C1.SQL_NM
+		                                                          FROM TBCOM_PAGE_INDVDLINFO_MAPPING C1
+		                                                               LEFT OUTER JOIN TBCOM_MENU C2
+		                                                                 ON C1.PAGE_ID = C2.PAGE_ID
+		                                                        )D
+		                                         ON A.OPRTIN_NM = D.OPRTIN_NM
+		                                        AND A.MENU_ID = D.MENU_ID
+		                                WHERE  1=1
+
+		<isNotEmpty property="FROM_DT">
+			<![CDATA[
+		                                AND    A.OCCRRNC_DT >= TO_DATE(#FROM_DT#, 'YYYYMMDD')
+			]]>
+		</isNotEmpty>
+		<isNotEmpty property="TO_DT">
+			<![CDATA[
+		                                AND    A.OCCRRNC_DT <= TO_DATE(#TO_DT#, 'YYYYMMDD') + 1
+			]]>
+		</isNotEmpty>
+		<isEqual property="ERROR_MSSAGE_SE" compareValue="1">
+		                                AND    ERROR_MSSAGE LIKE 'success%'
+		</isEqual>
+		<isNotEmpty property="SYS_SE">
+		                                AND    B.SYS_SE_CODE = #SYS_SE#
+		</isNotEmpty>
+		<isNotEmpty property="JOB_SE">
+		                                AND    B.JOB_SE = #JOB_SE#
+		</isNotEmpty>
+		<isNotEmpty property="MENU_NM">
+		                                AND    B.MENU_NM_PTH LIKE '%'||#MENU_NM#||'%'
+		</isNotEmpty>
+		<isNotEmpty property="USER_NM">
+		                                AND    C.USER_NM LIKE '%'||#USER_NM#||'%'
+		</isNotEmpty>
+		<isNotEmpty property="RQESTER_IP">
+		                                AND    A.RQESTER_IP LIKE '%'||#RQESTER_IP#||'%'
+		</isNotEmpty>
+		<isNotEmpty property="REQUST_ID">
+		                                AND    A.REQUST_ID LIKE '%' || #REQUST_ID# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="ERR_CODE">
+		                                AND    DECODE(NVL(A.RSPNS_CODE,0), 0, 0, 1) = #ERR_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="SVC_NM">
+		                                AND    A.SVC_ID LIKE '%'||#SVC_NM#||'%'
+		</isNotEmpty>
+		<isNotEmpty property="INDVDLINFO_AT">
+			<isEqual property="INDVDLINFO_AT" compareValue="true">
+		        <![CDATA[
+		                                AND D.SQL_ID IS NOT NULL
+		        ]]>
+			</isEqual>
+			<isEqual property="INDVDLINFO_AT" compareValue="false">
+		        <![CDATA[
+		                                AND D.SQL_ID IS NULL
+		        ]]>
+			</isEqual>
+		</isNotEmpty>
+		                                ORDER BY A.REQUST_ID DESC
+		                               ) TTT 
+		<![CDATA[
+		                       ) TT
+		               ) TT
+		        WHERE  ROWNUM <= #SHOW_CNT# * #PAGE_NO#
+		       ) T
+		WHERE  ORD_RN >= #SHOW_CNT# * (#PAGE_NO# - 1) + 1
+	]]>
+	</select>
+
+
+	<!-- 데이타베이스 로그 목록조회 -->
+	<select id="SYM050100DAO.getListDBLog" parameterClass="hashmap" resultClass="outmap">
+	
+		<![CDATA[
+		SELECT 
+		     T.*
+		   , #PAGE_NO# AS PAGE_NO
+		   , #SHOW_CNT# AS SHOW_CNT
+		FROM 
+		  (
+		      SELECT 
+		           TT.*
+		         , ROWNUM AS ORD_RN  
+		      FROM 
+		          (
+		          SELECT 
+		              TT.*
+		            , COUNT(*) OVER() AS TOT_CNT
+		          FROM (
+	    ]]>	
+	    
+		SELECT /*+ PARALLEL(4) A */
+		    DENSE_RANK() OVER(PARTITION BY A.INSTN_ID ORDER BY A.LOG_ID) AS ROWNO,    
+		    SUBSTR(B.SVC_ID, INSTR(B.SVC_ID, '.', -1)+1) AS SVC_ID, 
+		    B.OPRTIN_NM, 
+		    A.LOG_ID, A.CONECTR_ID,
+		    A.CONECT_IP, 
+		    TO_CHAR(A.CONECT_DT, 'YYYY-MM-DD HH24:MI:SS') AS CONECT_DT,
+		    A.PROCESS_TIME,
+		    A.SQL_ID, C.SQL_NM,
+		    A.REQUST_SQL, A.PROCESS_SE_NM,
+		    A.PROCESS_CO, A.INSTN_ID,
+		    A.RSPNS_CODE, A.ERROR_MSSAGE,
+		    A.REGISTER_ID, 
+		    TO_CHAR(A.REGIST_DT, 'YYYY-MM-DD HH24:MI:SS') AS REGIST_DT,
+		    A.UPDUSR_ID, 
+		    TO_CHAR(A.UPDT_DT, 'YYYY-MM-DD HH24:MI:SS') AS UPDT_DT
+		FROM TBCOM_DATABASE_CONECT_LOG A
+		     LEFT OUTER JOIN TBCOM_SYS_LOG B
+		       ON A.INSTN_ID = B.INSTN_ID
+		     LEFT OUTER JOIN (
+		                     SELECT C1.PAGE_ID
+		                           ,C2.MENU_ID
+		                           ,C1.SQL_ID
+		                           ,C1.SQL_NM
+		                       FROM TBCOM_PAGE_INDVDLINFO_MAPPING C1
+		                            LEFT OUTER JOIN TBCOM_MENU C2
+		                              ON C1.PAGE_ID = C2.PAGE_ID
+		                     )C
+		      ON A.SQL_ID = C.SQL_ID
+		     AND B.MENU_ID = C.MENU_ID
+		WHERE 1=1
+		
+		<isNotEmpty property="CONECT_IP">
+        <!--  AND A.CONECT_IP LIKE '%' || #CONECT_IP# || '%'-->
+        AND A.CONECT_IP = #CONECT_IP#
+        </isNotEmpty>
+        
+        <isNotEmpty property="CONECTR_ID">
+        AND A.CONECTR_ID LIKE '%' || #CONECTR_ID# || '%'
+        </isNotEmpty>
+        
+        <isNotEmpty property="SVC_NM">
+        AND (B.SVC_ID ) LIKE '%' || #SVC_NM# || '%'
+        </isNotEmpty>
+        
+        <isNotEmpty property="ERR_CODE">
+        AND DECODE(NVL(A.RSPNS_CODE,0), 0, 0, 1) = #ERR_CODE#
+        </isNotEmpty>
+        
+        <isNotEmpty property="FROM_DT">
+        <![CDATA[
+        AND A.CONECT_DT >= TO_DATE(#FROM_DT#, 'YYYYMMDD')
+        ]]>
+        </isNotEmpty>
+        
+        <isNotEmpty property="TO_DT">
+        <![CDATA[
+        AND A.CONECT_DT <= TO_DATE(#TO_DT#, 'YYYYMMDD') + 1
+        ]]> 
+        </isNotEmpty>
+         
+        <isNotEmpty property="UPDUSR_ID">
+        <![CDATA[
+        AND A.UPDUSR_ID like '%' || #UPDUSR_ID# || '%'
+        ]]>
+        </isNotEmpty>
+        <isNotEmpty property="INDVDLINFO_AT">
+        	<isEqual property="INDVDLINFO_AT" compareValue="true">
+	        <![CDATA[
+	        AND C.SQL_ID IS NOT NULL
+	        ]]>
+	        </isEqual>
+	        <isEqual property="INDVDLINFO_AT" compareValue="false">
+	        <![CDATA[
+	        AND C.SQL_ID IS NULL
+	        ]]>
+	        </isEqual>
+        </isNotEmpty>
+                       
+        ORDER BY A.LOG_ID DESC
+        
+        <![CDATA[
+		        			   ) TT
+		        	   ) TT													
+		           WHERE ROWNUM <= #SHOW_CNT# * #PAGE_NO#
+		       ) T
+		 WHERE ORD_RN >= #SHOW_CNT# * (#PAGE_NO# - 1) + 1
+		]]>
+       
+    </select>
+    
+    
+    <!--  개인정보 조회 로그 -->
+    <select id="SYM050100DAO.getListIndvdlLog" parameterClass="hashmap" resultClass="outmap">
+    
+    <![CDATA[
+		SELECT T.*
+		      ,#PAGE_NO#         AS PAGE_NO
+		      ,#SHOW_CNT#        AS SHOW_CNT
+		FROM   (
+		        SELECT TT.*
+		              ,ROWNUM   AS ORD_RN  
+		        FROM   (
+		                SELECT TT.*
+		                      ,COUNT(*) OVER()        AS TOT_CNT
+		                FROM   (
+		                        SELECT ROWNUM AS ROWNO
+		                              ,TTT.*
+		                        FROM   (
+		                                SELECT /*+ PARALLEL(4) A */
+		                                       TO_CHAR(A.OPERT_DT, 'YYYY-MM-DD HH24:MI:SS') AS OCCRRNC_DT
+		                                      ,A.OPERTOR_IP
+		                                      ,A.OPERTOR_ID
+		                                      ,C.USER_NM        AS OPERTOR_NM
+		                                      ,A.MENU_ID
+		                                      ,B.MENU_NM
+		                                      ,B.SYS_SE_CODE
+		                                      ,B.JOB_SE
+		                                      ,B.MENU_NM_PTH
+		                                      ,A.OPERT_DTLS
+		                                FROM   TBCOM_PAGE_USE_LOG A
+		                                       LEFT OUTER JOIN (
+		                                                        SELECT MENU_ID
+		                                                              ,MENU_NM
+		                                                              ,SYS_SE_CODE
+		                                                              ,JOB_SE
+		                                                              ,MENU_LVL
+		                                                              ,SUBSTR(SYS_CONNECT_BY_PATH(MENU_NM, ' > '), 4)   AS MENU_NM_PTH
+		                                                        FROM   TBCOM_MENU
+		                                                        WHERE  1=1
+		                                                        CONNECT BY PRIOR MENU_ID = UPPER_MENU
+		                                                        START WITH MENU_LVL = '0'
+		                                                        ORDER SIBLINGS BY MENU_ORDR
+		                                                       ) B
+		                                            ON A.MENU_ID = B.MENU_ID
+		                                       LEFT OUTER JOIN TBCOM_USER C
+		                                            ON A.OPERTOR_ID = C.USER_ID
+		                                WHERE  1=1
+        ]]>
+							        
+							        <isNotEmpty property="FROM_DT">
+							        <![CDATA[
+							        	AND A.OPERT_DT >= TO_DATE(#FROM_DT#, 'YYYYMMDD')
+							        ]]>
+							        </isNotEmpty>
+							        
+							        <isNotEmpty property="TO_DT">
+							        <![CDATA[
+							        	AND A.OPERT_DT <= TO_DATE(#TO_DT#, 'YYYYMMDD') + 1
+							        ]]>
+							        </isNotEmpty>
+							        <isNotEmpty property="JOB_SE">
+		                                AND    B.JOB_SE = #JOB_SE#
+									</isNotEmpty>
+									<isNotEmpty property="MENU_NM">
+									    AND    B.MENU_NM_PTH LIKE '%'||#MENU_NM#||'%'
+									</isNotEmpty>
+									<isNotEmpty property="USER_NM">
+									    AND    C.USER_NM LIKE '%'||#USER_NM#||'%'
+									</isNotEmpty>
+									<isNotEmpty property="RQESTER_IP">
+									    AND    A.OPERTOR_IP LIKE '%'||#RQESTER_IP#||'%'
+									</isNotEmpty>        
+							            ORDER BY LOG_SN DESC 
+							           ) TTT
+        <![CDATA[
+		        			   ) TT
+		        	   ) TT
+		           WHERE ROWNUM <= #SHOW_CNT# * #PAGE_NO#
+		       ) T
+		 WHERE ORD_RN >= #SHOW_CNT# * (#PAGE_NO# - 1) + 1
+		]]>
+       
+    </select>
+    
+    <!--  (사용자별) 메뉴사용현황 로그 조회 -->
+    <select id="SYM050100DAO.selectMenuUsedSttus" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+           <isEmpty property="STTUS_LEVEL">
+               A.MENU_ID0
+             , A.MENU_NM0
+             , A.MENU_ID1
+             , A.MENU_NM1
+             , A.MENU_ID2
+             , A.MENU_NM2
+             , A.MENU_ID3
+             , A.MENU_NM3
+             , A.MENU_ID4
+             , A.MENU_NM4
+             , A.MENU_LVL
+            , A.OCCRRNC_DT
+            , A.RQESTER_ID
+            , B.USER_NM
+             , A.CNT
+             , A.SEQ
+           </isEmpty>
+          <isLessThan property="STTUS_LEVEL" compareValue="4">
+            <isEqual property="STTUS_LEVEL" compareValue="0">
+                MENU_ID0
+              , MIN(A.MENU_NM0) AS MENU_NM0
+              , NULL AS MENU_ID1
+              , NULL AS MENU_NM1
+              , NULL AS MENU_ID2
+              , NULL AS MENU_NM2
+              , NULL AS MENU_ID3
+              , NULL AS MENU_NM3
+              , NULL AS MENU_ID4
+              , NULL AS MENU_NM4
+              , MIN(A.LEVEL0) AS MENU_LVL
+             <isNotEmpty property="BY_DT_AT">
+               <isEqual property="BY_DT_AT" compareValue="1">
+                 , A.OCCRRNC_DT
+               </isEqual>
+             </isNotEmpty>
+             <isEmpty property="BY_DT_AT">
+                 , NULL AS OCCRRNC_DT
+             </isEmpty>
+             <isNotEmpty property="BY_USER_AT">
+               <isEqual property="BY_USER_AT" compareValue="1">
+                 , A.RQESTER_ID
+                 , B.USER_NM
+               </isEqual>
+               <isEqual property="BY_USER_AT" compareValue="0">
+                 , NULL AS RQESTER_ID
+                 , NULL AS USER_NM
+               </isEqual>
+             </isNotEmpty>
+             <isEmpty property="BY_USER_AT">
+                 , NULL AS RQESTER_ID
+                 , NULL AS USER_NM
+             </isEmpty>
+              , SUM(A.CNT) AS CNT
+              , MIN(A.SEQ) AS SEQ
+            </isEqual>
+            
+            <isEqual property="STTUS_LEVEL" compareValue="1">
+              MENU_ID0
+            , MIN(A.MENU_NM0) AS MENU_NM0
+            , MENU_ID1
+            , MIN(A.MENU_NM1) AS MENU_NM1
+              , NULL AS MENU_ID2
+              , NULL AS MENU_NM2
+              , NULL AS MENU_ID3
+              , NULL AS MENU_NM3
+              , NULL AS MENU_ID4
+              , NULL AS MENU_NM4
+              , MIN(A.LEVEL1) AS MENU_LVL
+             <isNotEmpty property="BY_DT_AT">
+               <isEqual property="BY_DT_AT" compareValue="1">
+                 , A.OCCRRNC_DT
+               </isEqual>
+             </isNotEmpty>
+             <isEmpty property="BY_DT_AT">
+                 , NULL AS OCCRRNC_DT
+             </isEmpty>
+             <isNotEmpty property="BY_USER_AT">
+               <isEqual property="BY_USER_AT" compareValue="1">
+                 , A.RQESTER_ID
+                 , B.USER_NM
+               </isEqual>
+               <isEqual property="BY_USER_AT" compareValue="0">
+                 , NULL AS RQESTER_ID
+                 , NULL AS USER_NM
+               </isEqual>
+             </isNotEmpty>
+             <isEmpty property="BY_USER_AT">
+                 , NULL AS RQESTER_ID
+                 , NULL AS USER_NM
+             </isEmpty>
+              , SUM(A.CNT) AS CNT
+              , MIN(A.SEQ) AS SEQ
+            </isEqual>
+            
+            <isEqual property="STTUS_LEVEL" compareValue="2">
+                MENU_ID0
+              , MIN(A.MENU_NM0) AS MENU_NM0
+              , MENU_ID1
+              , MIN(A.MENU_NM1) AS MENU_NM1
+              , MENU_ID2
+              , MIN(A.MENU_NM2) AS MENU_NM2
+              , NULL AS MENU_ID3
+              , NULL AS MENU_NM3
+              , NULL AS MENU_ID4
+              , NULL AS MENU_NM4
+              , MIN(A.LEVEL2) AS MENU_LVL
+             <isNotEmpty property="BY_DT_AT">
+               <isEqual property="BY_DT_AT" compareValue="1">
+                 , A.OCCRRNC_DT
+               </isEqual>
+             </isNotEmpty>
+             <isEmpty property="BY_DT_AT">
+                 , NULL AS OCCRRNC_DT
+             </isEmpty>
+             <isNotEmpty property="BY_USER_AT">
+               <isEqual property="BY_USER_AT" compareValue="1">
+                 , A.RQESTER_ID
+                 , B.USER_NM
+               </isEqual>
+               <isEqual property="BY_USER_AT" compareValue="0">
+                 , NULL AS RQESTER_ID
+                 , NULL AS USER_NM
+               </isEqual>
+             </isNotEmpty>
+             <isEmpty property="BY_USER_AT">
+                 , NULL AS RQESTER_ID
+                 , NULL AS USER_NM
+             </isEmpty>
+              , SUM(A.CNT) AS CNT
+              , MIN(A.SEQ) AS SEQ
+            </isEqual>
+            
+            <isEqual property="STTUS_LEVEL" compareValue="3">
+                A.MENU_ID0
+              , MIN(A.MENU_NM0) AS MENU_NM0
+              , A.MENU_ID1
+              , MIN(A.MENU_NM1) AS MENU_NM1
+              , A.MENU_ID2
+              , MIN(A.MENU_NM2) AS MENU_NM2
+              , A.MENU_ID3
+              , MIN(A.MENU_NM3) AS MENU_NM3
+              , NULL AS MENU_ID4
+              , NULL AS MENU_NM4
+              , MIN(A.LEVEL3) AS MENU_LVL
+              <isNotEmpty property="BY_DT_AT">
+               <isEqual property="BY_DT_AT" compareValue="1">
+                 , A.OCCRRNC_DT
+               </isEqual>
+             </isNotEmpty>
+             <isEmpty property="BY_DT_AT">
+                 , NULL AS OCCRRNC_DT
+             </isEmpty>
+             <isNotEmpty property="BY_USER_AT">
+               <isEqual property="BY_USER_AT" compareValue="1">
+                 , A.RQESTER_ID
+                 , B.USER_NM
+               </isEqual>
+               <isEqual property="BY_USER_AT" compareValue="0">
+                 , NULL AS RQESTER_ID
+                 , NULL AS USER_NM
+               </isEqual>
+             </isNotEmpty>
+             <isEmpty property="BY_USER_AT">
+                 , NULL AS RQESTER_ID
+                 , NULL AS USER_NM
+             </isEmpty>
+              , SUM(A.CNT) AS CNT
+              , MIN(A.SEQ) AS SEQ
+            </isEqual>
+          </isLessThan>
+      
+          <isGreaterEqual property="STTUS_LEVEL" compareValue="4">
+              A.MENU_ID0
+            , A.MENU_NM0
+            , A.MENU_ID1
+            , A.MENU_NM1
+            , A.MENU_ID2
+            , A.MENU_NM2
+            , A.MENU_ID3
+            , A.MENU_NM3
+            , A.MENU_ID4
+            , A.MENU_NM4
+            , A.MENU_LVL
+            , A.OCCRRNC_DT
+            , A.RQESTER_ID
+            , B.USER_NM
+            , A.CNT
+            , A.SEQ
+          </isGreaterEqual>
+      FROM (
+            SELECT 
+                A.MENU_ID0
+              , A.LEVEL0
+              , A.MENU_NM0
+              , A.LEVEL1
+              , A.MENU_ID1
+              , A.MENU_NM1
+              , A.LEVEL2
+              , A.MENU_ID2
+              , A.MENU_NM2
+              , A.LEVEL3
+              , A.MENU_ID3
+              , A.MENU_NM3
+              , A.LEVEL4
+              , A.MENU_ID4
+              , A.MENU_NM4
+              , A.MENU_LVL
+              , A.MENU_ID
+              , A.MENU_NM
+              , A.SEQ
+              , B.OCCRRNC_DT
+              , B.RQESTER_ID
+              , B.CNT
+            FROM (
+                SELECT 
+                        DECODE(A.MENU_LVL, 0, 0, 1, A.F_UPPER_LVL, 2, A.G1_UPPER_LVL, 3, B.MENU_LVL, 4, (SELECT MENU_LVL FROM TBCOM_MENU WHERE MENU_ID = B.UPPER_MENU),  '') AS LEVEL0
+                      , DECODE(A.MENU_LVL, 0, A.MENU_ID, 1, A.UPPER_MENU, 2, A.G1_UPPER_ID, 3, A.G2_UPPER_ID, 4, B.UPPER_MENU, '') AS MENU_ID0
+                      , DECODE(A.MENU_LVL, 0, A.MENU_NM, 1, A.F_MENU_NM, 2, A.G1_MENU_NM, 3, A.G2_MENU_NM, 4, (SELECT MENU_NM FROM TBCOM_MENU WHERE MENU_ID = B.UPPER_MENU), '') AS MENU_NM0
+                      
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, A.MENU_LVL, 2, A.F_UPPER_LVL, 3, A.G1_UPPER_LVL, 4, B.MENU_LVL,  '') AS LEVEL1
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, A.MENU_ID, 2, A.UPPER_MENU, 3, A.G1_UPPER_ID, 4, A.G2_UPPER_ID, '') AS MENU_ID1
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, A.MENU_NM, 2, A.F_MENU_NM, 3, A.G1_MENU_NM, 4, A.G2_MENU_NM, '') AS MENU_NM1
+                      
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, NULL, 2, A.MENU_LVL, 3, A.F_UPPER_LVL, 4, A.G1_UPPER_LVL, '') AS LEVEL2
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, NULL, 2, A.MENU_ID, 3, A.UPPER_MENU, 4, A.G1_UPPER_ID, '') AS MENU_ID2
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, NULL, 2, A.MENU_NM, 3, A.F_MENU_NM, 4, A.G1_MENU_NM, '') AS MENU_NM2
+                      
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, NULL, 2, NULL, 3, A.MENU_LVL, 4, A.F_UPPER_LVL, '') AS LEVEL3
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, NULL, 2, NULL, 3, A.MENU_ID, 4, A.UPPER_MENU, '') AS MENU_ID3
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, NULL, 2, NULL, 3, A.MENU_NM, 4, A.F_MENU_NM, '') AS MENU_NM3
+                      
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, NULL, 2, NULL, 3, NULL, 4, A.MENU_LVL, '') AS LEVEL4
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, NULL, 2, NULL, 3, NULL, 4, A.MENU_ID, '') AS MENU_ID4
+                      , DECODE(A.MENU_LVL, 0, NULL, 1, NULL, 2, NULL, 3, NULL, 4, A.MENU_NM, '') AS MENU_NM4
+                      , A.MENU_LVL
+                      , A.MENU_ID
+                      , A.MENU_NM
+                      , A.UPPER_MENU
+                      , A.F_MENU_NM
+                      , A.G1_MENU_NM
+                      , A.G2_MENU_NM
+                      , B.UPPER_MENU AS G3_UPPER_ID
+                      , (SELECT MENU_LVL FROM TBCOM_MENU WHERE MENU_ID = B.UPPER_MENU) AS G3_UPPER_ID
+                      , (SELECT MENU_NM FROM TBCOM_MENU WHERE MENU_ID = B.UPPER_MENU) AS G3_MENU_NM
+                      , A.SEQ
+                FROM (
+                     SELECT
+                         A.*
+                       , B.UPPER_MENU AS G2_UPPER_ID
+                       , (SELECT MENU_LVL FROM TBCOM_MENU WHERE MENU_ID = B.UPPER_MENU) AS G2_UPPER_LVL
+                       , (SELECT MENU_NM FROM TBCOM_MENU WHERE MENU_ID = B.UPPER_MENU) AS G2_MENU_NM
+                     FROM 
+                        (
+                              SELECT 
+                                    A.SYS_SE_CODE
+                                  , A.MENU_NM
+                                  , A.MENU_LVL
+                                  , A.MENU_GRP
+                                  , A.UPPER_MENU
+                                  , A.MENU_ORDR
+                                  , A.MENU_OPTP
+                                  , A.MENU_PARAMTR
+                                  , A.MENU_STTUS
+                                  , A.MENU_DC
+                                  , A.USE_AT
+                                  , A.MNL_SN
+                                  , ROWNUM AS SEQ
+                                  , B.UPPER_MENU AS G1_UPPER_ID
+                                  , (SELECT MENU_LVL FROM TBCOM_MENU WHERE MENU_ID = B.UPPER_MENU) AS G1_UPPER_LVL
+                                  , (SELECT MENU_NM FROM TBCOM_MENU WHERE MENU_ID = B.UPPER_MENU) AS G1_MENU_NM
+                                  , B.MENU_LVL AS F_UPPER_LVL
+                                  , B.MENU_NM AS F_MENU_NM
+                                  , A.MENU_ID
+                              FROM TBCOM_MENU A, TBCOM_MENU B
+                              WHERE A.UPPER_MENU = B.MENU_ID(+)
+                                AND A.USE_AT='1' 
+                                AND A.MENU_ID > 0
+                                <isNotEmpty property="SYS_SE_CODE">
+                                  AND A.SYS_SE_CODE = #SYS_SE_CODE#
+                                </isNotEmpty>
+                              CONNECT BY PRIOR A.MENU_ID = A.UPPER_MENU
+                              START WITH A.MENU_ID = DECODE(#UPPER_MENU#, NULL, 0, 'NULL', 0, 'null', 0, #UPPER_MENU#)
+                              ORDER SIBLINGS BY A.MENU_ORDR,TO_CHAR(A.MENU_ID) ASC 
+                          ) A
+                          , TBCOM_MENU B
+                          WHERE A.G1_UPPER_ID = B.MENU_ID(+)
+                ) A, TBCOM_MENU B
+                WHERE A.G2_UPPER_ID = B.MENU_ID(+)
+            ) A
+            , (
+                SELECT 
+                     <isNotEmpty property="BY_DT_AT">
+                       <isNotEmpty property="BY_USER_AT">
+                           <isEqual property="BY_DT_AT" compareValue="1">
+                             <isEqual property="BY_USER_AT" compareValue="1">
+                               RQESTER_ID, MENU_ID, TO_CHAR(OCCRRNC_DT, 'YYYY-MM-DD') AS OCCRRNC_DT
+                             </isEqual>
+                             <isEqual property="BY_USER_AT" compareValue="0">
+                                NULL AS RQESTER_ID, MENU_ID, TO_CHAR(OCCRRNC_DT, 'YYYY-MM-DD') AS OCCRRNC_DT
+                             </isEqual>
+                           </isEqual>
+                           <isEqual property="BY_DT_AT" compareValue="0">
+                             <isEqual property="BY_USER_AT" compareValue="1">
+                              RQESTER_ID, MENU_ID, NULL AS OCCRRNC_DT
+                             </isEqual>
+                             <isEqual property="BY_USER_AT" compareValue="0">
+                               NULL AS RQESTER_ID, MENU_ID, NULL AS OCCRRNC_DT
+                             </isEqual>
+                           </isEqual>
+                       </isNotEmpty>
+                       <isEmpty property="BY_USER_AT">
+                         <isEqual property="BY_DT_AT" compareValue="1">
+                              NULL AS RQESTER_ID, MENU_ID, TO_CHAR(OCCRRNC_DT, 'YYYY-MM-DD') AS OCCRRNC_DT
+                         </isEqual>
+                         <isEqual property="BY_DT_AT" compareValue="0">
+                              NULL AS RQESTER_ID, MENU_ID, NULL AS OCCRRNC_DT
+                         </isEqual>
+                       </isEmpty>
+                     </isNotEmpty>
+                     <isEmpty property="BY_DT_AT">
+                       <isNotEmpty property="BY_USER_AT">
+                         <isEqual property="BY_USER_AT" compareValue="1">
+                           RQESTER_ID, MENU_ID, NULL AS OCCRRNC_DT
+                         </isEqual>
+                         <isEqual property="BY_USER_AT" compareValue="0">
+                          NULL AS RQESTER_ID, MENU_ID, NULL AS OCCRRNC_DT
+                         </isEqual>
+                       </isNotEmpty>
+                       <isEmpty property="BY_USER_AT">
+                           NULL AS RQESTER_ID, MENU_ID, NULL AS OCCRRNC_DT
+                       </isEmpty>
+                     </isEmpty>
+                     , COUNT(*) AS CNT
+                FROM TBCOM_MENU_USE_LOG
+                WHERE OCCRRNC_DT BETWEEN TO_DATE(NVL(#BGNDT#, TO_CHAR(SYSDATE, 'YYYYMMDD')), 'YYYYMMDD') AND TO_DATE(NVL(#ENDDT#, TO_CHAR(SYSDATE, 'YYYYMMDD')), 'YYYYMMDD') + 1
+                  <isNotEmpty property="RQESTER_ID">
+                      AND RQESTER_ID= #RQESTER_ID#
+                  </isNotEmpty>
+                <isNotEmpty property="BY_DT_AT">
+                  <isNotEmpty property="BY_USER_AT">
+                      <isEqual property="BY_DT_AT" compareValue="1">
+                        <isEqual property="BY_USER_AT" compareValue="1">
+                          GROUP BY RQESTER_ID, MENU_ID, TO_CHAR(OCCRRNC_DT, 'YYYY-MM-DD')
+                        </isEqual>
+                        <isEqual property="BY_USER_AT" compareValue="0">
+                           GROUP BY MENU_ID, TO_CHAR(OCCRRNC_DT, 'YYYY-MM-DD')
+                        </isEqual>
+                      </isEqual>
+                      <isEqual property="BY_DT_AT" compareValue="0">
+                        <isEqual property="BY_USER_AT" compareValue="1">
+                          GROUP BY RQESTER_ID, MENU_ID
+                        </isEqual>
+                        <isEqual property="BY_USER_AT" compareValue="0">
+                          GROUP BY MENU_ID
+                        </isEqual>
+                      </isEqual>
+                  </isNotEmpty>
+                  <isEmpty property="BY_USER_AT">
+                    <isEqual property="BY_DT_AT" compareValue="1">
+                         GROUP BY MENU_ID, TO_CHAR(OCCRRNC_DT, 'YYYY-MM-DD')
+                    </isEqual>
+                    <isEqual property="BY_DT_AT" compareValue="0">
+                        GROUP BY MENU_ID
+                    </isEqual>
+                  </isEmpty>
+                </isNotEmpty>
+                <isEmpty property="BY_DT_AT">
+                  <isNotEmpty property="BY_USER_AT">
+                    <isEqual property="BY_USER_AT" compareValue="1">
+                      GROUP BY RQESTER_ID, MENU_ID
+                    </isEqual>
+                    <isEqual property="BY_USER_AT" compareValue="0">
+                      GROUP BY MENU_ID
+                    </isEqual>
+                  </isNotEmpty>
+                  <isEmpty property="BY_USER_AT">
+                      GROUP BY MENU_ID
+                  </isEmpty>
+                </isEmpty>
+            ) B
+            WHERE A.MENU_ID = B.MENU_ID(+)
+               <isNotEmpty property="VIEW_EXISTS_ONLY">
+                  <isEqual property="VIEW_EXISTS_ONLY" compareValue="1">
+                     AND B.CNT IS NOT NULL
+                  </isEqual>                     
+               </isNotEmpty>
+        ) A, TBCOM_USER B
+        WHERE A.RQESTER_ID = B.USER_ID(+)
+        <isLessThan property="STTUS_LEVEL" compareValue="4">
+           <isEqual property="STTUS_LEVEL" compareValue="0">
+               <isNotEmpty property="BY_DT_AT">
+                   <isEqual property="BY_DT_AT" compareValue="1">
+                     <isNotEmpty property="BY_USER_AT">
+                       <isEqual property="BY_USER_AT" compareValue="1">
+                           GROUP BY MENU_ID0, RQESTER_ID, A.OCCRRNC_DT, B.USER_NM
+                       </isEqual>
+                       <isEqual property="BY_USER_AT" compareValue="0">
+                           GROUP BY MENU_ID0, A.OCCRRNC_DT, B.USER_NM
+                       </isEqual>
+                     </isNotEmpty>
+                     <isEmpty property="BY_USER_AT">
+                         GROUP BY MENU_ID0, A.OCCRRNC_DT, B.USER_NM
+                     </isEmpty>
+                   </isEqual>
+                   <isEqual property="BY_DT_AT" compareValue="0">
+                     <isNotEmpty property="BY_USER_AT">
+                       <isEqual property="BY_USER_AT" compareValue="1">
+                           GROUP BY MENU_ID0, RQESTER_ID, B.USER_NM
+                       </isEqual>
+                       <isEqual property="BY_USER_AT" compareValue="0">
+                           GROUP BY MENU_ID0, B.USER_NM
+                       </isEqual>
+                     </isNotEmpty>
+                     <isEmpty property="BY_USER_AT">
+                         GROUP BY MENU_ID0, B.USER_NM
+                     </isEmpty>
+                   </isEqual>
+               </isNotEmpty>
+               <isEmpty property="BY_DT_AT">
+                  <isNotEmpty property="BY_USER_AT">
+                    <isEqual property="BY_USER_AT" compareValue="1">
+                        GROUP BY MENU_ID0, RQESTER_ID, B.USER_NM
+                    </isEqual>
+                    <isEqual property="BY_USER_AT" compareValue="0">
+                        GROUP BY MENU_ID0, B.USER_NM
+                    </isEqual>
+                   </isNotEmpty>
+                   <isEmpty property="BY_USER_AT">
+                       GROUP BY MENU_ID0, B.USER_NM
+                   </isEmpty>
+               </isEmpty>
+           </isEqual>
+        
+           
+           <isEqual property="STTUS_LEVEL" compareValue="1">
+               <isNotEmpty property="BY_DT_AT">
+                   <isEqual property="BY_DT_AT" compareValue="1">
+                     <isNotEmpty property="BY_USER_AT">
+                       <isEqual property="BY_USER_AT" compareValue="1">
+                           GROUP BY MENU_ID0, MENU_ID1, RQESTER_ID, A.OCCRRNC_DT, B.USER_NM
+                       </isEqual>
+                       <isEqual property="BY_USER_AT" compareValue="0">
+                           GROUP BY MENU_ID0, MENU_ID1, A.OCCRRNC_DT, B.USER_NM
+                       </isEqual>
+                     </isNotEmpty>
+                     <isEmpty property="BY_USER_AT">
+                         GROUP BY MENU_ID0, MENU_ID1, A.OCCRRNC_DT, B.USER_NM
+                     </isEmpty>
+                   </isEqual>
+                   <isEqual property="BY_DT_AT" compareValue="0">
+                     <isNotEmpty property="BY_USER_AT">
+                       <isEqual property="BY_USER_AT" compareValue="1">
+                           GROUP BY MENU_ID0, MENU_ID1, RQESTER_ID, B.USER_NM
+                       </isEqual>
+                       <isEqual property="BY_USER_AT" compareValue="0">
+                           GROUP BY MENU_ID0, MENU_ID1, B.USER_NM
+                       </isEqual>
+                     </isNotEmpty>
+                     <isEmpty property="BY_USER_AT">
+                         GROUP BY MENU_ID0, MENU_ID1, B.USER_NM
+                     </isEmpty>
+                   </isEqual>
+               </isNotEmpty>
+               <isEmpty property="BY_DT_AT">
+                  <isNotEmpty property="BY_USER_AT">
+                    <isEqual property="BY_USER_AT" compareValue="1">
+                        GROUP BY MENU_ID0, MENU_ID1, RQESTER_ID, B.USER_NM
+                    </isEqual>
+                    <isEqual property="BY_USER_AT" compareValue="0">
+                        GROUP BY MENU_ID0, MENU_ID1, B.USER_NM
+                    </isEqual>
+                   </isNotEmpty>
+                   <isEmpty property="BY_USER_AT">
+                       GROUP BY MENU_ID0, MENU_ID1, B.USER_NM
+                   </isEmpty>
+               </isEmpty>
+           </isEqual>
+           
+           <isEqual property="STTUS_LEVEL" compareValue="2">
+               <isNotEmpty property="BY_DT_AT">
+                   <isEqual property="BY_DT_AT" compareValue="1">
+                     <isNotEmpty property="BY_USER_AT">
+                       <isEqual property="BY_USER_AT" compareValue="1">
+                           GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, RQESTER_ID, A.OCCRRNC_DT, B.USER_NM
+                       </isEqual>
+                       <isEqual property="BY_USER_AT" compareValue="0">
+                           GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, A.OCCRRNC_DT, B.USER_NM
+                       </isEqual>
+                     </isNotEmpty>
+                     <isEmpty property="BY_USER_AT">
+                         GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, A.OCCRRNC_DT, B.USER_NM
+                     </isEmpty>
+                   </isEqual>
+                   <isEqual property="BY_DT_AT" compareValue="0">
+                     <isNotEmpty property="BY_USER_AT">
+                       <isEqual property="BY_USER_AT" compareValue="1">
+                           GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, RQESTER_ID, B.USER_NM
+                       </isEqual>
+                       <isEqual property="BY_USER_AT" compareValue="0">
+                           GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, B.USER_NM
+                       </isEqual>
+                     </isNotEmpty>
+                     <isEmpty property="BY_USER_AT">
+                         GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, B.USER_NM
+                     </isEmpty>
+                   </isEqual>
+               </isNotEmpty>
+               
+               <isEmpty property="BY_DT_AT">
+                  <isNotEmpty property="BY_USER_AT">
+                    <isEqual property="BY_USER_AT" compareValue="1">
+                        GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, RQESTER_ID, B.USER_NM
+                    </isEqual>
+                    <isEqual property="BY_USER_AT" compareValue="0">
+                        GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, B.USER_NM
+                    </isEqual>
+                   </isNotEmpty>
+                   <isEmpty property="BY_USER_AT">
+                       GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, B.USER_NM
+                   </isEmpty>
+               </isEmpty>
+           </isEqual>
+        
+           <isEqual property="STTUS_LEVEL" compareValue="3">
+               <isNotEmpty property="BY_DT_AT">
+                   <isEqual property="BY_DT_AT" compareValue="1">
+                     <isNotEmpty property="BY_USER_AT">
+                       <isEqual property="BY_USER_AT" compareValue="1">
+                           GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, MENU_ID3, RQESTER_ID, A.OCCRRNC_DT, B.USER_NM
+                       </isEqual>
+                       <isEqual property="BY_USER_AT" compareValue="0">
+                           GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, MENU_ID3, A.OCCRRNC_DT, B.USER_NM
+                       </isEqual>
+                     </isNotEmpty>
+                     <isEmpty property="BY_USER_AT">
+                         GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, MENU_ID3, A.OCCRRNC_DT, B.USER_NM
+                     </isEmpty>
+                   </isEqual>
+                   <isEqual property="BY_DT_AT" compareValue="0">
+                     <isNotEmpty property="BY_USER_AT">
+                       <isEqual property="BY_USER_AT" compareValue="1">
+                           GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, MENU_ID3, RQESTER_ID, B.USER_NM
+                       </isEqual>
+                       <isEqual property="BY_USER_AT" compareValue="0">
+                           GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, MENU_ID3, B.USER_NM
+                       </isEqual>
+                     </isNotEmpty>
+                     <isEmpty property="BY_USER_AT">
+                         GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, MENU_ID3, B.USER_NM
+                     </isEmpty>
+                   </isEqual>
+               </isNotEmpty>
+               <isEmpty property="BY_DT_AT">
+                  <isNotEmpty property="BY_USER_AT">
+                    <isEqual property="BY_USER_AT" compareValue="1">
+                        GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, MENU_ID3, RQESTER_ID, B.USER_NM
+                    </isEqual>
+                    <isEqual property="BY_USER_AT" compareValue="0">
+                        GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, MENU_ID3, B.USER_NM
+                    </isEqual>
+                   </isNotEmpty>
+                   <isEmpty property="BY_USER_AT">
+                       GROUP BY MENU_ID0, MENU_ID1, MENU_ID2, MENU_ID3, B.USER_NM
+                   </isEmpty>
+               </isEmpty>
+           </isEqual>
+        </isLessThan>
+        
+        <isNotEmpty property="BY_DT_AT">
+            <isNotEmpty property="BY_USER_AT">
+                <isEqual property="BY_DT_AT" compareValue="1">
+                    <isEqual property="BY_USER_AT" compareValue="1">
+                        ORDER BY SEQ, OCCRRNC_DT, USER_NM
+                    </isEqual>
+                    <isEqual property="BY_USER_AT" compareValue="0">
+                        ORDER BY SEQ, OCCRRNC_DT, USER_NM
+                    </isEqual>
+                </isEqual>
+                <isEqual property="BY_DT_AT" compareValue="0">
+                    <isEqual property="BY_USER_AT" compareValue="1">
+                        ORDER BY SEQ, USER_NM,  OCCRRNC_DT
+                    </isEqual>
+                    <isEqual property="BY_USER_AT" compareValue="0">
+                        ORDER BY SEQ,  OCCRRNC_DT, USER_NM
+                    </isEqual>
+                </isEqual>
+            </isNotEmpty>
+            <isEmpty property="BY_USER_AT">
+                ORDER BY SEQ, OCCRRNC_DT, USER_NM
+            </isEmpty>
+        </isNotEmpty>
+        <isEmpty property="BY_DT_AT">
+            <isNotEmpty property="BY_USER_AT">
+                <isEqual property="BY_USER_AT" compareValue="1">
+                    ORDER BY SEQ, USER_NM, OCCRRNC_DT
+                </isEqual>
+                <isEqual property="BY_USER_AT" compareValue="0">
+                    ORDER BY SEQ, OCCRRNC_DT, USER_NM
+                </isEqual>
+            </isNotEmpty>
+            <isEmpty property="BY_USER_AT">
+                ORDER BY SEQ, OCCRRNC_DT, USER_NM
+            </isEmpty> 
+        </isEmpty>
+    </select>
+
+</sqlMap>

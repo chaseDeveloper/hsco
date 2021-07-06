@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR060300_SQL">	
+	
+	<!-- 계약현황  -->
+	<select id="CTR060300DAO.cntrctSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*CTR060300DAO.cntrctSttusList*/]]>
+		WITH TMP_DSGNR_SPRVISOR AS (
+		    SELECT CNTRCT_NO
+		         , DSGNR_SPRVISOR_SE
+		         , LISTAGG(BCNC_NM, CHR(13)||CHR(10)) WITHIN GROUP(ORDER BY BCNC_NM)    AS BCNC_NM
+		      FROM (
+		            SELECT c.CNTRCT_NO
+		                 , c.DSGNR_SPRVISOR_SE /* 1: 설계, 2: 감리 */
+		                 , CASE WHEN d.BCNC_NM IN ('자체설계','자체감리') THEN d.BCNC_NM
+		                        ELSE d.BCNC_NM || '[대표자 : ' || d.RPRSNTV || ']'
+		                   END                       AS BCNC_NM
+		              FROM TBCTR_DSGNR_SPRVISOR c
+		                   LEFT OUTER JOIN TBCTR_BCNC_MASTR d
+		                        ON c.BCNC_CODE = d.BCNC_CODE
+		             WHERE c.BCNC_CODE IS NOT NULL
+		           )
+		    GROUP BY CNTRCT_NO, DSGNR_SPRVISOR_SE
+		)
+		SELECT t1.BSNS_CODE
+		     , t2.BSNS_NM
+		     , t1.CNTRCT_NO
+		     , t1.CNTRCT_NM
+		     , t1.INFRML_CNTRCT_AT
+		     , DECODE(t1.INFRML_CNTRCT_AT, '1', '간이', '정식')    AS INFRML_CNTRCT_AT2
+		     , t1.CNTRCT_SE
+		     , t3.CODE_NM           AS CNTRCT_SE_NM
+		     , t1.DETAIL_SE
+		     , t4.CODE_NM           AS DETAIL_SE_NM
+		     , t1.CNTRCT_MTH_SE
+		     , t5.CODE_NM           AS CNTRCT_MTH_NM
+		     , t1.CNTRCT_DISPOS_SE
+		     , t8.CODE_NM           AS CNTRCT_DISPOS_SE_NM
+		     , t1.OUTSRC_MTH_SE
+		     , t9.CODE_NM           AS OUTSRC_MTH_SE_NM
+		     , t1.BID_DE
+		     , t1.REAL_COMPET_DE
+		     , t1.STRWRK_DE
+		     , t1.COMPET_DE
+		     , t1.DSGN_AMOUNT
+		     , t1.BSIS_AMOUNT
+		     , t1.PREARNGE_PC
+		     , t1.SCSBID_AMOUNT
+		     , t1.SCSBID_RT
+		     , t1.PRCURE_CNTRCT_NO
+		     , t1.PRCURE_FEE
+		     , t1.SPT_LOCPLC
+		     , t1.MNG_DEPT_CODE
+		     , t1.CNTRCT_DE
+		     , t10.DEPT_NM          AS MNG_DEPT_NM
+		     , t11.MANGR_EMPNM
+		     , t12.BCNC_NM
+		     , SFCTR_CNTRCT_AMOUNT(t1.CNTRCT_NO, NULL)    AS LAST_CNTRCT_AMOUNT
+		     , SFCTR_COMPET_DE(t1.CNTRCT_NO)              AS LAST_COMPET_DE
+		     , t15.BCNC_NM                                AS DSGN_ENTRPS
+		     , t16.BCNC_NM                                AS SPRVISN_ENTRPS
+		     , t17.BIZRNOS
+		     , NVL(t19.CONFM_AT, '9') AS CONFM_AT
+		     , t20.O_AREA_ENTRPS_AT
+		     , t20.O_BCNC_NM
+		     , t20.O_BIZRNO
+		     , t20.O_ADRES
+		  FROM TBCTR_CNTRCT t1
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE t2
+		            ON t1.BSNS_CODE = t2.BSNS_CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		            ON t1.CNTRCT_SE = t3.CODE
+		           AND t3.GRP_CODE  = 'CTR022'
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		            ON t1.DETAIL_SE = t4.CODE
+		           AND t4.GRP_CODE  = 'CTR023'
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		            ON t1.CNTRCT_MTH_SE = t5.CODE
+		           AND t5.GRP_CODE      = 'CTR049'
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t8
+		            ON t1.CNTRCT_DISPOS_SE = t8.CODE
+		           AND t8.GRP_CODE         = 'CTR042'
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t9
+		            ON t1.OUTSRC_MTH_SE = t9.CODE
+		           AND t9.GRP_CODE      = 'CTR040'
+		       LEFT OUTER JOIN TBHRM_DEPT t10
+		            ON t1.MNG_DEPT_CODE = t10.DEPT_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                             , LISTAGG(MANGR_EMPNM, ', ') WITHIN GROUP(ORDER BY MANGR_EMPNM)    AS MANGR_EMPNM
+		                          FROM   (
+		                                SELECT s1.CNTRCT_NO
+		                                     , s1.SN
+		                                     , s1.MANGR_EMPNO
+		                                     , s3.DEPT_NM || ' ' || s4.CODE_NM || DECODE(s7.CODE_NM,NULL,'','('||s7.CODE_NM||')') || ' ' || s5.CODE_NM || ' ' || s6.CODE_NM || ' ' || s2.EMPNM    AS MANGR_EMPNM
+		                                  FROM TBCTR_CNTRCT_MANGR s1
+		                                       LEFT OUTER JOIN TBHRM_HR_MASTR s2
+		                                            ON s1.MANGR_EMPNO = s2.EMPNO
+		                                       LEFT OUTER JOIN TBHRM_DEPT s3
+		                                            ON s2.DEPT_CODE = s3.DEPT_CODE
+		                                       LEFT OUTER JOIN TBCOM_CMMN_CODE s4
+		                                            ON s2.JSSFC_SE = s4.CODE
+		                                           AND s4.GRP_CODE = 'HRM001'
+		                                       LEFT OUTER JOIN TBCOM_CMMN_CODE s5
+		                                            ON s2.HR_CLSF_SE = s5.CODE
+		                                           AND s5.GRP_CODE   = 'HRM002'
+		                                       LEFT OUTER JOIN TBCOM_CMMN_CODE s6
+		                                            ON s2.OFCPS_SE = s6.CODE
+		                                           AND s6.GRP_CODE = 'HRM003'
+		                                       LEFT OUTER JOIN TBCOM_CMMN_CODE s7
+		                                            ON s2.JBLN_SE  = s7.CODE
+		                                           AND s7.GRP_CODE = 'HRM004'
+		                                 WHERE s1.CONFM_AT = '1'
+		                                ORDER BY s1.SN
+		                               )
+		                        GROUP BY CNTRCT_NO
+		                       ) t11
+		            ON t1.CNTRCT_NO = t11.CNTRCT_NO
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                             , LISTAGG(BCNC_NM, ', ') WITHIN GROUP(ORDER BY MNGT_AT ASC, REGIST_DT ASC, BCNC_NMM ASC)    AS BCNC_NM
+		                          FROM (
+		                                SELECT a.CNTRCT_NO
+		                                	  ,a.MNGT_AT
+		                                      ,a.REGIST_DT
+		                                      ,b.BCNC_NM AS BCNC_NMM
+		                                      ,b.BCNC_NM || ' [대표자 : ' || RPRSNTV || ', ' || a.QOTA_RT || '% 지분]'    AS BCNC_NM
+		                                  FROM TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS a
+		                                       LEFT OUTER JOIN TBCTR_BCNC_MASTR b
+		                                            ON a.BCNC_CODE = b.BCNC_CODE
+		                               )
+		                        GROUP BY CNTRCT_NO
+		                       ) t12
+		            ON t1.CNTRCT_NO = t12.CNTRCT_NO
+		       LEFT OUTER JOIN TMP_DSGNR_SPRVISOR t15
+		            ON t1.CNTRCT_NO          = t15.CNTRCT_NO
+		           AND t15.DSGNR_SPRVISOR_SE = '1'
+		       LEFT OUTER JOIN TMP_DSGNR_SPRVISOR t16
+		            ON t1.CNTRCT_NO          = t16.CNTRCT_NO
+		           AND t16.DSGNR_SPRVISOR_SE = '2'
+		      LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                             , LISTAGG(BIZRNOS, ', ') WITHIN GROUP(ORDER BY MNGT_AT ASC, REGIST_DT ASC, BCNC_NM ASC)    AS BIZRNOS
+		                          FROM (
+		                                SELECT a.CNTRCT_NO
+		                                      ,a.MNGT_AT
+		                                      ,a.REGIST_DT
+		                                      ,b.BCNC_NM
+		                                      ,b.BCNC_NM || ' [사업자등록번호 : ' || H_DECRYPT (b.BIZRNO) || ', 관내여부 : ' || DECODE(b.AREA_ENTRPS_AT, '1', '관내', '관외') || ', 거래처주소 : ' || b.ADRES || NVL2 (NVL (b.DETAIL_RDNMADR,b.DETAIL_ADRES),' ','') || NVL (b.DETAIL_RDNMADR, b.DETAIL_ADRES) || ']' AS BIZRNOS
+		                                  FROM TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS a
+		                                       LEFT OUTER JOIN TBCTR_BCNC_MASTR b
+		                                            ON a.BCNC_CODE = b.BCNC_CODE
+		                               )
+		                        GROUP BY CNTRCT_NO
+		                       ) t17
+		            ON t1.CNTRCT_NO = t17.CNTRCT_NO
+		      LEFT OUTER JOIN TBCTR_CNTRCT_REQEST t19
+		        ON t1.REQEST_NO = t19.REQEST_NO
+		      LEFT OUTER JOIN (
+		                      SELECT
+		                          t1.CNTRCT_NO
+		                          ,DECODE(NVL(MAX(T2.AREA_ENTRPS_AT) KEEP(DENSE_RANK FIRST ORDER BY T1.MNGT_AT ASC, T1.REGIST_DT ASC, t2.BCNC_NM ASC), 0), '1', '관내', '관외') AS O_AREA_ENTRPS_AT
+		                          ,MAX(T2.BCNC_NM) KEEP(DENSE_RANK FIRST ORDER BY T1.MNGT_AT ASC, T1.REGIST_DT ASC, t2.BCNC_NM ASC) AS O_BCNC_NM
+		                          ,MAX(H_DECRYPT(T2.BIZRNO)) KEEP(DENSE_RANK FIRST ORDER BY T1.MNGT_AT ASC, T1.REGIST_DT ASC, t2.BCNC_NM ASC) AS O_BIZRNO
+		                          ,MAX(T2.ADRES || NVL2(NVL(T2.DETAIL_RDNMADR, T2.DETAIL_ADRES),' ','') || NVL(T2.DETAIL_RDNMADR, T2.DETAIL_ADRES)) KEEP(DENSE_RANK FIRST ORDER BY T1.MNGT_AT ASC, T1.REGIST_DT ASC, t2.BCNC_NM ASC) AS O_ADRES
+		                      FROM TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS t1
+		                          LEFT OUTER JOIN TBCTR_BCNC_MASTR t2
+		                            ON t1.BCNC_CODE = t2.BCNC_CODE
+		                      GROUP BY t1.CNTRCT_NO
+		                      ) t20
+		        ON t1.CNTRCT_NO = t20.CNTRCT_NO
+		WHERE  1=1
+		<isEqual property="YEAR_GBN" compareValue="1">
+			<isNotEmpty property="CNTRCT_YEAR">
+			AND    SUBSTR(t1.CNTRCT_NO,1,4) = #CNTRCT_YEAR# /*계약년도*/
+			</isNotEmpty>
+		</isEqual>
+		<isNotEmpty property="SRCH_TXT">
+			<isEqual property="SRCH_DS" compareValue="0">
+			AND    (
+			        t1.CNTRCT_NO        LIKE '%'|| #SRCH_TXT# ||'%'    /*계약번호*/
+			        OR
+			        t1.CNTRCT_NM        LIKE '%'|| #SRCH_TXT# ||'%'    /*계약명*/
+			        OR
+			        t2.BSNS_NM          LIKE '%'|| #SRCH_TXT# ||'%'    /*사업명*/
+			        OR
+			        t12.BCNC_NM         LIKE '%'|| #SRCH_TXT# ||'%'    /*거래처*/
+			        OR
+			        t15.BCNC_NM         LIKE '%'|| #SRCH_TXT# ||'%'    /* 설계업체 */
+			        OR
+			        t16.BCNC_NM         LIKE '%'|| #SRCH_TXT# ||'%'    /* 감리업체 */
+			        OR
+			        t1.PRCURE_CNTRCT_NO LIKE '%'|| #SRCH_TXT# ||'%'    /* 조달계약번호 */
+			       )
+			</isEqual>
+			<isEqual property="SRCH_DS" compareValue="1">
+			AND    t1.CNTRCT_NO  LIKE '%'|| #SRCH_TXT# ||'%'    /*계약번호*/
+			</isEqual>
+			<isEqual property="SRCH_DS" compareValue="2">
+			AND    t1.CNTRCT_NM  LIKE '%'|| #SRCH_TXT# ||'%'    /*계약명*/
+			</isEqual>
+			<isEqual property="SRCH_DS" compareValue="3">
+			AND    t2.BSNS_NM    LIKE '%'|| #SRCH_TXT# ||'%'    /*사업명*/
+			</isEqual>
+			<isEqual property="SRCH_DS" compareValue="4">
+			AND    t12.BCNC_NM   LIKE '%'|| #SRCH_TXT# ||'%'    /*거래처*/
+			</isEqual>
+			<isEqual property="SRCH_DS" compareValue="5">
+			AND    t15.BCNC_NM   LIKE '%'|| #SRCH_TXT# ||'%'    /* 설계업체 */
+			</isEqual>
+			<isEqual property="SRCH_DS" compareValue="6">
+			AND    t16.BCNC_NM   LIKE '%'|| #SRCH_TXT# ||'%'    /* 감리업체 */
+			</isEqual>
+			<isEqual property="SRCH_DS" compareValue="7">
+			AND    t1.PRCURE_CNTRCT_NO  LIKE '%'|| #SRCH_TXT# ||'%'    /* 조달계약번호 */
+			</isEqual>
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+		AND    t1.BSNS_CODE = #BSNS_CODE# /*사업코드*/
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_SE">
+		AND    t1.CNTRCT_SE = #CNTRCT_SE# /*계약구분*/
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_FROM_DE">
+		AND    t1.CNTRCT_DE <![CDATA[>=]]> #CNTRCT_FROM_DE#  /*계약일자*/
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_TO_DE">
+		AND    t1.CNTRCT_DE <![CDATA[<=]]> #CNTRCT_TO_DE# 	/*계약일자*/
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_FROM_AMT">
+		AND    SFCTR_CNTRCT_AMOUNT(t1.CNTRCT_NO, NULL) <![CDATA[>=]]> #CNTRCT_FROM_AMT#	/*계약금액*/
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_TO_AMT">
+		AND    SFCTR_CNTRCT_AMOUNT(t1.CNTRCT_NO, NULL) <![CDATA[<=]]> #CNTRCT_TO_AMT# 	/*계약금액*/
+		</isNotEmpty>
+		<isNotEmpty property="COMPET_FROM_DE">
+		AND    SFCTR_COMPET_DE(t1.CNTRCT_NO) <![CDATA[>=]]> #COMPET_FROM_DE#			/*존공일자*/
+		</isNotEmpty>
+		<isNotEmpty property="COMPET_TO_DE">
+		AND    SFCTR_COMPET_DE(t1.CNTRCT_NO) <![CDATA[<=]]> #COMPET_TO_DE#				/*존공일자*/
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_MTH_SE">
+		AND    t1.CNTRCT_MTH_SE = #CNTRCT_MTH_SE#										/*계약방법*/
+		</isNotEmpty>
+		<isNotEmpty property="CONFM_AT">
+		AND    t19.CONFM_AT = #CONFM_AT#							/*승인구분*/
+		</isNotEmpty>
+		ORDER BY t1.BSNS_CODE, t1.CNTRCT_NO
+	</select>
+
+</sqlMap>

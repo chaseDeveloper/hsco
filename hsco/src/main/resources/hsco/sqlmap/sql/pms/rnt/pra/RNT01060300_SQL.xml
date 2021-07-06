@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01060300SQL">	
+
+	<!-- 쿼리명 : 과년도미수금내역조회
+	설명 : 과년도미수금내역조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.16
+	-->
+	<select id="RNT01060300DAO.selectPstyrAtmpAmountList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	     SELECT ANACT_SE, /* 결의서구분 */
+		        MDAT_DE,  /* 결의일자 */
+		        MDAT_DECSN_NO, /* 조정결의번호 */
+		        PAY_SE, /* 납부구분 */
+		        AMOUNT, /* 금액 */
+		        RM, /* 비고 */
+		        BUDGET_YEAR, /* 예산년도 */
+		        SUBSTR(BUDGET_ACNT_SE,1,1) BUDGET_ACNT_SE, /* 예산계정구분 */
+		        BUDGET_ACNTCTGR, /* 예산계정과목 */
+		        BUKIP_CODE, /* 부기코드 */
+		        REGISTER_ID, /* 등록자 아이디 */
+		        REGIST_DT, /* 등록일시 */
+		        UPDUSR_ID, /* 수정자 아이디 */
+		        UPDT_DT, /* 수정일시 */
+		        (SELECT CODE_NM
+		           FROM TBCOM_CMMN_CODE z
+		           WHERE CODE = SUBSTR(a.BUDGET_ACNT_SE,1,1)  /* 사업구분 첫자리만 적용 - 사업구분명*/
+		             AND GRP_CODE = 'BDG001') BUDGET_ACNT_SE_NM,
+		        (SELECT BUDGET_ACNT_NM
+		           FROM TBBDG_BUDGET_ACNT_CODE z
+		           WHERE YEAR = a.BUDGET_YEAR
+		             AND BSNS_SE = SUBSTR(a.BUDGET_ACNT_SE,1,1)
+		             AND BUDGET_ACNT_CODE = a.BUDGET_ACNTCTGR) BUDGET_ACNT_NM, /* 예산계정코드명 */
+		        (SELECT EXPNDTR_UNIT_NM
+		           FROM TBBDG_EXPNDTR_UNIT_CODE z
+		           WHERE YEAR = a.BUDGET_YEAR
+		             AND BSNS_SE = SUBSTR(a.BUDGET_ACNT_SE,1,1)
+		             AND BUDGET_ACNT_CODE  = a.BUDGET_ACNTCTGR
+		             AND EXPNDTR_UNIT_CODE = a.BUKIP_CODE)  EXPNDTR_UNIT_NM, /* 지출단위코드명 */
+		        HOUSE_CODE /* 주택코드 */
+		 FROM TBRNT_PSTYR_ATMPT_AMOUNT a
+		 WHERE BUDGET_YEAR = #year#
+		   AND a.JOB_SE_CODE = 'RN1'
+	</select>
+	
+	<!--  과년도미수금내역 신규등록  -->
+	<insert id="RNT01060300DAO.InsertPstyrAtmpAmountList" parameterClass="java.util.HashMap" >
+		 INSERT INTO TBRNT_PSTYR_ATMPT_AMOUNT
+                         (MDAT_DE,
+                          MDAT_DECSN_NO,
+                          BUDGET_YEAR,
+                          BUDGET_ACNT_SE,
+                          BUDGET_ACNTCTGR,
+                          BUKIP_CODE,
+                          ANACT_SE,
+                          PAY_SE,
+                          AMOUNT,
+                          RM,
+                          HOUSE_CODE,
+                          JOB_SE_CODE,
+                          REGISTER_ID,
+                          REGIST_DT,
+                          UPDUSR_ID,
+                          UPDT_DT)
+                  VALUES(#MDAT_DE#,
+                         (SELECT NVL(MAX(MDAT_DECSN_NO),0)
+                            FROM TBRNT_PSTYR_ATMPT_AMOUNT
+                            WHERE BUDGET_YEAR = #BUDGET_YEAR#) + 1,
+                         #BUDGET_YEAR#,
+                         #BUDGET_ACNT_SE#,
+                         #BUDGET_ACNTCTGR#,
+                         #BUKIP_CODE#,
+                         #ANACT_SE#,
+                         DECODE(#PAY_SE#,'%','',#PAY_SE#),
+                         #AMOUNT#,
+                         #RM#,
+                         DECODE(#HOUSE_CODE#,'%','',#HOUSE_CODE#),
+                         'RN1',
+                         #S_USER_ID#,
+                         SYSDATE,
+                         #S_USER_ID#,
+                         SYSDATE)
+	</insert>
+	
+	<!-- 과년도미수금내역 수정 -->
+	<update id="RNT01060300DAO.UpdatePstyrAtmpAmountList" parameterClass="java.util.HashMap" >
+    UPDATE TBRNT_PSTYR_ATMPT_AMOUNT
+       SET ANACT_SE   = #ANACT_SE#,
+           PAY_SE     = decode(#PAY_SE#,'%','',#PAY_SE#),
+           AMOUNT     = #AMOUNT#,
+           RM         = #RM#,
+           HOUSE_CODE = DECODE(#HOUSE_CODE#,'%','',#HOUSE_CODE#),
+           UPDUSR_ID  = #S_USER_ID#,
+           UPDT_DT    = SYSDATE
+     WHERE MDAT_DE           = #MDAT_DE#
+       AND MDAT_DECSN_NO     = #MDAT_DECSN_NO#
+       AND BUDGET_YEAR       = #BUDGET_YEAR#
+       AND BUDGET_ACNT_SE    = #BUDGET_ACNT_SE# || '1'
+       AND BUDGET_ACNTCTGR   = #BUDGET_ACNTCTGR#
+       AND BUKIP_CODE        = #BUKIP_CODE#
+       AND JOB_SE_CODE       = 'RN1'
+	</update>
+	
+	<!-- 과년도미수금내역 수삭제-->
+	<delete id="RNT01060300DAO.DeletePstyrAtmpAmountList" parameterClass="java.util.HashMap">
+  	DELETE FROM TBRNT_PSTYR_ATMPT_AMOUNT
+    WHERE MDAT_DE          = #MDAT_DE#
+      AND MDAT_DECSN_NO    = #MDAT_DECSN_NO#
+      AND BUDGET_YEAR      = #BUDGET_YEAR#
+      AND BUDGET_ACNT_SE   = #BUDGET_ACNT_SE# || '1'
+      AND BUDGET_ACNTCTGR  = #BUDGET_ACNTCTGR#
+      AND BUKIP_CODE       = #BUKIP_CODE#
+      AND JOB_SE_CODE      = 'RN1'
+	</delete>
+</sqlMap>

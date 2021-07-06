@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC060303_SQL">
+
+	<!-- 구분회계 현금흐름표 조회 -->
+	<select id="ACC060303DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC060303DAO.select*/]]>
+		WITH CASH_FLOW_T AS (
+		    SELECT t1.ACCNUT_YEAR
+		         , t1.FNNR_TBLAT_CODE
+		         , t1.OUTPT_ACNT_NM
+		         , NVL(t2.AMOUNT, 0) AS SLIP_AMT
+		    FROM TBACC_FNNR_TBLAT_MANAGE t1
+		      	 LEFT OUTER JOIN 
+		         (SELECT 
+		                a.ACCNUT_YEAR
+		               ,a.ACCNUT_MT
+		               ,a.ACCNUT_ACNT_CODE
+		               ,SUM(a.AMOUNT) AS AMOUNT
+		          FROM TBACC_CASH_FLOW_STACNT a
+		          	   INNER JOIN TBACC_SE_ACCNUT_ACNT_CODE b
+		         	   ON  a.ACCNUT_YEAR			= b.ACCNUT_YEAR
+		         	   AND a.SE_ACCNUT_ACNT_CODE	= b.SE_ACCNUT_ACNT_CODE 
+		          WHERE a.ACCNUT_YEAR = SUBSTR(#ACCNUT_YM#,1,4)
+		            AND a.ACCNUT_MT 	= SUBSTR(#ACCNUT_YM#,5,2)
+		            AND a.STACNT_SE 	= 'C2' /* 구분회계(고정) */
+				<isNotEmpty property="BSNS_DISTRICT">
+				    AND   b.BSNS_DISTRICT 	= #BSNS_DISTRICT#
+				</isNotEmpty>
+				<isNotEmpty property="BSNS_HSMP">
+				    AND   b.BSNS_HSMP 		= #BSNS_HSMP#
+				</isNotEmpty>
+				<isNotEmpty property="SUPLY_TY">
+				    AND   b.SUPLY_TY 		= #SUPLY_TY#
+				</isNotEmpty>
+				<isNotEmpty property="BSNS_TY">
+				    AND   b.BSNS_TY 		= #BSNS_TY#
+				</isNotEmpty>
+				
+				<!-- 2016.08.25 -->
+				<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+				    AND   b.SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+				</isNotEmpty>
+				
+		          GROUP BY a.ACCNUT_YEAR, a.ACCNUT_MT, a.ACCNUT_ACNT_CODE
+		         ) t2
+		      	 ON  t1.ACCNUT_YEAR     = t2.ACCNUT_YEAR
+		      	 AND t1.FNNR_TBLAT_CODE = t2.ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR = SUBSTR(#ACCNUT_YM#,1,4)
+		    AND   t1.FNNR_TBLAT_SE_CODE = 'S1' /*현금흐름표*/
+		    ORDER BY t1.OUTPT_SEQ ASC
+		           , t1.FNNR_TBLAT_CODE ASC
+		)
+		, BEF_CASH_FLOW_T AS (
+		    SELECT t1.ACCNUT_YEAR
+		         , t1.FNNR_TBLAT_CODE
+		         , t1.OUTPT_ACNT_NM
+		         , NVL(t2.AMOUNT, 0) AS SLIP_AMT
+		    FROM TBACC_FNNR_TBLAT_MANAGE t1
+		      	 LEFT OUTER JOIN 
+		         (SELECT 
+		                a.ACCNUT_YEAR
+		               ,a.ACCNUT_MT
+		               ,a.ACCNUT_ACNT_CODE
+		               ,SUM(a.AMOUNT) AS AMOUNT
+		          FROM TBACC_CASH_FLOW_STACNT a
+		          	   INNER JOIN TBACC_SE_ACCNUT_ACNT_CODE b
+		         	   ON  a.ACCNUT_YEAR			= b.ACCNUT_YEAR
+		         	   AND a.SE_ACCNUT_ACNT_CODE	= b.SE_ACCNUT_ACNT_CODE
+		          WHERE a.ACCNUT_YEAR = SUBSTR(#ACCNUT_YM#, 0, 4)-1
+		            AND a.ACCNUT_MT	= SUBSTR(#ACCNUT_YM#,5,2)
+		            AND a.STACNT_SE	= 'C2' /* 구분회계(고정) */
+				<isNotEmpty property="BSNS_DISTRICT">
+				    AND   b.BSNS_DISTRICT 	= #BSNS_DISTRICT#
+				</isNotEmpty>
+				<isNotEmpty property="BSNS_HSMP">
+				    AND   b.BSNS_HSMP 		= #BSNS_HSMP#
+				</isNotEmpty>
+				<isNotEmpty property="SUPLY_TY">
+				    AND   b.SUPLY_TY 		= #SUPLY_TY#
+				</isNotEmpty>
+				<isNotEmpty property="BSNS_TY">
+				    AND   b.BSNS_TY 		= #BSNS_TY#
+				</isNotEmpty>
+				
+				<!-- 2016.08.25 -->
+				<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+				    AND   b.SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+				</isNotEmpty>
+				
+		          GROUP BY a.ACCNUT_YEAR, a.ACCNUT_MT, a.ACCNUT_ACNT_CODE
+		         ) t2
+			     ON  t1.ACCNUT_YEAR     = t2.ACCNUT_YEAR
+			     AND t1.FNNR_TBLAT_CODE = t2.ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR        = SUBSTR(#ACCNUT_YM#,1,4)-1
+		    AND   t1.FNNR_TBLAT_SE_CODE = 'S1' /*현금흐름표*/
+		    ORDER BY t1.OUTPT_SEQ ASC
+		           , t1.FNNR_TBLAT_CODE ASC
+		)
+		SELECT t1.ACCNUT_YEAR
+		     , t1.FNNR_TBLAT_CODE
+		     , t1.OUTPT_ACNT_NM
+		     , NVL(t1.SLIP_AMT,0) AS THIS_SLIP_AMT
+		     , NVL(t4.SLIP_AMT,0) AS BEF_SLIP_AMT
+		FROM CASH_FLOW_T t1
+		  LEFT OUTER JOIN BEF_CASH_FLOW_T t4
+		  ON  t1.ACCNUT_YEAR     = t4.ACCNUT_YEAR
+		  AND t1.FNNR_TBLAT_CODE = t4.FNNR_TBLAT_CODE
+	</select>
+	<!-- 구분회계 세부내역 조회 -->
+	<select id="ACC060303DAO.seAccExcelDown" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC060303DAO.seAccExcelDown*/]]>
+		WITH CASH_FLOW_T AS
+			( SELECT  t1.ACCNUT_YEAR ,
+			         t1.FNNR_TBLAT_CODE ,
+			         t1.OUTPT_ACNT_NM ,
+			         SE_ACCNUT_ACNT_CODE,
+			         SE_ACCNUT_ACNT_NM,
+			         NVL(t2.AMOUNT, 0) AS SLIP_AMT
+			FROM     TBACC_FNNR_TBLAT_MANAGE t1
+			         LEFT OUTER JOIN
+			                  (SELECT  a.ACCNUT_YEAR ,
+			                           a.ACCNUT_MT ,
+			                           a.ACCNUT_ACNT_CODE ,
+			                           a.SE_ACCNUT_ACNT_CODE,
+			                           B.SE_ACCNUT_ACNT_NM,
+			                           SUM(a.AMOUNT) AS AMOUNT
+			                  FROM     TBACC_CASH_FLOW_STACNT a
+			                           INNER JOIN TBACC_SE_ACCNUT_ACNT_CODE b
+			                           ON       a.ACCNUT_YEAR         = b.ACCNUT_YEAR
+			                           AND      a.SE_ACCNUT_ACNT_CODE = b.SE_ACCNUT_ACNT_CODE
+			                           
+			                  WHERE    a.ACCNUT_YEAR                  = SUBSTR(#ACCNUT_YM#,1,4)
+			                  AND      a.ACCNUT_MT                    = SUBSTR(#ACCNUT_YM#,5,2)
+			                  AND      a.STACNT_SE                    = 'C2'
+			<![CDATA[         AND 	   a.AMOUNT <> 0 		]]>
+			                           /* 구분회계(고정) */
+			                  GROUP BY a.ACCNUT_YEAR,
+			                           a.ACCNUT_MT,
+			                           a.ACCNUT_ACNT_CODE,
+			                           a.SE_ACCNUT_ACNT_CODE,
+			                           B.SE_ACCNUT_ACNT_NM
+			                  )
+			                  t2
+			         ON       t1.ACCNUT_YEAR     = t2.ACCNUT_YEAR
+			         AND      t1.FNNR_TBLAT_CODE = t2.ACCNUT_ACNT_CODE
+			WHERE    t1.ACCNUT_YEAR              = SUBSTR(#ACCNUT_YM#,1,4)
+			AND      t1.FNNR_TBLAT_SE_CODE       = 'S1'
+			         /*현금흐름표*/
+			ORDER BY t1.OUTPT_SEQ ASC ,
+			         t1.FNNR_TBLAT_CODE ASC
+			)
+			SELECT t1.ACCNUT_YEAR ,
+			       t1.FNNR_TBLAT_CODE ,
+			       t1.OUTPT_ACNT_NM ,
+			       SE_ACCNUT_ACNT_CODE,
+			       SE_ACCNUT_ACNT_NM,
+			       NVL(t1.SLIP_AMT,0) AS THIS_SLIP_AMT 
+			FROM   CASH_FLOW_T t1
+			
+			ORDER BY  FNNR_TBLAT_CODE,SE_ACCNUT_ACNT_CODE
+	</select>
+</sqlMap>

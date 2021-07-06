@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN040303_SQL">
+
+	<!-- 가상계좌 수납내역(검색조건 은행 목록) -->
+	<select id="FUN040303DAO.selectBankList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*FUN040303DAO.selectBankList*/ ]]>        
+        <![CDATA[
+			SELECT CODE
+			      ,CODE_NM
+			FROM   TBCOM_CMMN_CODE
+			WHERE  GRP_CODE = 'COM021'
+			AND    USE_AT = '1'
+			AND    CHRCTR_PREPAR_VALUE_0 = '1' 
+		]]>
+	</select>
+	
+	<!-- 가상계좌 수납내역(검색조건 계약구분코드 목록) -->
+	<select id="FUN040303DAO.selectCrtDivList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*FUN040303DAO.selectCrtDivList*/ ]]>
+        <![CDATA[
+			SELECT CODE
+			      ,CODE_NM
+			FROM   TBCOM_CMMN_CODE
+			WHERE  GRP_CODE = 'COM027'
+			AND    USE_AT = '1'
+			AND    CODE NOT LIKE 'T%' 
+		]]>
+	</select>	
+	
+	<!-- 가상계좌 수납내역(기본) -->
+	<select id="FUN040303DAO.selectVaReceiptList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*FUN040303DAO.selectVaReceiptList*/ ]]>
+        <![CDATA[
+			SELECT A.CRT_DIV_NM			             AS CRT_DIV_NM  /*계약구분명*/
+			       ,A.CRT_DIV			             AS CRT_DIV     /*계약구분코드*/
+			       ,A.HOUSE_SE			             AS HOUSE_SE    /*주택구분코드*/
+			       ,A.BANK_CD			             AS BANK_CD     /*은행코드*/
+			       ,A.BANK_NM                        AS BANK_NM
+			       ,TO_CHAR(A.IN_DATE, 'YYYYMMDD')   AS IN_DATE     /*수납일자*/
+			       ,COUNT(DISTINCT A.CNT)            AS CNT			/*건수*/
+			       ,SUM(A.AMT)                       AS AMT			/*수납금액*/
+			       ,'0'                              AS CHK
+			FROM   (SELECT (SELECT CODE_NM
+			                FROM   TBCOM_CMMN_CODE
+			                WHERE  GRP_CODE = 'COM027'
+			                   AND CODE = DECODE(A.CRT_DIV, 'RN', DECODE(A.HOUSE_SE, 'R2', 'RM', 
+			                                                                         'JR', 'JR', 
+			                                                                         A.CRT_DIV),
+			                                                A.CRT_DIV))         AS CRT_DIV_NM   /*계약구분명*/
+			                ,A.CRT_DIV                                          AS CRT_DIV
+			                ,A.BANK_CD                                  		AS BANK_CD      /*은행코드*/
+			                ,(SELECT CODE_NM
+			                  FROM   TBCOM_CMMN_CODE
+			                  WHERE  GRP_CODE = 'COM021'
+			                  AND CODE = A.BANK_CD)                     		AS BANK_NM      /*은행명*/
+			                ,A.IN_DATE                                  		AS IN_DATE      /*수납일자*/
+			                ,A.IN_DATE                                  		AS IN_DATE1
+			                ,A.VACCT_NO ||TR_NO_TRAN                    		AS CNT          
+			                ,A.BILL_AMT                                 		AS AMT          /*청구금액*/
+			                ,A.HOUSE_SE                                 		AS HOUSE_SE
+			          FROM   (SELECT A.*
+			                         ,NVL((SELECT DECODE(C.HOUSE_SE, 'R2', 'R2'          /*주택구분코드*/
+			                                                       , 'R1')
+			                               FROM   TBRNT_RENT_CNTRCT B                    /*영구임대계약정보*/
+			                                     ,TBRNT_RENT_HOUSE C                     /*영구임대주택*/
+			                               WHERE  B.CNTRCTR_NO = A.CRT_ID                /*계약번호*/
+			                               AND B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE     /*임대주택코드*/
+                                           UNION
+                                           SELECT DECODE(C.HOUSE_SE, 'R2', 'R2'          /*주택구분코드*/
+			                                                       , 'R1')
+			                               FROM   TBRNT_PUCHAS_CNTRCT B                  /*매입임대계약정보*/
+			                                    ,TBRNT_PUCHAS_HOUSE C                    /*매입임대주택*/
+			                               WHERE  B.CNTRCTR_NO = A.CRT_ID                /*계약번호*/
+			                               AND B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE     /*임대주택코드*/
+			                               UNION
+			                               SELECT 'JR'
+			                               FROM   TBRNT_LFSTS_CNTRCT B                   /*전세임대계약관리*/
+			                               WHERE  B.CNTRCTR_NO = A.CRT_ID), A.CRT_DIV) AS HOUSE_SE
+			                    FROM   VA_RECEIPT A) A                                   /*VA_RECEIPT : 가상계좌 수납내역*/
+			          WHERE  1=1
+			 ]]>
+	           	<isNotEmpty property="CRT_DIV">
+	                  AND A.CRT_DIV = DECODE(#CRT_DIV#, 'RM', 'RN',
+	                                                    'JR', 'RN',
+	                                                    #CRT_DIV#)			          		
+	           	</isNotEmpty>
+	           	<isNotEmpty property="BANK_CD">
+	                  AND A.BANK_CD = #BANK_CD#			          		
+	           	</isNotEmpty>
+	         <![CDATA[
+			          AND A.IN_DATE BETWEEN TO_DATE(#FDATE#,'YYYYMMDD') AND TO_DATE(#TDATE#, 'YYYYMMDD')
+			          ) A
+			WHERE  1=1
+		]]>
+			<isNotEmpty property="CRT_DIV"><isNotEqual property="CRT_DIV" compareValue="MA">
+			  AND  A.HOUSE_SE = DECODE(#CRT_DIV#, 'RN', 'R1',
+			                                      'RM', 'R2',
+			                                      'BS', 'R1',
+			                                      #CRT_DIV#)
+	        </isNotEqual></isNotEmpty>			
+		<![CDATA[
+			GROUP  BY A.CRT_DIV_NM
+			          ,A.CRT_DIV
+			          ,A.HOUSE_SE
+			          ,A.BANK_CD
+			          ,A.BANK_NM
+			          ,A.IN_DATE
+			          ,A.IN_DATE1
+			ORDER  BY IN_DATE DESC 
+		]]>
+	</select>
+	
+	<!-- 가상계좌 수납내역(상세) -->
+	<select id="FUN040303DAO.selectVaReceiptDetailList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*FUN040303DAO.selectVaReceiptDetailList*/ ]]>
+        <![CDATA[
+			SELECT (SELECT CODE_NM 
+			          FROM TBCOM_CMMN_CODE 
+			         WHERE GRP_CODE = 'COM027' 
+			           AND CODE = DECODE(CRT_DIV, 'RN', DECODE(HOUSE_SE, 'R2', 'RM', 
+			                                                             'JR', 'JR', 
+			                                                             CRT_DIV), 
+			                                      CRT_DIV))    AS CRT_DIV_NM
+			       ,BANK_CD                                    AS BANK_CD
+			       ,(SELECT CODE_NM 
+			           FROM TBCOM_CMMN_CODE 
+			          WHERE GRP_CODE = 'COM021' 
+			            AND CODE = A.BANK_CD)                  AS BANK_NM 
+			       ,VACCT_NO                                   AS VACCT_NO
+			       ,TO_CHAR(IN_DATE, 'YYYYMMDD')               AS IN_DATE
+			       ,DECODE(CRT_DIV, 'SL', (SELECT C.CSTMR_NM||'('||B.HOUSE_CODE||'-'||B.DONG||'-'||B.HO||')' 
+			                                 FROM TBSLS_HCNTRCTR B 
+			                                      ,TBSLS_HOUSE_CSTMR C 
+			                                WHERE B.CNTRCTR_NO = A.CRT_ID 
+			                                  AND B.HOUSE_CSTMR_NO = C.HOUSE_CSTMR_NO) 
+			                        ,'LN', (SELECT C.CSTMR_NM||'('||B.LAD_CODE||'-'||B.BLCK||'-'||B.LOT||'-'||B.LOT_TY||')' 
+			                                 FROM TBSLS_LCNTRCTR B 
+			                                      ,TBSLS_LAD_CSTMR C 
+			                                WHERE B.CNTRCTR_NO = A.CRT_ID 
+			                                  AND B.LAD_CSTMR_NO = C.LAD_CSTMR_NO)
+			                        ,'RN', (SELECT C.NM||'('||B.RENT_HOUSE_CODE||'-'||B.DONG||'-'||B.HO||')'
+			                                 FROM TBRNT_RENT_CNTRCT B 
+			                                      ,TBRNT_PRMANENT_RENT_CSTMR C 
+			                                WHERE B.CNTRCTR_NO = A.CRT_ID 
+			                                  AND B.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO
+	                                        UNION
+	                                        SELECT C.NM||'('||B.RENT_HOUSE_CODE||'-'||B.DONG||'-'||B.HO||')' 
+				                              FROM TBRNT_PUCHAS_CNTRCT B 
+				                                   ,TBRNT_PUCHAS_RENT_CSTMR C 
+				                             WHERE B.CNTRCTR_NO = A.CRT_ID 
+				                               AND B.PUCHAS_CSTMR_NO =  C.PUCHAS_CSTMR_NO   
+			                               UNION 
+			                               SELECT C.NM||'('||B.AREA_SE||'-'||B.DONG||'-'||B.HO||')'
+			                                 FROM TBRNT_LFSTS_CNTRCT B 
+			                                      ,TBRNT_LFSTS_CSTMR C 
+			                                WHERE B.CNTRCTR_NO = A.CRT_ID 
+			                                  AND B.LFSTS_CSTMR_NO = C.LFSTS_CSTMR_NO)
+			                        ,'RM', (SELECT C.NM||'('||B.RENT_HOUSE_CODE||'-'||B.DONG||'-'||B.HO||')' 
+			                                 FROM TBRNT_RENT_CNTRCT B 
+			                                      ,TBRNT_PRMANENT_RENT_CSTMR C 
+			                                WHERE B.CNTRCTR_NO = A.CRT_ID 
+			                                  AND B.PRMANENT_CSTMR_NO =  C.PRMANENT_CSTMR_NO
+                                     UNION
+                                     SELECT C.NM||'('||B.RENT_HOUSE_CODE||'-'||B.DONG||'-'||B.HO||')' 
+			                                 FROM TBRNT_PUCHAS_CNTRCT B 
+			                                      ,TBRNT_PUCHAS_RENT_CSTMR C 
+			                                WHERE B.CNTRCTR_NO = A.CRT_ID 
+			                                  AND B.PUCHAS_CSTMR_NO =  C.PUCHAS_CSTMR_NO) 
+			                        ,'MA', (SELECT C.NM||'('||B.RENT_HOUSE_CODE||'-'||B.DONG||'-'||B.HO||')' 
+			                                 FROM TBRNT_RENT_CNTRCT B 
+			                                      ,TBRNT_PRMANENT_RENT_CSTMR C 
+			                                WHERE B.CNTRCTR_NO = A.CRT_ID 
+			                                  AND B.PRMANENT_CSTMR_NO =  C.PRMANENT_CSTMR_NO
+                                     UNION
+                                     SELECT C.NM||'('||B.RENT_HOUSE_CODE||'-'||B.DONG||'-'||B.HO||')' 
+			                                 FROM TBRNT_PUCHAS_CNTRCT B 
+			                                      ,TBRNT_PUCHAS_RENT_CSTMR C 
+			                                WHERE B.CNTRCTR_NO = A.CRT_ID 
+			                                  AND B.PUCHAS_CSTMR_NO =  C.PUCHAS_CSTMR_NO)
+                                    ,CRT_DIV)                  AS CRT_INFO 
+			       ,COUNT(DISTINCT VACCT_NO||TR_NO_TRAN)       AS CNT 
+			       ,SUM(BILL_AMT)                              AS AMT
+			  FROM (SELECT A.* 
+			               ,NVL((SELECT DECODE(C.HOUSE_SE, 'R2', 'R2'          /*주택구분코드*/
+                                                         , 'R1')
+                                 FROM   TBRNT_RENT_CNTRCT B                    /*영구임대계약정보*/
+                                       ,TBRNT_RENT_HOUSE C                     /*영구임대주택*/
+                                 WHERE  B.CNTRCTR_NO = A.CRT_ID                /*계약번호*/
+                                 AND B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE     /*임대주택코드*/
+                                          UNION
+                                          SELECT DECODE(C.HOUSE_SE, 'R2', 'R2'          /*주택구분코드*/
+                                                         , 'R1')
+                                 FROM   TBRNT_PUCHAS_CNTRCT B                  /*매입임대계약정보*/
+                                      ,TBRNT_PUCHAS_HOUSE C                    /*매입임대주택*/
+                                 WHERE  B.CNTRCTR_NO = A.CRT_ID                /*계약번호*/
+                                 AND B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE     /*임대주택코드*/
+                                 UNION
+                                 SELECT 'JR'
+                                 FROM   TBRNT_LFSTS_CNTRCT B                   /*전세임대계약관리*/
+                                 WHERE  B.CNTRCTR_NO = A.CRT_ID), A.CRT_DIV) AS HOUSE_SE 
+			          FROM VA_RECEIPT A) A 
+			 WHERE A.CRT_DIV = #CRT_DIV# 
+			   AND A.BANK_CD = #BANK_CD# 
+			   AND A.IN_DATE = TO_DATE(#IN_DATE#, 'YYYYMMDD')
+			   AND A.HOUSE_SE = #HOUSE_SE#
+			 GROUP BY A.CRT_ID 
+			          ,A.CRT_DIV 
+			          ,A.BANK_CD 
+			          ,A.VACCT_NO 
+			          ,A.IN_DATE 
+			          ,A.HOUSE_SE 
+			 ORDER BY IN_DATE DESC
+		]]>
+	</select>	
+	
+</sqlMap>

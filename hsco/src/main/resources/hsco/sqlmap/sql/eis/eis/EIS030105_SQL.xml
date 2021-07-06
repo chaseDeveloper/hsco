@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="EIS030105_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	 
+	<!-- 근태현황정보 목록조회 -->
+	<select id="EIS030105DAO.selectMnbyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH T_YRYC AS (
+			SELECT B.EMPNO,
+			       (NVL(A.SZ1,0)+NVL(A.SZ2,0)+NVL(A.SZ4,0)+NVL(A.SZ5,0)+NVL(A.SZ6,0)+NVL(A.SZ8,0)+NVL(A.SZ12,0)+NVL(A.SZ13,0)) + NVL(C.HOUR_TO_DAY,0) AS TOT_USE
+			FROM   TBHRM_YRYC_MANAGE B
+			       LEFT OUTER JOIN (
+			                        SELECT A.EMPNO                                           AS EMPNO,
+			                               SUBSTR(A.BGNDE,0,4)                               AS YEAR,
+			                               SUM(DECODE(A.ASORT_CODE,'101',A.DAYCNT,0))        AS SZ1,   /*연차*/
+			                               SUM(DECODE(A.ASORT_CODE,'303',A.DAYCNT,0))        AS SZ2,   /*하계휴가*/
+			                               SUM(DECODE(A.ASORT_CODE,'202',A.DAYCNT,0))        AS SZ3,   /*병가(사)*/
+			                               SUM(DECODE(A.ASORT_CODE,'102',A.DAYCNT,0))        AS SZ4,   /*오전연차*/
+			                               SUM(DECODE(A.ASORT_CODE,'103',A.DAYCNT,0))        AS SZ5,   /*오후연차*/
+			                               SUM(DECODE(A.ASORT_CODE,'104',A.DAYCNT,0))        AS SZ6,   /*연차취소*/
+			                               SUM(DECODE(A.ASORT_CODE,'204',A.DAYCNT,0))        AS SZ7,   /*병가(사)취소*/
+			                               SUM(DECODE(A.ASORT_CODE,'306',A.DAYCNT,0))        AS SZ8,   /*하계휴가취소*/
+			                               SUM(DECODE(A.ASORT_CODE,'304',A.DAYCNT,0))        AS SZ12,  /*오전하계휴가*/
+			                               SUM(DECODE(A.ASORT_CODE,'305',A.DAYCNT,0))        AS SZ13  /*오후하계휴가*/
+			                        FROM   TBHRM_WRKCP A
+			                        WHERE  SFCOM_GET_SANCTN_KND(A.SANCTN_NO) = '5'
+			                        GROUP BY A.EMPNO
+			                                ,SUBSTR(A.BGNDE,0,4)
+			                       ) A
+			            ON A.EMPNO = B.EMPNO
+			           AND A.YEAR = B.YEAR
+			       LEFT OUTER JOIN (
+			                        SELECT EMPNO
+			                              ,YEAR
+			                              ,TRUNC((SM_402_HOUR + SM_404_HOUR) * 0.125)       AS HOUR_TO_DAY
+			                        FROM   (
+			                                SELECT EMPNO
+			                                      ,YEAR
+			                                      ,NVL(SUM(TM_402_HOUR), 0) + NVL(TRUNC(SUM(TM_402_MINUTE) / 60), 0) AS SM_402_HOUR
+			                                      ,NVL(SUM(TM_404_HOUR), 0) + NVL(TRUNC(SUM(TM_404_MINUTE) / 60), 0) AS SM_404_HOUR
+			                                FROM   (
+			                                        SELECT EMPNO
+			                                              ,SUBSTR(BGNDE,1,4)                   AS YEAR
+			                                              ,TO_NUMBER(SUBSTR(TIME,1,2)) * DECODE(ASORT_CODE, '403', -1, 1)     AS TM_402_HOUR
+			                                              ,TO_NUMBER(SUBSTR(TIME,3,4)) * DECODE(ASORT_CODE, '403', -1, 1)     AS TM_402_MINUTE
+			                                              ,NULL     AS TM_404_HOUR
+			                                              ,NULL     AS TM_404_MINUTE
+			                                        FROM   TBHRM_WRKCP
+			                                        WHERE  ASORT_CODE IN ('402', '403')
+			                                        AND    SFCOM_GET_SANCTN_KND(SANCTN_NO) = '5'
+			                                        UNION ALL
+			                                        SELECT EMPNO
+			                                              ,SUBSTR(BGNDE,1,4)                   AS YEAR
+			                                              ,NULL     AS TM_402_HOUR
+			                                              ,NULL     AS TM_402_MINUTE
+			                                              ,TO_NUMBER(SUBSTR(TIME,1,2)) * DECODE(ASORT_CODE, '406', -1, 1) AS TM_404_HOUR
+			                                              ,TO_NUMBER(SUBSTR(TIME,3,4)) * DECODE(ASORT_CODE, '406', -1, 1) AS TM_404_MINUTE
+			                                            FROM TBHRM_WRKCP
+			                                            WHERE ASORT_CODE                   IN ('404', '406')
+			                                        AND    SFCOM_GET_SANCTN_KND(SANCTN_NO) = '5'
+			                                       )
+			                                GROUP BY EMPNO, YEAR
+			                               )
+			                       ) C
+			            ON B.EMPNO = C.EMPNO
+			           AND B.YEAR = C.YEAR
+			WHERE    B.YEAR  = TO_CHAR(SYSDATE,'YYYY')
+			),
+			T_EDC AS (
+			    SELECT EMPNO, SUM(EDC_RCOGN_TIME) AS EDC_SUM_TIME
+			    FROM TBHRM_EDC_MANAGE
+			    WHERE YEAR = TO_CHAR(SYSDATE,'YYYY')
+			    GROUP BY YEAR,  EMPNO
+			),
+			T_BSRP AS (
+			    SELECT EMPNO
+			         , SUM(DECODE(WHTHRC_AT,'1',BSRP_DAYCNT + 1,0)) AS DAYCNT1
+			         , SUM(DECODE(WHTHRC_AT,'0',BSRP_DAYCNT + 1,0)) AS DAYCNT2
+			    FROM TBHRM_BSRP_INDVDL t1
+			    WHERE NVL(t1.OVSEA_AT, '0') <> '1'                   /*해외출장이 아닌 내역만 조회*/
+			     AND NVL(CANCL_AT,'0') <> '1'                       /*취소여부가 '1' 아닌 내역만 조회*/
+			     AND NOT EXISTS (                                   /*취소출장순번과 일치하지 않는 내역만 조회*/
+			          SELECT 1
+			            FROM TBHRM_BSRP_INDVDL temp
+			           WHERE temp.EMPNO = t1.EMPNO
+			             AND temp.CANCL_BSRP_SEQ = t1.BSRP_SEQ
+			        )
+			     AND BSRP_BGNDE LIKE TO_CHAR(SYSDATE,'YYYY') || '%'
+			     AND SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5'       /*결재가 완료된 내역만 조회*/
+			    GROUP BY EMPNO
+			)
+			SELECT
+			     a1.DEPT_NM
+			    ,a1.DEPT_CODE
+			    ,NVL(a2.EMP_CNT,0) AS A0
+			    ,NVL(a2.TOT_USE,0) AS A1
+			    ,NVL(a2.EDC_SUM_TIME,0) AS A2
+			    ,NVL(a2.DAYCNT1,0) AS A3
+			    ,NVL(a2.DAYCNT2,0) AS A4
+			FROM VWHRM_DEPT a1
+			     FULL OUTER JOIN (
+			        SELECT t1.DEPT_CODE
+			              ,COUNT(1) AS EMP_CNT
+			              ,SUM(t2.TOT_USE) AS TOT_USE
+			              ,SUM(t3.EDC_SUM_TIME) AS EDC_SUM_TIME
+			              ,SUM(t4.DAYCNT1) AS DAYCNT1
+			              ,SUM(t4.DAYCNT2) AS DAYCNT2
+			        FROM TBHRM_HR_MASTR t1
+			             LEFT OUTER JOIN T_YRYC t2
+			             ON t1.EMPNO = t2.EMPNO
+			             LEFT OUTER JOIN T_EDC t3
+			             ON t1.EMPNO = t3.EMPNO
+			             LEFT OUTER JOIN T_BSRP t4
+			             ON t1.EMPNO = t4.EMPNO
+			        WHERE t1.STTUS_SE <> '009'
+			        GROUP BY t1.DEPT_CODE
+			     ) a2
+			     ON  a1.DEPT_CODE = a2.DEPT_CODE
+			     AND a1.USE_AT = '1'
+			WHERE a1.DEPT_CODE <> '000000'
+			ORDER BY a1.OUTPT_ORDR
+		]]>		
+		
+    </select>
+    
+    <!-- 근태현황정보 목록조회2 -->
+	<select id="EIS030105DAO.selectMnby2List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH T_YRYC AS (
+			    SELECT B.EMPNO,
+			           (NVL(A.SZ1,0)+NVL(A.SZ2,0)+NVL(A.SZ4,0)+NVL(A.SZ5,0)+NVL(A.SZ6,0)+NVL(A.SZ8,0)+NVL(A.SZ12,0)+NVL(A.SZ13,0)) + NVL(C.HOUR_TO_DAY,0) AS TOT_USE
+			    FROM   TBHRM_YRYC_MANAGE B
+			           LEFT OUTER JOIN (
+			                            SELECT A.EMPNO                                           AS EMPNO,
+			                                   SUBSTR(A.BGNDE,0,4)                               AS YEAR,
+			                                   SUM(DECODE(A.ASORT_CODE,'101',A.DAYCNT,0))        AS SZ1,   /*연차*/
+			                                   SUM(DECODE(A.ASORT_CODE,'303',A.DAYCNT,0))        AS SZ2,   /*하계휴가*/
+			                                   SUM(DECODE(A.ASORT_CODE,'202',A.DAYCNT,0))        AS SZ3,   /*병가(사)*/
+			                                   SUM(DECODE(A.ASORT_CODE,'102',A.DAYCNT,0))        AS SZ4,   /*오전연차*/
+			                                   SUM(DECODE(A.ASORT_CODE,'103',A.DAYCNT,0))        AS SZ5,   /*오후연차*/
+			                                   SUM(DECODE(A.ASORT_CODE,'104',A.DAYCNT,0))        AS SZ6,   /*연차취소*/
+			                                   SUM(DECODE(A.ASORT_CODE,'204',A.DAYCNT,0))        AS SZ7,   /*병가(사)취소*/
+			                                   SUM(DECODE(A.ASORT_CODE,'306',A.DAYCNT,0))        AS SZ8,   /*하계휴가취소*/
+			                                   SUM(DECODE(A.ASORT_CODE,'304',A.DAYCNT,0))        AS SZ12,  /*오전하계휴가*/
+			                                   SUM(DECODE(A.ASORT_CODE,'305',A.DAYCNT,0))        AS SZ13  /*오후하계휴가*/
+			                            FROM   TBHRM_WRKCP A
+			                            WHERE SFCOM_GET_SANCTN_KND(A.SANCTN_NO) = '5'
+			                            GROUP BY A.EMPNO
+			                                    ,SUBSTR(A.BGNDE,0,4)
+			                           ) A
+			                ON A.EMPNO = B.EMPNO
+			               AND A.YEAR = B.YEAR
+			           LEFT OUTER JOIN (
+			                            SELECT EMPNO
+			                                  ,YEAR
+			                                  ,TRUNC((SM_402_HOUR + SM_404_HOUR) * 0.125)       AS HOUR_TO_DAY
+			                            FROM   (
+			                                    SELECT EMPNO
+			                                          ,YEAR
+			                                          ,NVL(SUM(TM_402_HOUR), 0) + NVL(TRUNC(SUM(TM_402_MINUTE) / 60), 0) AS SM_402_HOUR
+			                                          ,NVL(SUM(TM_404_HOUR), 0) + NVL(TRUNC(SUM(TM_404_MINUTE) / 60), 0) AS SM_404_HOUR
+			                                    FROM   (
+			                                            SELECT EMPNO
+			                                                  ,SUBSTR(BGNDE,1,4)                   AS YEAR
+			                                                  ,TO_NUMBER(SUBSTR(TIME,1,2)) * DECODE(ASORT_CODE, '403', -1, 1)     AS TM_402_HOUR
+			                                                  ,TO_NUMBER(SUBSTR(TIME,3,4)) * DECODE(ASORT_CODE, '403', -1, 1)     AS TM_402_MINUTE
+			                                                  ,NULL     AS TM_404_HOUR
+			                                                  ,NULL     AS TM_404_MINUTE
+			                                            FROM   TBHRM_WRKCP
+			                                            WHERE  ASORT_CODE IN ('402', '403')
+			                                            AND    SFCOM_GET_SANCTN_KND(SANCTN_NO) = '5'
+			                                            UNION ALL
+			                                            SELECT EMPNO
+			                                                  ,SUBSTR(BGNDE,1,4)                   AS YEAR
+			                                                  ,NULL     AS TM_402_HOUR
+			                                                  ,NULL     AS TM_402_MINUTE
+			                                                  ,TO_NUMBER(SUBSTR(TIME,1,2)) * DECODE(ASORT_CODE, '406', -1, 1) AS TM_404_HOUR
+			                                                  ,TO_NUMBER(SUBSTR(TIME,3,4)) * DECODE(ASORT_CODE, '406', -1, 1) AS TM_404_MINUTE
+			                                                FROM TBHRM_WRKCP
+			                                                WHERE ASORT_CODE                   IN ('404', '406')
+			                                            AND    SFCOM_GET_SANCTN_KND(SANCTN_NO) = '5'
+			                                           )
+			                                    GROUP BY EMPNO, YEAR
+			                                   )
+			                           ) C
+			                ON B.EMPNO = C.EMPNO
+			               AND B.YEAR = C.YEAR
+			    WHERE    B.YEAR  = TO_CHAR(SYSDATE,'YYYY')
+			),
+			T_EDC AS (
+			    SELECT EMPNO, SUM(EDC_RCOGN_TIME) AS EDC_SUM_TIME
+			    FROM TBHRM_EDC_MANAGE
+			    WHERE YEAR = TO_CHAR(SYSDATE,'YYYY')
+			    GROUP BY YEAR,  EMPNO
+			),
+			T_BSRP AS (
+			    SELECT EMPNO
+			         , SUM(DECODE(WHTHRC_AT,'1',BSRP_DAYCNT + 1,0)) AS DAYCNT1
+			         , SUM(DECODE(WHTHRC_AT,'0',BSRP_DAYCNT + 1,0)) AS DAYCNT2
+			    FROM TBHRM_BSRP_INDVDL t1
+			    WHERE NVL(t1.OVSEA_AT, '0') <> '1'                   /*해외출장이 아닌 내역만 조회*/
+			     AND NVL(CANCL_AT,'0') <> '1'                       /*취소여부가 '1' 아닌 내역만 조회*/
+			     AND NOT EXISTS (                                   /*취소출장순번과 일치하지 않는 내역만 조회*/
+			          SELECT 1
+			            FROM TBHRM_BSRP_INDVDL temp
+			           WHERE temp.EMPNO = t1.EMPNO
+			             AND temp.CANCL_BSRP_SEQ = t1.BSRP_SEQ
+			        )
+			     AND BSRP_BGNDE LIKE TO_CHAR(SYSDATE,'YYYY') || '%'
+			     AND SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5'       /*결재가 완료된 내역만 조회*/
+			    GROUP BY EMPNO
+			)
+			SELECT t1.DEPT_CODE
+			      ,t5.DEPT_NM
+			      ,t1.EMPNO
+			      ,t1.EMPNM
+			      ,t6.CODE_NM AS CLSF_SE
+			      ,NVL(t2.TOT_USE,0) AS  A1
+			      ,NVL(t3.EDC_SUM_TIME,0) AS A2
+			      ,NVL(t4.DAYCNT1,0) AS A3
+			      ,NVL(t4.DAYCNT2,0) AS A4
+			FROM TBHRM_HR_MASTR t1
+			     LEFT OUTER JOIN T_YRYC t2
+			     ON t1.EMPNO = t2.EMPNO
+			     LEFT OUTER JOIN T_EDC t3
+			     ON t1.EMPNO = t3.EMPNO
+			     LEFT OUTER JOIN T_BSRP t4
+			     ON t1.EMPNO = t4.EMPNO
+			     LEFT OUTER JOIN VWHRM_DEPT t5
+			     ON t1.DEPT_CODE = t5.DEPT_CODE
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+			     ON  t1.HR_CLSF_SE = t6.CODE
+			     AND t6.GRP_CODE = 'HRM002'
+			WHERE t1.STTUS_SE <> '009'
+			  AND t1.DEPT_CODE = #DEPT_CODE#
+			ORDER BY t1.HR_CLSF_SE
+		]]>		
+		
+    </select>
+    
+
+</sqlMap>

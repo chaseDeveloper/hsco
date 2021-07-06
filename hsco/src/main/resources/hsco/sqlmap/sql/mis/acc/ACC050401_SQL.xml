@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050401_SQL">	
+
+	<!--사업지구별 원가항목명세서 리스트조회 -->
+	<select id="ACC050401DAO.ChitMassterList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC050401DAO.ChitMassterList*/ ]]>
+		SELECT t1.ACCNUT_ACNT_CODE
+		     , t1.ACCNUT_ACNT_NM
+		     , NVL(SUM(t1.CYFD_AMT),0) AS BEF_CYFD_AMT  /*전기이월*/
+		     , NVL(SUM(t1.DR_AMT),0)   AS DR_AMT        /*차변*/
+		     , NVL(SUM(t1.CR_AMT),0)   AS CR_AMT        /*대변*/
+		     , NVL(SUM(JAN_AMT),0)     AS AMT  /*계정잔액(차기이월)*/
+		FROM (
+		    SELECT t2.ACCNUT_ACNT_CODE
+		         , t3.ACCNUT_ACNT_NM
+		         , 0                AS CYFD_AMT
+		         , NVL(t2.DEBTOR_AMOUNT,0) AS DR_AMT    
+		         , NVL(t2.CRDIT_AMOUNT,0)  AS CR_AMT
+		         , DECODE(t3.DBRT_SE, 'D', NVL(t2.DEBTOR_AMOUNT,0) - NVL(t2.CRDIT_AMOUNT,0), 'C', NVL(t2.CRDIT_AMOUNT,0) - NVL(t2.DEBTOR_AMOUNT,0), 0/*잔액이 0 이면 차화성분 확인*/) AS JAN_AMT
+		    FROM TBACC_CHIT_MASTR t1
+		      INNER JOIN TBACC_CHIT_DETAIL t2
+		      ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		      AND t1.CHIT_NO     = t2.CHIT_NO
+		      INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		      ON  t2.ACCNUT_YEAR      = t3.ACCNUT_YEAR
+		      AND t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR   = SUBSTR(#ACCNUT_DATE_ED#,1,4)
+		    AND	  t3.UPPER_ACNT_CODE IN ('1106000','1108000','11040050','11040080')
+		    AND   t1.CHIT_DE     BETWEEN #ACCNUT_DATE_ST# AND #ACCNUT_DATE_ED#
+		    AND   t1.CHIT_CONFM_AT = '1'  /*승인*/
+		    UNION ALL
+		    SELECT t1.ACCNUT_ACNT_CODE
+		         , t1.ACCNUT_ACNT_NM
+		         , DECODE(t1.DBRT_SE, 'D', (NVL(t1.DEBTOR_AMOUNT,0)+NVL(B.DEBTOR_AMOUNT,0)) - (NVL(t1.CRDIT_AMOUNT,0)+NVL(B.CRDIT_AMOUNT,0)), 'C', (NVL(t1.CRDIT_AMOUNT,0)+NVL(B.CRDIT_AMOUNT,0)) - (NVL(t1.DEBTOR_AMOUNT,0)+NVL(B.DEBTOR_AMOUNT,0)), 0) AS CYFD_AMT  /*이월금액*/
+		         , 0 AS DR_AMT    /*차변*/
+		         , 0 AS CR_AMT     /*대변*/
+		         , DECODE(t1.DBRT_SE, 'D', (NVL(t1.DEBTOR_AMOUNT,0)+NVL(B.DEBTOR_AMOUNT,0)) - (NVL(t1.CRDIT_AMOUNT,0)+NVL(B.CRDIT_AMOUNT,0)), 'C', (NVL(t1.CRDIT_AMOUNT,0)+NVL(B.CRDIT_AMOUNT,0)) - (NVL(t1.DEBTOR_AMOUNT,0)+NVL(B.DEBTOR_AMOUNT,0)), 0) AS JAN_AMT
+		    FROM (SELECT t1.ACCNUT_YEAR, 
+ 		                t1.ACCNUT_ACNT_CODE , 
+ 		                t2.ACCNUT_ACNT_NM , 
+ 		                t2.DBRT_SE, 
+ 		                NVL(SUM(t1.DEBTOR_AMOUNT),0) AS DEBTOR_AMOUNT, 
+ 		                NVL(SUM(t1.CRDIT_AMOUNT),0) AS CRDIT_AMOUNT 
+ 		           FROM TBACC_ACCNUT_STACNT t1 
+ 		            INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t2 
+ 		                ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR 
+ 		                AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE 
+ 		          WHERE t1.ACCNUT_YEAR = SUBSTR(#ACCNUT_DATE_ED#,1,4) 
+ 		          		AND	t2.UPPER_ACNT_CODE IN ('1106000','1108000','11040050','11040080')
+ 		                AND t1.ACCNUT_MT = '00' 
+ 		          GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE, t2.ACCNUT_ACNT_NM, t2.DBRT_SE 
+ 		         ) t1 
+                 LEFT OUTER JOIN 
+	             (SELECT B.ACCNUT_YEAR, 
+	                    B.ACCNUT_ACNT_CODE, 
+	                    SUM(B.DEBTOR_AMOUNT) AS DEBTOR_AMOUNT, 
+	                    SUM(B.CRDIT_AMOUNT) AS CRDIT_AMOUNT 
+	               FROM TBACC_CHIT_MASTR A, 
+	                    TBACC_CHIT_DETAIL B 
+	              WHERE A.ACCNUT_YEAR = B.ACCNUT_YEAR 
+	                    AND A.CHIT_NO = B.CHIT_NO 
+	                    AND A.CHIT_DE <![CDATA[<=]]> 
+	                    (SELECT MAX(CHIT_DE) 
+	                      FROM TBACC_CHIT_MASTR A, 
+	                           TBACC_CHIT_DETAIL B 
+	                     WHERE A.CHIT_DE <![CDATA[<]]> #ACCNUT_DATE_ST# 
+	                           AND A.ACCNUT_YEAR = B.ACCNUT_YEAR 
+	                           AND A.CHIT_NO = B.CHIT_NO 
+	                    ) 
+	                    AND A.CHIT_CONFM_AT = '1' 
+	                    AND A.ACCNUT_YEAR = SUBSTR(#ACCNUT_DATE_ST#,1,4) 
+	              GROUP BY B.ACCNUT_YEAR, 
+	                    B.ACCNUT_ACNT_CODE
+	             ) B 
+	             ON t1.ACCNUT_YEAR = B.ACCNUT_YEAR 
+	             AND t1.ACCNUT_ACNT_CODE = B.ACCNUT_ACNT_CODE		      
+		) t1
+		WHERE 1=1
+		GROUP BY t1.ACCNUT_ACNT_CODE
+		       , t1.ACCNUT_ACNT_NM
+		ORDER BY t1.ACCNUT_ACNT_CODE
+		
+    </select>
+ </sqlMap>

@@ -1,0 +1,151 @@
+package hsco.mis.sal.SAL040104;
+
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.nexacro.xapi.data.DataSet;
+
+import hsco.cmm.exception.NexaServiceException;
+import hsco.cmm.ria.nexacro.NexacroConstant;
+import hsco.cmm.ria.nexacro.map.DataSetMap;
+import hsco.cmm.service.BaseService;
+
+
+
+/**
+ * <pre>
+ * @Project Name 	: 화성도시공사 경영정보시스템
+ * @Class Name   	: SAL040103ServiceImpl.java
+ * @Description  	: 퇴직대상자관리
+ * @author       	: 이상명
+ * @since        	: 2017. 9. 22.
+ * @version      	: 1.0
+ * @see          	: 
+ * @COPYRIGHT (c) 2017 NANUMICT, Inc. All Right Reserved.
+ * <pre>
+ * ------------------------------------------------------------------
+ * Modification Information 
+ * ------------------------------------------------------------------
+ *   작성일                        작성자                내용
+ * ------------------------------------------------------------------
+ *  2017. 9. 22.					이상명				최초생성
+ * </pre>  
+ */
+
+@Service("SAL040104Service")
+public class SAL040104ServiceImpl extends BaseService {
+	
+	protected Logger log = LoggerFactory.getLogger(this.getClass());
+	
+    
+    /**
+	 * 퇴직대상자관리 목록을 조회한다.
+	 * @param (DataSetMap, inVar, inDataset, outVar, outDataset) 
+	 * @return void
+	 * @throws NexaServiceException
+	 */
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectRetireTrgterList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		
+		List <Map> records;
+
+		if (inMap != null) {
+			records = (List<Map>)baseDao.list("SAL040104DAO.selectRetireTrgterList", inMap);
+		} else {
+			records = (List<Map>)baseDao.list("SAL040104DAO.selectRetireTrgterList", inVar);
+		}
+		
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		
+		outDataset.put("output3", outDsMap);
+		
+		
+		DataSetMap inDsMap2 = (DataSetMap)inDataset.get("input1");
+		Map inMap2 = null;
+		
+		if (inDsMap2 != null)
+			inMap2 = inDsMap2.get(0);
+		
+		List <Map> records2;
+
+		if (inMap2 != null) {
+			records2 = (List<Map>)baseDao.list("SAL040104DAO.selectRetireTrgter2List", inMap2);
+		} else {
+			records2 = (List<Map>)baseDao.list("SAL040104DAO.selectRetireTrgter2List", inVar);
+		}
+		
+		DataSetMap outDsMap2 = new DataSetMap();
+		outDsMap2.setRowMaps(records2);
+		
+		outDataset.put("output4", outDsMap2);
+			        		
+   		
+   	}
+    
+    /**
+   	 * 퇴직대상자관리 등록, 수정, 삭제
+   	 * @param (DataSetMap, inVar, inDataset, outVar, outDataset) 
+   	 * @return int
+   	 * @throws NexaServiceException
+   	 */
+   	@SuppressWarnings({ "rawtypes" })
+   	
+   	public int RetireTrgterCUD( DataSetMap tranInfo, Map<String, Object> inVar,
+   			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+   			Map<String, DataSetMap> outDataset) throws NexaServiceException {		
+   		
+   		int iRow = 0;
+   		
+   		DataSetMap list = (DataSetMap) inDataset.get("input1");		
+   		int listSize = (list == null) ? 0 : list.size();		
+   		for (int x = 0; x < listSize; x++) {
+   				
+   			Map map = list.get(x);
+   			int rowType = ((Integer) map.get(NexacroConstant.DATASET_ROW_TYPE)).intValue(); 			
+   			switch(rowType) {
+   				case DataSet.ROW_TYPE_INSERTED :
+   					String seq = (String) baseDao.select("SAL040104DAO.selectRetireSalarySeq", map);
+   					map.put("SEQ", seq);
+   					baseDao.insert("SAL040104DAO.RetireTrgterC", map);
+   					baseDao.update("SAL040104DAO.procRtrpayAvrgwage", map);
+   					break;
+   				case DataSet.ROW_TYPE_UPDATED :
+   					baseDao.update("SAL040104DAO.RetireTrgterU", map);
+   					if("1".equals((String)map.get("RECAL_AT"))) {
+   						baseDao.update("SAL040104DAO.procRtrpayAvrgwage", map);
+   					}
+   					break;
+   				case DataSet.ROW_TYPE_DELETED :
+   					baseDao.delete("SAL040104DAO.deleteRtrpayAvrgwage", map);
+   					iRow += baseDao.delete("SAL040104DAO.RetireTrgterD", map);
+   					break;
+   			}
+   			
+   			
+   			String error = (String)map.get("ERROR");
+   			
+   			if(error != null && !"".equals(error)) {
+				throw new NexaServiceException("err.예외상황.발생.SQL", error);
+			}
+   			
+   		}
+   		return iRow;
+   		
+   	}
+   
+    
+   	
+}

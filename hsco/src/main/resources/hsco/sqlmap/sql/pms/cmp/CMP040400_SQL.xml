@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP040400_SQL">
+<!--  설명  : 관계인지급
+	작성자 : 지효정  -->
+
+	<!-- 관계인 목록 -->
+	<select id="CMP040400DAO.thingPartcpntList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+	SELECT
+		 C.OWNER_NM AS NM
+		,C.ADRES
+		,B.PARTCPNT_NO
+		,B.BSNS_AREA_CODE
+		,'0' AS CHK
+	FROM
+		(
+	    	SELECT
+	             BSNS_AREA_CODE	/* 사업지역코드 */
+	            ,THING_SN		/* 물건일련번호 */
+	        FROM TBCMP_THING_WTNNC
+	        WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+	        <isNotEmpty property="LOCPLC_CODE">
+			AND	  LOCPLC_CODE = #LOCPLC_CODE#
+			</isNotEmpty>
+	        GROUP BY BSNS_AREA_CODE, THING_SN, LOCPLC_CODE
+	    )A
+	    ,TBCMP_THING_PARTCPNT B
+	    ,TBCMP_OWNER C
+	WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+	AND   A.THING_SN = B.THING_SN
+	AND   B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+	AND   B.PARTCPNT_NO = C.OWNER_NO
+	AND   C.OWNER_SE = '2'
+	<isNotEmpty property="NM">
+	AND   C.OWNER_NM LIKE '%' ||  #NM# || '%'
+	</isNotEmpty>
+	GROUP BY B.PARTCPNT_NO, C.ADRES, C.OWNER_NM, B.BSNS_AREA_CODE
+	ORDER BY C.OWNER_NM
+	</select>
+
+	<!-- 조서 목록 -->
+	<select id="CMP040400DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT A.AR ,
+		       A.ADRES ,
+		       A.NM ,
+		       A.OWNER_SN ,
+		       (SELECT CODE_NM 
+		         FROM TBCOM_CMMN_CODE 
+		        WHERE GRP_CODE = 'CMP003' 
+		              AND CODE = A.RELATE_KND 
+		       ) RELATE_KND ,
+		       B.LOCPLC_CODE ,
+		       B.FULL_LOCPLC_CODE_NM ,
+		       B.THING_CL ,
+		       B.THING_NM ,
+		       B.LNDCGR_LGSTR ,
+		       B.LNDCGR_INCRPR ,
+		       B.STRCT_STNDRD ,
+		       B.AR_LGSTR ,
+		       B.AR_INCRPR ,
+		       B.UNIT ,
+		       B.UNTPC UNTPC ,
+		       A.RWMNY ,
+		       B.RM_1 , 
+		       SFCMP_GET_CODENM('CMP002', B.UNIT) AS UNIT_NM ,
+		       SFCMP_GET_CODENM('CMP003', A.RELATE_KND) AS RELATE_KND_NM ,
+		       C.CODE_NM AS THING_CL_NM ,
+		       D.OWNER_NM AS PARTCPNT_NM ,
+		       D.ADRES||' '||D.ADRES_DETAIL AS PARTCPNT_ADRES ,
+		       E.LOCPLC,
+		       A.PARTCPNT_NO
+		  FROM
+		       (SELECT AA.BSNS_AREA_CODE ,
+		              AA.THING_SN ,
+		              AA.AR ,
+		              AB.ADRES||' '||AB.ADRES_DETAIL AS ADRES ,
+		              AB.OWNER_NM AS NM ,
+		              AA.OWNER_SN ,
+		              AC.RELATE_KND ,
+		              AC.PARTCPNT_NO ,
+		              AA.RWMNY
+		         FROM TBCMP_THING_OWNER AA, 
+		              TBCMP_OWNER AB, 
+		              TBCMP_THING_PARTCPNT AC 
+		        WHERE AA.BSNS_AREA_CODE = #BSNS_AREA_CODE# 
+		              AND AB.BSNS_AREA_CODE = AA.BSNS_AREA_CODE 
+		              AND AB.OWNER_NO = AA.OWNER_NO 
+		              AND AA.BSNS_AREA_CODE = AC.BSNS_AREA_CODE 
+		              AND AA.THING_SN = AC.THING_SN 
+		              AND AA.OWNER_SN = AC.OWNER_SN 
+		              AND  AB.OWNER_SE = '1'
+					  <isNotEmpty property="PARTCPNT_NO">
+					  AND AC.PARTCPNT_NO IN
+					  <iterate property="ARR_PARTCPNT_NO"  open="(" close=")" conjunction="," >
+					  #ARR_PARTCPNT_NO[]#
+					  </iterate>
+					  </isNotEmpty>
+		       )A,
+		       (SELECT BSNS_AREA_CODE ,
+		              THING_SN ,
+		              LOCPLC_CODE ,
+		              SFCMP_GET_LOCPLC(BSNS_AREA_CODE, LOCPLC_CODE) || ' ' || DECODE(SLNO, NULL, LNM, LNM || '-' || SLNO) AS FULL_LOCPLC_CODE_NM ,
+		              TRIM(THING_CL) AS THING_CL ,
+		              THING_NM ,
+		              LNDCGR_LGSTR ,
+		              LNDCGR_INCRPR ,
+		              AR_LGSTR ,
+		              AR_INCRPR ,
+		              UNIT ,
+		              THING_UNTPC AS UNTPC ,
+		              RWMNY ,
+		              RM_1 ,
+		              STRCT_STNDRD 
+		         FROM TBCMP_THING_WTNNC 
+		        WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE# 
+		       )B ,
+		       TBCOM_CMMN_CODE C ,
+		       TBCMP_OWNER D ,
+		       TBCMP_LOCPLC_INFO E
+		 WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE 
+		       AND A.THING_SN = B.THING_SN
+		       AND 'CMP001' = C.GRP_CODE(+) 
+		       AND B.THING_CL = C.CODE(+) 
+		       AND A.BSNS_AREA_CODE = D.BSNS_AREA_CODE(+)
+		       AND A.PARTCPNT_NO = D.OWNER_NO(+)
+		       AND '2' = D.OWNER_SE(+)
+		       AND A.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+		       AND B.LOCPLC_CODE = E.LOCPLC_CODE
+	           <isNotEmpty property="LOCPLC_CODE">
+			   AND B.LOCPLC_CODE = #LOCPLC_CODE#
+			   </isNotEmpty>
+			ORDER BY NM, B.THING_CL, B.FULL_LOCPLC_CODE_NM, C.CODE_ORDR
+	</select>
+
+
+	<!-- 토지및물건내역(관계인) 레포트 -->
+	<select id="CMP040400DAO.selectRptList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT ROWNUM , 
+		       A.BSNS_AREA_CODE , 
+		       A.PARTCPNT_NM , 
+		       A.PARTCPNT_ADRES , 
+		       A.AR , 
+		       A.ADRES , 
+		       A.NM , 
+		       A.OWNER_SN , 
+		       B.LOCPLC_CODE , 
+		       B.FULL_LOCPLC_CODE_NM , 
+		       B.THING_CL , 
+		       B.THING_NM , 
+		       B.LNDCGR_LGSTR ,
+		       B.LNDCGR_INCRPR ,
+		       B.STRCT_STNDRD ,
+		       B.AR_LGSTR , 
+		       B.AR_INCRPR , 
+		       B.UNIT , 
+		       B.UNTPC , 
+		       B.RWMNY , 
+		       B.RM_1 , 
+		       A.RELATE_KND 
+		  FROM 
+		       (SELECT AA.BSNS_AREA_CODE , 
+		              AA.THING_SN , 
+		              AA.AR , 
+		              AB.ADRES , 
+		              AB.OWNER_NM AS NM , 
+		              AA.OWNER_SN , 
+		              (SELECT MAX(D.OWNER_NM) 
+		                FROM TBCMP_THING_PARTCPNT P, 
+		                     TBCMP_OWNER D 
+		               WHERE P.BSNS_AREA_CODE = AA.BSNS_AREA_CODE 
+		                     AND AA.OWNER_SN = P.OWNER_SN 
+		                     AND AA.THING_SN = P.THING_SN 
+		                     AND D.BSNS_AREA_CODE = P.BSNS_AREA_CODE 
+		                     AND D.OWNER_NO = P.PARTCPNT_NO 
+		                     AND P.PARTCPNT_NO = AC.PARTCPNT_NO 
+		              ) AS PARTCPNT_NM , 
+		              (SELECT MAX(D.ADRES || D.ADRES_DETAIL) 
+		                FROM TBCMP_THING_PARTCPNT P, 
+		                     TBCMP_OWNER D 
+		               WHERE P.BSNS_AREA_CODE = AA.BSNS_AREA_CODE 
+		                     AND AA.OWNER_SN = P.OWNER_SN 
+		                     AND AA.THING_SN = P.THING_SN 
+		                     AND D.BSNS_AREA_CODE = P.BSNS_AREA_CODE 
+		                     AND D.OWNER_NO = P.PARTCPNT_NO 
+		                     AND P.PARTCPNT_NO = AC.PARTCPNT_NO 
+		              ) AS PARTCPNT_ADRES , 
+		              (SELECT CODE_NM 
+		                FROM TBCOM_CMMN_CODE 
+		               WHERE GRP_CODE= 'CMP003' 
+		                     AND CODE = AC.RELATE_KND 
+		              ) AS RELATE_KND 		               
+		         FROM TBCMP_THING_OWNER AA, 
+		              TBCMP_OWNER AB, 
+		              TBCMP_THING_PARTCPNT AC , 
+		              TBCMP_THING_WTNNC AD 
+		        WHERE AA.BSNS_AREA_CODE = #BSNS_AREA_CODE# 
+		              AND AB.BSNS_AREA_CODE = AA.BSNS_AREA_CODE 
+		              AND AA.BSNS_AREA_CODE = AD.BSNS_AREA_CODE 
+		              AND AA.THING_SN = AD.THING_SN 
+		              AND AB.OWNER_NO = AA.OWNER_NO 
+		              AND AA.BSNS_AREA_CODE = AC.BSNS_AREA_CODE 
+		              AND AA.THING_SN = AC.THING_SN 
+		              AND AA.OWNER_SN = AC.OWNER_SN 
+		              AND AC.PARTCPNT_NO = #PARTCPNT_NO# 
+		       )A, 
+		       (SELECT BSNS_AREA_CODE , 
+		              THING_SN , 
+		              LOCPLC_CODE , 
+		              SFCMP_GET_LOCPLC(BSNS_AREA_CODE, LOCPLC_CODE) || ' ' || DECODE(SLNO, NULL, LNM, LNM || '-' || SLNO) AS FULL_LOCPLC_CODE_NM , 
+		              TRIM(THING_CL) AS THING_CL , 
+		              THING_NM , 
+		              LNDCGR_LGSTR , 
+		              LNDCGR_INCRPR , 
+		              AR_LGSTR , 
+		              AR_INCRPR , 
+		              UNIT , 
+		              THING_UNTPC AS UNTPC , 
+		              RWMNY , 
+		              RM_1 , 
+		              STRCT_STNDRD 
+		         FROM TBCMP_THING_WTNNC 
+		        WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE# 
+		       )B 
+		 WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE 
+		       AND A.THING_SN = B.THING_SN 
+		ORDER BY C.NM
+	</select>
+</sqlMap>

@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH030203T06_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 연결계량지표 정보조회 -->
+	<select id="ACH030203T06DAO.selectListMst" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT   A.EVL_YEAR                  AS EVL_YEAR                
+				,A.ODR_SE                    AS ODR_SE                  
+				,A.REFRN_SE                  AS REFRN_SE                
+				,A.IX_CODE                   AS IX_CODE                 
+				,B.IX_NM                     AS IX_NM                   
+				,B.MESURE_CYCLE              AS MESURE_CYCLE            
+				,B.MESURE_UNIT               AS MESURE_UNIT             
+				,B.ACMSLT_VALUE_MANAGE_MTHD  AS ACMSLT_VALUE_MANAGE_MTHD
+				,B.ACMSLT_CALC_FRMLA         AS ACMSLT_CALC_FRMLA    
+				,B.ACHIV_RT_CALC_FRMLA       AS ACHIV_RT_CALC_FRMLA
+                ,B.ACMSLT_INPUT_TY           AS ACMSLT_INPUT_TY
+                ,B.MXMM_EVL_LMT              AS MXMM_EVL_LMT
+                ,B.EXCP_RSLT_CALC_FRMLA      AS EXCP_RSLT_CALC_FRMLA       
+		   FROM TBACH_QYEVAL_REFRN_CNNC A, TBACH_KPI B
+		  WHERE 1=1
+			AND A.EVL_YEAR 	= B.EVL_YEAR
+			AND A.ODR_SE 	= B.ODR_SE
+			AND A.IX_CODE 	= B.IX_CODE
+			AND B.USE_AT 	= '1'
+			AND B.IX_CHARCT = '000' <!-- 계량 -->
+			AND B.IX_SE 	= '004'	<!-- KPI -->
+			AND A.EVL_YEAR 	= #EVL_YEAR#
+			AND A.ODR_SE 	= #ODR_SE#
+			AND A.REFRN_SE 	= #REFRN_SE#
+    </select>
+    
+    <!-- 계량지표 실적참조 Temp조회 -->
+	<select id="ACH030203T06DAO.selectListTemp" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	 	<!--
+		SELECT   B.EVL_YEAR                  AS EVL_YEAR                
+		        ,B.ODR_SE                    AS ODR_SE                  
+		        ,NVL(B.REFRN_SE, #REFRN_SE#) AS REFRN_SE                
+		        ,A.IX_CODE                   AS IX_CODE                 
+		        ,A.IX_NM                     AS IX_NM                   
+		        ,A.MESURE_CYCLE              AS MESURE_CYCLE            
+		        ,A.MESURE_UNIT               AS MESURE_UNIT             
+		        ,A.ACMSLT_VALUE_MANAGE_MTHD  AS ACMSLT_VALUE_MANAGE_MTHD
+		        ,A.ACMSLT_CALC_FRMLA         AS ACMSLT_CALC_FRMLA       
+		   FROM TBACH_KPI A, TBACH_QYEVAL_REFRN_CNNC B
+		  WHERE 1=1
+		    AND A.EVL_YEAR = B.EVL_YEAR(+)
+		    AND A.ODR_SE = B.ODR_SE(+)
+		    AND A.IX_CODE = B.IX_CODE(+)
+		    AND A.USE_AT = '1'
+		    AND A.IX_CHARCT = '000'
+		    AND A.IX_SE = '004'
+		    AND A.EVL_YEAR = #EVL_YEAR#
+		    AND A.ODR_SE = #ODR_SE#
+			<isNotEmpty property="IX_CODE">				    
+		    AND A.IX_CODE = #IX_CODE#
+		    AND B.REFRN_SE(+) = #REFRN_SE#	
+		    </isNotEmpty>>
+		-->	    
+    </select>
+
+	<!-- 상대평가 점수기준 조회 -->
+	<select id="ACH030203T06DAO.mainSearchList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.EVL_YEAR
+		       , A.ODR_SE
+		       , A.IX_CODE
+		       , A.A1
+		       , A.A2
+		       , A.A3
+               , A.A4
+		FROM   TBACH_KPI_RELATIVE A
+		WHERE 1=1
+		  AND A.EVL_YEAR = #EVL_YEAR#
+		  AND A.ODR_SE   = #ODR_SE#
+		  AND A.IX_CODE  = #IX_CODE#
+    </select>
+        
+    <!-- 계량지표 실적참조 내역 조회[전체/조직별] -->
+	<select id="ACH030203T06DAO.selectListDtl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT  A.EVL_YEAR
+              , A.ODR_SE
+              , A.IX_CODE
+              , A.ORGNZT_CODE
+              , SFACH_GET_ORGNZTNM(A.EVL_YEAR, A.ODR_SE, A.ORGNZT_CODE) AS ORGNZT_NM
+              , NVL(B.ACMSLT_YY, #EVL_YEAR#) AS ACMSLT_YY
+              , NVL(B.ACMSLT_MT, #ACMSLT_MT#) AS ACMSLT_MT
+              , NVL(B.REFRN_SE, #REFRN_SE#) AS REFRN_SE
+              , RANK() OVER(ORDER BY B.ACMSLT_C DESC) AS RANK_CALC
+        	  , B.ORGNZT_NMPR
+        	  , B.ACMSLT_A
+        	  , B.ACMSLT_B
+        	  , B.ACMSLT_C
+        	  , B.ACMSLT_D
+        	  , B.ACMSLT_E
+        	  , C.A1          AS ACMSLT_RANK
+        	  , C.A4          AS ACMSLT_SCORE
+        	  , B.APPLC_AT
+        	  , B.APPLC_DE      
+        FROM   TBACH_WGHTVAL A
+              LEFT OUTER JOIN TBACH_QYEVAL_REFRN B
+                           ON A.EVL_YEAR = B.EVL_YEAR
+                          AND A.ODR_SE = B.ODR_SE 
+                          AND A.IX_CODE = B.IX_CODE
+                          AND A.ORGNZT_CODE = B.ORGNZT_CODE
+                          AND B.ACMSLT_YY = #EVL_YEAR#
+                          AND B.ACMSLT_MT = #ACMSLT_MT#
+                          AND B.REFRN_SE = #REFRN_SE#
+              LEFT OUTER JOIN TBACH_KPI_RELATIVE_ACM C
+                           ON A.EVL_YEAR = C.EVL_YEAR
+                          AND A.ODR_SE = C.ODR_SE 
+                          AND A.IX_CODE = C.IX_CODE
+                          AND A.ORGNZT_CODE = C.ORGNZT_CODE
+                          AND C.ACMSLT_MT = #ACMSLT_MT#
+        WHERE  A.EVL_YEAR = #EVL_YEAR#
+          AND  A.ODR_SE = #ODR_SE#
+          AND  A.IX_CODE = #IX_CODE#
+        <isNotEmpty property="ORGNZT_CODE">	
+          AND  A.ORGNZT_CODE = #ORGNZT_CODE#			
+        </isNotEmpty>	  
+        ORDER BY A.ORGNZT_CODE		
+    </select>    
+    
+     <!-- 계량지표 실적참조 등록 -->
+    <insert id="ACH030203T06DAO.dtlC" parameterClass="java.util.HashMap" >
+           MERGE INTO TBACH_QYEVAL_REFRN
+				  USING DUAL
+				  ON (EVL_YEAR = #EVL_YEAR# 
+				      AND ODR_SE = #ODR_SE# 
+				      AND IX_CODE = #IX_CODE# 
+				      AND ORGNZT_CODE = #ORGNZT_CODE# 
+				      AND ACMSLT_YY = #ACMSLT_YY#
+				      AND ACMSLT_MT = #ACMSLT_MT#
+				      AND REFRN_SE = #REFRN_SE#
+				     )
+				  WHEN MATCHED THEN
+				  UPDATE SET 
+				               ORGNZT_NMPR    = #ORGNZT_NMPR#
+							   , ACMSLT_A 	  = #ACMSLT_A#
+							   , ACMSLT_B 	  = #ACMSLT_B#
+							   , ACMSLT_C 	  = #ACMSLT_C#
+							   , ACMSLT_D 	  = #ACMSLT_D#
+							   , ACMSLT_E 	  = #ACMSLT_E#
+							   , ACMSLT_RANK  = #ACMSLT_RANK#
+							   , ACMSLT_SCORE = #ACMSLT_SCORE#
+							   , APPLC_AT     = #APPLC_AT#
+							   , APPLC_DE     = DECODE(#APPLC_AT#,'1',TO_CHAR(SYSDATE,'YYYYMMDD'),NULL)		   
+							   , UPDUSR_ID 	  = #S_USER_ID#
+							   , UPDT_DT 	  = SYSDATE				            
+				  WHEN NOT MATCHED THEN 
+				      
+		    INSERT (
+					EVL_YEAR
+					,ODR_SE
+					,IX_CODE
+					,ORGNZT_CODE
+					,ACMSLT_YY
+					,ACMSLT_MT
+					,REFRN_SE
+					,ORGNZT_NMPR
+					,ACMSLT_A
+					,ACMSLT_B
+					,ACMSLT_C
+					,ACMSLT_D
+					,ACMSLT_E
+					,ACMSLT_RANK
+					,ACMSLT_SCORE
+					,APPLC_AT
+					,APPLC_DE
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+				   )
+			  VALUES
+				   (
+					 #EVL_YEAR#
+					, #ODR_SE#
+					, #IX_CODE#
+					, #ORGNZT_CODE#
+					, #ACMSLT_YY#
+					, #ACMSLT_MT#
+					, #REFRN_SE#
+					, #ORGNZT_NMPR#
+					, #ACMSLT_A#
+					, #ACMSLT_B#
+					, #ACMSLT_C#
+					, #ACMSLT_D#
+					, #ACMSLT_E#
+					, #ACMSLT_RANK#
+					, #ACMSLT_SCORE#
+					, #APPLC_AT#
+					, DECODE(#APPLC_AT#,'1',TO_CHAR(SYSDATE,'YYYYMMDD'),NULL)
+				    , #S_USER_ID#
+				    , SYSDATE
+				    , #S_USER_ID#
+				    , SYSDATE
+					)					
+    </insert>
+
+    <!-- 상대평가실적테이블 등록/수정 -->
+    <update id="ACH030203T06DAO.saveU" parameterClass="java.util.HashMap" >
+           MERGE INTO TBACH_KPI_RELATIVE_ACM
+				  USING DUAL
+				  ON (    EVL_YEAR = #EVL_YEAR# 
+				      AND ODR_SE = #ODR_SE#
+				      AND IX_CODE = #IX_CODE#
+				      AND ORGNZT_CODE = #ORGNZT_CODE#
+				      AND ACMSLT_MT = #ACMSLT_MT#
+				     )
+				  WHEN MATCHED THEN
+				  UPDATE SET 
+				  			  A1       = #ACMSLT_RANK#
+				  			, A4       = #ACMSLT_SCORE#
+				  			, UPDUSR_ID     = #S_USER_ID#
+				  			, UPDT_DT       = SYSDATE
+				  WHEN NOT MATCHED THEN 
+				  INSERT(
+                           EVL_YEAR
+                         , ODR_SE
+                         , IX_CODE
+                         , ORGNZT_CODE
+                         , ACMSLT_MT
+                         , A1
+                         , A2
+                         , A3
+                         , A4
+                         , REGISTER_ID
+                         , REGIST_DT
+                         , UPDUSR_ID
+                         , UPDT_DT
+				            
+				  )VALUES(
+                           #EVL_YEAR#
+                         , #ODR_SE#
+                         , #IX_CODE#
+                         , #ORGNZT_CODE#
+                         , #ACMSLT_MT#
+                         , #ACMSLT_RANK#
+                         , 0
+                         , 0
+                         , #ACMSLT_SCORE#
+				         , #S_USER_ID#
+				         , SYSDATE
+				         , #S_USER_ID#
+				         , SYSDATE
+				  )
+    </update>  
+        
+    <!-- 계량지표 실적참조 정보  수정 -->
+    <update id="ACH030203T06DAO.dtlU" parameterClass="java.util.HashMap" >
+		UPDATE TBACH_QYEVAL_REFRN
+		   SET ORGNZT_NMPR  = #ORGNZT_NMPR#
+			   ,ACMSLT_A 	= #ACMSLT_A#
+			   ,ACMSLT_B 	= #ACMSLT_B#
+			   ,ACMSLT_C 	= #ACMSLT_C#
+			   ,ACMSLT_D 	= #ACMSLT_D#
+			   ,ACMSLT_E 	= #ACMSLT_E#
+			   ,ACMSLT_RANK = #ACMSLT_RANK#
+			   ,ACMSLT_SCORE = #ACMSLT_SCORE#
+			  , APPLC_AT    = #APPLC_AT#
+			  , APPLC_DE   	= DECODE(#APPLC_AT#,'1',TO_CHAR(SYSDATE,'YYYYMMDD'),NULL)		   
+			   ,UPDUSR_ID 	= #S_USER_ID#
+			   ,UPDT_DT 	= SYSDATE
+		 WHERE 1=1
+		   AND EVL_YEAR 	= #EVL_YEAR#
+		   AND ODR_SE 		= #ODR_SE#
+		   AND IX_CODE  	= #IX_CODE#
+		   AND REFRN_SE 	= #REFRN_SE#	
+		   AND ORGNZT_CODE 	= #ORGNZT_CODE#
+    </update>       
+    
+    <!-- 계량지표 실적참조 정보 삭제 -->
+    <delete id="ACH030203T06DAO.dtlD" parameterClass="java.util.HashMap" >
+		DELETE TBACH_QYEVAL_REFRN		   
+		 WHERE 1=1
+		   AND EVL_YEAR 	= #EVL_YEAR#
+		   AND ODR_SE 		= #ODR_SE#
+		   AND IX_CODE  	= #IX_CODE#
+		   AND REFRN_SE 	= #REFRN_SE#	
+		   AND ORGNZT_CODE 	= #ORGNZT_CODE#
+    </delete>    
+
+    <!-- 계량지표배정실적 수정/신규 -->
+    <update id="ACH030203T06DAO.qyevalDstbAcmsltU" parameterClass="java.util.HashMap" >
+		MERGE INTO TBACH_QYEVAL_DSTB_ACMSLT
+		USING DUAL ON (  
+		                  EVL_YEAR = #EVL_YEAR#
+				      AND ODR_SE = #ODR_SE#
+				      AND IX_CODE = #IX_CODE#
+				      AND ORGNZT_CODE = #ORGNZT_CODE#
+				      AND ACMSLT_YY = #EVL_YEAR#
+				      AND ACMSLT_MT = #ACMSLT_MT#
+				      )
+		WHEN MATCHED THEN
+			UPDATE SET 
+					  ACMSLT_VAL   = #MT_ACMSLT_VAL#     <!-- 월실적 -->
+					, RESULT_SCORE = #MT_RESULT_SCORE#   <!-- 월성과점수 -->
+					, UPDUSR_ID    = #S_USER_ID#
+					, UPDT_DT 	   = SYSDATE
+		WHEN NOT MATCHED THEN
+			INSERT (
+				  EVL_YEAR
+				, ODR_SE
+				, IX_CODE
+				, ORGNZT_CODE
+				, ACMSLT_YY
+				, ACMSLT_MT
+				, ACMSLT_VAL
+				, RESULT_SCORE
+				, REGISTER_ID
+				, REGIST_DT
+				, UPDUSR_ID
+				, UPDT_DT	
+				)
+			VALUES	(
+				 #EVL_YEAR#
+				, #ODR_SE#
+				, #IX_CODE#
+				, #ORGNZT_CODE#
+				, #EVL_YEAR#
+				, #ACMSLT_MT#
+				, #MT_ACMSLT_VAL#	<!-- 월실적 -->
+				, #MT_RESULT_SCORE# <!-- 월설과점수 -->
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+			)
+    </update>
+    
+    <!-- 계량지표결과 테이블  등록(수정) -->
+    <update id="ACH030203T06DAO.qyevalResultU" parameterClass="java.util.HashMap" >
+		UPDATE TBACH_QYEVAL_RESULT 
+		   SET SM_ACMSLTVAL =  
+		       <!-- 합계실적치 -->
+               CASE #ACMSLT_INPUT_TY#
+		           WHEN '001'   <!-- 누계합산 -->
+		           THEN 
+		               (SELECT SUM(k.ACMSLT_VAL) 
+		                 FROM TBACH_QYEVAL_DSTB_ACMSLT k 
+		                WHERE 1=1   
+                          AND k.EVL_YEAR = #EVL_YEAR#
+                          AND k.ODR_SE = #ODR_SE#
+                          AND k.IX_CODE = #IX_CODE#                          
+                          AND k.ORGNZT_CODE = #ORGNZT_CODE#
+                        GROUP BY k.EVL_YEAR,k.ODR_SE,k.IX_CODE,k.ORGNZT_CODE
+		               ) 
+		           WHEN '002' <!-- 누계평균 -->
+		           THEN 
+		               (SELECT AVG(k.ACMSLT_VAL) 
+		                 FROM TBACH_QYEVAL_DSTB_ACMSLT k 
+		                WHERE 1=1
+                          AND k.EVL_YEAR = #EVL_YEAR#
+                          AND k.ODR_SE = #ODR_SE#
+                          AND k.IX_CODE = #IX_CODE#                          
+                          AND k.ORGNZT_CODE = #ORGNZT_CODE#
+		                  AND k.ACMSLT_VAL IS NOT NULL
+                     GROUP BY k.EVL_YEAR,k.ODR_SE,k.IX_CODE,k.ORGNZT_CODE                          
+           	            )
+		           WHEN '003' <!--  누계실적치 -->
+		           THEN            	               
+		               (SELECT * 
+                          FROM (SELECT k.ACMSLT_VAL 
+                                  FROM TBACH_QYEVAL_DSTB_ACMSLT k 
+                                 WHERE 1=1
+                                   AND k.EVL_YEAR = #EVL_YEAR#
+                                   AND k.ODR_SE = #ODR_SE#
+                                   AND k.IX_CODE = #IX_CODE#                          
+                                   AND k.ORGNZT_CODE = #ORGNZT_CODE#
+                                   AND k.ACMSLT_VAL IS NOT NULL
+                                 ORDER BY k.ACMSLT_YY DESC,TO_NUMBER(k.ACMSLT_MT) DESC ) 
+	                       <![CDATA[	
+			                WHERE ROWNUM<=1 
+			               ]]> 
+                        )			                         	                
+		           ELSE  0 END
+		      , LAST_RESULT_SCORE =
+				<!-- 최종결과점수 -->		      
+                CASE #ACHIV_RT_CALC_FRMLA# 
+		           WHEN '001' <!--  실적치/목표치 -->
+		           THEN 
+		               (SELECT DECODE(NVL(TO_NUMBER(#FINAL_GOAL#),0),0,0,
+		                       TO_NUMBER(#	#) / TO_NUMBER(#FINAL_GOAL#) )
+		                       * TO_NUMBER(#EVL_WGHTVAL#) 
+		                  FROM DUAL
+		                 WHERE 1=1 
+		               ) 
+		           WHEN '002' <!--  목표치/실적치 -->
+		           THEN 
+		               (SELECT DECODE(NVL(TO_NUMBER(#FINAL_ACMSLT#),0),0,1,TO_NUMBER(#FINAL_GOAL#) / TO_NUMBER(#FINAL_ACMSLT#) )
+		                       * TO_NUMBER(#EVL_WGHTVAL#)   
+		                  FROM DUAL
+		                 WHERE 1=1
+		               ) 
+       			   ELSE 0 END
+		      , ACMSLTVAL_RT =
+				<!-- 달성율 -->		      
+                CASE #ACHIV_RT_CALC_FRMLA# 
+		           WHEN '001' <!--  실적치/목표치 -->
+		           THEN 
+		               (SELECT DECODE(NVL(TO_NUMBER(#FINAL_GOAL#),0),0,0,
+		                       TO_NUMBER(#FINAL_ACMSLT#) / TO_NUMBER(#FINAL_GOAL#) * 100 )
+		                  FROM DUAL
+		                 WHERE 1=1 
+		               ) 
+		           WHEN '002' <!--  목표치/실적치 -->
+		           THEN 
+		               (SELECT DECODE(NVL(TO_NUMBER(#FINAL_ACMSLT#),0),0,1,
+		                       TO_NUMBER(#FINAL_GOAL#) / TO_NUMBER(#FINAL_ACMSLT#) * 100)		                         
+		                  FROM DUAL
+		                 WHERE 1=1
+		               ) 
+       			   ELSE 0 END       			   
+			  , UPDUSR_ID 	= #S_USER_ID#
+			  , UPDT_DT 	= SYSDATE
+	      WHERE 1=1
+            AND EVL_YEAR = #EVL_YEAR#
+	        AND ODR_SE = #ODR_SE#
+	        AND IX_CODE = #IX_CODE#
+	        AND ORGNZT_CODE = #ORGNZT_CODE#
+    </update>    
+</sqlMap>

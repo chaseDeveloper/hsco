@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL030201_SQL">	
+	
+	<!-- 최종지급년월 조회 -->
+	<select id="SAL030201DAO.selectLastPymntYm" resultClass="java.util.HashMap">
+		SELECT MAX(PYMNT_YM) AS PYMNT_YM
+		FROM TBSAL_MT_SALARY_CALC
+		WHERE CLOS_AT = '1'
+	</select>
+	
+	<!-- 급여명세서정보 목록조회 -->
+	<select id="SAL030201DAO.selectMtSalaryDtstmnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH TBL_SALARY AS (
+		      SELECT
+		           NVL(t1.PYMNT_YM,t2.PYMNT_YM) AS PYMNT_YM
+		          ,NVL(t1.PYMNT_DDC_CODE,t2.PYMNT_DDC_CODE) AS PYMNT_DDC_CODE
+		          ,NVL(t1.AMOUNT,0) AS AMOUNT
+		      FROM (SELECT PYMNT_YM, EMPNO, PYMNT_DDC_CODE, SUM(AMOUNT) AS AMOUNT
+		            FROM TBSAL_MT_SALARY_DTLS a
+		            WHERE PYMNT_YM = #PYMNT_YM#
+		              AND SN LIKE #SN#
+		              AND EMPNO = #EMPNO#
+		              AND EXISTS (
+		                  SELECT 1
+		                  FROM TBSAL_MT_SALARY_CALC b
+		                  WHERE a.PYMNT_YM = b.PYMNT_YM
+		                    AND a.SN = b.SN
+		                    AND b.CLOS_AT = '1'
+		              )
+		            GROUP BY PYMNT_YM, EMPNO, PYMNT_DDC_CODE
+		           ) t1
+		           FULL OUTER JOIN
+		          (SELECT PYMNT_YM, PYMNT_DDC_CODE
+		           FROM TBSAL_MT_SALARY_IEM
+		           WHERE PYMNT_YM = #PYMNT_YM#
+		             AND SN LIKE #SN#
+		             AND JSSFC_SE = (SELECT JSSFC_SE FROM TBHRM_HR_MASTR WHERE EMPNO = #EMPNO#)
+		           GROUP BY PYMNT_YM, PYMNT_DDC_CODE
+		          ) t2
+		          ON  t1.PYMNT_YM = t2.PYMNT_YM
+		          AND t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+		)
+		SELECT t2.PYMNT_DDC_CODE_NM
+		      ,t1.AMOUNT
+		FROM TBL_SALARY t1
+		     INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE t2
+		     ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+		WHERE t2.PYMNT_DDC_SE = #PYMNT_DDC_SE#
+		ORDER BY t2.OUTPT_ORDR	
+	</select>
+			 
+</sqlMap>

@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FMS030201_SQL">
+
+	<!-- 시설물 조회 -->
+	<select id="FMS030201DAO.selectFcltsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH CHCK_DGNSS_PLAN_T AS (
+		    SELECT FCLTS_MANAGE_SN
+		          ,YEAR
+		          ,SUM(1)                                               AS CNT
+		          ,SUM(DECODE(CONFM_AT, '1', 1, 0))                     AS CONFM_CNT
+		          ,SUM(DECODE(CONFM_AT, '1', NVL(CT, 0), 0))            AS CONFM_AMOUNT
+		    FROM   TBFMS_CHCK_DGNSS_ACMSLT
+		    GROUP BY FCLTS_MANAGE_SN, YEAR
+		), MENDNG_REINFC_PLAN_T AS (
+		    SELECT FCLTS_MANAGE_SN
+		          ,YEAR
+		          ,SUM(1)                                               AS CNT
+		          ,SUM(DECODE(CONFM_AT, '1', 1, 0))                     AS CONFM_CNT
+		          ,SUM(DECODE(CONFM_AT, '1', NVL(CNTRWK_CT, 0), 0))     AS CONFM_AMOUNT
+		    FROM   TBFMS_MENDNG_REINFC_ACMSLT
+		    GROUP BY FCLTS_MANAGE_SN, YEAR
+		)
+		SELECT t1.SN
+		      ,#YEAR#                       AS YEAR
+		      ,t1.FCLTS_SE_SN
+		      ,t2.ASORT_SE
+		      ,t3.CODE_NM                   AS ASORT_NM
+		      ,t1.MANAGE_NO
+		      ,t1.MANAGE_DEPT_CODE
+		      ,t4.DEPT_NM                   AS MANAGE_DEPT_NM
+		      ,t1.FCLTS_NM
+		      ,t1.COMPET_DE
+		      ,t1.CONFM_AT
+		      ,NVL(t5.CNT,0)                AS CHCK_NY_CNT
+		      ,NVL(t5.CONFM_CNT,0)          AS CHCK_NY_CONFM_CNT
+		      ,NVL(t5.CONFM_AMOUNT,0)       AS CHCK_NY_CONFM_AMOUNT
+		      ,NVL(t6.CNT,0)                AS CHCK_BY_CNT
+		      ,NVL(t6.CONFM_CNT,0)          AS CHCK_BY_CONFM_CNT
+		      ,NVL(t6.CONFM_AMOUNT,0)       AS CHCK_BY_CONFM_AMOUNT
+		      ,NVL(t7.CNT,0)                AS MENDNG_NY_CNT
+		      ,NVL(t7.CONFM_CNT,0)          AS MENDNG_NY_CONFM_CNT
+		      ,NVL(t7.CONFM_AMOUNT,0)       AS MENDNG_NY_CONFM_AMOUNT
+		      ,NVL(t8.CNT,0)                AS MENDNG_BY_CNT
+		      ,NVL(t8.CONFM_CNT,0)          AS MENDNG_BY_CONFM_CNT
+		      ,NVL(t8.CONFM_AMOUNT,0)       AS MENDNG_BY_CONFM_AMOUNT
+		FROM   TBFMS_REPRSNT_FCLTS_MANAGE t1
+		       LEFT OUTER JOIN TBFMS_FCLTS_SE_MANAGE t2
+		            ON t1.FCLTS_SE_SN = t2.SN
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		            ON t2.ASORT_SE = t3.CODE
+		           AND t3.GRP_CODE = 'FMS001'
+		       LEFT OUTER JOIN TBHRM_DEPT t4
+		            ON t1.MANAGE_DEPT_CODE = t4.DEPT_CODE
+		       LEFT OUTER JOIN CHCK_DGNSS_PLAN_T t5
+		            ON t1.SN = t5.FCLTS_MANAGE_SN
+		           AND t5.YEAR = #YEAR#
+		       LEFT OUTER JOIN CHCK_DGNSS_PLAN_T t6
+		            ON t1.SN = t6.FCLTS_MANAGE_SN
+		           AND t6.YEAR = (#YEAR#-1)
+		       LEFT OUTER JOIN MENDNG_REINFC_PLAN_T t7
+		            ON t1.SN = t7.FCLTS_MANAGE_SN
+		           AND t7.YEAR = #YEAR#
+		       LEFT OUTER JOIN MENDNG_REINFC_PLAN_T t8
+		            ON t1.SN = t8.FCLTS_MANAGE_SN
+		           AND t8.YEAR = (#YEAR#-1)
+		WHERE  t1.CONFM_AT = '1'
+	<isNotEmpty property="DEPT_CODE">
+		AND    t1.MANAGE_DEPT_CODE = #DEPT_CODE#
+	</isNotEmpty>
+		ORDER BY t1.SN
+		        ,t1.FCLTS_SE_SN
+	</select>
+
+
+	<!-- 점검진단실적 조회 -->
+	<select id="FMS030201DAO.selectChckDgnssAcmslt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.FCLTS_MANAGE_SN
+		      ,t1.YEAR
+		      ,t1.SN
+		      ,t1.CHCK_DGNSS_SE
+		      ,t1.CHCK_BGNDE
+		      ,t1.CHCK_ENDDE
+		      ,t1.RSPNSBL_TCNXPRT
+		      ,t1.PRECISE_DGNSS_NEED_AT
+		      ,t1.CT
+		      ,t1.SAFE_GRAD_SE
+		      ,t1.DGNSS_RESULT
+		      ,t1.MENDNG_ARTCL
+		      ,t1.FAN_ENNC_SE
+		      ,t1.FAN_CHCK_MATTER
+		      ,t1.FAN_MENDNG_NEED_AT
+		      ,t1.PRUF_FILE_SN
+		      ,t1.CONFM_AT
+		      ,t1.CONFM_DE
+		      ,t2.CODE_NM || CHR(13) || CHR(10) || '(' || TO_CHAR(TO_DATE(t1.CHCK_BGNDE, 'YYYYMMDD'), 'YY/MM/DD') || ' ~ ' || TO_CHAR(TO_DATE(t1.CHCK_ENDDE, 'YYYYMMDD'), 'YY/MM/DD') || ')' AS RELATE_CHCK_DGNSS_NM
+		FROM   TBFMS_CHCK_DGNSS_ACMSLT t1
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		            ON t1.CHCK_DGNSS_SE = t2.CODE
+		           AND t2.GRP_CODE = 'FMS022'
+		WHERE  t1.FCLTS_MANAGE_SN = #FCLTS_MANAGE_SN#
+		AND    t1.YEAR = #YEAR#
+	<isNotEmpty property="CONFM_AT">
+		AND    t1.CONFM_AT = #CONFM_AT#
+	</isNotEmpty>
+	<isNotEmpty property="CHCK_DGNSS_SE">
+		AND    t1.CHCK_DGNSS_SE = #CHCK_DGNSS_SE#
+	</isNotEmpty>
+	<isNotEmpty property="CHCK_BGNDE">
+		<isNotEmpty property="CHCK_ENDDE">
+			AND    (
+			        t1.CHCK_BGNDE BETWEEN #CHCK_BGNDE# AND #CHCK_ENDDE#
+			        OR
+			        t1.CHCK_ENDDE BETWEEN #CHCK_BGNDE# AND #CHCK_ENDDE#
+			       )
+		</isNotEmpty>
+	</isNotEmpty>
+		ORDER BY t1.FCLTS_MANAGE_SN
+		        ,t1.YEAR
+		        ,t1.SN
+	</select>
+
+
+	<!-- 점검진단실적 추가 -->
+	<insert id="FMS030201DAO.insertChckDgnssAcmslt" parameterClass="java.util.HashMap">
+		INSERT INTO TBFMS_CHCK_DGNSS_ACMSLT (
+		     FCLTS_MANAGE_SN
+		    ,YEAR
+		    ,SN
+		    ,CHCK_DGNSS_SE
+		    ,CHCK_BGNDE
+		    ,CHCK_ENDDE
+		    ,RSPNSBL_TCNXPRT
+		    ,PRECISE_DGNSS_NEED_AT
+		    ,CT
+		    ,SAFE_GRAD_SE
+		    ,DGNSS_RESULT
+		    ,MENDNG_ARTCL
+		    ,FAN_ENNC_SE
+		    ,FAN_CHCK_MATTER
+		    ,FAN_MENDNG_NEED_AT
+		    ,PRUF_FILE_SN
+		    ,CONFM_AT
+		    ,CONFM_DE
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES (
+		     #FCLTS_MANAGE_SN#
+		    ,#YEAR#
+		    ,(SELECT NVL(MAX(SN),0)+1
+		      FROM   TBFMS_CHCK_DGNSS_ACMSLT
+		      WHERE  FCLTS_MANAGE_SN = #FCLTS_MANAGE_SN#
+		      AND    YEAR = #YEAR#
+		     )
+		    ,#CHCK_DGNSS_SE#
+		    ,#CHCK_BGNDE#
+		    ,#CHCK_ENDDE#
+		    ,#RSPNSBL_TCNXPRT#
+		    ,#PRECISE_DGNSS_NEED_AT#
+		    ,#CT#
+		    ,#SAFE_GRAD_SE#
+		    ,#DGNSS_RESULT#
+		    ,#MENDNG_ARTCL#
+		    ,#FAN_ENNC_SE#
+		    ,#FAN_CHCK_MATTER#
+		    ,#FAN_MENDNG_NEED_AT#
+		    ,#PRUF_FILE_SN#
+		    ,#CONFM_AT#
+		    ,#CONFM_DE#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	</insert>
+
+
+	<!-- 점검진단실적 수정 -->
+	<update id="FMS030201DAO.updateChckDgnssAcmslt" parameterClass="java.util.HashMap">
+		UPDATE TBFMS_CHCK_DGNSS_ACMSLT
+		SET    FCLTS_MANAGE_SN       = #FCLTS_MANAGE_SN#
+		      ,YEAR                  = #YEAR#
+		      ,SN                    = #SN#
+		      ,CHCK_DGNSS_SE         = #CHCK_DGNSS_SE#
+		      ,CHCK_BGNDE            = #CHCK_BGNDE#
+		      ,CHCK_ENDDE            = #CHCK_ENDDE#
+		      ,RSPNSBL_TCNXPRT       = #RSPNSBL_TCNXPRT#
+		      ,PRECISE_DGNSS_NEED_AT = #PRECISE_DGNSS_NEED_AT#
+		      ,CT                    = #CT#
+		      ,SAFE_GRAD_SE          = #SAFE_GRAD_SE#
+		      ,DGNSS_RESULT          = #DGNSS_RESULT#
+		      ,MENDNG_ARTCL          = #MENDNG_ARTCL#
+		      ,FAN_ENNC_SE           = #FAN_ENNC_SE#
+		      ,FAN_CHCK_MATTER       = #FAN_CHCK_MATTER#
+		      ,FAN_MENDNG_NEED_AT    = #FAN_MENDNG_NEED_AT#
+		      ,PRUF_FILE_SN          = #PRUF_FILE_SN#
+		      ,CONFM_AT              = #CONFM_AT#
+		      ,CONFM_DE              = #CONFM_DE#
+		      ,UPDUSR_ID             = #S_USER_ID#
+		      ,UPDT_DT               = SYSDATE
+		WHERE  FCLTS_MANAGE_SN       = #FCLTS_MANAGE_SN#
+		AND    YEAR                  = #YEAR#
+		AND    SN                    = #SN#
+	</update>
+
+
+	<!-- 점검진단실적 삭제 -->
+	<delete id="FMS030201DAO.deleteChckDgnssAcmslt" parameterClass="java.util.HashMap">
+		DELETE
+		FROM   TBFMS_CHCK_DGNSS_ACMSLT
+		WHERE  FCLTS_MANAGE_SN       = #FCLTS_MANAGE_SN#
+		AND    YEAR                  = #YEAR#
+		AND    SN                    = #SN#
+	</delete>
+
+</sqlMap>

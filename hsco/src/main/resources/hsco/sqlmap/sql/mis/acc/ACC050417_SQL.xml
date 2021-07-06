@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050417_SQL">	
+	
+	<!-- 불러오기 -->
+	<select id="ACC050417DAO.callData" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+	<![CDATA[/*ACC050417DAO.callData*/]]>
+		WITH
+		TAB_01 AS( /* 총세대 */
+			SELECT W1.HOUSE_CODE
+			     , COUNT(*) AS TOT_CNT
+			  FROM TBSLS_HOUSE_DONG_HO W1
+			 WHERE 1 = 1
+			 GROUP BY W1.HOUSE_CODE
+		),
+		TAB_02 AS( /* 분양전환세대 */
+			SELECT W2.HOUSE_CODE
+			     , COUNT(*) AS LTTOT_CNT
+			  FROM TBSLS_HCNTRCTR W2
+			 WHERE 1 = 1
+			   AND W2.CNTRCTR_STTUS_CODE = '01'
+			   AND W2.RENT_LTTOT_CNVRS_DE IS NOT NULL
+			 GROUP BY W2.HOUSE_CODE
+		),
+		TAB_03 AS( /* 공가(빈집) */
+			SELECT T1.HOUSE_CODE
+			     , COUNT(*) AS EMPTY_CNT
+			  FROM TBSLS_HOUSE_DONG_HO T1
+			 WHERE 1 = 1
+				   AND NOT EXISTS ( SELECT 1
+				                      FROM TBSLS_HCNTRCTR S1
+				                     WHERE 1 = 1
+				                       AND S1.HOUSE_CODE = T1.HOUSE_CODE
+				                       AND S1.DONG = T1.DONG
+				                       AND S1.HO = T1.HO
+				                       AND S1.CNTRCTR_STTUS_CODE = '01'
+				                  )
+		 GROUP BY HOUSE_CODE
+		),
+		TAB_04 AS( /* 해약금액 */
+			SELECT S1.HOUSE_CODE
+			     , SUM(S2.RCIV_AMOUNT) AS CANCL_PAYAMT
+			  FROM TBSLS_HCNTRCTR_CANCL S1
+			     , TBSLS_HOUSE_LTTOT_PAY S2     
+			 WHERE 1 = 1
+			   AND S1.CNTRCTR_NO = S2.CNTRCTR_NO
+			   AND S1.CANCL_DE BETWEEN #YEAR#||'0101' AND #YEAR#||'1231'
+			   AND S2.PAY_CODE IN ('R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R9')
+			   AND S2.RCIV_DE BETWEEN #YEAR#||'0101' AND #YEAR#||'1231'
+			 GROUP BY S1.HOUSE_CODE
+		)
+		SELECT 
+		       SFSLS_HOUSE_NM(T1.HOUSE_CODE, 'HOUSE_NM') AS ALL_HOUSE_NM
+		     , T1.HOUSE_CODE
+		     , T2.TOT_CNT
+		     , NVL(T3.LTTOT_CNT,0)                                    AS LTTOT_CNT
+		     , T2.TOT_CNT - NVL(T3.LTTOT_CNT,0)                       AS REMAIN_CNT
+		     , T2.TOT_CNT - NVL(T3.LTTOT_CNT,0) - NVL(T4.EMPTY_CNT,0) AS LIVE_CNT
+		     , '0'    AS HOUSE_AMOUNT              /*주택금액*/
+		     , '0'    AS RENT_HOUSE_GTN            /*임대주택보증금*/
+		     , '0'    AS MRFN_HOUSE_ENDW           /*국민주택기금*/
+		     , '0'    AS LTTOT_BSIS_AMOUNT         /*분양기초금액*/
+		     , #YEAR# AS ACCNUT_YEAR
+		  FROM (
+		          SELECT S2.HOUSE_CODE
+		               , SUM(S1.RCIV_AMOUNT) AS RCIV_AMOUNT
+		            FROM TBSLS_HOUSE_LTTOT_PAY S1
+		               , TBSLS_HCNTRCTR S2
+		           WHERE 1 = 1
+		             AND S1.CNTRCTR_NO = S2.CNTRCTR_NO
+		             AND S1.PAY_CODE IN ('R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R9')
+		             AND S1.RCIV_DE BETWEEN #YEAR#||'0101' AND #YEAR#||'1231'
+		           GROUP BY S2.HOUSE_CODE
+		       ) T1
+		     , TAB_01 T2
+		     , TAB_02 T3
+		     , TAB_03 T4
+		     , TAB_04 T5
+		     , TBACC_INORG_RENT_HOUSE_DTSTMN T6
+		 WHERE 1 = 1
+		   AND T1.HOUSE_CODE = T2.HOUSE_CODE
+		   AND T1.HOUSE_CODE = T3.HOUSE_CODE(+)
+		   AND T1.HOUSE_CODE = T4.HOUSE_CODE(+)
+		   AND T1.HOUSE_CODE = T5.HOUSE_CODE(+)
+		   AND T1.HOUSE_CODE = T6.HOUSE_CODE(+)
+		   AND T6.ACCNUT_YEAR = #YEAR#
+	</select>
+	
+	<!-- 장기임대주택 명세서 -->
+	<select id="ACC050417DAO.select" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+	<![CDATA[/*ACC050417DAO.select*/]]>
+		SELECT 
+		       SFSLS_HOUSE_NM(T1.HOUSE_CODE, 'HOUSE_NM') AS ALL_HOUSE_NM
+		     , T1.HOUSE_CODE
+		     , T1.TOT_HSHLD                AS TOT_CNT
+		     , T1.LTTOT_CNVRS_HSHLD        AS LTTOT_CNT
+		     , T1.REMNDR_HSHLD             AS REMAIN_CNT
+		     , T1.MVN_HSHLD                AS LIVE_CNT
+		     , NVL(T1.HOUSE_AMOUNT,0)      AS HOUSE_AMOUNT              /*주택금액*/
+		     , NVL(T1.RENT_HOUSE_GTN,0)    AS RENT_HOUSE_GTN            /*임대주택보증금*/
+		     , NVL(T1.MRFN_HOUSE_ENDW,0)   AS MRFN_HOUSE_ENDW           /*국민주택기금*/
+		     , NVL(T1.LTTOT_BSIS_AMOUNT,0) AS LTTOT_BSIS_AMOUNT         /*분양기초금액*/
+		     , #YEAR# AS ACCNUT_YEAR
+		  FROM TBACC_INORG_RENT_HOUSE_DTSTMN T1
+		 WHERE 1 = 1
+		 AND   ACCNUT_YEAR = #YEAR#
+	</select>
+	
+	<!-- 장기임대주택 저장 -->
+	<update id="ACC050417DAO.inorgRentHouseC" parameterClass="java.util.HashMap">
+		<![CDATA[ /*ACC050417DAO.inorgRentHouseC*/ ]]>
+		MERGE INTO TBACC_INORG_RENT_HOUSE_DTSTMN
+		  USING DUAL
+		  ON (HOUSE_CODE = #HOUSE_CODE# AND ACCNUT_YEAR = #ACCNUT_YEAR#)
+		  WHEN MATCHED THEN
+		    UPDATE SET
+				 HOUSE_AMOUNT       = #HOUSE_AMOUNT#
+				,RENT_HOUSE_GTN     = #RENT_HOUSE_GTN#
+				,MRFN_HOUSE_ENDW    = #MRFN_HOUSE_ENDW#
+				,LTTOT_BSIS_AMOUNT  = #LTTOT_BSIS_AMOUNT#
+				,UPDUSR_ID          = #S_USER_ID#
+				,UPDT_DT            = SYSDATE    
+			WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+			AND   HOUSE_CODE  = #HOUSE_CODE#
+		  WHEN NOT MATCHED THEN
+			INSERT (
+				 ACCNUT_YEAR                         /*회계년도*/
+				,HOUSE_CODE                          /*주택코드*/
+				,TOT_HSHLD                           /*총세대*/
+				,LTTOT_CNVRS_HSHLD                   /*분양전환세대*/
+				,REMNDR_HSHLD                        /*잔여세대*/
+				,MVN_HSHLD                           /*입주세대*/
+				,HOUSE_AMOUNT                        /*주택금액*/
+				,RENT_HOUSE_GTN                      /*임대주택보증금*/
+				,MRFN_HOUSE_ENDW                     /*국민주택기금*/
+				,LTTOT_BSIS_AMOUNT                   /*분양기초금액*/
+				,REGISTER_ID                         /*등록자ID*/
+				,REGIST_DT                           /*등록일시*/
+				,UPDUSR_ID                           /*수정자ID*/
+				,UPDT_DT                             /*수정일시*/
+			) VALUES (
+				 #ACCNUT_YEAR#                       /*회계년도*/
+				,#HOUSE_CODE#                        /*주택코드*/
+				,#TOT_CNT#                           /*총세대*/
+				,#LTTOT_CNT#                         /*분양전환세대*/
+				,#REMAIN_CNT#                        /*잔여세대*/
+				,#LIVE_CNT#                          /*입주세대*/
+				,#HOUSE_AMOUNT#                      /*주택금액*/
+				,#RENT_HOUSE_GTN#                    /*임대주택보증금*/
+				,#MRFN_HOUSE_ENDW#                   /*국민주택기금*/
+				,#LTTOT_BSIS_AMOUNT#                 /*분양기초금액*/
+				,#S_USER_ID#                         /*등록자ID*/
+				,SYSDATE                             /*등록일시*/
+				,#S_USER_ID#                         /*수정자ID*/
+				,SYSDATE                             /*수정일시*/
+			)
+	</update>
+	
+	<!-- 장기임대주택 삭제 -->
+	<update id="ACC050417DAO.inorgRentHouseCallD" parameterClass="java.util.HashMap">
+		<![CDATA[ /*ACC050417DAO.inorgRentHouseCallD*/ ]]>
+		DELETE FROM TBACC_INORG_RENT_HOUSE_DTSTMN
+    	WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+	</update>
+	
+	<!-- 장기임대주택 삭제 -->
+	<update id="ACC050417DAO.inorgRentHouseD" parameterClass="java.util.HashMap">
+		<![CDATA[ /*ACC050417DAO.inorgRentHouseD*/ ]]>
+		DELETE FROM TBACC_INORG_RENT_HOUSE_DTSTMN
+    	WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+   		AND   HOUSE_CODE  = #HOUSE_CODE#
+	</update>
+</sqlMap>

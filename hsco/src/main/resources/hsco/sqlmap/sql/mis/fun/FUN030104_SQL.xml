@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN030104_SQL">	
+	
+	<!-- 브랜치 일자별 최종잔액 내역조회 -->
+	<select id="FUN030104DAO.selectBsnsBlceInfo" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*FUN030104DAO.selectBsnsBlceInfo*/ ]]>
+        <![CDATA[
+			WITH TEMP1 AS(
+			  SELECT  ACCT_NO
+			        , MAX(ACCT_TXDAY) as ACCT_TXDAY
+			  FROM    NH_ACCT_HIS
+			  WHERE ACCT_TXDAY <= #SEARCH_DAY#
+			  GROUP BY ACCT_NO
+			)
+			, TEMP2 AS(
+			  SELECT  T1.ACCT_NO
+			        , T1.ACCT_TXDAY
+			        , max(ACCT_TXDAY_SEQ) as ACCT_TXDAY_SEQ
+			  FROM    NH_ACCT_HIS T1
+			        ,TEMP1 T2
+			  WHERE T1.ACCT_NO = T2.ACCT_NO
+			    AND T1.ACCT_TXDAY = T2.ACCT_TXDAY
+			  GROUP BY T1.ACCT_NO, T1.ACCT_TXDAY
+			)
+			, TEMP3 AS (
+			  SELECT T1.BSNS_CODE
+			       , SUM(TX_CUR_BAL) AS BRANCH_AMT
+			       , COUNT(*) AS BRANCH_CNT
+			  FROM (
+			        SELECT T5.BSNS_CODE         AS BSNS_CODE
+			             , T5.ACNUTNO           AS OUT_ACCTNO
+			             , T3.TX_CUR_BAL        AS TX_CUR_BAL
+			        FROM NH_ACCT_HIS T3
+			           , TEMP2 T4
+			           , TBFUN_BRANCH_ACNUT T5
+			        WHERE 1=1
+			        AND T3.ACCT_NO      = T4.ACCT_NO
+			        AND T3.ACCT_TXDAY     = T4.ACCT_TXDAY
+			        AND T3.ACCT_TXDAY_SEQ = T4.ACCT_TXDAY_SEQ
+			        AND TRIM(REPLACE(T3.ACCT_NO, '-', ''))  = TRIM(REPLACE(T5.ACNUTNO, '-', ''))
+			        AND T5.USE_AT = '1'
+			        AND T5.BSNS_CODE IS NOT NULL
+			       ) T1
+			  GROUP BY T1.BSNS_CODE
+			)
+			, TEMP4 AS (
+			  SELECT T1.BSNS_CODE
+			       , SUM(NVL(T2.DPST_AMT,0)) AS DPST_AMT
+			       , COUNT(*) AS DPST_CNT
+			  FROM TBFUN_DPST_ACNUT T1
+			  LEFT OUTER JOIN (SELECT ACNUTNO                                   AS ACNUTNO 
+			                        , SUM(NVL(RCPMNY, 0)) - SUM(NVL(DEFRAY, 0)) AS DPST_AMT
+			                   FROM TBFUN_DPST_IPP_DTLS
+			                   WHERE DELNG_DE <= #SEARCH_DAY#
+			                   GROUP BY ACNUTNO
+			                  ) T2
+			          ON T1.ACNUTNO = T2.ACNUTNO
+			  WHERE 1=1
+			    AND T1.BSNS_CODE IS NOT NULL
+			  GROUP BY T1.BSNS_CODE
+			)
+			SELECT T1.BSNS_CODE
+			     , T1.BSNS_NM
+			     , T2.BSNS_TY
+			     , T3.BRANCH_AMT
+			     , NVL(T3.BRANCH_CNT,0) AS BRANCH_CNT
+			     , T4.DPST_AMT
+			     , NVL(T4.DPST_CNT,0) AS DPST_CNT
+			FROM TBPRJ_BSNS_CODE T1
+			LEFT OUTER JOIN TBPRJ_BSNS_SUMRY T2
+			        ON T1.BSNS_CODE = T2.BSNS_CODE
+			LEFT OUTER JOIN TEMP3 T3
+			        ON T1.BSNS_CODE = T3.BSNS_CODE
+			LEFT OUTER JOIN TEMP4 T4
+			        ON T1.BSNS_CODE = T4.BSNS_CODE
+			WHERE 1 = 1
+			  AND T1.USE_AT  = '1'
+	    ]]>
+		<isNotEmpty property="BSNS_TY">
+		       AND T2.BSNS_TY = #BSNS_TY#
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+		       AND T1.BSNS_CODE = #BSNS_CODE#
+		</isNotEmpty>
+		<![CDATA[
+			ORDER BY T1.BSNS_CODE, T2.BSNS_TY
+		]]>
+	</select>
+	
+</sqlMap>

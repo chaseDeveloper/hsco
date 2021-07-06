@@ -1,0 +1,726 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM030102R_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 인사마스터 가족사항 탭 조회 -->
+	<select id="HRM030102RDAO.tbhrmHrFamilyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT   A.SEQ
+					,A.EMPNO
+			        ,A.FAMILY_RELATE_SE
+			        ,B.CODE_NM AS FAMILY_RELATE_NM
+			        ,A.FAMILY_NM
+			        ,A.SEXDSTN_SE
+			        ,A.BRTHDY
+			        ,A.OCCP_NM
+			        ,A.ACDMCR_SE
+			        ,C.CODE_NM AS ACDMCR_NM
+			        ,A.TROBL_AT
+			        ,A.SUPORT_AT
+			        ,A.ALLWNC_PYMNT_AT
+			        ,A.CNFIRM_AT
+			        ,'0' AS CHK
+			FROM    TBHRM_HR_FAMILY A
+			        LEFT OUTER JOIN TBCOM_CMMN_CODE B
+                         ON A.FAMILY_RELATE_SE = B.CODE
+                         AND B.GRP_CODE = 'HRM013'
+                    LEFT OUTER JOIN TBCOM_CMMN_CODE C
+                         ON A.ACDMCR_SE = C.CODE
+                         AND C.GRP_CODE = 'HRM020'
+			WHERE	A.EMPNO   =   #EMPNO#
+		]]>	
+    </select>   
+    
+	<!-- 인사마스터 학력사항 탭 조회 -->
+	<select id="HRM030102RDAO.tbhrmHrAcdmcrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT   T1.*
+			FROM    (
+			         SELECT    A.SEQ
+			         	 	  ,A.EMPNO
+			                  ,A.ACDMCR_SE
+			                  ,TCC1.CHRCTR_PREPAR_VALUE_1 AS ACDMCR_NM
+                              ,A.SCHUL_NM || '(' || SUBSTR(A.GRDTN_DE, 1, 4) || ')(' || TCC1.CHRCTR_PREPAR_VALUE_1 || ')' AS SCHUL_STTUS
+			                  ,A.SCHUL_NM
+			                  ,A.MAJOR_SUBJCT
+			                  ,A.NATION_NM
+			                  ,A.ENTSCH_DE
+			                  ,A.GRDTN_DE
+			                  ,A.DGRI_SE
+			                  ,'' AS DGRI_NM
+			                  ,A.RM
+			                  ,'0' AS CHK
+			         FROM     TBHRM_HR_ACDMCR A
+			                  LEFT OUTER JOIN TBCOM_CMMN_CODE TCC1
+                                   ON A.ACDMCR_SE = TCC1.CODE
+			         WHERE 	 TCC1.GRP_CODE = 'HRM020'
+                       AND    A.ACDMCR_SE LIKE '04%'
+                       AND    A.EMPNO   =   #EMPNO#
+			         ORDER BY A.ENTSCH_DE DESC
+			        ) T1
+			WHERE   ROWNUM = 1
+			UNION ALL
+			SELECT  B.SEQ
+                   ,B.EMPNO
+                   ,B.ACDMCR_SE
+                   ,TCC2.CHRCTR_PREPAR_VALUE_1 AS ACDMCR_NM
+                   ,B.SCHUL_NM || '(' || SUBSTR(B.GRDTN_DE, 1, 4) || ')(' || TCC2.CHRCTR_PREPAR_VALUE_1 || ')' AS SCHUL_STTUS
+                   ,B.SCHUL_NM
+                   ,B.MAJOR_SUBJCT
+                   ,B.NATION_NM
+                   ,B.ENTSCH_DE
+                   ,B.GRDTN_DE
+                   ,B.DGRI_SE
+                   ,'' AS DGRI_NM
+                   ,B.RM
+                   ,'0' AS CHK
+            FROM   TBHRM_HR_ACDMCR B
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC2
+                        ON B.ACDMCR_SE = TCC2.CODE
+            WHERE  TCC2.GRP_CODE = 'HRM020'
+            AND    B.ACDMCR_SE NOT LIKE '04%'
+            AND    B.EMPNO = #EMPNO#
+		]]>	
+    </select>   
+    
+	<!-- 인사마스터 사회단체 탭 조회 -->
+	<select id="HRM030102RDAO.tbhrmHrSoctyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT    A.SEQ
+					 ,A.EMPNO
+			         ,A.SOCTY_GRP_NM
+			         ,A.SRBDE
+			         ,A.SECSN_DE
+			         ,A.RSPOFC_NM
+			         ,A.RM
+			         ,'0' AS chk
+			         
+			FROM     TBHRM_HR_SOCTY_GRP A
+			WHERE	 A.EMPNO   =   #EMPNO#
+			ORDER BY A.SRBDE DESC
+		]]>	
+    </select>       
+
+	<!-- 인사마스터 발령사항 탭 조회 -->
+	<select id="HRM030102RDAO.tbhrmHrDscplDspsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT T1.*
+			FROM
+			      (
+			      SELECT T.*, TCC1.CODE_NM AS OFCPS_NM, TCC2.CODE_NM AS JSSFC_NM
+			           , ROW_NUMBER() OVER (ORDER BY GNFD_DE) AS RANK
+			      FROM
+			               (
+			                SELECT   A.SEQ
+			                		,A.EMPNO
+			                        ,A.GNFD_DE
+			                        ,DECODE(A.EMPNO, LEAD(A.EMPNO) OVER (ORDER BY A.EMPNO), LEAD(A.GNFD_DE) OVER (ORDER BY A.EMPNO, A.GNFD_DE), '') AS GNFD_DE2
+			                        ,A.REGIST_DE
+			                        ,A.GNFD_SE
+			                        ,A.GNFD_OFFIC_NM
+			                        ,NVL(SFSAL_GETDEPTNM_01(A.DEPT_CODE), SFHRM_GET_DEPTNM(A.DEPT_CODE, '0')) AS DEPT_CODE
+			                        ,SFHRM_GET_OFCPSCD(A.EMPNO,A.JSSFC_SE,A.CLSF_SE,THM.ECNY_DE)              AS OFCPS_SE
+			                        ,A.JSSFC_SE
+			                        ,A.RSPOFC_SE
+			                        ,A.CLSF_SE
+			                        ,A.SRCLS_SE
+			                        ,A.DTY_NM
+			                        ,A.DCSN_DSCPL_MONTH_CO
+			                        ,A.DCSN_DSCPL_RECOVRY_YYCNT
+			                        ,A.DSCPL_APPLC_DE
+			                        ,A.DSCPL_ENDDE
+			                        ,A.STATE_MAN_NM
+			                        ,'0' AS chk
+			                FROM    TBHRM_GNFD A
+			                        LEFT OUTER JOIN TBHRM_HR_MASTR THM
+                                         ON A.EMPNO = THM.EMPNO
+                           ) T
+			               LEFT OUTER JOIN TBCOM_CMMN_CODE TCC1
+                                ON T.OFCPS_SE = TCC1.CODE
+                           LEFT OUTER JOIN TBCOM_CMMN_CODE TCC2
+                                ON T.JSSFC_SE = TCC2.CODE
+                  WHERE    TCC1.GRP_CODE = 'HRM021'
+                  AND      TCC2.GRP_CODE = 'HRM001'
+			      AND      T.EMPNO       = #EMPNO#
+			      ORDER BY RANK DESC
+			      ) T1
+			WHERE ROWNUM < 21
+			ORDER BY RANK
+		]]>	
+    </select>        
+    
+	<!-- 인사마스터 포상서훈 탭 조회 -->
+	<select id="HRM030102RDAO.tbhrmHrRwardCnferList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT   A.SEQ
+					,A.EMPNO
+			        ,A.RWARD_DE
+			        ,A.RWARD_ASORT_SE
+			        ,C.CODE_NM AS RWARD_ASORT_NM
+			        ,A.RWARD_INSTT_NM
+			        ,A.RWARD_BASIS
+			        ,A.PBLEN_SUMRY
+			        ,A.RWARD_DTLS
+			        ,A.RM
+			        ,A.RWARD_GRADE
+			        ,A.DSCPL_SEQ
+			        ,B.DSCPL_DCSN_DE
+			        ,B.RDUCT_AT
+			        ,'0' AS chk
+			FROM TBHRM_RWARD_CNFER A
+			     LEFT OUTER JOIN (
+			                        SELECT B.EMPNO
+			                              ,B.SEQ
+			                              ,B.RDUCT_AT
+			                              ,MAX(NVL(B.RETRIAL_DCSN_DE,B.DSCPL_DCSN_DE)) AS DSCPL_DCSN_DE
+			                        FROM   TBHRM_DSCPL_DSPS B
+			                        WHERE  RDUCT_AT ='1' 
+			                        GROUP BY B.EMPNO, B.SEQ, B.RDUCT_AT                      
+			                        ) B
+			          ON A.EMPNO = B.EMPNO
+			          AND A.DSCPL_SEQ = B.SEQ
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE C
+                      ON A.RWARD_ASORT_SE = C.CODE
+			WHERE	A.EMPNO   =   #EMPNO#
+			  AND   C.GRP_CODE = 'HRM008'
+			ORDER BY A.RWARD_DE DESC
+		]]>	
+    </select>        
+    
+	<!-- 인사마스터 교육훈련 탭 조회 -->
+	<select id="HRM030102RDAO.tbhrmHrEdcTraingComplList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT   A.SEQ
+					,A.EMPNO
+			        ,A.BGNDE
+			        ,A.ENDDE
+			        ,A.EDC_CRSE_NM
+			        ,A.EDC_NM
+			        ,A.OPERTN_INSTT_NM
+			        ,A.COMPL_INSTT_NM
+			        ,A.COMPL_SE
+			        ,A.EDC_TIME
+			        ,A.EDC_CT
+			        ,A.CRTFC_AT
+			        ,A.RM
+			        ,'0' AS chk
+			FROM    TBHRM_EDC_TRAING_COMPL A
+			WHERE	A.EMPNO   =   #EMPNO#
+			ORDER BY A.BGNDE
+		]]>	
+    </select>    
+     
+	<!-- 인사마스터 경력사항 탭 조회 -->
+	<select id="HRM030102RDAO.tbhrmHrCareerList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT   A.SEQ
+					,A.EMPNO
+			        ,A.ECNY_DE
+			        ,A.RETIRE_DE
+			        ,A.WRKPLC_NM
+			        ,A.WORK_CAREER_YY
+			        ,A.WORK_CAREER_MT
+			        ,A.CAREER_APPLC_RATE
+			        ,A.CRTFC_CAREER_YY
+			        ,A.CRTFC_CAREER_MT
+			        ,A.LAST_OFCPS_NM
+			        ,A.CAREER_CN
+			        ,A.RM
+			        ,'0' AS chk
+			FROM    TBHRM_HR_CAREER A
+			WHERE	A.EMPNO   =   #EMPNO#
+		]]>	
+    </select>      
+     
+	<!-- 인사마스터 외국시찰 탭 조회 -->
+	<select id="HRM030102RDAO.tbhrmHrFrntnInspnSdytrnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT   A.SEQ
+					,A.EMPNO
+			        ,A.BGNDE
+			        ,A.ENDDE
+			        ,A.PURPS
+			        ,A.OPERTN_OFFIC_NM
+			        ,A.NATION_NM
+			        ,A.RM
+			        ,'0' AS chk
+			FROM    TBHRM_HR_FRNTN_INSPN_SDYTRN A
+			WHERE	A.EMPNO   =   #EMPNO#
+		]]>	
+    </select>  
+     
+	<!-- 인사마스터 자격사항 탭 조회 -->
+	<select id="HRM030102RDAO.tbhrmHrQualfList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT   A.SEQ 
+					,A.EMPNO
+			        ,A.ITEM_GRAD_NM
+			        ,H_DECRYPT(A.QUALF_LCNS_NO)  AS QUALF_LCNS_NO
+			        ,A.PBLICTE_OFFIC_NM
+			        ,A.ACQS_DE
+			        ,A.VALID_DE
+			        ,A.QUALF_ALLWNC
+			        ,A.RM
+			        ,A.ALLWNC_AT
+			        ,'0' AS chk
+			FROM    TBHRM_HR_QUALF A
+			WHERE	A.EMPNO   =   #EMPNO#
+		]]>	
+    </select>  
+    
+	<select id="HRM030102RDAO.tbhrmHrEmpno" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			
+			SELECT 	 '0' AS NOTHING
+		]]>	
+		
+	    <dynamic>
+		<isEqual property="JSSFC_SE" compareValue="005">
+					,TO_CHAR(SUBSTR(#ECNY_DE#,1,4) || 9 || NVL(MAX(SUBSTR(EMPNO,6,3)),0) + 1) as EMPNO
+			FROM    TBHRM_HR_MASTR
+			WHERE 1=1
+			AND JSSFC_SE IN ('005')
+		</isEqual>
+		<isEqual property="JSSFC_SE" compareValue="006">
+					,TO_CHAR(SUBSTR(#ECNY_DE#,1,4) || 7 || NVL(MAX(SUBSTR(EMPNO,6,3)),0) + 1) as EMPNO
+			FROM    TBHRM_HR_MASTR
+			WHERE 1=1
+			AND JSSFC_SE IN ('006')
+		</isEqual>
+		<isEqual property="JSSFC_SE" compareValue="000">
+					,TO_CHAR(SUBSTR(#ECNY_DE#,1,4) || 0 || NVL(MAX(SUBSTR(EMPNO,6,3)),0) + 1) as EMPNO
+			FROM    TBHRM_HR_MASTR
+			WHERE 1=1
+			AND JSSFC_SE IN ('000','001','002','003','004','007','008')
+		</isEqual>
+		<isEqual property="JSSFC_SE" compareValue="001">
+					,TO_CHAR(SUBSTR(#ECNY_DE#,1,4) || 0 || NVL(MAX(SUBSTR(EMPNO,6,3)),0) + 1) as EMPNO
+			FROM    TBHRM_HR_MASTR
+			WHERE 1=1
+			AND JSSFC_SE IN ('000','001','002','003','004','007','008')
+		</isEqual>
+		<isEqual property="JSSFC_SE" compareValue="002">
+					,TO_CHAR(SUBSTR(#ECNY_DE#,1,4) || 0 || NVL(MAX(SUBSTR(EMPNO,6,3)),0) + 1) as EMPNO
+			FROM    TBHRM_HR_MASTR
+			WHERE 1=1
+			AND JSSFC_SE IN ('000','001','002','003','004','007','008')
+		</isEqual>
+		<isEqual property="JSSFC_SE" compareValue="003">
+					,TO_CHAR(SUBSTR(#ECNY_DE#,1,4) || 0 || NVL(MAX(SUBSTR(EMPNO,6,3)),0) + 1) as EMPNO
+			FROM    TBHRM_HR_MASTR
+			WHERE 1=1
+			AND JSSFC_SE IN ('000','001','002','003','004','007','008')
+		</isEqual>
+		<isEqual property="JSSFC_SE" compareValue="004">
+					,TO_CHAR(SUBSTR(#ECNY_DE#,1,4) || 0 || NVL(MAX(SUBSTR(EMPNO,6,3)),0) + 1) as EMPNO
+			FROM    TBHRM_HR_MASTR
+			WHERE 1=1
+			AND JSSFC_SE IN ('000','001','002','003','004','007','008')
+		</isEqual>
+		<isEqual property="JSSFC_SE" compareValue="007">
+					,TO_CHAR(SUBSTR(#ECNY_DE#,1,4) || 0 || NVL(MAX(SUBSTR(EMPNO,6,3)),0) + 1) as EMPNO
+			FROM    TBHRM_HR_MASTR
+			WHERE 1=1
+			AND JSSFC_SE IN ('000','001','002','003','004','007','008')
+		</isEqual>		
+		<isEqual property="JSSFC_SE" compareValue="008">
+					,TO_CHAR(SUBSTR(#ECNY_DE#,1,4) || 0 || NVL(MAX(SUBSTR(EMPNO,6,3)),0) + 1) as EMPNO
+			FROM    TBHRM_HR_MASTR
+			WHERE 1=1
+			AND JSSFC_SE IN ('000','001','002','003','004','007','008')
+		</isEqual>		
+		</dynamic>
+    </select>
+	
+    <!-- 징계 정보 조회 -->
+	<select id="HRM030102RDAO.selectDscplList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT T.EMPNO
+			     , T.DCSN_DE
+			     , T.DCSN_DSCPL_SE
+			     , TDS.DSLRC_NM
+			     , T.PRVONSH
+			     , T.GNFD_OFFIC_NM
+			  FROM (
+			        SELECT TDD.EMPNO
+                         , NVL(TDD.RETRIAL_DCSN_DE, TDD.DSCPL_DCSN_DE)                                   AS DCSN_DE
+                         , DECODE(TDD.RETRIAL_DCSN_DE, NULL, TDD.DCSN_DSCPL_SE, TDD.RETRIAL_DSCPL_SE)    AS DCSN_DSCPL_SE
+                         , SUBSTR(DECODE(TDD.RETRIAL_DCSN_DE, NULL, TDD.DSCPL_DEMAND_PRVONSH, TDD.RETRIAL_DCSN_PRVONSH), 1, 27)    AS PRVONSH
+                         , TDD.GNFD_OFFIC_NM
+			          FROM TBHRM_DSCPL_DSPS TDD
+			       ) T
+			       LEFT OUTER JOIN TBHRM_DSCPL_STDR TDS
+			            ON T.DCSN_DSCPL_SE = TDS.DSLRC_CODE
+			 WHERE T.EMPNO = #EMPNO#
+		]]>
+    </select>   
+    
+    <!-- 인쇄(직원면담카드) 조회 -->
+	<select id="HRM030102RDAO.selectPrint05Dtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+             SELECT T.EMPNO, T.EMPNM, T.NM_CHCRT
+                  , T.DEPT_CODE, T.DEPT_NM, T.DEPT_GNFDDE
+                  , T.DTY_NM, T.OFCPS_NM, T.JSSFC_NM
+                  , T.CLSF_NM1, T.RSPOFC_NM, T.IHIDNUM_ENCPT 
+                  , T.EMPMN_SE_NM, T.TELNO_1, T.TELNO_2
+                  , T.ADRES || ' ' || T.ADRES_DETAIL AS ADRES
+                  , T.ECNY_DE
+                  , '(' || TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.DEPT_GNFDDE, 'YYYYMMDD'))/12) || ' 년 ' || CEIL(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.DEPT_GNFDDE, 'YYYYMMDD')) - TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.DEPT_GNFDDE, 'YYYYMMDD'))/12)*12) || ' 월)' AS CNWK_DEPTDE
+                  , '(' || TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.ECNY_DE, 'YYYYMMDD'))/12) || ' 년 ' || CEIL(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.ECNY_DE, 'YYYYMMDD')) - TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.ECNY_DE, 'YYYYMMDD'))/12)*12) || ' 월)' AS CNWK_ECNYDE
+                  , SUBSTR(T.GNFD_DE, 1, 4) || '-' || SUBSTR(T.GNFD_DE, 5, 2) || '-' || SUBSTR(T.GNFD_DE, 7, 2) AS GNFD_DE
+                  , '(' || TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.GNFD_DE, 'YYYYMMDD'))/12) || ' 년 ' || CEIL(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.GNFD_DE, 'YYYYMMDD')) - TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.GNFD_DE, 'YYYYMMDD'))/12)*12) || ' 월)' AS CNWK_GNFDDE
+                  , '(' || TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.MINDE, 'YYYYMMDD'))/12) || ' 년 ' || CEIL(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.MINDE, 'YYYYMMDD')) - TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.MINDE, 'YYYYMMDD'))/12)*12) || ' 월)' AS CNWK_MINDE
+                  , '(' || TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.MAXDE, 'YYYYMMDD'))/12) || ' 년 ' || CEIL(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.MAXDE, 'YYYYMMDD')) - TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.MAXDE, 'YYYYMMDD'))/12)*12) || ' 월)' AS CNWK_MAXDE
+                  , T.CLSF_NM2
+                  , SUBSTR(T.MINDE, 1, 4) || '-' || SUBSTR(T.MINDE, 5, 2) || '-' || SUBSTR(T.MINDE, 7, 2) AS MINDE
+                  , SUBSTR(T.MAXDE, 1, 4) || '-' || SUBSTR(T.MAXDE, 5, 2) || '-' || SUBSTR(T.MAXDE, 7, 2) AS MAXDE
+                  , T.LAST_SCHUL_NM || DECODE(T.LAST_SCHUL_NM, '', '','(' || SUBSTR(T.LAST_GRDTN_DE, 1, 4) || ')(' || T.LAST_ACDMCR_NM || ')') AS SCHUL_STTUS
+                  , T.RSPOFCDE
+                  , '(' || TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.RSPOFCDE, 'YYYYMMDD'))/12) || ' 년 ' || CEIL(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.RSPOFCDE, 'YYYYMMDD')) - TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.RSPOFCDE, 'YYYYMMDD'))/12)*12) || ' 월)' AS CNWK_RSPOFCDE
+                  , T.PRPRTY_HUSE
+                  , T.FILE_SN
+               FROM (
+                     SELECT THM.EMPNO
+                          , THM.EMPNM
+                          , THM.NM_CHCRT
+                          , THM.DEPT_CODE
+                          , NVL(SFSAL_GETDEPTNM_01(THM.DEPT_CODE), SFHRM_GET_DEPTNM(THM.DEPT_CODE, '0'))       AS DEPT_NM
+                          , THM.DTY_NM
+                          , TCC1.CODE_NM                                                                       AS OFCPS_NM
+                          , TCC2.CODE_NM                                                                       AS JSSFC_NM
+                          , THM.HR_CLSF_SE || ' 급'                                                            AS CLSF_NM1
+                          , TCC4.CODE_NM                                                                       AS RSPOFC_NM
+                          , THM.EMPMN_SE_NM
+                          , THM.TELNO_1
+                          , H_DECRYPT(THM.TELNO_2)   AS TELNO_2
+                          , THM.ADRES
+                          , THM.ADRES_DETAIL
+                          , H_DECRYPT(THM.IHIDNUM_ENCPT)     AS IHIDNUM_ENCPT 
+                          , THM.ECNY_DE
+                          , TG.GNFD_DE
+                          , TCC3.CODE_NM || ' / ' || TG.CLSF_SE || ' 급'                                        AS CLSF_NM2
+                          , (SELECT MIN(GNFD_DE) FROM TBHRM_GNFD WHERE EMPNO = THM.EMPNO AND JSSFC_SE = THM.JSSFC_SE AND CLSF_SE = THM.HR_CLSF_SE) AS MINDE
+                          , (SELECT MAX(GNFD_DE) FROM TBHRM_GNFD WHERE EMPNO = THM.EMPNO AND JSSFC_SE = THM.JSSFC_SE AND CLSF_SE = THM.HR_CLSF_SE) AS MAXDE
+                          , TG2.DEPT_GNFDDE
+                          , (SELECT SCHUL_NM FROM TBHRM_HR_ACDMCR WHERE EMPNO = THM.EMPNO AND ENTSCH_DE = T2.MAX_ENTSCH_DE) AS LAST_SCHUL_NM
+                          , (SELECT GRDTN_DE FROM TBHRM_HR_ACDMCR WHERE EMPNO = THM.EMPNO AND ENTSCH_DE = T2.MAX_ENTSCH_DE) AS LAST_GRDTN_DE
+                          , (SELECT TCC.CHRCTR_PREPAR_VALUE_1 FROM TBHRM_HR_ACDMCR THA LEFT OUTER JOIN TBCOM_CMMN_CODE TCC ON THA.ACDMCR_SE = TCC.CODE WHERE EMPNO = THM.EMPNO AND ENTSCH_DE = T2.MAX_ENTSCH_DE AND TCC.GRP_CODE = 'HRM020') AS LAST_ACDMCR_NM
+                          , (SELECT MIN(A.GNFD_DE) FROM (SELECT TG3.EMPNO, TG3.GNFD_DE FROM TBHRM_GNFD TG3 RIGHT OUTER JOIN TBHRM_HR_MASTR THM3 ON TG3.EMPNO = THM3.EMPNO WHERE THM3.EMPNO = #EMPNO# AND THM3.RSPOFC_SE = TG3.RSPOFC_SE) A GROUP BY A.EMPNO) AS RSPOFCDE
+                          , TH2.PRPRTY_HUSE
+                          , THM.FILE_SN  FILE_SN
+                          , TG.SEQ
+                       FROM TBHRM_HR_MASTR THM
+                            LEFT OUTER JOIN TBCOM_CMMN_CODE TCC1
+                                 ON SFHRM_GET_OFCPSCD(THM.EMPNO, THM.JSSFC_SE, THM.HR_CLSF_SE, THM.ECNY_DE) = TCC1.CODE
+                                 AND TCC1.GRP_CODE = 'HRM021'
+                            LEFT OUTER JOIN TBCOM_CMMN_CODE TCC2
+                                 ON THM.JSSFC_SE = TCC2.CODE
+                                 AND TCC2.GRP_CODE = 'HRM001'
+                            LEFT OUTER JOIN TBHRM_GNFD TG
+                                 ON THM.EMPNO = TG.EMPNO
+                            LEFT OUTER JOIN (
+                                             SELECT EMPNO, DEPT_CODE, MIN(GNFD_DE) AS DEPT_GNFDDE
+                                               FROM TBHRM_GNFD
+                                           GROUP BY EMPNO, DEPT_CODE
+                                            ) TG2
+                                 ON THM.EMPNO = TG2.EMPNO
+                                 AND THM.DEPT_CODE = TG2.DEPT_CODE
+                            LEFT OUTER JOIN TBCOM_CMMN_CODE TCC3
+                                 ON TG.JSSFC_SE = TCC3.CODE
+                                 AND TCC3.GRP_CODE = 'HRM001'
+                            LEFT OUTER JOIN TBCOM_CMMN_CODE TCC4
+                                 ON THM.RSPOFC_SE = TCC4.CODE
+                                 AND TCC4.GRP_CODE = 'HRM214'
+                            LEFT OUTER JOIN (
+                                             SELECT EMPNO, GNFD_DE
+                                             FROM (
+                                                   SELECT EMPNO
+                                                        , MIN(GNFD_DE) AS GNFD_DE
+                                                     FROM TBHRM_GNFD
+                                                 GROUP BY EMPNO
+                                                   )
+                                            ) T1
+                                 ON THM.EMPNO = T1.EMPNO
+                            LEFT OUTER JOIN (
+                                             SELECT EMPNO, MAX(ENTSCH_DE) AS MAX_ENTSCH_DE
+                                             FROM TBHRM_HR_ACDMCR
+                                             GROUP BY EMPNO
+                                            ) T2
+                                 ON THM.EMPNO = T2.EMPNO
+                            LEFT OUTER JOIN TBHRM_HR_ETC TH2
+                                 ON THM.EMPNO = TH2.EMPNO
+                      WHERE 1=1
+                        AND THM.EMPNO     = #EMPNO#
+                    ) T
+             ORDER BY SEQ     
+		]]>
+    </select>
+    
+    <!-- 휴직 내역 조회 -->
+	<select id="HRM030102RDAO.selectLayOffList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT EMPNO
+                 , TO_CHAR(BGNDT, 'YYYYMMDD')                             AS BGNDT
+                 , TO_CHAR(ENDDT, 'YYYYMMDD')                             AS ENDDT
+                 , PRVONSH
+              FROM TBHRM_WRKCP
+             WHERE 1=1
+               AND DCLZ_SE = '216'
+               AND EMPNO = #EMPNO#
+          ORDER BY BGNDT
+		]]>
+    </select>
+    
+    <!-- 가족사항 조회 -->
+	<select id="HRM030102RDAO.selectFamily" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT '부(' || DECODE(COUNT( CASE WHEN FAMILY_RELATE_SE = '003' THEN EMPNO ELSE '' END ), 0, 'X)', 'O)')
+                   || '모(' || DECODE(COUNT( CASE WHEN FAMILY_RELATE_SE = '004' THEN EMPNO ELSE '' END ), 0, 'X)', 'O)')
+                   || '배우자(' || DECODE(COUNT( CASE WHEN FAMILY_RELATE_SE = '005' OR FAMILY_RELATE_SE = '006' THEN EMPNO ELSE '' END ), 0, 'X)', 'O)')
+                   || '자녀남(' || COUNT( CASE WHEN FAMILY_RELATE_SE = '007' AND SEXDSTN_SE = '1' THEN EMPNO ELSE '' END ) || ')'
+                   || '자녀여(' || COUNT( CASE WHEN FAMILY_RELATE_SE = '007' AND SEXDSTN_SE = '2' THEN EMPNO ELSE '' END ) || ')'
+                   AS FAMILY
+              FROM TBHRM_HR_FAMILY
+             WHERE 1=1
+               AND EMPNO = #EMPNO#
+		]]>
+    </select>
+    
+    <!-- 승급기록 조회 -->
+	<select id="HRM030102RDAO.selectPromtDe" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT TG.EMPNO
+                 , TG.SRCLS_SE
+                 , TG.GNFD_DE
+                 , TG.STATE_MAN_NM
+                 , TG2.GNFD_DE                     AS GNFD_DE00
+                 , NVL(TG2.STATE_MAN_NM, ' ')      AS STATE_MAN_NM00
+                 , THM.EMPNM
+              FROM TBHRM_GNFD TG
+                 , TBHRM_GNFD TG2
+                 , (
+                    SELECT EMPNO, MIN(GNFD_DE) AS MINDE
+                      FROM TBHRM_GNFD
+                     WHERE EMPNO = #EMPNO#
+                  GROUP BY EMPNO, SRCLS_SE
+                  ORDER BY SRCLS_SE
+                   ) T
+                 , (
+                    SELECT EMPNO
+                         , MIN(GNFD_DE) AS FIRSTDE
+                      FROM TBHRM_GNFD
+                     WHERE EMPNO = #EMPNO#
+                  GROUP BY EMPNO
+                   ) T2
+                 , TBHRM_HR_MASTR THM
+             WHERE 1=1
+               AND TG.EMPNO    = T.EMPNO
+               AND TG.GNFD_DE  = T.MINDE
+               AND TG2.EMPNO   = T2.EMPNO
+               AND TG2.GNFD_DE = T2.FIRSTDE
+               AND TG.EMPNO    = THM.EMPNO
+          ORDER BY SRCLS_SE
+		]]>
+    </select>
+    
+    <!-- 인사기록카드(갑) 경력사항(이전+공사) 조회 -->
+	<select id="HRM030102RDAO.selectCareerAll" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT THC.EMPNO
+                 , THC.ECNY_DE                          AS BGNDE
+                 , THC.RETIRE_DE                        AS ENDDE
+                 , ''                                   AS CLSF_NM
+                 , THC.WRKPLC_NM                        AS DEPT_NM
+                 , THC.LAST_OFCPS_NM                    AS OFCPS_NM
+                 , ''                                   AS DTY_NM
+                 , ''                                   AS GNFD_OFFIC_NM
+                 , NVL(THM.EMPNM, THC.REGISTER_ID)      AS STATE_MAN_NM
+              FROM TBHRM_HR_CAREER THC
+                   LEFT OUTER JOIN TBHRM_HR_MASTR THM
+                        ON THC.REGISTER_ID = THM.EMPNO
+             WHERE THC.EMPNO = #EMPNO#
+         UNION ALL
+            SELECT T.EMPNO
+                 , T.BGNDE
+                 , T.ENDDE
+                 , T.CLSF_NM
+                 , T.DEPT_NM
+                 , TCC.CODE_NM             AS OFCPS_NM
+                 , T.DTY_NM
+                 , T.GNFD_OFFIC_NM
+                 , T.STATE_MAN_NM
+              FROM (
+                    SELECT TG.EMPNO
+                         , TG.GNFD_DE AS BGNDE
+                         , DECODE(TG.EMPNO, LEAD(TG.EMPNO) OVER (ORDER BY TG.EMPNO), LEAD(TG.GNFD_DE) OVER (ORDER BY TG.EMPNO, TG.GNFD_DE), '') AS ENDDE
+                         , TG.CLSF_SE || DECODE(TG.CLSF_SE, NULL, NULL, ' 급')                         AS CLSF_NM
+                         , NVL(SFSAL_GETDEPTNM_01(TG.DEPT_CODE), SFHRM_GET_DEPTNM(TG.DEPT_CODE, '0'))  AS DEPT_NM
+                         , SFHRM_GET_OFCPSCD(TG.EMPNO,TG.JSSFC_SE,TG.CLSF_SE,THM.ECNY_DE)              AS OFCPS_SE
+                         , TG.DTY_NM
+                         , TG.GNFD_OFFIC_NM
+                         , TG.STATE_MAN_NM
+                      FROM TBHRM_GNFD TG
+                           LEFT OUTER JOIN TBHRM_HR_MASTR THM
+                                ON TG.EMPNO = THM.EMPNO
+                   ) T
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC
+                        ON T.OFCPS_SE = TCC.CODE
+             WHERE EMPNO = #EMPNO#
+               AND TCC.GRP_CODE = 'HRM021'
+          ORDER BY BGNDE
+		]]>
+    </select>
+    
+    <!-- 임면사항 조회 -->
+	<select id="HRM030102RDAO.selectApdsmsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT TG.GNFD_DE
+			     , TG.CLSF_SE
+			     , TCC.CODE_NM
+			     , TG.GNFD_OFFIC_NM
+              FROM TBHRM_GNFD TG
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC
+                        ON TG.GNFD_SE = TCC.CODE
+             WHERE TG.EMPNO = #EMPNO#
+               AND TCC.GRP_CODE = 'HRM012'
+               AND GNFD_SE = '023'
+         UNION ALL
+            SELECT TG.GNFD_DE
+                 , TG.CLSF_SE
+                 , TCC.CODE_NM
+                 , TG.GNFD_OFFIC_NM
+              FROM TBHRM_GNFD TG
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC
+                        ON TG.GNFD_SE = TCC.CODE
+             WHERE EMPNO = #EMPNO#
+               AND GNFD_DE IN (
+                               SELECT MIN(GNFD_DE)
+                               FROM TBHRM_GNFD
+                               WHERE EMPNO = #EMPNO#
+                               GROUP BY EMPNO, JSSFC_SE, CLSF_SE
+                              )
+               AND TCC.GRP_CODE = 'HRM012'
+          ORDER BY GNFD_DE
+		]]>
+    </select>
+    
+    <!-- 근무성적평정 조회 -->
+	<select id="HRM030102RDAO.selectPerevaSmList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT TPTS.EMPNO
+                 , TPTS.STDR_YEAR
+                 , TPTS.TOT_DEVA_SCORE
+                 , NVL(THM.EMPNM, TPTS.REGISTER_ID)                AS REGIST_NM
+              FROM TBHRM_PEREVA_TOT_SCORE TPTS
+                   LEFT OUTER JOIN TBHRM_HR_MASTR THM
+                        ON TPTS.REGISTER_ID = THM.EMPNO
+             WHERE 1=1
+               AND TPTS.EMPNO = #EMPNO#
+          ORDER BY STDR_YEAR DESC
+		]]>
+    </select>
+    
+    <!-- 경력평정 조회 -->
+	<select id="HRM030102RDAO.selectCrevalList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT TCS.DEVA_YEAR || ' ' || DECODE(TCS.ODR_SE, '1', '1차', '2', '2차')       AS STDR_DE
+                 , TO_CHAR(TO_NUMBER(TCS.BASS_CAREER_GRADE)+TO_NUMBER(TCS.EXCESS_CAREER_GRADE)+TO_NUMBER(TCS.SIMILR_CAREER_GRADE), '990.9') AS CAREER_GRADE
+                 , NVL(THM.EMPNM, TCS.REGISTER_ID)                                         AS REGIST_NM
+              FROM TBHRM_CREVAL_SM TCS
+                   LEFT OUTER JOIN TBHRM_HR_MASTR THM
+                        ON TCS.REGISTER_ID = THM.EMPNO
+             WHERE 1=1
+               AND TCS.EMPNO = #EMPNO#
+          ORDER BY TCS.DEVA_YEAR DESC, TCS.ODR_SE
+		]]>
+    </select>
+    
+    <!-- 훈련성적 조회 -->
+	<select id="HRM030102RDAO.selectEdcTraingList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT TETC.BGNDE
+                 , TETC.ENDDE
+                 , TETC.CALC_SCORE
+                 , NVL(THM.EMPNM, TETC.REGISTER_ID)                AS REGIST_NM
+              FROM TBHRM_EDC_TRAING_COMPL TETC
+                   LEFT OUTER JOIN TBHRM_HR_MASTR THM
+                        ON TETC.REGISTER_ID = THM.EMPNO
+             WHERE TETC.EMPNO = #EMPNO#
+          ORDER BY TETC.BGNDE DESC
+		]]>
+    </select>
+    
+    <!-- 인사기록카드(갑) 인사정보 조회 -->
+	<select id="HRM030102RDAO.selectEmpInfoDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT THM.EMPNO, THM.EMPNM, THM.NM_CHCRT
+                 , H_DECRYPT(THM.IHIDNUM_ENCPT) AS IHIDNUM_ENCPT 
+                 , THM.BRTHDY, TCC1.CODE_NM AS JSSFC_NM
+                 , DECODE(THM.SEXDSTN, '1', '남', '2', '여') AS SEXDSTN, THM.ADRES || THM.ADRES_DETAIL AS ADRES, TH2.PRMDMCL
+                 , TH2.HUSEDR_NM || DECODE(TH2.HUSEDR_NM, NULL, NULL, ' 의 (' || TH2.HUSEDR_RELATE || ')') AS HUSEDR
+                 , TH2.MTRSC_INCMP_PRVONSH, TCC2.CODE_NM AS MLTDTCS_NM, TCC3.CODE_NM AS MSCL_NM
+                 , TCC4.CODE_NM AS CURIMPT_NM, TCC5.CODE_NM AS CLSS_NM, TH2.SSN
+                 , TH2.ENST_DE, TH2.DMBLZ_DE, TH2.HEIGHT
+                 , TH2.BDWGH, TH2.VSPR_LFT, TH2.VSPR_RIT
+                 , DECODE(TH2.ACHRMTPS_AT, '0', '정상', '1', '비정상') AS ACHRMTPS, TH2.BDP_SE ||' ' || TH2.RH_SE AS BDP_RH, TCC6.CODE_NM AS HEALTH_STTUS
+                 , TH2.RELGN_NM, TH2.HOBBY_NM, TH2.SPCABL_NM
+                 , TH2.PRPRTY_MVBLS, TH2.PRPRTY_ESTATE, DECODE(TH2.PRPRTY_HUSE, '1', '자가', '2', '전세') AS PRPRTY_HUSE
+                 , TH2.SIDJOB_NM, TH2.SIDJOB_DAYCNT, TH2.PRPRTY_MVBLS + TH2.PRPRTY_ESTATE AS PRPRTY_TOTAL
+                 , 'http://' || #S_USER_IP# || ':8880/hsco/mis/hrm/HRM030102/getPhoto.do' AS PHOTO_URL
+                 , THM.FILE_SN
+              FROM TBHRM_HR_MASTR THM
+                   LEFT OUTER JOIN TBHRM_HR_ETC TH2
+                        ON THM.EMPNO = TH2.EMPNO
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC1
+                        ON THM.JSSFC_SE = TCC1.CODE
+                        AND TCC1.GRP_CODE = 'HRM001'
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC2
+                        ON TH2.MLTDTCS_SE = TCC2.CODE
+                        AND TCC2.GRP_CODE = 'HRM015'
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC3
+                        ON TH2.MSCL_SE = TCC3.CODE
+                        AND TCC3.GRP_CODE = 'HRM005'
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC4
+                        ON TH2.CURIMPT_SE = TCC4.CODE
+                        AND TCC4.GRP_CODE = 'HRM014'
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC5
+                        ON TH2.CLSS_SE = TCC5.CODE
+                        AND TCC5.GRP_CODE = 'HRM016'
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC6
+                        ON TH2.HEALTH_STTUS = TCC6.CODE
+                        AND TCC6.GRP_CODE = 'HRM006'
+             WHERE THM.EMPNO = #EMPNO#
+		]]>
+    </select>
+    
+    <!-- 학력사항 조회1 -->
+	<select id="HRM030102RDAO.tbhrmHrAcdmcrList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT  B.SEQ
+                   ,B.EMPNO
+                   ,B.ACDMCR_SE
+                   ,TCC2.CHRCTR_PREPAR_VALUE_1 AS ACDMCR_NM
+                   ,B.SCHUL_NM || '(' || SUBSTR(B.GRDTN_DE, 1, 4) || ')(' || TCC2.CHRCTR_PREPAR_VALUE_1 || ')' AS SCHUL_STTUS
+                   ,B.SCHUL_NM
+                   ,B.MAJOR_SUBJCT
+                   ,B.NATION_NM
+                   ,B.ENTSCH_DE
+                   ,B.GRDTN_DE
+                   ,B.DGRI_SE
+                   ,TCC1.CODE_NM AS DGRI_NM 
+                   ,B.RM
+                   ,'0' AS CHK
+            FROM   TBHRM_HR_ACDMCR B
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC1
+                        ON B.DGRI_SE = TCC1.CODE
+                        and TCC1.GRP_CODE = 'HRM018'
+                   LEFT OUTER JOIN TBCOM_CMMN_CODE TCC2
+                        ON B.ACDMCR_SE = TCC2.CODE
+                        and TCC2.GRP_CODE = 'HRM020'
+            WHERE  B.EMPNO = #EMPNO#
+		]]>	
+    </select>
+    
+</sqlMap>

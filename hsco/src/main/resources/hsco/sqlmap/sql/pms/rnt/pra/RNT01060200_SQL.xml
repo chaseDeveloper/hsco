@@ -1,0 +1,515 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01060200SQL">	
+
+	<!-- 쿼리명 : 결의내역
+	설명 : 결의내역
+	수정일  수정자  수정내용
+	작성자 : 김지훈
+	최초작성일 : 2015.12.03
+	-->
+	<select id="RNT01060200DAO.selectDecsnListPrt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+      /*  결의내역 */
+
+      SELECT a.ANACT_SE,
+             MDAT_DE,
+             (SELECT CODE_NM
+                FROM TBCOM_CMMN_CODE z
+               WHERE GRP_CODE = 'RNT010'
+                 AND CODE = a.ANACT_SE) ANACT_SE_NM, /* 결의서구분명 */
+             b.RENT_HOUSE_NM,
+             SUM(a.OCCRRNC_CO)   OCCRRNC_CO,       /* 건수 */
+             SUM(a.ANACT_AMOUNT) ANACT_AMOUNT ,      /* 결의서 금액 */
+             MAX(a.PAY_TMLMT)    PAY_TMLMT,         /* 납부기한 */
+             a.BUDGET_YEAR,
+             a.BSNS_SE,
+             a.BUDGET_ACNT_CODE,
+             a.EXPNDTR_UNIT_CODE,
+             (SELECT CODE_NM
+                FROM TBCOM_CMMN_CODE z
+               WHERE GRP_CODE = 'BDG001'
+                 AND CODE = a.BSNS_SE) BSNS_SE_NM, /* 사업구분명 */
+             a.BUDGET_ACNT_CODE,   /* 예산계정코드 */
+             (SELECT  BUDGET_ACNT_NM
+                FROM  TBBDG_BUDGET_ACNT_CODE z
+                WHERE z.YEAR              = a.BUDGET_YEAR
+                  AND z.BSNS_SE           = a.BSNS_SE
+                  AND z.BUDGET_ACNT_CODE  = a.BUDGET_ACNT_CODE
+                 ) AS BUDGET_ACNT_NM, /* 예산계정코드명 */
+             a.EXPNDTR_UNIT_CODE, /* 지출단위코드 */
+             (SELECT EXPNDTR_UNIT_NM  TBBDG_TAXITM_CODE
+                FROM TBBDG_EXPNDTR_UNIT_CODE z
+                WHERE z.YEAR              = a.BUDGET_YEAR
+                  AND z.BSNS_SE           = a.BSNS_SE
+                  AND z.BUDGET_ACNT_CODE  = a.BUDGET_ACNT_CODE
+                  AND z.EXPNDTR_UNIT_CODE = a.EXPNDTR_UNIT_CODE) EXPNDTR_UNIT_NM,   /* 지출단위코드명 */
+             b.RENT_HOUSE_NM || ' ' || a.DONG || ' ' || a.HO AS CRT_INFO, /* 납입자 정보 */
+             MAX(a.SUMRY_1) SUMRY_1  /*비고 */
+        FROM TBRNT_ANACT_INFO a, /* 결의서 정보 */
+             TBRNT_RENT_HOUSE b
+      WHERE a.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE(+)
+        	AND SUBSTR(a.MDAT_DE,1,6) = #mdat_de#
+      	<isNotEmpty property="rentHouseCode">
+	    	AND a.RENT_HOUSE_CODE like #rentHouseCode#
+      	</isNotEmpty>
+	  	<isNotEmpty property="anact_chk">
+			AND ANACT_SE IN
+			<iterate property="arr_anact_chk" open="(" close=")" conjunction=",">
+            #arr_anact_chk[]#
+            </iterate>
+		</isNotEmpty>
+      GROUP BY ANACT_SE,
+               MDAT_DE,
+               a.RENT_HOUSE_CODE,
+               b.RENT_HOUSE_NM,
+               DONG,
+               HO,
+               BUDGET_YEAR,
+               BSNS_SE,
+               BUDGET_ACNT_CODE,
+               EXPNDTR_UNIT_CODE
+      ORDER BY a.MDAT_DE, 
+               a.ANACT_SE,
+               a.BSNS_SE,
+               a.BUDGET_ACNT_CODE,
+               a.RENT_HOUSE_CODE,
+               a.DONG,
+               A.HO
+
+	</select>
+	
+	<!-- 쿼리명 : 결의서
+	설명 : 유보금처리내역
+	수정일  수정자  수정내용
+	작성자 : 김지훈
+	최초작성일 : 2015.12.03
+	-->
+	<select id="RNT01060200DAO.selecAanactListPrt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+       SELECT ANACT_SE,
+              ANACT_SE_NM, /* 결의서구분 */
+              MDAT_DE,     /* 결의일자 */
+              PAY_TMLMT,
+              CRT_INFO,
+              BSNS_SE_NM,
+              BUDGET_ACNT_NM,  /* 계정과목 */
+              EXPNDTR_UNIT_NM,
+              RENT_HOUSE_CODE,
+              BSNS_SE,
+              BUDGET_ACNT_CODE,
+              max(SUMRY_1) as SUMRY_1,
+              BUDGET_YEAR,
+              RENT_HOUSE_NM,    /* 주택명 */
+              sum(OCCRRNC_CO) as OCCRRNC_CO,  /* 건수 */
+              sum(ANACT_AMOUNT) as ANACT_AMOUNT, /* 금액 */
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   X.ACNT_LEVEL = 1
+                            AND SUBSTR (BUDGET_ACNT_CODE, 1, 1) =
+                                  SUBSTR (A.BUDGET_ACNT_CODE, 1, 1)
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_1,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   X.ACNT_LEVEL = 2
+                            AND SUBSTR (BUDGET_ACNT_CODE, 1, 2) =
+                                  SUBSTR (A.BUDGET_ACNT_CODE, 1, 2)
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_2,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   X.ACNT_LEVEL = 3
+                            AND SUBSTR (BUDGET_ACNT_CODE, 1, 3) =
+                                  SUBSTR (A.BUDGET_ACNT_CODE, 1, 3)
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_3,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_4                
+         FROM(SELECT distinct a.ANACT_SE,
+                      (SELECT CODE_NM
+                        FROM TBCOM_CMMN_CODE z
+                       WHERE GRP_CODE = 'RNT010'
+                         AND CODE = a.ANACT_SE) ANACT_SE_NM, /* 결의서구분명 */
+                     a.MDAT_DE,
+                     a.OCCRRNC_CO,
+                     a.ANACT_AMOUNT,
+                     a.PAY_TMLMT,
+
+                     ( CASE WHEN a.OCCRRNC_CO > 1 THEN
+
+                                 b.RENT_HOUSE_NM || ' ' || c.DONG || ' ' || c.HO ||' 외' || (a.OCCRRNC_CO - 1)
+
+                            ELSE b.RENT_HOUSE_NM || ' ' || c.DONG || ' ' || c.HO END
+
+                     ) AS CRT_INFO,
+                     (SELECT CODE_NM
+                        FROM TBCOM_CMMN_CODE z
+                       WHERE GRP_CODE = 'BDG001'
+                         AND CODE = a.BSNS_SE) BSNS_SE_NM, /* 사업구분명 */
+                     (SELECT  BUDGET_ACNT_NM
+                        FROM  TBBDG_BUDGET_ACNT_CODE z
+                        WHERE z.YEAR              = a.BUDGET_YEAR
+                          AND z.BSNS_SE           = a.BSNS_SE
+                          AND z.BUDGET_ACNT_CODE  = a.BUDGET_ACNT_CODE) AS BUDGET_ACNT_NM,           /* 예산계정코드명 */
+                   (SELECT EXPNDTR_UNIT_NM  TBBDG_TAXITM_CODE
+                      FROM TBBDG_EXPNDTR_UNIT_CODE z
+                      WHERE z.YEAR              = a.BUDGET_YEAR
+                        AND z.BSNS_SE           = a.BSNS_SE
+                        AND z.BUDGET_ACNT_CODE  = a.BUDGET_ACNT_CODE
+                        AND z.EXPNDTR_UNIT_CODE = a.EXPNDTR_UNIT_CODE) EXPNDTR_UNIT_NM,   /* 지출단위코드명 */
+                   c.BUDGET_YEAR,
+                   c.SUMRY_1,
+                   c.RENT_HOUSE_CODE,
+                   c.DONG,
+                   c.HO ,
+                   b.RENT_HOUSE_NM,
+                   a.BSNS_SE,
+                   a.BUDGET_ACNT_CODE
+                 FROM(SELECT ANACT_SE,
+                             MDAT_DE,
+                             SUM(OCCRRNC_CO) OCCRRNC_CO,
+                             SUM(ANACT_AMOUNT) ANACT_AMOUNT,
+                             MAX(PAY_TMLMT) PAY_TMLMT,
+                             BUDGET_YEAR,
+                             BSNS_SE,
+                             BUDGET_ACNT_CODE,
+                             MAX(EXPNDTR_UNIT_CODE) EXPNDTR_UNIT_CODE,
+                             MAX(MDAT_DECSN_NO) MDAT_DECSN_NO
+                       FROM TBRNT_ANACT_INFO a, /* 결의서 정보 */
+                            TBRNT_RENT_HOUSE b
+                       WHERE SUBSTR(a.MDAT_DE,1,6) = #mdat_de#
+                         AND a.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE(+)
+                    <isNotEmpty property="rentHouseCode">
+	                     AND a.RENT_HOUSE_CODE like #rentHouseCode#
+                    </isNotEmpty>
+					<isNotEmpty property="anact_chk">
+						AND a.ANACT_SE IN
+						<iterate property="arr_anact_chk" open="(" close=")" conjunction=",">
+					  	#arr_anact_chk[]#
+						</iterate>
+					</isNotEmpty>
+                       GROUP BY ANACT_SE,
+                                MDAT_DE,
+                                BUDGET_YEAR,
+                                BSNS_SE,
+                                BUDGET_ACNT_CODE) a,
+                        TBRNT_RENT_HOUSE b,
+                        TBRNT_ANACT_INFO c
+                 WHERE c.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE(+)
+                   AND a.ANACT_SE    = c.ANACT_SE
+                   AND a.MDAT_DE     = c.MDAT_DE
+                   AND a.MDAT_DECSN_NO = c.MDAT_DECSN_NO) A
+        GROUP BY ANACT_SE,
+                 ANACT_SE_NM,
+                 MDAT_DE,
+                 PAY_TMLMT,
+                 CRT_INFO,
+                 BSNS_SE_NM,
+                 BUDGET_ACNT_NM,
+                 EXPNDTR_UNIT_NM,
+                 RENT_HOUSE_CODE,
+                 BSNS_SE,
+                 BUDGET_ACNT_CODE,
+                 BUDGET_YEAR,
+                 RENT_HOUSE_NM
+        ORDER BY MDAT_DE,
+                 ANACT_SE,
+                 BSNS_SE,
+                 BUDGET_ACNT_CODE,
+                 RENT_HOUSE_CODE
+	</select>
+	
+	<!-- 쿼리명 : 감액내역서
+	설명 : 감액내역서
+	수정일  수정자  수정내용
+	작성자 : 김지훈
+	최초작성일 : 2015.12.03
+	-->
+	<select id="RNT01060200DAO.selectRdcamtListPrt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+      SELECT b.RENT_HOUSE_NM,
+             (SELECT p.NM
+               FROM TBRNT_RENT_CNTRCT z,
+                    TBRNT_PRMANENT_RENT_CSTMR p
+               WHERE z.PRMANENT_CSTMR_NO = p.PRMANENT_CSTMR_NO
+                 AND z.CNTRCTR_NO = a.CNTRCTR_NO) NM,
+             a.DONG,
+             a.HO,
+             a.MDAT_DE,
+             (select v.RNTCHRG
+               from TBRNT_RENT_MT_RNTCHRG v,
+                    TBRNT_RENT_CNTRCT P
+              where V.CNTRCTR_NO = p.CNTRCTR_NO
+                AND p.RENT_HOUSE_CODE = a.RENT_HOUSE_CODE
+                AND p.DONG       = a.DONG
+                AND p.HO         = a.HO
+                AND SUBSTR(v.PAY_TMLMT,1,6)  = SUBSTR(a.PAY_TMLMT,1,6)
+                AND v.NHT_SN = (SELECT MAX(NHT_SN)
+                                  FROM TBRNT_RENT_MT_RNTCHRG z
+                                  WHERE CNTRCTR_NO = v.CNTRCTR_NO
+                                    AND SUBSTR(PAY_TMLMT,1,6) = SUBSTR(v.PAY_TMLMT,1,6) ) ) AS RNTCHRG, /* 월임대료 */
+              a.ANACT_AMOUNT /* 감액 */
+             , '(임대료 - (월 임대료 X 감액일자) / 일수)' AS RM
+        FROM TBRNT_ANACT_INFO a,
+             TBRNT_RENT_HOUSE b
+       WHERE a.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE(+)
+         AND SUBSTR(a.MDAT_DE,1,6) = #mdat_de#
+       <isNotEmpty property="rentHouseCode">
+	     AND a.RENT_HOUSE_CODE LIKE #rentHouseCode#
+       </isNotEmpty>
+         AND a.ANACT_SE = '4'
+       ORDER BY a.MDAT_DE
+
+	</select>
+	
+	<!-- 쿼리명 : 소송비수납내역
+	설명 : 소송비수납내역
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.03
+	-->
+	<select id="RNT01060200DAO.selectLgxpssListPrt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+     SELECT a.RENT_HOUSE_CODE,
+            a.DONG,
+            a.HO,
+            b.RENT_HOUSE_NM,
+            d.NM,
+            a.MDAT_DE,
+            sum(a.OCCRRNC_CO) as OCCRRNC_CO,
+            sum(a.ANACT_AMOUNT) as ANACT_AMOUNT,
+            (SELECT CODE_NM
+               FROM TBCOM_CMMN_CODE z
+              WHERE GRP_CODE = 'RNT010'
+                AND CODE = a.ANACT_SE) ANACT_SE_NM, /* 결의서구분명 */
+            (SELECT CODE_NM
+               FROM TBCOM_CMMN_CODE z
+              WHERE GRP_CODE = 'BDG001'
+                AND CODE = a.BSNS_SE) BSNS_SE_NM, /* 사업구분명 */
+            (SELECT  BUDGET_ACNT_NM
+               FROM  TBBDG_BUDGET_ACNT_CODE z
+              WHERE z.YEAR              = a.BUDGET_YEAR
+                AND z.BSNS_SE           = a.BSNS_SE
+                AND z.BUDGET_ACNT_CODE  = a.BUDGET_ACNT_CODE ) AS BUDGET_ACNT_NM, /* 예산계정코드명 */
+           (SELECT EXPNDTR_UNIT_NM  TBBDG_TAXITM_CODE
+                     FROM TBBDG_EXPNDTR_UNIT_CODE z
+                     WHERE z.YEAR              = a.BUDGET_YEAR
+                       AND z.BSNS_SE           = a.BSNS_SE
+                       AND z.BUDGET_ACNT_CODE  = a.BUDGET_ACNT_CODE
+                       AND z.EXPNDTR_UNIT_CODE = a.EXPNDTR_UNIT_CODE) EXPNDTR_UNIT_NM   /* 지출단위코드명 */
+       FROM TBRNT_ANACT_INFO a,
+            TBRNT_RENT_HOUSE b,
+            TBRNT_RENT_CNTRCT c,
+            TBRNT_PRMANENT_RENT_CSTMR d
+      WHERE a.RENT_HOUSE_CODE  	= b.RENT_HOUSE_CODE(+)
+        AND a.CNTRCTR_NO 		= c.CNTRCTR_NO(+)
+        AND c.PRMANENT_CSTMR_NO = d.PRMANENT_CSTMR_NO(+)
+        AND SUBSTR(a.MDAT_DE,1,6) = #mdat_de#
+      <isNotEmpty property="rentHouseCode">
+	    AND a.RENT_HOUSE_CODE LIKE #rentHouseCode#
+      </isNotEmpty>
+        AND a.ANACT_SE	= '2'
+        AND a.PAY_SE 	= '8'
+        
+      GROUP BY ANACT_SE,
+               MDAT_DE,
+               a.RENT_HOUSE_CODE,
+               RENT_HOUSE_NM,
+               a.DONG,
+               a.HO,
+               NM,
+               BUDGET_YEAR,
+               BSNS_SE,
+               BUDGET_ACNT_CODE,
+               EXPNDTR_UNIT_CODE
+      ORDER BY a.RENT_HOUSE_CODE,
+               a.DONG,
+               a.HO
+
+	</select>
+	
+	  <!-- 수입결의서 조회 -->
+	  <select id="RNT01060200DAO.selectIncmeDecsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			
+                   SELECT   A.ANACT_SE,
+                            SFCOM_CODE_NM ('HOU0Z2', A.ANACT_SE, 'ALL_CODE_NM') AS DECSN_SE_NM,
+                            A.BSNS_SE,
+                            A.BUDGET_ACNT_CODE,
+                            TO_CHAR (TO_DATE (A.MDAT_DE), 'YYYY-MM-DD') AS DECSN_DE,
+                            TO_CHAR (TO_DATE (A.PAY_TMLMT), 'YYYY-MM-DD') AS PAY_TMLMT,
+                            A.BUDGET_YEAR,
+                            B.OCCRRNC_CO_SUM,
+                            B.DECSN_AMOUNT_SUM,
+                            CASE 
+                                WHEN OCCRRNC_CO_SUM > 1
+                                THEN
+                                      Z.RENT_HOUSE_NM
+                                   || ' '
+                                   || A.DONG
+                                   || ' '
+                                   || A.HO
+                                   || ' 외'
+                                   || (OCCRRNC_CO_SUM - 1)
+                                ELSE
+                                      Z.RENT_HOUSE_NM
+                                   || ' '
+                                   || A.DONG
+                                   || ' '
+                                   || A.HO
+                            END
+                               AS F_REMARK,     
+                            '[' || Z.RENT_HOUSE_CODE || ']' || RENT_HOUSE_NM AS ALL_HOUSE_NM,
+                            (                  SELECT   BUDGET_ACNT_NM
+                                                 FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                                                WHERE   X.ACNT_LEVEL = 1
+                                                        AND SUBSTR (BUDGET_ACNT_CODE, 1, 1) =
+                                                              SUBSTR (A.BUDGET_ACNT_CODE, 1, 1)
+                                                        AND X.YEAR = A.BUDGET_YEAR
+                                                        AND X.BSNS_SE = A.BSNS_SE)
+                               AS F_ACCT_1,
+                            (                  SELECT   BUDGET_ACNT_NM
+                                                 FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                                                WHERE   X.ACNT_LEVEL = 2
+                                                        AND SUBSTR (BUDGET_ACNT_CODE, 1, 2) =
+                                                              SUBSTR (A.BUDGET_ACNT_CODE, 1, 2)
+                                                        AND X.YEAR = A.BUDGET_YEAR
+                                                        AND X.BSNS_SE = A.BSNS_SE)
+                               AS F_ACCT_2,
+                            (                  SELECT   BUDGET_ACNT_NM
+                                                 FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                                                WHERE   X.ACNT_LEVEL = 3
+                                                        AND SUBSTR (BUDGET_ACNT_CODE, 1, 3) =
+                                                              SUBSTR (A.BUDGET_ACNT_CODE, 1, 3)
+                                                        AND X.YEAR = A.BUDGET_YEAR
+                                                        AND X.BSNS_SE = A.BSNS_SE)
+                               AS F_ACCT_3,
+                            (                  SELECT   BUDGET_ACNT_NM
+                                                 FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                                                WHERE   BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE
+                                                        AND X.YEAR = A.BUDGET_YEAR
+                                                        AND X.BSNS_SE = A.BSNS_SE)
+                               AS F_ACCT_4,
+                            CASE OCCRRNC_CO_SUM WHEN 1 THEN SUMRY_1 || SUMRY_2 ELSE SUMRY_1|| SUMRY_2 || ' 외 기타' END
+                               AS F_REMARK2,
+				          NM1,
+				          NM2,
+				          NM3                               
+                     FROM   TBRNT_ANACT_INFO A                 /* 주택결의 */
+                                               ,
+                            (              SELECT   MIN (MDAT_DECSN_NO) AS INCME_DECSN_NO,
+                                                    ANACT_SE,
+                                                    BUDGET_YEAR,
+                                                    BSNS_SE,
+                                                    BUDGET_ACNT_CODE,
+                                                    SUM (OCCRRNC_CO) AS OCCRRNC_CO_SUM,
+                                                    SUM (ANACT_AMOUNT) AS DECSN_AMOUNT_SUM
+                                             FROM   TBRNT_ANACT_INFO /* 주택결의 */
+                                            WHERE   MDAT_DE = #MDAT_DE#
+                                         GROUP BY   ANACT_SE,
+                                                    BUDGET_YEAR,
+                                                    BSNS_SE,
+                                                    BUDGET_ACNT_CODE) B
+                           , TBRNT_RENT_HOUSE Z                         
+					       , (SELECT MAX(DECODE(SANCTN_SN , '0' , EMPNM , '')) AS NM1  
+					              , MAX(DECODE(SANCTN_SN , '1' , EMPNM , '')) AS NM2
+					              , MAX(DECODE(SANCTN_SN , '2' , EMPNM , '')) AS NM3
+					          FROM (
+					                SELECT B.SANCTN_SN,
+					                       B.SANCTNER_ID,
+					                       CASE
+					                         WHEN AGNCY_SANCTNER_ID IS NULL THEN U.USER_NM 
+					                         ELSE U.USER_NM||CHR(13)||CHR(10)||'('||U1.USER_NM||')' 
+					                       END EMPNM,
+					                       B.SANCTN_STEP,
+					                       C.CODE_NM SANCTN_STEP_NM,
+					                       B.SANCTN_STTUS,
+					                       D.CODE_NM SANCTN_STTUS_NM,
+					                       E.CODE OFCPS_SE,
+					                       E.CODE_NM OFCPS_NM,
+					                       TO_CHAR(B.SANCTN_DT,'MM/DD') SANCTN_DT
+					                  FROM TBCOM_INNER_SANCTN_DTLS B
+					                 INNER JOIN TBCOM_INNER_SANCTNER S ON (S.INNER_SANCTN_ID=B.INNER_SANCTN_ID
+					                                                       AND S.SANCTN_SN=B.SANCTN_SN
+					                                                       AND S.SANCTNER_ID=B.SANCTNER_ID)
+					                  LEFT OUTER JOIN TBCOM_USER U ON (U.USER_ID=B.SANCTNER_ID)
+					                  LEFT OUTER JOIN TBCOM_USER U1 ON (U1.USER_ID=B.AGNCY_SANCTNER_ID)
+					                  LEFT OUTER JOIN TBHRM_HR_MASTR A ON (A.EMPNO=U.EMPNO)
+					                  LEFT OUTER JOIN TBCOM_CMMN_CODE C ON (C.GRP_CODE='COM028'
+					                                                        AND C.CODE=B.SANCTN_STEP)
+					                  LEFT OUTER JOIN TBCOM_CMMN_CODE D ON (D.GRP_CODE='COM032'
+					                                                        AND D.CODE=B.SANCTN_STTUS)
+					                  LEFT OUTER JOIN TBCOM_CMMN_CODE E ON (E.GRP_CODE='HRM021'
+					                                                        AND E.CODE=S.OFCPS_NM)
+					                 WHERE B.INNER_SANCTN_ID= (SELECT INNER_SANCTN_NO FROM TBPMS_DECSN_SANCTN WHERE JOB_SE = 'RN1' AND FORMAT_SE = '005' AND DECSN_YM = SUBSTR(#MDAT_DE#,1,6))
+                   AND B.SANCTN_STEP IN ('S1','S2')
+                   AND D.CODE = 'S01'
+                 ORDER BY B.SANCTN_SN)) C                                                      
+                    WHERE       A.MDAT_DECSN_NO = B.INCME_DECSN_NO
+                            AND A.ANACT_SE = B.ANACT_SE
+                            AND A.BSNS_SE = B.BSNS_SE
+                            AND A.BUDGET_ACNT_CODE = B.BUDGET_ACNT_CODE
+                            AND A.RENT_HOUSE_CODE = Z.RENT_HOUSE_CODE
+                            AND A.MDAT_DE = #MDAT_DE#
+                            AND A.ANACT_SE = #ANACT_SE# 
+                            AND A.BSNS_SE = #BSNS_SE# 
+                            AND A.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+                 ORDER BY   A.ANACT_SE,
+                            A.BUDGET_YEAR,
+                            A.BSNS_SE,
+                            A.BUDGET_ACNT_CODE,
+                            A.RENT_HOUSE_CODE || A.DONG || A.HO			
+	
+	  </select>	
+	
+	  <!-- 수입내역서 조회 -->
+	  <select id="RNT01060200DAO.selectIncmeDtstmnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+            SELECT TO_CHAR(TO_DATE(A.MDAT_DE), 'YYYY-MM-DD') AS DECSN_DE
+                  ,A.ANACT_SE
+                  ,SFCOM_CODE_NM('HOU0Z2', A.ANACT_SE, 'ALL_CODE_NM') AS DECSN_SE_NM
+                  ,'[' || Z.RENT_HOUSE_CODE || ']' || RENT_HOUSE_NM AS ALL_HOUSE_NM
+                  ,SFCOM_CODE_NM('BDG017', A.BSNS_SE || '1', 'ALL_CODE_NM') AS BSNS_SE_NM
+                  ,A.BUDGET_ACNT_CODE
+                  ,(SELECT BUDGET_ACNT_NM
+                      FROM TBBDG_BUDGET_ACNT_CODE X
+                     WHERE X.YEAR = A.BUDGET_YEAR
+                       AND X.BSNS_SE = A.BSNS_SE
+                       AND X.BALC_SE = '1'
+                       AND X.BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE) AS BUDGET_ACNT_NM /* 예산계정코드명 */
+                  ,TO_CHAR(A.DONG) || '-' || TO_CHAR(A.HO) AS F_BLOCK
+                  ,A.DONG AS VBLOCK
+                  ,A.HO AS VLOT
+                  ,'' AS VLOT_TYPE
+                  ,A.PAY_TMLMT
+                  ,A.ANACT_AMOUNT AS DECSN_AMOUNT
+                  ,A.OCCRRNC_CO
+                  ,A.CNTRCTR_NO
+                  ,(SELECT BB.NM
+                      FROM TBRNT_PRMANENT_RENT_CSTMR BB
+                     WHERE BB.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO) AS HOUSE_CSTMR_NM
+                  ,A.SUMRY_1 || A.SUMRY_2 AS INCME_DTLS_1
+                  ,A.SUMRY_1 AS REMARK1
+                  ,A.SUMRY_2 AS REMARK2
+              FROM TBRNT_ANACT_INFO A /* 주택결의 */
+                  ,TBRNT_RENT_CNTRCT  B /* 주택계약자 */
+                  ,TBRNT_RENT_HOUSE Z
+             WHERE 1 = 1
+               AND A.CNTRCTR_NO = B.CNTRCTR_NO(+)
+               AND A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE(+)
+               AND A.DONG = B.DONG(+)
+               AND A.HO = B.HO(+)
+               AND A.RENT_HOUSE_CODE = Z.RENT_HOUSE_CODE
+               AND MDAT_DE = #MDAT_DE#
+               AND ANACT_SE = #ANACT_SE#
+               AND BSNS_SE = #BSNS_SE#
+               AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+             ORDER BY A.RENT_HOUSE_CODE, VBLOCK, VLOT, A.CNTRCTR_NO  
+			 
+	  </select>		
+	
+</sqlMap>

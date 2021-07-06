@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020403_SQL">	
+	
+	<!-- 세목별집계표 -->
+	<select id="ACC020403DAO.taxitmAsstnSmTableList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   <![CDATA[ /*"ACC020403DAO.taxitmAsstnSmTableList"*/ ]]>
+		WITH TM_EXECUT_BUDGET AS (
+				  SELECT s1.YEAR
+				       , s1.BSNS_SE
+				       , s1.BALC_SE
+				       , s1.DETAIL_BSNS_CODE
+					   , s1.DEPT_CODE
+				       , s1.BUDGET_ACNT_CODE
+				       , s1.EXPNDTR_UNIT_CODE
+				       , NVL(SUM(s1.ORIBDGT),0)     AS ORIBDGT
+				       , NVL(SUM(s1.CYFD_BUDGET),0) AS CYFD_BUDGET
+				       , NVL(SUM(s1.ORIBDGT),0)
+				         + NVL(SUM(s1.RVSPBGT_1_ODR),0)
+				         + NVL(SUM(s1.RVSPBGT_2_ODR),0)
+				         + NVL(SUM(s1.RVSPBGT_3_ODR),0)
+				         + NVL(SUM(s1.RVSPBGT_4_ODR),0)
+				         + NVL(SUM(s1.RVSPBGT_5_ODR),0)
+				         + NVL(SUM(s1.RVSPBGT_6_ODR),0)
+				         + NVL(SUM(s1.RVSPBGT_7_ODR),0)
+				         + NVL(SUM(s1.TRSF_AM),0)
+				         + NVL(SUM(s1.BUKIP_MVMN_AM),0)
+				         + NVL(SUM(s1.MVMN_AM),0)
+				         + NVL(SUM(s1.DVR_AM),0)
+				         + NVL(SUM(s1.RSVFND_REQST_AM),0)
+				         AS EXECUT_BDG_AMT
+				  FROM TBBDG_EXECUT_BUDGET s1
+				  WHERE s1.YEAR = #YEAR#
+				  
+				<isNotEmpty property="DEPT_CODE">
+		             <isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">
+		               	s1.DEPT_CODE = #DEPT_CODE#
+		             </isNotEqual>
+		        </isNotEmpty>
+		        
+				  GROUP BY s1.YEAR
+				         , s1.BSNS_SE
+				         , s1.BALC_SE
+				         , s1.DETAIL_BSNS_CODE
+						 , s1.DEPT_CODE
+				         , s1.BUDGET_ACNT_CODE
+				         , s1.EXPNDTR_UNIT_CODE
+		)
+		SELECT
+		       t1.BUDGET_ACNT_CODE
+		      ,t1.EXPNDTR_UNIT_CODE
+		      ,t1.BUDGET_ACNT_CODE||'-'|| MAX(t2.MOK_NM) AS SECHUL
+		      ,MAX(t3.BUKIP_NM) AS EXPNDTR_UNIT_NM2
+			  ,NVL(SUM(t4.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_AMOUNT
+		      , NVL(SUM(t4.DEBT_AMT),0) AS DEBT_AMT
+			  , NVL(SUM(t4.DECSN_AMOUNT),0) AS DECSN_AMOUNT
+			<isEqual property="CYFD_SE" compareValue="0">
+			  , NVL(MAX(t1.EXECUT_BDG_AMT),0) AS EXECUT_BDG_AMT
+			  , NVL(MAX(t1.EXECUT_BDG_AMT ),0) - NVL(SUM(t4.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_BLCE
+		      , NVL(MAX(t1.EXECUT_BDG_AMT ),0) -  NVL(SUM(t4.DEBT_AMT),0) AS DEBT_BLCE
+			</isEqual>
+			<isEqual property="CYFD_SE" compareValue="1">
+			  , NVL(MAX(t1.CYFD_BUDGET),0) AS EXECUT_BDG_AMT
+			  , NVL(MAX(t1.CYFD_BUDGET ),0) - NVL(SUM(t4.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_BLCE
+		      , NVL(MAX(t1.CYFD_BUDGET ),0) -  NVL(SUM(t4.DEBT_AMT),0) AS DEBT_BLCE
+			</isEqual>
+		FROM TM_EXECUT_BUDGET t1
+		     LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t2
+		     ON  t1.YEAR             = t2.YEAR
+		     AND t1.BSNS_SE          = t2.BSNS_SE
+				 AND t1.BALC_SE          = t2.BALC_SE
+				 AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		     LEFT OUTER JOIN TBBDG_BUKIP_CODE t3
+		     ON  t1.EXPNDTR_UNIT_CODE = t3.BUKIP_CODE
+		     LEFT OUTER JOIN 
+		     (SELECT *
+		      FROM VHACC_EXP_DSN_MASTR
+		      WHERE BUDGET_YEAR = #YEAR#
+		        AND CYFD_SE     = #CYFD_SE# /*이월구분*/
+		        AND CAUSE_ACTION_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		     ) t4
+		     ON t1.YEAR             = t4.BUDGET_YEAR
+		     AND t1.BSNS_SE          = t4.BSNS_SE
+			 AND t1.BALC_SE          = t4.BALC_SE
+			 AND t1.DETAIL_BSNS_CODE = t4.BSNS_CODE
+			 AND t1.DEPT_CODE		 = t4.BUDGET_DEPT_CODE
+			 AND t1.BUDGET_ACNT_CODE = t4.BUDGET_ACNT_CODE
+		     AND t1.EXPNDTR_UNIT_CODE = t4.EXPNDTR_UNIT_CODE
+		WHERE 1=1
+		  AND t1.BUDGET_ACNT_CODE  BETWEEN SUBSTR(#BUDGET_ACNT_CODE_ST#, 0, 3) || '0000' AND SUBSTR(#BUDGET_ACNT_CODE_ED#, 0, 3) || '9999'
+		  
+		  AND t1.BSNS_SE          = #BSNS_SE#
+  		  AND t1.BALC_SE          = #BALC_SE#
+  		<isEqual property="CYFD_SE" compareValue="1">
+  		  AND NVL(t1.CYFD_BUDGET,0) > 0 /*이월구분*/
+  		</isEqual>
+		GROUP BY t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE
+		ORDER BY t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE
+	</select>
+	
+</sqlMap>

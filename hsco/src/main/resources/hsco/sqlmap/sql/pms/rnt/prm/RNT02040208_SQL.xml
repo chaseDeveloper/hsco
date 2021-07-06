@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02040208_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 특별관리대상 조회
+			 설명 : 매입임대 특별관리대상 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.04
+	-->	
+	<select id="RNT02040208DAO.selectSpecialManagementList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		           '0' AS CHK
+		            ,'PRM' AS JOB_SE
+					,A.*
+					,B.RENT_HOUSE_CODE													/*주택코드*/
+					,B.DONG																		/*동*/
+					,B.HO																			/*호*/
+					,C.RENT_HOUSE_NM														/*주택명*/
+					,D.NM
+		            ,NVL(D.MBTLNO, D.TELNO) AS MBTLNO																							
+					,D.IHIDNUM																	/*주민번호*/
+					,E.CANCL_DE																/*해약일자*/
+          		    ,S.REG_DATE AS SNDNG_DT
+         		    ,S.MSG_STATUS					
+		FROM(
+					SELECT
+								A.CNTRCTR_NO
+								,SUM(A.NPYM_AMOUNT) AS NPYM_AMOUNT			/*체납금액 합계*/
+								,SUM(A.OVDINTR) AS OVDINTR							/*연체이자 합계*/
+					FROM		TBRNT_PUCHAS_SPECL_MANAGE A
+								,TBRNT_PUCHAS_CNTRCT B
+								,TBRNT_PUCHAS_HOUSE C
+					WHERE	A.CNTRCTR_NO = B.CNTRCTR_NO
+					AND		B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE 
+					<isNotEmpty property="houseCode">
+					AND		B.RENT_HOUSE_CODE LIKE #houseCode#
+					</isNotEmpty>
+					<isNotEmpty property="dong">
+					AND		B.DONG LIKE #dong#
+					</isNotEmpty>
+					<isNotEmpty property="ho">
+					AND		B.HO LIKE #ho#
+					</isNotEmpty>
+					GROUP BY A.CNTRCTR_NO
+					) A
+					,TBRNT_PUCHAS_CNTRCT B
+					,TBRNT_PUCHAS_HOUSE C
+					,TBRNT_PUCHAS_RENT_CSTMR D
+					,TBRNT_PUCHAS_RESCI E
+			        ,(   SELECT *
+								     FROM (
+									        SELECT 
+											        A.MT_PR
+											       ,A.MT_SEQ 
+											       ,(SELECT SFSAL_GETDEPTNM_01(MT_REFKEY) 
+											           FROM EMMA.EM_SMT_TRAN
+											          WHERE MT_PR = A.MT_PR)  AS DEPT_CODE              /* 부서코드*/
+											       ,(SELECT TO_CHAR(DATE_CLIENT_REQ,'YYYY-MM-DD HH24:MI')
+											           FROM EMMA.EM_SMT_TRAN
+											          WHERE MT_PR = A.MT_PR)	           AS REG_DATE     /* 발송일시 */  
+											       ,TO_CHAR(DATE_RSLT,'YYYY-MM-DD HH24:MI')  AS DATE_RSLT    /* 단말기수신일시 */        
+											       ,(SELECT SERVICE_TYPE 
+											           FROM EMMA.EM_SMT_TRAN
+											          WHERE MT_PR = A.MT_PR)   AS  SERVICE_TYPE         /* SMS,MMX */
+											       ,A.MSG_STATUS
+											       ,A.RECIPIENT_NUM
+											       ,A.CHANGE_WORD5
+											       ,(SELECT CONTENT
+											           FROM EMMA.EM_SMT_TRAN
+											          WHERE MT_PR = A.MT_PR)  AS  CONTENT   /* 메시지 */
+											 FROM EMMA.EM_SMT_CLIENT A
+											WHERE 1=1					
+											 AND A.MT_PR IN  (SELECT MT_PR 
+											                     FROM EMMA.EM_SMT_TRAN
+											                    WHERE MT_REFKEY = #deptCode#)
+			
+										    UNION ALL
+										
+											SELECT 
+											        A.MT_PR
+											       ,A.MT_SEQ 
+											       ,(SELECT SFSAL_GETDEPTNM_01(MT_REFKEY) 
+											           FROM EMMA.EM_MMT_TRAN
+											           WHERE MT_PR = A.MT_PR)  AS DEPT_CODE              /* 부서코드*/
+											       ,(SELECT TO_CHAR(DATE_CLIENT_REQ,'YYYY-MM-DD HH24:MI')
+											           FROM EMMA.EM_MMT_TRAN
+											          WHERE MT_PR = A.MT_PR)	           AS REG_DATE     /* 발송일시 */  
+											       ,TO_CHAR(DATE_RSLT,'YYYY-MM-DD HH24:MI')  AS DATE_RSLT    /* 단말기수신일시 */        
+											       ,(SELECT SERVICE_TYPE 
+											           FROM EMMA.EM_MMT_TRAN
+											          WHERE MT_PR = A.MT_PR)   AS  SERVICE_TYPE         /* SMS,MMX */
+											       ,A.MSG_STATUS
+											       ,A.RECIPIENT_NUM
+											       ,A.CHANGE_WORD5
+											       ,(SELECT CONTENT
+											           FROM EMMA.EM_MMT_TRAN
+											          WHERE MT_PR = A.MT_PR)  AS  CONTENT   /* 메시지 */
+											 FROM EMMA.EM_MMT_CLIENT A
+											WHERE 1=1				
+											 AND A.MT_PR IN  (SELECT MT_PR 
+											                     FROM EMMA.EM_MMT_TRAN
+											                    WHERE MT_REFKEY = #deptCode#)
+											)
+								) S          					
+		WHERE	A.CNTRCTR_NO = B.CNTRCTR_NO
+		AND		B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		AND		B.PUCHAS_CSTMR_NO = D.PUCHAS_CSTMR_NO
+		AND		B.CNTRCTR_NO = E.CNTRCTR_NO(+)
+		AND   	NVL(D.MBTLNO, D.TELNO) = S.RECIPIENT_NUM(+)
+		<isNotEmpty property="houseCode">
+		AND		B.RENT_HOUSE_CODE LIKE #houseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND		B.DONG LIKE #dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND		B.HO LIKE #ho#
+		</isNotEmpty>
+		ORDER BY B.RENT_HOUSE_CODE, B.DONG, B.HO
+	</select>
+
+
+
+	<!-- 쿼리명 : 매입임대 특별관리대상 상세사항 조회
+			 설명 : 매입임대 특별관리대상 상세사항 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.04
+	-->	
+	<select id="RNT02040208DAO.selectSpecialManagementDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+					CNTRCTR_NO																/*계약자번호*/
+					,PAY_TMLMT																/*납부기한*/
+					,NPYM_SN																	/*체납순번*/
+					,PAY_SE																		/*납부구분*/
+					,NPYM_AMOUNT															/*체납금액*/
+					,OVDINTR																	/*연체이자*/
+					,PROCESS_DE																/*처리일자*/
+		FROM		TBRNT_PUCHAS_SPECL_MANAGE
+		WHERE	CNTRCTR_NO	LIKE	#cntrctrNo#
+	</select>
+
+
+
+	<!-- 쿼리명 : 매입임대 연체자 조회
+			 설명 : 매입임대 연체자 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.04
+	-->	
+	<select id="RNT02040208DAO.selectArrearageNmList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+					A.CNTRCTR_NO
+					,A.RENT_HOUSE_CODE
+					,C.RENT_HOUSE_NM
+					,A.DONG
+					,A.HO
+					,D.NM
+					,D.IHIDNUM
+					,SUM( B.RNTCHRG + NVL(B.RDCAMT_AMOUNT,0) ) AS DEL_AMT
+					,SUM(B.OVDINTR) AS DEL_INT
+					,COUNT(1) CNT
+		FROM		TBRNT_PUCHAS_CNTRCT A
+					,TBRNT_PUCHAS_MT_RNTCHRG B
+					,TBRNT_PUCHAS_HOUSE C
+					,TBRNT_PUCHAS_RENT_CSTMR D
+		WHERE	A.CNTRCTR_NO				=	B.CNTRCTR_NO
+		AND		A.RENT_HOUSE_CODE		=	C.RENT_HOUSE_CODE
+		AND		A.PUCHAS_CSTMR_NO	=	D.PUCHAS_CSTMR_NO
+		AND		B.RCIV_DE	IS	NULL
+		<isNotEmpty property="houseCode">
+		AND		A.RENT_HOUSE_CODE LIKE #houseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND		A.DONG LIKE #dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND		A.HO LIKE #ho#
+		</isNotEmpty>
+		GROUP BY 
+					A.CNTRCTR_NO
+					,A.RENT_HOUSE_CODE
+					,C.RENT_HOUSE_NM
+					,A.DONG
+					,A.HO
+					,D.NM
+					,D.IHIDNUM
+		HAVING SUM(B.RNTCHRG + NVL(B.RDCAMT_AMOUNT,0)) BETWEEN '1' AND #edOvdintr#
+		AND COUNT(1) BETWEEN '1' AND #edOvdintrCnt#
+		ORDER BY A.RENT_HOUSE_CODE,	A.DONG,	A.HO
+	</select>
+
+
+
+	<!-- 쿼리명 : 매입임대 연체자 상세사항 조회
+			 설명 : 매입임대 연체자 상세사항 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.04
+	-->	
+	<select id="RNT02040208DAO.selectArrearageNmDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+					B.CNTRCTR_NO																	/*계약자번호*/
+					,B.MDAT_YM																	/*조정일자*/
+					,B.PAY_TMLMT																	/*납부기한*/
+					,B.RNTCHRG + NVL(B.RDCAMT_AMOUNT,0) AS DEL_AMT			/*체납금액*/
+					,B.OVDINTR AS DEL_INT														/*연체이자*/
+		FROM TBRNT_PUCHAS_MT_RNTCHRG B
+		WHERE	B.CNTRCTR_NO	=	#cntrctrNo#
+		AND		B.RCIV_DE IS NULL
+		ORDER BY B.MDAT_YM
+	</select>
+
+
+
+	<!-- 쿼리명 : 매입임대 특별관리대상 등록
+			 설명 : 매입임대 특별관리대상 등록 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.04
+	-->	
+	<insert id="RNT02040208DAO.saveArrearageNmC" parameterClass="java.util.HashMap">
+		INSERT INTO TBRNT_PUCHAS_SPECL_MANAGE(
+					CNTRCTR_NO
+					,PAY_TMLMT
+					,NPYM_SN
+					,PAY_SE
+					,NPYM_AMOUNT
+					,OVDINTR
+					,PROCESS_DE
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+					)
+					SELECT
+								A.CNTRCTR_NO
+								,A.PAY_TMLMT
+								,RowNum
+								,'2' AS PAY_SE
+								,A.RCIV_AMOUNT + A.RDCAMT_AMOUNT
+								,A.OVDINTR
+								,NULL
+								,#S_USER_ID#
+								,SYSDATE
+								,#S_USER_ID#
+								,SYSDATE
+		FROM		TBRNT_PUCHAS_MT_RNTCHRG A
+		WHERE	A.CNTRCTR_NO = #cntrctrNo#
+		AND		A.RCIV_DE	is	null
+	</insert>
+	
+	
+	<!-- 쿼리명 : 매입임대 특별관리대상 삭제
+			 설명 : 매입임대 특별관리대상 삭제 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.10.22
+	-->	
+	<delete id="RNT02040208DAO.saveSpecialManagementD" parameterClass="java.util.HashMap">
+		DELETE
+		FROM		TBRNT_PUCHAS_SPECL_MANAGE											
+		WHERE	CNTRCTR_NO	=	#CNTRCTR_NO#
+	</delete>	
+</sqlMap>

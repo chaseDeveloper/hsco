@@ -1,0 +1,1464 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL030110_SQL">	
+	
+	<!-- 급여이체자료정보 목록조회 -->
+	<select id="SAL030110DAO.selectPymntTransfrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH MT_SALARY_T AS (
+		    SELECT 
+		         t1.PYMNT_YM
+		        ,t1.SN
+		        ,t2.EMPNO
+		        ,SUM(DECODE(t3.PYMNT_DDC_SE,0,1,-1) * t2.AMOUNT) AS AMOUNT
+		    FROM TBSAL_MT_SALARY_CALC t1
+		         INNER JOIN TBSAL_MT_SALARY_DTLS t2
+		         ON  t1.PYMNT_YM = t2.PYMNT_YM
+		         AND t1.SN       = t2.SN
+		         INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE t3
+		         ON  t2.PYMNT_DDC_CODE = t3.PYMNT_DDC_CODE
+		    WHERE t1.PYMNT_YM = #PYMNT_YM#
+		      AND t1.SN = #SN#
+		    GROUP BY t1.PYMNT_YM, t1.SN, t2.EMPNO
+		)
+		SELECT 
+		       t2.PYMNT_DE
+		      ,t2.SALARY_DEPT_CODE AS DEPT_CODE
+		      ,NVL(t2.SALARY_DEPT_NM, t3.SALARY_DEPT_NM) AS DEPT_NM
+		      ,t1.EMPNO
+		      ,t6.EMPNM
+		      ,t4.SALARY_BANK_CODE
+		      ,t5.FNNC_INSTT_CODE_NM
+		      ,t4.SALARY_BANK_ACNUT
+		      ,t1.AMOUNT
+		FROM MT_SALARY_T t1
+		     INNER JOIN TBSAL_MT_SALARY_PYMNT t2
+		     ON  t1.PYMNT_YM = t2.PYMNT_YM
+		     AND t1.SN = t2.SN
+		     AND t1.EMPNO = t2.EMPNO
+		     INNER JOIN TBSAL_SALARY_DEPT t3
+		     ON  t2.SALARY_DEPT_CODE = t3.SALARY_DEPT_CODE
+		     LEFT OUTER JOIN TBSAL_EMPL_BANK_ACNUT t4
+		     ON t1.EMPNO = t4.EMPNO
+		     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t5
+		     ON t4.SALARY_BANK_CODE = t5.FNNC_INSTT_CODE
+		     INNER JOIN TBHRM_HR_MASTR t6
+		     ON t1.EMPNO = t6.EMPNO
+		WHERE t3.BSNS_TY = #BSNS_TY#
+		  AND NVL(t1.AMOUNT,0) <![CDATA[<>]]> 0
+		ORDER BY t3.OUTPT_SEQ, t6.JSSFC_SE, t6.HR_CLSF_SE, t6.EMPNO        	     
+    </select>  
+    
+   <!-- 급여이체자료정보 수정 -->
+    <update id="SAL030110DAO.PymntTransfrListU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBSAL_SALARY_TRANSFR_MANAGE A SET
+                     BANK_CODE     = #BANK_CODE#
+					,ACNUT_NO      = #ACNUT_NO#
+					,PYMNT_AMOUNT  = #PYMNT_AMOUNT#
+					,RM            = #RM#
+	                ,UPDUSR_ID	   = #S_USER_ID#
+	                ,UPDT_DT	   = SYSDATE
+            WHERE A.EMPNO = #EMPNO#
+            AND A.PYMNT_YM = #PYMNT_YM#
+            AND A.PYMNT_DE = #PYMNT_DE#
+            AND A.PYMNT_SE = #PYMNT_SE#
+			
+        ]]>    
+    </update>
+    
+     <!-- 급여이체데이터 회계전송 삭제 old -->
+    <delete id="SAL030110DAO.delAccPymntTransfr" parameterClass="java.util.HashMap">
+        <![CDATA[
+            DELETE FROM TBACC_EXPNDTR_SLARY_DETAIL
+            WHERE PYMNT_DE = #PYMNT_DE#
+            AND CMPNSP_NO IS NULL
+        ]]>         
+    </delete> 
+     
+     <!-- 급여이체데이터 회계전송 생성 old -->
+    <insert id="SAL030110DAO.creAccPymntTransfr" parameterClass="java.util.HashMap">      
+         <![CDATA[
+              INSERT INTO TBACC_EXPNDTR_SLARY_DETAIL (
+						 BPLC_CODE
+						,PYMNT_YEAR
+						,PYMNT_DE
+						,PYMNT_SE
+						,SEQ
+						,DECSN_AMOUNT
+						,RCPT_DE
+						,RCPT_MAN
+						,RCPT_MAN_DEPT_CODE
+						,RCPT_MAN_EMPNO
+						,FNNC_INSTT_CODE
+						,PYMNT_ACNUTNO
+						,SALARY_SE
+						,RM
+						,CMPNSP_NO
+						,REGISTER_ID        /* 등록자ID */
+					    ,REGIST_DT          /* 등록일시 */
+					    ,UPDUSR_ID          /* 수정자ID */
+					    ,UPDT_DT            /* 수정일시 */
+					    
+					    ,ERROR_AT /* 오류여부 */
+					    ,CHGHY /* 변경사유 */
+			 )
+			 SELECT 
+						 '01'
+						,SUBSTR(A.PYMNT_YM,1,4)
+						,A.PYMNT_DE
+						,DECODE(A.PYMNT_SE,'1','02','2','01','4','01')
+						,SQ_TBSAL_7.NEXTVAL
+						,A.PYMNT_AMOUNT
+						,A.PYMNT_DE
+						,A.EMPNM
+					    ,A.DEPT_CODE
+					    ,A.EMPNO
+					    ,A.BANK_CODE
+					    ,A.ACNUT_NO
+					    ,DECODE(A.ANSLRY_AT,'1','001','2','002','3','003') 
+					    ,''
+					    ,''
+					    ,#S_USER_ID#           /* 등록자ID */
+						,SYSDATE               /* 등록일시 */
+						,#S_USER_ID#           /* 수정자ID */
+						,SYSDATE               /* 수정일시 */
+						
+						,'0' AS ERROR_AT /* 오류여부 */
+						,'' AS CHGHY /* 변경사유 */
+						 
+			 FROM TBSAL_SALARY_TRANSFR_MANAGE A
+             WHERE 1=1
+             AND A.PYMNT_YM = #PYMNT_YM#
+             AND A.PYMNT_SE = #PYMNT_SE#
+             AND A.PYMNT_DE = #PYMNT_DE#
+             AND A.SALARY_SE = #SALARY_SE#
+             AND A.EMPNO NOT IN (SELECT EMPNO FROM TBACC_EXPNDTR_SLARY_DETAIL 
+                                 WHERE PYMNT_YEAR = SUBSTR(A.PYMNT_YM,1,4) 
+						         AND PYMNT_DE = A.PYMNT_DE 
+						         AND PYMNT_SE = DECODE(A.PYMNT_SE,'1','02','2','01','4','01')
+						         AND SALARY_SE = DECODE(A.ANSLRY_AT,'1','001','2','002','3','003')
+						         AND CMPNSP_NO IS NOT NULL )
+          ]]> 
+     </insert>  
+     
+    <!-- 급여이체데이터 회계전송 여부 old -->
+    <delete id="SAL030110DAO.updAccPymntTransfr" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBSAL_SALARY_TRANSFR_MANAGE A 
+            SET  TRNSMIS_SE = '1'
+            WHERE 1=1
+            AND A.PYMNT_YM = #PYMNT_YM#
+            AND A.PYMNT_SE = #PYMNT_SE#
+            AND A.PYMNT_DE = #PYMNT_DE#
+            AND A.SALARY_SE = #SALARY_SE#
+            AND A.EMPNO NOT IN (SELECT EMPNO FROM TBACC_EXPNDTR_SLARY_DETAIL 
+                                WHERE PYMNT_YEAR = SUBSTR(A.PYMNT_YM,1,4) 
+						        AND PYMNT_DE = A.PYMNT_DE 
+						        AND PYMNT_SE = DECODE(A.PYMNT_SE,'1','02','2','01','4','01')
+						        AND CMPNSP_NO IS NOT NULL )
+        ]]>         
+    </delete> 
+    
+    <!-- 지급요청 대상자료 -->
+    <select id="SAL030110DAO.pymntRqsTrg" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+    	
+    	<!-- 급여 -->
+    	<isEqual property="PYMNT_SE" compareValue="01">
+    		
+    		SELECT
+			     #BPLC_CODE# 											AS BPLC_CODE			/*사업장구분*/
+			    ,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,#PYMNT_SE# 													AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = #PYMNT_SE#
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,rownum         										AS SEQ					/*순번*/
+			    /*,t2.SORT_ORDR											AS SEQ*/					/*순번*/
+			    ,t1.RL_RECPT_AMOUNT										AS DECSN_AMOUNT			/*결의금액*/
+			    ,t1.EMPNO												AS EMPNO				/*영수자사번*/
+			    ,t1.EMPNM												AS RCPT_MAN				/*영수자성명*/
+			    ,t1.DEPT_CODE											AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,t3.DEPT_NM												AS DEPT_NM				/*영수자부서명*/
+			    ,t1.SALARY_BANK_CODE									AS FNNC_INSTT_CODE		/*은행코드*/
+			    ,t5.FNNC_INSTT_CODE_NM									AS FNNC_INSTT_CODE_NM	/*은행명*/
+			    ,t1.SALARY_BANK_ACNUT									AS PYMNT_ACNUTNO		/*계좌번호*/
+			    ,t2.SALARY_SE											AS SALARY_SE			/*급여구분*/
+			    ,t4.CODE_NM                   							AS SALARY_SE_NM			/*급여구분명*/
+			    ,'' 													AS RM					/*적요*/
+			FROM TBSAL_MT_SALARY_PYMNT t1
+			     
+			     INNER JOIN TBHRM_HR_MASTR t2
+			     ON t1.EMPNO = t2.EMPNO
+			     
+			     LEFT OUTER JOIN VWHRM_DEPT t3
+			     ON t1.DEPT_CODE = t3.DEPT_CODE
+			     
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			     ON  t4.GRP_CODE = 'SAL001'
+			     AND t2.SALARY_SE = t4.CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t5
+			     ON  t1.SALARY_BANK_CODE = t5.FNNC_INSTT_CODE
+			
+			WHERE t1.PYMNT_YM 	= SUBSTR(#SRCH_DT#,1,6)
+			  AND t1.SALARY_SE 	= '1'	/* 1:정상 */
+			  AND t1.PYMNT_DE 	= #SRCH_DT#
+			  AND t1.PYMNT_SE 	= '2'	/* 2:급여 */
+			  AND NVL(t1.RL_RECPT_AMOUNT,0) > 0
+			  AND NVL(t2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+			
+			  And Not Exists (
+				SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+				WHERE
+				    iA.BPLC_CODE     	= #BPLC_CODE#
+				    AND iA.PYMNT_DE     = #SRCH_DT#
+				    AND iA.PYMNT_SE     = #PYMNT_SE#
+			)
+			
+			UNION ALL
+			
+			SELECT
+				 #BPLC_CODE#											AS BPLC_CODE			/*사업장코드*/
+				,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,#PYMNT_SE# 											AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = #PYMNT_SE#
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,999 													AS SEQ					/*순번*/
+			    ,t2.DDC_AMOUNT 											AS DECSN_AMOUNT			/*금액*/
+			    ,NULL													AS EMPNO				/*사원번호*/
+			    ,t1.DPSTR 												AS RCPT_MAN				/*영수자성명*/
+			    ,NULL 													AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,NULL													AS DEPT_NM				/*영수자부서명*/
+			    ,t1.RCPMNY_BANK_CODE 									AS FNNC_INSTT_CODE		/*은행코드*/
+			    ,t3.FNNC_INSTT_CODE_NM									AS FNNC_INSTT_CODE_NM	/*은행명*/
+				,t1.RCPMNY_ACNUT_NO 									AS PYMNT_ACNUTNO		/*계좌번호*/
+			    ,NULL 													AS SALARY_SE			/*급여구분*/
+				,NULL													AS SALARY_SE_NM			/*급여구분명*/
+			    ,t1.PYMNT_DDC_CODE_NM									AS RM					/*적요*/
+			
+			FROM TBSAL_PYMNT_DDC_STDR_CODE t1
+			     
+			     INNER JOIN
+			     (SELECT PYMNT_YM, PYMNT_DE, SALARY_SE, PYMNT_SE, PYMNT_DDC_CODE, SUM(DDC_AMOUNT) AS DDC_AMOUNT
+			      FROM TBSAL_MT_DDC_DTLS
+                  WHERE
+                    (PYMNT_YM, PYMNT_DE, SALARY_SE, PYMNT_SE, EMPNO) 
+                    In
+                    (
+                        Select
+                            iA.PYMNT_YM,
+                            iA.PYMNT_DE,
+                            iA.SALARY_SE,
+                            iA.PYMNT_SE,
+                            iA.EMPNO
+                        FROM TBSAL_MT_SALARY_PYMNT iA
+                             INNER JOIN TBHRM_HR_MASTR iB
+                             ON iA.EMPNO = iB.EMPNO
+                        WHERE iA.PYMNT_YM     = SUBSTR(#SRCH_DT#,1,6)
+                          AND iA.SALARY_SE     = '1'    /* 1:정상 */
+                          AND iA.PYMNT_DE     = #SRCH_DT#
+                          AND iA.PYMNT_SE     = '2'    /* 2:급여 */
+                          /*AND NVL(iA.RL_RECPT_AMOUNT,0) > 0*/
+                          AND NVL(iB.ETC_EMP_YN, '0') NOT IN ('1')        /* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+                    )
+			      GROUP BY PYMNT_YM, PYMNT_DE, SALARY_SE, PYMNT_SE, PYMNT_DDC_CODE
+			     ) t2
+			     ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t3
+			     ON t1.RCPMNY_BANK_CODE = t3.FNNC_INSTT_CODE
+			
+			WHERE SUBSTR(t1.PYMNT_DDC_CODE,1,1) = 'S'
+			  AND t2.DDC_AMOUNT > 0
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+    	</isEqual>
+    	
+    	<!-- 계약직 -->
+    	<isEqual property="PYMNT_SE" compareValue="07">
+    		SELECT
+			     #BPLC_CODE# 											AS BPLC_CODE			/*사업장구분*/
+			    ,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,#PYMNT_SE# 													AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = #PYMNT_SE#
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,rownum         										AS SEQ					/*순번*/
+			    /*,t2.SORT_ORDR											AS SEQ*/					/*순번*/
+			    ,t1.RL_RECPT_AMOUNT										AS DECSN_AMOUNT			/*결의금액*/
+			    ,t1.EMPNO												AS EMPNO				/*영수자사번*/
+			    ,t1.EMPNM												AS RCPT_MAN				/*영수자성명*/
+			    ,t1.DEPT_CODE											AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,t3.DEPT_NM												AS DEPT_NM				/*영수자부서명*/
+			    ,t1.SALARY_BANK_CODE									AS FNNC_INSTT_CODE		/*은행코드*/
+			    ,t5.FNNC_INSTT_CODE_NM									AS FNNC_INSTT_CODE_NM	/*은행명*/
+			    ,t1.SALARY_BANK_ACNUT									AS PYMNT_ACNUTNO		/*계좌번호*/
+			    ,t2.SALARY_SE											AS SALARY_SE			/*급여구분*/
+			    ,t4.CODE_NM                   							AS SALARY_SE_NM			/*급여구분명*/
+			    ,'' 													AS RM					/*적요*/
+			FROM TBSAL_MT_SALARY_PYMNT t1
+			     
+			     INNER JOIN TBHRM_HR_MASTR t2
+			     ON t1.EMPNO = t2.EMPNO
+			     
+			     LEFT OUTER JOIN VWHRM_DEPT t3
+			     ON t1.DEPT_CODE = t3.DEPT_CODE
+			     
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			     ON  t4.GRP_CODE = 'SAL001'
+			     AND t2.SALARY_SE = t4.CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t5
+			     ON  t1.SALARY_BANK_CODE = t5.FNNC_INSTT_CODE
+			
+			WHERE t1.PYMNT_YM 	= SUBSTR(#SRCH_YM#,1,6)
+			  AND t1.SALARY_SE 	= '1'	/* 1:정상 */
+			  AND t1.PYMNT_DE 	= #SRCH_DT#
+			  AND t1.PYMNT_SE 	= '4'	/* 4:계약직 */
+			  AND NVL(t1.RL_RECPT_AMOUNT,0) > 0
+			  AND NVL(t2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE    = #BPLC_CODE#
+					    AND iA.PYMNT_DE = #SRCH_DT#
+					    AND iA.PYMNT_SE	= #PYMNT_SE#
+				)
+			
+			UNION ALL
+			
+			SELECT
+				 #BPLC_CODE#											AS BPLC_CODE			/*사업장코드*/
+				,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,#PYMNT_SE# 											AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = #PYMNT_SE#
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,999 													AS SEQ					/*순번*/
+			    ,t2.DDC_AMOUNT 											AS DECSN_AMOUNT			/*금액*/
+			    ,NULL													AS EMPNO				/*사원번호*/
+			    ,t1.DPSTR 												AS RCPT_MAN				/*영수자성명*/
+			    ,NULL 													AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,NULL													AS DEPT_NM				/*영수자부서명*/
+			    ,t1.RCPMNY_BANK_CODE 									AS FNNC_INSTT_CODE		/*은행코드*/
+			    ,t3.FNNC_INSTT_CODE_NM									AS FNNC_INSTT_CODE_NM	/*은행명*/
+				,t1.RCPMNY_ACNUT_NO 									AS PYMNT_ACNUTNO		/*계좌번호*/
+			    ,NULL 													AS SALARY_SE			/*급여구분*/
+				,NULL													AS SALARY_SE_NM			/*급여구분명*/
+			    ,t1.PYMNT_DDC_CODE_NM									AS RM					/*적요*/
+			
+			FROM TBSAL_PYMNT_DDC_STDR_CODE t1
+			     
+			     INNER JOIN
+			     (SELECT st1.PYMNT_YM, st1.PYMNT_DE, st1.SALARY_SE, st1.PYMNT_SE, st1.PYMNT_DDC_CODE, SUM(st1.DDC_AMOUNT) AS DDC_AMOUNT
+			      FROM TBSAL_MT_DDC_DTLS st1
+				      INNER JOIN TBHRM_HR_MASTR st2
+				      ON st1.EMPNO = st2.EMPNO
+			      WHERE st1.PYMNT_YM 	= SUBSTR(#SRCH_YM#,1,6)
+			        AND st1.PYMNT_DE 	= #SRCH_DT#
+			        AND st1.SALARY_SE 	= '1'	/* 1:정상 */
+			        AND st1.PYMNT_SE 	= '4'	/* 4:계약직 */
+			        AND NVL(st2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+			      GROUP BY st1.PYMNT_YM, st1.PYMNT_DE, st1.SALARY_SE, st1.PYMNT_SE, st1.PYMNT_DDC_CODE
+			     ) t2
+			     ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t3
+			     ON t1.RCPMNY_BANK_CODE = t3.FNNC_INSTT_CODE
+			
+			WHERE SUBSTR(t1.PYMNT_DDC_CODE,1,1) = 'S'
+			  AND t2.DDC_AMOUNT > 0
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+    	</isEqual>
+    	
+    	<!-- 기간제 -->
+    	<isEqual property="PYMNT_SE" compareValue="08">
+            SELECT
+                 #BPLC_CODE#                                             AS BPLC_CODE            /*사업장구분*/
+                ,(SELECT CODE_NM
+                  FROM TBCOM_CMMN_CODE 
+                  WHERE GRP_CODE = 'ACC001' 
+                    AND CODE = #BPLC_CODE#
+                 )                                                         AS BPLC_NM                /*사업장명*/
+                ,#PYMNT_SE#                                                     AS PYMNT_SE                /*지급구분*/
+                ,(SELECT CODE_NM 
+                  FROM TBCOM_CMMN_CODE 
+                  WHERE GRP_CODE = 'ACC011' 
+                    AND CODE = #PYMNT_SE#
+                 )                                                         AS PYMNT_SE_NM            /*지급구분명*/
+                ,rownum                                                 AS SEQ                    /*순번*/
+                /*,t2.SORT_ORDR                                            AS SEQ*/                    /*순번*/
+                ,t1.REAL_PYMNT_AM                                        AS DECSN_AMOUNT            /*결의금액*/
+                ,t1.EMPNO                                                AS EMPNO                /*영수자사번*/
+                ,t1.EMPNM                                                AS RCPT_MAN                /*영수자성명*/
+                ,t1.DEPT_CODE                                            AS RCPT_MAN_DEPT_CODE    /*영수자부서코드*/
+                ,t3.DEPT_NM                                                AS DEPT_NM                /*영수자부서명*/
+                ,LPAD(NVL (t5.SALARY_BANK_CODE, 0), 3, '0')                                    AS FNNC_INSTT_CODE        /*은행코드*/
+                ,(Select iA.FNNC_INSTT_CODE_NM From TBACC_FNNC_INSTT_CODE iA Where iA.FNNC_INSTT_CODE = LPAD(NVL (t5.SALARY_BANK_CODE, 0), 3, '0')) AS FNNC_INSTT_CODE_NM    /*은행명*/
+                ,t5.SALARY_BANK_ACNUT                                    AS PYMNT_ACNUTNO        /*계좌번호*/
+                ,t2.SALARY_SE                                            AS SALARY_SE            /*급여구분*/
+                ,t4.CODE_NM                                               AS SALARY_SE_NM            /*급여구분명*/
+                ,''                                                     AS RM                    /*적요*/
+            FROM TBSAL_PD_WORK_SALARY t1
+                 
+                 INNER JOIN TBHRM_HR_MASTR t2
+                 ON t1.EMPNO = t2.EMPNO
+                 
+                 LEFT OUTER JOIN VWHRM_DEPT t3
+                 ON t1.DEPT_CODE = t3.DEPT_CODE
+                 
+                 LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+                 ON  t4.GRP_CODE = 'SAL001'
+                 AND t2.SALARY_SE = t4.CODE
+                         
+                 LEFT OUTER JOIN TBSAL_EMPL_BANK_ACNUT t5
+                 ON  t1.EMPNO = t5.EMPNO
+        
+            WHERE t1.PYMNT_YM     = SUBSTR(#SRCH_YM#,1,6)
+              AND t1.PYMNT_DE     = #SRCH_DT#
+              AND t1.CLOS_AT        = '1'
+              AND NVL(t1.REAL_PYMNT_AM,0) > 0
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+            
+            UNION ALL
+            
+            SELECT
+                 #BPLC_CODE#                                            AS BPLC_CODE            /*사업장코드*/
+                ,(SELECT CODE_NM
+                  FROM TBCOM_CMMN_CODE 
+                  WHERE GRP_CODE = 'ACC001' 
+                    AND CODE = #BPLC_CODE#
+                 )                                                         AS BPLC_NM                /*사업장명*/
+                ,#PYMNT_SE#                                                     AS PYMNT_SE                /*지급구분*/
+                ,(SELECT CODE_NM 
+                  FROM TBCOM_CMMN_CODE 
+                  WHERE GRP_CODE = 'ACC011' 
+                    AND CODE = #PYMNT_SE#
+                 )                                                         AS PYMNT_SE_NM            /*지급구분명*/
+                ,999                                                     AS SEQ                    /*순번*/
+                ,t2.DDC_AMOUNT                                             AS DECSN_AMOUNT            /*금액*/
+                ,NULL                                                    AS EMPNO                /*사원번호*/
+                ,t1.DPSTR                                                 AS RCPT_MAN                /*영수자성명*/
+                ,NULL                                                     AS RCPT_MAN_DEPT_CODE    /*영수자부서코드*/
+                ,NULL                                                    AS DEPT_NM                /*영수자부서명*/
+                ,t1.RCPMNY_BANK_CODE                                     AS FNNC_INSTT_CODE        /*은행코드*/
+                ,t3.FNNC_INSTT_CODE_NM                                    AS FNNC_INSTT_CODE_NM    /*은행명*/
+                ,t1.RCPMNY_ACNUT_NO                                     AS PYMNT_ACNUTNO        /*계좌번호*/
+                ,NULL                                                     AS SALARY_SE            /*급여구분*/
+                ,NULL                                                    AS SALARY_SE_NM            /*급여구분명*/
+                ,t1.PYMNT_DDC_CODE_NM                                    AS RM                    /*적요*/
+            
+            FROM TBSAL_PYMNT_DDC_STDR_CODE t1
+                 
+                 INNER JOIN (
+                    Select 
+                        iA.PYMNT_YM, iA.PYMNT_DE, 'S2110' PYMNT_DDC_CODE, Sum(HLTHINS) DDC_AMOUNT /*건강보험*/
+                    FROM TBSAL_PD_WORK_SALARY iA WHERE iA.PYMNT_DE = #SRCH_DT# AND iA.CLOS_AT = '1'
+                    Group By iA.PYMNT_YM, iA.PYMNT_DE
+                    Union All
+                    Select 
+                        iA.PYMNT_YM, iA.PYMNT_DE, 'S2120' PYMNT_DDC_CODE, Sum(NPN) DDC_AMOUNT /*국민연금*/
+                    FROM TBSAL_PD_WORK_SALARY iA WHERE iA.PYMNT_DE = #SRCH_DT# AND iA.CLOS_AT = '1'
+                    Group By iA.PYMNT_YM, iA.PYMNT_DE
+                    Union All
+                    Select 
+                        iA.PYMNT_YM, iA.PYMNT_DE, 'S2150' PYMNT_DDC_CODE, Sum(EMPLYMINSRNC) DDC_AMOUNT /*고용보험*/
+                    FROM TBSAL_PD_WORK_SALARY iA WHERE iA.PYMNT_DE = #SRCH_DT# AND iA.CLOS_AT = '1'
+                    Group By iA.PYMNT_YM, iA.PYMNT_DE
+                    Union All
+                    Select 
+                        iA.PYMNT_YM, iA.PYMNT_DE, 'S2010' PYMNT_DDC_CODE, Sum(INCMTAX) DDC_AMOUNT /*소득세*/
+                    FROM TBSAL_PD_WORK_SALARY iA WHERE iA.PYMNT_DE = #SRCH_DT# AND iA.CLOS_AT = '1'
+                    Group By iA.PYMNT_YM, iA.PYMNT_DE
+                    Union All
+                    Select 
+                        iA.PYMNT_YM, iA.PYMNT_DE, 'S2020' PYMNT_DDC_CODE, Sum(LCLTY_INCMTAX) DDC_AMOUNT /*지방소득세*/
+                    FROM TBSAL_PD_WORK_SALARY iA WHERE iA.PYMNT_DE = #SRCH_DT# AND iA.CLOS_AT = '1'
+                    Group By iA.PYMNT_YM, iA.PYMNT_DE
+                    Union All
+                    Select 
+                        iA.PYMNT_YM, iA.PYMNT_DE, 'S2298' PYMNT_DDC_CODE, Sum(FSTMP_PURCHS_DDC) DDC_AMOUNT /*식권구매공제*/
+                    FROM TBSAL_PD_WORK_SALARY iA WHERE iA.PYMNT_DE = #SRCH_DT# AND iA.CLOS_AT = '1'
+                    Group By iA.PYMNT_YM, iA.PYMNT_DE
+                 ) t2
+                 ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+                 
+                 LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t3
+                 ON t1.RCPMNY_BANK_CODE = t3.FNNC_INSTT_CODE
+            
+            WHERE SUBSTR(t1.PYMNT_DDC_CODE,1,1) = 'S'
+              AND t2.DDC_AMOUNT > 0
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+    	</isEqual>
+    	
+    	<!-- 수당 -->
+    	<isEqual property="PYMNT_SE" compareValue="02">
+    		SELECT
+			     #BPLC_CODE# 											AS BPLC_CODE			/*사업장구분*/
+			    ,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,'02' 													AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = '02'
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,t2.SORT_ORDR											AS SEQ					/*순번*/
+			    ,t1.RL_RECPT_AMOUNT										AS DECSN_AMOUNT			/*결의금액*/
+			    ,t1.EMPNO																		/*영수자사번*/
+			    ,t1.EMPNM												AS RCPT_MAN
+			    ,t1.DEPT_CODE											AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,t3.DEPT_NM
+			    ,t1.ALLWNC_BANK_CODE									AS FNNC_INSTT_CODE
+			    ,t5.FNNC_INSTT_CODE_NM
+			    ,t1.ALLWNC_BANK_ACNUT									AS PYMNT_ACNUTNO
+			    ,t2.SALARY_SE
+			    ,t4.CODE_NM                   							AS SALARY_SE_NM			/*급여구분명*/
+			    ,'' AS RM
+			FROM TBSAL_MT_SALARY_PYMNT t1
+			     
+			     INNER JOIN TBHRM_HR_MASTR t2
+			     ON t1.EMPNO = t2.EMPNO
+			     
+			     LEFT OUTER JOIN VWHRM_DEPT t3
+			     ON t1.DEPT_CODE = t3.DEPT_CODE
+			     
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			     ON  t4.GRP_CODE = 'SAL001'
+			     AND t2.SALARY_SE = t4.CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t5
+			     ON  t1.ALLWNC_BANK_CODE = t5.FNNC_INSTT_CODE
+			
+			WHERE t1.PYMNT_YM 	= SUBSTR(#SRCH_DT#,1,6)
+			  AND t1.SALARY_SE 	IN ('1', '3')	/* 1:정상, 3:시간외 */
+			  AND t1.PYMNT_DE 	= #SRCH_DT#
+			  AND t1.PYMNT_SE 	= '1'	/* 1:수당 */
+			  AND NVL(t1.RL_RECPT_AMOUNT,0) > 0
+			  AND NVL(t2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+			
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+			
+			UNION ALL
+			
+			SELECT
+				 #BPLC_CODE#											AS BPLC_CODE			/*사업장코드*/
+				,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,'02' 													AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = '02'
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,999 													AS SEQ					/*순번*/
+			    ,t2.DDC_AMOUNT 											AS DECSN_AMOUNT			/*금액*/
+			    ,NULL													AS EMPNO				/*사원번호*/
+			    ,t1.DPSTR 												AS RCPT_MAN				/*영수자성명*/
+			    ,NULL 													AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,NULL													AS DEPT_NM				/*영수자부서명*/
+			    ,t1.RCPMNY_BANK_CODE 									AS FNNC_INSTT_CODE		/*은행코드*/
+			    ,t3.FNNC_INSTT_CODE_NM									AS FNNC_INSTT_CODE_NM	/*은행명*/
+				,t1.RCPMNY_ACNUT_NO 									AS PYMNT_ACNUTNO		/*계좌번호*/
+			    ,NULL 													AS SALARY_SE			/*급여구분*/
+				,NULL													AS SALARY_SE_NM			/*급여구분명*/
+			    ,t1.PYMNT_DDC_CODE_NM									AS RM					/*적요*/
+			
+			FROM TBSAL_PYMNT_DDC_STDR_CODE t1
+			     
+			     INNER JOIN
+			     (SELECT st1.PYMNT_YM, st1.PYMNT_DE, st1.SALARY_SE, st1.PYMNT_SE, st1.PYMNT_DDC_CODE, SUM(st1.DDC_AMOUNT) AS DDC_AMOUNT
+			      FROM TBSAL_MT_DDC_DTLS st1
+				      INNER JOIN TBHRM_HR_MASTR st2
+				      ON st1.EMPNO = st2.EMPNO
+			      WHERE st1.PYMNT_YM 	= SUBSTR(#SRCH_DT#,1,6)
+			        AND st1.PYMNT_DE 	= #SRCH_DT#
+			        AND st1.SALARY_SE 	IN ('1', '3')	/* 1:정상, 3:시간외 */
+			        AND st1.PYMNT_SE 	= '1'	/* 1:수당 */
+			        AND NVL(st2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+			      GROUP BY st1.PYMNT_YM, st1.PYMNT_DE, st1.SALARY_SE, st1.PYMNT_SE, st1.PYMNT_DDC_CODE
+			     ) t2
+			     ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t3
+			     ON t1.RCPMNY_BANK_CODE = t3.FNNC_INSTT_CODE
+			
+			WHERE SUBSTR(t1.PYMNT_DDC_CODE,1,1) = 'S'
+			  AND t2.DDC_AMOUNT > 0
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+    	</isEqual>
+    	
+    	<!-- 정산 -->
+    	<isEqual property="PYMNT_SE" compareValue="03">
+    		SELECT
+			     #BPLC_CODE# 											AS BPLC_CODE			/*사업장구분*/
+			    ,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,'02' 													AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = '03'
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,t2.SORT_ORDR											AS SEQ					/*순번*/
+			    ,t1.RL_RECPT_AMOUNT										AS DECSN_AMOUNT			/*결의금액*/
+			    ,t1.EMPNO																		/*영수자사번*/
+			    ,t1.EMPNM												AS RCPT_MAN
+			    ,t1.DEPT_CODE											AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,t3.DEPT_NM
+			    ,t1.ALLWNC_BANK_CODE									AS FNNC_INSTT_CODE
+			    ,t5.FNNC_INSTT_CODE_NM
+			    ,t1.ALLWNC_BANK_ACNUT									AS PYMNT_ACNUTNO
+			    ,t2.SALARY_SE
+			    ,t4.CODE_NM                   							AS SALARY_SE_NM			/*급여구분명*/
+			    ,'' AS RM
+			FROM TBSAL_MT_SALARY_PYMNT t1
+			     
+			     INNER JOIN TBHRM_HR_MASTR t2
+			     ON t1.EMPNO = t2.EMPNO
+			     
+			     LEFT OUTER JOIN VWHRM_DEPT t3
+			     ON t1.DEPT_CODE = t3.DEPT_CODE
+			     
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			     ON  t4.GRP_CODE = 'SAL001'
+			     AND t2.SALARY_SE = t4.CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t5
+			     ON  t1.ALLWNC_BANK_CODE = t5.FNNC_INSTT_CODE
+			
+			WHERE t1.PYMNT_YM 	= SUBSTR(#SRCH_DT#,1,6)
+			  AND t1.SALARY_SE 	= '1'	/* 1:정상 */
+			  AND t1.PYMNT_DE 	= #SRCH_DT#
+			  AND t1.PYMNT_SE 	= '1'	/* 1:수당 */
+			  AND NVL(t1.RL_RECPT_AMOUNT,0) > 0
+			  AND NVL(t2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+			
+			UNION ALL
+			
+			SELECT
+				 #BPLC_CODE#											AS BPLC_CODE			/*사업장코드*/
+				,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,'03' 													AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = '03'
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,999 													AS SEQ					/*순번*/
+			    ,t2.DDC_AMOUNT 											AS DECSN_AMOUNT			/*금액*/
+			    ,NULL													AS EMPNO				/*사원번호*/
+			    ,t1.DPSTR 												AS RCPT_MAN				/*영수자성명*/
+			    ,NULL 													AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,NULL													AS DEPT_NM				/*영수자부서명*/
+			    ,t1.RCPMNY_BANK_CODE 									AS FNNC_INSTT_CODE		/*은행코드*/
+			    ,t3.FNNC_INSTT_CODE_NM									AS FNNC_INSTT_CODE_NM	/*은행명*/
+				,t1.RCPMNY_ACNUT_NO 									AS PYMNT_ACNUTNO		/*계좌번호*/
+			    ,NULL 													AS SALARY_SE			/*급여구분*/
+				,NULL													AS SALARY_SE_NM			/*급여구분명*/
+			    ,t1.PYMNT_DDC_CODE_NM									AS RM					/*적요*/
+			
+			FROM TBSAL_PYMNT_DDC_STDR_CODE t1
+			     
+			     INNER JOIN
+			     (SELECT st1.PYMNT_YM, st1.PYMNT_DE, st1.SALARY_SE, st1.PYMNT_SE, st1.PYMNT_DDC_CODE, SUM(st1.DDC_AMOUNT) AS DDC_AMOUNT
+			      FROM TBSAL_MT_DDC_DTLS st1
+				      INNER JOIN TBHRM_HR_MASTR st2
+				      ON st1.EMPNO = st2.EMPNO
+			      WHERE st1.PYMNT_YM 	= SUBSTR(#SRCH_DT#,1,6)
+			        AND st1.PYMNT_DE 	= #SRCH_DT#
+			        AND st1.SALARY_SE 	= '1'	/* 1:정상 */
+			        AND st1.PYMNT_SE 	= '1'	/* 1:수당 */
+			        AND NVL(st2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+			      GROUP BY st1.PYMNT_YM, st1.PYMNT_DE, st1.SALARY_SE, st1.PYMNT_SE, st1.PYMNT_DDC_CODE
+			     ) t2
+			     ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t3
+			     ON t1.RCPMNY_BANK_CODE = t3.FNNC_INSTT_CODE
+			
+			WHERE SUBSTR(t1.PYMNT_DDC_CODE,1,1) = 'S'
+			  AND t2.DDC_AMOUNT > 0
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+    	</isEqual>
+    	
+    	<!-- 소급정산 -->
+    	<isEqual property="PYMNT_SE" compareValue="04">
+    	
+    		SELECT
+			     #BPLC_CODE# 											AS BPLC_CODE			/*사업장구분*/
+			    ,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,'04' 													AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = '04'
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,t2.SORT_ORDR											AS SEQ					/*순번*/
+			    ,t1.RL_RECPT_AMOUNT										AS DECSN_AMOUNT			/*결의금액*/
+			    ,t1.EMPNO												AS EMPNO				/*영수자사번*/
+			    ,t1.EMPNM												AS RCPT_MAN				/*영수자성명*/
+			    ,t1.DEPT_CODE											AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,t3.DEPT_NM												AS DEPT_NM				/*영수자부서명*/
+			    ,t1.ALLWNC_BANK_CODE									AS FNNC_INSTT_CODE		/*은행코드*/
+			    ,t5.FNNC_INSTT_CODE_NM									AS FNNC_INSTT_CODE_NM	/*은행명*/
+			    ,t1.ALLWNC_BANK_ACNUT									AS PYMNT_ACNUTNO		/*계좌번호*/
+			    ,t2.SALARY_SE											AS SALARY_SE			/*급여구분*/
+			    ,t4.CODE_NM                   							AS SALARY_SE_NM			/*급여구분명*/
+			    ,'' 													AS RM					/*적요*/
+			FROM TBSAL_MT_SALARY_PYMNT t1
+			     
+			     INNER JOIN TBHRM_HR_MASTR t2
+			     ON t1.EMPNO = t2.EMPNO
+			     
+			     LEFT OUTER JOIN VWHRM_DEPT t3
+			     ON t1.DEPT_CODE = t3.DEPT_CODE
+			    
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			     ON  t4.GRP_CODE = 'SAL001'
+			     AND t2.SALARY_SE = t4.CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t5
+			     ON  t1.ALLWNC_BANK_CODE = t5.FNNC_INSTT_CODE
+			
+			WHERE t1.PYMNT_YM 	= SUBSTR(#SRCH_DT#,1,6)
+			  AND t1.SALARY_SE 	= '2'	/* 2:정산 */
+			  AND t1.PYMNT_DE 	LIKE SUBSTR(#SRCH_DT#,1,6)||'%'
+			  AND t1.PYMNT_SE 	= '2'	/* 2:급여 */
+			  AND NVL(t1.RL_RECPT_AMOUNT,0) > 0
+			  AND NVL(t2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+			  
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+				
+			UNION ALL
+			
+			SELECT
+				 #BPLC_CODE#											AS BPLC_CODE			/*사업장코드*/
+				,(SELECT CODE_NM
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC001' 
+			        AND CODE = #BPLC_CODE#
+			     ) 														AS BPLC_NM				/*사업장명*/
+			    ,'04' 													AS PYMNT_SE				/*지급구분*/
+			    ,(SELECT CODE_NM 
+			      FROM TBCOM_CMMN_CODE 
+			      WHERE GRP_CODE = 'ACC011' 
+			        AND CODE = '04'
+			     ) 														AS PYMNT_SE_NM			/*지급구분명*/
+			    ,999 													AS SEQ					/*순번*/
+			    ,t2.DDC_AMOUNT 											AS DECSN_AMOUNT			/*금액*/
+			    ,NULL													AS EMPNO				/*사원번호*/
+			    ,t1.DPSTR 												AS RCPT_MAN				/*영수자성명*/
+			    ,NULL 													AS RCPT_MAN_DEPT_CODE	/*영수자부서코드*/
+			    ,NULL													AS DEPT_NM				/*영수자부서명*/
+			    ,t1.RCPMNY_BANK_CODE 									AS FNNC_INSTT_CODE		/*은행코드*/
+			    ,t3.FNNC_INSTT_CODE_NM									AS FNNC_INSTT_CODE_NM	/*은행명*/
+				,t1.RCPMNY_ACNUT_NO 									AS PYMNT_ACNUTNO		/*계좌번호*/
+			    ,NULL 													AS SALARY_SE			/*급여구분*/
+				,NULL													AS SALARY_SE_NM			/*급여구분명*/
+			    ,t1.PYMNT_DDC_CODE_NM									AS RM					/*적요*/
+			
+			FROM TBSAL_PYMNT_DDC_STDR_CODE t1
+			     
+			     INNER JOIN
+			     (SELECT st1.PYMNT_DE, st1.SALARY_SE, st1.PYMNT_SE, st1.PYMNT_DDC_CODE, SUM(st1.DDC_AMOUNT) AS DDC_AMOUNT
+			      FROM TBSAL_MT_DDC_DTLS st1
+				      INNER JOIN TBHRM_HR_MASTR st2
+				      ON st1.EMPNO = st2.EMPNO
+			      WHERE st1.PYMNT_DE 	= #SRCH_DT#
+			        AND st1.SALARY_SE 	= '2'	/* 1:정상 */
+			        AND st1.PYMNT_SE 	= '2'	/* 1:수당 */
+			        AND NVL(st2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+			      GROUP BY st1.PYMNT_DE, st1.SALARY_SE, st1.PYMNT_SE, st1.PYMNT_DDC_CODE
+			     ) t2
+			     ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			     
+			     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t3
+			     ON t1.RCPMNY_BANK_CODE = t3.FNNC_INSTT_CODE
+			
+			WHERE SUBSTR(t1.PYMNT_DDC_CODE,1,1) = 'S'
+			  AND t2.DDC_AMOUNT > 0
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND iA.PYMNT_DE     = #SRCH_DT#
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+    	</isEqual>
+    	
+    	<!-- 당직수당 -->
+    	<isEqual property="PYMNT_SE" compareValue="05">
+    	
+	    	SELECT
+			       d6.CODE                     								AS BPLC_CODE  		/*사업장구분*/
+      			  ,d6.CODE_NM                  								AS BPLC_NM			/*사업장명*/
+			      ,d7.CODE               									AS PYMNT_SE 		/*지급구분*/
+			      ,d7.CODE_NM												AS PYMNT_SE_NM
+			      ,ROW_NUMBER() OVER(ORDER BY d1.BNDT_DE, d1.EMPNO) 		AS SEQ 				/*순번*/
+			      ,CASE WHEN d1.BNDT_DE <![CDATA[<= ]]> '20140608' THEN DECODE(d1.BNDT_SE,'000',30000,30000)
+			            ELSE DECODE(d1.BNDT_SE, '000', 30000, 20000) END      AS DECSN_AMOUNT 	/*결의금액*/
+			      ,d2.EMPNO 																	/*영수자사번*/
+			      ,d2.EMPNM AS RCPT_MAN  														/*영수자*/
+			      ,d2.DEPT_CODE AS RCPT_MAN_DEPT_CODE 											/*영수자부서코드*/
+			      ,d3.DEPT_NM																	/*부서명*/
+			      ,d2.SALARY_SE           														/*급여구분*/
+			      ,d5.CODE_NM                   							AS SALARY_SE_NM		/*급여구분명*/
+			      ,d8.ALLWNC_BANK_CODE  									AS FNNC_INSTT_CODE  /*금융기관코드*/
+			      ,d4.FNNC_INSTT_CODE_NM  														/*금융기관명*/
+			      ,d8.ALLWNC_BANK_ACNUT    									AS PYMNT_ACNUTNO  	/*지급계좌번호*/
+			      ,DECODE(d1.BNDT_SE, '000', '일직', '숙직') || ( ' (' || TO_CHAR(TO_DATE(D1.BNDT_DE, 'YYYYMMDD'), 'YYYY-MM-DD')) || ')' AS RM /*비고*/
+			FROM   TBHRM_DALY_BNDT d1
+			       
+			       LEFT OUTER JOIN TBHRM_HR_MASTR d2
+			            ON d1.EMPNO = d2.EMPNO
+			       
+			       LEFT OUTER JOIN VWHRM_DEPT d3
+			            ON d2.DEPT_CODE = d3.DEPT_CODE
+			       
+			       LEFT OUTER JOIN TBSAL_EMPL_BANK_ACNUT d8
+			            ON d1.EMPNO = d8.EMPNO
+			       
+			       LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE d4
+			            ON d8.ALLWNC_BANK_CODE = d4.FNNC_INSTT_CODE
+			       
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE d5
+			            ON d2.SALARY_SE = d5.CODE
+			           AND d5.GRP_CODE = 'SAL001'
+			       
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE d6
+				        ON  d6.GRP_CODE = 'ACC001'
+				        AND d6.CODE 	= '01'
+				   
+				   LEFT OUTER JOIN TBCOM_CMMN_CODE d7
+				   		ON  d7.GRP_CODE = 'ACC011'
+				        AND d7.CODE 	= '05'
+			WHERE  1=1
+			  AND SUBSTR(d1.BNDT_DE,1,6) LIKE SUBSTR(#SRCH_DT#,1,6)
+			  AND D1.SUBDUTY_AT = '0'						/* 대직여부 */
+			  AND NVL(d2.ETC_EMP_YN, '0') NOT IN ('1')		/* 별도사원제외 - 별도사원여부(0: 정원, 1: 별도사원) */
+
+				And Not Exists (
+					SELECT iA.* FROM TBACC_EXPNDTR_SLARY_DETAIL iA
+					WHERE
+					    iA.BPLC_CODE     	= #BPLC_CODE#
+					    AND SUBSTR(iA.PYMNT_DE, 1, 6)	= SUBSTR(#SRCH_DT#, 1, 6)
+					    AND iA.PYMNT_SE     = #PYMNT_SE#
+				)
+		
+    	</isEqual>
+    	
+    	<!-- 연말정산 : 개발 아직 안함 -->
+    	<isEqual property="PYMNT_SE" compareValue="06">
+    		SELECT *, 0 SEQ FROM DUAL WHERE 1=2
+    	</isEqual>
+    		
+    		UNION ALL
+    		
+	        SELECT
+	             t1.BPLC_CODE                                            AS BPLC_CODE            	/*사업장코드*/
+	            ,t2.CODE_NM                                              AS BPLC_NM                	/*사업장명*/
+	            ,t1.PYMNT_SE                                             AS PYMNT_SE                /*지급구분*/
+	            ,t3.CODE_NM                                              AS PYMNT_SE_NM            	/*지급구분명*/
+	            ,rownum                                                  AS SEQ                    	/*순번*/
+	            ,t1.DECSN_AMOUNT                                         AS DECSN_AMOUNT            /*금액*/
+	            ,t1.RCPT_MAN_EMPNO                                       AS EMPNO                	/*사원번호*/
+	            ,t1.RCPT_MAN                                             AS RCPT_MAN                /*영수자성명*/
+	            ,t1.RCPT_MAN_DEPT_CODE                                   AS RCPT_MAN_DEPT_CODE    	/*영수자부서코드*/
+	            ,t4.DEPT_NM                                              AS DEPT_NM                	/*영수자부서명*/
+	            /*,t1.FNNC_INSTT_CODE                                    AS FNNC_INSTT_CODE*/       /*은행코드*/
+	            /*,t6.FNNC_INSTT_CODE_NM                                 AS FNNC_INSTT_CODE_NM*/    /*은행명*/
+	            /*,t1.PYMNT_ACNUTNO                                      AS PYMNT_ACNUTNO*/        	/*계좌번호*/
+                ,
+                Case
+                    When t1.PYMNT_DDC_CODE Is Null Then
+                    (
+                        Select
+                            Case
+                                When #PYMNT_SE# In ('07') Then LPAD(NVL (iA.SALARY_BANK_CODE, 0),3,'0')
+                                Else LPAD(NVL (iA.ALLWNC_BANK_CODE, 0),3,'0')
+                            End
+                        From
+                            TBSAL_EMPL_BANK_ACNUT iA
+                        Where
+                            iA.EMPNO = t1.RCPT_MAN_EMPNO
+                    )
+                    Else
+                    (
+                        Select
+                            iA.RCPMNY_BANK_CODE
+                        From 
+                            TBSAL_PYMNT_DDC_STDR_CODE iA
+                        Where
+                            iA.PYMNT_DDC_CODE = t1.PYMNT_DDC_CODE
+                    )
+                End FNNC_INSTT_CODE        /*은행코드*/
+                ,
+                Case
+                    When t1.PYMNT_DDC_CODE Is Null Then
+                    (
+                        Select
+                            Case
+                                When #PYMNT_SE# In ('07') Then (Select iiA.FNNC_INSTT_CODE_NM From TBACC_FNNC_INSTT_CODE iiA Where iiA.FNNC_INSTT_CODE = LPAD(NVL (iA.SALARY_BANK_CODE,0),3,'0'))
+                                Else (Select iiA.FNNC_INSTT_CODE_NM From TBACC_FNNC_INSTT_CODE iiA Where iiA.FNNC_INSTT_CODE = LPAD(NVL (iA.ALLWNC_BANK_CODE,0),3,'0'))
+                            End
+                        From
+                            TBSAL_EMPL_BANK_ACNUT iA
+                        Where
+                            iA.EMPNO = t1.RCPT_MAN_EMPNO
+                    )
+                    Else
+                    (
+                        Select
+                            (Select iiA.FNNC_INSTT_CODE_NM From TBACC_FNNC_INSTT_CODE iiA Where iiA.FNNC_INSTT_CODE = LPAD(NVL (iA.RCPMNY_BANK_CODE,0),3,'0'))
+                        From 
+                            TBSAL_PYMNT_DDC_STDR_CODE iA
+                        Where
+                            iA.PYMNT_DDC_CODE = t1.PYMNT_DDC_CODE
+                    )
+                End FNNC_INSTT_CODE_NM    /*은행명*/
+                ,
+                Case
+                    When t1.PYMNT_DDC_CODE Is Null Then
+                    (
+                        Select
+                            Case
+                                When #PYMNT_SE# In ('07') Then iA.SALARY_BANK_ACNUT
+                                Else iA.ALLWNC_BANK_ACNUT
+                            End
+                        From
+                            TBSAL_EMPL_BANK_ACNUT iA
+                        Where
+                            iA.EMPNO = t1.RCPT_MAN_EMPNO
+                    )
+                    Else
+                    (
+                        Select
+                            iA.RCPMNY_ACNUT_NO
+                        From 
+                            TBSAL_PYMNT_DDC_STDR_CODE iA
+                        Where
+                            iA.PYMNT_DDC_CODE = t1.PYMNT_DDC_CODE
+                    )
+                End PYMNT_ACNUTNO        /*계좌번호*/
+	            ,t1.SALARY_SE                                            AS SALARY_SE            /*급여구분*/
+	            ,t5.CODE_NM                                              AS SALARY_SE_NM            /*급여구분명*/
+	            ,t1.RM                                                   AS RM                    /*적요*/
+	        FROM TBACC_EXPNDTR_SLARY_DETAIL t1
+	             
+	             LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+	             ON  t1.BPLC_CODE = t2.CODE
+	             AND t2.GRP_CODE  = 'ACC001'
+	             
+	             LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+	             ON  t1.PYMNT_SE  = t3.CODE
+	             AND t3.GRP_CODE  = 'ACC011'
+	             
+	             LEFT OUTER JOIN VWHRM_DEPT t4
+	             ON  t1.RCPT_MAN_DEPT_CODE = t4.DEPT_CODE
+	             
+	             LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+	             ON  t1.SALARY_SE = t5.CODE
+	             AND t5.GRP_CODE = 'SAL001'
+	             
+	             LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t6
+	             ON  t1.FNNC_INSTT_CODE = t6.FNNC_INSTT_CODE
+	        
+	        WHERE t1.BPLC_CODE    = #BPLC_CODE#
+			<isEqual property="PYMNT_SE" compareValue="05">
+		          AND SUBSTR(t1.PYMNT_DE, 1, 6)  = SUBSTR(#SRCH_DT#, 1, 6)
+		    </isEqual>
+			<isNotEqual property="PYMNT_SE" compareValue="05">
+		          AND t1.PYMNT_DE = #SRCH_DT#
+		    </isNotEqual>
+		          AND t1.PYMNT_SE = #PYMNT_SE#
+		          AND t1.CMPNSP_NO Is Null
+		          And t1.ERROR_AT = '1'
+			
+			ORDER BY SEQ
+    	
+    </select>
+    
+    <!-- 지급요청 처리자료 -->
+    <select id="SAL030110DAO.pymntRqsProc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+		     t1.BPLC_CODE
+		    ,t2.CODE_NM     			AS BPLC_NM
+		    ,t1.PYMNT_SE
+		    ,t3.CODE_NM     			AS PYMNT_SE_NM
+		    ,t1.PYMNT_DE
+		    ,t1.RCPT_DE
+		    ,t1.SEQ
+		    ,t1.DECSN_AMOUNT
+		    ,t1.RCPT_MAN
+		    ,t1.RCPT_MAN_DEPT_CODE
+		    ,t4.DEPT_NM
+		    ,t1.SALARY_SE
+		    ,t5.CODE_NM 				AS SALARY_SE_NM
+		    ,t1.FNNC_INSTT_CODE
+		    ,t6.FNNC_INSTT_CODE_NM
+		    ,t1.PYMNT_ACNUTNO
+		    ,t1.RM
+		    ,t1.CMPNSP_NO
+		    ,DECODE(t1.CMPNSP_NO,NULL,'0','1') AS PYMNT_AT
+		    
+		    ,t1.ERROR_AT	/* 오류여부 */
+		    ,t1.CHGHY	/* 변경사유 */		    
+		    
+		FROM TBACC_EXPNDTR_SLARY_DETAIL t1
+		     
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		     ON  t1.BPLC_CODE = t2.CODE
+		     AND t2.GRP_CODE  = 'ACC001'
+		     
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		     ON  t1.PYMNT_SE  = t3.CODE
+		     AND t3.GRP_CODE  = 'ACC011'
+		     
+		     LEFT OUTER JOIN VWHRM_DEPT t4
+		     ON  t1.RCPT_MAN_DEPT_CODE = t4.DEPT_CODE
+		     
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		     ON  t1.SALARY_SE = t5.CODE
+		     AND t5.GRP_CODE = 'SAL001'
+		     
+		     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t6
+		     ON  t1.FNNC_INSTT_CODE = t6.FNNC_INSTT_CODE
+		
+		WHERE NVL(t1.DECSN_AMOUNT,0) <![CDATA[>]]> 0
+          AND t1.PYMNT_DE = #SRCH_DT#
+          And Not (
+	          t1.CMPNSP_NO Is Null 
+	          And Nvl(t1.ERROR_AT,'0') = '1'
+	      )
+			
+		ORDER BY t1.SEQ
+    </select>
+
+	<!-- 지급요청 -->
+	<insert id="SAL030110DAO.pymntRqsC" parameterClass="java.util.HashMap">
+		INSERT INTO TBACC_EXPNDTR_SLARY_DETAIL
+		(
+		 BPLC_CODE
+		,PYMNT_YEAR
+		,PYMNT_DE
+		,PYMNT_SE
+		,SEQ
+		,DECSN_AMOUNT
+		,RCPT_DE
+		,RCPT_MAN
+		,RCPT_MAN_DEPT_CODE
+		,RCPT_MAN_EMPNO
+		,FNNC_INSTT_CODE
+		,PYMNT_ACNUTNO
+		,SALARY_SE
+		,RM
+		,CMPNSP_NO
+		,REGISTER_ID
+		,REGIST_DT
+		,UPDUSR_ID
+		,UPDT_DT
+		)
+		WITH MT_SALARY_T AS (
+		    SELECT 
+		         t1.PYMNT_DE
+		        ,t2.EMPNO
+		        ,SUM(DECODE(t3.PYMNT_DDC_SE,0,1,-1) * t2.AMOUNT) AS AMOUNT
+		    FROM TBSAL_MT_SALARY_CALC t1
+		         INNER JOIN TBSAL_MT_SALARY_DTLS t2
+		         ON  t1.PYMNT_YM = t2.PYMNT_YM
+		         AND t1.SN       = t2.SN
+		         INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE t3
+		         ON  t2.PYMNT_DDC_CODE = t3.PYMNT_DDC_CODE
+		    WHERE t1.PYMNT_DE = #PYMNT_DE#
+		      AND t1.CLOS_AT  = '1'
+		    GROUP BY t1.PYMNT_DE, t2.EMPNO
+		)
+		SELECT
+		     '01' 
+		    ,SUBSTR(t1.PYMNT_DE,1,4)
+		    ,t1.PYMNT_DE
+		    ,'01'
+		    ,ROW_NUMBER() OVER(ORDER BY t4.OUTPT_ORDR, t2.JSSFC_SE, t2.HR_CLSF_SE, t2.EMPNO) AS RN
+		    ,t1.AMOUNT
+		    ,t1.PYMNT_DE
+		    ,t2.EMPNM
+		    ,t2.DEPT_CODE
+		    ,t2.EMPNO
+		    ,t3.SALARY_BANK_CODE
+		    ,t3.SALARY_BANK_ACNUT
+		    ,NULL
+		    ,NULL
+		    ,NULL
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		FROM MT_SALARY_T t1
+		     INNER JOIN TBHRM_HR_MASTR t2
+		     ON t1.EMPNO = t2.EMPNO
+		     LEFT OUTER JOIN TBSAL_EMPL_BANK_ACNUT t3
+		     ON t1.EMPNO = t3.EMPNO
+		     LEFT OUTER JOIN VWHRM_DEPT t4
+		     ON t2.DEPT_CODE = t4.DEPT_CODE
+		     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t5
+		     ON t3.SALARY_BANK_CODE = t5.FNNC_INSTT_CODE
+		ORDER BY t4.OUTPT_ORDR, t2.JSSFC_SE, t2.HR_CLSF_SE, t2.EMPNO       
+	</insert>
+	
+	<!-- 지급요청취소 (1건이라도 ERP번호가 있으면 취소 불가) -->
+	<delete id="SAL030110DAO.pymntRqsD" parameterClass="java.util.HashMap">
+Begin
+	DELETE FROM TBACC_EXPNDTR_SLARY_DETAIL t1
+	WHERE t1.BPLC_CODE	= #BPLC_CODE#
+	  AND t1.PYMNT_SE 	= #PYMNT_SE#
+<isEqual property="PYMNT_SE" compareValue="05">
+      AND t1.PYMNT_DE = SUBSTR(#SRCH_DT#, 1, 6) || TO_CHAR(LAST_DAY(TO_DATE(#SRCH_DT#, 'YYYYMMDD')), 'DD')
+</isEqual>
+<isNotEqual property="PYMNT_SE" compareValue="05">
+      AND t1.PYMNT_DE = #SRCH_DT#
+</isNotEqual>
+	  AND (t1.CHGHY Is Null Or t1.CHGHY != 'E')
+	  AND NOT EXISTS (
+			    SELECT 1
+			    FROM TBACC_EXPNDTR_SLARY_DETAIL t2
+			    WHERE t1.BPLC_CODE = t2.BPLC_CODE
+			      AND t1.PYMNT_SE  = t2.PYMNT_SE
+			      AND t1.PYMNT_DE  = t2.PYMNT_DE
+			      AND t1.CMPNSP_NO IS NOT NULL
+	  			);
+	  			
+	Update TBACC_EXPNDTR_SLARY_DETAIL t1
+	Set
+	    t1.ERROR_AT = '1',
+	    t1.UPDUSR_ID = #S_USER_ID#,
+	    t1.UPDT_DT = Sysdate
+	WHERE t1.BPLC_CODE	= #BPLC_CODE#
+	  AND t1.PYMNT_SE 	= #PYMNT_SE#
+<isEqual property="PYMNT_SE" compareValue="05">
+      AND t1.PYMNT_DE = SUBSTR(#SRCH_DT#, 1, 6) || TO_CHAR(LAST_DAY(TO_DATE(#SRCH_DT#, 'YYYYMMDD')), 'DD')
+</isEqual>
+<isNotEqual property="PYMNT_SE" compareValue="05">
+      AND t1.PYMNT_DE = #SRCH_DT#
+</isNotEqual>
+	  AND t1.CHGHY = 'E'
+	  AND NOT EXISTS (
+			    SELECT 1
+			    FROM TBACC_EXPNDTR_SLARY_DETAIL t2
+			    WHERE t1.BPLC_CODE = t2.BPLC_CODE
+			      AND t1.PYMNT_SE  = t2.PYMNT_SE
+			      AND t1.PYMNT_DE  = t2.PYMNT_DE
+			      AND t1.CMPNSP_NO IS NOT NULL
+	  			);
+    	
+End;
+	</delete>
+	
+	<!-- 급여이체 엑셀자료등록 -->
+	<insert id="SAL030110DAO.pymntRqsExcel" parameterClass="java.util.HashMap">
+Begin
+	If #EMPNM# Is Not Null Then
+		If #EMPNO# Is Not Null Then
+			/* 직원별 지급금액 */
+			INSERT INTO TBACC_EXPNDTR_SLARY_DETAIL
+			(
+				 BPLC_CODE
+				,PYMNT_YEAR
+				,PYMNT_DE
+				,PYMNT_SE
+				,SEQ
+				,DECSN_AMOUNT
+				,RCPT_DE
+				,RCPT_MAN
+				,RCPT_MAN_DEPT_CODE
+				,RCPT_MAN_EMPNO
+				,FNNC_INSTT_CODE
+				,PYMNT_ACNUTNO
+				,SALARY_SE
+				,RM
+				,CMPNSP_NO
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+				
+				,ERROR_AT /* 오류여부 */
+				,CHGHY	/* 변경사유 */
+				,PYMNT_DDC_CODE
+			)
+			SELECT
+				 #BPLC_CODE#			
+				,SUBSTR(#PYMNT_DE#,1,4)        
+				,#PYMNT_DE#          
+				,#PYMNT_SE#				
+				,(
+					Select
+						Nvl(Max(iA.SEQ),0)+1
+					From
+						TBACC_EXPNDTR_SLARY_DETAIL iA
+					Where
+						 BPLC_CODE = #BPLC_CODE#
+						And PYMNT_YEAR = SUBSTR(#PYMNT_DE#,1,4)
+						And PYMNT_DE = #PYMNT_DE#
+						And PYMNT_SE = #PYMNT_SE#
+				) SEQ					
+				,#DECSN_AMOUNT#			
+				,Null RCPT_DE           
+				,(Select iA.EMPNM From TBHRM_HR_MASTR iA Where iA.EMPNO = #EMPNO#) RCPT_MAN          
+				,(Select iA.DEPT_CODE From TBHRM_HR_MASTR iA Where iA.EMPNO = #EMPNO#) RCPT_MAN_DEPT_CODE
+				,#EMPNO# EMPNO				
+				,
+                (
+                    Select
+                        Case
+                            When #PYMNT_SE# Not In ('02','05') Then LPAD(NVL (iA.SALARY_BANK_CODE, 0),3,'0')
+                            Else LPAD(NVL (iA.ALLWNC_BANK_CODE, 0),3,'0')
+                        End
+                    From
+                        TBSAL_EMPL_BANK_ACNUT iA
+                    Where
+                        iA.EMPNO = #EMPNO#
+                ) FNNC_INSTT_CODE   
+				,
+                (
+                    Select
+                        Case
+                            When #PYMNT_SE# Not In ('02','05') Then iA.SALARY_BANK_ACNUT
+                            Else iA.ALLWNC_BANK_ACNUT
+                        End
+                    From
+                        TBSAL_EMPL_BANK_ACNUT iA
+                    Where
+                        iA.EMPNO = #EMPNO#
+                ) PYMNT_ACNUTNO     
+				,(Select iA.SALARY_SE From TBHRM_HR_MASTR iA Where iA.EMPNO = #EMPNO#) SALARY_SE         
+				,Null RM    
+				,Null CMPNSP_NO
+				,#S_USER_ID#	      
+				,SYSDATE
+				,#S_USER_ID#	      
+				,SYSDATE
+				
+				,'1' AS ERROR_AT /* 오류여부 */
+				,'E' AS CHGHY	/* 변경사유 *//* E : 엑셀 업로드 자료 여부 */
+				,Null PYMNT_DDC_CODE
+			FROM
+				Dual;
+		Else
+			/* 공제코드별 지급금액*/
+			INSERT INTO TBACC_EXPNDTR_SLARY_DETAIL
+			(
+				 BPLC_CODE
+				,PYMNT_YEAR
+				,PYMNT_DE
+				,PYMNT_SE
+				,SEQ
+				,DECSN_AMOUNT
+				,RCPT_DE
+				,RCPT_MAN
+				,RCPT_MAN_DEPT_CODE
+				,RCPT_MAN_EMPNO
+				,FNNC_INSTT_CODE
+				,PYMNT_ACNUTNO
+				,SALARY_SE
+				,RM
+				,CMPNSP_NO
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+				
+				,ERROR_AT /* 오류여부 */
+				,CHGHY	/* 변경사유 */
+				,PYMNT_DDC_CODE
+			)
+			SELECT
+				 #BPLC_CODE#			
+				,SUBSTR(#PYMNT_DE#,1,4)        
+				,#PYMNT_DE#          
+				,#PYMNT_SE#				
+				,(
+					Select
+						Nvl(Max(iA.SEQ),0)+1
+					From
+						TBACC_EXPNDTR_SLARY_DETAIL iA
+					Where
+						 BPLC_CODE = #BPLC_CODE#
+						And PYMNT_YEAR = SUBSTR(#PYMNT_DE#,1,4)
+						And PYMNT_DE = #PYMNT_DE#
+						And PYMNT_SE = #PYMNT_SE#
+				) SEQ					
+				,#DECSN_AMOUNT#			
+				,Null RCPT_DE           
+				,
+                (
+                    Select
+                        iA.DPSTR
+                    From 
+                        TBSAL_PYMNT_DDC_STDR_CODE iA
+                    Where
+                        iA.PYMNT_DDC_CODE_NM = #EMPNM#
+                        AND iA.PYMNT_DDC_SE = '1' 
+                        And iA.USE_ENNC = '1'
+                ) RCPT_MAN          
+				,Null RCPT_MAN_DEPT_CODE
+				,Null EMPNO				
+				,
+                (
+                    Select
+                        iA.RCPMNY_BANK_CODE
+                    From 
+                        TBSAL_PYMNT_DDC_STDR_CODE iA
+                    Where
+                        iA.PYMNT_DDC_CODE_NM = #EMPNM#
+                        AND iA.PYMNT_DDC_SE = '1' 
+                        And iA.USE_ENNC = '1'
+                ) FNNC_INSTT_CODE   
+				,
+                (
+                    Select
+                        iA.RCPMNY_ACNUT_NO
+                    From 
+                        TBSAL_PYMNT_DDC_STDR_CODE iA
+                    Where
+                        iA.PYMNT_DDC_CODE_NM = #EMPNM#
+                        AND iA.PYMNT_DDC_SE = '1' 
+                        And iA.USE_ENNC = '1'
+                ) PYMNT_ACNUTNO     
+				,Null SALARY_SE         
+				,#EMPNM# RM    
+				,Null CMPNSP_NO
+				,#S_USER_ID#	      
+				,SYSDATE
+				,#S_USER_ID#	      
+				,SYSDATE
+				
+				,'1' AS ERROR_AT /* 오류여부 */
+				,'E' AS CHGHY	/* 변경사유 */ /* E : 엑셀 업로드 자료 여부 */
+				,
+				(
+                    Select
+                        iA.PYMNT_DDC_CODE
+                    From 
+                        TBSAL_PYMNT_DDC_STDR_CODE iA
+                    Where
+                        iA.PYMNT_DDC_CODE_NM = #EMPNM#
+                        AND iA.PYMNT_DDC_SE = '1' 
+                        And iA.USE_ENNC = '1'
+                ) PYMNT_DDC_CODE
+			FROM
+				Dual;
+		End If;
+	End If;
+    	
+End;
+	</insert>
+	
+	<!-- 엑셀업로드데이터 삭제 -->
+	<delete id="SAL030110DAO.pymntRqsExcelDelete" parameterClass="java.util.HashMap">
+		DELETE FROM TBACC_EXPNDTR_SLARY_DETAIL t1
+		WHERE t1.BPLC_CODE	= #BPLC_CODE#
+		  AND t1.PYMNT_SE 	= #PYMNT_SE#
+		  AND t1.PYMNT_DE 	= #SRCH_DT#
+		  And t1.ERROR_AT   = '1'
+		  And t1.CHGHY      = 'E' /* E : 엑셀 업로드 자료 여부 */
+		  And t1.CMPNSP_NO  Is Null
+	</delete>
+</sqlMap>

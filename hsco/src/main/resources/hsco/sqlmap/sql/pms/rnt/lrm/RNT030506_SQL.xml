@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT030409">
+
+	<!-- 쿼리명 : 계약자별 월별 체납액
+	설명 : 계약자별 월별 체납액
+	수정일  수정자  수정내용
+	작성자 : 이광원
+	최초작성일 : 2015.10.13
+	-->
+<select id="RNT030506DAO.getList" parameterClass="map" resultClass="hashmap">
+SELECT A.CNTRCTR_NO
+     , A.AREA_SE
+     , A.DONG
+     , A.HO
+     , C.NM
+     , D.ZIP
+     , D.ADRES
+     , D.ADRES_DETAIL
+     , C.TELNO
+     , C.MBTLNO
+     , DEDT_DE
+     , NVL(B.RNTCHRG_NPYM , 0) AS RNTCHRG_NPYM
+     , NVL(B.OVDINTR_NPYM , 0) AS OVDINTR_NPYM
+     , NVL(B.RSVMNEY_NPYM , 0) AS RSVMNEY_NPYM
+     , NVL(B.RNTCHRG_NPYM , 0) + NVL(B.OVDINTR_NPYM , 0) + NVL(B.RSVMNEY_NPYM , 0) AS TOTAL
+     , Z.RESCI_TRMNAT_DE
+FROM TBRNT_LFSTS_CNTRCT A
+    , (SELECT CNTRCTR_NO
+               , DEDT_DE
+               , RNTCHRG_THSMON + NVL(RNTCHRG_RDCAMT,0) AS RNTCHRG_NPYM
+               , OVDINTR AS OVDINTR_NPYM
+               , RSVMNEY_THSMON + NVL(RSVMNEY_RDCAMT,0) AS RSVMNEY_NPYM
+          FROM TBRNT_LFSTS_MT_RNTCHRG
+         WHERE ( RCIV_DE IS NULL OR RCIV_DE > #DEDT_DE2# ) ) B
+    , TBRNT_LFSTS_CSTMR C
+    , TBRNT_LFSTS_HOUSE_CNTRCTR D
+    , TBRNT_LFSTS_RESCI_TRMNAT Z
+WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+  AND A.LFSTS_CSTMR_NO = C.LFSTS_CSTMR_NO
+  AND A.CNTRCTR_NO = D.CNTRCTR_NO
+  AND A.CNTRCT_CO = D.CNTRCTR_CO
+  AND A.CNTRCTR_NO = Z.CNTRCTR_NO(+)
+  AND A.CNTRCT_CO = Z.CNTRCTR_CO(+)
+  <isNotEmpty property="AREA_SE">
+     AND A.AREA_SE = #AREA_SE#
+ </isNotEmpty>
+ <isNotEmpty property="NM">
+     AND C.NM LIKE #NM#||'%'
+ </isNotEmpty>
+  <isNotEmpty property="DONG">
+     AND A.DONG LIKE #DONG#
+ </isNotEmpty>
+  <isNotEmpty property="HO">
+     AND A.HO LIKE #HO#
+ </isNotEmpty>
+   <isNotEmpty property="DEDT_DE1">
+     AND B.DEDT_DE BETWEEN #DEDT_DE1# AND #DEDT_DE2#
+ </isNotEmpty>
+    ORDER BY A.CNTRCTR_NO
+</select>
+
+
+
+	<!-- 쿼리명 : 계약자별 체납액 합계
+	설명 : 계약자조회
+	수정일  수정자  수정내용
+
+	작성자 : 이광원
+	최초작성일 : 2015.10.13
+	-->
+	<select id="RNT030506DAO.getList1" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+<![CDATA[
+SELECT A.CNTRCTR_NO
+     , A.AREA_SE
+     , A.DONG
+     , A.HO
+     , C.NM
+     , D.ZIP
+     , D.ADRES
+     , D.ADRES_DETAIL
+     , C.TELNO
+     , C.MBTLNO
+     , NVL(B.RNTCHRG_NPYM , 0) AS RNTCHRG_NPYM
+     , NVL(B.OVDINTR_NPYM , 0) AS OVDINTR_NPYM
+     , NVL(B.RSVMNEY_NPYM , 0) AS RSVMNEY_NPYM
+     , NVL(B.RNTCHRG_NPYM , 0) + NVL(B.OVDINTR_NPYM , 0) + NVL(B.RSVMNEY_NPYM , 0) AS TOTAL
+     , B.CNT
+     , Z.RESCI_TRMNAT_DE
+FROM TBRNT_LFSTS_CNTRCT A
+    , (SELECT CNTRCTR_NO,
+               COUNT(RNTCHRG_THSMON) AS CNT,
+               SUM(CASE WHEN (RCIV_DE IS NULL OR RCIV_DE > #DEDT_DE2#) THEN RNTCHRG_THSMON + NVL(RNTCHRG_RDCAMT,0) ELSE 0 END) RNTCHRG_NPYM,
+               SUM(CASE WHEN (RCIV_DE IS NULL OR RCIV_DE > #DEDT_DE2#) THEN OVDINTR ELSE 0 END) OVDINTR_NPYM,
+               SUM(CASE WHEN (RCIV_DE IS NULL OR RCIV_DE > #DEDT_DE2#) THEN RSVMNEY_THSMON + NVL(RSVMNEY_RDCAMT,0) ELSE 0 END) RSVMNEY_NPYM
+          FROM TBRNT_LFSTS_MT_RNTCHRG
+         WHERE ( RCIV_DE IS NULL OR RCIV_DE > #DEDT_DE2# )
+           AND DEDT_DE BETWEEN #DEDT_DE1# AND #DEDT_DE2#
+         GROUP BY CNTRCTR_NO) B
+    , TBRNT_LFSTS_CSTMR C
+    , TBRNT_LFSTS_HOUSE_CNTRCTR D
+    , TBRNT_LFSTS_RESCI_TRMNAT Z
+]]>
+WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+  AND A.LFSTS_CSTMR_NO = C.LFSTS_CSTMR_NO
+  AND A.CNTRCTR_NO = D.CNTRCTR_NO
+  AND A.CNTRCT_CO = D.CNTRCTR_CO
+  AND A.CNTRCTR_NO = Z.CNTRCTR_NO(+)
+  AND A.CNTRCT_CO = Z.CNTRCTR_CO(+)
+ <isNotEmpty property="CNT1">
+     AND B.CNT BETWEEN #CNT1# AND #CNT2#
+ </isNotEmpty>
+ <isNotEmpty property="RNTCHRG_NPYM2">
+     AND RNTCHRG_NPYM BETWEEN NVL(#RNTCHRG_NPYM1# , 0) AND #RNTCHRG_NPYM2#
+ </isNotEmpty>
+  <isNotEmpty property="AREA_SE">
+     AND A.AREA_SE = #AREA_SE#
+ </isNotEmpty>
+ <isNotEmpty property="NM">
+     AND C.NM LIKE #NM#||'%'
+ </isNotEmpty>
+  <isNotEmpty property="DONG">
+     AND A.DONG LIKE #DONG#
+ </isNotEmpty>
+  <isNotEmpty property="HO">
+     AND A.HO LIKE #HO#
+ </isNotEmpty>
+    ORDER BY A.CNTRCTR_NO
+	</select>
+</sqlMap>

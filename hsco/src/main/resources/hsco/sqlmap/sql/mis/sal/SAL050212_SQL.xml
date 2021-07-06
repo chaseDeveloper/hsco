@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL050212_SQL">	
+
+	<!-- 지급코드 목록 -->
+	<select id="SAL050212DAO.selectPymntDdcStdrCode" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.PYMNT_DDC_CODE
+		      ,t1.PYMNT_DDC_CODE_NM
+		FROM   TBSAL_PYMNT_DDC_STDR_CODE t1
+		WHERE  t1.PYMNT_DDC_SE = '0'
+		AND    EXISTS (
+		    SELECT *
+		    FROM   TBSAL_MT_SALARY_DTLS
+		    WHERE  PYMNT_DDC_CODE = t1.PYMNT_DDC_CODE
+		    AND    SUBSTR(PYMNT_YM,1,4) = #YEAR#
+		)
+		ORDER BY t1.PYMNT_DDC_CODE
+	]]>
+	</select>
+
+
+	<!-- 조회 -->
+	<select id="SAL050212DAO.selectYndExcclcSalary" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+	<![CDATA[
+		WITH MT_SALARY_DTLS_T AS (
+		    SELECT t1.EMPNO
+		          ,SUBSTR(t1.PYMNT_YM,1,4)                                  AS PYMNT_YEAR
+	]]>
+	<iterate property="PYMNT_CODE">
+		          ,SUM(DECODE(t1.PYMNT_DDC_CODE, #PYMNT_CODE[]#, t1.AMOUNT, 0))     AS AMT$PYMNT_CODE[]$
+	</iterate>
+	<![CDATA[
+		          ,SUM(NVL(t1.TAXXMPT,0))                                   AS TAXXMPT
+		    FROM   TBSAL_MT_SALARY_DTLS t1
+		           INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE t2
+		                ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+		               AND t2.PYMNT_DDC_SE = '0'
+		    WHERE  t1.PYMNT_YM BETWEEN #YEAR#||'01' AND #YEAR#||'12'
+		    AND    EXISTS (
+		        SELECT 1
+		        FROM   TBSAL_MT_SALARY_CALC t3
+		        WHERE  t1.PYMNT_YM = t3.PYMNT_YM
+		        AND    t1.SN = t3.SN
+		        AND    t3.CLOS_AT = '1'
+		    )
+		    GROUP BY t1.EMPNO, SUBSTR(t1.PYMNT_YM,1,4)
+		    ORDER BY t1.EMPNO, SUBSTR(t1.PYMNT_YM,1,4)
+		)
+		SELECT T1.PYMNT_YEAR   AS YEAR
+		      ,t1.EMPNO
+		      ,t2.EMPNM
+	]]>
+	<iterate property="PYMNT_CODE">
+		      ,t1.AMT$PYMNT_CODE[]$
+	</iterate>
+	<![CDATA[
+		      ,t1.TAXXMPT
+		      ,t3.IHIDNUM
+		      ,t3.SM_AMOUNT
+		      ,t3.TAXXMPT_CGFFD
+		      ,t3.WLFARE_POINT_AMOUNT
+		      ,NVL(t3.TOT_SALARY,0)   AS TOT_SALARY
+		      ,NVL(t3.INCMTAX,0)      AS INCMTAX
+		      ,NVL(t3.IHNTS,0)        AS IHNTS
+		      ,NVL(t3.HLTHINS,0)      AS HLTHINS
+		      ,NVL(t3.NPN,0)          AS NPN
+		      ,NVL(t3.EMPLYMINSRNC,0) AS EMPLYMINSRNC
+		      ,NVL(t3.LBUN_CT,0)      AS LBUN_CT
+		      ,DECODE(SUBSTR(t2.ECNY_DE, 0, 4), #YEAR#, TO_CHAR(TO_DATE(t2.ECNY_DE),'YYYY-MM-DD'), #YEAR#||'-01-01') AS ST_DE
+		      ,#YEAR#||'-12-31'                                                                                      AS ED_DE
+		FROM   MT_SALARY_DTLS_T t1
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t2
+		            ON t1.EMPNO = t2.EMPNO
+		       LEFT OUTER JOIN TBSAL_YND_EXCCLC_SALARY t3
+		       ON t1.EMPNO = t3.EMPNO
+		       AND t1.PYMNT_YEAR = t3.YEAR
+		WHERE  1=1
+		ORDER BY t2.EMPNM
+	]]>
+	</select>
+
+
+	<!-- 수정 -->
+	<update id="SAL050212DAO.mergeYndExcclcSalary" parameterClass="java.util.HashMap">
+	<![CDATA[
+		MERGE INTO TBSAL_YND_EXCCLC_SALARY
+		USING DUAL
+		ON (
+		    YEAR  = #YEAR#        AND
+		    EMPNO = #EMPNO#
+		   )
+		WHEN MATCHED THEN
+		    UPDATE
+		    SET    IHIDNUM             = #IHIDNUM#
+		          ,SM_AMOUNT           = #SM_AMOUNT#
+		          ,TAXXMPT_CGFFD       = #TAXXMPT_CGFFD#
+		          ,WLFARE_POINT_AMOUNT = #WLFARE_POINT_AMOUNT#
+		          ,TOT_SALARY          = #TOT_SALARY#
+		          ,INCMTAX             = #INCMTAX#
+		          ,IHNTS               = #IHNTS#
+		          ,HLTHINS             = #HLTHINS#
+		          ,NPN                 = #NPN#
+		          ,EMPLYMINSRNC        = #EMPLYMINSRNC#
+		          ,LBUN_CT             = #LBUN_CT#
+		          ,UPDUSR_ID           = #S_USER_ID#
+		          ,UPDT_DT             = SYSDATE
+		WHEN NOT MATCHED THEN
+		    INSERT (
+		         YEAR
+		        ,EMPNO
+		        ,IHIDNUM
+		        ,SM_AMOUNT
+		        ,TAXXMPT_CGFFD
+		        ,WLFARE_POINT_AMOUNT
+		        ,TOT_SALARY
+		        ,INCMTAX
+		        ,IHNTS
+		        ,HLTHINS
+		        ,NPN
+		        ,EMPLYMINSRNC
+		        ,LBUN_CT
+		        ,REGISTER_ID
+		        ,REGIST_DT
+		        ,UPDUSR_ID
+		        ,UPDT_DT
+		    ) VALUES (
+		         #YEAR#
+		        ,#EMPNO#
+		        ,#IHIDNUM#
+		        ,#SM_AMOUNT#
+		        ,#TAXXMPT_CGFFD#
+		        ,#WLFARE_POINT_AMOUNT#
+		        ,#TOT_SALARY#
+		        ,#INCMTAX#
+		        ,#IHNTS#
+		        ,#HLTHINS#
+		        ,#NPN#
+		        ,#EMPLYMINSRNC#
+		        ,#LBUN_CT#
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		    )
+	]]>
+	</update>
+
+
+	<!-- 삭제 -->
+	<delete id="SAL050212DAO.deleteYndExcclcSalary" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBSAL_YND_EXCCLC_SALARY
+		WHERE  YEAR                = #YEAR#
+	]]>
+	<isNotEmpty property="EMPNO">
+		AND    EMPNO               = #EMPNO#
+	</isNotEmpty>
+	</delete>
+
+
+	<!-- 자동계산 -->
+	<insert id="SAL050212DAO.calcAutoCalcData" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBSAL_YND_EXCCLC_SALARY (
+		     YEAR
+		    ,EMPNO
+		    ,IHIDNUM
+		    ,SM_AMOUNT
+		    ,TAXXMPT_CGFFD
+		    ,WLFARE_POINT_AMOUNT
+		    ,TOT_SALARY
+		    ,INCMTAX
+		    ,IHNTS
+		    ,HLTHINS
+		    ,NPN
+		    ,EMPLYMINSRNC
+		    ,LBUN_CT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		SELECT t1.YEAR
+		      ,t1.EMPNO                                                                 AS ENOBI
+		      ,H_DECRYPT(t2.IHIDNUM_ENCPT)                                              AS IHIDNUM
+		      ,NVL(t1.AMOUNT,0)                                                         AS SM_AMOUNT
+		      ,NVL(t1.TAXXMPT,0)                                                        AS TAXXMPT_CGFFD
+		      ,NVL(t3.WLFARE_POINT_AMOUNT,0)                                            AS WLFARE_POINT_AMOUNT
+		      ,NVL(t1.AMOUNT,0) - NVL(t1.TAXXMPT,0) + NVL(t3.WLFARE_POINT_AMOUNT,0)     AS TOT_SALARY
+		      ,t4.INCMTAX                                                               AS INCMTAX
+		      ,t4.IHNTS                                                                 AS IHNTS
+		      ,t4.HLTHINS                                                               AS HLTHINS
+		      ,t4.NPN                                                                   AS NPN
+		      ,t4.EMPLYMINSRNC                                                          AS EMPLYMINSRNC
+		      ,t4.LBUN_CT                                                               AS LBUN_CT
+		      ,#S_USER_ID#
+		      ,SYSDATE
+		      ,#S_USER_ID#
+		      ,SYSDATE
+		FROM   (
+		        SELECT SUBSTR(s1.PYMNT_YM,1,4)      AS YEAR
+		              ,s1.EMPNO
+		              ,SUM(s1.AMOUNT)               AS AMOUNT
+		              ,SUM(s1.TAXXMPT)              AS TAXXMPT
+		        FROM   TBSAL_MT_SALARY_DTLS s1
+		        WHERE  EXISTS (
+		            SELECT *
+		            FROM   TBSAL_PYMNT_DDC_STDR_CODE
+		            WHERE  PYMNT_DDC_SE = '0'
+		            AND    PYMNT_DDC_CODE = s1.PYMNT_DDC_CODE
+		        )
+		        GROUP BY SUBSTR(PYMNT_YM,1,4)
+		                ,EMPNO
+		       ) t1
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t2
+		            ON t1.EMPNO = t2.EMPNO
+		       LEFT OUTER JOIN TBSAL_WLFARE_POINT_AMOUNT t3
+		            ON t1.YEAR = t3.YEAR
+		           AND t1.EMPNO = t3.EMPNO
+		       LEFT OUTER JOIN (
+		                        SELECT SUBSTR(r1.PYMNT_YM,1,4)  AS YEAR
+		                              ,r1.EMPNO
+		                              ,SUM(r1.AMOUNT)
+		                              ,SUM(DECODE(r1.PYMNT_DDC_CODE, '2010', NVL(r1.AMOUNT,0), 0))   AS INCMTAX
+		                              ,SUM(DECODE(r1.PYMNT_DDC_CODE, '2020', NVL(r1.AMOUNT,0), 0))   AS IHNTS
+		                              ,SUM(DECODE(r1.PYMNT_DDC_CODE, '2030', NVL(r1.AMOUNT,0), 0) + DECODE(r1.PYMNT_DDC_CODE, '2140', NVL(r1.AMOUNT,0), 0))  AS HLTHINS
+		                              ,SUM(DECODE(r1.PYMNT_DDC_CODE, '2040', NVL(r1.AMOUNT,0), 0) + DECODE(r1.PYMNT_DDC_CODE, '2130', NVL(r1.AMOUNT,0), 0))  AS NPN
+		                              ,SUM(DECODE(r1.PYMNT_DDC_CODE, '2050', NVL(r1.AMOUNT,0), 0) + DECODE(r1.PYMNT_DDC_CODE, '2120', NVL(r1.AMOUNT,0), 0))  AS EMPLYMINSRNC
+		                              ,SUM(DECODE(r1.PYMNT_DDC_CODE, '2070', NVL(r1.AMOUNT,0), 0))   AS LBUN_CT
+		                        FROM   TBSAL_MT_SALARY_DTLS r1
+		                               INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE r2
+		                               ON r1.PYMNT_DDC_CODE = r2.PYMNT_DDC_CODE
+		                               AND r2.PYMNT_DDC_SE = '1'
+		                        GROUP BY SUBSTR(r1.PYMNT_YM,1,4), r1.EMPNO
+		                       ) t4
+		            ON t1.YEAR = t4.YEAR
+		           AND t1.EMPNO = t4.EMPNO
+		WHERE  t1.YEAR = #YEAR#
+	]]>
+	</insert>
+
+
+</sqlMap>

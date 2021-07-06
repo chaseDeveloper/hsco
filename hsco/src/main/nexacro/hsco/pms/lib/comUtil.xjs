@@ -1,0 +1,497 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/********************************************************
+파일명 : comUtil.xjs
+설 명 : PMS 공통 유틸
+수정일 수정자 Version Function 명
+------- -------- ---------- --------------
+2015.06.02 지효정 1.0 최초 생성
+*********************************************************/
+
+/***********************************************************************************
+* 함수 : fn_init
+* 설명 : Form에서 공통적으로 적용될 초기화 설정
+
+* 함수 : fn_init_enterKeyEvent
+* 설명	: Enter key 입력 초기화
+
+* 함수 : fn_boolean
+* 설명 : Y, N, 문자 0을 true, false 로 변환 한다. 
+
+* 함수 : nvl
+* 설명 : obj가 null일경우 defaultValue를 반환한다.
+
+* 함수 : fn_numToHangul
+* 설명 : 숫자를 한글로 변환한다.
+
+* 함수 : fn_get_yyyymmdd
+* 설명 : date 객체를 yyyymmdd 형식의 스트링으로 변환
+
+* 함수 : fn_get_date
+* 설명 : yyyymmdd 형식의스트링을 date 객체로 변환.
+
+* 함수 : fn_last_yyyymmdd
+* 설명 : date 객체또는 yyyymmdd 형식의 날짜 데이터를 현재 달의 마지막날짜로 변환.
+
+* 함수 : alert
+* 설명 : 폼의 alert함수를 디자인된 팝업으로 변경.
+
+* 함수 : this.fn_confirm
+* 설명 : 컨펌 메시지 처리
+
+* 함수 : fn_callback_message
+* 설명	: 트랜젝션후 콜백 메시지 처리
+
+***********************************************************************************/
+this.checkDs = [];
+/***********************************************************************************
+* 설명	: Form에서 공통적으로 적용될 초기화 설정
+***********************************************************************************/
+this.fn_init = function(bSkipFocusInit){
+	//시스템 공통으로 Form을 Initialize 한다.
+	this.gfn_initForm(this);
+		
+	//폼내의 모든 그리드 초기화
+	this.fn_init_allGrid(this);
+	
+	//폼내의 그리드확장기능 추가
+	// this.fn_initMakeObj();  공통 lib로 적용 -- > this.gfn_initGridCommon
+
+	//search 영역 초기화
+	this.fn_init_search();	
+	
+	//콤포넌트의 엔터키 처리 초기화
+	if(bSkipFocusInit !== true){
+		this.fn_init_enterKeyEvent(this);
+	}
+	
+	//form load시에 공통으로 처리할 기능 정의
+	this.addEventHandler("onload", this._fn_form_onload, this); 
+	
+	//데이터셋 기능 추가
+	this.fn_add_datasetFn();	
+	
+}
+
+this._fn_form_onload = function(obj:Form, e:nexacro.LoadEventInfo){
+	this.fn_init_focus();
+}
+/***********************************************************************************
+* 설명	: search 영역 초기화 설정
+* div 	: search div 설정, 기본값은 this.div_search
+* fn_search : 조회 함수 설정, 기본값은 this.fn_Search, this.fn_search
+***********************************************************************************/
+this.fn_init_search = function(){
+	div = this.div_search;
+	
+	if(div == null){
+		return;
+	}
+	
+	var len = div.components.length;
+	for(var i=0; i<len; i++){
+		var item = div.components.get_item(i);
+		switch(item.toString()){
+			case "[object Combo]":
+				item.set_type("filter");
+				break;
+				
+			case "[object Edit]":
+			case "[object MaskEdit]":
+			case "[object TextArea]":
+				item.addEventHandler("onkeydown", this._fn_searchEditOnkeydownHandler, this); 
+				break;
+			//case "[object Spin]":
+			//case "[object Calendar]": 
+				//컨셉 확정될때까지 일단 막음
+				//엔터키 입력시 조회되도록...
+				//item.addEventHandler("onkeydown", this._fn_searchEditOnkeydownHandler, this); 
+				//break;
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: search 영역 내의 Enter key 이벤트 처리
+***********************************************************************************/
+this._fn_searchEditOnkeydownHandler = function(obj:Edit, e:nexacro.KeyEventInfo)
+{
+	if(e.keycode == 13){
+		if(this.fn_Search != null){
+			this.fn_Search();
+		}else if(this.fn_search != null){
+			this.fn_search();
+		}else if(this.btn_search_onclick != null){
+			this.btn_search_onclick();
+		}else if(this.btn_Search_onclick != null){
+			this.btn_Search_onclick();
+		}
+	}
+}
+/***********************************************************************************
+* 설명	: 지정된 콤포넌트에 Enter key 이벤트 설정
+***********************************************************************************/
+this.fn_init_enterKeyEvent = function(div){
+	if(div == null){
+		return;
+	}
+	
+	var len = div.components.length;
+	for(var i=0; i<len; i++){
+		var item = div.components.get_item(i);
+		switch(item.toString()){
+			case "[object Edit]":
+			case "[object MaskEdit]":
+			//case "[object TextArea]":
+			case "[object Spin]":
+			case "[object Calendar]":
+			case "[object Combo]":
+			case "[object Radio]":
+				item.addEventHandler("onkeyup", this._fn_focusOnkeydownHandler, this);
+				break;
+				
+			case "[object Div]":
+			case "[object Tab]":
+			case "[object Tabpage]":
+				this.fn_init_enterKeyEvent(item);
+				break;
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: Enter key 이벤트 처리
+***********************************************************************************/
+this._fn_focusOnkeydownHandler = function(obj, e)
+{
+	if(e.keycode == 13){
+		if(this._fn_focus_nextComp(obj) == false){
+			firstComponent = obj.parent.getFirstComponent();
+			if(firstComponent != null){
+				firstComponent.setFocus();
+			}
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: obj의 다음 Taborder 검색후 포커스 지정
+***********************************************************************************/
+this._fn_focus_nextComp = function(obj){
+	var startComponent = this.getNextComponent(obj);
+	var nextComponent = startComponent;
+	var i=0;
+	var limit = 200;
+	//무한루프 방지하기 위해...
+	while(i<limit){
+		switch(nextComponent.toString()){
+			case "[object Edit]":
+			case "[object MaskEdit]":
+			case "[object TextArea]":
+			case "[object Spin]":
+			case "[object Calendar]":
+			case "[object Combo]":
+			case "[object Radio]":
+				//읽기 전용에는 포커스 가지 않도록
+				if(nextComponent.readonly == true || nextComponent.visible == false || nextComponent.enable == false){
+					break;
+				}
+				nextComponent.setFocus();
+				return true;
+			
+			case "[object Form]":
+			case "[object Div]":
+			case "[object Tab]":
+			case "[object Div]":
+				break;
+		}
+		
+		nextComponent = this.getNextComponent(nextComponent);
+		if(startComponent == nextComponent){
+			break;
+		}
+		i++;
+	}
+	
+	return false;
+}
+
+/***********************************************************************************
+* 설명	: 폼 시작시 디폴트 포커스 지정
+***********************************************************************************/
+this.fn_init_focus = function(){
+	//this._fn_focus_nextComp(this);
+	var comp = this.getFirstComponent();
+	
+	if(comp != null){
+		this.debug("fn_init_focus:" + comp.name);
+		comp.setFocus();
+	}
+}
+
+/***********************************************************************************
+* 설명	: Y, N, 문자 0을 true, false 로 변환 한다. 
+***********************************************************************************/
+this.fn_boolean = function(value){
+	if(value === 'Y' || value === 'y' || value === '1' || value === 1){
+		return true; 
+	}else if(value === 'N' || value === 'n' || value ==='0' || value === 0){
+		return false;
+	}
+	
+	return Boolean(value);
+}
+
+/***********************************************************************************
+* 설명	: obj가 null일경우 defaultValue를 반환한다.
+***********************************************************************************/
+this.nvl = function(checkValue, defaultValue){
+	if(this.comUtils.isNullEmpty(checkValue)){
+		return defaultValue;
+	}
+	return checkValue;
+}
+
+/***********************************************************************************
+* 설명	: 숫자를 한글로 변환
+***********************************************************************************/
+this.fn_numToHangul = function(num){
+	var hangulNum     	= ['' , '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+	var hangulNumUnit 	= ['' , '십', '백', '천'];
+	var hangulNumBigUnit= ['' , '만', '억', '조', '경'];
+	
+	var strNum           = num.toString();
+	var arrReverseStrNum = strNum.split('').reverse();
+	var len              = arrReverseStrNum.length;
+	var arrResult        = [];
+	
+	for(var i=0; i<len; i++){
+		if(i % 4 == 0){
+            //arrResult.push(hangulNumBigUnit[i/4-1]);
+			arrResult.push(hangulNumBigUnit[i/4]);
+		}
+
+		//var s = hangulNum[Number(arrReverseStrNum[i] - 1)];
+		//var no = parseInt(arrReverseStrNum[i])||0;
+		var no = Number(arrReverseStrNum[i]);
+		var s = hangulNum[no];
+		if(no > 0) s += hangulNumUnit[i%4];
+		//s += hangulNumUnit[i%4];
+		arrResult.push(s);
+	}
+	
+	var strResult = arrResult.reverse().toString().replace(/,/g, '');
+	this.debug("fn_numToHangul " + num + " : " + strResult, true);
+	return strResult;
+}
+
+/***********************************************************************************
+* 설명	: date 객체를 yyyymmdd 형식의 스트링으로 변환
+***********************************************************************************/
+this.fn_get_yyyymmdd = function(date) {
+    var yyyy = date.getFullYear().toString();
+    var mm = (date.getMonth()+1).toString();
+    var dd  = date.getDate().toString();
+    return yyyy + (mm[1]?mm:"0"+mm[0]) + (dd[1]?dd:"0"+dd[0]);
+};
+
+/***********************************************************************************
+* 설명	: yyyymmdd 형식의스트링을 date 객체로 변환
+***********************************************************************************/
+this.fn_get_date = function(yyyymmdd, plusDay){
+	var yyyy = Number(yyyymmdd.substring(0, 4));
+	var mm = Number(yyyymmdd.substring(4, 6)) - 1;
+	var dd = Number(yyyymmdd.substring(6, 8)) + (plusDay==null?0:plusDay);
+	return new Date(yyyy, mm, dd);
+}
+
+/***********************************************************************************
+* 설명	: date 객체또는 yyyymmdd 형식의 날짜 데이터를 마지막날짜로 변환
+***********************************************************************************/
+this.fn_last_yyyymmdd = function(yyyymmdd, prevMon){
+	if(yyyymmdd instanceof Date){
+		yyyymmdd = this.fn_get_yyyymmdd(yyyymmdd);
+	}
+	
+	if(prevMon == null){
+		prevMon = 0;
+	}
+	
+	var yyyy = Number(yyyymmdd.substring(0, 4));
+	var mm = Number(yyyymmdd.substring(4, 6)) + prevMon;
+	
+	return this.fn_get_yyyymmdd(new Date(yyyy, mm , 0));
+}
+
+/***********************************************************************************
+* 설명	: date 객체또는 yyyymmdd 형식의 날짜 데이터를 첫번째날짜로 변환
+***********************************************************************************/
+this.fn_first_yyyymmdd = function(yyyymmdd, prevMon){
+	if(yyyymmdd instanceof Date){
+		yyyymmdd = this.fn_get_yyyymmdd(yyyymmdd);
+	}
+	
+	if(prevMon == null){
+		prevMon = 0;
+	}
+	
+	var yyyy = Number(yyyymmdd.substring(0, 4));
+	var mm = Number(yyyymmdd.substring(4, 6)) + prevMon;
+	
+	return this.fn_get_yyyymmdd(new Date(yyyy, mm-1 , 1));
+}
+/***********************************************************************************
+* 설명	: 폼의 alert함수를 디자인된 팝업으로 변경
+* msg_cd : 메시지 코드 OR 일반 메시지
+* msg : 메시지 코드의 {} 안에 들어갈 문자열, 여러개일경우 '|'을 토큰으로 사용
+***********************************************************************************/
+this.alert = function(msg_cd, msg){
+	var sMessage = this._findMessage(msg_cd);
+	if(this.comUtils.isNullEmpty(sMessage))
+	{
+		msg = msg_cd;
+		msg_cd = null;
+	}
+	this.gfn_message(msg_cd, msg);
+};
+
+/***********************************************************************************
+* 설명	: Confirm창 공통 메시지 처리
+* 폼의 confirm 팝업창의 메시지를 동일하게 출력할 수 있도록 처리.
+* msg_cd : 메시지 코드 OR 일반 메시지
+* msg : 메시지 코드의 {} 안에 들어갈 문자열, 여러개일경우 '|'을 토큰으로 사용
+***********************************************************************************/
+this.confirm = function(msg_cd, msg, callback){
+	var result = false;
+	
+	//메시지 코드로 넘어올경우 처리..
+	var sMessage = this.comUtils.isNullEmpty(msg_cd) ? null : this._findMessage(msg_cd);
+	
+	//메시지 코드가 아닐경우 기존의 메시지 처리...
+	if(this.comUtils.isNullEmpty(sMessage)){
+		switch(msg_cd){
+			case "C":	case "c":
+				msg_cd = "comm.행위여부";
+				msg = "취소";
+				break;
+			case "S":	case "s":
+				msg_cd = "confirm.저장.여부";
+				break;
+			case "D":	case "d":
+				msg_cd = "confirm.삭제여부";
+				break;
+		}
+		
+		sMessage = this.comUtils.isNullEmpty(msg_cd) ? null : this._findMessage(msg_cd);
+		
+		if(this.comUtils.isNullEmpty(sMessage)){
+			sMessage = msg_cd;
+		}
+	}
+
+	if(!this.comUtils.isNullEmpty(msg)){
+		if(this.comUtils.isNullEmpty(sMessage)){
+			sMessage = msg;
+		}else{
+			var arrMsg = msg.split("|");
+			for(var i = 0; i < arrMsg.length; i++)
+			{
+				sMessage = sMessage.replace("{" + i + "}", arrMsg[i]);
+			}
+		}
+	}
+	
+	sMessage = sMessage.replace(/\\\\n/g, "\n");
+	
+	if(callback == null){
+		var result = confirm(sMessage);
+		return result;
+	}else{
+		//callback이 정상작동 안함.... 고객 요청사항 있을시에... 변경...
+		this._msgPop("C", "Q", sMessage, null, "confirm_pop", callback);
+	}
+}
+
+/***********************************************************************************
+* 설명	: 트랜젝션후 콜백 메시지 처리
+***********************************************************************************/
+this.fn_callback_message = function(strSvcId, nErrorCode, strErrorMsg){
+	var bSuccess = nErrorCode == 0 ? true : false;
+	if(bSuccess == true){
+		this.fn_auto_gridAlign(strSvcId, nErrorCode);
+		switch(strErrorMsg){
+			case "success.처리성공":
+			case "success.정상등록":
+			case "success.정상삭제":
+			case "success.정상수정":
+				var sMessage = this._findMessage(strErrorMsg);
+				this.alert(sMessage);
+				break;
+		}
+	}else{
+		this.gfn_callback_message(strSvcId, nErrorCode, strErrorMsg);
+	}
+}
+
+/***********************************************************************************
+* 설명	: 체크 데이터셋 업데이트 유무 체크
+***********************************************************************************/
+this.fn_checkUpdate = function(dataset, skipRow, checkDelete){
+	var rowcount = dataset.rowcount;
+	var checkDelete = this.comUtils.isNullEmpty(checkDelete) ? true : checkDelete;
+	// 삭제 체크시 먼저 처리
+	if (checkDelete && dataset.getDeletedRowCount() > 0){	
+		return true;
+	}
+		
+	for(var rowidx=0; rowidx<rowcount; rowidx++)
+	{
+		if(this.comUtils.isNullEmpty(skipRow) == false){
+			if(rowidx == skipRow && dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT){
+				continue;
+			}
+		}
+		
+		if(dataset.getRowType(rowidx)==Dataset.ROWTYPE_INSERT ||
+			dataset.getRowType(rowidx)==Dataset.ROWTYPE_UPDATE ||
+			dataset.getRowType(rowidx)==Dataset.ROWTYPE_DELETE){
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+/***********************************************************************************
+* 설명	: 분수 형식을 퍼센트 형식으로
+*         1/2 -> 50
+***********************************************************************************/
+this.fn_fractionalToPer = function(fractional){
+	if(fractional.indexOf('/') == -1){
+		return 0;
+	}
+	
+	var numerador =  Number(fractional.split('/')[0]);
+	var denominator = Number(fractional.split('/')[1]);
+	
+	return numerador / denominator * 100;
+}
+
+/***********************************************************************************
+* 설명	: 퍼센트 형식을 분수 형식으로
+*         50 -> 1/2
+***********************************************************************************/
+this.fn_perToFractional = function(per){
+	var numerador = per;
+	var denominator = 100;
+	
+	for(var i=10; i>0; i--){
+		if(numerador % i != 0) continue;
+		if(denominator % i != 0) continue;
+		
+		numerador = numerador / i;
+		denominator = denominator / i;
+	}
+	
+	return numerador + '/' + denominator;
+}
+]]></Script>

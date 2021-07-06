@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM020200_SQL">
+	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 권한그룹 리스트 -->
+	<select id="SYM020200DAO.getListDept" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+		SELECT 
+		    DISTINCT DEPT_CODE AS CODE, 
+		    	DEPT_NM AS CODE_NM,
+		    	 DEPT_CODE || '(' || DEPT_NM || ')' AS ALL_CODE_NM		    	 
+		FROM VWHRM_DEPT
+		WHERE USE_AT = '1'
+		ORDER BY DEPT_NM
+		
+	</select>
+               	 
+	
+	<!-- 권한그룹 리스트 -->
+	<select id="SYM020200DAO.getListGrp" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+        SELECT
+        	  '0' AS CHK
+            , A.AUTH_GRP_ID
+            , A.AUTH_GRP_NM
+            , A.SYS_SE_CODE
+            , B.CODE_NM AS SYS_SE_NM           
+            , A.DFLT_AT
+            , A.JOB_SE
+            , C.CODE_NM AS JOB_SE_NM
+            , DECODE( A.DFLT_AT, 1, 'Y', 'N') AS DFLT_YN
+            , A.AUTH_CODE
+            , D.CODE_NM AS AUTH_NM
+        FROM 
+            TBCOM_AUTH_GRP A
+            , ( SELECT CODE, CODE_NM FROM TBCOM_CMMN_CODE 
+                WHERE GRP_CODE = 'COM024'
+              ) B
+           , (
+                SELECT CODE, CODE_NM FROM TBCOM_CMMN_CODE 
+                WHERE GRP_CODE = 'COM025'
+             ) C
+           , (
+                SELECT CODE, CODE||':'||CODE_NM AS CODE_NM FROM TBCOM_CMMN_CODE 
+                WHERE GRP_CODE = 'COM056'
+            ) D
+        WHERE A.USE_AT = '1'
+          AND A.SYS_SE_CODE = B.CODE(+)
+          AND A.JOB_SE      = C.CODE(+)
+          AND A.AUTH_CODE = D.CODE(+)
+       <isNotEmpty property="AUTH_GRP_ID">
+       	AND A.AUTH_GRP_ID LIKE '%' || #AUTH_GRP_ID# || '%'        
+       </isNotEmpty>
+       
+        <isNotEmpty property="AUTH_GRP_NM">
+        AND A.AUTH_GRP_NM LIKE '%' || #AUTH_GRP_NM# || '%'
+        </isNotEmpty>
+        
+        <isNotEmpty property="SYS_SE_CODE">
+        AND A.SYS_SE_CODE LIKE '%' || #SYS_SE_CODE# || '%'
+        </isNotEmpty>
+        
+        <isNotEmpty property="JOB_SE">
+        AND A.JOB_SE LIKE '%' || #JOB_SE# || '%'
+        </isNotEmpty>
+        
+        <isNotEmpty property="DFLT_AT">
+        AND NVL(A.DFLT_AT, '0') = DECODE( NVL(#DFLT_AT#, '0'), 'N', '0', 'Y', 1,  #DFLT_AT# )
+        </isNotEmpty>
+        ORDER BY A.AUTH_GRP_NM, A.AUTH_GRP_ID 	     
+    </select>
+    
+    <!-- 그룹 사용자 리스트 조회 -->
+	<select id="SYM020200DAO.getListGrpUser" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+		SELECT
+			0 AS CHK,
+		    A.AUTH_GRP_ID,
+		    (SELECT K.AUTH_GRP_NM
+			   FROM TBCOM_AUTH_GRP K
+			  WHERE K.AUTH_GRP_ID = A.AUTH_GRP_ID AND ROWNUM = 1)
+			 AS AUTH_GRP_NM,
+		    B.USER_ID, B.USER_NM,
+		    C.EMPNO, D.DEPT_CODE, D.DEPT_NM,
+		    (
+		        SELECT CODE_NM FROM TBCOM_CMMN_CODE
+		        WHERE GRP_CODE = 'HRM001'
+		        AND CODE = C.JSSFC_SE
+		    ) ||
+		    CASE
+		        WHEN C.HR_CLSF_SE IS NULL THEN ''
+		        ELSE SUBSTR(C.HR_CLSF_SE, 2,1) || '급'
+		    END AS HR_CLSF_SE,
+		    (
+		        SELECT CODE_NM FROM TBCOM_CMMN_CODE
+		        WHERE GRP_CODE = 'HRM214'
+		        AND CODE = C.RSPOFC_SE
+		    ) AS RSPOFC_NM
+		FROM 
+		    TBCOM_USER_GRP A,
+		    TBCOM_USER B,
+		    TBHRM_HR_MASTR C,
+		    VWHRM_DEPT D
+		WHERE
+		    A.USER_ID = B.USER_ID
+		AND B.EMPNO = C.EMPNO(+)
+		AND C.DEPT_CODE = D.DEPT_CODE(+)
+		<isNotEmpty property="AUTH_GRP_ID"> 
+			AND AUTH_GRP_ID = #AUTH_GRP_ID#
+		</isNotEmpty>
+		
+    </select>
+    
+    <!-- 그룹 대상 사용자 리스트 -->
+    <select id="SYM020200DAO.getListUser" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+            0 AS CHK, #AUTH_GRP_ID# AS AUTH_GRP_ID,
+            #AUTH_GRP_NM# AS AUTH_GRP_NM,
+            A.USER_ID, A.USER_NM,
+            C.EMPNO, D.DEPT_CODE, D.DEPT_NM,
+  			(
+		        SELECT CODE_NM FROM TBCOM_CMMN_CODE
+		        WHERE GRP_CODE = 'HRM001'
+		        AND CODE = C.JSSFC_SE
+		    ) ||
+		    CASE
+		        WHEN C.HR_CLSF_SE IS NULL THEN ''
+		        ELSE SUBSTR(C.HR_CLSF_SE, 2,1) || '급'
+		    END AS HR_CLSF_SE,
+            (
+                SELECT CODE_NM FROM TBCOM_CMMN_CODE
+                WHERE GRP_CODE = 'HRM214'
+                AND CODE = C.RSPOFC_SE
+            ) AS RSPOFC_NM
+        FROM
+            TBCOM_USER A, 
+            (
+                SELECT AUTH_GRP_ID, USER_ID
+                FROM TBCOM_USER_GRP
+                WHERE AUTH_GRP_ID = #AUTH_GRP_ID#
+            ) B,
+            TBHRM_HR_MASTR C,
+            VWHRM_DEPT D
+        WHERE
+            A.USER_ID = B.USER_ID(+)
+        AND A.EMPNO = C.EMPNO(+)
+        AND C.DEPT_CODE = D.DEPT_CODE(+)
+        AND B.AUTH_GRP_ID IS NULL
+        <isNotEmpty property="USER_NM"> 
+			AND A.USER_NM LIKE '%'|| #USER_NM# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE"> 
+			AND C.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+			AND A.USER_STTUS_CODE = 'JA'
+		
+    </select>
+ 
+ 	<!-- 그룹 사용자 추가 -->
+    <insert id="SYM020200DAO.SYM020200C" parameterClass="java.util.Map" >
+		INSERT INTO TBCOM_USER_GRP (
+		                AUTH_GRP_ID, USER_ID, INTRCP_AT,
+		                REGISTER_ID, REGIST_DT,
+		                UPDUSR_ID, UPDT_DT
+		            )
+		     VALUES (
+		            #AUTH_GRP_ID#, #USER_ID#, '0',
+		            #S_USER_ID#, SYSDATE,
+		            #S_USER_ID#, SYSDATE
+		        )
+
+	</insert>
+	
+    <!--  그룹 사용자 삭제 -->
+    <delete id="SYM020200DAO.SYM020200D" parameterClass="java.util.Map" >
+
+	      	DELETE FROM TBCOM_USER_GRP
+			WHERE
+				USER_ID = #USER_ID#
+			AND AUTH_GRP_ID = #AUTH_GRP_ID#
+
+    </delete>
+    
+	<insert id="SYM020200DAO.insertUserChg" parameterClass="hashmap" >
+	
+		<selectKey keyProperty="CHG_SN_KEY" resultClass="string">
+			SELECT SQ_COM_USER_AUTH_CHGHST_1.NEXTVAL AS CHG_SN_KEY
+			FROM DUAL
+    	</selectKey>
+    	
+    	INSERT INTO TBCOM_USER_CHGDTL (
+	                USER_ID,
+	                CHG_SN,
+	                CHANGE_DT,
+	                BFCHG_GRP_ID,
+	                AFTCH_GRP_ID,
+	                BF_INDVDLINFO_AUTH,
+	                AFT_INDVDLINFO_AUTH,
+	                REGISTER_ID,
+	                REGIST_DT,
+	                UPDUSR_ID,
+	                UPDT_DT
+	            )
+	     VALUES (
+	                #USER_ID#,
+	                #CHG_SN_KEY#,
+	                SYSDATE,
+	                #BFCHG_GRP_ID#,
+	                #AFTCH_GRP_ID#,
+	                #BF_INDVDLINFO_AUTH#,
+	                #AFT_INDVDLINFO_AUTH#,
+	                #S_USER_ID#,
+	                SYSDATE,
+	                #S_USER_ID#,
+	                SYSDATE
+	            )
+	
+	</insert>
+	
+	<!--  사용자가 속한 권한 삭제 로그 -->
+	<insert id="SYM020200DAO.removeAuthUser" parameterClass="hashmap" >
+	
+		<selectKey keyProperty="CHG_SN_KEY" resultClass="string">
+			SELECT SQ_COM_USER_AUTH_CHGHST_1.NEXTVAL AS CHG_SN_KEY
+			FROM DUAL
+    	</selectKey>
+    	
+    	INSERT INTO TBCOM_USER_CHGDTL (
+		                USER_ID, CHG_SN,
+		                CHANGE_DT, BFCHG_GRP_ID,
+		                AFTCH_GRP_ID, BF_INDVDLINFO_AUTH,
+		                AFT_INDVDLINFO_AUTH,
+		                REGISTER_ID, REGIST_DT,
+		                UPDUSR_ID, UPDT_DT
+	            )
+	     SELECT  #USER_ID#,  #CHG_SN_KEY#,
+	     		SYSDATE, AUTH_GRP_ID,
+	            NULL,	NULL,
+	            NULL,
+				#S_USER_ID#, SYSDATE,
+	            #S_USER_ID#, SYSDATE
+		FROM 	TBCOM_USER_GRP
+		WHERE
+			USER_ID = #USER_ID#
+	
+	</insert>
+	
+	<insert id="SYM020200DAO.insertAuthUser" parameterClass="hashmap" >
+	
+		<selectKey keyProperty="CHG_SN_KEY" resultClass="string">
+				SELECT SQ_COM_USER_AUTH_CHGHST_1.NEXTVAL AS CHG_SN_KEY
+				FROM DUAL
+	    	</selectKey>
+		
+		INSERT INTO TBCOM_USER_CHGDTL (
+		                USER_ID, CHG_SN,
+		                CHANGE_DT, BFCHG_GRP_ID,
+		                AFTCH_GRP_ID, BF_INDVDLINFO_AUTH,
+		                AFT_INDVDLINFO_AUTH,
+		                REGISTER_ID, REGIST_DT,
+		                UPDUSR_ID, UPDT_DT
+		            )
+		     SELECT #USER_ID#,  #CHG_SN_KEY#,
+		     		SYSDATE, NULL,
+		            #AFTCH_GRP_ID#,	NULL,
+		            NULL,
+					#S_USER_ID#, SYSDATE,
+		            #S_USER_ID#, SYSDATE
+			FROM 	TBCOM_USER_GRP
+			WHERE
+				USER_ID = #USER_ID#
+	</insert>
+</sqlMap>

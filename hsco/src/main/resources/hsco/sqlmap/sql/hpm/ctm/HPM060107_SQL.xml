@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HPM060107_SQL">	
+	
+	<!-- 프로그램 목록 -->
+	<select id="HPM060107DAO.selectProgrmManageList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+		     t1.PROGRM_CODE
+		    ,t1.DEPT_CODE
+		    ,t1.FCLTY
+		    ,t1.ITEM
+		    ,t1.BAN
+		    ,t1.GRAD
+		    ,t1.USE_AT
+		    ,t2.RENT_PROGRM_CNT	/*등록된 강좌수*/
+		    ,v1.DEPT_NM
+		    ,t6.CODE_NM	AS FCLTY_NM
+		    ,t3.CODE_NM	AS ITEM_NM
+		    ,t4.CODE_NM	AS BAN_NM
+		    ,t5.CODE_NM	AS GRAD_NM
+		    ,t3.CODE_NM
+		    || NVL2(t4.CODE_NM, ' ' || t4.CODE_NM , t4.CODE_NM) 
+		    || NVL2(t5.CODE_NM, ' ' || t5.CODE_NM , t5.CODE_NM) AS PROGRM_CODE_NM
+		FROM TBHPM_PROGRM_MANAGE t1
+		    LEFT OUTER JOIN ( SELECT PROGRM_CODE
+		                            ,DEPT_CODE
+		                            ,COUNT(*) AS RENT_PROGRM_CNT
+		                        FROM TBHPM_RENT_PROGRM_MANAGE 
+		                        GROUP BY PROGRM_CODE, DEPT_CODE
+		                    ) t2
+		      ON t1.PROGRM_CODE = t2.PROGRM_CODE
+		     AND t1.DEPT_CODE   = t1.DEPT_CODE
+		     LEFT OUTER JOIN VWHRM_DEPT v1
+		       ON t1.DEPT_CODE = v1.DEPT_CODE
+			LEFT OUTER JOIN TBHPM_PROGRM_TY_CODE t3
+		      ON t3.DEPT_CODE = t1.DEPT_CODE 
+		     AND t3.TY_CODE = '1'
+		     AND t1.ITEM = t3.CODE
+		    LEFT OUTER JOIN TBHPM_PROGRM_TY_CODE t4
+		      ON t4.DEPT_CODE = t1.DEPT_CODE 
+		     AND t4.TY_CODE = '2'
+		     AND t1.BAN = t4.CODE
+		    LEFT OUTER JOIN TBHPM_PROGRM_TY_CODE t5
+		      ON t5.DEPT_CODE = t1.DEPT_CODE 
+		     AND t5.TY_CODE = '3'
+		     AND t1.GRAD = t5.CODE
+		    LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+		      ON t1.FCLTY = t6.CODE
+		     AND t6.GRP_CODE  = 'HPM018'
+		WHERE 1=1
+			AND t1.DEPT_CODE = #DEPT_CODE#
+		<isNotEmpty prepend="AND" property="FCLTY">
+			t1.FCLTY = #FCLTY#
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="ITEM">
+			t1.ITEM  = #ITEM#
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="BAN">
+			t1.BAN = #BAN#
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="GRAD">
+			t1.GRAD= #GRAD#
+		</isNotEmpty>
+		ORDER BY t1.FCLTY, t1.ITEM, t1.BAN, t1.GRAD
+	</select>
+	
+	<!-- 프로그램 등록 -->
+	<insert id="HPM060107DAO.selectProgrmManageC" parameterClass="java.util.HashMap">
+		INSERT INTO TBHPM_PROGRM_MANAGE
+		(
+			 PROGRM_CODE
+			,DEPT_CODE
+			,FCLTY
+			,ITEM
+			,BAN
+			,GRAD
+			,USE_AT
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)VALUES (
+			 #PROGRM_CODE#
+			,#DEPT_CODE#
+		    ,#FCLTY#
+		    ,#ITEM#
+		    ,#BAN#
+		    ,#GRAD#
+		    ,#USE_AT#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE	
+		)
+	</insert>
+	
+	<!-- 프로그램 수정 -->
+	<update id="HPM060107DAO.selectProgrmManageU" parameterClass="java.util.HashMap">
+		UPDATE TBHPM_PROGRM_MANAGE
+		   SET FCLTY      = #FCLTY#
+			  ,ITEM       = #ITEM#
+			  ,BAN        = #BAN#
+			  ,GRAD       = #GRAD#
+			  ,USE_AT     = #USE_AT#
+			  ,UPDUSR_ID  = #S_USER_ID#
+			  ,UPDT_DT    = SYSDATE
+		WHERE PROGRM_CODE = #PROGRM_CODE#
+		  AND DEPT_CODE   = #DEPT_CODE#  
+	</update> 
+	
+	<!-- 프로그램 삭제 -->
+	<delete id="HPM060107DAO.selectProgrmManageD" parameterClass="java.util.HashMap">
+		DELETE FROM TBHPM_PROGRM_MANAGE
+		WHERE PROGRM_CODE = #PROGRM_CODE#
+		  AND DEPT_CODE   = #DEPT_CODE#  
+	</delete>
+	
+	<!-- 프로그램유형 목록 -->
+	<select id="HPM060107DAO.selectProgrmTyList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+		     t1.DEPT_CODE
+		    ,t1.TY_CODE
+		    ,t1.CODE
+		    ,t1.CODE_NM
+		    ,t1.USE_AT
+		    ,t1.SORT_ORDR
+		    ,t2.RENT_PROGRM_CNT
+		FROM TBHPM_PROGRM_TY_CODE t1
+		    LEFT OUTER JOIN (
+				<isEqual property="TY_CODE" compareValue="1">
+					SELECT ITEM, DEPT_CODE, NVL(COUNT(*), 0) AS RENT_PROGRM_CNT FROM TBHPM_PROGRM_MANAGE GROUP BY DEPT_CODE , ITEM
+				</isEqual>
+				<isEqual property="TY_CODE" compareValue="2">
+					SELECT BAN, DEPT_CODE, NVL(COUNT(*), 0) AS RENT_PROGRM_CNT FROM TBHPM_PROGRM_MANAGE GROUP BY DEPT_CODE , BAN
+				</isEqual>
+				<isEqual property="TY_CODE" compareValue="3">
+					SELECT GRAD, DEPT_CODE, NVL(COUNT(*), 0) AS RENT_PROGRM_CNT FROM TBHPM_PROGRM_MANAGE GROUP BY DEPT_CODE , GRAD
+				</isEqual>
+		     				) t2
+		      ON t2.DEPT_CODE = t1.DEPT_CODE
+		      <isEqual property="TY_CODE" compareValue="1">
+		      	AND t1.CODE = t2.ITEM 
+		      </isEqual>
+		      <isEqual property="TY_CODE" compareValue="2">
+		      	AND t1.CODE = t2.BAN 
+		      </isEqual>
+		      <isEqual property="TY_CODE" compareValue="3">
+		      	AND t1.CODE = t2.GRAD 
+		      </isEqual>
+		WHERE 	1=1
+		  AND t1.DEPT_CODE = #DEPT_CODE#
+		  AND t1.TY_CODE = #TY_CODE#
+		ORDER BY t1.SORT_ORDR ASC
+	</select>
+	
+	<!-- 프로그램유형 등록 -->
+	<insert id="HPM060107DAO.selectProgrmTyC" parameterClass="java.util.HashMap">
+		INSERT INTO TBHPM_PROGRM_TY_CODE
+		(
+			 DEPT_CODE
+			,TY_CODE
+			,CODE
+			,CODE_NM
+			,USE_AT
+			,SORT_ORDR
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)VALUES (
+			 #DEPT_CODE#
+		    ,#TY_CODE#
+		    ,#CODE#		
+			,#CODE_NM#
+		    ,#USE_AT#
+		    ,#SORT_ORDR#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE	
+		)
+	</insert>
+	
+	<!-- 프로그램유형 수정 -->
+	<update id="HPM060107DAO.selectProgrmTyU" parameterClass="java.util.HashMap">
+		UPDATE TBHPM_PROGRM_TY_CODE
+		SET CODE_NM     = #CODE_NM#
+	       ,USE_AT      = #USE_AT#
+	       ,SORT_ORDR   = #SORT_ORDR#
+	       ,UPDUSR_ID   = #S_USER_ID#
+	       ,UPDT_DT     = SYSDATE    
+		WHERE DEPT_CODE = #DEPT_CODE#
+		  AND TY_CODE   = #TY_CODE#
+		  AND CODE 	    = #CODE#
+	</update>
+	
+	<!-- 프로그램유형 삭제 -->
+	<delete id="HPM060107DAO.selectProgrmTyD" parameterClass="java.util.HashMap">
+		DELETE FROM TBHPM_PROGRM_TY_CODE
+		WHERE DEPT_CODE = #DEPT_CODE#
+		  AND TY_CODE   = #TY_CODE#
+		  AND CODE 	    = #CODE#
+	</delete>
+	
+	<!-- ===================== [ 팝업01 : 프로그램선택 ] ===================== -->
+	
+	<!-- 시설 목록  -->
+	<select id="HPM060107DAO.selectFcltyList" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap" >
+		SELECT 
+			 t2.CODE 	AS FCLTY
+			,t2.CODE_NM AS FCLTY_NM
+		FROM TBHPM_PROGRM_MANAGE t1
+		    INNER JOIN TBCOM_CMMN_CODE t2
+		       ON t1.FCLTY = t2.CODE
+		      AND t2.GRP_CODE  = 'HPM018'
+			  <isNotEmpty property="USE_AT">
+			 	 AND t2.USE_AT = #USE_AT#
+	  		  </isNotEmpty>
+		WHERE 1=1
+		AND t1.DEPT_CODE = #DEPT_CODE#
+		GROUP BY t2.CODE, t2.CODE_NM
+		ORDER BY t2.CODE, t2.CODE_NM
+	</select>
+	
+	<!-- 종목 목록 -->
+	<select id="HPM060107DAO.selectItemList" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap" >
+		SELECT t1.FCLTY	    AS FCLTY
+		     , t1.ITEM		AS ITEM
+		     , t2.CODE_NM	AS ITEM_NM
+		FROM TBHPM_PROGRM_MANAGE t1
+		    INNER JOIN TBHPM_PROGRM_TY_CODE t2
+		     ON  t1.DEPT_CODE = t2.DEPT_CODE
+		     AND t1.ITEM = t2.CODE
+		     AND t2.TY_CODE = '1'
+		WHERE 1=1
+		  AND t1.DEPT_CODE = #DEPT_CODE#
+	  	 <isNotEmpty prepend="AND" property="USE_AT">
+	  		 t1.USE_AT = #USE_AT#
+	  	 </isNotEmpty>
+		GROUP BY t1.FCLTY, t1.ITEM, t2.CODE_NM
+		ORDER BY t1.FCLTY, t1.ITEM, t2.CODE_NM
+	</select>
+    
+    <!-- 반 목록 -->
+    <select id="HPM060107DAO.selectBanList" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap" >
+		SELECT t1.FCLTY		AS FCLTY
+		     , t1.ITEM		AS ITEM
+		     , t1.BAN     	AS BAN
+		     , t2.CODE_NM 	AS BAN_NM
+		FROM TBHPM_PROGRM_MANAGE t1
+		     INNER JOIN TBHPM_PROGRM_TY_CODE t2
+		     ON  t1.DEPT_CODE = t2.DEPT_CODE
+		     AND t1.BAN= t2.CODE
+		     AND t2.TY_CODE = '2'
+		WHERE 1=1
+			AND t1.DEPT_CODE = #DEPT_CODE#
+	  	 <isNotEmpty prepend="AND" property="USE_AT">
+	  		 t1.USE_AT = #USE_AT#
+	  	 </isNotEmpty>
+		GROUP BY t1.FCLTY, t1.ITEM, t1.BAN, t2.CODE_NM
+		ORDER BY t1.FCLTY, t1.ITEM, t1.BAN, t2.CODE_NM
+    </select>
+    
+    <!-- 등급 목록 -->
+    <select id="HPM060107DAO.selectGradList" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap" >
+		SELECT t1.FCLTY	
+		     , t1.ITEM	
+		     , t1.BAN   
+		     , t1.GRAD	
+		     , t2.CODE_NM 	AS GRAD_NM
+		FROM TBHPM_PROGRM_MANAGE t1
+		     INNER JOIN TBHPM_PROGRM_TY_CODE t2
+		     ON  t1.DEPT_CODE = t2.DEPT_CODE
+		     AND t1.GRAD = t2.CODE
+		     AND t2.TY_CODE = '3'
+		WHERE 1=1
+			AND t1.DEPT_CODE = #DEPT_CODE#
+	  	 <isNotEmpty prepend="AND" property="USE_AT">
+	  		 t1.USE_AT = #USE_AT#
+	  	 </isNotEmpty>
+		GROUP BY t1.FCLTY, t1.ITEM, t1.BAN, t1.GRAD, t2.CODE_NM
+		ORDER BY t1.FCLTY, t1.ITEM, t1.BAN, t1.GRAD, t2.CODE_NM
+    </select>
+</sqlMap>

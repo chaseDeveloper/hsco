@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP040300_SQL">
+<!--  설명  : 협의자료 출력
+	작성자 : 지효정  -->
+	
+	<!-- 보상협의 내역 -->
+	<select id="CMP040300DAO.rwmnyList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		/********************************************************************************************************************/
+		/*  소유자별 보상액  누계액  계산    */
+		/********************************************************************************************************************/
+		SELECT A.BSNS_AREA_CODE
+			  ,A.OWNER_NO
+		      ,B.OWNER_NM
+		      ,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM
+		      ,NVL(B.ADRES,'')||NVL(B.ADRES_DETAIL,'')  AS ADRES
+		      ,B.TELNO_1
+		      ,A.TOT_AMT
+		      ,A.A_AMT
+		      ,A.B_AMT
+		      ,A.C_AMT
+		      ,A.D_AMT
+		      ,A.E_AMT
+		      ,A.RTOT_AMT
+		      ,A.RA_AMT
+		      ,A.RB_AMT
+		      ,A.RC_AMT
+		      ,A.RD_AMT
+		      ,A.RE_AMT
+		      ,C.BSNS_NTFC_NO
+		      ,C.LOCPLC||' '||C.LNM||' '||C.SLNO AS FULL_NM
+		      ,C.CHRCTR_PREPAR_VALUE_2
+		      ,D.BSNS_AREA_NM
+		FROM
+		    (
+		      SELECT  A.BSNS_AREA_CODE, B.OWNER_NO
+		              /********************************************************************************************************************/
+		              /*  소유자별 보상액  누계액  계산    */
+		              /********************************************************************************************************************/
+		              ,SUM(B.RWMNY)   AS   TOT_AMT
+		              ,SUM(CASE WHEN NVL(C.CHRCTR_PREPAR_VALUE_2,'0') = '1' THEN B.RWMNY  ELSE  0 END )   AS A_AMT
+		              ,SUM(CASE WHEN NVL(C.CHRCTR_PREPAR_VALUE_2,'0') NOT IN ( '1','3','5','6') THEN B.RWMNY  ELSE  0 END ) AS B_AMT
+		              ,SUM(CASE WHEN NVL(C.CHRCTR_PREPAR_VALUE_2,'0') = '5' THEN B.RWMNY  ELSE  0 END )   AS C_AMT
+		              ,SUM(CASE WHEN NVL(C.CHRCTR_PREPAR_VALUE_2,'0') = '3' THEN B.RWMNY  ELSE  0 END )   AS D_AMT
+		              ,SUM(CASE WHEN NVL(C.CHRCTR_PREPAR_VALUE_2,'0') = '6' THEN B.RWMNY  ELSE  0 END )   AS E_AMT
+		              /********************************************************************************************************************/
+		              /********************************************************************************************************************/
+		              /*  소유자별 청구(협의)  누계액  계산    */
+		              /********************************************************************************************************************/
+		              ,SUM(B.RWMNY)   AS   RTOT_AMT
+		              ,SUM(CASE WHEN NVL(B.RQEST_SE,'0') =  '1' AND NVL(C.CHRCTR_PREPAR_VALUE_2,'0') = '1' THEN B.RWMNY  ELSE  0 END )   AS RA_AMT
+		              ,SUM(CASE WHEN NVL(B.RQEST_SE,'0') =  '1' AND NVL(C.CHRCTR_PREPAR_VALUE_2,'0') NOT IN ( '1','3','5','6') THEN B.RWMNY  ELSE  0 END ) AS RB_AMT
+		              ,SUM(CASE WHEN NVL(B.RQEST_SE,'0') =  '1' AND NVL(C.CHRCTR_PREPAR_VALUE_2,'0') = '5' THEN B.RWMNY  ELSE  0 END )   AS RC_AMT
+		              ,SUM(CASE WHEN NVL(B.RQEST_SE,'0') =  '1' AND NVL(C.CHRCTR_PREPAR_VALUE_2,'0') = '3' THEN B.RWMNY  ELSE  0 END )   AS RD_AMT
+		              ,SUM(CASE WHEN NVL(B.RQEST_SE,'0') =  '1' AND NVL(C.CHRCTR_PREPAR_VALUE_2,'0') = '6' THEN B.RWMNY  ELSE  0 END )   AS RE_AMT
+		        FROM TBCMP_THING_WTNNC A
+		             ,TBCMP_THING_OWNER B
+		             ,TBCOM_CMMN_CODE   C
+		             ,(SELECT DISTINCT AA.BSNS_AREA_CODE, AA.OWNER_NO, AA.THING_SN
+		                FROM  TBCMP_THING_RWMNY  AA,
+		                      TBCMP_RWMNY_PYMNT  BB
+		                WHERE AA.BSNS_AREA_CODE = BB.BSNS_AREA_CODE
+		                AND   AA.RQEST_SN       = BB.RQEST_SN
+		                AND   AA.OWNER_NO       = BB.OWNER_NO
+		                AND   BB.RQEST_DE       = #rqestDe#
+		              ) D
+		       WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		         AND A.THING_SN       = B.THING_SN
+		         AND A.THING_CL       = C.CODE
+		         AND B.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+		         AND B.OWNER_NO       = D.OWNER_NO
+		         AND B.THING_SN       = D.THING_SN
+		         AND C.GRP_CODE       = 'CMP001'
+		         AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+		         AND B.OWNER_NO = #no#
+		       GROUP BY A.BSNS_AREA_CODE, B.OWNER_NO  ) A
+		       ,TBCMP_OWNER  B,
+		       (SELECT DISTINCT F.BSNS_NTFC_NO,B.BSNS_AREA_CODE,B.OWNER_NO,E.LOCPLC ,A.LNM ,A.SLNO , C.CHRCTR_PREPAR_VALUE_2
+		          FROM TBCMP_THING_WTNNC A
+		               ,TBCMP_THING_OWNER B
+		               ,TBCOM_CMMN_CODE   C
+		               ,TBCMP_LOCPLC_INFO E
+		               ,TBCMP_REWARD_BSNS_DSTRC F
+		               ,(SELECT DISTINCT AA.BSNS_AREA_CODE, AA.OWNER_NO, AA.THING_SN
+		                  FROM  TBCMP_THING_RWMNY  AA,
+		                        TBCMP_RWMNY_PYMNT  BB
+		                  WHERE AA.BSNS_AREA_CODE = BB.BSNS_AREA_CODE
+		                  AND   AA.RQEST_SN       = BB.RQEST_SN
+		                  AND   AA.OWNER_NO       = BB.OWNER_NO
+		                  AND   BB.RQEST_DE       = #rqestDe#
+		                 )  D
+		           WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		             AND A.THING_SN       = B.THING_SN
+		             AND A.THING_CL       = C.CODE
+		             AND B.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+		             AND B.OWNER_NO       = D.OWNER_NO
+		             AND B.THING_SN       = D.THING_SN
+		             AND A.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+		             AND A.LOCPLC_CODE    = E.LOCPLC_CODE
+		             AND A.BSNS_AREA_CODE = F.BSNS_AREA_CODE
+		             AND C.GRP_CODE       = 'CMP001'
+		             AND NVL(C.CHRCTR_PREPAR_VALUE_2,'0') NOT IN ('3','5','6')
+		             AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+		             AND B.OWNER_NO       = #no#
+		              ) C
+		       ,TBCMP_REWARD_BSNS_DSTRC D       
+		WHERE  A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		  AND  A.OWNER_NO       = B.OWNER_NO
+		  AND  A.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+		  AND  A.OWNER_NO       = C.OWNER_NO
+		  AND  B.OWNER_SE       = '1'
+		  AND  A.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+	ORDER BY C.LOCPLC, TO_NUMBER(C.LNM), TO_NUMBER(C.SLNO)
+	</select>
+	
+	
+		<select id="CMP040300DAO.rwmnyRptList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		WITH RWMNY_INFO AS(
+			SELECT 
+				 A.THING_CL_KIND
+				,B.RWMNY
+				,B.RWMNY_PYMNT_SE
+				,B.OWNER_NM
+       			,B.ADRES
+       			,B.IHIDNUM
+       			,B.TELNO_1
+       			,B.BSNS_AREA_NM
+		        ,B.PARTCPNT_NM
+		        ,B.PARTCPNT_ADRES
+		        ,B.PARTCPNT_TELNO_1
+		        ,B.PARTCPNT_IHIDNUM
+		        ,B.PARTCPNT_ACNUTNO
+		        ,B.PARTCPNT_BANK_CODE
+		        ,B.PARTCPNT_OWNER_DPSTR         			
+			FROM(
+				SELECT 
+			       A.BSNS_AREA_CODE		
+			      ,A.THING_SN				       
+			      ,DECODE(
+			          B.CODE_ETC_1, 'L', 'T'								/* 토지 */
+			                      , '3', 'B'								/* 분묘 */
+			                      , DECODE(
+			                          B.CODE, '06', 'S'						/* 실농 */
+			                                , '10', 'M'						/* 이사/주거 */
+			                                , '11', 'M'						/* 이사/주거 */
+			                                , '12', 'M'						/* 이사/주거 */
+			                                , 'J')) AS THING_CL_KIND		/* 그외에는 모두 지장물 */
+				  FROM TBCMP_THING_WTNNC A , TBCOM_CMMN_CODE B
+				  WHERE BSNS_AREA_CODE = #bsnsAreaCode#
+				  AND   B.GRP_CODE = 'CMP001'
+				  AND   TRIM(A.THING_CL) = B.CODE
+				)A
+				,(
+					SELECT 
+				     A.BSNS_AREA_CODE
+				    ,D.BSNS_AREA_NM
+				    ,A.THING_SN
+				    ,C.RWMNY_PYMNT_SE
+				    ,B.OWNER_NM
+           			,B.ADRES
+           			,B.IHIDNUM
+           			,B.TELNO_1
+				     ,NVL(A.RWMNY, 0) AS RWMNY	/* 보상금 */
+            ,(SELECT D.OWNER_NM
+                FROM TBCMP_THING_PARTCPNT C, TBCMP_OWNER D
+                WHERE C.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+                AND   A.OWNER_SN = C.OWNER_SN
+                AND   A.THING_SN = C.THING_SN
+                AND   D.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                AND   D.OWNER_NO = C.PARTCPNT_NO  
+              ) AS PARTCPNT_NM
+            ,(SELECT D.ADRES
+                FROM TBCMP_THING_PARTCPNT C, TBCMP_OWNER D
+                WHERE C.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+                AND   A.OWNER_SN = C.OWNER_SN
+                AND   A.THING_SN = C.THING_SN
+                AND   D.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                AND   D.OWNER_NO = C.PARTCPNT_NO  
+              ) AS PARTCPNT_ADRES
+            ,(SELECT D.TELNO_1
+                FROM TBCMP_THING_PARTCPNT C, TBCMP_OWNER D
+                WHERE C.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+                AND   A.OWNER_SN = C.OWNER_SN
+                AND   A.THING_SN = C.THING_SN
+                AND   D.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                AND   D.OWNER_NO = C.PARTCPNT_NO  
+              ) AS PARTCPNT_TELNO_1
+            ,(SELECT D.IHIDNUM
+                FROM TBCMP_THING_PARTCPNT C, TBCMP_OWNER D
+                WHERE C.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+                AND   A.OWNER_SN = C.OWNER_SN
+                AND   A.THING_SN = C.THING_SN
+                AND   D.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                AND   D.OWNER_NO = C.PARTCPNT_NO  
+              ) AS PARTCPNT_IHIDNUM
+            ,(SELECT D.ACNUTNO
+                FROM TBCMP_THING_PARTCPNT C, TBCMP_OWNER D
+                WHERE C.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+                AND   A.OWNER_SN = C.OWNER_SN
+                AND   A.THING_SN = C.THING_SN
+                AND   D.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                AND   D.OWNER_NO = C.PARTCPNT_NO  
+              ) AS PARTCPNT_ACNUTNO
+            ,(SELECT D.BANK_CODE
+                FROM TBCMP_THING_PARTCPNT C, TBCMP_OWNER D
+                WHERE C.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+                AND   A.OWNER_SN = C.OWNER_SN
+                AND   A.THING_SN = C.THING_SN
+                AND   D.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                AND   D.OWNER_NO = C.PARTCPNT_NO  
+              ) AS PARTCPNT_BANK_CODE
+            ,(SELECT D.OWNER_DPSTR
+                FROM TBCMP_THING_PARTCPNT C, TBCMP_OWNER D
+                WHERE C.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+                AND   A.OWNER_SN = C.OWNER_SN
+                AND   A.THING_SN = C.THING_SN
+                AND   D.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                AND   D.OWNER_NO = C.PARTCPNT_NO  
+              ) AS PARTCPNT_OWNER_DPSTR   				     
+				     FROM 
+				          TBCMP_THING_OWNER A
+				         ,TBCMP_OWNER B
+				         ,TBCMP_RWMNY_PYMNT C          
+				         ,TBCMP_REWARD_BSNS_DSTRC D
+				     WHERE A.BSNS_AREA_CODE = #bsnsAreaCode#
+				     AND   A.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+				     AND   B.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+				     AND   B.OWNER_NO = A.OWNER_NO
+				     AND   A.RQEST_SE = '1'
+				     AND   A.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+				     AND   A.OWNER_NO = C.OWNER_NO
+				     <isNotEmpty property="no">
+				     AND   B.OWNER_NO = #no#
+				     </isNotEmpty>
+				     <isNotEmpty property="rqestDe">
+				     AND   C.RQEST_DE = #rqestDe#
+				    </isNotEmpty>
+				)B
+				WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				AND   A.THING_SN = B.THING_SN
+		)
+		
+		SELECT
+			 '보상금액' AS NEGO_THING_NM
+			 ,MAX(BSNS_AREA_NM) AS BSNS_AREA_NM
+			 ,MAX(OWNER_NM) AS OWNER_NM
+      		 ,MAX(ADRES) AS ADRES
+      		 ,MAX(SFCOM_DEC_ALL(IHIDNUM)) AS IHIDNUM
+      		 ,MAX(TELNO_1) AS TELNO_1
+      		 ,MAX(#rqestDe#) AS RQEST_DE
+			,SUM(RWMNY) AS TOT_RWMNY
+			 ,SUM(DECODE(RWMNY_PYMNT_SE, '1', RWMNY))- SUM(DECODE(RWMNY_PYMNT_SE, '1', NVL(DECODE(THING_CL_KIND, 'T', RWMNY), 0), 0)) AS ETC_TOT_RWMNY
+			,SUM(NVL(DECODE(THING_CL_KIND, 'T', RWMNY), 0)) AS T_RWMNY		/*토지 보상금액*/
+		    ,SUM(NVL(DECODE(THING_CL_KIND, 'J', RWMNY), 0)) AS J_RWMNY		/*지장물 보상금액*/
+		    ,SUM(NVL(DECODE(THING_CL_KIND, 'S', RWMNY), 0)) AS S_RWMNY		/*실농 보상금액*/
+		    ,SUM(NVL(DECODE(THING_CL_KIND, 'B', RWMNY), 0)) AS B_RWMNY		/*분묘 보상금액*/
+		    ,SUM(NVL(DECODE(THING_CL_KIND, 'M', RWMNY), 0)) AS M_RWMNY		/*이사/주거 보상금액*/
+	       ,MAX(PARTCPNT_NM) AS PARTCPNT_NM
+	       ,MAX(PARTCPNT_ADRES) AS PARTCPNT_ADRES
+	       ,MAX(PARTCPNT_TELNO_1) AS PARTCPNT_TELNO_1
+	       ,MAX(SFCOM_DEC_ALL(PARTCPNT_IHIDNUM)) AS PARTCPNT_IHIDNUM
+	       ,MAX(PARTCPNT_ACNUTNO) AS PARTCPNT_ACNUTNO
+	       ,MAX(PARTCPNT_BANK_CODE) AS PARTCPNT_BANK_CODE
+	       ,MAX(PARTCPNT_OWNER_DPSTR) AS PARTCPNT_OWNER_DPSTR		    
+		FROM RWMNY_INFO
+	</select>
+	
+	
+	<select id="CMP040300DAO.silnongRptList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+			SELECT 
+                A.BSNS_AREA_CODE
+                ,C.OWNER_NM
+                ,(SELECT
+                        L.LOCPLC
+                  FROM TBCMP_LOCPLC_INFO L
+                  WHERE L.LOCPLC_CODE = A.LOCPLC_CODE
+                  AND   L.BSNS_AREA_CODE = #bsnsAreaCode#) AS LOCPLC
+                ,A.LNM
+                ,CASE                     
+                      WHEN A.LNDCGR_INCRPR = NULL THEN A.LNDCGR_LGSTR
+                      WHEN A.LNDCGR_LGSTR = NULL THEN A.REAL_LNDCGR
+                      ELSE A.LNDCGR_INCRPR END  AS LNDCGR
+                ,A.AR_LGSTR
+                ,A.AR_INCRPR
+                ,A.NOW_USE_STTUS
+             FROM  TBCMP_THING_WTNNC A
+                  ,TBCMP_THING_OWNER B
+                  ,TBCMP_OWNER C
+                  ,TBCOM_CMMN_CODE D
+            WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+            AND   A.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+            AND   A.THING_SN = B.THING_SN
+            AND   B.OWNER_NO = C.OWNER_NO
+            AND   C.BSNS_AREA_CODE LIKE #bsnsAreaCode#
+            <isNotEmpty property="no">
+            AND   C.OWNER_NO = #no#
+            </isNotEmpty>
+            AND   D.GRP_CODE = 'CMP001'
+            AND   TRIM(A.THING_CL) = D.CODE
+            AND   D.CODE = '06'			
+	</select>
+	
+	
+	<select id="CMP040300DAO.habRptList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+			SELECT 
+			      (SELECT
+			               L.LOCPLC
+			       FROM TBCMP_LOCPLC_INFO L
+			       WHERE L.LOCPLC_CODE = A.LOCPLC_CODE
+			       AND   L.BSNS_AREA_CODE = #bsnsAreaCode#) AS LOCPLC
+			      ,(SELECT
+			              LNDCGR_NM
+			      FROM TBCMP_LNDCGR_CODE
+			      WHERE LNDCGR_CODE = CASE                     
+			                        WHEN A.LNDCGR_INCRPR = NULL THEN A.LNDCGR_LGSTR
+			                        WHEN A.LNDCGR_LGSTR = NULL THEN A.REAL_LNDCGR
+			                        ELSE A.LNDCGR_INCRPR END) AS LNDCGR
+			      ,B.AR
+			      ,B.RWMNY 
+			      ,C.OWNER_NM
+			      ,(SELECT D.OWNER_NM
+			                FROM TBCMP_THING_PARTCPNT P, TBCMP_OWNER D
+			                WHERE P.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+			                AND   B.OWNER_SN = P.OWNER_SN
+			                AND   B.THING_SN = P.THING_SN
+			                AND   D.BSNS_AREA_CODE = P.BSNS_AREA_CODE
+			                AND   D.OWNER_NO = P.PARTCPNT_NO  
+			              ) AS PARTCPNT_NM
+			      ,(SELECT
+			              CODE_NM
+			        FROM TBCOM_CMMN_CODE
+			        WHERE GRP_CODE= 'CMP003'
+			        AND CODE =  (SELECT P.RELATE_KND
+			                    FROM TBCMP_THING_PARTCPNT P
+			                    WHERE P.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+			                    AND   P.THING_SN = A.THING_SN
+			                    AND   P.OWNER_SN = B.OWNER_SN)) AS RELATE_KND            
+			FROM TBCMP_THING_WTNNC A
+			     ,TBCMP_THING_OWNER B
+			     ,TBCMP_OWNER C
+			     ,TBCOM_CMMN_CODE D
+			WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+			AND   A.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+			AND   A.THING_SN = B.THING_SN
+			AND   B.OWNER_NO = C.OWNER_NO
+			AND   C.BSNS_AREA_CODE LIKE #bsnsAreaCode#
+			<isNotEmpty property="no">
+			AND   C.OWNER_NO = #no#
+			</isNotEmpty>
+			AND   D.GRP_CODE = 'CMP001'
+			AND   TRIM(A.THING_CL) = D.CODE
+			AND   D.CODE_ETC_1 = 'L'		
+	</select>	
+</sqlMap>

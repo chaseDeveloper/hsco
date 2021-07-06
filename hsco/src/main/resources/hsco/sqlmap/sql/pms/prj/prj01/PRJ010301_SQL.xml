@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj01">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBACC_EXP_DSN_MASTR			지출결의
+		 R   : TBCTR_CNTRCT					계약정보
+		 R   : TBPRJ_PXCOND_DTLS			기성내역
+	-->
+
+	<!-- 기성내역 ================================================== -->
+
+	<select id="PRJ010301.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.CNTRCT_NO			/* 계약번호 */
+	,A.ODR					/* 차수 */
+
+	,A.PXCOND_SE			/* 기성구분 */
+	,A.PRSEC_DE				/* 검사일자 */
+	,A.EXPNDTR_DE			/* 지출일자 */
+
+	,NVL(SUM(A.PXCOND_AMOUNT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO
+			ORDER BY A.ODR ASC
+			ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),0) AS S_AMT_1			/* 전회 기성액(합계) */
+
+	,A.PXCOND_AMOUNT AS AMT		/* 기성금액 */
+	,ROUND(A.PXCOND_AMOUNT * 100 / C.CNTRCT_AMOUNT,2) AS RT		/* 기성율 */
+
+	,SUM(A.PXCOND_AMOUNT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO
+			ORDER BY A.ODR ASC
+			ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS S_AMT			/* 누계 기성금액 */
+
+	,ROUND(SUM(A.PXCOND_AMOUNT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO
+			ORDER BY A.ODR ASC
+			ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) * 100
+	 / C.CNTRCT_AMOUNT,2) AS S_RT											/* 누계 기성율 */
+
+	,C.CNTRCT_AMOUNT
+	 - SUM(A.PXCOND_AMOUNT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO
+			ORDER BY A.ODR ASC
+			ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS REMAIN_AMT		/* 잔여 기성액 */
+
+	,A.ADVAN_EXCCLC_AMOUNT	/* 선금정산금액 : 계약참조 */
+	,A.PXCOND_AMOUNT - A.ADVAN_EXCCLC_AMOUNT AS RL_PYMNT_AMOUNT		/* 실지급금액 = 기성금액 - 선금정산금액 */
+<!-- 
+	,D.ADVAN_EXCCLC_AMOUNT						/* TODO: 선금정산금액 : 계약참조(추가예정) */
+	,A.PXCOND_AMOUNT - D.ADVAN_EXCCLC_AMOUNT	/* TODO: 실지급금액 : 기성금액 - 선금정산금액(추가예정) */
+
+	,A.ADVAN_EXCCLC_AMOUNT	/* 선금정산금액 : 계약참조(삭제) */
+	,A.RL_PYMNT_AMOUNT		/* 실지급금액 : 지출참조 또는 계산(삭제) */
+-->
+
+	,A.TAXXPT				/* 면세 */
+	,A.SUPLY_AMOUNT			/* 공급가액 */
+	,A.VAT					/* 부가세 */
+FROM TBPRJ_PXCOND_DTLS A			/* 기성내역 */
+LEFT JOIN TBCTR_CNTRCT C ON C.CNTRCT_NO = A.CNTRCT_NO
+<!-- 
+LEFT JOIN TBPRJ_PXCOND_DTLS D			/* TODO: 계약 - 선금정산금액 관리(추가예정) */
+  ON D.BSNS_CODE = A.BSNS_CODE		/* 사업코드 */
+ AND D.CNTRCT_NO = A.CNTRCT_NO		/* 계약번호 */
+ AND D.PXCOND_SE = A.PXCOND_SE		/* 기성구분 */
+ AND D.ODR = A.ODR					/* 차수 */
+-->
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A.CNTRCT_NO = #CNTRCT_NO#			/* 계약번호 */
+<isNotEmpty property="PXCOND_SE" >
+  AND A.PXCOND_SE = #PXCOND_SE#			/* 기성구분 */
+</isNotEmpty>
+ORDER BY 1,2,3,4
+	</select>
+
+</sqlMap>

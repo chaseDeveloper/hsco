@@ -1,0 +1,711 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="COM000000_SQL">
+
+<!--
+SQL File Name : COM000000_SQL.xml
+Description : PMS공통
+Modification Information
+수정일			수정자		Version	Query Id
+2015.09.01	정윤원		1.0		최초 생성
+2015.09.02	이상준		1.1		가상계좌관련 쿼리 추가
+-->
+	
+	<!-- 
+		가상계좌 등록 
+	  	IN_CRT_DIV    	IN VA_MAST.CRT_DIV%TYPE,   					 부서구분( SL:주택, LN:토지, RN:영구임대 관리비외, MA:영구임대 관리비)
+	  	IN_BANK_CD    	IN VA_MAST.BANK_CD%TYPE,   					 은행코드
+	  	IN_CUST_ID    	IN TBSLS_HCNTRCTR.CNTRCTR_NO%TYPE, 			 계약자정보( TBSLS_HCNTRCTR )
+	  	IN_HOUSE_CODE  	IN TBRNT_RENT_HOUSE.RENT_HOUSE_CODE%TYPE, 	 영구임대주택마스터(TBRNT_RENT_HOUSE)
+	  	IN_ACCT_DIV   	IN VA_MAST.OPT1%TYPE,              			 작업구분('1' - 임대료 전용계좌 )
+	  	IN_FIRST_ENTRY 	IN TBSLS_HCNTRCTR.REGISTER_ID%TYPE,  		 REGISTER_ID
+	  	IN_BJ_YN  VARCHAR2  := ' ' 									 보증금전용계좌 등록
+	-->
+	<parameterMap id="speva_mast_u_param" class="java.util.HashMap">
+		<parameter property="IN_CRT_DIV" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="IN_BANK_CD" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="IN_CUST_ID" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="IN_HOUSE_CODE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="IN_ACCT_DIV" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="IN_FIRST_ENTRY" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="IN_BJ_YN" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	</parameterMap>
+	
+	
+	<!-- 사원정보 목록조회 -->
+	<select id="COM000000DAO.selectDeptCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+           SELECT   
+       	         T1.RSPOFC_SE      AS RSPOFC_SE
+                ,T1.HR_CLSF_SE	   AS HR_CLSF_SE
+                ,T1.JSSFC_SE      AS JSSFC_SE
+                ,T1.PAY_CLSF_SE   AS PAY_CLSF_SE
+                ,T1.DTY_SE        AS DTY_SE
+                ,T1.EMPNO         AS EMPNO
+		        ,T1.EMPNM         AS EMPNM
+		        ,T1.DEPT_CODE     AS DEPT_CODE
+		        ,T2.DEPT_NM       AS DEPT_NM
+      	        ,T1.ECNY_DE       AS ECNY_DE
+		        ,T1.ADRES         AS ADRES
+		        ,T1.STDR_DE       AS STDR_DE
+		        ,T1.TELNO_2	   AS TELNO_2
+                ,T1.TELNO_1	   AS TELNO_1
+                ,T1.EMAIL         AS EMAIL
+                ,T1.STTUS_SE      AS STTUS_SE
+                ,T1.RETIRE_DE     AS RETIRE_DE      
+                ,( SELECT CODE_NM 
+                     FROM TBCOM_CMMN_CODE 
+                    WHERE GRP_CODE = 'HRM002'  
+                      AND USE_AT = '1' 
+                      AND CODE = T1.STTUS_SE
+                  ) AS STTUS_SE_NM
+           FROM TBHRM_HR_MASTR T1
+               ,VWHRM_DEPT T2
+          WHERE 1 =1 
+            AND T1.RETIRE_DE IS NULL        
+            AND T1.DEPT_CODE = T2.DEPT_CODE	
+	        AND T2.USE_AT    = '1'		
+	        AND T2.DEPT_LEVEL_SE IN ('1','2')
+			]]>
+		<isNotEmpty property="EMPNO">
+			AND T1.EMPNO  LIKE  #EMPNO#  ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="EMPNM">
+			AND T1.EMPNM  LIKE  #EMPNM#  ||'%'
+		</isNotEmpty>
+			ORDER BY T2.DEPT_NM
+			   ,T1.EMPNO
+			   ,T1.EMPNM
+               ,T1.HR_CLSF_SE
+               ,T1.EMPNM        	     
+    </select>
+    
+    <!-- 쿼리명 : 공통코드 목록 조회
+	설명 : 공통코드 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.17	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.17
+	-->
+    <select id="COM000000DAO.selectComCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT /* COM000000DAO.selectComCodeList 공통코드 목록 조회 */
+		       '0' AS CHK									/* 선택(기본값) */
+		     , a.GRP_CODE									/* 그룹코드 */
+		     , a.CODE										/* 코드 */
+		     , a.CODE_NM									/* 코드명 */
+		     , '['||a.CODE||']'||a.CODE_NM AS ALL_CODE_NM	/* 코드 코드명 */
+		     , a.CODE_CN									/* 코드내용 */
+		     , a.CHRCTR_PREPAR_VALUE_0						/* 문자예비값0 */
+		     , a.CHRCTR_PREPAR_VALUE_1						/* 문자예비값1 */
+		     , a.CHRCTR_PREPAR_VALUE_2						/* 문자예비값2 */
+		     , a.CHRCTR_PREPAR_VALUE_3						/* 문자예비값3 */
+		     , a.CHRCTR_PREPAR_VALUE_4						/* 문자예비값4 */
+		     , a.INTGR_PREPAR_VALUE							/* 정수예비값 */
+		     , a.MSTK_PREPAR_VALUE							/* 실수예비값 */
+		     , a.CODE_ETC_1									/* 코드기타1 */
+		     , a.CODE_ETC_2									/* 코드기타2 */
+		     , a.CODE_ETC_3									/* 코드기타3 */
+		  FROM TBCOM_CMMN_CODE a		/* 공통코드 */
+		 WHERE 1 = 1
+    	   AND a.GRP_CODE = #GRP_CODE#
+    	 <isNotEmpty property="USE_AT">
+    	   AND a.USE_AT = #USE_AT#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="CHRCTR_PREPAR_VALUE_0">
+    	   AND a.CHRCTR_PREPAR_VALUE_0 = #CHRCTR_PREPAR_VALUE_0#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="CHRCTR_PREPAR_VALUE_1">
+    	   AND a.CHRCTR_PREPAR_VALUE_1 = #CHRCTR_PREPAR_VALUE_1#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="CHRCTR_PREPAR_VALUE_2">
+    	   AND a.CHRCTR_PREPAR_VALUE_2 = #CHRCTR_PREPAR_VALUE_2#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="CHRCTR_PREPAR_VALUE_3">
+    	   AND a.CHRCTR_PREPAR_VALUE_3 = #CHRCTR_PREPAR_VALUE_3#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="CHRCTR_PREPAR_VALUE_4">
+    	   AND a.CHRCTR_PREPAR_VALUE_4 = #CHRCTR_PREPAR_VALUE_4#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="INTGR_PREPAR_VALUE">
+    	   AND a.INTGR_PREPAR_VALUE = #INTGR_PREPAR_VALUE#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="MSTK_PREPAR_VALUE">
+    	   AND a.MSTK_PREPAR_VALUE = #MSTK_PREPAR_VALUE#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="CODE_ETC_1">
+    	   AND a.CODE_ETC_1 = #CODE_ETC_1#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="CODE_ETC_2">
+    	   AND a.CODE_ETC_2 = #CODE_ETC_2#
+    	 </isNotEmpty>
+    	 <isNotEmpty property="CODE_ETC_3">
+    	   AND a.CODE_ETC_3 = #CODE_ETC_3#
+    	 </isNotEmpty>
+    	 ORDER BY a.CODE_ORDR
+    </select>
+    
+    <!-- 쿼리명 : 업무구분별 서식목록 조회
+	설명 : 업무구분멸 서식목록 조회
+	수정일  		수정자  	수정내용
+	2016.02.16	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.16
+	-->
+    <select id="COM000000DAO.selectIssuFormatList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT /* 민원서식 목록 조회 */
+		       '0' AS CHK
+		     , a.JOB_SE			/* 업무구분 (판매_주택/판매_토지/임대_영구/임대_매입/임대_전세…) */
+			 , a.JOB_KEY		/* 업무구분에 따른 코드(판매_토지 : 토지코드, 그 외 : 주택코드) */
+			 , a.FORMAT_SE		/* 서식구분 (보고서/안내문/문자) */
+			 , a.FORMAT_CODE	/* 서식코드 (분양계약서/임대계약서…) */
+			 , a.FORMAT_ODR		/* 서식차수 */
+			 , a.FORMAT_SN		/* 서식일련번호 */
+			 , a.FORMAT_CN		/* 서식내용 */
+		     , '[' || a.FORMAT_CODE || '] '|| a.FORMAT_CN AS FORMAT_CN_ALL
+			 , a.USE_AT			/* 사용여부 */
+		  FROM TBPMS_FORMAT_MANAGE a	/* 서식관리 */
+		 WHERE 1 = 1
+		   AND a.USE_AT = '1'
+		   AND a.JOB_SE = #JOB_SE#
+		 <isNotEmpty property="JOB_KEY">
+		   AND a.JOB_KEY = #JOB_KEY#
+		 </isNotEmpty>
+    </select>
+    
+    <!-- 쿼리명 : 계약자별 서식 발급이력 목록 조회
+	설명 : 계약자별 서식 발급이력 목록 조회
+	수정일  		수정자  	수정내용
+	2016.02.16	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.16
+	-->
+	<select id="COM000000DAO.selectIssuFormatLogList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT /* COM000000DAO.selectIssuFormatLogList 민원서류 발급이력 조회 */
+			   ROWNUM AS NO				/* 순번 */
+			 , a.JOB_SE					/* 업무구분 */
+		     , c.CODE_NM AS JOB_SE_NM	/* 업무구분명 */
+			 , '['||a.JOB_SE||'] '||c.CODE_NM AS JOB_SE_NM_ALL	/* 업무구분명 */
+		     , a.CNTRCTR_NO				/* 계약자번호 */
+		     , a.FORMAT_SE				/* 서식구분 보고서(01)/안내문(02)/문자(03) */
+		     , c.CODE_NM AS FORMAT_SE_NM	/* 서식구분명 */
+			 , '['||a.FORMAT_SE||'] '||c.CODE_NM AS FORMAT_SE_NM_ALL	/* 서식구분명 */
+		     , a.ISSU_SN				/* 발급일련번호 */
+		     , a.FORMAT_CODE			/* 서식코드 분양계약서/임대계약서… */
+		     , a.ISSU_NO				/* 발급번호 */
+		     , a.ISSUER					/* 발급자 */
+		     , a.REGISTER_ID
+		     ,'[' || REGISTER_ID || '] '|| SFSAL_GETEMPNO_01(REGISTER_ID) AS ISSUER_NM	/* 발급자명 */
+		     , a.ISSU_DT				/* 발급일시 */
+		     , TO_CHAR(a.ISSU_DT, 'YYYYMMDDHH24MISS') AS ISSU_DATE		/* 발급일시 */
+		     , a.ISSU_PRPOS				/* 발급용도 */
+		FROM TBPMS_FORMAT_ISSU_LOG a	/* 서식발급로그 */
+		   , (SELECT CODE
+		   		   , CODE_NM
+		        FROM TBCOM_CMMN_CODE
+		       WHERE GRP_CODE = 'PCOM01'	/* PMS서식업무구분코드 */
+		      ) c
+		    , (SELECT CODE
+		   		   , CODE_NM
+		        FROM TBCOM_CMMN_CODE
+		       WHERE GRP_CODE = 'PCOM02'	/* PMS서식구분 */
+		      ) d
+		WHERE 1 = 1
+		  AND a.JOB_SE = c.CODE(+)
+		  AND a.FORMAT_SE = d.CODE(+)
+		  AND a.JOB_SE = #JOB_SE#			/* 업무구분 */
+		<isNotEmpty property="FORMAT_SE">
+		  AND a.FORMAT_SE = #FORMAT_SE#		/* 서식구분 보고서(01)/안내문(02)/문자(03) */
+		</isNotEmpty>
+		<isNotEmpty property="FORMAT_CODE">
+		  AND a.FORMAT_CODE = #FORMAT_CODE#	/* 서식코드 */
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCTR_NO">
+		  AND a.CNTRCTR_NO = #CNTRCTR_NO#	/* 계약자번호 */
+		</isNotEmpty>
+		 ORDER BY ISSU_DT DESC
+	</select>
+	
+	<!-- 쿼리명 : 계약자별 서식 발급이력 저장
+	설명 : 계약자별 서식 발급이력 저장
+	수정일  		수정자  	수정내용
+	2016.02.25	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.25
+	-->
+	<insert id="COM000000DAO.insertIssuFormatLog" parameterClass="java.util.HashMap">
+		INSERT INTO TBPMS_FORMAT_ISSU_LOG
+		(                                   
+		      JOB_SE
+		    , CNTRCTR_NO
+		    , ISSU_SN
+		    , FORMAT_SE
+		    , FORMAT_CODE
+		    , ISSU_NO
+		    , ISSU_PRPOS
+		    , ISSUER
+		    , ISSU_DT
+		    , ISSU_TY
+		    , ISSU_COURS
+		    , ZIP_CODE
+		    , ADRES
+		    , ADRES_DETAIL
+		    , FAXNO
+		    , REGISTER_ID
+		    , REGIST_DT
+		    , UPDUSR_ID
+		    , UPDT_DT
+		)VALUES(
+		      #JOB_SE#
+		    , #CNTRCTR_NO#
+		    , NVL((SELECT MAX(ISSU_SN) FROM TBPMS_FORMAT_ISSU_LOG WHERE JOB_SE = #JOB_SE#), 0) + 1
+		    , #FORMAT_SE#
+		    , #FORMAT_CODE#
+		    , #ISSU_NO#
+		    , #ISSU_PRPOS#
+		    , #ISSUER#
+		    , #ISSU_DT#
+		    , #ISSU_TY#                  
+		    , #ISSU_COURS#
+		    , #ZIP_CODE#
+		    , #ADRES#
+		    , #ADRES_DETAIL#
+		    , #FAXNO#
+		    , #S_USER_ID#
+		    , SYSDATE
+		    , #S_USER_ID#
+		    , SYSDATE
+		)
+	</insert>
+       
+	<!-- 쿼리명 : 사이버브랜치용 은행코드 목록 조회
+	설명 : 사이버브랜치(가상계좌)용 은행코드 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.02	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.02
+	-->
+    <select id="COM000000DAO.selectCyberBankCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* COM000000DAO.selectCyberBankCodeList 은행코드(사이버브랜치용) 조회 */
+			   GRP_CODE_SN								/* 그룹코드일련번호 */
+		     , GRP_CODE									/* 그룹코드 */
+		     , CODE										/* 코드 */
+			 , CODE_NM									/* 코드명 */
+		     , '['||CODE||']'||CODE_NM AS ALL_CODE_NM	/* [코드]코드명 */
+		     , USE_AT									/* 사용여부 */
+		  FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		 WHERE 1 = 1
+		   AND GRP_CODE = 'COM021'			/* 은행코드 */
+		   AND CHRCTR_PREPAR_VALUE_0 = '1'	/* 사이버브랜치용 */
+		   AND USE_AT = '1'					/* 사용여부 */
+		 ORDER BY CHRCTR_PREPAR_VALUE_1
+    </select>
+    
+    <!-- 쿼리명 : 가상계좌 발급 목록 조회
+	설명 : 계약번호별 가상계좌 발급 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.02	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.02
+	-->
+    <select id="COM000000DAO.selectVaMastList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* COM000000DAO.selectVaMastList 가상계좌 발급목록 */
+			   a.BANK_CD					/* 은행코드 */
+		     , (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		         WHERE GRP_CODE = 'COM021'	/* 은행코드 */
+		           AND CODE = a.BANK_CD
+		       ) AS BANK_NM					/* 은행명 */
+		     , a.VACCT_NO					/* 가상계좌 번호 */
+		     , a.CUST_CD					/* 영업점 코드(계약번호) */
+		     , a.CUST_NM					/* 영업점 명 */
+		     , a.CRT_DIV					/* 부서구분(거래구분) */
+		     , a.STAT_CD					/* 계좌상태 */
+		     , DECODE(a.STAT_CD, '0', '미사용',
+		                 		 '1', '사용(정상)',
+		                 		 '2', '해지') AS STAT_NM	/* 계좌상태명 */
+		     , a.INP_DT						/* 신규일시 */
+		     , a.UPD_DT						/* 수정일시 */
+		     , a.CLS_DT						/* 해지일시 */
+		     , a.CUR_BAL					/* 최종잔액 */
+		     , a.LST_IN_DT					/* 최종입금일시 */
+		     , a.LST_OUT_DT					/* 최종차감일시 */
+		     , a.EBS_SEND_GB				/* 이모아전송여부 */
+		     , a.EBS_SEND_DT				/* 이모아전송일시 */
+			 , (SELECT USER_NM
+		            FROM TBCOM_USER			/* 사용자 */
+		           WHERE USER_ID = a.EXT1
+		       ) AS PUT_USER_NM				/* 입력자 성명 */
+		     , a.EXT1						/* 비고 */
+		     , NVL(a.OPT1, '0') AS OPT1		/* 임대료지정계좌 */
+		     , NVL(a.OPT2, '0') AS OPT2		/* 보증금지정계좌 */
+		     , NVL(a.OPT3, '0') AS OPT3		/* 주거급여전용계좌 */
+		     , a.FIRST_DATE					/* 최초등록일시 */
+		     , a.FIRST_ENTRY				/* 최초등록자 */
+		     , (SELECT USER_NM
+		          FROM TBCOM_USER			/* 사용자 */
+		     	 WHERE USER_ID = a.FIRST_ENTRY
+		       ) AS FIRST_ENTRY_NM
+		     , a.LAST_ENTRY					/* 수정자 */
+		     , (SELECT USER_NM
+		          FROM TBCOM_USER			/* 사용자 */
+		         WHERE USER_ID = a.LAST_ENTRY
+		       ) AS LAST_ENTRY_NM
+		     , a.LAST_DATE					/* 최종수정일시 */
+		    FROM VA_MAST a					/* 가상계좌 계좌원장 */
+		   WHERE a.CRT_DIV = #CRT_DIV#		/* 부서구분(거래구분) */
+		     AND a.CUST_CD = #CUST_CD#		/* 영업점 코드(계약번호) */
+		   ORDER BY a.BANK_CD
+    </select>
+    
+    <!-- 쿼리명 : 가상계좌 입금내역 목록 조회
+	설명 : 계약번호별 가상계좌 입금내역 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.02	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.02
+	-->
+    <select id="COM000000DAO.selectVaReceiptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* COM000000DAO.selectVaReceiptList 입금내역 조회 */
+			   a.CRT_DIV					/* 계약구분 */
+			 , (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		         WHERE GRP_CODE = 'COM027' 	/* 가상계좌부서구분 */
+		           AND CODE = a.CRT_DIV) AS CRT_DIV_NM		/* 계약구분명 */
+		     , a.BANK_CD					/* 은행코드 */
+		     , (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		         WHERE GRP_CODE = 'COM021'	/* 은행코드 */
+		           AND CODE = a.BANK_CD
+		       ) AS BANK_NM					/* 은행명 */
+		     , a.VACCT_NO    				/* 가상계좌번호 */
+		     , a.CRT_ID						/* 계약자번호(계약번호)*/
+		     , a.CRT_ID AS CUST_CD			/* 계약자번호(계약번호)*/
+		     , a.IN_DATE       				/* 수납일자 */
+		     , TO_CHAR(a.IN_DATE, 'YYYYMMDD') AS IN_DT	/* 수납일 */
+		     , DECODE(a.CRT_DIV, 'SL', (SELECT y.CSTMR_NM||'('||x.HOUSE_CODE||'-'||x.DONG||'-'||x.HO||')'
+		     							  FROM TBSLS_HCNTRCTR x  	/* 주택계약자 */
+		                                     , TBSLS_HOUSE_CSTMR y	/* 주택고객 */
+		     						     WHERE x.HOUSE_CSTMR_NO = y.HOUSE_CSTMR_NO	/* 주택고객번호 */
+		                                   AND x.CNTRCTR_NO = a.CRT_ID				/* 계약자번호(계약번호) */
+		     						   )
+		     				   , 'LN', (SELECT y.CSTMR_NM||'('||x.LAD_CODE||'-'||x.BLCK||'-'||x.LOT||'-'||x.LOT_TY||')'
+		                                  FROM TBSLS_LCNTRCTR x		/* 토지계약자 */
+		                                     , TBSLS_LAD_CSTMR y	/* 토지고객 */
+		                       	         WHERE x.LAD_CSTMR_NO = y.LAD_CSTMR_NO		/* 토지고객번호 */
+		                                   AND x.CNTRCTR_NO = a.CRT_ID	/* 계약자번호(계약번호) */
+		                       		   )
+		                       , 'RN', (SELECT y.NM||'('||x.RENT_HOUSE_CODE||'-'||x.DONG||'-'||x.HO||')'
+		                       			 FROM TBRNT_RENT_CNTRCT x 			/* 임대계약정보 */
+		                                    , TBRNT_PRMANENT_RENT_CSTMR y	/* 영구임대고객 */
+		                       			WHERE x.PRMANENT_CSTMR_NO = y.PRMANENT_CSTMR_NO	/* 영구고객번호 */
+		                                  AND x.CNTRCTR_NO = a.CRT_ID		/* 계약자번호(계약번호)*/
+		                       		   )
+		                       , 'MA', (SELECT y.NM||'('||x.RENT_HOUSE_CODE||'-'||x.DONG||'-'||x.HO||')'
+		                       			 FROM TBRNT_RENT_CNTRCT x 			/* 임대계약정보 */
+		                                    , TBRNT_PRMANENT_RENT_CSTMR y	/* 영구임대고객 */
+		                       			WHERE x.PRMANENT_CSTMR_NO = y.PRMANENT_CSTMR_NO	/* 영구고객번호 */
+		                                  AND x.CNTRCTR_NO = a.CRT_ID		/* 계약자번호(계약번호) */
+		                       		   )
+		                       , a.CRT_DIV) AS CRT_INFO     /* 계약정보 */
+		     , a.PAYEND_DATE				/* 납입기한일자 */
+		     , TO_CHAR(a.PAYEND_DATE, 'YYYYMMDD') AS PAYEND_DT	/* 납입기한일 */
+		     , a.BILL_AMT       			/* 청구금액(입금액) */
+		     , a.CORT_CODE					/* 납부코드 */
+		     , DECODE(a.CRT_DIV, 'SL', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HOU0A1' AND CODE = a.CORT_CODE)
+		                       , 'LN', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAD0A1' AND CODE = a.CORT_CODE)
+		                       , 'RN', DECODE(a.CORT_CODE, 'RN', '임대료', 'R0', '보증금', 'T2', '소송비', a.CORT_CODE)
+		                       , 'MA', DECODE(a.CORT_CODE, 'MA', '관리비', a.CORT_CODE)
+		     		 ) AS CORT_CODE_NM   	/* 납부코드명 */
+		     , a.REC_CLASS					/* 납부구분 */
+		     , DECODE(a.CRT_DIV, 'SL', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HOU0A8' AND CODE = a.REC_CLASS)
+		                       , 'LN', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAD0A8' AND CODE = a.REC_CLASS)
+		                       , 'RN', '[0]정상'
+		                       , 'MA', '[0]정상'
+		     		 ) AS REC_CLASS_NM     	/* 납부구분명 */
+		     , a.REC_SEQ					/* 납부순번 */
+		     , DECODE(a.CRT_DIV, 'SL', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HOU0A9' AND CODE = a.REC_SEQ)
+		     				   , 'LN', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAD0A9' AND CODE = a.REC_SEQ)
+		                       , 'RN','[0]정상'
+		                       , 'MA','[0]정상'
+					 ) AS REC_SEQ_NM        /* 납부순번 */
+		  FROM VA_RECEIPT a 				/* 가상계좌 수납내역 */
+		 WHERE 1=1
+		   AND a.CRT_DIV = #CRT_DIV#		/* 부서구분(거래구분) */
+		   AND a.CRT_ID = #CUST_CD#			<!--   영업점 코드(계약번호) -->
+           <isNotEmpty property="BANK_CD">
+		   AND a.BANK_CD = #BANK_CD#
+		   </isNotEmpty>
+           <isNotEmpty property="VACCT_NO">
+		   AND a.VACCT_NO = #VACCT_NO#
+		   </isNotEmpty>
+		 ORDER BY a.IN_DATE DESC
+		 		, a.PAYEND_DATE
+    </select>
+  
+	<!-- 쿼리명 : 가상계좌 납부진행내역 목록 조회
+	설명 : 계약번호별 가상계좌 납부진행내역 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.02	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.02
+	-->
+    <select id="COM000000DAO.selectVaBillList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* COM000000DAO.selectVaBillList 납부진행내역 조회 */
+			   a.BANK_CD					/* 은행코드 */
+		     , (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		         WHERE GRP_CODE = 'COM021'	/* 은행코드 */
+		           AND CODE = a.BANK_CD
+		       ) AS BANK_NM					/* 은행명 */
+		     , a.VACCT_NO    				/* 가상계좌번호 */
+		     , a.TR_DATE    				/* 거래일자 */
+		     , a.TR_SDATE    				/* 거래시작일 */
+		     , a.TR_EDATE    				/* 거래종료일 */
+		     , a.BILL_AMT    				/* 청구금액 */
+		     , a.IN_DATE    				/* 입금일자 */
+		     , a.CRT_DIV    				/* 계약구분 */
+		     , a.CRT_ID    					/* 계약번호 */
+		     , a.CRT_ID AS CUST_CD			/* 계약번호 */
+		     , a.PUT_USER_ID    			/* 등록자 */
+		     , a.PUT_DATE    				/* 등록일시 */
+		     , TO_CHAR(a.PUT_DATE, 'YYYYMMDD') AS PUT_DT    /* 등록일자 */
+		     , a.EXT1        				/* 비고 */
+		     , (SELECT USER_NM
+		            FROM TBCOM_USER			/* 사용자 */
+		           WHERE USER_ID = a.PUT_USER_ID
+		       ) AS PUT_USER_NM				/* 입력자(등록자) 성명 */
+		  FROM VA_BILL a    				/* 가상계좌 청구내역 */
+		 WHERE a.CRT_DIV = #CRT_DIV#    	/* 계약구분  */
+		   AND a.CRT_ID = #CUST_CD#			/* 영업점 코드(계약번호) */
+         <isNotEmpty property="BANK_CD">
+		   AND a.BANK_CD = #BANK_CD#
+		 </isNotEmpty>
+         <isNotEmpty property="VACCT_NO">
+		   AND a.VACCT_NO = #VACCT_NO#
+		 </isNotEmpty>		   
+		 ORDER BY a.BANK_CD
+    </select>
+
+	<!-- 쿼리명 : 가상계좌 납부진행상세내역 목록 조회
+	설명 : 계약번호별 가상계좌 납부진행상세내역 목록 조회
+	수정일  		수정자  	수정내용
+	2015.09.02	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.02
+	-->
+    <select id="COM000000DAO.selectVaBillDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* COM000000DAO.selectVaBillDetailList 납부진행 상세내역 조회 */
+			   a.BANK_CD		/* 은행코드 */
+		     , (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		         WHERE GRP_CODE = 'COM021'
+		           AND CODE = a.BANK_CD
+		       ) AS BANK_NM		/* 은행명 */
+		     , a.VACCT_NO		/* 가상계좌번호 */
+		     , a.TR_DATE		/* 거래일자 */
+		     , a.TR_NO			/* 거래일련번호 */
+			 , a.CORT_CODE		/* 납부코드 */
+		     , DECODE(a.CRT_DIV, 'SL', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HOU0A1' AND CODE = a.CORT_CODE)
+		                       , 'LN', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAD0A1' AND CODE = a.CORT_CODE)
+		                       , 'RN', DECODE(a.CORT_CODE, 'RN', '임대료', 'R0', '보증금', 'T2', '소송비', a.CORT_CODE)
+		                       , 'MA', DECODE(a.CORT_CODE, 'MA', '관리비', a.CORT_CODE)
+		     		 ) AS CORT_CODE_NM   /* 납부코드명 */
+		     , a.REC_CLASS		/* 납부구분 */
+		     , DECODE(a.CRT_DIV, 'SL', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HOU0A8' AND CODE = a.REC_CLASS)
+		                       , 'LN', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAD0A8' AND CODE = a.REC_CLASS)
+		                       , 'RN', '[0]정상'
+		                       , 'MA', '[0]정상'
+		     		 ) AS REC_CLASS_NM     /* 납부구분명 */
+		     , a.REC_SEQ		/* 납부순번 */
+		     , DECODE(a.CRT_DIV, 'SL', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HOU0A9' AND CODE = a.REC_SEQ)
+		     				   , 'LN', (SELECT '['||CODE||']'||CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAD0A9' AND CODE = a.REC_CLASS)
+		                       , 'RN','[0]정상'
+		                       , 'MA','[0]정상'
+					 ) AS REC_SEQ_NM        /* 납부순번 */
+		     , a.BILL_SEQ		/* 청구순번 */
+		     , a.CRT_DIV		/* 계약구분 */
+		     , a.CRT_ID			/* 계약번호 */
+		     , a.CRT_ID AS CUST_CD	/* 계약번호 */
+		     , a.PAYEND_DATE	/* 납입기한 */
+		     , TO_CHAR(a.PAYEND_DATE, 'YYYYMMDD') AS PAYEND_DT	/* 납입기한일 */
+		     , a.BILL_AMT		/* 청구금액 */
+		     , a.PAY_AMT		/* 납부대상금액 */
+		     , a.SALE_AMT		/* 차감금액 */
+		     , a.INT_AMT		/* 연체금액 */
+		     , a.PUT_USER_ID	/* 등록자 */
+		     , a.PUT_DATE		/* 등록일 */
+		     , TO_CHAR(a.PUT_DATE, 'YYYYMMDD') AS PUT_DT	/* 등록일 */
+		     , a.EXT1			/* 비고 */
+		     , a.PAY_NUM		/* 납부번호 */
+		     , a.LOSS_AMT		/* 대손충당금 */
+		     , a.LSALE_AMT		/* 대손충당금(감액) */
+		     , a.OPT2			/* 보증금전용 */
+		  FROM VA_BILL_DETAIL a	/* 가상계좌 청구내역(상세) */
+		 WHERE 1 = 1
+		   AND a.CRT_DIV = #CRT_DIV#    	/* 계약구분  */
+		   AND a.CRT_ID = #CUST_CD#			/* 영업점 코드(계약번호) */
+		 <isNotEmpty property="BANK_CD">
+		   AND a.BANK_CD = #BANK_CD#
+		 </isNotEmpty>
+		 <isNotEmpty property="VACCT_NO">
+		   AND a.VACCT_NO = #VACCT_NO#
+		 </isNotEmpty>
+		 <isNotEmpty property="TR_DATE">
+		   AND a.TR_DATE = #TR_DATE#
+		 </isNotEmpty>
+		 ORDER BY a.BANK_CD		/* 은행코드 */
+		 	 , a.VACCT_NO		/* 가상계좌번호 */
+		     , a.TR_DATE		/* 거래일자 */
+		     , a.TR_NO			/* 거래일련번호 */
+		     , a.CORT_CODE		/* 납부코드 */
+    </select>
+    
+    <!-- 쿼리명 : 가상계좌 임대료 지정계좌 조회
+	설명 : 은행별 가상계좌중 임대료 지정계좌 존재여부 확인
+	수정일  		수정자  	수정내용
+	2015.09.02	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.02
+	-->
+    <select id="COM000000DAO.selectOptMastList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    <![CDATA[	
+	    SELECT /* COM000000DAO.selectOptMastList 가상계좌 임대료 지정계좌 조회 */
+	           a.BANK_CD					/* 은행코드 */
+	         , (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		         WHERE GRP_CODE = 'COM021'
+		           AND CODE = a.BANK_CD
+		       ) AS BANK_NM					/* 은행명 */
+	         , a.VACCT_NO					/* 가상계좌번호 */
+	         , a.CRT_DIV					/* 부서구분(계약구분) */
+	         , a.CUST_CD					/* 영업점코드(계약번호) */
+	         , a.OPT1						/* 임대료지정계좌(대표계좌) */
+		  FROM VA_MAST a
+		 WHERE 1 = 1
+		   AND a.BANK_CD = #BANK_CD#
+		   AND a.VACCT_NO <> #VACCT_NO#
+		   AND a.CRT_DIV = #CRT_DIV#
+		   AND a.CUST_CD = #CUST_CD#
+		   AND NVL(a.OPT1,'0') = '1'
+		]]>
+    </select>
+    
+    <!-- 쿼리명 : 가상계좌원장 옵션정보 변경
+	설명 : 가상계좌원장 옵션정보 변경
+	수정일  		수정자  	수정내용
+	2015.09.03	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.03
+	-->
+	<update id="COM000000DAO.updateVaMastOptionInfo" parameterClass="java.util.HashMap">
+		UPDATE /* COM000000DAO.updateVaMastOptionInfo 가상계좌원장 옵션정보 변경 */
+			   VA_MAST									/* 가상계좌 계좌원장 */
+		   SET OPT1 = #OPT1#							/* 임대료지정계좌 */
+		     , OPT2 = #OPT2#							/* 보증금지정계좌 */
+		     , OPT3 = #OPT3#							/* 주거급여전용계좌 */
+		     , UPD_DT = TO_CHAR(SYSDATE,'YYYY-MM-DD')	/* 수정일시 */
+		     , LAST_ENTRY = #S_USER_ID#					/* 수정자 */
+		     , LAST_DATE  = SYSDATE						/* 최종수정일시 */
+		 WHERE 1 = 1
+		   AND CRT_DIV = #CRT_DIV#						/* 계약구분 */
+		   AND BANK_CD = #BANK_CD#						/* 은행코드 */
+		   AND VACCT_NO = #VACCT_NO#					/* 가상계좌번호 */
+		   AND CUST_CD = #CUST_CD#						/* 계약번호 */
+	</update>
+
+	<!-- 쿼리명 : 가상계좌원장 추가등록(단건)
+	설명 : 가상계좌원장 추가등록(단건)
+	수정일  		수정자  	수정내용
+	2015.09.03	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2015.09.03
+	-->
+	<procedure id="COM000000DAO.SP_VA_MAST_U" parameterMap="speva_mast_u_param">
+		{ call SP_VA_MAST_U(?, ?, ?, ?, ?, ?, ?) }
+	</procedure>
+
+
+
+
+    <!-- 쿼리명 : 각종현황 및 분석표출력 결의서번호 조회
+	설명 : 각종현황 및 분석표출력 결의서번호 조회
+	수정일  		수정자  	수정내용
+	2016.10.31	이광원	최초생성
+	작성자 : 이광원
+	최초작성일 : 2016.10.31
+	-->
+    <select id="COM000000DAO.selectDecsn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+	    SELECT INNER_SANCTN_NO
+	      FROM TBPMS_DECSN_SANCTN
+	     WHERE 1=1
+	       AND JOB_SE = #JOB_SE#
+	       AND FORMAT_SE = #FORMAT_SE#
+	       AND DECSN_YM = #DECSN_YM#
+	       <isNotEmpty property="DECSN_DE">
+	       AND DECSN_DE = #DECSN_DE#
+	       </isNotEmpty>
+    </select>
+
+	<!-- 쿼리명 : 각종현황 및 분석표출력 결의서번호 저장
+	설명 : 각종현황 및 분석표출력 결의서번호 저장
+	수정일  		수정자  	수정내용
+	2016.10.31	이광원	최초생성
+	작성자 : 이광원
+	최초작성일 : 2016.10.31
+	-->
+	<insert id="COM000000DAO.insertDecsn" parameterClass="java.util.HashMap">
+
+	  MERGE INTO TBPMS_DECSN_SANCTN
+	     USING DUAL
+	     ON (
+	      	  JOB_SE = #JOB_SE#     
+	      AND FORMAT_SE = #FORMAT_SE#
+	      AND DECSN_YM = #DECSN_YM#
+	      <isNotEmpty property="DECSN_DE">
+	      AND DECSN_DE = #DECSN_DE#
+	      </isNotEmpty> 
+	     )
+	 WHEN MATCHED THEN
+	UPDATE SET
+	      INNER_SANCTN_NO = #INNER_SANCTN_NO#
+	    , UPDUSR_ID = #S_USER_ID#
+	    , UPDT_DT = SYSDATE            
+	WHERE JOB_SE = #JOB_SE#     
+	      AND FORMAT_SE = #FORMAT_SE#
+	      AND DECSN_YM = #DECSN_YM#
+	      <isNotEmpty property="DECSN_DE">
+	      AND DECSN_DE = #DECSN_DE#
+	      </isNotEmpty>              
+	 WHEN NOT MATCHED THEN
+	INSERT(
+		     JOB_SE
+		   , FORMAT_SE
+		   , SN
+		   , DECSN_YM
+		   , DECSN_DE
+		   , ANACT_SE
+		   , BSNS_SE
+		   , BUDGET_ACNT_CODE
+		   , INNER_SANCTN_NO
+		   , REGISTER_ID
+		   , REGIST_DT
+		   , UPDUSR_ID
+		   , UPDT_DT
+		) VALUES (
+		     #JOB_SE#
+		   , #FORMAT_SE#
+		   , NVL((SELECT MAX(SN) FROM TBPMS_DECSN_SANCTN),0)+1 
+		   , #DECSN_YM#
+		   , #DECSN_DE#
+		   , #ANACT_SE#
+		   , #BSNS_SE#
+		   , #BUDGET_ACNT_CODE#
+		   , #INNER_SANCTN_NO#
+		   , #S_USER_ID#
+		   , SYSDATE
+		   , #S_USER_ID#
+		   , SYSDATE    
+		)     
+	</insert>
+
+</sqlMap>

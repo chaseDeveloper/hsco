@@ -1,0 +1,431 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM090802_SQL">	
+	
+	<!-- 복지포인트 테이블 추가점수항목 목록조회 -->
+	<select id="HRM090802DAO.selectScoreAditSe" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT   APPLC_YEAR   AS STDR_APPLC_YEAR
+		       , #APPLC_YEAR# AS APPLC_YEAR
+	           , NULL AS SN
+	           , NULL AS IEM_NM
+	           , NULL AS ADIT_SCORE
+	           , NULL AS RM
+	           , BASS_SCORE
+	           , WLFARE_SCORE_AMOUNT
+		  FROM TBHRM_WLFARE_SCORE_STDR
+		 WHERE APPLC_YEAR = (SELECT MAX(APPLC_YEAR) FROM TBHRM_WLFARE_SCORE_STDR WHERE APPLC_YEAR <= #APPLC_YEAR#)
+	UNION
+		SELECT   NULL AS STDR_APPLC_YEAR
+		       , NULL AS APPLC_YEAR
+	           , SN
+	           , IEM_NM
+	           , ADIT_SCORE
+	           , RM
+	           , NULL AS BASS_SCORE
+	           , NULL AS WLFARE_SCORE_AMOUNT
+		  FROM TBHRM_WLFARE_SCORE_STDR_ADIT t1
+		 WHERE APPLC_YEAR = (SELECT MAX(APPLC_YEAR) FROM TBHRM_WLFARE_SCORE_STDR WHERE APPLC_YEAR <= #APPLC_YEAR#)
+	]]>
+    </select>
+    
+    <!-- 복지포인트 테이블 상세 목록조회 -->
+    <select id="HRM090802DAO.selectScore" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+	        SELECT 
+					#APPLC_YEAR#                      AS APPLC_YEAR
+				   ,t2.EMPNO
+				   ,t2.EMPNM
+				   ,TO_NUMBER(t1.REAL_APPLC_MONTH)    AS REAL_APPLC_MONTH
+				   ,t1.REAL_WLFARE_SCORE
+				   ,NVL(t1.BASS_SCORE, 0)             AS BASS_SCORE
+				   ,NVL(t1.CNWK_SCORE, 0)             AS CNWK_SCORE
+				   ,NVL(t1.CNWK_YYCNT, t2.CNWK_YYCNT) AS CNWK_YYCNT
+				   ,NVL(t1.DNTMY_SCORE, 0)            AS DNTMY_SCORE
+				   ,NVL(t1.HEALTH_SCORE, 0)           AS HEALTH_SCORE
+				   ,t1.DNTMY_CO
+				   ,t1.RM
+				<isNotEmpty property="aditList">
+					<iterate property="aditList">
+					   ,NVL(t3.ADIT_$aditList[].SN$,0)        AS ADIT_$aditList[].SN$
+					   ,NVL(t3.ADIT_SCORE_$aditList[].SN$,0)  AS ADIT_SCORE_$aditList[].SN$
+					</iterate>
+				</isNotEmpty>
+				   ,t4.DEPT_NM
+				   ,t2.HR_CLSF_SE
+				   ,t2.SEXDSTN
+				   ,t2.ECNY_DE
+				   ,t2.BRTHDY
+				   ,t1.WLFARE_SCORE_AMOUNT
+			FROM TBHRM_WLFARE_SCORE t1
+			  LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			    ON  t1.EMPNO = t2.EMPNO 
+			  LEFT OUTER JOIN (
+				SELECT EMPNO
+				<isNotEmpty property="aditList">
+					<iterate property="aditList">
+					   ,NVL(MAX(DECODE(ADIT_IEM_SN, #aditList[].SN#, 1)),0)           AS ADIT_$aditList[].SN$
+					   ,NVL(MAX(DECODE(ADIT_IEM_SN, #aditList[].SN#, ADIT_SCORE)),0)  AS ADIT_SCORE_$aditList[].SN$
+					</iterate>
+				</isNotEmpty>
+				FROM TBHRM_WLFARE_SCORE_ADIT
+				WHERE APPLC_YEAR = #APPLC_YEAR#
+				GROUP BY EMPNO
+			  ) t3
+			    ON  t1.EMPNO      = t3.EMPNO
+			  LEFT OUTER JOIN VWHRM_DEPT t4
+			    ON t2.DEPT_CODE = t4.DEPT_CODE
+<![CDATA[
+			WHERE t1.APPLC_YEAR = #APPLC_YEAR#
+			  AND (SUBSTR(t2.ECNY_DE, 0, 4)  <= #APPLC_YEAR# OR t2.ECNY_DE IS NULL)
+			  AND (t2.RETIRE_DE IS NULL OR SUBSTR(t2.RETIRE_DE,0,4) > #APPLC_YEAR#)
+]]>
+			<isNotEmpty property="EMPNM">
+			  AND t2.EMPNM LIKE '%' || #EMPNM# || '%'
+			</isNotEmpty>
+			ORDER BY t4.SORT_ORDR, t2.JSSFC_SE, t2.DEPT_CODE, t2.HR_CLSF_SE, t2.EMPNM
+    </select>
+    
+    
+    <!-- 가족사항 조회 -->
+	<select id="HRM090802DAO.selectHrFamilyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			   EMPNO 
+		      ,SEQ
+		      ,FAMILY_RELATE_SE
+		      ,FAMILY_NM
+		      ,H_DECRYPT(IHIDNUM_ENCPT)    AS IHIDNUM_ENCPT
+		      ,SEXDSTN_SE
+		      ,BRTHDY
+		      ,ACDMCR_SE
+		      ,OCCP_NM
+		      ,NVL(TROBL_AT       , 0)   AS TROBL_AT
+		      ,NVL(SUPORT_AT      , 0)   AS SUPORT_AT
+		      ,NVL(ALLWNC_PYMNT_AT, 0)   AS ALLWNC_PYMNT_AT
+		      ,CNFIRM_AT
+		      ,TRUNC((MONTHS_BETWEEN(LAST_DAY(TO_DATE(#APPLC_YEAR#||'1231', 'YYYYMMDD')), TO_DATE(BRTHDY, 'YYYYMMDD')) - 1) / 12) AS AGE
+		FROM   TBHRM_HR_FAMILY
+		WHERE  EMPNO = #EMPNO#
+		ORDER BY FAMILY_RELATE_SE
+    </select>
+    
+    <!-- 복지포인트 테이블 입력 -->
+    <insert id="HRM090802DAO.scoreC" parameterClass="java.util.HashMap">
+		INSERT INTO TBHRM_WLFARE_SCORE(
+	            APPLC_YEAR
+	          , EMPNO
+	          , REAL_APPLC_MONTH
+	          , REAL_WLFARE_SCORE
+	          , BASS_SCORE
+	          , CNWK_SCORE
+	          , CNWK_YYCNT
+	          , DNTMY_SCORE
+	          , DNTMY_CO
+	          , RM
+	          , WLFARE_SCORE_AMOUNT
+	          , HEALTH_SCORE
+	          , REGISTER_ID
+	          , REGIST_DT
+	          , UPDUSR_ID
+	          , UPDT_DT
+		) VALUES (
+	            #APPLC_YEAR#
+	          , #EMPNO#
+	          , #REAL_APPLC_MONTH#
+	          , #REAL_WLFARE_SCORE#
+	          , #BASS_SCORE#
+	          , #CNWK_SCORE#
+	          , #CNWK_YYCNT#
+	          , #DNTMY_SCORE#
+	          , #DNTMY_CO#
+	          , #RM#
+	          , #WLFARE_SCORE_AMOUNT#
+	          , #HEALTH_SCORE#
+	          , #S_USER_ID#
+	          , SYSDATE
+	          , #S_USER_ID#
+	          , SYSDATE
+		)
+    </insert>
+
+
+    <!-- 복지포인트 테이블 수정 -->
+    <update id="HRM090802DAO.scoreU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBHRM_WLFARE_SCORE SET
+                  REAL_APPLC_MONTH    = #REAL_APPLC_MONTH#
+                , REAL_WLFARE_SCORE   = #REAL_WLFARE_SCORE#
+                , BASS_SCORE          = #BASS_SCORE#
+                , CNWK_SCORE          = #CNWK_SCORE#
+                , CNWK_YYCNT          = #CNWK_YYCNT#
+                , DNTMY_SCORE         = #DNTMY_SCORE#
+                , DNTMY_CO            = #DNTMY_CO#
+                , RM                  = #RM#
+                , WLFARE_SCORE_AMOUNT = #WLFARE_SCORE_AMOUNT#
+                , UPDUSR_ID		      = #S_USER_ID#
+                , UPDT_DT		      = SYSDATE
+            WHERE  APPLC_YEAR         = #APPLC_YEAR#
+              AND  EMPNO              = #EMPNO#
+        ]]>
+    </update>
+
+    <!-- 복지포인트 테이블 입력 -->
+    <insert id="HRM090802DAO.scoreAditC" parameterClass="java.util.HashMap">
+		MERGE INTO TBHRM_WLFARE_SCORE_ADIT
+		  USING DUAL
+		  ON ( APPLC_YEAR = #APPLC_YEAR#
+		   AND EMPNO      = #EMPNO#
+		   AND STDR_APPLC_YEAR   = #STDR_APPLC_YEAR#
+		   AND ADIT_IEM_SN     = #IEM_SN#
+		   AND ADIT_SCORE = #ADIT_SCORE#)
+		  WHEN MATCHED THEN
+		    UPDATE SET
+				 UPDUSR_ID     = #S_USER_ID#
+				,UPDT_DT       = SYSDATE    
+			WHERE APPLC_YEAR   = #APPLC_YEAR#
+			  AND EMPNO      = #EMPNO#
+			  AND STDR_APPLC_YEAR   = #STDR_APPLC_YEAR#
+			  AND ADIT_IEM_SN     = #IEM_SN#
+			  AND ADIT_SCORE = #ADIT_SCORE#
+		  WHEN NOT MATCHED THEN
+			INSERT (
+				  APPLC_YEAR
+			    , EMPNO
+			    , STDR_APPLC_YEAR
+			    , ADIT_IEM_SN
+			    , ADIT_SCORE
+			    , REGISTER_ID
+			    , REGIST_DT
+			    , UPDUSR_ID
+			    , UPDT_DT
+			) VALUES (
+			      #APPLC_YEAR#
+			    , #EMPNO#
+			    , #STDR_APPLC_YEAR#
+			    , #IEM_SN#
+			    , #ADIT_SCORE#
+			    , #S_USER_ID#
+			    , SYSDATE
+			    , #S_USER_ID#
+			    , SYSDATE
+			)
+    </insert>
+    
+    
+    <!-- 복지포인트 삭제 -->
+    <delete id="HRM090802DAO.scoreD" parameterClass="java.util.HashMap">
+			DELETE FROM TBHRM_WLFARE_SCORE 
+			 WHERE APPLC_YEAR  = #APPLC_YEAR#
+			 <isNotEmpty property="EMPNO">
+			   AND EMPNO       = #EMPNO#
+			 </isNotEmpty>
+    </delete>
+    <!-- 복지포인트 삭제 -->
+    <delete id="HRM090802DAO.scoreAditD" parameterClass="java.util.HashMap">
+    <![CDATA[
+			DELETE FROM TBHRM_WLFARE_SCORE_ADIT 
+			 WHERE APPLC_YEAR = #APPLC_YEAR#
+	]]>
+			<isNotEmpty property="EMPNO">
+			   AND EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="IEM_SN">
+			   AND ADIT_IEM_SN = #IEM_SN#
+			</isNotEmpty>
+    </delete>
+
+    <!-- 복지포인트 테이블 입력 -->
+    <insert id="HRM090802DAO.calc" parameterClass="java.util.HashMap">
+    <![CDATA[
+			INSERT INTO TBHRM_WLFARE_SCORE (
+			      APPLC_YEAR 
+			    , EMPNO 
+			    , REAL_APPLC_MONTH
+			    , REAL_WLFARE_SCORE
+			    , BASS_SCORE 
+			    , CNWK_SCORE 
+			    , CNWK_YYCNT 
+			    , DNTMY_SCORE 
+			    , DNTMY_CO 
+			    , WLFARE_SCORE_AMOUNT
+			    , HEALTH_SCORE
+			    , REGISTER_ID
+			    , REGIST_DT
+			    , UPDUSR_ID
+			    , UPDT_DT
+			)  SELECT 
+				    #APPLC_YEAR#
+				   ,t1.EMPNO
+				   ,'12'
+				   /*건강+기본+근속+가족*/
+				   ,TO_NUMBER(t3.HEALTH_SCORE) + TO_NUMBER(t3.BASS_SCORE) + TO_NUMBER(CASE WHEN (t1.CNWK_YYCNT * t3.CNWK_SCORE) > t3.MXMM_CNWK_SCORE THEN t3.MXMM_CNWK_SCORE ELSE t1.CNWK_YYCNT * t3.CNWK_SCORE END) + TO_NUMBER(CASE WHEN NVL(t2.FAMILY_SCORE,0) > t3.MXMM_FAMILY_SCORE THEN t3.MXMM_FAMILY_SCORE ELSE NVL(t2.FAMILY_SCORE,0) END)
+				   ,t3.BASS_SCORE
+				   ,CASE WHEN (t1.CNWK_YYCNT * t3.CNWK_SCORE) > t3.MXMM_CNWK_SCORE THEN t3.MXMM_CNWK_SCORE ELSE t1.CNWK_YYCNT * t3.CNWK_SCORE END
+				   ,t1.CNWK_YYCNT
+				   ,CASE WHEN NVL(t2.FAMILY_SCORE,0) > t3.MXMM_FAMILY_SCORE THEN t3.MXMM_FAMILY_SCORE ELSE NVL(t2.FAMILY_SCORE,0) END
+				   ,NVL(t2.FAMILY_COUNT,0)
+				   ,(TO_NUMBER(t3.HEALTH_SCORE) + TO_NUMBER(t3.BASS_SCORE) + TO_NUMBER(CASE WHEN (t1.CNWK_YYCNT * t3.CNWK_SCORE) > t3.MXMM_CNWK_SCORE THEN t3.MXMM_CNWK_SCORE ELSE t1.CNWK_YYCNT * t3.CNWK_SCORE END) + TO_NUMBER(CASE WHEN NVL(t2.FAMILY_SCORE,0) > t3.MXMM_FAMILY_SCORE THEN t3.MXMM_FAMILY_SCORE ELSE NVL(t2.FAMILY_SCORE,0) END)) * NVL(t3.WLFARE_SCORE_AMOUNT,0)
+				   ,t3.HEALTH_SCORE
+				   ,#S_USER_ID#
+				   ,SYSDATE
+				   ,#S_USER_ID#
+				   ,SYSDATE
+			   FROM ( 
+			     /*사원정보*/
+			       SELECT EMPNO
+			             ,DATEDIF(TO_DATE(ECNY_DE), TO_DATE(#APPLC_YEAR#||'0101'), 'y') AS CNWK_YYCNT
+			             ,JSSFC_SE
+			             ,DEPT_CODE
+			             ,HR_CLSF_SE
+			             ,EMPNM
+			         FROM TBHRM_HR_MASTR
+			        WHERE SUBSTR(ECNY_DE,0,4) <= #APPLC_YEAR#
+					  AND STTUS_SE <> 009
+					) t1 
+			    LEFT OUTER JOIN (
+			      /*가족점수*/
+			      SELECT   EMPNO
+			             , SUM(PARENTS) + SUM(SPOUSE) + SUM(CHLD) AS FAMILY_SCORE
+			             , SUM(FAMILY_COUNT) AS FAMILY_COUNT
+			        FROM(
+			                SELECT A.EMPNO
+			                     , CASE WHEN A.FAMILY_RELATE_SE = '001' OR A.FAMILY_RELATE_SE = '002' OR A.FAMILY_RELATE_SE = '003' OR A.FAMILY_RELATE_SE = '004' THEN COUNT(A.FAMILY_RELATE_SE)* B.PARNTS_SCORE ELSE 0 END AS PARENTS
+			                     , CASE WHEN A.FAMILY_RELATE_SE = '005' OR A.FAMILY_RELATE_SE = '006' THEN B.SPOUSE_SCORE ELSE 0 END AS SPOUSE
+			                     , CASE WHEN A.FAMILY_RELATE_SE = '007' AND TRUNC((MONTHS_BETWEEN(LAST_DAY(TO_DATE(#APPLC_YEAR#||'1231', 'YYYYMMDD')), TO_DATE(BRTHDY, 'YYYYMMDD')) - 1) / 12) < 20 THEN COUNT(FAMILY_RELATE_SE)*B.CHLDRN_SCORE ELSE 0 END AS CHLD
+			                     , CASE WHEN A.FAMILY_RELATE_SE = '001' OR A.FAMILY_RELATE_SE = '002' OR A.FAMILY_RELATE_SE = '003' OR A.FAMILY_RELATE_SE = '004' OR A.FAMILY_RELATE_SE = '005' OR A.FAMILY_RELATE_SE = '006' OR (A.FAMILY_RELATE_SE = '007' AND TRUNC((MONTHS_BETWEEN(LAST_DAY(TO_DATE(#APPLC_YEAR#||'1231', 'YYYYMMDD')), TO_DATE(BRTHDY, 'YYYYMMDD')) - 1) / 12) < 20) THEN COUNT(1) ELSE 0 END  AS FAMILY_COUNT
+			                FROM TBHRM_HR_FAMILY A
+			                   , TBHRM_WLFARE_SCORE_STDR B
+			                WHERE A.CNFIRM_AT = '1' 
+			                  AND A.ALLWNC_PYMNT_AT = '1'
+			                  AND B.APPLC_YEAR = #STDR_APPLC_YEAR#
+			                GROUP BY A.EMPNO, A.FAMILY_RELATE_SE, A.BRTHDY, B.PARNTS_SCORE, B.SPOUSE_SCORE, B.CHLDRN_SCORE
+			        )
+			        GROUP BY EMPNO ) t2
+			        ON t1.EMPNO = t2.EMPNO
+		      , TBHRM_WLFARE_SCORE_STDR t3
+		      WHERE t3.APPLC_YEAR = #STDR_APPLC_YEAR#
+	]]>
+    </insert>
+    
+    <!-- 3자녀 이상 입력 -->
+    <insert id="HRM090802DAO.calcAdit1" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBHRM_WLFARE_SCORE_ADIT (
+			      APPLC_YEAR
+			    , EMPNO
+			    , STDR_APPLC_YEAR
+			    , ADIT_IEM_SN
+			    , ADIT_SCORE
+			    , REGISTER_ID
+			    , REGIST_DT
+			    , UPDUSR_ID
+			    , UPDT_DT
+			)  SELECT #APPLC_YEAR#
+			         ,MAX(t1.EMPNO)
+			         ,#STDR_APPLC_YEAR#
+			         ,'1'
+			         ,'200'
+				     ,#S_USER_ID#
+				     ,SYSDATE
+				     ,#S_USER_ID#
+				     ,SYSDATE
+			FROM (
+			   SELECT t1.EMPNO
+		         FROM TBHRM_HR_MASTR t1
+		           LEFT OUTER JOIN (
+							  SELECT EMPNO
+							        ,BRTHDY
+							        ,TRUNC((MONTHS_BETWEEN(LAST_DAY(TO_DATE(#APPLC_YEAR#||'1231', 'YYYYMMDD')), TO_DATE(BRTHDY, 'YYYYMMDD')) - 1) / 12) AS AGE
+							        ,ROW_NUMBER() OVER (PARTITION BY EMPNO ORDER BY BRTHDY) AS CHID_CNT
+							   FROM TBHRM_HR_FAMILY
+							  WHERE FAMILY_RELATE_SE = '007'
+			                    AND CNFIRM_AT = '1' 
+			                    AND ALLWNC_PYMNT_AT = '1'
+							  ORDER BY EMPNO, ROW_NUMBER() OVER (PARTITION BY EMPNO ORDER BY BRTHDY)
+						  )t2
+		             ON t1.EMPNO = t2.EMPNO
+		             AND t2.AGE < 20 
+		             AND t2.CHID_CNT >= 3
+		        WHERE t1.ECNY_DE <= TO_NUMBER(#APPLC_YEAR#)-1 || '1231'
+		          AND SUBSTR(t2.BRTHDY, 0, 4) <= TO_NUMBER(#APPLC_YEAR#)-1
+				  AND t1.STTUS_SE <> 009
+	        ) t1
+	        GROUP BY t1.EMPNO
+    ]]>
+    </insert>
+    
+    <!-- 3자녀 출생시 입력 -->
+    <insert id="HRM090802DAO.calcAdit2" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBHRM_WLFARE_SCORE_ADIT (
+			      APPLC_YEAR
+			    , EMPNO
+			    , STDR_APPLC_YEAR
+			    , ADIT_IEM_SN
+			    , ADIT_SCORE
+			    , REGISTER_ID
+			    , REGIST_DT
+			    , UPDUSR_ID
+			    , UPDT_DT
+			)  SELECT #APPLC_YEAR#
+			         ,MAX(t1.EMPNO)
+			         ,#STDR_APPLC_YEAR#
+			         ,'2'
+			         ,'2000'
+				     ,#S_USER_ID#
+				     ,SYSDATE
+				     ,#S_USER_ID#
+				     ,SYSDATE
+		         FROM TBHRM_HR_MASTR t1
+		           LEFT OUTER JOIN (
+						  SELECT EMPNO
+						        ,BRTHDY
+						        ,ROW_NUMBER() OVER (PARTITION BY EMPNO ORDER BY BRTHDY) AS CHID_CNT
+						   FROM TBHRM_HR_FAMILY
+						  WHERE FAMILY_RELATE_SE = '007'
+		                    AND CNFIRM_AT = '1' 
+		                    AND ALLWNC_PYMNT_AT = '1'
+						  ORDER BY EMPNO, ROW_NUMBER() OVER (PARTITION BY EMPNO ORDER BY BRTHDY)
+					)t2
+		            ON t1.EMPNO = t2.EMPNO
+		        WHERE SUBSTR(t1.ECNY_DE,0,4) <= #APPLC_YEAR#
+		          AND TO_NUMBER(SUBSTR(t2.BRTHDY, 0, 4)) = TO_NUMBER(#APPLC_YEAR#)-1
+		          AND t2.CHID_CNT >= 3
+				  AND t1.STTUS_SE <> 009
+		        GROUP BY t1.EMPNO
+    ]]>
+    </insert>
+    
+    <!-- 추가점수 조회 -->
+	<select id="HRM090802DAO.selectCalcAddAdit" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			   t1.EMPNO 
+			  ,t1.APPLC_YEAR
+			  ,MAX(t2.REAL_WLFARE_SCORE)+SUM(t1.ADIT_SCORE) AS ADIT_SCORE
+			  ,MAX(t2.DNTMY_SCORE)+SUM(t1.ADIT_SCORE)       AS DNTMY_SCORE
+			  ,(MAX(t2.REAL_WLFARE_SCORE)+SUM(t1.ADIT_SCORE))*MAX(t3.WLFARE_SCORE_AMOUNT) AS WLFARE_SCORE_AMOUNT
+		FROM   TBHRM_WLFARE_SCORE_ADIT t1
+		  LEFT OUTER JOIN TBHRM_WLFARE_SCORE t2
+		     ON t1.EMPNO = t2.EMPNO
+		    AND t1.APPLC_YEAR = t2.APPLC_YEAR
+	      LEFT OUTER JOIN TBHRM_WLFARE_SCORE_STDR t3
+		     ON t1.EMPNO = t2.EMPNO
+		    AND t1.APPLC_YEAR = t2.APPLC_YEAR
+		WHERE  t1.APPLC_YEAR = #APPLC_YEAR#
+		GROUP BY t1.APPLC_YEAR, t1.EMPNO
+    </select>
+    
+    <!-- 복지포인트 테이블 수정 -->
+    <update id="HRM090802DAO.calcAddAdit" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBHRM_WLFARE_SCORE SET
+                  REAL_WLFARE_SCORE     = #ADIT_SCORE#
+                , DNTMY_SCORE           = #DNTMY_SCORE#
+                , WLFARE_SCORE_AMOUNT   = #WLFARE_SCORE_AMOUNT#
+                , UPDUSR_ID		      = #S_USER_ID#
+                , UPDT_DT		      = SYSDATE
+            WHERE  APPLC_YEAR         = #APPLC_YEAR#
+              AND  EMPNO              = #EMPNO#
+        ]]>
+    </update>
+    
+</sqlMap>

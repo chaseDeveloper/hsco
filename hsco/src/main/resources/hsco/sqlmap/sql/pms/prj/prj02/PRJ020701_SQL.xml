@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_PRSMP_PRMPC		추정원가
+		 R   : TBPRJ_PRMPC_CODE			원가코드
+		 R   : TBPRJ_HOUSE_SLE_PLAN_ACMSLT		주택판매계획실적
+		 R   : TBPRJ_LAD_SLE_PLAN_ACMSLT		토지판매계획및실적
+		 R   : TBACC_EXP_DSN_MASTR				지출결의
+		CRUD : TBPRJ_BALC_ANALS_INCME			수지분석_수입
+		CRUD : TBPRJ_BALC_ANALS_EXPNDTR			수지분석_지출
+		 R   : TBSLS_HCNTRCTR_PAY_DETAIL		주택계약자납부상세
+		 R   : TBSLS_LCNTRCTR_PAY_DETAIL		토지계약자납부상세
+	-->
+
+	<!-- 투자원가현황 조회 -->
+	<select id="PRJ020701.mList" parameterClass="map" resultClass="hashmap">
+		SELECT AA.STD_PRMPC_CODE
+		     , SUBSTR(AA.STD_PRMPC_CODE, 0, 2) || '-00-00.' || AA.LCLAS_NM AS LCLAS_NM
+     		 , SUBSTR(AA.STD_PRMPC_CODE, 0, 2) || '-' || SUBSTR(AA.STD_PRMPC_CODE, 3, 2) || '-00.' || AA.MLSFC_NM AS MLSFC_NM
+     		 , SUBSTR(AA.STD_PRMPC_CODE, 0, 2) || '-' || SUBSTR(AA.STD_PRMPC_CODE, 3, 2) || '-' || SUBSTR(AA.STD_PRMPC_CODE, 5, 2) || '.' || AA.SCLAS_NM AS SCLAS_NM
+		     , AA.ACCNUT_YEAR
+		     , AA.ACCNUT_ACNT_CODE
+		     ,(SELECT ACCNUT_ACNT_NM FROM TBACC_ACCNUT_ACNT_SBJECT WHERE ACCNUT_YEAR = AA.ACCNUT_YEAR AND ACCNUT_ACNT_CODE = AA.ACCNUT_ACNT_CODE) AS ACCNUT_ACNT_CODE_NM
+		     , AA.SAL_SE
+		     , BB.DEBTOR_AMOUNT AS DEBTOR_AMOUNT_1
+		     , ROUND(BB.DEBTOR_AMOUNT / 1000, 2) AS DEBTOR_AMOUNT_2
+		     , ROUND(BB.DEBTOR_AMOUNT / 100000, 2) AS DEBTOR_AMOUNT_3
+		     , AA.INVT_PLAN_AMOUNT AS INVT_PLAN_AMOUNT_1
+		     , ROUND(AA.INVT_PLAN_AMOUNT / 1000, 2) AS INVT_PLAN_AMOUNT_2
+		     , ROUND(AA.INVT_PLAN_AMOUNT / 100000, 2) AS INVT_PLAN_AMOUNT_3
+		     , (AA.INVT_PLAN_AMOUNT + BB.DEBTOR_AMOUNT) AS INPT_PRMPC_1
+		     , ROUND((AA.INVT_PLAN_AMOUNT + BB.DEBTOR_AMOUNT) / 1000, 2) AS INPT_PRMPC_2
+		     , ROUND((AA.INVT_PLAN_AMOUNT + BB.DEBTOR_AMOUNT) / 100000, 2) AS INPT_PRMPC_3
+		     , (AA.INVT_PLAN_AMOUNT + BB.DEBTOR_AMOUNT) / SUM(AA.INVT_PLAN_AMOUNT + BB.DEBTOR_AMOUNT) OVER (PARTITION BY ACCNUT_YEAR) * 100 AS CMPNTRT
+		FROM  
+		(
+		    SELECT A.STD_PRMPC_CODE   /* 표준원가코드 */
+		         , (SELECT LCLAS_NM FROM TBPRJ_PRMPC_CODE WHERE STD_PRMPC_CODE = RPAD(SUBSTR(A.STD_PRMPC_CODE, 0, 2), 6, '0')) AS LCLAS_NM /* 대분류명 */
+		         , (SELECT MLSFC_NM FROM TBPRJ_PRMPC_CODE WHERE STD_PRMPC_CODE = RPAD(SUBSTR(A.STD_PRMPC_CODE, 0, 4), 6, '0')) AS MLSFC_NM /* 중분류명 */
+		         , A.SCLAS_NM         /* 소분류명 */
+		         , B.ACCNUT_YEAR      /* 회계년도 */
+		         , B.ACCNUT_ACNT_CODE /* 회계계정코드 */
+		         , B.SAL_SE           /* 판매구분 */
+		         , NVL(C.INVT_PLAN_AMOUNT, 0) AS INVT_PLAN_AMOUNT
+		    FROM TBPRJ_PRMPC_CODE A
+		       , (
+		            SELECT *
+		            FROM   TBPRJ_PRMPC_ACNT_MAPNG 
+		            WHERE  ACCNUT_YEAR = #ACCNUT_YEAR#
+		            AND    SAL_SE = #SAL_SE#
+		         ) B
+		       , (
+		            SELECT STD_PRMPC_CODE
+		                 , SUM(INVT_PLAN_AMOUNT) AS INVT_PLAN_AMOUNT
+		            FROM   TBPRJ_INVT_PLAN
+		            WHERE  STDR_YEAR = #ACCNUT_YEAR#
+		            AND    BSNS_CODE = #BSNS_CODE#
+		            AND    STDR_MT <![CDATA[>]]> #STDR_MT#
+		            GROUP BY STD_PRMPC_CODE
+		         ) C         
+		    WHERE  A.CL_SE = '3'
+		    AND    A.STD_PRMPC_CODE = B.STD_PRMPC_CODE(+)
+		    AND    A.STD_PRMPC_CODE = C.STD_PRMPC_CODE(+)    
+		    ORDER BY A.STD_PRMPC_CODE 
+		) AA
+		, (
+		    SELECT B.ACCNUT_ACNT_CODE         /* 회계계정코드 */
+		         , B.PRMPC_CODE               /* 예산코드 */
+		         , SUM(B.DEBTOR_AMOUNT) AS DEBTOR_AMOUNT
+		    FROM   TBACC_CHIT_MASTR A
+		         , TBACC_CHIT_DETAIL B
+		         , TBPRJ_BSNS_CODE C
+		    WHERE  A.ACCNUT_YEAR = B.ACCNUT_YEAR
+		    AND    A.CHIT_NO = B.CHIT_NO
+		    AND    A.STACNT_SE = B.STACNT_SE
+		    AND    A.CHIT_CONFM_AT = '1'
+		    AND    B.BALC_SE = '2'  /* 1:수입, 2:지출 */
+		    AND    B.BSNS_CODE = C.BSNS_CODE
+		    AND    C.BSNS_CODE = #BSNS_CODE#   /* 사업코드 */
+		    AND    A.ACCNUT_YEAR = #ACCNUT_YEAR#
+		    AND    SUBSTR(A.CHIT_DE, 0, 6) BETWEEN #STARTDT# AND #ENDDT#
+		    GROUP BY B.ACCNUT_ACNT_CODE, B.PRMPC_CODE   
+		) BB
+		WHERE AA.ACCNUT_ACNT_CODE = BB.ACCNUT_ACNT_CODE(+)
+		AND   AA.STD_PRMPC_CODE = BB.PRMPC_CODE(+)
+	</select>
+
+
+</sqlMap>

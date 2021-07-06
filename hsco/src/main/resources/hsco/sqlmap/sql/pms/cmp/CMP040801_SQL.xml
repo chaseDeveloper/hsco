@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP040801_SQL">
+<!--  설명  : 수용확인서발급
+	작성자 : 지효정  -->
+	
+	<!-- 물건 소유자 목록 -->
+	<select id="CMP040801DAO.thingOwnerList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT DISTINCT 
+			 ABC.BSNS_AREA_CODE	/* 사업지역코드 */
+			,ABC.OWNER_NO		/* 소유자번호 */
+			,ABC.NM				/* 소유자 이름 */
+			,ABC.ADRES			/* 소유자 주소 */
+			,ABC.IHIDNUM		/* 소유자 주민번호 */
+		FROM(
+			SELECT AB.*
+			FROM(
+				SELECT 
+					 A.BSNS_AREA_CODE
+					,A.OWNER_NO
+					,A.THING_SN
+					,B.OWNER_NM AS NM
+					,B.ADRES
+					,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM
+				FROM TBCMP_THING_OWNER A, TBCMP_OWNER B
+				WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+				AND   B.OWNER_SE = '1'
+				AND   A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				AND   A.OWNER_NO = B.OWNER_NO
+				<isNotEmpty property="NM">
+				AND	  B.OWNER_NM LIKE '%' || #NM# || '%'
+				</isNotEmpty>
+			)AB,
+			(
+				SELECT BSNS_AREA_CODE, THING_SN				
+				FROM TBCMP_THING_WTNNC
+				WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+				<isNotEmpty property="LOCPLC_CODE" prepend="AND" open=" ">
+					  LOCPLC_CODE = #LOCPLC_CODE#
+				</isNotEmpty>
+				ORDER BY BSNS_AREA_CODE, THING_SN
+			)C
+			WHERE AB.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+			AND AB.THING_SN = C.THING_SN
+		)ABC
+		ORDER BY ABC.NM, ABC.OWNER_NO
+	</select>
+	
+	<!-- 조서 목록 -->
+	<select id="CMP040801DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT AA.BSNS_AREA_CODE , 
+		       AA.THING_SN , 
+		       AA.LOCPLC_CODE , 
+		       SFCMP_GET_LOCPLC(AA.BSNS_AREA_CODE, AA.LOCPLC_CODE) || ' ' || DECODE(AA.SLNO, NULL, AA.LNM, AA.LNM || '-' || AA.SLNO) AS FULL_LOCPLC_CODE_NM , 
+		       TRIM(AA.THING_CL) AS THING_CL , 
+		       DECODE(AB.CODE_ETC_1, 'L', 'L', 'J') AS THING_CL_KIND , 
+		       AA.THING_NM , 
+		       AA.LNDCGR_INCRPR , 
+		       AA.LNDCGR_LGSTR, 
+		       AA.STRCT_STNDRD, 
+		       AA.AR_LGSTR , 
+		       AA.AR_INCRPR , 
+		       AA.UNIT , 
+		       ROUND(NVL(AA.THING_UNTPC,0),0) AS UNTPC , 
+		       NVL(BA.RWMNY,0) AS RWMNY, 
+		       BA.AR , 
+		       DECODE(BA.RQEST_SE, '1', '청구', '미청구') AS RQEST , 
+		       AA.REWARD_STLE|| 
+		       CASE NVL(AA.REWARD_STLE,'0') 
+		           WHEN '0' 
+		           THEN LPAD(NVL(AB.CODE_ORDR,'99'),2,'0') 
+		           ELSE 
+		               CASE 
+		                   WHEN BA.RWMNY > 0 
+		                   THEN '00' 
+		                   ELSE LPAD(NVL(AB.CODE_ORDR,'99'),2,'0') 
+		               END 
+		       END AS SORT_ORD 
+		  FROM TBCMP_THING_WTNNC AA, 
+		       TBCOM_CMMN_CODE AB, 
+		       TBCMP_THING_OWNER BA, 
+		       TBCMP_RWMNY_PYMNT BB , 
+		       TBCMP_LOCPLC_INFO X 
+		 WHERE AA.BSNS_AREA_CODE = #BSNS_AREA_CODE# 
+		       AND BA.OWNER_NO = #OWNER_NO# 
+		       AND 'CMP001' = AB.GRP_CODE(+) 
+		       AND TRIM(AA.THING_CL) = AB.CODE(+) 
+		       AND AA.BSNS_AREA_CODE = BA.BSNS_AREA_CODE 
+		       AND AA.THING_SN = BA.THING_SN 
+		       AND BA.BSNS_AREA_CODE = BB.BSNS_AREA_CODE(+) 
+		       AND BA.OWNER_NO = BB.OWNER_NO(+) 
+		       AND BA.RQEST_SN = BB.RQEST_SN(+) 
+		       AND AA.BSNS_AREA_CODE = X.BSNS_AREA_CODE 
+		       AND AA.LOCPLC_CODE = X.LOCPLC_CODE 
+		ORDER BY X.SORT_ORDR, TO_NUMBER(AA.LNM), TO_NUMBER(AA.SLNO), AA.THING_SN, SORT_ORD
+	</select>
+	
+	<!-- 대체 취득 목록 -->
+	<select id="CMP040801DAO.altrtvAcqsList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT
+			 '0' AS CHK		
+		    ,BSNS_AREA_CODE	/* 사업지역코드 */
+		    ,OWNER_NO		/* 소유자번호 */
+		    ,ACQS_SN		/* 취득일련번호 */
+		    ,ALTRTV_ACQS_SE		/* 취득구분 */
+		    ,LOCPLC			/* 소재지 */
+		    ,STRCT_STNDRD	/* 구조규격 */
+		    ,AR				/* 면적 */
+		    ,UNIT			/* 단위 */
+		    ,RM				/* 비고 */
+		FROM TBCMP_ALTRTV_ACQS
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#	
+	</select>
+	
+	<!-- 대체 취득 생성 -->
+	<insert id="CMP040801DAO.altrtvAcqsC" parameterClass="java.util.Map">
+		INSERT INTO TBCMP_ALTRTV_ACQS(
+			 BSNS_AREA_CODE	/* 사업지역코드 */
+			,OWNER_NO		/* 소유자번호 */
+			,ACQS_SN		/* 취득일련번호 */
+			,ALTRTV_ACQS_SE		/* 취득구분 */
+			,LOCPLC			/* 소재지 */
+			,STRCT_STNDRD	/* 구조규격 */
+			,AR				/* 면적 */	
+			,UNIT			/* 단위 */	
+			,RM				/* 비고 */	
+			,REGISTER_ID	
+			,REGIST_DT		
+			,UPDUSR_ID		
+			,UPDT_DT)
+		VALUES(
+			 #BSNS_AREA_CODE#
+			,#OWNER_NO#
+			,(SELECT DECODE(MAX(ACQS_SN), NULL, 1, MAX(ACQS_SN)+1) FROM TBCMP_ALTRTV_ACQS)		
+			,#ALTRTV_ACQS_SE#			
+			,#LOCPLC#				
+			,#STRCT_STNDRD#	
+			,#AR#						
+			,#UNIT#					
+			,#RM#						
+			,#S_USER_ID#	
+			,SYSDATE		
+			,#S_USER_ID#		
+			,SYSDATE
+		)
+	</insert>
+	
+	<!-- 대체 취득 수정 -->
+	<update id="CMP040801DAO.altrtvAcqsU" parameterClass="java.util.Map">
+		UPDATE TBCMP_ALTRTV_ACQS SET
+			 ALTRTV_ACQS_SE = #ALTRTV_ACQS_SE#	/* 취득구분 */		
+			,LOCPLC = #LOCPLC#		/* 소재지 */		
+			,STRCT_STNDRD = #STRCT_STNDRD#	/* 구조규격 */
+			,AR = #AR#				/* 면적 */	
+			,UNIT = #UNIT#			/* 단위 */		
+			,RM = #RM#				/* 비고 */
+			,UPDUSR_ID = #S_USER_ID#		
+			,UPDT_DT = SYSDATE
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#
+		AND   ACQS_SN = #ACQS_SN#
+	</update>
+	
+	<!-- 대체 취득 삭제 -->
+	<delete id="CMP040801DAO.altrtvAcqsD" parameterClass="java.util.Map">
+		DELETE FROM TBCMP_ALTRTV_ACQS
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#
+		AND   ACQS_SN = #ACQS_SN#
+	</delete>
+	
+	<!-- 수용 확인서 목록 -->
+	<select id="CMP040801DAO.aceptncCnfrmnList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT
+			 A.BSNS_AREA_CODE	/* 사업지역코드 */
+			,A.OWNER_NO		/* 소유자번호 */
+			,A.DOC_ISSU_NO		/* 발급일련번호 */
+			,A.CNFRMN_ISSU_SE	/* 발급구분 */
+			,A.ISSU_PRPOS_SE	/* 발급용도 */
+			,ISSU_DE		/* 발급일자 */
+			,A.PYMNTAMT_LAD	/* 지급금액_토지 */
+			,A.PYMNTAMT_HOUSE	/* 지급금액_주택 */
+			,A.USGAMT_BEFORE	/* 사용액_이전 */
+			,A.USGAMT_NOW		/* 사용액_현재 */
+			,A.BLCE			/* 잔액 */
+			,A.RM				/* 비고 */
+			,(SELECT MAX(B.PYMNT_DE) FROM TBCMP_RWMNY_PYMNT B WHERE B.BSNS_AREA_CODE = A.BSNS_AREA_CODE AND B.OWNER_NO = A.OWNER_NO AND B.PYMNT_DE <![CDATA[ <= ]]> A.ISSU_DE) AS DE 
+		FROM TBCMP_ACEPTNC_CNFRMN A
+		WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   A.OWNER_NO = #OWNER_NO#	
+		ORDER BY A.ISSU_DE , A.DOC_ISSU_NO  
+	</select>
+	
+	<!-- 수용 확인서 생성 -->
+	<insert id="CMP040801DAO.aceptncCnfrmnC" parameterClass="java.util.Map">
+		INSERT INTO TBCMP_ACEPTNC_CNFRMN(
+			 BSNS_AREA_CODE	/* 사업지역코드 */
+			,OWNER_NO		/* 소유자번호 */
+			,DOC_ISSU_NO		/* 발급일련번호 */
+			,CNFRMN_ISSU_SE		/* 발급구분 */
+			,ISSU_PRPOS_SE		/* 발급용도 */
+			,ISSU_DE		/* 발급일자 */
+			,PYMNTAMT_LAD	/* 지급금액_토지 */
+			,PYMNTAMT_HOUSE	/* 지급금액_주택 */
+			,USGAMT_BEFORE	/* 사용액_이전 */
+			,USGAMT_NOW		/* 사용액_현재 */
+			,BLCE			/* 잔액 */			
+			,RM				/* 비고 */	
+			,REGISTER_ID	
+			,REGIST_DT		
+			,UPDUSR_ID		
+			,UPDT_DT)
+		VALUES(
+			 #BSNS_AREA_CODE#
+			,#OWNER_NO#		
+			,(
+				SELECT TO_CHAR(SYSDATE, 'YYYY')||'-' || LPAD(NVL(MAX(TO_NUMBER(SUBSTR(DOC_ISSU_NO, 6))),0) + 1, 5, '0') 
+				FROM TBCMP_ACEPTNC_CNFRMN
+				WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+				AND SUBSTR(DOC_ISSU_NO,0,4) = TO_CHAR(SYSDATE, 'YYYY')
+			 )				
+			,#CNFRMN_ISSU_SE#			
+			,#ISSU_PRPOS_SE#			
+			,#ISSU_DE#				
+			,#PYMNTAMT_LAD#		
+			,#PYMNTAMT_HOUSE#	
+			,#USGAMT_BEFORE#
+			,#USGAMT_NOW#		
+			,#BLCE#				
+			,#RM#				
+			,#S_USER_ID#	
+			,SYSDATE		
+			,#S_USER_ID#		
+			,SYSDATE)
+	</insert>
+	
+	<!-- 수용 확인서 수정 -->
+	<update id="CMP040801DAO.aceptncCnfrmnU" parameterClass="java.util.Map">
+		UPDATE TBCMP_ACEPTNC_CNFRMN SET
+			CNFRMN_ISSU_SE = #CNFRMN_ISSU_SE#					/* 발급구분 */
+			,ISSU_PRPOS_SE = #ISSU_PRPOS_SE#			/* 발급용도 */
+			,ISSU_DE = #ISSU_DE#				/* 발급일자 */
+			,PYMNTAMT_LAD = #PYMNTAMT_LAD#		/* 지급금액_토지 */
+			,PYMNTAMT_HOUSE = #PYMNTAMT_HOUSE#	/* 지급금액_주택 */
+			,USGAMT_BEFORE = #USGAMT_BEFORE#	/* 사용액_이전 */
+			,USGAMT_NOW = #USGAMT_NOW#			/* 사용액_현재 */
+			,BLCE = #BLCE#						/* 잔액 */
+			,RM = #RM#							/* 비고 */	
+			,UPDUSR_ID = #S_USER_ID#		
+			,UPDT_DT = SYSDATE
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#
+		AND   DOC_ISSU_NO = #DOC_ISSU_NO#
+	</update>
+	
+	<!-- 수용 확인서 삭제 -->
+	<delete id="CMP040801DAO.aceptncCnfrmnD" parameterClass="java.util.Map">
+		DELETE FROM TBCMP_ACEPTNC_CNFRMN
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#
+		AND   DOC_ISSU_NO = #DOC_ISSU_NO#
+	</delete>
+	
+	
+	<!-- 매핑테이블 목록 -->
+	<select id="CMP040801DAO.aceptncThingList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT
+		      BSNS_AREA_CODE
+		    , OWNER_NO
+		    , DOC_ISSU_NO
+		    , ACQS_SN
+		    , REGISTER_ID
+		    , REGIST_DT
+		    , UPDUSR_ID
+		    , UPDT_DT
+		 FROM TBCMP_ACEPTNC_THING
+		WHERE 1=1
+		  AND BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		  AND OWNER_NO = #OWNER_NO#
+		  AND DOC_ISSU_NO = #DOC_ISSU_NO#	
+	</select>
+	
+	<!-- 매핑테이블 삭제 -->
+	<delete id="CMP040801DAO.aceptncThingD" parameterClass="java.util.Map">
+		DELETE FROM TBCMP_ACEPTNC_THING
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   OWNER_NO = #OWNER_NO#
+		AND   DOC_ISSU_NO = #DOC_ISSU_NO#	
+		AND   ACQS_SN = #ACQS_SN#
+	</delete>
+	
+	<!-- 수용 확인서 생성 -->
+	<insert id="CMP040801DAO.aceptncThingI" parameterClass="java.util.Map">
+		  INSERT INTO TBCMP_ACEPTNC_THING(
+		       BSNS_AREA_CODE
+		     , OWNER_NO
+		     , DOC_ISSU_NO
+		     , ACQS_SN
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT)  
+		  VALUES(
+		       #BSNS_AREA_CODE#
+		     , #OWNER_NO#
+		     , #DOC_ISSU_NO#
+		     , #ACQS_SN#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE  
+		  )	
+	</insert>	
+</sqlMap>

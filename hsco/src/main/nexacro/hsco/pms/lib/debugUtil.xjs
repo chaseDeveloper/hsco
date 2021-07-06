@@ -1,0 +1,355 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/********************************************************
+파일명 : debugUtil.xjs
+설 명 : 로그 공통 유틸
+수정일 수정자 Version Function 명
+------- -------- ---------- --------------
+2015.09.23 지효정
+*********************************************************/
+
+/***********************************************************************************
+* 설명	: 디버그 레벨
+***********************************************************************************/
+this.LOG_LEVEL = {
+	FATAL 	: 1,	
+	ERROR 	: 2,	
+	WARN 	: 3,	
+	INFO 	: 4,	
+	DEBUG 	: 5	
+};
+
+/***********************************************************************************
+* 설명	: 강조기능 사용시 강조시 사용될 특수문자
+***********************************************************************************/
+this.arrSpecialChar = ["★", "●", "◆", "■", "▲", "▶", "♠", "♥", "♣", "◈"];
+
+/***********************************************************************************
+* 설명	: 현재 설정된 디버그 레벨
+***********************************************************************************/
+this.logLevel = this.LOG_LEVEL.DEBUG;
+
+/***********************************************************************************
+* 설명	: FATAL 로그
+***********************************************************************************/
+this.fatal = function(msg, specialChar, stIdx, cnt, showColumnId, bVertical){
+	this.printLog(this.LOG_LEVEL.FATAL, msg, specialChar, stIdx, cnt, showColumnId, bVertical);
+}
+
+/***********************************************************************************
+* 설명	: ERROR 로그
+***********************************************************************************/
+this.error = function(msg, specialChar, stIdx, cnt, showColumnId, bVertical){
+	this.printLog(this.LOG_LEVEL.ERROR, msg, specialChar, stIdx, cnt, showColumnId, bVertical);
+}
+
+/***********************************************************************************
+* 설명	: WARNING 로그
+***********************************************************************************/
+this.warn = function(msg, specialChar, stIdx, cnt, showColumnId, bVertical){
+	this.printLog(this.LOG_LEVEL.WARN, msg, specialChar, stIdx, cnt, showColumnId, bVertical);
+}
+
+/***********************************************************************************
+* 설명	: INFO 로그
+***********************************************************************************/
+this.info = function(msg, specialChar, stIdx, cnt, showColumnId, bVertical){
+	this.printLog(this.LOG_LEVEL.INFO, msg, specialChar, stIdx, cnt, showColumnId, bVertical);
+}
+
+/***********************************************************************************
+* 설명	: DEBUG 로그
+***********************************************************************************/
+this.debug = function(msg, specialChar, stIdx, cnt, showColumnId, bVertical){
+	this.printLog(this.LOG_LEVEL.DEBUG, msg, specialChar, stIdx, cnt, showColumnId, bVertical);
+}
+
+/***********************************************************************************
+* 설명	: 로그 출력
+* msg 	: 
+	-dataset인경우 데이터셋을 출력
+	-string일경우 그대로 출력, 단 'sInDatasets'이란 단어가 포함되면 파라미터로 사용된 데이터셋의 값을 출력 
+	-Array인경우 모든 객체의 필드 출력
+	-object인경우 객체의 모든 필드 출력
+* specialChar 	: (생략가능)
+	- true : 로 세팅할경우 "★"가 강조문구로 선택
+	- 0~9 : "★", "●", "◆", "■", "▲", "▶", "♠", "♥", "♣", "◈"의 순서에 맞는 특수문자를 강조문구로 선택
+	- 사용자 지정 특수문자 : 지정된 특수문자가 강조문구로 선택
+*opt	: 데이터셋 로그 옵션(생략가능)
+ - stIdx 		: stIdx부터 출력
+ - cnt			: stIdx부터 cnt갯수만큼  출력
+ - showColumnId 	: 해당 컬럼만 출력 ex)"RCEPT_DE" or ["RCEPT_DE", "RCEPT_SN"]
+ - bVertical		: 세로로 메시지 출력
+***********************************************************************************/
+this.printLog = function(level, msg, specialChar, stIdx, cnt, showColumnId, bVertical){
+	var opt = {};
+	
+	/***********************************************************************************
+	* 설명	: 로그레벨에 따른 로그 출력
+	***********************************************************************************/
+	if(this.logLevel >= level){
+		if(stIdx != null && stIdx instanceof Object == false){
+			if(stIdx != null){
+				opt.stIdx = stIdx;
+			}
+			if(cnt != null){
+				opt.cnt = cnt;
+			}
+			if(showColumnId != null){
+				opt.showColumnId = showColumnId;
+			}
+			if(bVertical != null){
+				opt.bVertical = bVertical;
+			}
+		}else{
+			opt = stIdx;
+		}
+		
+		this._fn_print_specialChar(specialChar, 80);
+		this.log(msg, specialChar, opt);
+		this._fn_print_specialChar(specialChar, 80);
+	}
+}
+
+/***********************************************************************************
+* 설명	: 로그 레벨에 맞는 로그만 출력
+***********************************************************************************/
+this.log = function(msg, specialChar, opt){
+	/***********************************************************************************
+	* Dataset일경우의 메시지 처리
+	***********************************************************************************/
+	if(msg instanceof Dataset){
+		this._fn_debugDS(msg, specialChar, opt);
+	}
+	/***********************************************************************************
+	* String일경우의 메시지 처리
+	***********************************************************************************/
+	else if(typeof(msg) == 'string'){
+		this._fn_debugStr(msg, specialChar);
+	}
+	/***********************************************************************************
+	* 배열일경우의 메시지 처리
+	***********************************************************************************/
+	else if(msg instanceof Array){
+		this._fn_debugArr(msg, specialChar, opt);
+	}
+	/***********************************************************************************
+	* 객체일경우의 메시지 처리
+	***********************************************************************************/
+	else if(msg instanceof Object){
+		this._fn_debugObj(msg, specialChar);
+	}
+	/***********************************************************************************
+	* Default 메시지 처리
+	***********************************************************************************/
+	else{
+		trace(msg);
+	}
+}
+
+/***********************************************************************************
+* 설명	: 데이터셋을 로그로 출력
+***********************************************************************************/
+this._fn_debugDS = function(msg, specialChar, opt){
+	var ds       = msg;
+	var dsId     = ds.name;
+	var colcount = ds.colcount;
+	
+	/***********************************************************************************
+	* stIdx 생략 할경우 0, rowcount보다 큰경우 ds.rowcount
+	***********************************************************************************/
+	var stIdx    = opt == null || opt.stIdx == null ? 0 : opt.stIdx > ds.rowcount ? ds.rowcount : opt.stIdx;
+	
+	/***********************************************************************************
+	* cnt 생략한 경우, rowcount보다 큰경우 ds.rowcount - stIdx, 
+	***********************************************************************************/
+	var cnt	 	 = opt == null || opt.cnt == null ? ds.rowcount - stIdx: stIdx + opt.cnt > ds.rowcount ? ds.rowcount - stIdx : opt.cnt;
+	var showColumnId = opt == null || opt.showColumnId == null ? null : opt.showColumnId;
+	var bVertical = opt == null || opt.bVertical == null ? false : opt.bVertical;
+	
+	var dsValueArr = [];
+	var msgHeader = this._fn_get_megHeader(specialChar);
+	
+	/***********************************************************************************
+	* rowcount가 0인경우 No Data 출력
+	***********************************************************************************/
+	trace(msgHeader + "rowcount	: " + ds.rowcount);
+	trace(msgHeader + "stIdx	: " 	+ stIdx);
+	trace(msgHeader + "cnt		: " 	+ cnt);
+		
+	if(ds.rowcount == 0){
+		trace(msgHeader+ dsId + ": No Data");
+	}else{
+		for(var j=stIdx; j<stIdx+cnt; j++){
+			for(var i=0; i<colcount; i++){
+				var columnId = ds.getColID(i);
+				if(showColumnId != null){
+					/***********************************************************************************
+					* showColumnId가 string 일경우 특정 한 컬럼만 출력
+					* showColumnId가 배열일경우 배열에 있는 컬럼만 출력
+					* showColumnId를 생략 할 경우 모든 컬럼 출력
+					***********************************************************************************/
+					if(typeof showColumnId == 'string'){
+						if(columnId != showColumnId) continue;
+					}else{
+						var len = showColumnId.length;
+						var bFind = false;
+						
+						for(var k=0; k<len; k++){
+							if(columnId == showColumnId[k]){
+								bFind = true;
+								break;
+							}
+						}
+						if(bFind == false) continue;
+					}
+				}
+				var value = ds.getColumn(j, columnId);
+				if(this.comUtils.isNullEmpty(value) == false){	
+					/***********************************************************************************
+					* 세로모드일경우 세로모드로 출력
+					* 세로모드가 아닐경우 배열에 로그 데이터 삽입
+					***********************************************************************************/
+					if(bVertical == true){
+						trace(msgHeader + dsId + "[" + j + "]" + ":" + columnId + "=" + value);
+					}else{
+						dsValueArr.push(" " + columnId + "=" + value);
+					}
+				}
+			}
+			
+			/***********************************************************************************
+			* Dataset의 rowType
+			***********************************************************************************/
+			var rowType = "EMPTY";
+			switch(ds.getRowType(j)){
+				case Dataset.ROWTYPE_NORMAL:
+					rowType = "ROWTYPE_NORMAL";
+					break;
+				case Dataset.ROWTYPE_INSERT:
+					rowType = "ROWTYPE_INSERT";
+					break;
+				case Dataset.ROWTYPE_UPDATE:
+					rowType = "ROWTYPE_UPDATE";
+					break;
+				case Dataset.ROWTYPE_DELETE:
+					rowType = "ROWTYPE_DELETE";
+					break;
+			}
+			
+			/***********************************************************************************
+			* 세로모드일경우 rowType만 출력
+			* 세로모드가 아닐경우 한라인에 출력
+			***********************************************************************************/
+			if(bVertical == true){
+				trace(msgHeader + dsId + "[" + j + "]" + ":" + "rowType=" + rowType);
+				if(j < stIdx+cnt-1){
+					trace(msgHeader + " ");
+				}
+			}else{
+				dsValueArr.push(" rowType=" + rowType);
+				trace(msgHeader + dsId + "[" + j + "]" + ":" + dsValueArr.toString());
+				dsValueArr.length = 0;
+			}
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: string일경우 그대로 출력,
+* 'sInDatasets'이란 단어가 포함되면 파라미터로 사용된 데이터셋의 값을 출력 
+***********************************************************************************/
+this._fn_debugStr = function(msg, specialChar){
+	var dsValueArr = [];
+	var msgHeader = this._fn_get_megHeader(specialChar);
+	
+	trace(msgHeader + msg);
+	
+	if(msg.indexOf("sInDatasets") != -1){
+		var dsId = msg.split("=")[1];
+		if(dsId != null && (msg.indexOf("ds_cond") != -1 || msg.indexOf("ds_param") != -1)){
+			var ds = this[dsId];
+			this._fn_debugDS(ds, specialChar);
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: object인경우 객체의 필드 출력
+***********************************************************************************/
+this._fn_debugObj = function(msg, specialChar){
+	var dsValueArr = [];
+	var msgHeader = this._fn_get_megHeader(specialChar);
+	
+	for(var key in msg){
+		if(msg.hasOwnProperty(key) == true){
+			dsValueArr.push(key + "=" + msg[key]);
+		}
+	}
+	trace(msgHeader + dsValueArr.toString());
+}
+
+/***********************************************************************************
+* 설명	: Array인경우 재귀호출하면서 배열의 모든 항목을 출력
+***********************************************************************************/
+this._fn_debugArr = function(msg, specialChar, opt){
+	var dsValueArr = [];
+	var msgHeader = this._fn_get_megHeader(specialChar);
+	
+	var len = msg.length;
+	for(var i=0; i<len; i++){
+		trace(msgHeader + "idx : " + i);
+		this.log(msg[i], specialChar, opt);
+		if(i < len-1){
+			trace(msgHeader + " ");
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: 강조기능 사용시 강조시 사용될 특수문자를 출력
+***********************************************************************************/
+this._fn_print_specialChar = function(specialChar, cnt){
+	if(this.comUtils.isNullEmpty(specialChar) == true){
+		return;
+	}
+	
+	var printChar = "";
+	if(specialChar === true){
+		specialChar = "★";
+	}else if(isNaN(specialChar) == false){
+		specialChar = this.arrSpecialChar[specialChar % 9];
+	}
+	
+	for(var i=0; i<cnt; i++){
+		 printChar += specialChar;
+	}
+	
+	trace(printChar);
+}
+
+this._fn_get_megHeader = function(specialChar){
+	if(this.comUtils.isNullEmpty(specialChar) == true){
+		switch(this.logLevel){
+			case this.LOG_LEVEL.FATAL:
+				return "[fatal]";
+			case this.LOG_LEVEL.ERROR:
+				return "[error]";
+			case this.LOG_LEVEL.WARN:
+				return "[warn]";
+			case this.LOG_LEVEL.INFO:
+				return "[info]";
+			case this.LOG_LEVEL.DEBUG:
+				return "[debug]";
+		}
+	}
+	
+	if(specialChar === true){
+		return "★";
+	}else if(isNaN(specialChar) == false){
+		return this.arrSpecialChar[specialChar % 10];
+	} 
+	
+	return specialChar;
+}
+
+]]></Script>

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN020202_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	
+	<!-- 공사채등록 내역 조회 -->
+	<select id="FUN020202DAO.selectPbncdList" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT A.CONFM_NO                                                                           AS CONFM_NO
+			       ,A.CONFM_AMOUNT                                                                      AS CONFM_AMOUNT
+			       ,A.BOD_CONFM_DE                                                                      AS BOD_CONFM_DE
+			       ,A.GVRN_CONFM_DE                                                                     AS GVRN_CONFM_DE
+			       ,A.CITY_CONFM_DE                                                                     AS CITY_CONFM_DE
+			       ,B.BSNS_CODE                                                                         AS BSNS_CODE  
+			       ,B.BSNS_NM                                                                           AS BSNS_NM
+			       ,C.PBNCD_NO                                                                          AS PBNCD_NO
+			       ,D.CODE_NM                                                                           AS CPTAL_KND_NM
+			       ,C.CPTAL_KND                                                                         AS CPTAL_KND
+			       ,C.CMPNINT_SE                                                                        AS CMPNINT_SE
+			       ,C.INRST_SE                                                                          AS INRST_SE
+			       ,C.RPAY_SE                                                                           AS RPAY_SE
+			       ,C.BRRW_ACNUT_NM                                                                     AS BRRW_ACNUT_NM
+			       ,C.FNNC_INSTT_SPOT_CODE                                                              AS FNNC_INSTT_CODE
+			       ,C.BRRW_AMOUNT                                                                       AS BRRW_AMOUNT
+			       ,NVL(C.BRRW_AMOUNT, 0) - NVL((SELECT SUM(AA.RPAY_AMOUNT) FROM TBFUN_PBNCD_PRNCPAL_RPAY_DTLS AA WHERE AA.PBNCD_NO = C.PBNCD_NO), 0) AS BRRW_BALANCE
+			       ,C.BRRW_DE                                                                           AS BRRW_DE
+			       ,C.EXPRTN_DE                                                                         AS EXPRTN_DE
+			       ,C.INTRT                                                                             AS INTRT
+			       ,C.INTR_CYCLE                                                                        AS INTR_CYCLE
+			       ,CEIL(MONTHS_BETWEEN(TO_DATE(C.EXPRTN_DE,'YYYYMMDD'),TO_DATE(C.BRRW_DE,'YYYYMMDD'))) AS RPAY_PD
+			       ,C.RM                                                                                AS RM
+			       ,C.EXPRTN_AT                                                                         AS EXPRTN_AT
+			       ,C.KR_NO                                                                             AS KR_NO
+                   ,C.REGIST_CNVRS_DE                                                                   AS REGIST_CNVRS_DE
+                   ,C.REGIST_CNVRS_AT                                                                   AS REGIST_CNVRS_AT
+                   ,C.BRWOFC                                                                            AS BRWOFC
+                   ,C.PNINT_RCPMNY_INSTT                                                                AS PNINT_RCPMNY_INSTT
+                   ,C.DFR_MT                                                                            AS DFR_MT
+                   ,C.RPAY_MT			                                                                AS RPAY_MT
+                   ,C.ISU_FOM                                                                           AS ISU_FOM
+                   ,C.FIXING_INRST_SE                                                                   AS FIXING_INRST_SE
+                   ,C.FILE_SN                                                                           AS FILE_SN
+                   ,C.FNNC_INSTT_SPOT_NM                                                                AS FNNC_INSTT_SPOT_NM
+                   ,C.ACNUTNO                                                                           AS ACNUTNO
+                   ,NVL(C.OBJT_AT, '0')																	AS OBJT_AT
+				   ,CASE WHEN NVL(C.OBJT_AT, '0') = '0' AND NVL((SELECT AA.PBLICTE_MTH FROM TBFUN_CDIT AA WHERE AA.ITEM_CODE = C.KR_NO AND AA.OBJT_AT = C.OBJT_AT)  ,'0') = '0'
+					     THEN '2' /* 미등록 */
+					     ELSE C.OBJT_AT
+					END AS PBLICTE_SE  
+				   ,C.LEASE_YM              
+			  FROM TBFUN_PBNCD_CONFM A
+			       ,TBFUN_PBNCD C
+			       LEFT OUTER JOIN TBPRJ_BSNS_CODE B
+		                      ON C.BSNS_CODE = B.BSNS_CODE
+				   LEFT OUTER JOIN (SELECT DETAIL_CODE    AS CODE
+								         , DETAIL_CODE_NM AS CODE_NM
+								    FROM TBFUN_CPTAL_DETAIL_CODE
+								    WHERE CODE_SE = '000') D 
+				                ON C.CPTAL_KND = D.CODE
+			 WHERE 1=1
+			   AND C.CONFM_NO = A.CONFM_NO
+			   AND C.CPTAL_KND IN ('A02', 'B02') /* 주택도시기금 */
+		]]>
+			   <isNotEmpty property="BRWOFC">
+			   AND C.BRWOFC LIKE '%'||#BRWOFC#||'%'
+			   </isNotEmpty>
+			   <isNotEmpty property="BSNS_CODE">
+			   AND C.BSNS_CODE = #BSNS_CODE#
+			   </isNotEmpty>
+			   <isNotEmpty property="CPTAL_KND">
+			   AND C.CPTAL_KND = #CPTAL_KND#
+			   </isNotEmpty>
+			   <isNotEmpty property="FNNC_INSTT_SPOT_CODE">
+			   AND C.FNNC_INSTT_SPOT_CODE = #FNNC_INSTT_SPOT_CODE#
+			   </isNotEmpty>
+			   <isNotEmpty property="EXPRTN_AT">
+			   AND C.EXPRTN_AT = #EXPRTN_AT#
+			   </isNotEmpty>
+		<![CDATA[
+			 ORDER BY C.BRRW_DE, C.PBNCD_NO
+		]]>
+    </select>
+
+    <!-- 공사채 수정 -->
+    <update id="FUN020202DAO.PbncdU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBFUN_PBNCD 
+               SET  LEASE_YM		    = #LEASE_YM#
+                   ,UPDUSR_ID	        = #S_USER_ID#
+                   ,UPDT_DT		        = SYSDATE
+             WHERE 1=1
+               AND PBNCD_NO = #PBNCD_NO#
+        ]]>
+    </update>
+
+</sqlMap>

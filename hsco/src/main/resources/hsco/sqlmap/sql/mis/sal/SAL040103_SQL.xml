@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL040103_SQL">	
+	
+	<!-- 기본정보 목록조회 -->
+	<select id="SAL040103DAO.selectRetirePlanList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		 
+	       SELECT  A.EMPNO         AS EMPNO
+			      ,A.EMPNM         AS EMPNM
+			      ,A.NM_CHCRT      AS NM_CHCRT
+			      ,A.DEPT_CODE     AS DEPT_CODE
+			      ,SFSAL_GETDEPTNM_01(A.DEPT_CODE)  AS DEPT_NAME
+			      ,A.PAY_CLSF_SE   AS CLSF_CODE
+			      ,A.JSSFC_SE      AS JSSFC_SE   /* 사원구분 */			     
+			      ,A.RSPOFC_SE     AS RSPOFC_SE
+			      ,A.OFCPS_SE      AS OFCPS_SE   /* 직위 */			     
+			      ,A.ECNY_DE       AS ECNY_DE
+			      ,A.STDR_DE       AS STDR_DE	
+			      ,A.ADRES         AS ADRES	
+			      ,(SELECT CASE COUNT(I.EMPNO) WHEN 1 THEN 'Y' ELSE '' END
+				    FROM TBSAL_ANSLRY_INFO I
+				    WHERE I.APPLC_DE = (SELECT MAX(APPLC_DE) FROM TBSAL_ANSLRY_INFO WHERE APPLC_DE <= #ENDDE#)
+				    AND I.PYMNT_SE = '1'
+				    AND I.EMPNO = A.EMPNO)   AS  ANSLRY_AT             /* 연봉여부 */
+			        ,TO_CHAR(ADD_MONTHS(TO_DATE(#ENDDE#,'YYYYMMDD'),-3),'YYYYMM')  AS DATE1
+			        ,TO_CHAR(ADD_MONTHS(TO_DATE(#ENDDE#,'YYYYMMDD'),-1),'YYYYMM')  AS DATE2
+			FROM TBHRM_HR_MASTR A
+			WHERE A.EMPNO = #EMPNO#
+	        
+		]]>	 		        	     
+    </select>  
+    
+    <!-- 소득세율정보2 목록조회 -->
+	<select id="SAL040103DAO.selectRetireCnwksd2List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		 
+	        SELECT FLOOR((#T_AMT# * INCOME_TAXRT / 100) - ADIT_DDC_AM)  AS T2_AMT
+		    FROM TBSAL_INCOME_TAXRT
+		    WHERE LWLT_AM  <  #T_AMT#
+		    AND UPLMT_AM  >=  #T_AMT#
+		    AND APPLC_DE = (SELECT MAX(C.APPLC_DE) FROM TBSAL_INCOME_TAXRT C)
+			
+	        
+		]]>	 		        	     
+    </select>  
+    
+    <!-- 퇴직근속연수공제기준정보 목록조회 -->
+	<select id="SAL040103DAO.selectRetireCnwksdList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		   SELECT 
+		             SN
+					,SDYTRN_1
+					,SDYTRN_2
+					,DDC_1
+					,DDC_2
+					,DDC_3
+					,RM
+	        FROM  TBSAL_RETIRE_CNWK_SDYTRN_DDC
+	        WHERE TO_NUMBER(SDYTRN_1) <= #YEAR#
+	        AND TO_NUMBER(SDYTRN_2) >= #YEAR#
+	        AND APPLC_YEAR = (SELECT MAX(APPLC_YEAR) FROM TBSAL_RETIRE_CNWK_SDYTRN_DDC WHERE APPLC_YEAR <=  #STD_YEAR#)
+	        
+		]]>	 		        	     
+    </select>  
+  
+    <!-- 지급정보(3개월) 목록조회 -->
+	<select id="SAL040103DAO.selectRetireTrgt3List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT NVL(SUM(AMOUNT),0) AS  TOT1
+		FROM TBSAL_MT_SALARY_DTLS
+		WHERE PYMNT_DDC_CODE IN ('1010', '1020', '1030', '1050', '1090', '1140', '1150', '1160', '1250')
+		  AND PYMNT_YM BETWEEN #YYYYMM1# AND #YYYYMM2#
+		  AND EMPNO = #EMPNO#
+    </select>      
+    
+    <!-- 성과급, 연차수당 목록조회 -->
+	<select id="SAL040103DAO.selectRetireTrgt4List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+	        SELECT NVL(SUM(AMOUNT),0) AS  TOT2
+		FROM TBSAL_MT_SALARY_DTLS
+		WHERE PYMNT_DDC_CODE IN ('1330', '1340')
+		  AND PYMNT_YM BETWEEN #YYYYMM1# AND #YYYYMM2#
+		  AND EMPNO = #EMPNO#
+	        
+		]]>	 		        	     
+    </select>
+    
+    <!-- 환산급여 공제율 조회 -->
+	<select id="SAL040103DAO.selectRetireCnwksd5List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+	        SELECT
+	              A.APPLC_YEAR
+				 ,A.LWLT_AMOUNT
+				 ,A.UPLMT_AMOUNT
+				 ,A.ADSBTR_AMOUNT
+				 ,A.STDR_AMOUNT
+				 ,A.DDC_RT
+				 ,A.RM
+			FROM TBSAL_CNVRSN_SALARY_DDC_RT A
+			WHERE A.LWLT_AMOUNT < #CNV_AMT#
+			AND A.UPLMT_AMOUNT >= #CNV_AMT#
+		]]>	 		        	     
+    </select>
+    
+    <!-- 세액계산특례 조회 -->
+	<select id="SAL040103DAO.selectRetireCnwksd6List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+	        SELECT 
+					 A.MTHD_SE
+					,A.APPLC_YEAR
+					,A.RATE
+					,A.RM	   	   
+			FROM TBSAL_RETIRE_TAXAMT_EXCPT A
+			WHERE 1=1
+			AND A.APPLC_YEAR = #APPLC_YEAR#
+			ORDER BY A.MTHD_SE
+		]]>	 		        	     
+    </select>      
+
+</sqlMap>

@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="EIS030103_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 부서코드 목록조회 -->
+	<select id="EIS030103DAO.selectdeptcodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT 
+			      A.DEPT_CODE  AS DEPT_CODE
+				 ,A.DEPT_NM    AS DEPT_NM
+			FROM VWHRM_DEPT A
+			WHERE A.USE_AT = '1'
+			AND A.DEPT_LEVEL_SE IN('1','2')
+			ORDER BY A.DEPT_LEVEL_SE, NVL(A.OUTPT_ORDR,0)
+		]]>
+	</select>
+
+	<!-- 정현원대비표 조회(직종부서별)-->
+	<select id="EIS030103DAO.selectPsncpaJssfcDeptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">	  
+		WITH DEPT_PSNCPA_T AS (
+		    /*정원*/
+		    SELECT s1.DEPT_CODE         AS PSNCPA_DEPT_CODE
+		          ,s1.DEPT_NM           AS DEPT_NM
+		          ,s1.UPPER_DEPT_CODE   AS UPPER_DEPT_CODE
+		          ,s2.*
+		    FROM   VWHRM_DEPT s1
+		           LEFT OUTER JOIN (
+		                            SELECT DEPT_CODE
+										<iterate property="jssfcList" >
+										 ,SUM(DECODE(JSSFC_SE, #jssfcList[].CODE#, NVL(NMPR,0), 0))   AS PSNCPA_$jssfcList[].CODE$
+										</iterate>
+		                            FROM TBHRM_DEPT_ACCTO_PSNCPA t1
+		                                  INNER JOIN (SELECT MAX(STDR_DE) AS STDR_DE FROM TBHRM_DEPT_ACCTO_PSNCPA) t2
+		                                     ON t1.STDR_DE = t2.STDR_DE
+		                            GROUP BY DEPT_CODE
+		                           ) s2
+		                ON s1.DEPT_CODE = s2.DEPT_CODE
+		    WHERE  1=1
+		)
+		, DEPT_NOW_NMPR_T AS (
+		    /*현원*/
+		    SELECT h1.DEPT_CODE         AS NOW_NMPR_DEPT_CODE
+		          ,h1.DEPT_NM           AS DEPT_NM
+		          ,h1.UPPER_DEPT_CODE   AS UPPER_DEPT_CODE
+		          ,h2.*
+		    FROM   VWHRM_DEPT h1
+		           LEFT OUTER JOIN (
+		                            SELECT DEPT_CODE
+		                            	<iterate property="jssfcList" >
+										 ,SUM(DECODE(JSSFC_SE, #jssfcList[].CODE#, 1, 0))   AS NOW_NMPR_$jssfcList[].CODE$
+										</iterate>
+		                            FROM   TBHRM_HR_MASTR
+		                            WHERE  1=1
+		                              AND STTUS_SE <![CDATA[<>]]> '009'
+		                            GROUP BY DEPT_CODE
+		                           ) h2
+		                ON h1.DEPT_CODE = h2.DEPT_CODE
+		    WHERE  1=1
+		)
+		SELECT t1.DEPT_CODE
+		      ,t1.DEPT_NM
+		      ,t1.DEPT_LV1_NM
+		      ,t1.DEPT_LV2_NM
+		      ,t1.DEPT_LV3_NM
+		      /*정원*/
+				<iterate property="jssfcList" >
+				,(SELECT SUM(NVL(PSNCPA_$jssfcList[].CODE$,0)) FROM DEPT_PSNCPA_T START WITH PSNCPA_DEPT_CODE = t1.DEPT_CODE CONNECT BY PRIOR PSNCPA_DEPT_CODE = UPPER_DEPT_CODE)   AS PSNCPA_$jssfcList[].CODE$
+				</iterate>
+		      /*현원*/
+		      	<iterate property="jssfcList" >
+				,(SELECT SUM(NVL(NOW_NMPR_$jssfcList[].CODE$,0)) FROM DEPT_NOW_NMPR_T START WITH NOW_NMPR_DEPT_CODE = t1.DEPT_CODE CONNECT BY PRIOR NOW_NMPR_DEPT_CODE = UPPER_DEPT_CODE)   AS NOW_NMPR_$jssfcList[].CODE$
+				</iterate>
+		FROM   (
+		        SELECT DEPT_CODE
+		              ,DEPT_NM
+		              ,SUBSTR(DEPT_NM_PTH, INSTR(DEPT_NM_PTH, '|', 1, 1)+1, INSTR(DEPT_NM_PTH, '|', 1, 1+1) - INSTR(DEPT_NM_PTH, '|', 1, 1)-1) AS DEPT_LV1_NM
+		              ,SUBSTR(DEPT_NM_PTH, INSTR(DEPT_NM_PTH, '|', 1, 2)+1, INSTR(DEPT_NM_PTH, '|', 1, 2+1) - INSTR(DEPT_NM_PTH, '|', 1, 2)-1) AS DEPT_LV2_NM
+		              ,SUBSTR(DEPT_NM_PTH, INSTR(DEPT_NM_PTH, '|', 1, 3)+1, INSTR(DEPT_NM_PTH, '|', 1, 3+1) - INSTR(DEPT_NM_PTH, '|', 1, 3)-1) AS DEPT_LV3_NM
+		        FROM   VWHRM_DEPT
+		       ) t1
+		WHERE  1=1
+    </select>
+    
+   	<!-- 정현원대비표 조회(직종직급별)-->
+	<select id="EIS030103DAO.selectPsncpaJssfcHrClsfList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.JSSFC_SE
+		      ,t1.JSSFC_NM
+		      ,t2.*
+  			<iterate property="hrClsfList" >
+			 ,NVL(t3.NOW_NMPR_$hrClsfList[].CODE$, 0)    AS NOW_NMPR_$hrClsfList[].CODE$
+			</iterate>
+		      ,t3.*
+		FROM   (
+		        SELECT CODE         AS JSSFC_SE
+		              ,CODE_NM      AS JSSFC_NM
+		        FROM   TBCOM_CMMN_CODE
+		        WHERE  GRP_CODE = 'HRM001'
+		        AND    USE_AT = '1'
+		       ) t1
+		       INNER JOIN (
+		                   /*정원*/
+		                   SELECT JSSFC_SE                                     AS PSNCPA_JSSFC_SE
+								<iterate property="hrClsfList" >
+								 ,SUM(DECODE(CLSF_SE, #hrClsfList[].CODE#, NVL(NMPR,0), 0))  AS PSNCPA_$hrClsfList[].CODE$
+								</iterate>
+		                   FROM TBHRM_CLSF_ACCTO_PSNCPA t1
+		                       INNER JOIN (SELECT MAX(STDR_DE) AS STDR_DE FROM TBHRM_CLSF_ACCTO_PSNCPA) t2
+		                          ON t1.STDR_DE = t2.STDR_DE
+		                   GROUP BY JSSFC_SE
+		                  ) t2
+		            ON t1.JSSFC_SE = t2.PSNCPA_JSSFC_SE
+		       LEFT OUTER JOIN (
+		                        /*현원*/
+		                        SELECT JSSFC_SE                               AS NMPR_JSSFC_SE
+									<iterate property="hrClsfList" >
+									 ,SUM(DECODE(HR_CLSF_SE, #hrClsfList[].CODE#, 1, 0))    AS NOW_NMPR_$hrClsfList[].CODE$
+									</iterate>
+		                        FROM   TBHRM_HR_MASTR
+		                        WHERE  1=1
+		                          AND STTUS_SE <![CDATA[<>]]> '009'
+		                        GROUP BY JSSFC_SE
+		                       ) t3
+		            ON t1.JSSFC_SE = t3.NMPR_JSSFC_SE
+		WHERE  1=1
+		ORDER BY t1.JSSFC_SE
+    </select>
+
+	<!-- 직급별정보 목록조회 -->
+	<select id="EIS030103DAO.selectPsncpa3List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		 SELECT 
+		         COUNT( CASE WHEN ( A.HR_CLSF_SE = '101' ) THEN A.EMPNO END ) AS A0
+		        ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '201' ) THEN A.EMPNO END ) AS A1
+		        ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '202' ) THEN A.EMPNO END ) AS A2
+		        ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '203' ) THEN A.EMPNO END ) AS A3
+		        ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '204' ) THEN A.EMPNO END ) AS A4
+		        ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '205' ) THEN A.EMPNO END ) AS A5
+		        ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '301' ) THEN A.EMPNO END ) AS A6
+		        ,COUNT( CASE WHEN ( A.HR_CLSF_SE IN ('501','502') ) THEN A.EMPNO END ) AS A7
+		        ,COUNT( CASE WHEN ( A.HR_CLSF_SE IN ('601','602') ) THEN A.EMPNO END ) AS A8
+		FROM TBHRM_HR_MASTR A 
+		WHERE A.STTUS_SE = '000'
+		]]>		
+    </select>
+    
+    <!-- 직급별정보 근속년수 목록조회 -->
+	<select id="EIS030103DAO.selectPsncpa4List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		  SELECT 
+               '평균근속년수' AS GUBUN
+               ,FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '101' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END))  AS A0
+		       ,FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '201' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END))  AS A1
+		       ,FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '202' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END))  AS A2
+		       ,FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '203' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END))  AS A3
+		       ,FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '204' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END))  AS A4 
+		       ,FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '205' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END))  AS A5 
+		       ,FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '301' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END))  AS A6 
+		       ,FLOOR(AVG(CASE WHEN A.HR_CLSF_SE IN ('501','502') THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END))  AS A7
+		       ,FLOOR(AVG(CASE WHEN A.HR_CLSF_SE IN ('601','602') THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END))  AS A8 
+          FROM TBHRM_HR_MASTR A
+          WHERE A.STTUS_SE = '000'
+		]]>		
+    </select>
+    
+    <!-- 직종별 상세내역 목록조회 -->
+	<select id="EIS030103DAO.selectPsncpa5List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		   SELECT
+		           SFSAL_GETDEPTNM_01(A.DEPT_CODE)  AS DEPT_NAME
+		          ,A.HR_CLSF_SE
+		          ,A.EMPNM
+		          ,A.BRTHDY
+		          ,A.ECNY_DE
+		          ,FLOOR(MONTHS_BETWEEN(  TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12) || '년 '  || 
+		           FLOOR(MOD(MONTHS_BETWEEN(  TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD')),12 )) || '개월' AS A1
+		          ,FLOOR(MONTHS_BETWEEN(  TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.BRTHDY, 'YYYYMMDD'))/12)                  AS A2
+		          ,NVL((SELECT MAX(AF.GNFD_DE) FROM TBHRM_GNFD_DTLS AF WHERE AF.EMPNO = A.EMPNO AND AF.GNFD_SE IN ('012','013')),A.ECNY_DE)         AS GNFD_DE
+		          ,FLOOR(MONTHS_BETWEEN(  TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(
+		            NVL((SELECT MAX(AF.GNFD_DE)  FROM TBHRM_GNFD_DTLS AF   WHERE AF.EMPNO = A.EMPNO  AND AF.GNFD_SE IN ('012','013')),A.ECNY_DE) , 'YYYYMMDD'))/12) || '년 '  || 
+		           FLOOR(MOD(MONTHS_BETWEEN(  TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(
+		            NVL((SELECT MAX(AF.GNFD_DE)  FROM TBHRM_GNFD_DTLS AF   WHERE AF.EMPNO = A.EMPNO  AND AF.GNFD_SE IN ('012','013')),A.ECNY_DE) , 'YYYYMMDD')),12 )) || '개월'     AS A3   
+		          ,TO_CHAR(LAST_DAY(ADD_MONTHS(TO_DATE(A.BRTHDY, 'YYYYMMDD'), 12*60)), 'YYYYMMDD')   AS AGLMT_PRARNDE  
+		  FROM TBHRM_HR_MASTR A
+		  	   LEFT OUTER JOIN VWHRM_DEPT B
+		  	   ON A.DEPT_CODE = B.DEPT_CODE 
+		  WHERE A.STTUS_SE = '000'
+		    AND A.HR_CLSF_SE LIKE #JSSFC_SE# ||'%'
+	      ORDER BY A.RSPOFC_SE, SFHRM_GET_OFCPSCD(A.EMPNO,A.JSSFC_SE,A.HR_CLSF_SE,A.ECNY_DE),A.PAY_CLSF_SE,A.EMPNO,A.JSSFC_SE 
+		]]>		
+    </select>
+    
+    <!-- 퇴직자현황 목록조회 -->
+	<select id="EIS030103DAO.selectPsncpa6List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT 
+			     t1.YEAR
+			    ,t2.A101
+			    ,t2.A201
+			    ,t2.A202
+			    ,t2.A203
+			    ,t2.A204
+			    ,t2.A205
+			    ,t2.A301
+			    ,t2.A502
+			    ,t2.A602
+			    ,t3.B101
+			    ,t3.B201
+			    ,t3.B202
+			    ,t3.B203
+			    ,t3.B204
+			    ,t3.B205
+			    ,t3.B301
+			    ,t3.B502
+			    ,t3.B602
+			FROM (SELECT TO_CHAR(SYSDATE,'YYYY') - LEVEL + 1 AS YEAR
+			      FROM DUAL
+			      CONNECT BY LEVEL <= 5
+			     ) t1
+			     LEFT OUTER JOIN
+			     (SELECT 
+			             SUBSTR(A.RETIRE_DE,1,4) AS YEAR
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '101' ) THEN A.EMPNO END ) AS A101
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '201' ) THEN A.EMPNO END ) AS A201
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '202' ) THEN A.EMPNO END ) AS A202
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '203' ) THEN A.EMPNO END ) AS A203
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '204' ) THEN A.EMPNO END ) AS A204
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '205' ) THEN A.EMPNO END ) AS A205
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '301' ) THEN A.EMPNO END ) AS A301
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE IN ('501','502') ) THEN A.EMPNO END ) AS A502
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE IN ('601','602') ) THEN A.EMPNO END ) AS A602
+			      FROM TBHRM_HR_MASTR A 
+			      WHERE A.RETIRE_DE IS NOT NULL
+			      AND SUBSTR(A.RETIRE_DE,1,4) BETWEEN TO_CHAR(SYSDATE,'YYYY')-4 AND TO_CHAR(SYSDATE,'YYYY')
+			      GROUP BY SUBSTR(A.RETIRE_DE,1,4)
+			     ) t2
+			     ON t1.YEAR = t2.YEAR
+			     LEFT OUTER JOIN
+			     (SELECT 
+			             SUBSTR(A.ECNY_DE,1,4) AS YEAR
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '101' ) THEN A.EMPNO END ) AS B101
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '201' ) THEN A.EMPNO END ) AS B201
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '202' ) THEN A.EMPNO END ) AS B202
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '203' ) THEN A.EMPNO END ) AS B203
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '204' ) THEN A.EMPNO END ) AS B204
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '205' ) THEN A.EMPNO END ) AS B205
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE = '301' ) THEN A.EMPNO END ) AS B301
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE IN ('501','502') ) THEN A.EMPNO END ) AS B502
+			            ,COUNT( CASE WHEN ( A.HR_CLSF_SE IN ('601','602') ) THEN A.EMPNO END ) AS B602
+			      FROM TBHRM_HR_MASTR A
+			      WHERE 1=1
+			      AND SUBSTR(A.ECNY_DE,1,4) BETWEEN TO_CHAR(SYSDATE,'YYYY')-4 AND TO_CHAR(SYSDATE,'YYYY')
+			      GROUP BY SUBSTR(A.ECNY_DE,1,4)
+			     ) t3
+			     ON t1.YEAR = t3.YEAR
+			ORDER BY t1.YEAR DESC
+		]]>		
+    </select>
+    
+    
+    <!-- 퇴직자 상세내역 목록조회 -->
+	<select id="EIS030103DAO.selectPsncpa7List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		   SELECT
+		           SFSAL_GETDEPTNM_01(A.DEPT_CODE)  AS DEPT_NAME
+		          ,A.JSSFC_SE 
+		          ,A.HR_CLSF_SE
+		          ,A.EMPNM
+		          ,A.BRTHDY
+		          ,A.ECNY_DE
+		          ,FLOOR(MONTHS_BETWEEN( TO_DATE(A.RETIRE_DE,'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12) || '년 '  || 
+		           FLOOR(MOD(MONTHS_BETWEEN( TO_DATE(A.RETIRE_DE,'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD')),12 )) || '개월'   AS A1
+		          ,FLOOR(MONTHS_BETWEEN( TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.BRTHDY, 'YYYYMMDD'))/12)    AS A2
+		          ,A.RETIRE_DE AS RETIRE_DE
+		          ,(SELECT GNFD_SE
+				    FROM TBHRM_GNFD
+				    WHERE EMPNO = A.EMPNO AND GNFD_DE = (SELECT MAX(GNFD_DE) FROM TBHRM_GNFD WHERE EMPNO = A.EMPNO))  AS GNFD_SE
+		  FROM TBHRM_HR_MASTR A 
+		  WHERE SUBSTR(A.RETIRE_DE,1,4) = #YEAR#
+		  AND A.JSSFC_SE IN ('01','02','03','05','06','99')
+	      ORDER BY A.RETIRE_DE DESC 
+		]]>		
+    </select>
+    
+    <!-- 임금피크대상자 목록조회 -->
+	<select id="EIS030103DAO.selectPsncpa8List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		SELECT
+		     t1.YY_ODR
+		    ,SUM(DECODE(t2.HR_CLSF_SE,'101',1,0)) C101
+		    ,SUM(DECODE(t2.HR_CLSF_SE,'201',1,0)) C201
+		    ,SUM(DECODE(t2.HR_CLSF_SE,'202',1,0)) C202
+		    ,SUM(DECODE(t2.HR_CLSF_SE,'203',1,0)) C203
+		    ,SUM(DECODE(t2.HR_CLSF_SE,'204',1,0)) C204
+		    ,SUM(DECODE(t2.HR_CLSF_SE,'205',1,0)) C205
+		    ,SUM(DECODE(t2.HR_CLSF_SE,'301',1,0)) C301
+		    ,SUM(DECODE(t2.HR_CLSF_SE,'502',1,0)) C502
+		    ,SUM(DECODE(t2.HR_CLSF_SE,'602',1,0)) C602
+		FROM TBSAL_WAGE_PEAK t1
+		     INNER JOIN TBHRM_HR_MASTR t2
+		     ON t1.EMPNO = t2.EMPNO
+		WHERE TO_CHAR(SYSDATE, 'YYYYMMDD') BETWEEN BGNDE AND ENDDE
+		GROUP BY t1.YY_ODR
+		]]>		
+    </select>
+    
+    <!-- 임금피크대상자 근속년수 목록조회 -->
+	<select id="EIS030103DAO.selectPsncpa9List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		  SELECT 
+		       '평균근속년수' AS GUBUN
+		       ,NVL(FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '101' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END)),0)  AS A0
+		       ,NVL(FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '201' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END)),0)  AS A1
+		       ,NVL(FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '202' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END)),0)  AS A2
+		       ,NVL(FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '203' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END)),0)  AS A3
+		       ,NVL(FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '204' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END)),0)  AS A4 
+		       ,NVL(FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '205' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END)),0)  AS A5 
+		       ,NVL(FLOOR(AVG(CASE WHEN A.HR_CLSF_SE = '301' THEN MONTHS_BETWEEN(TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12 END)),0)  AS A6 
+		  FROM TBHRM_HR_MASTR A
+		      ,TBSAL_WAGE_PEAK B
+		  WHERE A.STTUS_SE = '000'
+		  AND A.JSSFC_SE IS NOT NULL
+		  AND B.BGNDE <= TO_CHAR(SYSDATE,'YYYYMMDD')
+		  AND B.ENDDE >= TO_CHAR(SYSDATE,'YYYYMMDD')
+		  AND A.EMPNO = B.EMPNO
+	      
+		]]>		
+    </select>
+    
+    <!-- 임금피크대상자 상세내역 목록조회 -->
+	<select id="EIS030103DAO.selectPsncpa10List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		SELECT 
+		     t1.EMPNO
+		    ,t2.EMPNM
+		    ,t2.DEPT_CODE
+		    ,t3.DEPT_NM
+		    ,t2.JSSFC_SE
+		    ,t4.CODE_NM AS JSSFC_NM
+		    ,t2.HR_CLSF_SE
+		    ,t5.CODE_NM AS CLSF_NM
+		    ,t2.BRTHDY
+		    ,t1.YY_ODR
+		    ,t1.BGNDE
+		    ,t1.ENDDE
+		    ,t1.RETIRE_YM
+		    ,t2.ECNY_DE
+		FROM TBSAL_WAGE_PEAK t1
+		     INNER JOIN TBHRM_HR_MASTR t2
+		     ON t1.EMPNO = t2.EMPNO
+		     LEFT OUTER JOIN TBHRM_DEPT t3
+		     ON t2.DEPT_CODE = t3.DEPT_CODE
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		     ON  t2.JSSFC_SE = t4.CODE
+		     AND t4.GRP_CODE = 'HRM001'
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		     ON  t2.HR_CLSF_SE = t5.CODE
+		     AND t5.GRP_CODE = 'HRM002'
+		WHERE TO_CHAR(SYSDATE,'YYYYMMDD') BETWEEN t1.BGNDE AND t1.ENDDE 
+		]]>		
+    </select>
+    
+    <!-- 임원퇴직자 목록조회 -->
+	<select id="EIS030103DAO.selectPsncpa11List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		   SELECT
+		           SFSAL_GETDEPTNM_01(A.DEPT_CODE)  AS DEPT_NAME
+		          ,A.JSSFC_SE 
+		          ,A.HR_CLSF_SE
+		          ,A.EMPNM
+		          ,A.BRTHDY
+		          ,A.ECNY_DE
+		          ,FLOOR(MONTHS_BETWEEN( TO_DATE(A.RETIRE_DE,'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD'))/12) || '년 '  || 
+		           FLOOR(MOD(MONTHS_BETWEEN( TO_DATE(A.RETIRE_DE,'YYYYMMDD'), TO_DATE(A.ECNY_DE, 'YYYYMMDD')),12 )) || '개월'   AS A1
+		          ,FLOOR(MONTHS_BETWEEN( TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD'),'YYYYMMDD'), TO_DATE(A.BRTHDY, 'YYYYMMDD'))/12)    AS A2
+		          ,FLOOR(MONTHS_BETWEEN( TO_DATE(A.RETIRE_DE,'YYYYMMDD'), TO_DATE(
+		            NVL((SELECT MAX(AF.GNFD_DE)  FROM TBHRM_GNFD_DTLS AF   WHERE AF.EMPNO = A.EMPNO  AND AF.GNFD_SE IN ('018')),A.ECNY_DE) , 'YYYYMMDD'))/12) || '년 '  || 
+		            FLOOR(MOD(MONTHS_BETWEEN( TO_DATE(A.RETIRE_DE,'YYYYMMDD'), TO_DATE(
+		            NVL((SELECT MAX(AF.GNFD_DE)  FROM TBHRM_GNFD_DTLS AF   WHERE AF.EMPNO = A.EMPNO  AND AF.GNFD_SE IN ('018')),A.ECNY_DE) , 'YYYYMMDD')),12 )) || '개월'  AS A3  
+                  ,NVL((SELECT MAX(AF.GNFD_DE) FROM TBHRM_GNFD_DTLS AF WHERE AF.EMPNO = A.EMPNO AND AF.GNFD_SE IN ('018')),A.ECNY_DE)   AS GNFD_DE
+                  ,A.RETIRE_DE AS RETIRE_DE
+		   FROM TBHRM_HR_MASTR A 
+		  WHERE  A.JSSFC_SE = '01'
+          AND A.STTUS_SE = '009'
+	      ORDER BY A.RETIRE_DE DESC
+		]]>		
+    </select>
+
+</sqlMap>

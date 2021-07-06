@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH010101_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+    
+    <!-- 평가차수 조회 -->
+	<select id="ACH010101DAO.selectListDtl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT B.EVL_CYCLE 				AS C_EVL_CYCLE
+		       ,A.EVL_YEAR 				AS EVL_YEAR
+		       ,A.ODR_SE 				AS ODR_SE
+		       ,SFACH_GET_EVLODRNM(B.EVL_CYCLE, A.ODR_SE) AS C_ODR_SE_NM
+		       ,A.TRGET_PD_BGNMT 		AS TP_BGNMT
+		       ,A.TRGET_PD_ENDMT 		AS TP_ENDMT
+		       ,A.TRGET_PD_BGNDE 		AS TP_BGNDE
+		       ,A.TRGET_PD_ENDDE 		AS TP_ENDDE
+		       ,A.GOAL_REGIST_BGNDE 	AS GR_BGNDE
+		       ,A.GOAL_REGIST_ENDDE 	AS GR_ENDDE
+		       ,A.ACMSLT_REGIST_BGNDE 	AS AR_BGNDE
+		       ,A.ACMSLT_REGIST_ENDDE 	AS AR_ENDDE
+		       ,A.EVL_BGNDE 			AS EVL_BGNDE
+		       ,A.EVL_ENDDE 			AS EVL_ENDDE 
+		       ,A.CUR_MT                AS CUR_MT
+		  FROM TBACH_EVL_ODR A,  TBACH_EVL_CYCLE B
+		 WHERE 1=1 
+	       AND A.EVL_YEAR = B.EVL_YEAR       
+	       AND A.EVL_YEAR = #EVL_YEAR# 
+	       AND B.EVL_CYCLE = #EVL_CYCLE#
+	     ORDER BY TO_NUMBER(A.ODR_SE)
+    </select>      
+    
+    <!-- 평가차수 기초자료 생성위한 임시조회 -->
+	<select id="ACH010101DAO.selectTempOdr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH V_ODR AS ( SELECT B.EVL_YEAR AS EVL_YEAR
+			                      ,B.EVL_CYCLE AS EVL_CYCLE 
+						          ,A.CODE AS ODR_SE
+						          ,( A.CODE_NM || ' / ' || DECODE(B.EVL_CYCLE,'1',A.CHRCTR_PREPAR_VALUE_0,
+						        											  '2', A.CHRCTR_PREPAR_VALUE_1, 
+						        											  '4', A.CHRCTR_PREPAR_VALUE_2, 
+						        											 '12', A.CHRCTR_PREPAR_VALUE_3)) AS ODR_SE_NM 
+						      FROM TBCOM_CMMN_CODE A, TBACH_EVL_CYCLE B
+						     WHERE 1=1
+						       AND A.GRP_CODE = 'ACH010'
+						       AND B.EVL_YEAR = #EVL_YEAR#
+						       AND B.EVL_CYCLE = #EVL_CYCLE#		   
+						   	   AND TO_NUMBER(A.CODE) <= TO_NUMBER(B.EVL_CYCLE)
+						     ORDER BY TO_NUMBER(A.CODE)
+            )            
+			SELECT 
+     			  A.EVL_CYCLE 					AS C_EVL_CYCLE
+				 ,NVL(B.EVL_YEAR,A.EVL_YEAR)    AS EVL_YEAR                
+				 ,NVL(B.ODR_SE,A.ODR_SE)        AS ODR_SE
+				 ,A.ODR_SE_NM 					AS C_ODR_SE_NM                     
+				 ,B.TRGET_PD_BGNMT              AS TP_BGNMT          
+				 ,B.TRGET_PD_ENDMT              AS TP_ENDMT          
+				 ,B.TRGET_PD_BGNDE              AS TP_BGNDE          
+				 ,B.TRGET_PD_ENDDE              AS TP_ENDDE          
+				 ,B.GOAL_REGIST_BGNDE           AS GR_BGNDE       
+				 ,B.GOAL_REGIST_ENDDE           AS GR_ENDDE       
+				 ,B.ACMSLT_REGIST_BGNDE         AS AR_BGNDE     
+				 ,B.ACMSLT_REGIST_ENDDE         AS AR_ENDDE     
+				 ,B.EVL_BGNDE                   AS EVL_BGNDE               
+				 ,B.EVL_ENDDE                   AS EVL_ENDDE               
+			 FROM V_ODR A, TBACH_EVL_ODR B
+			WHERE 1=1
+			  AND A.EVL_YEAR = B.EVL_YEAR(+)
+			  AND A.ODR_SE = B.ODR_SE(+)
+		]]>
+    </select>    
+    
+     <!-- 평가주기 둥록 -->
+    <insert id="ACH010101DAO.mstC" parameterClass="java.util.HashMap" >	
+	    MERGE INTO TBACH_EVL_CYCLE
+			USING DUAL ON (  
+			                  EVL_YEAR 	= #EVL_YEAR#
+			              )
+			WHEN MATCHED THEN
+			    UPDATE SET 
+			               EVL_CYCLE = #EVL_CYCLE#
+			              ,UPDUSR_ID = #S_USER_ID#
+			              ,UPDT_DT 	 = SYSDATE
+			WHEN NOT MATCHED THEN
+			    INSERT (
+			          EVL_YEAR
+			        , EVL_CYCLE
+			        , REGISTER_ID
+			        , REGIST_DT
+			        , UPDUSR_ID
+			        , UPDT_DT	
+			        )
+			    VALUES	(
+			          #EVL_YEAR#
+			        , #EVL_CYCLE#
+			        , #S_USER_ID#
+			        , SYSDATE
+			        , #S_USER_ID#
+			        , SYSDATE
+			    )
+    </insert>
+    
+    <!-- 평가주기 수정/신규 -->
+    <update id="ACH010101DAO.mstU" parameterClass="java.util.HashMap" >    
+		UPDATE TBACH_EVL_CYCLE SET 
+		       EVL_CYCLE 	= #EVL_CYCLE#
+		      ,UPDUSR_ID 	= #S_USER_ID#
+		      ,UPDT_DT 		= SYSDATE
+	     WHERE 1=1
+	 	   AND EVL_YEAR = #EVL_YEAR#
+    </update>        
+    
+     <!-- 평가차수 등록_기초자료생성 -->
+    <insert id="ACH010101DAO.dtlC" parameterClass="java.util.HashMap" >    
+		{call  
+		    BEGIN	    
+			    DELETE FROM TBACH_EVL_ODR
+				 WHERE 1=1
+				   AND EVL_YEAR = #EVL_YEAR#
+				   AND ODR_SE = #ODR_SE#
+				;    
+				INSERT INTO TBACH_EVL_ODR (
+							 EVL_YEAR
+							,ODR_SE
+							,TRGET_PD_BGNMT
+							,TRGET_PD_ENDMT
+							,TRGET_PD_BGNDE
+							,TRGET_PD_ENDDE
+							,GOAL_REGIST_BGNDE
+							,GOAL_REGIST_ENDDE
+							,ACMSLT_REGIST_BGNDE
+							,ACMSLT_REGIST_ENDDE
+							,EVL_BGNDE
+							,EVL_ENDDE
+							,CUR_MT
+							,REGISTER_ID
+							,REGIST_DT
+							,UPDUSR_ID
+							,UPDT_DT
+						   )
+					  VALUES
+						   (
+							 #EVL_YEAR#
+							,#ODR_SE#
+							,#TP_BGNMT#
+							,#TP_ENDMT#
+							,#TP_BGNDE#
+							,#TP_ENDDE#
+							,#GR_BGNDE#
+							,#GR_ENDDE#
+							,#AR_BGNDE#
+							,#AR_ENDDE#
+							,#EVL_BGNDE#
+							,#EVL_ENDDE#
+							,#CUR_MT#
+						    ,#S_USER_ID#
+						    ,SYSDATE
+						    ,#S_USER_ID#
+						    ,SYSDATE
+							)
+				;   
+		    END
+	    }					
+    </insert>
+    
+    <!--평가차수 수정/신규 -->
+    <update id="ACH010101DAO.dtlU" parameterClass="java.util.HashMap" >
+		UPDATE TBACH_EVL_ODR SET 
+                 TRGET_PD_BGNMT        = #TP_BGNMT#    
+                ,TRGET_PD_ENDMT        = #TP_ENDMT#    
+                ,TRGET_PD_BGNDE        = #TP_BGNDE#    
+                ,TRGET_PD_ENDDE        = #TP_ENDDE#    
+                ,GOAL_REGIST_BGNDE     = #GR_BGNDE#    
+                ,GOAL_REGIST_ENDDE     = #GR_ENDDE#    
+                ,ACMSLT_REGIST_BGNDE   = #AR_BGNDE#    
+                ,ACMSLT_REGIST_ENDDE   = #AR_ENDDE#    
+                ,EVL_BGNDE             = #EVL_BGNDE#   
+                ,EVL_ENDDE             = #EVL_ENDDE#   
+                ,CUR_MT                = #CUR_MT#
+                ,UPDUSR_ID             = #S_USER_ID# 
+                ,UPDT_DT			   = SYSDATE 
+         WHERE 1=1
+           AND EVL_YEAR = #EVL_YEAR#
+           AND ODR_SE = #ODR_SE#
+    </update>         
+    
+    <!-- 평가차수 관련 테이블 전체 삭제 
+    	 : 마감 테이블
+    	 : 테이터이관 테이블
+    	 : 가중치 테이블
+    	 : 핵심성과자료 테이블
+    	 : 평가차수 테이블
+    -->
+    <delete id="ACH010101DAO.before01D" parameterClass="java.util.HashMap" >
+	 	DELETE TBACH_CLOS		   
+		 WHERE 1=1
+		   AND EVL_YEAR = #EVL_YEAR#   
+    </delete>  
+    <delete id="ACH010101DAO.before02D" parameterClass="java.util.HashMap" >
+	 	DELETE TBACH_DATA_TRNSFER		   
+		 WHERE 1=1
+		   AND EVL_YEAR = #EVL_YEAR#   
+    </delete>  
+    <delete id="ACH010101DAO.before03D" parameterClass="java.util.HashMap" >
+	 	DELETE TBACH_WGHTVAL		   
+		 WHERE 1=1
+		   AND EVL_YEAR = #EVL_YEAR#   
+    </delete>
+    <delete id="ACH010101DAO.before04D" parameterClass="java.util.HashMap" >
+	 	DELETE TBACH_KPI		   
+		 WHERE 1=1
+		   AND EVL_YEAR = #EVL_YEAR#   
+    </delete> 
+    <delete id="ACH010101DAO.before05D" parameterClass="java.util.HashMap" >
+	 	DELETE TBACH_EVL_ODR		   
+		 WHERE 1=1
+		   AND EVL_YEAR = #EVL_YEAR#   
+    </delete>  
+    
+    <!-- 평가주기  전체 삭제 -->
+    <delete id="ACH010101DAO.cycleD" parameterClass="java.util.HashMap" >
+	 	DELETE TBACH_EVL_CYCLE	   
+		 WHERE 1=1
+		  AND EVL_YEAR = #EVL_YEAR#   
+    </delete>      
+
+</sqlMap>

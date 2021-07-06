@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FRM02020300SQL">	
+
+	<!-- 쿼리명 : 수입결의 현황
+	설명 : 수입결의 조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.01.26
+	-->
+	<select id="FRM02020300DAO.selectFrmEndwInDecsn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		   SELECT a.ACCNUT_YEAR,	           /* 회계년도 */
+                 a.ENDW_INCME_DECSN_NO,	   /* 기금수입결의번호 */
+                 trim(a.INCME_SE) INCME_SE,	               /* 수입구분(1:임대료, 2:연체이자, 3:충당금, 4:지원금, 5:이자, 9:기타) */
+                 a.INCME_DT,	               /* 수입일자 */
+                 a.ITNC_MAN_ID,	           /* 발의자ID */
+                 (SELECT DECODE(COUNT(*),0,1,COUNT(*))
+                    FROM TBRNT_LFSTS_RCIV z
+                     WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                       AND ENDW_INCME_DECSN_NO = a.ENDW_INCME_DECSN_NO )  IN_CNT, 
+                 (SELECT USER_NM
+                    FROM TBCOM_USER z
+                    WHERE USER_ID = a.ITNC_MAN_ID )ITNC_MAN_NM,
+                 a.ITNC_DE,	               /* 발의일자 */
+                 a.DECSN_DE,	               /* 결의일자 */
+                 a.INCME_PREARNGE_AMOUNT,	   /* 수입예정금액 */
+                 a.INCME_DECSN_AMOUNT,       /* 수입결의금액 */
+                 a.ACNUTNO,	               /* 수입계좌번호 */
+                 b.ACNUT_PRPOS ACNUTNO_NM,           /* 수입계좌명 */
+                 (SELECT FNLT_NM
+                    FROM TBFRM_ENDW_FNLT z
+                    WHERE ENDW_FNLT_CODE = b.ENDW_FNLT_CODE) FNLT_NM ,/* 은행명 */ 
+                 a.CNTRCTR_NO,               /* 계약자번호 */
+                 a.AREA_SE,	               /* 지역구분 */
+                 a.DONG,	                   /* 동 */
+                 a.HO,	                   /* 호 */
+                 a.DELNG_TY_CODE,	           /* 거래유형코드 */
+                 (SELECT DELNG_TY_NM
+                    FROM TBFRM_DELNG_TY_CODE z
+                    WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                      AND DELNG_TY_CODE = a.DELNG_TY_CODE)
+                  DELNG_TY_NM,	           /* 거래유형명 */
+                 a.BCNC_CODE,	               /* 거래처코드 */
+                 c.RPRSNTV,                  /* 대표자명 */
+                 c.BIZRNO,                   /* 사업자번호 */
+                 CASE WHEN trim(a.INCME_SE) = '1'
+                           THEN (SELECT LISTAGG(MAX((SELECT CODE_NM
+                                                       FROM TBFRM_ENDW_CMMN_CODE p
+                                                        WHERE GRP_CODE = 'RNT004'
+                                                          AND CHRCTR_PREPAR_VALUE_1 = z.AREA_SE)), ' / ') WITHIN GROUP (ORDER BY AREA_SE) 
+                                  FROM TBRNT_LFSTS_RCIV z
+                                   WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                                    AND ENDW_INCME_DECSN_NO = a.ENDW_INCME_DECSN_NO
+                                    GROUP BY AREA_SE )
+                      ELSE c.MTLTY
+                  END MTLTY,                   /* 거래처명 */ 
+                 a.SUPLY_AMOUNT,	           /* 공급가액 */
+                 a.VAT,	                   /* 부가세 */
+                 a.ADVPAY_CRRX,	           /* 선급법인세 */
+                 a.SUMRY,	                   /* 적요 */
+                 a.INNER_SANCTN_NO, /* 내부결재번호 */
+                 nvl(a.SANCTN_STTUS,0) 	 SANCTN_STTUS          /* 결재상태(1:결재완료, 2:결재진행, 3:결재반려) */
+             FROM TBFRM_ENDW_INCME_DECSN a,
+                  TBFRM_ENDW_ACNUT b,
+                  TBFRM_ENDW_BCNC c
+             WHERE a.ACCNUT_YEAR = #accuntYear#
+            <isNotEmpty property="endwInDecsnFrNo">
+               AND a.ENDW_INCME_DECSN_NO between #endwInDecsnFrNo# and #endwInDecsnToNo#
+            </isNotEmpty>
+            <isNotEmpty property="decsnFrDe">
+               AND a.DECSN_DE between #decsnFrDe# and #decsnToDe#
+            </isNotEmpty>
+            <isNotEmpty property="inCmeSe">
+               AND a.INCME_SE = #inCmeSe#
+            </isNotEmpty>
+            <isNotEmpty property="sancSe">
+               AND nvl(a.SANCTN_STTUS,'0') = #sancSe#
+            </isNotEmpty>
+               AND a.ACNUTNO = b.ACNUTNO(+)
+               AND a.BCNC_CODE = c.BCNC_CODE(+)
+             ORDER BY a.ACCNUT_YEAR,
+                      a.ENDW_INCME_DECSN_NO
+             
+	</select>
+	
+	
+	<!--   전표기본조회 	-->
+    
+	<select id="FRM02020300DAO.selectFrmEndwChit" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT ACCNUT_YEAR,
+                 CHIT_NO,
+                 CHIT_DE,
+                 DSCN_AT,
+                 RM,
+                 ENDW_INCME_DECSN_NO,
+                 OVERRPAY_DECSN_NO
+            FROM TBFRM_ENDW_CHIT
+             WHERE ACCNUT_YEAR = #accuntYear#
+               AND ENDW_INCME_DECSN_NO = #endwInDecsnNo#
+               AND OVERRPAY_DECSN_NO IS NULL
+	</select>
+	
+	<!--   전표기본상세 	-->
+	
+	<select id="FRM02020300DAO.selectFrmEndwChitDetail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		     SELECT ROWNUM SN,
+		            CHIT_NO,
+                    CHIT_SN,
+                    ACCNUT_YEAR,
+                    TRIM(DBRT_SE) DBRT_SE ,
+                    ACNT_CODE,
+                    (SELECT ACNTCTGR_NM
+                       FROM TBFRM_ENDW_ACNTCTGR z
+                       WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                         AND ACNT_CODE = a.ACNT_CODE ) ACNTCTGR_NM,
+                    DEBTOR_AMOUNT,
+                    CRDIT_AMOUNT,
+                    SUMRY
+               FROM TBFRM_ENDW_CHIT_DETAIL a
+               WHERE ACCNUT_YEAR = #accuntYear# 
+                 AND CHIT_NO = #chitNo#
+                order by CHIT_SN
+	</select>
+	
+</sqlMap>

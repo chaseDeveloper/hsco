@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070118_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap" />
+
+	<!-- 시간외근무현황 조회 쿼리 -->
+	<select id="HRM070118DAO.selectOvtmwrkReword" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH TBHRM_REWARD_MANAGE_TM AS (
+			SELECT   OVTMWRK_YM
+			       , EMPNO
+			       , REWARD_SE
+			       , LPAD(NVL(DECODE(TRUNC(OVTMWRK_TM/60),0,'',TRUNC(OVTMWRK_TM/60)),0), 2, '0') || LPAD((MOD(OVTMWRK_TM,60)), 2, '0') AS REWARD_TM
+			       , LPAD(NVL(DECODE(TRUNC(OVTMWRK_TM/60),0,'',TRUNC(OVTMWRK_TM/60)),0), 2, '0') AS REWARD_HH
+			       , LPAD((MOD(OVTMWRK_TM,60)), 2, '0')                                          AS REWARD_MM
+			       , LPAD(NVL(DECODE(TRUNC(SUBST_TM/60),0,'',TRUNC(SUBST_TM/60)),0), 2, '0') || LPAD((MOD(SUBST_TM,60)), 2, '0') AS SUBST_TM
+			       , LPAD(NVL(DECODE(TRUNC(SUBST_TM/60),0,'',TRUNC(SUBST_TM/60)),0), 2, '0') AS SUBST_HH
+			       , LPAD((MOD(SUBST_TM,60)), 2, '0')                                        AS SUBST_MM
+			FROM (
+				SELECT OVTMWRK_YM
+				       , EMPNO
+				       , REWARD_SE
+				       , SUM(TO_NUMBER(SUBSTR(REWARD_TM,0,2))*60 + TO_NUMBER(SUBSTR(REWARD_TM, 3,2))) AS OVTMWRK_TM
+				       , SUM(TO_NUMBER(SUBSTR(SUBST_TM,0,2))*60 + TO_NUMBER(SUBSTR(SUBST_TM, 3,2)))   AS SUBST_TM
+				FROM(
+						  SELECT t1.OVTMWRK_YM
+						       , t1.EMPNO
+						       , t1.REWARD_SE
+						       , (CASE WHEN t1.REWARD_SE = '1' THEN t1.OVTMWRK_TM ELSE '0000' END) AS REWARD_TM
+						       , (CASE WHEN t1.REWARD_SE = '2' THEN t1.OVTMWRK_TM ELSE '0000' END) AS SUBST_TM
+						  FROM TBHRM_OVTMWRK_REWARD_MANAGE t1
+							INNER JOIN TBHRM_WRKCP t2
+							  ON  t1.EMPNO      = t2.EMPNO
+							  AND t1.WRKCP_SEQ  = t2.SEQ
+					<isNotEmpty property="EMPNO">
+				      WHERE t1.EMPNO = #EMPNO#
+					</isNotEmpty>
+				)
+				GROUP BY  OVTMWRK_YM, EMPNO, REWARD_SE)
+		)
+		, TBHRM_OVTMWRK_TM AS (
+		    SELECT SUBSTR(OVTMWRK_DE,1,6) AS OVTMWRK_YM
+		         , EMPNO
+		         , SUM(OVTIME_WORK_TIME) AS OVTIME_WORK_TIME /*시간외근무시간*/
+		         , SUM(RESTDE_WORK_TIME) AS RESTDE_WORK_TIME /*휴일근무시간*/
+		         , SUM(NIGHT_WORK_TIME)  AS NIGHT_WORK_TIME  /*야간근무시간*/
+	             , LPAD( (NVL(SUM(OVTIME_WORK_TIME),'0000') ),4,'0') AS OVTIME_REMNDR /*시간외(보상전환가능 총시간)*/
+		    FROM TBHRM_OVTMWRK t1
+		    WHERE SUBSTR(OVTMWRK_DE,1,6) = #YYYYMM#
+		      AND SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5'	/*결재완료건만*/
+		    GROUP BY SUBSTR(OVTMWRK_DE,1,6)
+		           , EMPNO
+		)  SELECT    OVTMWRK_YM
+		            ,CASE WHEN OVTMWRK_YM <![CDATA[<]]> '201905'
+		            	  THEN TO_CHAR(ADD_MONTHS(TO_DATE(OVTMWRK_YM||'01' , 'YYYYMMDD'),2),'YYYYMM')
+		            	  ELSE TO_CHAR(ADD_MONTHS(TO_DATE(OVTMWRK_YM||'01' , 'YYYYMMDD'),6),'YYYYMM')
+		             END AS MAX_REG_YM
+					,DEPT_CODE 
+					,DEPT_NM
+					,EMPNO
+					,EMPNM
+					,OVTIME_WORK_TIME /*시간외근무시간*/
+					,RESTDE_WORK_TIME /*휴일근무시간*/
+					,OVTIME_DCSN_TIME /*시간외확정시간*/
+					,RESTDE_DCSN_TIME /*휴일확정시간*/
+					,NIGHT_WORK_TIME  /*야간근무시간*/
+					,REWARD_TM
+					,SUBST_TM
+					,REMNDR_HH || REMNDR_MM AS OVTIME_REMNDR
+					,REMNDR_HH
+					,REMNDR_MM
+					,OVTIME_HOUR
+					,OVTIME_MIN
+					,RESTDE_REMNDR
+		  FROM (SELECT t1.OVTMWRK_YM
+				     , t5.DEPT_CODE 
+				     , t4.DEPT_NM
+				     , t1.EMPNO
+				     , t5.EMPNM
+				     , LPAD(NVL(t1.OVTIME_WORK_TIME, '0000'),4, '0') AS OVTIME_WORK_TIME /*시간외근무시간*/
+				     , LPAD(NVL(t1.RESTDE_WORK_TIME, '0000'),4, '0') AS RESTDE_WORK_TIME /*휴일근무시간*/
+				     , LPAD(NVL(t6.OVTIME_TIME, '0000'),4, '0')      AS OVTIME_DCSN_TIME /*시간외확정시간*/
+				     , LPAD(NVL(t6.RESTDE_TIME, '0000'),4, '0')      AS RESTDE_DCSN_TIME /*휴일확정시간*/
+				     , LPAD(NVL(t1.NIGHT_WORK_TIME, '0000'),4, '0')  AS NIGHT_WORK_TIME  /*야간근무시간*/
+				     , LPAD(NVL(t2.REWARD_TM, '0000'),4, '0')        AS REWARD_TM
+				     , LPAD(NVL(t2.SUBST_TM, '0000'),4, '0')         AS SUBST_TM
+				     ,LPAD(TRUNC((((TO_NUMBER(SUBSTR(NVL(t1.OVTIME_REMNDR,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t2.REWARD_TM,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t6.OVTIME_TIME,'0000'),1,2)))*60) + TO_NUMBER(SUBSTR(NVL(t1.OVTIME_REMNDR,'0000'),3,4)) - TO_NUMBER(SUBSTR(NVL(t2.REWARD_TM,'0000'),3,4)) - TO_NUMBER(SUBSTR(NVL(t6.OVTIME_TIME,'0000'),3,4)))/60), 2, '0') AS REMNDR_HH
+				     ,LPAD(MOD((((TO_NUMBER(SUBSTR(NVL(t1.OVTIME_REMNDR,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t2.REWARD_TM,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t6.OVTIME_TIME,'0000'),1,2)))*60) + TO_NUMBER(SUBSTR(NVL(t1.OVTIME_REMNDR,'0000'),3,4)) - TO_NUMBER(SUBSTR(NVL(t2.REWARD_TM,'0000'),3,4)) - TO_NUMBER(SUBSTR(NVL(t6.OVTIME_TIME,'0000'),3,4))),60), 2, '0') AS REMNDR_MM
+				     ,LPAD(TRUNC((((TO_NUMBER(SUBSTR(NVL(t1.OVTIME_REMNDR,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t2.REWARD_TM,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t6.OVTIME_TIME,'0000'),1,2)))*60) + TO_NUMBER(SUBSTR(NVL(t1.OVTIME_REMNDR,'0000'),3,4)) - TO_NUMBER(SUBSTR(NVL(t2.REWARD_TM,'0000'),3,4)) - TO_NUMBER(SUBSTR(NVL(t6.OVTIME_TIME,'0000'),3,4)))*1.5/60), 2, '0') AS OVTIME_HOUR
+				     ,LPAD(MOD((((TO_NUMBER(SUBSTR(NVL(t1.OVTIME_REMNDR,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t2.REWARD_TM,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t6.OVTIME_TIME,'0000'),1,2)))*60) + TO_NUMBER(SUBSTR(NVL(t1.OVTIME_REMNDR,'0000'),3,4)) - TO_NUMBER(SUBSTR(NVL(t2.REWARD_TM,'0000'),3,4)) - TO_NUMBER(SUBSTR(NVL(t6.OVTIME_TIME,'0000'),3,4)))*1.5,60), 2, '0') AS OVTIME_MIN
+				     , LPAD(NVL(t1.RESTDE_WORK_TIME, '0000') - NVL(t3.SUBST_TM, '0000') - NVL(t6.RESTDE_TIME, '0000'),4,'0') AS RESTDE_REMNDR
+				FROM TBHRM_OVTMWRK_TM t1
+				  LEFT OUTER JOIN TBHRM_REWARD_MANAGE_TM t2
+				    ON  t1.OVTMWRK_YM = t2.OVTMWRK_YM
+				    AND t1.EMPNO      = t2.EMPNO
+				    AND t2.REWARD_SE  = '1'/*1:보상, 2:대체*/
+				  LEFT OUTER JOIN TBHRM_REWARD_MANAGE_TM t3
+				    ON  t1.OVTMWRK_YM = t3.OVTMWRK_YM
+				    AND t1.EMPNO      = t3.EMPNO
+				    AND t3.REWARD_SE  = '2'/*1:보상, 2:대체*/
+				  LEFT OUTER JOIN TBHRM_HR_MASTR t5
+				    ON t1.EMPNO = t5.EMPNO
+				  LEFT OUTER JOIN TBHRM_DEPT t4
+				    ON t5.DEPT_CODE = t4.DEPT_CODE
+				  LEFT OUTER JOIN TBHRM_OVTMWRK_DCSN t6
+				    ON  t1.OVTMWRK_YM = t6.OVTMWRK_YM
+				    AND t1.EMPNO      = t6.EMPNO
+				WHERE 1=1
+				<isNotEmpty property="DEPT_CODE">
+					  AND t5.DEPT_CODE = #DEPT_CODE#
+				</isNotEmpty>
+				<isNotEmpty property="EMPNO">
+					  AND t1.EMPNO = #EMPNO#
+				</isNotEmpty>
+			)
+	</select>
+	
+	<select id="HRM070118DAO.selectEmpReward" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  t1.REWARD_SEQ
+		       ,t1.WRKCP_SEQ
+		       ,t1.EMPNO
+		       ,t1.OVTMWRK_YM
+		       ,t1.OVTMWRK_TM
+		       ,t2.BGNDE || t2.BEGIN_TM              AS BGN_TM
+		       ,t2.ENDDE || t2.END_TM                AS END_TM
+		       ,t2.DAYCNT || t2.TIME                 AS DAY_TM
+		       ,t2.TIME
+		       ,t1.REWARD_SE
+		       ,t2.ASORT_CODE
+		       ,t2.PRVONSH
+		       ,t1.REGISTER_ID
+		       ,t1.REGIST_DT
+		       ,t1.UPDUSR_ID
+		       ,t1.UPDT_DT
+			   ,SFCOM_GET_SANCTN_KND(t2.SANCTN_NO)   AS SANCTN_STS
+		  FROM TBHRM_OVTMWRK_REWARD_MANAGE t1
+		    INNER JOIN TBHRM_WRKCP t2
+		      ON  t2.ASORT_CODE LIKE #ASORT_CODE# || '%'
+		      AND t1.EMPNO = t2.EMPNO
+		      AND t1.WRKCP_SEQ = t2.SEQ
+		   WHERE t1.EMPNO = #EMPNO#
+		     AND t1.OVTMWRK_YM = #OVTMWRK_YM#
+	</select>
+	
+	
+	<select id="HRM070118DAO.selectRewordManage" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  t1.REWARD_SEQ
+		       ,t1.WRKCP_SEQ
+		       ,t1.EMPNO
+		       ,t3.EMPNM
+		       ,t1.OVTMWRK_YM
+		       ,t2.TIME AS OVTMWRK_TM
+		       ,t2.BGNDE
+		       ,t2.BEGIN_TM
+		       ,t2.ENDDE
+		       ,t2.END_TM
+		       ,t2.DAYCNT || t2.TIME                 AS DAY_TM
+		       ,t1.REWARD_SE
+		       ,t2.ASORT_CODE
+		       /* 보상휴가 반차연차 구분할 수 없음 171213
+		       ,DECODE(t2.ASORT_CODE, '311', '1'
+		                            , '312', '1'
+		                            , '313', '2'
+		                            , '314', '2' )  AS TIME_SE
+		       */
+		       ,t2.PRVONSH
+		       ,t1.REGISTER_ID
+		       ,t1.REGIST_DT
+		       ,t1.UPDUSR_ID
+		       ,t1.UPDT_DT
+			   ,SFCOM_GET_SANCTN_KND(t2.SANCTN_NO)   AS SANCTN_STS
+		  FROM TBHRM_OVTMWRK_REWARD_MANAGE t1
+		    INNER JOIN TBHRM_WRKCP t2
+		      ON  t2.ASORT_CODE LIKE #ASORT_CODE# || '%'
+		      AND t1.EMPNO = t2.EMPNO
+		      AND t1.WRKCP_SEQ = t2.SEQ
+		    LEFT OUTER JOIN TBHRM_HR_MASTR t3
+		      ON t1.EMPNO = t3.EMPNO
+		   WHERE t1.REWARD_SEQ = #REWARD_SEQ#
+	</select>
+	
+	
+	<!-- 일련번호 조회 -->
+	<select id="HRM070118DAO.selectStrSeqNo" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+	<![CDATA[/*HRM070118DAO.selectStrSeqNo*/]]>
+		SELECT MAX(NVL(REWARD_SEQ,0))+1    AS REWARD_SEQ
+		  FROM TBHRM_OVTMWRK_REWARD_MANAGE
+	</select>
+	
+	
+	<insert id="HRM070118DAO.saveRewordManage" parameterClass="java.util.HashMap" >
+		INSERT INTO TBHRM_OVTMWRK_REWARD_MANAGE (
+				 REWARD_SEQ
+				,WRKCP_SEQ
+				,EMPNO
+				,OVTMWRK_YM
+				,OVTMWRK_TM
+				,REWARD_SE
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+		) VALUES (
+				 #REWARD_SEQ#
+				,#SEQ#
+				,#EMPNO#
+				,#OVTMWRK_YM#
+				,(DECODE(#REWARD_SE# , '1', (SELECT LPAD(FLOOR(CALC_MIN/60),2,'0') || LPAD(MOD(CALC_MIN,60),2,'0') AS TT2 
+											   FROM ( SELECT (SUBSTR(#OVTMWRK_TM#,0,2)*60+SUBSTR(#OVTMWRK_TM#,3,2))/3*2 AS CALC_MIN FROM DUAL ))
+									  , '2', LPAD(#OVTMWRK_TM#,4,'0')))
+				,#REWARD_SE#
+				,#S_USER_ID#
+				,SYSDATE
+				,#S_USER_ID#
+				,SYSDATE
+		)
+	</insert>
+	
+	<delete id="HRM070118DAO.deleteRewordManage" parameterClass="java.util.HashMap" >
+		DELETE FROM TBHRM_OVTMWRK_REWARD_MANAGE
+		 WHERE   REWARD_SEQ = #REWARD_SEQ#
+		   AND	 WRKCP_SEQ  = #WRKCP_SEQ#
+		   AND	 EMPNO      = #EMPNO# 
+		   AND	 OVTMWRK_YM = #OVTMWRK_YM#
+	</delete>
+	
+	
+	<!-- 근무상황부등록 입력	-->
+	<insert id="HRM070118DAO.tbhrmWrkcpC" parameterClass="java.util.HashMap">
+		<![CDATA[
+		INSERT INTO TBHRM_WRKCP (
+				 EMPNO
+				,SEQ
+				,DEPT_CODE
+				,ASORT_CODE
+				,BGNDE
+				,BEGIN_TM
+				,ENDDE
+				,END_TM
+				,DAYCNT
+				,TIME
+				,PRVONSH
+				,FAMILY_SEQ
+				,FILE_SN
+				,SANCTN_NO
+				,CNFIRM_AT
+				,CANCL_SEQ
+				,REWARD_SEQ
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+		) VALUES (
+				 #EMPNO#
+				,#SEQ#
+				,#DEPT_CODE#
+				,#ASORT_CODE#
+				,#BGNDE#
+				,#BEGIN_TM#
+				,#ENDDE#
+				,#END_TM#
+				,#DAYCNT#
+				,#TIME#
+				,#PRVONSH#
+				,#FAMILY_SEQ#
+				,#FILE_SN#
+				,#SANCTN_NO#
+				,#CNFIRM_AT#
+				,#CANCL_SEQ#
+				,#REWARD_SEQ#
+				,#S_USER_ID#
+				,SYSDATE
+				,#S_USER_ID#
+				,SYSDATE
+		)
+		]]>
+	</insert>
+	
+	<!-- 휴무를 제외한 신청일자 확인 -->
+	<select id="HRM070118DAO.chkHolyDe" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM070102DAO.chkHolyDe*/]]>
+		<![CDATA[
+			WITH VCATN_DE AS (
+			    SELECT TO_CHAR(TO_DATE(#BGNDE#, 'YYYYMMDD') + LEVEL -1, 'YYYYMMDD') AS IN_DATE
+			      FROM DUAL
+			    CONNECT BY LEVEL <= (TO_DATE(#ENDDE#, 'YYYYMMDD') - TO_DATE(#BGNDE#, 'YYYYMMDD')+1)
+			)
+			SELECT T1.SYS_DE    AS WORK_DE
+			FROM VWHRM_SYS_DAY T1
+			     INNER JOIN VCATN_DE T2
+			           ON T1.SYS_DE = T2.IN_DATE
+			 WHERE T1.HOLY_AT != '1'
+		]]>
+	</select>
+</sqlMap>

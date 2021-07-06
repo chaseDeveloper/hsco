@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050419_SQL">
+
+	<!-- 매출원가율명세서 조회 -->
+	<select id="ACC050419DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC050419DAO.select*/]]>
+	<![CDATA[
+		WITH SELNG_AMT AS (
+		    SELECT t1.ACCNUT_YEAR
+		         , t1.ACCNUT_ACNT_CODE
+		         , DECODE(t1.ACCNUT_ACNT_CODE, SFACC_GET_ACNT_CODE(#YEAR#, '40510000'), 'A1'
+		                                     , SFACC_GET_ACNT_CODE(#YEAR#, '40520000'), 'A2'
+		                                     , SFACC_GET_ACNT_CODE(#YEAR#, '40530000'), 'A3'
+		                                     , SFACC_GET_ACNT_CODE(#YEAR#, '40540000'), 'A4'
+		                                     , '-') AS ACCNUT_ACNT_TYPE
+		         , t1.BSNS_CODE
+		         , MAX(t2.BSNS_NM) AS BSNS_NM
+		         , NVL(SUM(DECODE(t3.DBRT_SE, 'D', t1.DEBTOR_AMOUNT - t1.CRDIT_AMOUNT, 'C', t1.CRDIT_AMOUNT - t1.DEBTOR_AMOUNT, 0)), 0) AS AMT
+		    FROM TBACC_ACCNUT_STACNT t1
+		      LEFT OUTER JOIN TBPRJ_BSNS_CODE t2
+		      ON  t1.BSNS_CODE = t2.BSNS_CODE
+		      INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		      ON  t1.ACCNUT_YEAR      = t3.ACCNUT_YEAR
+		      AND t1.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR = #YEAR#
+		    AND   t1.ACCNUT_ACNT_CODE IN ( SFACC_GET_ACNT_CODE(#YEAR#, '40510000'), SFACC_GET_ACNT_CODE(#YEAR#, '40520000'), SFACC_GET_ACNT_CODE(#YEAR#, '40530000'), SFACC_GET_ACNT_CODE(#YEAR#, '40540000') ) /*택지, 주택, 임대, 레포츠센터 매출액*/
+		    AND   t1.ACCNUT_MT   BETWEEN '00'/*이월*/ AND '12' /*결산월*/
+		    GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE, t1.BSNS_CODE
+		    ORDER BY t1.ACCNUT_ACNT_CODE ASC, t1.BSNS_CODE DESC
+		)
+		, SELNG_PRMPC_AMT AS (
+		    SELECT t1.ACCNUT_YEAR
+		         , t1.ACCNUT_ACNT_CODE
+		         , DECODE(t1.ACCNUT_ACNT_CODE, SFACC_GET_ACNT_CODE(#YEAR#, '41010000'), 'A1'
+		                                     , SFACC_GET_ACNT_CODE(#YEAR#, '41020000'), 'A2'
+		                                     , SFACC_GET_ACNT_CODE(#YEAR#, '41030000'), 'A3'
+		                                     , SFACC_GET_ACNT_CODE(#YEAR#, '41040000'), 'A4'
+		                                     , '-') AS ACCNUT_ACNT_TYPE
+		         , t1.BSNS_CODE
+		         , MAX(t2.BSNS_NM) AS BSNS_NM
+		         , NVL(SUM(DECODE(t3.DBRT_SE, 'D', t1.DEBTOR_AMOUNT - t1.CRDIT_AMOUNT, 'C', t1.CRDIT_AMOUNT - t1.DEBTOR_AMOUNT, 0)), 0) AS AMT
+		    FROM TBACC_ACCNUT_STACNT t1
+		      LEFT OUTER JOIN TBPRJ_BSNS_CODE t2
+		      ON  t1.BSNS_CODE = t2.BSNS_CODE
+		      INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		      ON  t1.ACCNUT_YEAR      = t3.ACCNUT_YEAR
+		      AND t1.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR = #YEAR#
+		    AND   t1.ACCNUT_ACNT_CODE IN ( SFACC_GET_ACNT_CODE(#YEAR#, '41010000'), SFACC_GET_ACNT_CODE(#YEAR#, '41020000'), SFACC_GET_ACNT_CODE(#YEAR#, '41030000'), SFACC_GET_ACNT_CODE(#YEAR#, '41040000') ) /*택지, 주택, 임대, 레포츠센터 매출원가*/
+		    AND   t1.ACCNUT_MT   BETWEEN '00'/*이월*/ AND '12' /*결산월*/
+		    AND   (t1.BSNS_CODE   IS NOT NULL AND t1.BSNS_CODE <> '-')
+		    GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE, t1.BSNS_CODE
+		    ORDER BY t1.ACCNUT_ACNT_CODE ASC, t1.BSNS_CODE DESC
+		)
+		SELECT t1.ACCNUT_ACNT_TYPE
+		     , CASE WHEN t1.ACCNUT_ACNT_TYPE = 'A1' THEN '택지판매'
+		            WHEN t1.ACCNUT_ACNT_TYPE = 'A2' THEN '주택판매'
+		            WHEN t1.ACCNUT_ACNT_TYPE = 'A3' THEN '임대사업'
+		            WHEN t1.ACCNUT_ACNT_TYPE = 'A4' THEN '레포츠센터운영'
+		            ELSE ''
+		        END AS ACCNUT_ACNT_TYPE_NM
+		     , t1.BSNS_CODE
+		     , MAX(t1.BSNS_NM)       AS BSNS_NM
+		     , NVL(SUM(t1.AMT1), 0)  AS AMT1
+		     , NVL(SUM(t1.AMT2), 0)  AS AMT2
+		     , NVL(SUM(t1.AMT1), 0) - NVL(SUM(t1.AMT2), 0) AS AMT3
+		     , TRUNC(CASE WHEN NVL(SUM(t1.AMT1), 0) = 0 THEN 0
+		            ELSE NVL(SUM(t1.AMT2), 0) / NVL(SUM(t1.AMT1), 0) 
+		       END * 100, 2) AS AMT4
+		FROM (
+		    SELECT NVL(t1.ACCNUT_ACNT_TYPE,t2.ACCNUT_ACNT_TYPE) AS ACCNUT_ACNT_TYPE
+		         , NVL(t1.BSNS_CODE, t2.BSNS_CODE) AS BSNS_CODE
+		         , NVL(t1.BSNS_NM, t2.BSNS_NM)     AS BSNS_NM
+		         , NVL(t1.AMT, 0)                  AS AMT1
+		         , NVL(t2.AMT, 0)                  AS AMT2
+		    FROM SELNG_AMT t1
+		      FULL OUTER JOIN SELNG_PRMPC_AMT t2
+		      ON  t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+		      AND t1.ACCNUT_ACNT_TYPE = t2.ACCNUT_ACNT_TYPE
+		      AND t1.BSNS_CODE        = t2.BSNS_CODE
+		) t1
+		WHERE (t1.AMT1 <> 0 OR t1.AMT2 <> 0)
+		GROUP BY t1.ACCNUT_ACNT_TYPE, t1.BSNS_CODE
+		ORDER BY t1.ACCNUT_ACNT_TYPE, t1.BSNS_CODE DESC
+	]]>
+	</select>
+
+
+</sqlMap>

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010201_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!--직원칭찬관리 목록조회 -->
+	<select id="CUS010201DAO.selectCstmrPartcptnList" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+		<![CDATA[
+			SELECT 
+				    A.REGIST_NO                                   AS REGIST_NO
+				  , A.PARTCPTN_SE                                 AS PARTCPTN_SE
+				  , A.CSTMR_NM                                    AS CSTMR_NM
+				  , A.MBTLNO                                      AS MBTLNO
+				  , A.EMAIL                                       AS EMAIL
+				  , A.ADRES                                       AS ADRES
+				  , A.SJ                                          AS SJ
+				  , A.CN                                          AS CN
+				  , A.ATCH_FILE                                   AS ATCH_FILE
+				  , A.PROCESS_DE                                  AS PROCESS_DE
+				  , A.PROCESS_SE                                  AS PROCESS_SE
+				  , A.OPETR                                       AS OPETR   
+				  , B.EMPNM                                       AS OPETR_NM       
+				  , A.PROCESS_CN                                  AS PROCESS_CN
+				  , A.PROCESS_ATCH_FILE                           AS PROCESS_ATCH_FILE
+				  , A.INNER_SANCTN_ID                             AS INNER_SANCTN_ID
+				  , A.EXPNDTR_TRGET_AT                            AS EXPNDTR_TRGET_AT
+				  , A.PYMNT_SN							          AS PYMNT_SN
+				  , A.REGISTER_ID                                 AS REGISTER_ID
+				  , TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS')      AS REGIST_DT
+				  , A.UPDUSR_ID                                   AS UPDUSR_ID
+				  , A.UPDT_DT                                     AS UPDT_DT
+				  , A.DRFT_DE                                     AS DRFT_DE
+				  , A.DRFT_NO                                     AS DRFT_NO
+				  , (CASE C.LAST_SANCTN_STTUS WHEN 'T12' THEN '1'
+				   	                          ELSE '2' 
+				      END )                                       AS PRC_STATUS
+				  , NVL(C.LAST_SANCTN_STTUS, 'S00')               AS LAST_SANCTN_STTUS
+				  , '0'                                           AS CHK
+				  , '0'                                           AS CHK1
+				  , SFCOM_GET_IN_SANCTNSTS('MIS', 'CUS', A.REGIST_NO||'^'||A.PARTCPTN_SE||'^'||TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS'), A.REGIST_DT) AS INNER_SANCTN_STTUS		/*내부결재 상태*/
+		          , SFCOM_GET_IN_SANCTNSTS_IMG('MIS', 'CUS', A.REGIST_NO||'^'||A.PARTCPTN_SE||'^'||TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS'), A.REGIST_DT) INNER_SANCTN_STTUS_IMG /*내부결재 상태 이미지*/
+		          , TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS')      AS INNER_SANCTN_KEY
+			  FROM TBCUS_CSTMR_PARTCPTN A
+                   LEFT OUTER JOIN TBCOM_INNER_SANCTN_MASTR C
+				                ON A.INNER_SANCTN_ID = C.INNER_SANCTN_ID
+				   LEFT OUTER JOIN TBHRM_HR_MASTR B
+				                ON A.OPETR = B.EMPNO
+			 WHERE A.REGIST_DT >= TO_DATE(#REGIST_BGN_DT#, 'YYYYMMDD')
+			   AND A.REGIST_DT <  TO_DATE(#REGIST_END_DT#, 'YYYYMMDD') + 1
+			   AND A.PARTCPTN_SE = #PARTCPTN_SE#
+		]]>
+		<isNotEmpty property="PRC_STATUS">
+			   AND (CASE C.LAST_SANCTN_STTUS
+					WHEN 'T12' THEN '1'
+					ELSE '2' END ) = #PRC_STATUS#
+		</isNotEmpty>
+		<isNotEmpty property="CSTMR_NM">
+			   AND A.CSTMR_NM LIKE '%' || #CSTMR_NM# || '%'
+		</isNotEmpty>
+		<![CDATA[
+		  ORDER BY A.REGIST_NO DESC
+		]]>
+	</select>
+
+	<!--직원칭찬관리 테이블수정 -->
+	<update id="CUS010201DAO.cstmrPartcptnListU" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBCUS_CSTMR_PARTCPTN SET
+				 PARTCPTN_SE       = #PARTCPTN_SE#
+				,PROCESS_DE        = #PROCESS_DE#
+				,PROCESS_SE        = #PROCESS_SE#
+				,OPETR             = #OPETR#    
+				,PROCESS_CN        = #PROCESS_CN#
+				,PROCESS_ATCH_FILE = #PROCESS_ATCH_FILE#
+				,INNER_SANCTN_ID   = #INNER_SANCTN_ID#
+				,DRFT_DE           = #DRFT_DE#
+				,EXPNDTR_TRGET_AT  = #EXPNDTR_TRGET_AT#
+				,UPDUSR_ID         = #S_USER_ID#
+				,UPDT_DT           = SYSDATE
+			WHERE REGIST_NO = #REGIST_NO#
+		]]>
+	</update>
+
+	<!--내부결재 레포트 데이터셋 -->
+	<select id="CUS010201DAO.innerSanctnUbiDataset" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+	
+			SELECT 
+					 A.REGIST_NO						AS REGIST_NO			/*등록번호*/
+					,DECODE(A.PARTCPTN_SE,'1','직원칭찬관리','2','고객제안관리','')
+														AS PARTCPTN_SE			/*참여구분*/
+					,A.CSTMR_NM							AS CSTMR_NM				/*고객성명*/
+					,SUBSTR(REPLACE(A.MBTLNO, '-', ''), 1,3)||'-'||SUBSTR(REPLACE(A.MBTLNO, '-', ''), 4,4)||'-'||SUBSTR(REPLACE(A.MBTLNO, '-', ''),8,4) AS MBTLNO				/*휴대폰번호*/
+					,A.EMAIL 							AS EMAIL				/*이메일*/
+					,A.ADRES							AS ADRES				/*주소*/
+					,A.SJ								AS SJ					/*제목*/
+					,A.CN								AS CN 					/*내용*/
+					,A.ATCH_FILE 						AS ATCH_FILE			/*첨부파일*/
+					,SUBSTR(A.PROCESS_DE, 1, 4)||'-'||SUBSTR(A.PROCESS_DE, 5, 2)||'-'||SUBSTR(A.PROCESS_DE, 7, 2)  AS PROCESS_DE			/*처리일자*/
+					,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'CUS008' AND CODE = A.PROCESS_SE)
+														AS PROCESS_SE			/*처리구분*/
+					,B.EMPNM							AS OPETR				/*처리자*/
+					,A.PROCESS_CN 						AS PROCESS_CN			/*처리내용*/
+					,A.PROCESS_ATCH_FILE 				AS PROCESS_ATCH_FILE	/*처리첨부파일*/
+					,A.INNER_SANCTN_ID 					AS INNER_SANCTN_ID		/*내부결재ID*/
+					,A.REGISTER_ID 						AS REGISTER_ID			/*등록자ID*/
+					,TO_CHAR(A.REGIST_DT,'YYYY-MM-DD')	AS REGIST_DT			/*등록일시*/
+					,A.UPDUSR_ID 						AS UPDUSR_ID			/*수정자ID*/
+					,A.UPDT_DT							AS UPDT_DT				/*수정일시*/
+					,A.DRFT_DE 							AS DRFT_DE				/*기안일자*/
+					,A.DRFT_NO 							AS DRFT_NO				/*기안번호*/
+			 FROM TBCUS_CSTMR_PARTCPTN A
+			      LEFT OUTER JOIN TBHRM_HR_MASTR B
+				       ON A.OPETR = B.EMPNO
+			WHERE 1=1
+			  AND REGIST_NO = #REGIST_NO#
+			  
+			<isNotEmpty property="PARTCPTN_SE">
+			  AND A.PARTCPTN_SE = #PARTCPTN_SE#
+			</isNotEmpty>
+	
+	</select>
+
+	<!--최초 내부결재 진행 여부 체크-->
+	<select id="CUS010201DAO.selectInnerSanctnMasterCheck" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ 
+		SELECT COUNT(1) AS CHK
+		       ,MAX(LAST_SANCTN_STTUS) AS LAST_SANCTN_STTUS
+		  FROM TBCOM_INNER_SANCTN_MASTR
+		 WHERE INNER_SANCTN_ID = #KEY#
+		 ]]>
+	</select>
+
+	<!-- 내부결재 ID 업데이트 -->
+	<update id="CUS010201DAO.drftInfoU" parameterClass="java.util.HashMap">
+		UPDATE TBCUS_CSTMR_PARTCPTN 
+		SET    INNER_SANCTN_ID = #KEY#
+		      ,DRFT_DE = TO_CHAR(SYSDATE, 'YYYYMMDD')
+		      ,UPDUSR_ID  = #S_USER_ID# 
+			  ,UPDT_DT    = SYSDATE      
+		WHERE  REGIST_NO = #REGIST_NO#
+	</update>	
+
+	<!-- 내부결재 번호 업데이트 -->
+	<update id="CUS010201DAO.saveInnerSanc" parameterClass="java.util.HashMap">
+		UPDATE TBCUS_CSTMR_PARTCPTN 
+		SET    INNER_SANCTN_ID = #INNER_SANCTN_ID#
+		      ,DRFT_DE = TO_CHAR(SYSDATE, 'YYYYMMDD')
+		      ,UPDUSR_ID  = #S_USER_ID# 
+			  ,UPDT_DT    = SYSDATE      
+		WHERE  REGIST_NO = #REGIST_NO#
+	</update>
+	
+	<!--내부결재 후처리용 : 결재번호로 제안자 정보 가져오기-->
+	<select id="CUS010201DAO.cstmrPartcptnInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.CSTMR_NM
+		     , REPLACE(A.MBTLNO,'-', '') AS MBTLNO 
+		     , A.OPETR
+		     , (SELECT DEPT_CODE FROM TBHRM_HR_MASTR B WHERE B.EMPNO=A.OPETR) AS DEPT_CODE
+		  FROM TBCUS_CSTMR_PARTCPTN A
+		 WHERE INNER_SANCTN_ID = #INNER_SANCTN_ID#
+	</select>	
+	
+	<!-- SMS 메시지 전송 프로시저 -->
+	<procedure id="CUS010201DAO.messeageProcedure" parameterClass="java.util.HashMap">
+		{ CALL SPCOM_SEND_UMS(
+							   #SEND_DEPT_CODE#                                 /*전송부서*/
+							  ,#ANSW_TEL#                               /*회신번호 0533500350*/
+							  ,#MSGE#                                   /*전송메세지*/
+							  ,#SEND_DT#                                /*전송희망시간(예약)*/
+							  ,#CHANG_WORD1#                            /*맞춤문자1*/
+							  ,#CHANG_WORD2#                            /*맞춤문자2*/
+							  ,#CHANG_WORD3#                            /*맞춤문자3*/
+							  ,#CHANG_WORD4#                            /*맞춤문자4*/
+							  ,#CHANG_WORD5#                            /*맞춤문자5*/
+							  ,#RECIPIENT_NUM#                          /*수신전화번호*/
+							  ,#RCVER_NM#                               /*수신자*/
+							  ,#SENDER_ID#                              /*발신자아이디*/
+							  ,#ETC1#                                   /*비고1*/
+							  ,#ETC2#                                   /*비고2*/
+							  ,#ETC3#                                   /*비고3*/
+							  ,#ETC4#                                   /*비고4*/
+							  ,#ETC5#                                   /*비고5*/
+							  ,#BROAD_MSSAGE_ID#                        /*맞춤문자메시지 일련번호*/
+							  ,#OUT_RESULT_MSG#                         /*오류메세지*/
+							)
+		}
+	</procedure>
+</sqlMap>

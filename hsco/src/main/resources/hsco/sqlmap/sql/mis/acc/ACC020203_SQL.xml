@@ -1,0 +1,2550 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020203_SQL">	
+   	 
+	<!-- 결의번호 취득 -->
+	<select id="ACC020203DAO.selectDecsnNo" resultClass="java.util.HashMap">
+		SELECT 
+			 TO_CHAR(SYSDATE,'YYYY')	AS DECSN_YEAR
+			,TO_CHAR(SYSDATE,'YYMMDD')||NVL(LPAD(TO_NUMBER(SUBSTR(MAX(DECSN_NO),7,4))+1,4,'0'),'0001') AS DECSN_NO
+		FROM TBACC_EXP_DSN_MASTR
+		WHERE DECSN_NO LIKE TO_CHAR(SYSDATE,'YYMMDD') || '%'
+	</select>
+	
+	
+	<!-- 지출결의 목록 -->
+	<select id="ACC020203DAO.expDsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   <![CDATA[ /*ACC020203DAO.expDsnList*/ ]]>
+		SELECT 
+			   t1.DECSN_NO
+			 , NVL(t5.SEQ,t9.SEQ) AS SEQ
+			 , ROW_NUMBER() OVER(PARTITION BY t1.DECSN_YEAR, t1.DECSN_NO ORDER BY NVL(t5.SEQ,t9.SEQ)) AS RNUMBER
+			 , NVL(TRIM(t1.EXPNDTR_CNFIRM_AT),'0') AS DECSN_YN /*지출여부*/
+		     , NVL(t1.CYFD_SE, '0')         AS CYFD_SE             /*이월구분*/
+		     , CASE WHEN t3.CHIT_NO IS NOT NULL THEN '1' ELSE '0' END AS CHIT_YN /*전표여부*/
+		     , t1.ITNC_DE                /* 발의일자(결의일자) */
+		     , t4.CNSUL_DE	AS CAUSE_ACTION_DE      /*원인행위일자*/
+		     , t1.DET_DCSN_DE          /*채무확정일자*/
+		     , t1.CPTAL_EXPNDTR_ACNTBK_DE
+		     , t1.CHECK_NO
+		     , t1.DECSN_YEAR
+		     , t1.ANACT_KND
+		     , t1.SUMRY
+		     /*, t1.DECSN_AMOUNT  	/*결의금액 */
+		     ,(CASE
+                  WHEN T1.ANACT_KND = '01' THEN
+                   T9.DECSN_AMOUNT
+                  ELSE
+                   NVL(T5.DECSN_AMOUNT, T1.DECSN_AMOUNT)
+                END) AS DECSN_AMOUNT /*결의금액*/
+		     , t6.BCNC_CODE
+		     , CASE WHEN t1.ANACT_KND = '01' THEN t9.RCPT_MAN ELSE t5.RCPT_MAN END AS RCPT_MAN      	/*채주(거래처명)*/
+		     , t6.BCNC_NM       
+		     , t1.BSNS_SE         	/*사업구분*/
+		     , t1.BALC_SE			/*수지구분*/
+		     , t1.BUDGET_ACNT_CODE
+		     , t7.BUDGET_ACNT_NM
+		     , t1.EXPNDTR_UNIT_CODE /*지출단위코드*/
+		     , t8.BUKIP_NM	AS EXPNDTR_UNIT_NM
+		     , t1.FILE_SN               /*파일일련번호*/
+		     , t1.SANCTN_NO             /*결재번호*/
+		     , SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,1,4)||'년 '||SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,5,2)||'월 '||SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,7,2)||'일 ['||COUNT(DISTINCT t1.DECSN_NO) OVER(PARTITION BY t1.CPTAL_EXPNDTR_ACNTBK_DE)||'건]' AS DECSN_CNT	/* 일자별 지출결의건수 */
+			 ,t1.TRG_FORM_ID
+			 ,t1.TRG_FORM_ID2
+			 , TO_CHAR(T1.REGIST_DT,'YYYYMMDD') AS REGIST_DT
+			 ,t5.ENDW_INTR_AT /* 기금이자상환여부 */ 
+			 ,t5.PBNCD_NO /* 공사채번호 */
+			 ,t5.ERROR_AT /* 오류여부 */
+			 ,t5.CHGHY /* 변경사유 */
+			 ,NVL(t1.EXPNDTR_CNFIRM_AT,'0') AS EXPNDTR_CNFIRM_AT 
+			 ,NVL(t1.TIMHDER_CONFM,'0')		AS TIMHDER_CONFM
+			 ,CASE WHEN t1.SANCTN_NO = '0' THEN '5' ELSE NVL(t12.SANCTN_KND,'0') END AS SANCTN_KND 
+			 ,t11.EMPNO AS REGISTER_EMPNO
+			 ,t1.ACNUTNO 					AS ACNUTNO
+			 ,t1.EXPNDTR_UPDT_REQ_CN /*재무팀수정요청내용*/
+		FROM TBACC_EXP_DSN_MASTR t1
+			  
+			  LEFT OUTER JOIN TBACC_EXP_DSN_MTR_DET t2
+			  ON  t1.DECSN_YEAR = t2.DECSN_YEAR
+			  AND t1.DECSN_NO   = t2.DECSN_NO
+			  
+			  LEFT OUTER JOIN (SELECT DECSN_YEAR, DECSN_NO, MAX(CHIT_NO) AS CHIT_NO FROM TBACC_CHIT_MASTR GROUP BY DECSN_YEAR, DECSN_NO) t3
+			  ON  t1.DECSN_YEAR = t3.DECSN_YEAR
+			  AND t1.DECSN_NO   = t3.DECSN_NO
+			  
+			  LEFT OUTER JOIN TBACC_CNSUL t4
+			  ON  t1.CAUSE_ACTION_NO = t4.CAUSE_ACTION_NO
+			  
+			  LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t5
+			  ON  t1.DECSN_YEAR = t5.DECSN_YEAR
+			  AND t1.DECSN_NO   = t5.DECSN_NO
+			  
+			  LEFT OUTER JOIN TBCTR_BCNC_MASTR t6
+			  ON  t5.BCNC_CODE  = t6.BCNC_CODE
+			  
+			  LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t7
+			  ON  t1.BUDGET_YEAR = t7.YEAR
+			  AND t1.BSNS_SE     = t7.BSNS_SE
+			  AND t1.BALC_SE     = t7.BALC_SE
+			  AND t1.BUDGET_ACNT_CODE = t7.BUDGET_ACNT_CODE
+			  
+			  LEFT OUTER JOIN TBBDG_BUKIP_CODE t8
+			  ON  t1.EXPNDTR_UNIT_CODE = t8.BUKIP_CODE
+			  
+			  LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL_TRVCT t9
+			  ON  t1.DECSN_YEAR = t9.DECSN_YEAR
+			  AND t1.DECSN_NO   = t9.DECSN_NO
+			  
+			  LEFT OUTER JOIN VWHRM_DEPT t10
+			  ON  t1.DEPT_CODE	= t10.DEPT_CODE
+			  
+			  LEFT OUTER JOIN TBCOM_USER t11
+			  ON  t1.REGISTER_ID = t11.USER_ID
+			  
+			  LEFT OUTER JOIN VIEW_MIS_SANCTN_KND@DL_INTRACITY t12
+			  ON  t1.SANCTN_NO = t12.SANCTN_NO
+		WHERE 1=1
+          AND t1.ANACT_KND	= #ANACT_KND#
+		<isNotEmpty property="BSNS_CODE">
+		  AND t1.BSNS_CODE	= #BSNS_CODE#							/* 사업코드			*/
+		</isNotEmpty>	
+		<isNotEmpty property="PRMPC_CODE">
+		  AND t1.PRMPC_CODE	= #PRMPC_CODE#							/* 원가항목			*/
+		</isNotEmpty>
+		<isNotEmpty property="ACCT_NO">
+		  AND t1.ACNUTNO	= #ACCT_NO#							    /* 계좌번호			*/
+		</isNotEmpty>
+		
+		<isNotEqual property="EXPNDTR_CNFIRM_AT" compareValue="A">
+		  AND NVL(t1.EXPNDTR_CNFIRM_AT,'0')	= #EXPNDTR_CNFIRM_AT#
+		</isNotEqual>
+		<isNotEmpty property="SRCH_TXT">
+			<isEqual property="SRCH_COND" compareValue="1">
+		  AND t1.CHECK_NO 	= #SRCH_TXT#							/* 수표번호			*/
+			</isEqual>
+			<isEqual property="SRCH_COND" compareValue="2">
+		  AND t1.SUMRY 		LIKE '%' || #SRCH_TXT# || '%'			/* 적요	    		*/
+			</isEqual>
+			<isEqual property="SRCH_COND" compareValue="3">
+		  AND t5.RCPT_MAN 	LIKE '%' || #SRCH_TXT# || '%'			/* 채주  			*/
+			</isEqual>
+		  <isEqual property="SRCH_COND" compareValue="4">
+		  AND t1.DECSN_NO 	LIKE '%' || #SRCH_TXT# || '%'			/* 결의번호  			*/
+			</isEqual>
+		</isNotEmpty>
+		<isEqual property="STDR_DE" compareValue="1">
+		  AND t1.ITNC_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#		/* 결의일자			*/
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="2">
+		  AND t1.DET_DCSN_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#	/* 채무확정일자		*/
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="3">
+		  AND t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#	/* 자금지출일자		*/
+		</isEqual>
+		<isEqual property="CNTRCT_DECSN_AT" compareValue="1">
+		  AND EXISTS (
+		  	SELECT 1
+		  	FROM TBCTR_CNTRCT_DECSN t11
+		  	WHERE t11.DECSN_YEAR = t1.DECSN_YEAR
+		  	  AND t11.DECSN_NO	 = t1.DECSN_NO
+		  )
+		</isEqual>
+		<isNotEmpty property="DECSN_AMOUNT">
+		  AND (CASE
+		          WHEN T1.ANACT_KND = '01'
+		          THEN T9.DECSN_AMOUNT
+		          ELSE NVL(T5.DECSN_AMOUNT, T1.DECSN_AMOUNT)
+		      END) <![CDATA[>=]]> #DECSN_AMOUNT#
+		</isNotEmpty>
+		<isNotEmpty property="DECSN_AMOUNT2">
+		  AND (CASE
+		          WHEN T1.ANACT_KND = '01'
+		          THEN T9.DECSN_AMOUNT
+		          ELSE NVL(T5.DECSN_AMOUNT, T1.DECSN_AMOUNT)
+		      END) <![CDATA[<=]]> #DECSN_AMOUNT2#
+		</isNotEmpty>    
+		<isNotEmpty property="DEPT_CODE">
+		  AND t1.DEPT_CODE IN(
+		  					  SELECT DEPT_CODE
+							  FROM (
+      								SELECT DEPT_CODE            
+            							  ,ORGCHT_CODE
+            							  ,UPPER_DEPT_CODE
+      								FROM TBHRM_ORGCHT_DEPT
+      								WHERE ORGCHT_CODE = (
+      													 SELECT ORGCHT_CODE
+                           								 FROM   TBHRM_ORGCHT_DEPT r1
+                           								 WHERE  r1.ORGCHT_CODE = (
+                                                    							  SELECT ORGCHT_CODE
+                                                    							  FROM   TBHRM_ORGCHT
+                                                    							  WHERE  APPLC_DE = (
+                                                                        							 SELECT MAX(APPLC_DE)
+                                                                        							 FROM   TBHRM_ORGCHT
+                                                                        							 WHERE  NVL(APPLC_AT, '0') = '1'
+                                                     							  AND    APPLC_DE <![CDATA[<=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')))
+                                                     							  AND    r1.DEPT_CODE = #DEPT_CODE#))
+							  START WITH DEPT_CODE = #DEPT_CODE#
+							  CONNECT BY PRIOR DEPT_CODE = UPPER_DEPT_CODE)
+		 </isNotEmpty>
+		ORDER BY t1.CPTAL_EXPNDTR_ACNTBK_DE ASC NULLS LAST, t1.DECSN_YEAR ASC, t1.DECSN_NO ASC, NVL(t5.SEQ,t9.SEQ)
+	</select>
+	
+	<!-- 지출결의마스터 조회 -->
+	<select id="ACC020203DAO.expDsnMastrInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 A.DECSN_YEAR					  /* 결의년도			  */
+			,A.DECSN_NO						  /* 결의번호             */
+			,A.CAUSE_ACTION_NO				  /* 원인행위번호		  */
+			,A.BUDGET_YEAR					  /* 예산년도			  */
+			,A.BSNS_SE						  /* 사업구분			  */
+			,A.BALC_SE						  /* 수지구분		  	  */
+			,A.BUDGET_ACNT_CODE				  /* 예산계정코드         */
+			,'('||N.DEPT_NM||')'||B.BUDGET_ACNT_NM2 AS BUDGET_ACNT_NM				  /* 예산계정명			  */
+			,A.ANACT_KND					  /* 결의서종류           */
+			,A.DEPT_CODE					  /* 부서코드             */
+			,D.DEPT_NM						  /* 부서명				  */
+			,A.CYFD_SE						  /* 이월구분             */
+			,A.ITNC_DE						  /* 발의일자			  */
+			,A.PYMNT_ITNC_DE				  /* 지급발의일자		  */
+			,A.DET_DCSN_DE					  /* 채무확정일자		  */
+			,A.PRMPC_JRNLZPR_RGIST_DE		  /* 원가분개장등기일자	  */
+			,A.CPTAL_EXPNDTR_ACNTBK_DE		  /* 자금지출장부일자	  */
+			,A.EXPNDTR_BUDGET_CNRL_DE		  /* 지출예산통제일자	  */
+			,NVL(A.CAUSE_ACTION_DE,E.CNSUL_DE) AS CAUSE_ACTION_DE	  /* 원인행위일자		  */
+			,E.CNSUL_SJ						  /* 품의제목  			  */
+			,A.DECSN_AMOUNT					  /* 결의금액			  */
+			,A.BUDGET_ACNT_BLCE				  /* 예산계정잔액         */
+			,A.EXPNDTR_UNIT_CODE			  /* 지출단위코드         */
+			,C.BUKIP_NM		 AS EXPNDTR_UNIT_NM
+			,NVL(M.EXECUT_BUDGET_JAN_AM,0) AS EXPNDTR_UNIT_CODE_BLCE		  /* 지출단위코드잔액     */
+			,NVL(M.ASIGN_JAN_AMOUNT,0) AS ASIGN_JAN_AMOUNT	/* 배정잔액 */
+			,NVL(A.TIMHDER_CONFM,'0')										AS TIMHDER_CONFM			/* 팀장승인*/
+			,A.SUMRY						  /* 적요				  */
+			,A.CNTRCT_NO					  /* 계약번호             */
+			,NVL(A.EXPNDTR_CNFIRM_AT,'0')									AS EXPNDTR_CNFIRM_AT	    /* 지출확인여부*/
+		    ,A.EXPNDTR_UPDT_REQ_CN                                                   /* 재무팀수정요청내용*/
+			,A.FNNC_INSTT_CODE				  /* 금융기관코드		  */
+			,A.ACNUTNO						  /* 계좌번호			  */
+			,L.ACNUT_NM
+			,A.BSNS_CODE					  /* 사업코드			  */
+			,F.BSNS_NM						  /* 사업코드명			  */
+			,A.PRMPC_YEAR					  /* 원가년도			  */
+			,A.PRMPC_CODE					  /* 원가코드			  */
+			,A.FILE_SN						  /* 파일일련번호 		  */
+			,G.ACCNUT_ACNT_NM AS PRMPC_NM	  /* 원가명				  */
+			,A.CHECK_NO						  /* 수표번호			  */
+			,A.ATMC_JRNLZ_TY_CODE			  /* 자동분개유형코드	  */
+			,SFACC_GET_ACNT_CODENM(H.BUDGET_YEAR,H.GNRL_DEBTOR_ACNT_CODE)	AS GNRL_DEBTOR_ACNT_NM		   /*일반_차변계정*/
+			,SFACC_GET_ACNT_CODENM(H.BUDGET_YEAR,H.GNRL_CRDIT_ACNT_CODE)	AS GNRL_CRDIT_ACNT_NM		   /*일반_대변계정*/
+			,SFACC_GET_ACNT_CODENM(H.BUDGET_YEAR,H.SETOFF_DEBTOR_ACNT_CODE)	AS SETOFF_DEBTOR_ACNT_NM	   /*상계_차변계정*/
+			,SFACC_GET_ACNT_CODENM(H.BUDGET_YEAR,H.SETOFF_CRDIT_ACNT_CODE)	AS SETOFF_CRDIT_ACNT_NM		   /*상계_대변계정*/
+			,A.SANCTN_NO                                                                                   /* 결재번호*/
+			,A.SANCTN_SE                                                                                   /* 결재구분*/
+			,TO_CHAR(A.REGIST_DT,'YYYYMMDD') AS REGIST_DT
+			,A.TRG_FORM_ID
+			,A.TRG_FORM_ID2
+			,(SELECT COUNT(*) FROM TBACC_EXP_DSN_MASTR AA WHERE AA.PARENT_DECSN_NO = A.DECSN_NO) AS CHI_CNT
+			,NVL2(A.PARENT_DECSN_NO, '1', '0') AS CHI_AT
+			,(SELECT COUNT(*) FROM TBACC_EXP_DSN_DETAIL AA WHERE A.DECSN_YEAR = AA.DECSN_YEAR AND A.DECSN_NO = AA.DECSN_NO) AS DETAIL_CNT
+			,B.GWAN_NM
+			,B.HANG_NM
+			,B.SEHANG_NM
+			,B.MOK_NM
+			,B.SEMOK_NM
+			,SFCOM_GET_SANCTN_KND(A.SANCTN_NO) AS SANCTN_KND
+			,A.BUDGET_DEPT_CODE
+			,NULL AS UPDT_REQ_AT
+			,O.EMPNO AS REGISTER_EMPNO
+		FROM TBACC_EXP_DSN_MASTR A
+			 LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE B ON A.BUDGET_YEAR 		= B.YEAR 
+			 										 AND A.BSNS_SE 			= B.BSNS_SE 
+			 										 AND A.BALC_SE 			= B.BALC_SE
+			 										 AND A.BUDGET_ACNT_CODE	= B.BUDGET_ACNT_CODE
+			 LEFT OUTER JOIN TBBDG_BUKIP_CODE C ON A.EXPNDTR_UNIT_CODE= C.BUKIP_CODE
+		     LEFT OUTER JOIN VWHRM_DEPT D ON A.DEPT_CODE = D.DEPT_CODE
+		     LEFT OUTER JOIN TBACC_CNSUL E ON A.CAUSE_ACTION_NO = E.CAUSE_ACTION_NO
+		     LEFT OUTER JOIN TBPRJ_BSNS_CODE F ON A.BSNS_CODE = F.BSNS_CODE
+		     LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT G ON A.PRMPC_CODE = G.ACCNUT_ACNT_CODE AND A.PRMPC_YEAR = G.ACCNUT_YEAR
+		     LEFT OUTER JOIN TBACC_ATMC_JRNLZ_TY H ON  A.BUDGET_YEAR = H.BUDGET_YEAR
+		     									   AND A.BSNS_SE = H.BSNS_SE
+		     									   AND A.BALC_SE = H.BALC_SE
+		     									   AND A.BUDGET_ACNT_CODE = H.BUDGET_ACNT_CODE
+		     									   AND A.EXPNDTR_UNIT_CODE  = H.BUKIP_CODE
+		     									   AND A.ATMC_JRNLZ_TY_CODE = H.SN
+		     LEFT OUTER JOIN TBFUN_BRANCH_ACNUT L ON A.ACNUTNO     = L.ACNUTNO
+		     LEFT OUTER JOIN VWACC_EXP_DSN_MASTR M 
+		     ON  A.BUDGET_YEAR       = M.BUDGET_YEAR
+		     AND A.BSNS_SE           = M.BSNS_SE
+		     AND A.BALC_SE           = M.BALC_SE
+		     AND A.BSNS_CODE         = M.BSNS_CODE
+		     AND A.BUDGET_DEPT_CODE  = M.DEPT_CODE
+		     AND A.BUDGET_ACNT_CODE  = M.BUDGET_ACNT_CODE
+		     AND A.EXPNDTR_UNIT_CODE = M.EXPNDTR_UNIT_CODE
+		     LEFT OUTER JOIN VWHRM_DEPT N ON A.BUDGET_DEPT_CODE = N.DEPT_CODE
+		     LEFT OUTER JOIN TBCOM_USER O
+		     ON  A.REGISTER_ID = O.USER_ID
+		WHERE A.DECSN_YEAR 	= #DECSN_YEAR#
+		  AND A.DECSN_NO 	= #DECSN_NO#
+	]]>
+	</select>
+	
+	<!-- 지출결의마스터상세 조회 -->
+	<select id="ACC020203DAO.expDsnMtrDetInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 DECSN_YEAR							/* 결의년도       */
+			,DECSN_NO                           /* 결의번호        */
+			,CNTRCT_DE                          /* 계약일자        */
+			,ACPTNC_DE                          /* 검수일자       */
+			,ORDER_DE                           /* 주문일자       */
+			,DVYFG_DE                           /* 납품일자       */
+			,COMPT_DE							/* 완료일자       */
+			,PYMNT_CMMND_PBLICTE_DE             /* 지급명령발행일자 */
+			,TAXXPT_AMOUNT                      /* 면세금액  */
+			,VAT_DECSN_AMOUNT                   /* 부가세결의금액 */
+			,SUPLY_AMOUNT                       /* 공급가액       */
+			,VAT_AMOUNT                         /* 부가세금액    */
+			,DSGN_AMOUNT                        /* 설계금액       */
+			,CNTRCT_SE                          /* 계약구분       */
+			,CNTRCT_MTHD                        /* 계약방식       */
+			,ATCH_FILE                          /* 첨부파일       */
+			,ATCH_FLPTH                         /* 첨부파일경로  */
+			,ATCH_FILE_1                        /* 첨부파일1  */
+			,ATCH_FLPTH_1                       /* 첨부파일경로1*/
+			,CNTR_RGST_STA_DE					/* 공사대장기재일자 */
+			,REGISTER_ID                        /* 등록자ID   */
+			,REGIST_DT                          /* 등록일시          */
+			,UPDUSR_ID                          /* 수정자ID   */
+			,UPDT_DT		                    /* 수정일시          */
+		FROM TBACC_EXP_DSN_MTR_DET
+		WHERE DECSN_YEAR 	= #DECSN_YEAR#
+		  AND DECSN_NO 		= #DECSN_NO#
+	]]>
+	</select>
+	
+	<!-- 봉급지출결의마스터상세 조회 -->
+	<select id="ACC020203DAO.slaryExpDsnMtrDetInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 DECSN_YEAR							/* 결의년도					*/
+			,DECSN_NO                           /* 결의번호                 */
+			,TAXXPT_AMOUNT                      /* 면세금액                 */
+			,VAT_AT                             /* 부가세여부               */
+			,VAT_DECSN_AMOUNT                   /* 부가세결의금액           */
+			,SUPLY_AMOUNT                       /* 공급가액                 */
+			,VAT_AMOUNT                         /* 부가세금액               */
+			,INCMTAX                            /* 소득세                   */
+			,IHNTS                              /* 주민세                   */
+			,HLTHINS                            /* 건강보험                 */
+			,NPN                                /* 국민연금                 */
+			,CREDTR                             /* 채주                     */
+			,RCPT_DE                            /* 영수일자                 */
+			,REGISTER_ID                        /* 등록자ID                 */
+			,REGIST_DT                          /* 등록일시                 */
+			,UPDUSR_ID                          /* 수정자ID                 */
+			,UPDT_DT		                    /* 수정일시                 */
+		FROM TBACC_SLARY_EXP_DSN_MTR_DET
+		WHERE DECSN_YEAR 	= #DECSN_YEAR#
+		  AND DECSN_NO 		= #DECSN_NO#
+	]]>
+	</select>
+	
+	<!-- 여입지출결의마스터상세 조회 -->
+	<select id="ACC020203DAO.rturnExpDsnMtrDetInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 DECSN_YEAR							/* 결의년도					*/
+			,DECSN_NO                           /* 결의번호                 */
+			,CNRL_LEDGR_RGIST_DE                /* 통제원장등기일자         */
+			,PYMNT_CNRL_LEDGR_DE                /* 지급통제원장일자         */
+			,EXPNDTR_DE                         /* 지출일자                 */
+			,NHT_PBLICTE_DE                     /* 고지서발행일자           */
+			,RTURN_NHT_NO                       /* 반납고지서번호           */
+			,PAY_TMLMT                          /* 납부기한                 */
+			,PAY_DE                             /* 납부일자                 */
+			,ADRES								/* 주소						*/
+			,NM									/* 성명						*/
+			,REGISTER_ID                        /* 등록자ID                 */
+			,REGIST_DT                          /* 등록일시                 */
+			,UPDUSR_ID                          /* 수정자ID                 */
+			,UPDT_DT		                    /* 수정일시                 */
+			,MTCHG_SE
+		FROM TBACC_RTURN_EXP_DSN_MTR_DET
+		WHERE DECSN_YEAR 	= #DECSN_YEAR#
+		  AND DECSN_NO 		= #DECSN_NO#
+	]]>
+	</select>
+	
+	<!-- 여비지출결의마스터상세 조회 -->
+	<select id="ACC020203DAO.trvctExpDsnMtrDetInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 DECSN_YEAR						/* 결의년도				*/
+			,DECSN_NO                       /* 결의번호             */
+			,EXPECT_DE                      /* 예상일자             */
+			,EXPECT_AMOUNT                  /* 예상금액             */
+			,EXCCLC_AMOUNT                  /* 정산금액             */
+			,REGISTER_ID                    /* 등록자ID             */
+			,REGIST_DT                      /* 등록일시             */
+			,UPDUSR_ID                      /* 수정자ID             */
+			,UPDT_DT		                /* 수정일시             */
+		FROM TBACC_TRVCT_EXP_DSN_MTR_DET
+		WHERE DECSN_YEAR 	= #DECSN_YEAR#
+		  AND DECSN_NO 		= #DECSN_NO#
+	]]>
+	</select>
+	
+	<!-- 지출결의세부 목록조회 -->
+	<select id="ACC020203DAO.expDsnDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			  NVL(L1.BCNC_NM, T1.BCNC_NM) AS BCNC_NM   /* 거래처명*/
+			, T1.DECSN_YEAR					/*결의년도*/
+			, T1.DECSN_NO					/*결의번호*/
+			, T1.SEQ						/*순번*/
+			, T1.DECSN_AMOUNT				/*결의금액*/
+			, T1.TAXXPT_AMOUNT				/*면세금액*/
+			, T1.VAT_AT						/*부가세여부*/
+			, T1.BILL_KND					/*계산서종류*/
+			, T1.VAT_DECSN_AMOUNT			/*부가세결의금액*/
+			, T1.SUPLY_AMOUNT				/*공급가액*/
+			, T1.VAT						/*부가세*/
+			, T1.BCNC_CODE					/*거래처코드*/
+			, T1.NM							/*성명*/
+			, T1.ADRES						/*주소*/
+			, T1.RQEST_DE					/*청구일자*/
+			, T1.RQEST_MAN					/*청구자*/
+			, T1.RCPT_DE					/*영수일자*/
+			, T1.RCPT_MAN					/*영수자*/
+			, T1.FNNC_INSTT_CODE			/*금융기관코드*/
+			, T1.ACNUTNO					/*계좌번호*/
+			, DECODE(T1.ENTRPRS_SE,'3' ,'3', '1')	AS ENTRPRS_SE				/*기업구분*/
+			, T1.EVRFRND					/*친환경*/
+			, T1.TCNDVLP					/*기술개발*/
+			, T1.CNTRWK_PRPOS_MTRIL			/*공사용도자재*/
+			, T1.AREA_ENTRPS				/*지역업체*/
+			, T1.FEMALE_ENTRPRS				/*여성기업*/
+			, T1.MIDDL_PD_CMPET_PRDUCT		/*중기간경쟁제품*/
+			, T1.FRGCPT_ENTRPRS				/*외자기업*/
+			, T1.DSPSN						/*장애인*/
+			, T1.SRSILL_DSPSN				/*중증장애인*/
+			, T1.SOCTY_ENTRPRS				/*사회기업*/
+			, T1.DSPSN_PRDCTN_FCLTY			/*장애인생산시설*/
+			, T1.SOCTY_CPER_MXTR			/*사회적협동조합*/
+			, T1.GREEN_PRDUCT				/*녹색제품*/
+			, T1.DSPSN_STD_BPLC				/*장애인표준사업장*/
+			, T1.WATER_INDUST				/*물산업*/
+			, T1.MDLC_INDUST				/*의료산업*/
+			, T1.FARMNG_INDUST				/*농업산업*/
+			, T1.ENERGY_INDUST				/*에너지산업*/
+			, T1.CRRSPND_ABSENCE			/*해당없음*/
+			, T1.WHTAX_AT					/*원천세여부*/
+			, T1.WHTAX_KND					/*원천세종류*/
+			, T1.WHTAX_ADRES				/*원천세주소*/
+			, T1.WHTAX_INCOME_SE_CODE		/*원천세_소득구분코드*/
+			, T1.WHTAX_INDUTY_CODE			/*원천세_업종코드*/
+			, T1.INCMTAX					/*소득세*/
+			, T1.IHNTS						/*주민세*/
+			, T1.MTCHG_SE					/*매칭구분*/
+			, T1.BRRW_AMOUNT_INTR_RPAY_AT	/*차입금액이자상환여부*/
+			, T1.RM							/*비고*/
+			, T1.CMPNSP_NO					/*대사번호*/
+			, T1.HOUSE_CODE					/*주택코드*/
+			, T1.PRPDVS_TRGET_CODE			/*안분대상코드*/
+			, H_DECRYPT(T1.IHDNUM)  AS IHDNUM						/*주민등록번호*/
+			, T1.REGISTER_ID				/*등록자ID*/
+			, T1.REGIST_DT					/*등록일시*/
+			, T1.UPDUSR_ID					/*수정자ID*/
+			, T1.UPDT_DT					/*수정일시*/
+			, T1.WHTAX_PYMNT_TOTAMT			/*원천세_지급총액*/
+			, T1.ENDW_INTR_AT				/*기금이자상환여부*/
+			, T1.PBNCD_NO					/*공사채번호*/
+			, T1.ERROR_AT					/*오류여부*/
+			, T1.CHGHY						/*변경사유*/
+			, L2.REAL_USER					/*실사용자*/
+			, L3.EMPNM AS REAL_USER_NM		/*실사용자*/
+			, L2.ATNDNC_MAN					/*참석자*/
+			, L2.PRVONSH					/*사유*/
+			, L2.BANK_CD					/*법인카드PK*/
+			, L2.CARD_NO					/*법인카드PK*/
+			, L2.APPR_DATE					/*법인카드PK*/
+			, L2.APPR_SEQ					/*법인카드PK*/
+			, L2.CANCEL_YN					/*법인카드PK*/
+		FROM TBACC_EXP_DSN_DETAIL T1
+			 LEFT OUTER JOIN TBCTR_BCNC_MASTR L1 
+			 ON T1.BCNC_CODE = L1.BCNC_CODE
+			 LEFT OUTER JOIN NH_APPR L2
+			 ON  T1.DECSN_YEAR  = L2.DECSN_YEAR
+			 AND T1.DECSN_NO	= L2.DECSN_NO
+			 AND T1.SEQ			= L2.SEQ
+			 LEFT OUTER JOIN TBHRM_HR_MASTR L3
+			 ON  L2.REAL_USER = L3.EMPNO
+		WHERE T1.DECSN_YEAR		= #DECSN_YEAR#             
+		  AND T1.DECSN_NO          = #DECSN_NO#
+		ORDER BY SEQ
+	]]>
+	</select>
+	
+	<!-- 지출결의세부여비 목록조회 -->
+	<select id="ACC020203DAO.expDsnDetailTrvctList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.DECSN_YEAR                                 /*결의년도*/
+		      ,t1.DECSN_NO                                     /*결의번호*/
+		      ,t1.SEQ                                          /*순번*/
+		      ,t1.EXPECT_AMOUNT                                /*예상금액*/
+		      ,t1.EXCCLC_AMOUNT                                /*정산금액*/
+		      ,t1.DECSN_AMOUNT                                 /*결의금액*/
+		      ,t1.RQEST_DE                                     /*청구일자*/
+		      ,t1.RQEST_MAN_EMPNO                              /*청구자사번*/
+		      ,NVL(t2.EMPNM, t1.RQEST_MAN)   AS RQEST_MAN      /*청구자*/
+		      ,t3.DEPT_NM                    AS RQEST_DEPT_NM  /*청구자부서*/
+		      ,t4.CODE_NM                    AS RQEST_CLSF     /*청구자직급*/
+		      ,t1.RCPT_DE                                      /*영수일자*/
+		      ,t1.RCPT_MAN_EMPNO                               /*영수자사번*/
+		      ,t1.RCPT_MAN                                     /*영수자*/
+		      ,t1.FNNC_INSTT_CODE                              /*금융기관코드*/
+		      ,t1.ACNUTNO                                      /*계좌번호*/
+		      ,t1.ERROR_AT                                     /*오류여부*/
+		      ,t1.CHGHY                                        /*변경사유*/
+		      ,t1.MTCHG_SE                                     /*매칭구분*/
+		      ,DECODE(t5.TRG_FORM_ID, 'HRM070206', NVL(t6.SUM_ACPLC_ACT,   0), 'HRM080306', NVL(t7.SUM_ACPLC_ACT,   0), 0)    AS SUM_ACPLC_ACT
+		      ,DECODE(t5.TRG_FORM_ID, 'HRM070206', NVL(t6.SUM_ETC_EXPENS,  0), 'HRM080306', NVL(t7.SUM_ETC_EXPENS,  0), 0)    AS SUM_ETC_EXPENS
+		      ,DECODE(t5.TRG_FORM_ID, 'HRM070206', NVL(t6.SUM_DAIL,        0), 'HRM080306', NVL(t7.SUM_DAIL,        0), 0)    AS SUM_DAIL
+		      ,DECODE(t5.TRG_FORM_ID, 'HRM070206', NVL(t6.SUM_MAEL,        0), 'HRM080306', NVL(t7.SUM_MAEL,        0), 0)    AS SUM_MAEL
+		      ,DECODE(t5.TRG_FORM_ID, 'HRM070206', NVL(t6.SUM_TRNSPORT,    0), 'HRM080306', NVL(t7.SUM_TRNSPORT,    0), 0)    AS SUM_TRNSPORT
+		      ,DECODE(t5.TRG_FORM_ID, 'HRM070206', NVL(t6.SUM_STAYNG,      0), 'HRM080306', NVL(t7.SUM_STAYNG,      0), 0)    AS SUM_STAYNG
+		      ,DECODE(t5.TRG_FORM_ID, 'HRM070206', NVL(t6.TOT_AMOUNT,      0), 'HRM080306', NVL(t7.TOT_AMOUNT,      0), 0)    AS TOT_AMOUNT
+		      ,DECODE(t5.TRG_FORM_ID, 'HRM070206', NVL(t6.CPR_CARD_AMOUNT, 0), 'HRM080306', NVL(t7.CPR_CARD_AMOUNT, 0), 0)    AS CPR_CARD_AMOUNT
+		FROM   TBACC_EXP_DSN_DETAIL_TRVCT t1
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t2
+		            ON t1.RQEST_MAN_EMPNO = t2.EMPNO
+		       LEFT OUTER JOIN VWHRM_DEPT t3
+		            ON t2.DEPT_CODE = t3.DEPT_CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		            ON t4.GRP_CODE = 'HRM237'
+		           AND t2.HR_CLSF_SE = t4.CODE
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t5
+		            ON t1.DECSN_YEAR = t5.DECSN_YEAR
+		           AND t1.DECSN_NO = t5.DECSN_NO
+		       LEFT OUTER JOIN (
+		                        SELECT b1.DECSN_YEAR
+		                              ,b1.DECSN_NO
+		                              ,b1.EMPNO
+		                              ,SUM(DECODE(b2.BTRPS_SE, '001', b2.USE_AM, 0))    AS SUM_ACPLC_ACT
+		                              ,SUM(DECODE(b2.BTRPS_SE, '002', b2.USE_AM, 0))    AS SUM_ETC_EXPENS
+		                              ,SUM(DECODE(b2.BTRPS_SE, '003', b2.USE_AM, 0))    AS SUM_DAIL
+		                              ,SUM(DECODE(b2.BTRPS_SE, '004', b2.USE_AM, 0))    AS SUM_MAEL
+		                              ,SUM(DECODE(b2.BTRPS_SE, '005', b2.USE_AM, 0))    AS SUM_TRNSPORT
+		                              ,SUM(DECODE(b2.BTRPS_SE, '006', b2.USE_AM, 0))    AS SUM_STAYNG
+		                              ,SUM(b2.USE_AM)                                   AS TOT_AMOUNT
+		                              ,SUM(DECODE(b2.EXCCLC_SE, '001', b2.USE_AM, 0))   AS CPR_CARD_AMOUNT
+		                              ,SUM(DECODE(b2.EXCCLC_SE, '001', 0, b2.USE_AM))   AS DECSN_AMOUNT
+		                        FROM   TBHRM_BSRP_INDVDL b1
+		                               LEFT OUTER JOIN TBHRM_BTRPS_EXCCLC_MANAGE b2
+		                                    ON b1.EMPNO = b2.EMPNO
+		                                   AND b1.BSRP_SEQ = b2.BSRP_SEQ
+		                        GROUP BY b1.DECSN_YEAR
+		                                ,b1.DECSN_NO
+		                                ,b1.EMPNO
+		                       ) t6
+		            ON t1.DECSN_YEAR = t6.DECSN_YEAR
+		           AND t1.DECSN_NO = t6.DECSN_NO
+		           AND t1.RCPT_MAN_EMPNO = t6.EMPNO
+		           AND t5.TRG_FORM_ID = 'HRM070206'
+		       LEFT OUTER JOIN (
+		                        SELECT b1.DECSN_YEAR
+		                              ,b1.DECSN_NO
+		                              ,b1.EMPNO
+		                              ,0                                                AS SUM_ACPLC_ACT
+		                              ,0                                                AS SUM_ETC_EXPENS
+		                              ,SUM(DECODE(b2.EDCCT_SE, '003', b2.USE_AM, 0))    AS SUM_DAIL
+		                              ,SUM(DECODE(b2.EDCCT_SE, '004', b2.USE_AM, 0))    AS SUM_MAEL
+		                              ,SUM(DECODE(b2.EDCCT_SE, '005', b2.USE_AM, 0))    AS SUM_TRNSPORT
+		                              ,SUM(DECODE(b2.EDCCT_SE, '006', b2.USE_AM, 0))    AS SUM_STAYNG
+		                              ,SUM(b2.USE_AM)                                   AS TOT_AMOUNT
+		                              ,SUM(DECODE(b2.EXCCLC_SE, '001', b2.USE_AM, 0))   AS CPR_CARD_AMOUNT
+		                              ,SUM(DECODE(b2.EXCCLC_SE, '001', 0, b2.USE_AM))   AS DECSN_AMOUNT
+		                        FROM   TBHRM_EDC_MANAGE b1
+		                               LEFT OUTER JOIN TBHRM_EDCCT_EXCCLC_MANAGE b2
+		                                    ON b1.YEAR   = b2.YEAR
+		                                   AND b1.SN     = b2.SN
+		                                   AND b1.EMPNO  = b2.EMPNO
+		                                   AND b2.EDC_TY = '1'
+		                        GROUP BY b1.DECSN_YEAR
+		                                ,b1.DECSN_NO
+		                                ,b1.EMPNO
+		                       ) t7
+		            ON t1.DECSN_YEAR = t7.DECSN_YEAR
+		           AND t1.DECSN_NO = t7.DECSN_NO
+		           AND t1.RCPT_MAN_EMPNO = t7.EMPNO
+		           AND t5.TRG_FORM_ID = 'HRM080306'
+		WHERE  t1.DECSN_YEAR = #DECSN_YEAR#
+		AND    t1.DECSN_NO = #DECSN_NO#
+		ORDER BY t1.SEQ
+	]]>
+	</select>
+	
+	
+	<!-- 지출결의내역 목록조회 -->
+	<select id="ACC020203DAO.expDsnDtlsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 DECSN_YEAR				/* 결의년도			*/
+			,DECSN_NO               /* 결의번호         */
+			,SEQ                    /* 순번             */
+			,RPAY_SE                /* 상환구분         */
+			,AMOUNT                 /* 금액             */
+			,NM                     /* 성명             */
+			,SUMRY                  /* 적요             */
+			,REGISTER_ID            /* 등록자ID         */
+			,REGIST_DT              /* 등록일시         */
+			,UPDUSR_ID              /* 수정자ID         */
+			,UPDT_DT                /* 수정일시         */
+		FROM TBACC_EXP_DSN_DTLS
+		WHERE DECSN_YEAR		= #DECSN_YEAR#             
+		  AND DECSN_NO          = #DECSN_NO#
+		ORDER BY SEQ
+	]]>
+	</select>
+	
+	<!-- 지출결의내역공사 목록조회 -->
+	<select id="ACC020203DAO.expDsnDtlsCntrwkList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 DECSN_YEAR				/* 결의년도			*/
+			,DECSN_NO               /* 결의번호         */
+			,SEQ                    /* 순번             */
+			,CNTRWK_NM              /* 공사명           */
+			,QLITY                  /* 품질             */
+			,STNDRD                 /* 규격             */
+			,UNIT                   /* 단위             */
+			,QY                     /* 수량             */
+			,UNTPC                  /* 단가             */
+			,AMOUNT                 /* 금액             */
+			,RM                     /* 비고             */
+			,CNTRWK_BEGIN_DE        /* 공사시작일자     */
+			,CNTRWK_COMPT_DE        /* 공사완료일자     */
+			,REGISTER_ID            /* 등록자ID         */
+			,REGIST_DT              /* 등록일시         */
+			,UPDUSR_ID              /* 수정자ID         */
+			,UPDT_DT                /* 수정일시         */
+		FROM TBACC_EXP_DSN_DTLS_CNTRWK
+		WHERE DECSN_YEAR		= #DECSN_YEAR#             
+		  AND DECSN_NO          = #DECSN_NO#
+		ORDER BY SEQ
+	]]>
+	</select>
+	
+	<!-- 지출결의내역구입 목록조회 -->
+	<select id="ACC020203DAO.expDsnDtlsPurchsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 t1.DECSN_YEAR				/* 결의년도			*/
+			,t1.DECSN_NO               /* 결의번호         */
+			,t1.SEQ                    /* 순번             */
+			,t1.PRDNM                  /* 품명             */
+			,t1.STNDRD                 /* 규격             */
+			,t1.UNIT                   /* 단위             */
+			,t1.QY                     /* 수량             */
+			,t1.UNTPC                  /* 단가             */
+			,t1.AMOUNT                 /* 금액             */
+			,t1.RM                     /* 비고             */
+			,t1.PAY_DE                 /* 납부일자         */
+			,t1.ASSETS_CL_CODE			/* 자산분류코드		*/
+			,t2.ASSETS_CL_NM			/* 자산분류명		*/
+			,t1.REGISTER_ID            /* 등록자ID         */
+			,t1.REGIST_DT              /* 등록일시         */
+			,t1.UPDUSR_ID              /* 수정자ID         */
+			,t1.UPDT_DT		        /* 수정일시         */
+		FROM TBACC_EXP_DSN_DTLS_PURCHS t1
+			 LEFT OUTER JOIN TBASS_ASSETS_CL t2
+			 ON t1.ASSETS_CL_CODE = t2.ASSETS_CL_CODE
+		WHERE t1.DECSN_YEAR		  = #DECSN_YEAR#             
+		  AND t1.DECSN_NO         = #DECSN_NO#
+		ORDER BY t1.SEQ
+	]]>
+	</select>
+	
+	
+	<!-- 지출결의내역용역 목록조회 -->
+	<select id="ACC020203DAO.expDsnDtlsServcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 DECSN_YEAR				/* 결의년도			*/
+			,DECSN_NO               /* 결의번호         */
+			,SEQ                    /* 순번             */
+			,PRDNM                  /* 품명             */
+			,STNDRD                 /* 규격             */
+			,UNIT                   /* 단위             */
+			,QY                     /* 수량             */
+			,UNTPC                  /* 단가             */
+			,AMOUNT                 /* 금액             */
+			,PAY_DE                 /* 납부일자         */
+			,RM                     /* 비고             */
+			,REGISTER_ID            /* 등록자ID         */
+			,REGIST_DT              /* 등록일시         */
+			,UPDUSR_ID              /* 수정자ID         */
+			,UPDT_DT                /* 수정일시         */
+		FROM TBACC_EXP_DSN_DTLS_SERVC
+		WHERE DECSN_YEAR		= #DECSN_YEAR#             
+		  AND DECSN_NO          = #DECSN_NO#
+		ORDER BY SEQ
+	]]>
+	</select>
+	
+	<!-- 지출결의내역임차 목록조회 -->
+	<select id="ACC020203DAO.expDsnDtlsHireList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT
+			 DECSN_YEAR				/* 년도				*/
+			,DECSN_NO               /* 결의번호         */
+			,SEQ                    /* 순번             */
+			,CNTRWK_NM              /* 공사명           */
+			,CNTRWK_BEGIN_DE        /* 공사시작일자     */
+			,CNTRWK_COMPT_DE        /* 공사완료일자     */
+			,CNTRWK_DAYCNT          /* 공사일수         */
+			,UNTPC                  /* 단가             */
+			,AMOUNT                 /* 금액             */
+			,HIRE_BEGIN_DE          /* 임차시작일자     */
+			,HIRE_ENDDE             /* 임차종료일자     */
+			,RM                     /* 비고             */
+			,REGISTER_ID            /* 등록자ID         */
+			,REGIST_DT              /* 등록일시         */
+			,UPDUSR_ID              /* 수정자ID         */
+			,UPDT_DT                /* 수정일시         */
+		FROM TBACC_EXP_DSN_DTLS_HIRE
+		WHERE DECSN_YEAR		= #DECSN_YEAR#             
+		  AND DECSN_NO          = #DECSN_NO#
+		ORDER BY SEQ
+	]]>
+	</select>
+	
+	<!-- 지출결의마스터 등록 -->
+	<insert id="ACC020203DAO.expDsnMastrC" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBACC_EXP_DSN_MASTR
+		(
+			 DECSN_YEAR
+			,DECSN_NO
+			,CAUSE_ACTION_NO
+			,BUDGET_YEAR
+			,BSNS_SE
+			,BALC_SE
+			,BUDGET_DEPT_CODE
+			,BUDGET_ACNT_CODE
+			,ANACT_KND
+			,DEPT_CODE
+			,CYFD_SE
+			,ITNC_DE
+			,PYMNT_ITNC_DE
+			,DET_DCSN_DE
+			,PRMPC_JRNLZPR_RGIST_DE
+			,CPTAL_EXPNDTR_ACNTBK_DE
+			,EXPNDTR_BUDGET_CNRL_DE
+			,DECSN_AMOUNT
+			,BUDGET_ACNT_BLCE
+			,EXPNDTR_UNIT_CODE
+			,EXPNDTR_UNIT_CODE_BLCE
+			,CPTAL_CHRG_CONFM
+			,TIMHDER_CONFM
+			,CNTRCT_NO
+			,FNNC_INSTT_CODE
+			,ACNUTNO
+			,SUMRY
+			,BSNS_CODE
+			,PRMPC_YEAR
+			,PRMPC_CODE
+			,EXPNDTR_CNFIRM_AT
+			,FILE_SN
+			,CHECK_NO
+			,ATMC_JRNLZ_TY_CODE
+			,ORIBDGT_DECSN_AMOUNT
+			,CYFD_BUDGET_DECSN_AMOUNT
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+			,TRG_FORM_ID
+			,TRG_FORM_ID2
+			,PRUF_SE_CODE
+			,EXPNDTR_UPDT_REQ_CN
+			,CAUSE_ACTION_DE
+		) VALUES (
+			 #DECSN_YEAR#
+		    ,#DECSN_NO#
+		    ,#CAUSE_ACTION_NO#
+		    ,#BUDGET_YEAR#
+		    ,#BSNS_SE#
+		    ,#BALC_SE#
+		    ,#BUDGET_DEPT_CODE#
+		    ,#BUDGET_ACNT_CODE#
+		    ,#ANACT_KND#
+		    ,#DEPT_CODE#
+		    ,#CYFD_SE#
+		    ,#ITNC_DE#
+		    ,#PYMNT_ITNC_DE#
+		    ,#DET_DCSN_DE#
+		    ,#PRMPC_JRNLZPR_RGIST_DE#
+		    ,#CPTAL_EXPNDTR_ACNTBK_DE#
+		    ,#EXPNDTR_BUDGET_CNRL_DE#
+		    ,NVL(#DECSN_AMOUNT#,0)
+		    ,#BUDGET_ACNT_BLCE#
+		    ,#EXPNDTR_UNIT_CODE#
+		    ,#EXPNDTR_UNIT_CODE_BLCE#
+		    ,#CPTAL_CHRG_CONFM#
+		    ,#TIMHDER_CONFM#
+		    ,#CNTRCT_NO#
+		    ,#FNNC_INSTT_CODE#
+			,#ACNUTNO#
+			,#SUMRY#
+			,#BSNS_CODE#
+			,#PRMPC_YEAR#
+			,#PRMPC_CODE#
+		    ,#EXPNDTR_CNFIRM_AT#
+		    ,#FILE_SN#
+		    ,CASE WHEN #EXPNDTR_BUDGET_CNRL_DE# IS NOT NULL THEN (SELECT NVL(MAX(CHECK_NO),0)+1 FROM TBACC_EXP_DSN_MASTR WHERE DECSN_YEAR = #DECSN_YEAR#) END	/* 수표번호 자동채번 */
+		    ,#ATMC_JRNLZ_TY_CODE#
+		    ,#ORIBDGT_DECSN_AMOUNT#
+		    ,#CYFD_BUDGET_DECSN_AMOUNT#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#TRG_FORM_ID#
+			,#TRG_FORM_ID2#
+			,#PRUF_SE_CODE#
+			,#EXPNDTR_UPDT_REQ_CN#
+			,#CAUSE_ACTION_DE#
+		)
+	]]>
+	</insert>
+	
+	<!-- 지출결의마스터 수정 -->
+	<update id="ACC020203DAO.expDsnMastrU" parameterClass="java.util.HashMap">
+		UPDATE TBACC_EXP_DSN_MASTR
+		SET
+			 CAUSE_ACTION_NO            = #CAUSE_ACTION_NO#         
+			,BUDGET_YEAR                = #BUDGET_YEAR#             
+			,BSNS_SE                    = #BSNS_SE#                 
+			,BALC_SE                    = #BALC_SE#
+			,BUDGET_DEPT_CODE			= #BUDGET_DEPT_CODE#                 
+			,BUDGET_ACNT_CODE           = #BUDGET_ACNT_CODE#        
+			,ANACT_KND                  = #ANACT_KND#               
+			,DEPT_CODE                  = #DEPT_CODE#               
+			,ITNC_DE                    = #ITNC_DE#                 
+			,PYMNT_ITNC_DE              = #PYMNT_ITNC_DE#           
+			,DET_DCSN_DE                = #DET_DCSN_DE#             
+			,PRMPC_JRNLZPR_RGIST_DE     = #PRMPC_JRNLZPR_RGIST_DE#  
+			,CPTAL_EXPNDTR_ACNTBK_DE    = #CPTAL_EXPNDTR_ACNTBK_DE#
+			,EXPNDTR_BUDGET_CNRL_DE		= #EXPNDTR_BUDGET_CNRL_DE# 
+			,DECSN_AMOUNT               = #DECSN_AMOUNT#            
+			,BUDGET_ACNT_BLCE           = #BUDGET_ACNT_BLCE#        
+			,EXPNDTR_UNIT_CODE          = #EXPNDTR_UNIT_CODE#       
+			,EXPNDTR_UNIT_CODE_BLCE     = #EXPNDTR_UNIT_CODE_BLCE#  
+			,CPTAL_CHRG_CONFM           = #CPTAL_CHRG_CONFM#        
+			,TIMHDER_CONFM              = #TIMHDER_CONFM#           
+			,CNTRCT_NO                  = #CNTRCT_NO#
+			,FNNC_INSTT_CODE			= #FNNC_INSTT_CODE#
+			,ACNUTNO					= #ACNUTNO#
+			,SUMRY						= #SUMRY#
+			,BSNS_CODE					= #BSNS_CODE#
+			,PRMPC_CODE					= #PRMPC_CODE#               
+		    ,EXPNDTR_CNFIRM_AT		    = #EXPNDTR_CNFIRM_AT#       
+		    ,FILE_SN                    = #FILE_SN#
+		    ,ATMC_JRNLZ_TY_CODE			= #ATMC_JRNLZ_TY_CODE#
+		    ,EXPNDTR_UPDT_REQ_CN        = #EXPNDTR_UPDT_REQ_CN#
+		    ,CAUSE_ACTION_DE            = #CAUSE_ACTION_DE#
+		    ,SANCTN_NO                  = #SANCTN_NO#
+		<isEqual property="MDFY_AMT" compareValue="1">
+		    ,CYFD_SE                    = #CYFD_SE#
+		    ,ORIBDGT_DECSN_AMOUNT		= #ORIBDGT_DECSN_AMOUNT#
+		    ,CYFD_BUDGET_DECSN_AMOUNT	= #CYFD_BUDGET_DECSN_AMOUNT#
+		</isEqual>
+		    ,UPDUSR_ID              	= #S_USER_ID#               	
+		    ,UPDT_DT                	= SYSDATE
+		WHERE DECSN_YEAR                = #DECSN_YEAR#
+		  AND DECSN_NO                  = #DECSN_NO#              
+	</update>
+	
+	<!-- 지출결의마스터 삭제 -->
+	<delete id="ACC020203DAO.expDsnMastrD" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE FROM TBACC_EXP_DSN_MASTR
+		WHERE DECSN_YEAR                = #DECSN_YEAR#                   
+		  AND DECSN_NO                  = #DECSN_NO#
+	]]>
+	</delete>
+	
+	<!-- 지출결의마스터상세 등록 -->
+	<insert id="ACC020203DAO.expDsnMtrDetC" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBACC_EXP_DSN_MTR_DET
+		(
+			 DECSN_YEAR
+			,DECSN_NO
+			,CNTRCT_DE
+			,ACPTNC_DE
+			,ORDER_DE
+			,DVYFG_DE
+			,COMPT_DE
+			,PYMNT_CMMND_PBLICTE_DE
+			,TAXXPT_AMOUNT
+			,VAT_DECSN_AMOUNT
+			,SUPLY_AMOUNT
+			,VAT_AMOUNT
+			,DSGN_AMOUNT
+			,CNTRCT_SE
+			,CNTRCT_MTHD
+			,ATCH_FILE
+			,ATCH_FLPTH
+			,ATCH_FILE_1
+			,ATCH_FLPTH_1
+			,CNTR_RGST_STA_DE
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT		
+		) VALUES (
+			 #DSNMASTR.DECSN_YEAR#
+			,#DSNMASTR.DECSN_NO#
+			,#CNTRCT_DE#
+			,#ACPTNC_DE#
+			,#ORDER_DE#
+			,#DVYFG_DE#
+			,#COMPT_DE#
+			,#PYMNT_CMMND_PBLICTE_DE#
+			,#TAXXPT_AMOUNT#
+			,#VAT_DECSN_AMOUNT#
+			,#SUPLY_AMOUNT#
+			,#VAT_AMOUNT#
+			,#DSGN_AMOUNT#
+			,#CNTRCT_SE#
+			,#CNTRCT_MTHD#
+			,#ATCH_FILE#
+			,#ATCH_FLPTH#
+			,#ATCH_FILE_1#
+			,#ATCH_FLPTH_1#
+			,#CNTR_RGST_STA_DE#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	]]>
+	</insert>
+	
+	<!-- 지출결의마스터상세 수정 -->
+	<update id="ACC020203DAO.expDsnMtrDetU" parameterClass="java.util.HashMap">
+	<![CDATA[
+		UPDATE TBACC_EXP_DSN_MTR_DET
+		SET
+			 CNTRCT_DE                          = #CNTRCT_DE#                     
+			,ACPTNC_DE                          = #ACPTNC_DE#                     
+			,ORDER_DE                           = #ORDER_DE#                      
+			,DVYFG_DE                           = #DVYFG_DE#
+			,COMPT_DE							= #COMPT_DE#                      
+			,PYMNT_CMMND_PBLICTE_DE             = #PYMNT_CMMND_PBLICTE_DE#        
+			,TAXXPT_AMOUNT                      = #TAXXPT_AMOUNT#                 
+			,VAT_DECSN_AMOUNT                   = #VAT_DECSN_AMOUNT#              
+			,SUPLY_AMOUNT                       = #SUPLY_AMOUNT#                  
+			,VAT_AMOUNT                         = #VAT_AMOUNT#                    
+			,DSGN_AMOUNT                        = #DSGN_AMOUNT#                   
+			,CNTRCT_SE                          = #CNTRCT_SE#                     
+			,CNTRCT_MTHD                        = #CNTRCT_MTHD#                   
+			,ATCH_FILE                          = #ATCH_FILE#                     
+			,ATCH_FLPTH                         = #ATCH_FLPTH#                    
+			,ATCH_FILE_1                        = #ATCH_FILE_1#                   
+			,ATCH_FLPTH_1                       = #ATCH_FLPTH_1#
+			,CNTR_RGST_STA_DE					= #CNTR_RGST_STA_DE#                  
+			,UPDUSR_ID                          = #S_USER_ID#                  
+			,UPDT_DT	                        = SYSDATE                         
+		WHERE DECSN_YEAR						= #DECSN_YEAR#                          
+		  AND DECSN_NO                          = #DECSN_NO#                      
+	]]>
+	</update>
+	
+	<!-- 지출결의마스터상세 삭제 -->
+	<delete id="ACC020203DAO.expDsnMtrDetD" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE FROM TBACC_EXP_DSN_MTR_DET
+		WHERE DECSN_YEAR						= #DECSN_YEAR#                          
+		  AND DECSN_NO                          = #DECSN_NO#                      
+	]]>
+	</delete>
+   
+   	<!-- 봉급지출결의마스터상세 등록 -->
+   	<insert id="ACC020203DAO.slaryExpDsnMtrDetC" parameterClass="java.util.HashMap">
+   	<![CDATA[
+   		INSERT INTO TBACC_SLARY_EXP_DSN_MTR_DET
+   		(
+   			 DECSN_YEAR
+			,DECSN_NO
+			,TAXXPT_AMOUNT
+			,VAT_AT
+			,VAT_DECSN_AMOUNT
+			,SUPLY_AMOUNT
+			,VAT_AMOUNT
+			,INCMTAX
+			,IHNTS
+			,HLTHINS
+			,NPN
+			,CREDTR
+			,RCPT_DE
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+   		) VALUES (
+   			 #DSNMASTR.DECSN_YEAR#
+   			,#DSNMASTR.DECSN_NO#
+   			,#TAXXPT_AMOUNT#
+   			,#VAT_AT#
+   			,#VAT_DECSN_AMOUNT#
+   			,#SUPLY_AMOUNT#
+   			,#VAT_AMOUNT#
+   			,#INCMTAX#
+   			,#IHNTS#
+   			,#HLTHINS#
+   			,#NPN#
+   			,#CREDTR#
+   			,#RCPT_DE#
+   			,#S_USER_ID#
+   			,SYSDATE
+   			,#S_USER_ID#
+   			,SYSDATE
+   		)
+   	]]>
+   	</insert>
+   	
+   	<!-- 봉급지출결의마스터상세 수정 -->
+   	<update id="ACC020203DAO.slaryExpDsnMtrDetU" parameterClass="java.util.HashMap">
+   	<![CDATA[
+   		UPDATE TBACC_SLARY_EXP_DSN_MTR_DET
+   		SET
+			 TAXXPT_AMOUNT                      = #TAXXPT_AMOUNT#                  
+			,VAT_AT                             = #VAT_AT#                         
+			,VAT_DECSN_AMOUNT                   = #VAT_DECSN_AMOUNT#               
+			,SUPLY_AMOUNT                       = #SUPLY_AMOUNT#                   
+			,VAT_AMOUNT                         = #VAT_AMOUNT#                     
+			,INCMTAX                            = #INCMTAX#                        
+			,IHNTS                              = #IHNTS#                          
+			,HLTHINS                            = #HLTHINS#                        
+			,NPN                                = #NPN#                            
+			,CREDTR                             = #CREDTR#                         
+			,RCPT_DE                            = #RCPT_DE#                        
+			,UPDUSR_ID                          = #S_USER_ID#                   
+			,UPDT_DT   		                    = SYSDATE                          
+   		WHERE DECSN_YEAR						= #DECSN_YEAR#                           
+		  AND DECSN_NO                          = #DECSN_NO#                       
+   	]]>
+   	</update>
+   	
+   	<!-- 봉급지출결의마스터상세 삭제 -->
+   	<delete id="ACC020203DAO.slaryExpDsnMtrDetD" parameterClass="java.util.HashMap">
+   	<![CDATA[
+   		DELETE FROM TBACC_SLARY_EXP_DSN_MTR_DET
+   		WHERE DECSN_YEAR						= #DECSN_YEAR#                           
+		  AND DECSN_NO                          = #DECSN_NO#                       
+   	]]>
+   	</delete>
+   
+	<!-- 반납지출결의마스터상세 등록 -->
+    <insert id="ACC020203DAO.rturnExpDsnMtrDetC" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBACC_RTURN_EXP_DSN_MTR_DET
+    	(
+    		 DECSN_YEAR
+			,DECSN_NO
+			,CNRL_LEDGR_RGIST_DE
+			,PYMNT_CNRL_LEDGR_DE
+			,EXPNDTR_DE
+			,NHT_PBLICTE_DE
+			,RTURN_NHT_NO
+			,PAY_TMLMT
+			,PAY_DE
+			,ADRES
+			,NM
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+			,MTCHG_SE
+    	) VALUES (
+    		 #DSNMASTR.DECSN_YEAR#
+    		,#DSNMASTR.DECSN_NO#
+    		,#CNRL_LEDGR_RGIST_DE#
+    		,#PYMNT_CNRL_LEDGR_DE#
+    		,#EXPNDTR_DE#
+    		,#NHT_PBLICTE_DE#
+    		,#RTURN_NHT_NO#
+    		,#PAY_TMLMT#
+    		,#PAY_DE#
+    		,#ADRES#
+			,#NM#
+    		,#S_USER_ID#
+    		,SYSDATE
+    		,#S_USER_ID#
+    		,SYSDATE
+    		,#MTCHG_SE#
+    	)
+    ]]>
+    </insert>
+    
+    <!-- 반납지출결의마스터상세 수정 -->
+    <update id="ACC020203DAO.rturnExpDsnMtrDetU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBACC_RTURN_EXP_DSN_MTR_DET
+    	SET
+			 CNRL_LEDGR_RGIST_DE                = #CNRL_LEDGR_RGIST_DE#            
+			,PYMNT_CNRL_LEDGR_DE                = #PYMNT_CNRL_LEDGR_DE#            
+			,EXPNDTR_DE                         = #EXPNDTR_DE#                     
+			,NHT_PBLICTE_DE                     = #NHT_PBLICTE_DE#                 
+			,RTURN_NHT_NO                       = #RTURN_NHT_NO#                   
+			,PAY_TMLMT                          = #PAY_TMLMT#                      
+			,PAY_DE                             = #PAY_DE#
+			,ADRES								= #ADRES#
+			,NM               					= #NM#
+			,UPDUSR_ID                          = #S_USER_ID#                   
+			,UPDT_DT                            = SYSDATE         
+			,MTCHG_SE							= #MTCHG_SE#
+    	WHERE DECSN_YEAR						= #DECSN_YEAR#                           
+		  AND DECSN_NO                          = #DECSN_NO#                       
+    ]]>
+    </update>
+    
+    <!-- 반납지출결의마스터상세 삭제 -->
+    <delete id="ACC020203DAO.rturnExpDsnMtrDetD" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	DELETE FROM TBACC_RTURN_EXP_DSN_MTR_DET
+    	WHERE DECSN_YEAR						= #DECSN_YEAR#                           
+		  AND DECSN_NO                          = #DECSN_NO#                       
+    ]]>
+    </delete>
+    
+    <!-- 여비지출결의마스터상세 등록 -->
+    <insert id="ACC020203DAO.trvctExpDsnMtrDetC" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBACC_TRVCT_EXP_DSN_MTR_DET
+    	(
+    		 DECSN_YEAR
+			,DECSN_NO
+			,EXPECT_DE
+			,EXPECT_AMOUNT
+			,EXCCLC_AMOUNT
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+    	) VALUES (
+    		 #DSNMASTR.DECSN_YEAR#
+    		,#DSNMASTR.DECSN_NO#
+    		,#EXPECT_DE#
+    		,#EXPECT_AMOUNT#
+    		,#EXCCLC_AMOUNT#
+    		,#S_USER_ID#
+    		,SYSDATE
+    		,#S_USER_ID#
+    		,SYSDATE
+    	)
+    ]]>
+    </insert>
+    
+    <!-- 여비지출결의마스터상세 수정 -->
+    <update id="ACC020203DAO.trvctExpDsnMtrDetU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBACC_TRVCT_EXP_DSN_MTR_DET
+    	SET
+			 EXPECT_DE                      = #EXPECT_DE#                
+			,EXPECT_AMOUNT                  = #EXPECT_AMOUNT#            
+			,EXCCLC_AMOUNT                  = #EXCCLC_AMOUNT#            
+			,UPDUSR_ID                      = #S_USER_ID#             
+			,UPDT_DT                        = SYSDATE                    
+    	WHERE DECSN_YEAR					= #DECSN_YEAR#                     
+		  AND DECSN_NO                      = #DECSN_NO#                 
+    ]]>
+    </update>
+    
+    <!-- 여비지출결의마스터상세 삭제 -->
+    <delete id="ACC020203DAO.trvctExpDsnMtrDetD" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	DELETE FROM TBACC_TRVCT_EXP_DSN_MTR_DET
+    	WHERE DECSN_YEAR					= #DECSN_YEAR#                     
+		  AND DECSN_NO                      = #DECSN_NO#                 
+    ]]>
+    </delete>
+    
+    <!-- 지출결의세부 키값 조회 -->
+    <select id="ACC020203DAO.expDsnDetailSeq" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+    	SELECT NVL(MAX(SEQ),0)+1 
+    	FROM TBACC_EXP_DSN_DETAIL 
+    	WHERE DECSN_YEAR = #DSNMASTR.DECSN_YEAR# 
+    	  AND DECSN_NO = #DSNMASTR.DECSN_NO#
+    </select>
+    
+    
+    <!-- 지출결의세부 등록 -->
+    <insert id="ACC020203DAO.expDsnDetailC" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBACC_EXP_DSN_DETAIL
+    	(
+			 DECSN_YEAR
+			,DECSN_NO
+			,SEQ
+			,DECSN_AMOUNT
+			,TAXXPT_AMOUNT
+			,VAT_AT
+			,BILL_KND
+			,VAT_DECSN_AMOUNT
+			,SUPLY_AMOUNT
+			,VAT
+			,BCNC_CODE
+			,BCNC_NM
+			,NM
+			,ADRES
+			,RQEST_DE
+			,RQEST_MAN
+			,RCPT_DE
+			,RCPT_MAN
+			,FNNC_INSTT_CODE
+			,ACNUTNO
+			,ENTRPRS_SE
+			,EVRFRND
+			,TCNDVLP
+			,CNTRWK_PRPOS_MTRIL
+			,AREA_ENTRPS
+			,FEMALE_ENTRPRS
+			,MIDDL_PD_CMPET_PRDUCT
+			,FRGCPT_ENTRPRS
+			,DSPSN
+			,SRSILL_DSPSN
+			,SOCTY_ENTRPRS
+			,DSPSN_PRDCTN_FCLTY
+			,SOCTY_CPER_MXTR
+			,GREEN_PRDUCT
+			,DSPSN_STD_BPLC
+			,WATER_INDUST
+			,MDLC_INDUST
+			,FARMNG_INDUST
+			,ENERGY_INDUST
+			,CRRSPND_ABSENCE
+			,WHTAX_AT
+			,WHTAX_KND
+			,WHTAX_ADRES
+			,MTCHG_SE
+			,BRRW_AMOUNT_INTR_RPAY_AT
+			,RM
+			,CMPNSP_NO
+			,IHDNUM
+			,INCMTAX
+			,IHNTS
+			,WHTAX_INCOME_SE_CODE
+			,WHTAX_INDUTY_CODE
+			,WHTAX_PYMNT_TOTAMT
+			,PRPDVS_TRGET_CODE
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+			
+			,ENDW_INTR_AT /* 기금이자상환여부 */ 
+			,PBNCD_NO /* 공사채번호 */  
+			,ERROR_AT /* 오류여부 */
+			,CHGHY /* 변경사유 */
+			     	
+    	) VALUES (
+    		 #DSNMASTR.DECSN_YEAR#
+    		,#DSNMASTR.DECSN_NO#
+    		,#SEQ#
+    		,#DECSN_AMOUNT#
+    		,#TAXXPT_AMOUNT#
+    		,#VAT_AT#
+    		,#BILL_KND#
+    		,#VAT_DECSN_AMOUNT#
+    		,#SUPLY_AMOUNT#
+    		,#VAT#
+    		,#BCNC_CODE#
+    		,#BCNC_NM#		/*거래처명*/
+    		,#NM#
+    		,#ADRES#
+    		,#RQEST_DE#
+    		,#RQEST_MAN#
+    		,#RCPT_DE#
+    		,#RCPT_MAN#
+    		,#FNNC_INSTT_CODE#
+    		,#ACNUTNO#
+    		,#ENTRPRS_SE#
+    		,#EVRFRND#
+    		,#TCNDVLP#
+    		,#CNTRWK_PRPOS_MTRIL#
+    		,#AREA_ENTRPS#
+    		,#FEMALE_ENTRPRS#
+    		,#MIDDL_PD_CMPET_PRDUCT#
+    		,#FRGCPT_ENTRPRS#
+    		,#DSPSN#
+    		,#SRSILL_DSPSN#
+    		,#SOCTY_ENTRPRS#
+    		,#DSPSN_PRDCTN_FCLTY#
+			,#SOCTY_CPER_MXTR#
+			,#GREEN_PRDUCT#
+			,#DSPSN_STD_BPLC#
+			,#WATER_INDUST#
+			,#MDLC_INDUST#
+			,#FARMNG_INDUST#
+			,#ENERGY_INDUST#		
+			,#CRRSPND_ABSENCE#
+    		,#WHTAX_AT#
+    		,#WHTAX_KND#
+    		,#WHTAX_ADRES#
+    		,#MTCHG_SE#
+    		,#BRRW_AMOUNT_INTR_RPAY_AT#
+    		,#RM#
+    		,#CMPNSP_NO#
+    		,H_ENCRYPT(#IHDNUM#)
+			,#INCMTAX#
+			,#IHNTS#
+			,#WHTAX_INCOME_SE_CODE#
+			,#WHTAX_INDUTY_CODE#
+			,#WHTAX_PYMNT_TOTAMT#
+			,#PRPDVS_TRGET_CODE#
+    		,#S_USER_ID#
+    		,SYSDATE
+    		,#S_USER_ID#
+    		,SYSDATE
+    		
+    		,#ENDW_INTR_AT# /* 기금이자상환여부 */ 
+			,#PBNCD_NO# /* 공사채번호 */
+			,#ERROR_AT# /* 오류여부 */
+			,#CHGHY# /* 변경사유 */  
+    	)
+    ]]>
+    </insert>
+    
+    <!-- 지출결의세부 수정 -->
+    <update id="ACC020203DAO.expDsnDetailU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBACC_EXP_DSN_DETAIL
+    	SET
+			 DECSN_AMOUNT                   = #DECSN_AMOUNT#             
+			,TAXXPT_AMOUNT                  = #TAXXPT_AMOUNT#            
+			,VAT_AT                         = #VAT_AT#                   
+			,BILL_KND                       = #BILL_KND#                 
+			,VAT_DECSN_AMOUNT               = #VAT_DECSN_AMOUNT#         
+			,SUPLY_AMOUNT                   = #SUPLY_AMOUNT#             
+			,VAT                            = #VAT#                      
+			,BCNC_CODE                      = #BCNC_CODE#                
+			,BCNC_NM                        = #BCNC_NM#
+			,NM                             = #NM#                       
+			,ADRES                          = #ADRES#                    
+			,RQEST_DE                       = #RQEST_DE#                 
+			,RQEST_MAN                      = #RQEST_MAN#                
+			,RCPT_DE                        = #RCPT_DE#                  
+			,RCPT_MAN                       = #RCPT_MAN#                 
+			,FNNC_INSTT_CODE                = #FNNC_INSTT_CODE#          
+			,ACNUTNO                        = #ACNUTNO#                  
+			,ENTRPRS_SE                     = #ENTRPRS_SE#               
+			,EVRFRND                        = #EVRFRND#                  
+			,TCNDVLP                        = #TCNDVLP#                  
+			,CNTRWK_PRPOS_MTRIL             = #CNTRWK_PRPOS_MTRIL#       
+			,AREA_ENTRPS                    = #AREA_ENTRPS#              
+			,FEMALE_ENTRPRS                 = #FEMALE_ENTRPRS#           
+			,MIDDL_PD_CMPET_PRDUCT          = #MIDDL_PD_CMPET_PRDUCT#                
+			,FRGCPT_ENTRPRS                 = #FRGCPT_ENTRPRS#           
+			,DSPSN                          = #DSPSN#                    
+			,SRSILL_DSPSN                   = #SRSILL_DSPSN#             
+			,SOCTY_ENTRPRS                  = #SOCTY_ENTRPRS#
+			,DSPSN_PRDCTN_FCLTY				= #DSPSN_PRDCTN_FCLTY#
+			,SOCTY_CPER_MXTR				= #SOCTY_CPER_MXTR#
+			,GREEN_PRDUCT            		= #GREEN_PRDUCT#
+			,DSPSN_STD_BPLC					= #DSPSN_STD_BPLC#
+			,WATER_INDUST                   = #WATER_INDUST#  
+			,MDLC_INDUST                    = #MDLC_INDUST#   
+			,FARMNG_INDUST                  = #FARMNG_INDUST# 
+			,ENERGY_INDUST                  = #ENERGY_INDUST# 
+			,CRRSPND_ABSENCE                = #CRRSPND_ABSENCE#
+			,WHTAX_AT                       = #WHTAX_AT#                 
+			,WHTAX_KND                      = #WHTAX_KND#                
+			,WHTAX_ADRES                    = #WHTAX_ADRES#              
+			,MTCHG_SE                       = #MTCHG_SE#                 
+			,BRRW_AMOUNT_INTR_RPAY_AT       = #BRRW_AMOUNT_INTR_RPAY_AT# 
+			,RM                             = #RM#                       
+			,IHDNUM							= H_ENCRYPT(#IHDNUM#)
+			,INCMTAX                        = #INCMTAX#
+			,IHNTS                          = #IHNTS#
+			,WHTAX_INCOME_SE_CODE           = #WHTAX_INCOME_SE_CODE#
+			,WHTAX_INDUTY_CODE              = #WHTAX_INDUTY_CODE#
+			,WHTAX_PYMNT_TOTAMT				= #WHTAX_PYMNT_TOTAMT#  
+			,PRPDVS_TRGET_CODE				= #PRPDVS_TRGET_CODE#
+			,UPDUSR_ID                      = #S_USER_ID#             
+			,UPDT_DT    	                = SYSDATE 
+			
+			,ENDW_INTR_AT 					= #ENDW_INTR_AT# /* 기금이자상환여부 */ 
+			,PBNCD_NO 						= #PBNCD_NO# /* 공사채번호 */
+			,ERROR_AT 						= #ERROR_AT# /* 오류여부 */ 
+			,CHGHY                          = #CHGHY#    /* 변경사유 */ 
+			                   
+    	WHERE DECSN_YEAR					= #DECSN_YEAR#                     
+		  AND DECSN_NO                      = #DECSN_NO#                 
+		  AND SEQ                           = #SEQ#   
+    ]]>
+    </update>
+    
+    <!-- 지출결의세부 삭제 -->
+    <delete id="ACC020203DAO.expDsnDetailD" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	DELETE FROM TBACC_EXP_DSN_DETAIL
+    	WHERE DECSN_YEAR					= #DECSN_YEAR#                     
+		  AND DECSN_NO                      = #DECSN_NO#                 
+		  AND SEQ                           = #SEQ#
+    ]]>
+    </delete>
+    
+    
+    <!-- 지출결의세부여비 등록 -->
+    <insert id="ACC020203DAO.expDsnDetailTrvctC" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBACC_EXP_DSN_DETAIL_TRVCT
+    	(
+    		 DECSN_YEAR
+			,DECSN_NO
+			,SEQ
+			,EXPECT_AMOUNT
+			,EXCCLC_AMOUNT
+			,DECSN_AMOUNT
+			,RQEST_DE
+			,RQEST_MAN_EMPNO
+			,RQEST_MAN
+			,RCPT_DE
+			,RCPT_MAN_EMPNO
+			,RCPT_MAN
+			,FNNC_INSTT_CODE
+			,ACNUTNO
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+			
+			,ERROR_AT
+			,CHGHY
+			,MTCHG_SE
+    	) VALUES (
+    		 #DSNMASTR.DECSN_YEAR#
+    		,#DSNMASTR.DECSN_NO#
+    		,(SELECT NVL(MAX(SEQ),0)+1 FROM TBACC_EXP_DSN_DETAIL_TRVCT WHERE DECSN_YEAR = #DSNMASTR.DECSN_YEAR# AND DECSN_NO = #DSNMASTR.DECSN_NO#)
+    		,#EXPECT_AMOUNT#
+    		,#EXCCLC_AMOUNT#
+    		,#DECSN_AMOUNT#
+    		,#RQEST_DE#
+    		,#RQEST_MAN_EMPNO#
+    		,#RQEST_MAN#
+    		,#RCPT_DE#
+    		,#RCPT_MAN_EMPNO#
+    		,#RCPT_MAN#
+    		,#FNNC_INSTT_CODE#
+    		,#ACNUTNO#
+    		,#S_USER_ID#
+    		,SYSDATE
+    		,#S_USER_ID#
+    		,SYSDATE
+    		
+    		,#ERROR_AT#
+    		,#CHGHY#
+    		,#MTCHG_SE#
+    	)
+    ]]>
+    </insert>
+    
+    <!-- 지출결의세부여비 수정 -->
+    <update id="ACC020203DAO.expDsnDetailTrvctU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBACC_EXP_DSN_DETAIL_TRVCT
+    	SET
+			 EXPECT_AMOUNT       = #EXPECT_AMOUNT#    
+			,EXCCLC_AMOUNT       = #EXCCLC_AMOUNT#    
+			,DECSN_AMOUNT        = #DECSN_AMOUNT#     
+			,RQEST_DE            = #RQEST_DE#         
+			,RQEST_MAN_EMPNO     = #RQEST_MAN_EMPNO#
+			,RQEST_MAN		     = #RQEST_MAN#
+			,RCPT_DE             = #RCPT_DE#          
+			,RCPT_MAN_EMPNO      = #RCPT_MAN_EMPNO#
+			,RCPT_MAN		     = #RCPT_MAN#
+			,FNNC_INSTT_CODE     = #FNNC_INSTT_CODE#  
+			,ACNUTNO             = #ACNUTNO#          
+			,UPDUSR_ID           = #S_USER_ID#     
+			,UPDT_DT    	     = SYSDATE
+			
+			,ERROR_AT           = #ERROR_AT#
+			,CHGHY           	= #CHGHY#
+			,MTCHG_SE           = #MTCHG_SE#
+    	WHERE DECSN_YEAR         = #DECSN_YEAR#             
+		  AND DECSN_NO           = #DECSN_NO#         
+		  AND SEQ                = #SEQ#               
+    ]]>
+    </update>
+    
+    <!-- 지출결의세부여비 삭제 -->
+    <delete id="ACC020203DAO.expDsnDetailTrvctD" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	DELETE FROM TBACC_EXP_DSN_DETAIL_TRVCT
+    	WHERE DECSN_YEAR         = #DECSN_YEAR#             
+		  AND DECSN_NO           = #DECSN_NO#         
+		  AND SEQ                = #SEQ#      
+    ]]>
+    </delete>
+    
+    
+    
+    <!-- 지출결의내역 등록 -->
+    <insert id="ACC020203DAO.expDsnDtlsC" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBACC_EXP_DSN_DTLS
+    	(
+    		 DECSN_YEAR
+			,DECSN_NO
+			,SEQ
+			,RPAY_SE
+			,AMOUNT
+			,NM
+			,SUMRY
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+    	) VALUES 
+    	(
+    		 #DSNMASTR.DECSN_YEAR#
+    		,#DSNMASTR.DECSN_NO#
+    		,(SELECT NVL(MAX(SEQ),0)+1 FROM TBACC_EXP_DSN_DTLS WHERE DECSN_YEAR = #DSNMASTR.DECSN_YEAR# AND DECSN_NO = #DSNMASTR.DECSN_NO#)
+    		,#RPAY_SE#
+    		,#AMOUNT#
+    		,#NM#
+    		,#SUMRY#
+    		,#S_USER_ID#
+    		,SYSDATE
+    		,#S_USER_ID#
+    		,SYSDATE
+    	)
+    ]]>
+    </insert>
+    
+    <!-- 지출결의내역 수정 -->
+    <update id="ACC020203DAO.expDsnDtlsU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBACC_EXP_DSN_DTLS
+    	SET
+			 RPAY_SE            = #RPAY_SE#       
+			,AMOUNT             = #AMOUNT#        
+			,NM                 = #NM#            
+			,SUMRY              = #SUMRY#         
+			,UPDUSR_ID          = #S_USER_ID#  
+			,UPDT_DT    	    = SYSDATE         
+    	WHERE DECSN_YEAR		= #DECSN_YEAR#          
+		  AND DECSN_NO          = #DECSN_NO#      
+		  AND SEQ               = #SEQ#
+    ]]>
+    </update>
+    
+    <!-- 지출결의내역 삭제 -->
+    <delete id="ACC020203DAO.expDsnDtlsD" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	DELETE FROM TBACC_EXP_DSN_DTLS
+    	WHERE DECSN_YEAR		= #DECSN_YEAR#          
+		  AND DECSN_NO          = #DECSN_NO#      
+		  AND SEQ               = #SEQ#
+    ]]>
+    </delete>
+    
+    <!-- 지출결의내역공사 등록 -->
+    <insert id="ACC020203DAO.expDsnDtlsCntrwkC" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBACC_EXP_DSN_DTLS_CNTRWK
+    	(
+			 DECSN_YEAR
+			,DECSN_NO
+			,SEQ
+			,CNTRWK_NM
+			,QLITY
+			,STNDRD
+			,UNIT
+			,QY
+			,UNTPC
+			,AMOUNT
+			,RM
+			,CNTRWK_BEGIN_DE
+			,CNTRWK_COMPT_DE
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+    	) VALUES (
+    		 #DSNMASTR.DECSN_YEAR#
+    		,#DSNMASTR.DECSN_NO#
+    		,(SELECT NVL(MAX(SEQ),0)+1 FROM TBACC_EXP_DSN_DTLS_CNTRWK WHERE DECSN_YEAR = #DSNMASTR.DECSN_YEAR# AND DECSN_NO = #DSNMASTR.DECSN_NO#)
+    		,#CNTRWK_NM#
+    		,#QLITY#
+    		,#STNDRD#
+    		,#UNIT#
+    		,#QY#
+    		,#UNTPC#
+    		,#AMOUNT#
+    		,#RM#
+    		,#CNTRWK_BEGIN_DE#
+    		,#CNTRWK_COMPT_DE#
+    		,#S_USER_ID#
+    		,SYSDATE
+    		,#S_USER_ID#
+    		,SYSDATE
+    	)
+    ]]>
+    </insert>
+    
+    <!-- 지출결의내역공사 수정 -->
+    <update id="ACC020203DAO.expDsnDtlsCntrwkU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBACC_EXP_DSN_DTLS_CNTRWK
+    	SET
+			 CNTRWK_NM              = #CNTRWK_NM#         
+			,QLITY                  = #QLITY#             
+			,STNDRD                 = #STNDRD#            
+			,UNIT                   = #UNIT#              
+			,QY                     = #QY#                
+			,UNTPC                  = #UNTPC#             
+			,AMOUNT                 = #AMOUNT#            
+			,RM                     = #RM#                
+			,CNTRWK_BEGIN_DE        = #CNTRWK_BEGIN_DE#   
+			,CNTRWK_COMPT_DE        = #CNTRWK_COMPT_DE#   
+			,UPDUSR_ID              = #S_USER_ID#      
+			,UPDT_DT                = SYSDATE             
+    	WHERE DECSN_YEAR			= #DECSN_YEAR#              
+		  AND DECSN_NO              = #DECSN_NO#          
+		  AND SEQ                   = #SEQ#
+    ]]>
+    </update>
+    
+    <!-- 지출결의내역공사 삭제 -->
+    <delete id="ACC020203DAO.expDsnDtlsCntrwkD" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	DELETE FROM TBACC_EXP_DSN_DTLS_CNTRWK
+    	WHERE DECSN_YEAR			= #DECSN_YEAR#              
+		  AND DECSN_NO              = #DECSN_NO#          
+		  AND SEQ                   = #SEQ#
+    ]]>
+    </delete>
+    
+    <!-- 지출결의내역구입 등록 -->
+    <insert id="ACC020203DAO.expDsnDtlsPurchsC" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBACC_EXP_DSN_DTLS_PURCHS
+    	(
+    		 DECSN_YEAR
+			,DECSN_NO
+			,SEQ
+			,PRDNM
+			,STNDRD
+			,UNIT
+			,QY
+			,UNTPC
+			,AMOUNT
+			,RM
+			,PAY_DE
+			,ASSETS_CL_CODE
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+    	) VALUES (
+    		 #DSNMASTR.DECSN_YEAR#
+			,#DSNMASTR.DECSN_NO#
+			,(SELECT NVL(MAX(SEQ),0)+1 FROM TBACC_EXP_DSN_DTLS_PURCHS WHERE DECSN_YEAR = #DSNMASTR.DECSN_YEAR# AND DECSN_NO = #DSNMASTR.DECSN_NO#)
+			,#PRDNM#
+			,#STNDRD#
+			,#UNIT#
+			,#QY#
+			,#UNTPC#
+			,#AMOUNT#
+			,#RM#
+			,#PAY_DE#
+			,#ASSETS_CL_CODE#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+    	)
+    ]]>
+    </insert>
+    
+    <!-- 지출결의내역구입 수정 -->
+    <update id="ACC020203DAO.expDsnDtlsPurchsU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBACC_EXP_DSN_DTLS_PURCHS
+    	SET
+			 PRDNM          = #PRDNM#          
+			,STNDRD         = #STNDRD#         
+			,UNIT           = #UNIT#           
+			,QY             = #QY#             
+			,UNTPC          = #UNTPC#          
+			,AMOUNT         = #AMOUNT#         
+			,RM             = #RM#             
+			,PAY_DE         = #PAY_DE#       
+			,ASSETS_CL_CODE	= #ASSETS_CL_CODE#  
+			,UPDUSR_ID      = #S_USER_ID#   
+			,UPDT_DT    	= SYSDATE          
+    	WHERE DECSN_YEAR	= #DECSN_YEAR#           
+		  AND DECSN_NO      = #DECSN_NO#       
+		  AND SEQ           = #SEQ#            
+    	
+    ]]>
+    </update>
+    
+    <!-- 지출결의내역구입 삭제 -->
+    <delete id="ACC020203DAO.expDsnDtlsPurchsD" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	DELETE FROM TBACC_EXP_DSN_DTLS_PURCHS
+    	WHERE DECSN_YEAR	= #DECSN_YEAR#           
+		  AND DECSN_NO      = #DECSN_NO#       
+		  AND SEQ           = #SEQ#          
+    ]]>
+    </delete>
+    
+    
+    <!-- 지출결의내역용역 등록 -->
+    <insert id="ACC020203DAO.expDsnDtlsServcC" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBACC_EXP_DSN_DTLS_SERVC
+    	(
+    		 DECSN_YEAR
+			,DECSN_NO
+			,SEQ
+			,PRDNM
+			,STNDRD
+			,UNIT
+			,QY
+			,UNTPC
+			,AMOUNT
+			,PAY_DE
+			,RM
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+    	) VALUES (
+    		 #DSNMASTR.DECSN_YEAR#
+			,#DSNMASTR.DECSN_NO#
+			,(SELECT NVL(MAX(SEQ),0)+1 FROM TBACC_EXP_DSN_DTLS_SERVC WHERE DECSN_YEAR = #DSNMASTR.DECSN_YEAR# AND DECSN_NO = #DSNMASTR.DECSN_NO#)
+			,#PRDNM#
+			,#STNDRD#
+			,#UNIT#
+			,#QY#
+			,#UNTPC#
+			,#AMOUNT#
+			,#PAY_DE#
+			,#RM#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE 	
+    	)
+    ]]>
+    </insert>
+    
+    <!-- 지출결의내역용역 수정 -->
+    <update id="ACC020203DAO.expDsnDtlsServcU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBACC_EXP_DSN_DTLS_SERVC
+    	SET
+			 PRDNM              = #PRDNM#          
+			,STNDRD             = #STNDRD#         
+			,UNIT               = #UNIT#           
+			,QY                 = #QY#             
+			,UNTPC              = #UNTPC#          
+			,AMOUNT             = #AMOUNT#         
+			,PAY_DE             = #PAY_DE#         
+			,RM                 = #RM#             
+			,UPDUSR_ID          = #S_USER_ID#   
+			,UPDT_DT            = SYSDATE 	      
+    	WHERE DECSN_YEAR		= #DECSN_YEAR#           
+		  AND DECSN_NO          = #DECSN_NO#       
+		  AND SEQ               = #SEQ# 
+    ]]>
+    </update>
+    
+    <!-- 지출결의내역용역 삭제 -->
+    <delete id="ACC020203DAO.expDsnDtlsServcD" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	DELETE FROM TBACC_EXP_DSN_DTLS_SERVC
+    	WHERE DECSN_YEAR		= #DECSN_YEAR#           
+		  AND DECSN_NO          = #DECSN_NO#       
+		  AND SEQ               = #SEQ#
+    ]]>
+    </delete>
+    
+    
+    <!-- 지출결의내역임차 등록 -->
+    <insert id="ACC020203DAO.expDsnDtlsHireC" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBACC_EXP_DSN_DTLS_HIRE
+    	(
+    		 DECSN_YEAR
+			,DECSN_NO
+			,SEQ
+			,CNTRWK_NM
+			,CNTRWK_BEGIN_DE
+			,CNTRWK_COMPT_DE
+			,CNTRWK_DAYCNT
+			,UNTPC
+			,AMOUNT
+			,HIRE_BEGIN_DE
+			,HIRE_ENDDE
+			,RM
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+    	) VALUES (
+    		 #DSNMASTR.DECSN_YEAR#
+    		,#DSNMASTR.DECSN_NO#
+    		,(SELECT NVL(MAX(SEQ),0)+1 FROM TBACC_EXP_DSN_DTLS_HIRE WHERE DECSN_YEAR = #DSNMASTR.DECSN_YEAR# AND DECSN_NO = #DSNMASTR.DECSN_NO#)
+    		,#CNTRWK_NM#
+    		,#CNTRWK_BEGIN_DE#
+    		,#CNTRWK_COMPT_DE#
+    		,#CNTRWK_DAYCNT#
+    		,#UNTPC#
+    		,#AMOUNT#
+    		,#HIRE_BEGIN_DE#
+    		,#HIRE_ENDDE#
+    		,#RM#
+    		,#S_USER_ID#
+    		,SYSDATE
+    		,#S_USER_ID#
+    		,SYSDATE
+    	)
+    ]]>
+    </insert>
+    
+    <!-- 지출결의내역임차 수정 -->
+    <update id="ACC020203DAO.expDsnDtlsHireU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBACC_EXP_DSN_DTLS_HIRE
+    	SET
+			 CNTRWK_NM          = #CNTRWK_NM#        
+			,CNTRWK_BEGIN_DE    = #CNTRWK_BEGIN_DE#  
+			,CNTRWK_COMPT_DE    = #CNTRWK_COMPT_DE#  
+			,CNTRWK_DAYCNT      = #CNTRWK_DAYCNT#    
+			,UNTPC              = #UNTPC#            
+			,AMOUNT             = #AMOUNT#           
+			,HIRE_BEGIN_DE      = #HIRE_BEGIN_DE#    
+			,HIRE_ENDDE         = #HIRE_ENDDE#       
+			,RM                 = #RM#               
+			,UPDUSR_ID          = #S_USER_ID#     
+			,UPDT_DT    	    = SYSDATE            
+    	WHERE DECSN_YEAR		= #DECSN_YEAR#             
+		  AND DECSN_NO          = #DECSN_NO#         
+		  AND SEQ               = #SEQ#    
+    ]]>
+    </update>
+    
+    <!-- 지출결의내역임차 삭제 -->
+    <delete id="ACC020203DAO.expDsnDtlsHireD" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	DELETE FROM TBACC_EXP_DSN_DTLS_HIRE
+    	WHERE DECSN_YEAR		= #DECSN_YEAR#             
+		  AND DECSN_NO          = #DECSN_NO#         
+		  AND SEQ               = #SEQ#
+    ]]>
+    </delete>
+    
+    <!-- 품의 조회 -->
+	<select id="ACC020203DAO.cnsulList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+		     t1.CAUSE_ACTION_NO
+		    ,t1.BUDGET_YEAR
+		    ,t1.BSNS_SE
+		    ,t1.BALC_SE
+		    ,t1.BSNS_CODE
+		    ,t1.BUDGET_DEPT_CODE
+		    ,t1.BUDGET_ACNT_CODE
+		    ,t1.BUKIP_CODE
+		    ,t1.EMPNO
+		    ,t1.DEPT_CODE
+		    ,t1.CNSUL_SJ
+		    ,t1.CNSUL_DE
+		    ,NVL(t1.CNSUL_AMOUNT,0) AS CNSUL_AMOUNT
+		    ,NVL(t1.CNSUL_RTRVL_AMOUNT,0) AS CNSUL_RTRVL_AMOUNT
+		    ,t1.SUMRY
+		    ,t1.SANCTN_NO
+		    ,t1.REGISTER_ID
+		    ,t1.REGIST_DT
+		    ,t1.UPDUSR_ID
+		    ,t1.UPDT_DT
+		    ,'('||t8.DEPT_NM||')'||t2.BUDGET_ACNT_NM2 AS BUDGET_ACNT_NM
+		    ,t3.BUKIP_NM
+		    ,t4.DEPT_NM
+		    ,t5.EMPNM
+		    ,NVL(t6.DECSN_AMOUNT,0) 							AS DECSN_AMOUNT 							/* 품의집행금액 */
+		    ,NVL(t1.CNSUL_AMOUNT,0) - NVL(t6.DECSN_AMOUNT,0) - NVL(t1.CNSUL_RTRVL_AMOUNT,0) AS CNSUL_BLCE  	/* 품의잔액 */
+		    ,NVL(t7.EXECUT_BUDGET_JAN_AM,0)		AS EXECUT_BUDGET_JAN_AM	/* 부기잔액 */
+    		,NVL(t7.ASIGN_JAN_AMOUNT,0)			AS ASIGN_JAN_AMOUNT		/* 배정잔액 */
+		    ,t10.BSNS_NM
+		    ,SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) AS SANCTN_KND
+		    ,t1.FILE_SN
+		    ,t1.CYFD_SE
+		FROM TBACC_CNSUL t1
+		     LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t2
+		     ON  t1.BUDGET_YEAR       = t2.YEAR
+		     AND t1.BSNS_SE           = t2.BSNS_SE
+		     AND t1.BALC_SE           = t2.BALC_SE
+		     AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+		     LEFT OUTER JOIN TBBDG_BUKIP_CODE t3
+		     ON  t1.BUKIP_CODE = t3.BUKIP_CODE
+		     LEFT OUTER JOIN VWHRM_DEPT t4
+		     ON  t1.DEPT_CODE = t4.DEPT_CODE
+		     LEFT OUTER JOIN TBHRM_HR_MASTR t5
+		     ON  t1.EMPNO = t5.EMPNO
+		     LEFT OUTER JOIN (
+		        SELECT CAUSE_ACTION_NO, SUM(DECSN_AMOUNT) AS DECSN_AMOUNT
+		        FROM TBACC_EXP_DSN_MASTR
+		        GROUP BY CAUSE_ACTION_NO
+		     ) t6
+		     ON  t1.CAUSE_ACTION_NO = t6.CAUSE_ACTION_NO
+		     LEFT OUTER JOIN VWACC_EXP_DSN_MASTR t7
+		     ON  t1.BUDGET_YEAR       = t7.BUDGET_YEAR
+		     AND t1.BSNS_SE           = t7.BSNS_SE
+		     AND t1.BALC_SE           = t7.BALC_SE
+		     AND t1.BSNS_CODE         = t7.BSNS_CODE
+		     AND t1.BUDGET_DEPT_CODE  = t7.DEPT_CODE
+		     AND t1.BUDGET_ACNT_CODE  = t7.BUDGET_ACNT_CODE
+		     AND t1.BUKIP_CODE        = t7.EXPNDTR_UNIT_CODE
+		     LEFT OUTER JOIN VWHRM_DEPT t8
+ 			 ON  t1.BUDGET_DEPT_CODE = t8.DEPT_CODE
+		     LEFT OUTER JOIN TBPRJ_BSNS_CODE t10
+         	 ON  t1.BSNS_CODE = t10.BSNS_CODE
+		WHERE t1.CNSUL_DE BETWEEN #SRCH_ST_DE# AND #SRCH_ED_DE#
+		<isNotEmpty property="DEPT_CODE">
+            <isNotEqual property="DEPT_CODE" compareValue="000000">
+          AND t1.DEPT_CODE = #DEPT_CODE#
+            </isNotEqual>
+        </isNotEmpty>
+        <isNotEmpty property="CNSUL_SJ">
+		  AND t1.CNSUL_SJ LIKE '%' || TRIM(#CNSUL_SJ#) || '%'
+		</isNotEmpty>
+		<isNotEmpty property="CAUSE_ACTION_NO">
+		  AND t1.CAUSE_ACTION_NO = #CAUSE_ACTION_NO#
+		</isNotEmpty>
+		<isNotEmpty property="CNSUL_BLCE_AT">
+			<isEqual property="CNSUL_BLCE_AT" compareValue="1">
+				AND NVL(t1.CNSUL_AMOUNT,0) - NVL(t6.DECSN_AMOUNT,0) - NVL(t1.CNSUL_RTRVL_AMOUNT,0) <![CDATA[ > ]]> 0
+			</isEqual>
+		</isNotEmpty>
+		  AND SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5' /*5:결재완료*/
+		  AND NVL(t1.EMPNO,'X') <![CDATA[ <> ]]> 'SYSTEM' /*원인행위 보정데이터 제외*/
+		ORDER BY t1.CAUSE_ACTION_NO DESC
+	</select>
+	
+	<!-- 결의서 삭제 -->
+	<delete id="ACC020203DAO.expDsnD" parameterClass="java.util.HashMap">
+		DECLARE
+			V_EXPNDTR_AT CHAR(1) := '0';
+		BEGIN
+		
+			/* 전자결재(상신,중간결재,결재완료) 는 삭제 불가 */
+			SELECT 
+			      CASE WHEN NVL(TRIM(SFCOM_GET_SANCTN_KND(t1.SANCTN_NO)),'0') IN ('1','4','5') 
+			      	  THEN '1' 
+			      	  ELSE '0' 
+			      END
+			INTO V_EXPNDTR_AT
+			FROM TBACC_EXP_DSN_MASTR t1
+			WHERE DECSN_YEAR  = #DECSN_YEAR#
+			  AND DECSN_NO    = #DECSN_NO#
+			;
+			
+			/* 지출이 안된 결의서만 삭제 */
+			IF V_EXPNDTR_AT = '0' THEN
+			
+				/*매입세금계산서*/
+				UPDATE DET_ISSU_MSTR t1
+				SET TAXBILL_NO = NULL
+				WHERE EXISTS (
+	    			SELECT 1
+	    			FROM TBACC_TAXBIL_MASTER t2
+	    			WHERE t1.TAXBILL_NO = t2.TAXBILL_NO
+	    			  AND t2.DECSN_YEAR	= #DECSN_YEAR#
+	    			  AND t2.DECSN_NO	= #DECSN_NO#
+	    		)
+	    		;
+			
+				/*세금계산서상세*/
+				DELETE FROM TBACC_TAXBIL_DETAIL t1
+	    		WHERE EXISTS (
+	    			SELECT 1
+	    			FROM TBACC_TAXBIL_MASTER t2
+	    			WHERE t1.TAXBILL_NO = t2.TAXBILL_NO
+	    			  AND t2.DECSN_YEAR	= #DECSN_YEAR#
+	    			  AND t2.DECSN_NO	= #DECSN_NO#
+	    		)
+	    		;
+	    	
+	    		/*세금계산서*/
+	    		DELETE FROM TBACC_TAXBIL_MASTER
+	    		WHERE DECSN_YEAR 	= #DECSN_YEAR#
+	    		  AND DECSN_NO		= #DECSN_NO#
+	    		;
+			
+				/*지출결의내역임차*/
+				DELETE FROM TBACC_EXP_DSN_DTLS_HIRE
+		    	WHERE DECSN_YEAR	= #DECSN_YEAR#             
+				  AND DECSN_NO      = #DECSN_NO#         
+				;
+				
+				/*지출결의내역용역*/
+				DELETE FROM TBACC_EXP_DSN_DTLS_SERVC
+		    	WHERE DECSN_YEAR	= #DECSN_YEAR#           
+				  AND DECSN_NO      = #DECSN_NO#       
+				;
+						
+						
+				/*지출결의내역구입*/
+				DELETE FROM TBACC_EXP_DSN_DTLS_PURCHS
+		    	WHERE DECSN_YEAR	= #DECSN_YEAR#           
+				  AND DECSN_NO      = #DECSN_NO#       
+				;
+						
+				/*지출결의내역공사*/
+				DELETE FROM TBACC_EXP_DSN_DTLS_CNTRWK
+		    	WHERE DECSN_YEAR	= #DECSN_YEAR#              
+				  AND DECSN_NO      = #DECSN_NO#          
+				;
+			
+				/*지출결의내역*/
+				 DELETE FROM TBACC_EXP_DSN_DTLS
+		    	WHERE DECSN_YEAR	= #DECSN_YEAR#          
+				  AND DECSN_NO      = #DECSN_NO#   
+				;   
+			
+				
+				/*지출세부여비*/
+				DELETE FROM TBACC_EXP_DSN_DETAIL_TRVCT
+		    	WHERE DECSN_YEAR    = #DECSN_YEAR#             
+				  AND DECSN_NO      = #DECSN_NO#         
+				;
+						
+				/*지출결의세부*/
+				DELETE FROM TBACC_EXP_DSN_DETAIL
+		    	WHERE DECSN_YEAR	= #DECSN_YEAR#                     
+				  AND DECSN_NO      = #DECSN_NO#                 
+				;
+				
+				/*여비지출마스터상세*/
+				DELETE FROM TBACC_TRVCT_EXP_DSN_MTR_DET
+	    		WHERE DECSN_YEAR	= #DECSN_YEAR#                     
+			  	  AND DECSN_NO      = #DECSN_NO#
+			  	;          
+			
+				/*여입지출마스터상세*/
+				DELETE FROM TBACC_RTURN_EXP_DSN_MTR_DET
+		    	WHERE DECSN_YEAR	= #DECSN_YEAR#                           
+				  AND DECSN_NO      = #DECSN_NO#
+				;
+				
+				/*봉급마스터상세*/
+				DELETE FROM TBACC_SLARY_EXP_DSN_MTR_DET
+		   		WHERE DECSN_YEAR	= #DECSN_YEAR#                           
+				  AND DECSN_NO      = #DECSN_NO#	
+				;
+			
+				/*결의마스터상세*/
+				DELETE FROM TBACC_EXP_DSN_MTR_DET
+				WHERE DECSN_YEAR	= #DECSN_YEAR#                          
+				  AND DECSN_NO      = #DECSN_NO#
+				;
+				
+				/*결의마스터*/
+				DELETE FROM TBACC_EXP_DSN_MASTR
+				WHERE DECSN_YEAR    = #DECSN_YEAR#                   
+				  AND DECSN_NO      = #DECSN_NO#
+				;
+				
+				/*법인카드*/
+				UPDATE NH_APPR
+				SET DECSN_YEAR		= NULL
+				   ,DECSN_NO		= NULL
+				   ,SEQ				= NULL
+				WHERE DECSN_YEAR	= #DECSN_YEAR#
+				  AND DECSN_NO		= #DECSN_NO#
+				;
+				
+				/*원천세*/
+				UPDATE TBHRM_DELBR
+				SET	   DECSN_YEAR 	= NULL
+		    		  ,DECSN_NO		= NULL
+				WHERE DECSN_YEAR 	= #DECSN_YEAR#
+				  AND DECSN_NO		= #DECSN_NO#
+				;
+				
+				/*대관_환불대상자*/
+				UPDATE TBHPM_RENT_FCLTS_REQST_MANAGE
+				SET	   DECSN_YEAR 	= NULL
+		    		  ,DECSN_NO		= NULL
+					  ,SEQ			= NULL
+				WHERE DECSN_YEAR 	= #DECSN_YEAR#
+				  AND DECSN_NO		= #DECSN_NO#
+				;
+				/*환불대상자*/
+				UPDATE TBHPM_REFND_TRGET
+				SET	   DECSN_YEAR 	= NULL
+		    		  ,DECSN_NO		= NULL
+					  ,SEQ			= NULL
+				WHERE DECSN_YEAR 	= #DECSN_YEAR#
+				  AND DECSN_NO		= #DECSN_NO#
+				;
+			END IF; 
+		
+		END;
+	</delete>
+	
+	<!-- 지출결의서 원인행위키값 수정 -->
+	<update id="ACC020203DAO.expDsnActNoU" parameterClass="java.util.HashMap">
+		UPDATE TBACC_EXP_DSN_MASTR
+		SET	  CAUSE_ACTION_NO 	= #CAUSE_ACTION_NO#
+		WHERE DECSN_YEAR    	= #DECSN_YEAR#                   
+		  AND DECSN_NO      	= #DECSN_NO#
+	</update>
+	
+	<!-- 구입내역 자산대장 등록 -->
+	<insert id="ACC020203DAO.assetsMastrC" parameterClass="java.util.HashMap">
+		INSERT INTO TBASS_ASSETS_MASTR
+		(
+			 ASSETS_NO					/* 자산번호 */
+			,ASSETS_CL_CODE             /* 자산분류코드 */
+			,ASSETS_NM                  /* 자산명 */
+			,QY                         /* 수량 */
+			,UNIT                       /* 단위 */
+			,STNDRD                     /* 규격 */
+			,ACQS_DE                    /* 취득일자 */
+			,ACQS_SUPLY_AMOUNT          /* 취득공급가액 */
+			,MRN_CT                     /* 부대비용 */
+			,ACQS_AMOUNT                /* 취득금액 */
+			,ACQS_VAT                   /* 취득부가세 */
+			,PUCHAS_BCNC                /* 매입거래처 */
+			,ACQS_CHIT_NO               /* 취득전표번호 */
+			,CHARGER                    /* 담당자 */
+			,RGSDE                      /* 등록일 */
+			,SRVIVE_AMOUNT              /* 잔존가액 */
+			,DPRC_COMPT_YEAR            /* 상각완료년도 */
+			,DPRT_COMPT_AT              /* 상각완료여부 */
+			,ASSETS_SE                  /* 자산구분 */
+			,GOVSUBY_ACQS_AMOUNT        /* 국고보조금취득가액 */
+			,UNTPC                      /* 단가 */
+			,REGISTER_ID                /* 등록자ID */
+			,REGIST_DT                  /* 등록일시 */
+			,UPDUSR_ID                  /* 수정자ID */
+			,UPDT_DT                    /* 수정일시 */
+		) VALUES (
+			 (SELECT NVL(MAX(TO_NUMBER(ASSETS_NO))+1,CONCAT(#DECSN_YEAR#,'000001'))
+			  FROM TBASS_ASSETS_MASTR
+			  WHERE ASSETS_NO LIKE #DECSN_YEAR# ||'%'
+			 )
+			,#ASSETS_CL_CODE#
+			,#PRDNM#
+			,#QY#
+			,#UNIT#
+			,#STNDRD#
+			,#PAY_DE#
+			,0
+			,0
+			,#AMOUNT#
+			,0
+			,NULL			/* 거래처. 전표생성시 입력 필요 */
+			,NULL			/* 전표번호. 전표생성시 입력 필요 */
+			,NULL
+			,#PAY_DE#
+			,0
+			,NULL
+			,'0'
+			,NULL
+			,0
+			,#UNTPC#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+	
+	
+    <!-- 예산잔액 조회 -->
+    <select id="ACC020203DAO.budgetBalcR" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT
+		     SFBDG_EXPNDTR_UNIT_BALC(BUDGET_YEAR,BSNS_SE,BALC_SE,BSNS_CODE,DEPT_CODE,BUDGET_ACNT_CODE,EXPNDTR_UNIT_CODE,'1') AS CYFD_BUDGET_BALC
+		    ,EXECUT_BUDGET_JAN_AM
+		    ,ASIGN_JAN_AMOUNT
+		    ,NVL(ORI_EXECUT_BUDGET_JAN_AM,0) 	AS ORI_EXECUT_BUDGET_JAN_AM
+			,NVL(CYFD_EXECUT_BUDGET_JAN_AM,0) 	AS CYFDE_XECUT_BUDGET_JAN_AM
+		FROM VWACC_EXP_DSN_MASTR
+		WHERE BUDGET_YEAR		= #BUDGET_YEAR#
+		  AND BSNS_SE           = #BSNS_SE#
+		  AND BALC_SE           = #BALC_SE#
+		  AND BSNS_CODE         = #BSNS_CODE#
+		  AND DEPT_CODE         = #BUDGET_DEPT_CODE#
+		  AND BUDGET_ACNT_CODE  = #BUDGET_ACNT_CODE#
+		  AND EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+    </select>
+    
+    <!-- 결의금액 조회 -->
+    <select id="ACC020203DAO.decsnAmtR" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT 
+    		 NVL(DECSN_AMOUNT,0) 				AS DECSN_AMOUNT					/* 결의금액 */
+    		,NVL(ORIBDGT_DECSN_AMOUNT,0) 		AS ORIBDGT_DECSN_AMOUNT			/* 본예산결의금액 */
+    		,NVL(CYFD_BUDGET_DECSN_AMOUNT,0) 	AS CYFD_BUDGET_DECSN_AMOUNT		/* 이월예산결의금액 */
+    		,CYFD_SE
+    	FROM TBACC_EXP_DSN_MASTR 
+    	WHERE DECSN_YEAR 	= #DECSN_YEAR# 
+    	  AND DECSN_NO 		= #DECSN_NO#
+    </select>
+    
+    <!-- 수입지출외현금 거래처정보 조회 -->
+    <select id="ACC020203DAO.incExpElseCashBcnc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT BCNC_CODE, BCNC_NM, RPRSNTV, BANK_CODE, DPSTR_NM, ACNUTNO
+		FROM (SELECT t1.BCNC_CODE, t1.BCNC_NM, t1.RPRSNTV, t2.BANK_CODE, t2.DPSTR_NM, t2.ACNUTNO
+		      FROM TBCTR_BCNC_MASTR t1
+		           LEFT OUTER JOIN TBCTR_BCNC_ACNUT t2
+		           ON t1.BCNC_CODE = t2.BCNC_CODE
+		      WHERE t1.BCNC_CODE = '015147'
+		      ORDER BY NVL(t2.MNBS_ACNUT_AT,'0') DESC
+		    )
+		WHERE ROWNUM = 1
+    </select>
+    
+    <!-- 세금계산서,계산서 생성 -->
+    <insert id="ACC020203DAO.taxbilC" parameterClass="java.util.HashMap">
+    	INSERT INTO TBACC_TAXBIL_MASTER
+    	(
+			 TAXBILL_NO
+			,PUCHAS_SELNG_SE
+			,BILL_KND
+			,PBLICTE_DE
+			,BCNC_CODE
+			,BIZRNO
+			,BCNC_NM
+			,BIZCND
+			,ITEM
+			,RPRSNTV_NM
+			,BPLC_ADRES
+			,TAXT_AT
+			,SUPLY_AMOUNT
+			,TAXAMT
+			,SM_AMOUNT
+			,RQEST_RCPT_SE
+			,NTS_CONFM_NO
+			,CASH_SE
+			,DECSN_YEAR
+			,DECSN_NO
+			,DECSN_SEQ
+			,PBLICTE_AT
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+    	) 
+    	SELECT
+		      (SELECT 'XX' || TO_CHAR(SYSDATE, 'YYMM') || LPAD(NVL(MAX(TO_NUMBER(SUBSTR(TAXBILL_NO,7,4))), 0)+1, 4, '0') AS TAXBILL_NO
+		  	   FROM TBACC_TAXBIL_MASTER
+		 	   WHERE SUBSTR(TAXBILL_NO,3,4) = SUBSTR(TO_CHAR(SYSDATE, 'YYYYMMDD'),3,4)) AS TAXBILL_NO
+		    , '2' /*1:매출,2:매입*/
+		    , t2.BILL_KND
+		    , t1.DET_DCSN_DE
+		    , t2.BCNC_CODE
+		    , H_DECRYPT(t3.BIZRNO)        AS BIZRNO
+		    , NVL(t3.BCNC_NM,t2.BCNC_NM)
+		    , t3.BIZCND
+		    , t3.INDUTY
+		    , t3.RPRSNTV
+		    , t2.ADRES
+		    , '1' /*과세여부(공제여부)*/
+		    , t2.SUPLY_AMOUNT
+		    , t2.VAT
+		    , t2.VAT_DECSN_AMOUNT
+		    , '1' /* 1:청구, 2:영수*/
+		    , NULL
+		    , '1' /*현금구분 (1:현금, 2:수표, 3:어음, 4:외상미수금)*/
+		    , t2.DECSN_YEAR
+		    , t2.DECSN_NO
+		    , t2.SEQ
+		    , '0' /*전자세금계산서 미발행*/
+		    , #S_USER_ID#
+			, SYSDATE
+			, #S_USER_ID#
+			, SYSDATE
+		FROM TBACC_EXP_DSN_MASTR t1
+		     
+		     INNER JOIN TBACC_EXP_DSN_DETAIL t2
+		     ON  t1.DECSN_YEAR = t2.DECSN_YEAR
+		     AND t1.DECSN_NO   = t2.DECSN_NO
+		     
+		     LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+		     ON  t2.BCNC_CODE = t3.BCNC_CODE
+		WHERE t2.DECSN_YEAR = #DSNMASTR.DECSN_YEAR#
+		  AND t2.DECSN_NO 	= #DSNMASTR.DECSN_NO#
+		  AND t2.SEQ 		= #SEQ#
+		  AND NVL(t2.VAT_AT,'0') = '1' 
+    </insert>
+    
+    <!-- 세금계산서, 계산서 삭제(부가세여부가 무로 변경된경우) -->
+    <delete id="ACC020203DAO.taxbilVatAtD" parameterClass="java.util.HashMap">
+    	DECLARE 
+    	BEGIN 
+	    	DELETE FROM TBACC_TAXBIL_DETAIL t1
+	    	WHERE EXISTS (
+	    		SELECT 1
+	    		FROM TBACC_TAXBIL_MASTER t2
+	    			 INNER JOIN TBACC_EXP_DSN_DETAIL t3
+	    			 ON  t2.DECSN_YEAR = t3.DECSN_YEAR
+	    			 AND t2.DECSN_NO   = t3.DECSN_NO
+	    			 AND t2.DECSN_SEQ  = t3.SEQ
+	    		WHERE t1.TAXBILL_NO = t2.TAXBILL_NO
+	    		  AND t2.DECSN_YEAR	= #DECSN_YEAR#
+	    		  AND t2.DECSN_NO	= #DECSN_NO#
+	    		  AND t2.DECSN_SEQ	= #SEQ#
+	    		  AND NVL(t3.VAT_AT,'0') = '0'
+	    	)
+	    	AND NOT EXISTS (
+	    		SELECT 1
+	    		FROM DET_ISSU_MSTR t4
+	    		WHERE t1.TAXBILL_NO = t4.TAXBILL_NO
+	    	)
+	    	;
+	    	
+	    	DELETE FROM TBACC_TAXBIL_MASTER t1
+			WHERE EXISTS (
+			  SELECT 1
+			  FROM TBACC_EXP_DSN_DETAIL t2
+			  WHERE t1.DECSN_YEAR   = t2.DECSN_YEAR
+			    AND t1.DECSN_NO     = t2.DECSN_NO
+			    AND t1.DECSN_SEQ    = t2.SEQ
+			    AND t1.DECSN_YEAR   = #DECSN_YEAR#
+			    AND t1.DECSN_NO     = #DECSN_NO#
+			    AND t1.DECSN_SEQ    = #SEQ#
+			    AND NVL(t2.VAT_AT,'0') = '0'
+			)
+			AND NOT EXISTS (
+	    		SELECT 1
+	    		FROM DET_ISSU_MSTR t4
+	    		WHERE t1.TAXBILL_NO = t4.TAXBILL_NO
+	    	)
+			;
+		END;
+    </delete>
+    
+    <!-- 세금계산서,계산서 수정 -->
+    <update id="ACC020203DAO.taxbilU" parameterClass="java.util.HashMap">
+    	UPDATE
+		(
+		    SELECT
+		          t1.DET_DCSN_DE              AS C_PBLICTE_DE
+		        , t2.BILL_KND				  AS C_BILL_KND
+		        , t2.BCNC_CODE                AS C_BCNC_CODE
+		        , H_DECRYPT(t3.BIZRNO)                   AS C_BIZRNO
+		        , NVL(t3.BCNC_NM,t2.BCNC_NM)  AS C_BCNC_NM
+		        , t3.BIZCND                   AS C_BIZCND
+		        , t3.INDUTY                   AS C_ITEM
+		        , t3.RPRSNTV                  AS C_RPRSNTV_NM
+		        , t2.ADRES                    AS C_BPLC_ADRES
+		        , t2.SUPLY_AMOUNT             AS C_SUPLY_AMOUNT
+		        , t2.VAT                      AS C_TAXAMT
+		        , t2.VAT_DECSN_AMOUNT         AS C_SM_AMOUNT
+		        , t4.PBLICTE_DE
+		        , t4.BILL_KND
+		        , t4.BCNC_CODE
+		        , t4.BIZRNO
+		        , t4.BCNC_NM
+		        , t4.BIZCND
+		        , t4.ITEM
+		        , t4.RPRSNTV_NM
+		        , t4.BPLC_ADRES
+		        , t4.SUPLY_AMOUNT
+		        , t4.TAXAMT
+		        , t4.SM_AMOUNT
+		    FROM TBACC_EXP_DSN_MASTR t1
+		         
+		         INNER JOIN TBACC_EXP_DSN_DETAIL t2
+		         ON  t1.DECSN_YEAR = t2.DECSN_YEAR
+		         AND t1.DECSN_NO   = t2.DECSN_NO
+		         
+		         LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+		         ON  t2.BCNC_CODE = t3.BCNC_CODE
+		         
+		         INNER JOIN TBACC_TAXBIL_MASTER t4
+		         ON  t2.DECSN_YEAR = t4.DECSN_YEAR
+		         AND t2.DECSN_NO   = t4.DECSN_NO
+		         AND t2.SEQ  = t4.DECSN_SEQ
+		         
+		    WHERE t2.DECSN_YEAR = #DECSN_YEAR#
+		      AND t2.DECSN_NO 	= #DECSN_NO#
+		      AND t2.SEQ 		= #SEQ#
+		)
+		SET 
+		      PBLICTE_DE    = C_PBLICTE_DE
+		    , BILL_KND		= C_BILL_KND
+		    , BCNC_CODE     = C_BCNC_CODE
+		    , BIZRNO        = C_BIZRNO
+		    , BCNC_NM       = C_BCNC_NM
+		    , BIZCND        = C_BIZCND
+		    , ITEM          = C_ITEM
+		    , RPRSNTV_NM    = C_RPRSNTV_NM
+		    , BPLC_ADRES    = C_BPLC_ADRES
+		    , SUPLY_AMOUNT  = C_SUPLY_AMOUNT
+		    , TAXAMT        = C_TAXAMT
+		    , SM_AMOUNT     = C_SM_AMOUNT
+    </update>
+    
+    <!-- 세금계산서,계산서 삭제 -->
+    <delete id="ACC020203DAO.taxbilD" parameterClass="java.util.HashMap">
+    	DECLARE
+    	BEGIN
+    		DELETE FROM TBACC_TAXBIL_DETAIL t1
+    		WHERE EXISTS (
+    			SELECT 1
+    			FROM TBACC_TAXBIL_MASTER t2
+    			WHERE t1.TAXBILL_NO = t2.TAXBILL_NO
+    			  AND t2.DECSN_YEAR	= #DECSN_YEAR#
+    			  AND t2.DECSN_NO	= #DECSN_NO#
+    			  AND t2.DECSN_SEQ	= #SEQ# 
+    		)
+    		;
+    	
+    		DELETE FROM TBACC_TAXBIL_MASTER
+    		WHERE DECSN_YEAR 	= #DECSN_YEAR#
+    		  AND DECSN_NO		= #DECSN_NO#
+    		  AND DECSN_SEQ		= #SEQ#
+    		;
+    	END;
+    </delete>
+    
+    <!-- 계약지출 원인행위잔액 조회 -->
+    <select id="ACC020203DAO.caActJanAmt" parameterClass="java.util.HashMap" resultClass="java.lang.Long">
+    <![CDATA[
+    	SELECT NVL((SELECT NVL(CNSUL_AMOUNT,0) - NVL(CNSUL_RTRVL_AMOUNT,0)
+					FROM TBACC_CNSUL
+					WHERE BUDGET_YEAR 		= #BUDGET_YEAR#
+					  AND CAUSE_ACTION_NO 	= #CAUSE_ACTION_NO#
+				   ),0)
+			   -
+    		   NVL((SELECT SUM(DECSN_AMOUNT)
+					FROM TBACC_EXP_DSN_MASTR
+					WHERE BUDGET_YEAR 		=  #BUDGET_YEAR#
+					  AND CAUSE_ACTION_NO 	=  #CAUSE_ACTION_NO#
+					  AND DECSN_NO 			<> NVL(#DECSN_NO#,'-')
+				   ),0)
+			   AS CA_ACT_JAN_AMT
+		FROM DUAL
+    ]]>
+    </select>
+	
+	<!-- 지출승인 -->
+	<update id="ACC020203DAO.expndtrConfmU" parameterClass="java.util.HashMap">
+		UPDATE TBACC_EXP_DSN_MASTR
+		SET EXPNDTR_CNFIRM_AT = #EXPNDTR_CNFIRM_AT#
+		WHERE DECSN_YEAR 	= #DECSN_YEAR#
+		  AND DECSN_NO		= #DECSN_NO#
+	</update>
+	
+	<update id="ACC020203DAO.nhApprU" parameterClass="java.util.HashMap">
+		UPDATE NH_APPR
+		SET	 
+			 DECSN_YEAR = #DSNMASTR.DECSN_YEAR#
+			,DECSN_NO	= #DSNMASTR.DECSN_NO#
+			,SEQ		= #SEQ#
+		WHERE TRIM(BANK_CD)	= #BANK_CD#
+		  AND CARD_NO   	= #CARD_NO#
+		  AND APPR_DATE 	= #APPR_DATE#
+		  AND TRIM(APPR_NO) = #APPR_NO#
+		  AND CANCEL_YN 	= DECODE(#CANCEL_YN#,'1','Y','N')
+		  AND DECSN_NO IS NULL
+	</update>
+	
+	<update id="ACC020203DAO.nhApprD" parameterClass="java.util.HashMap">
+		UPDATE NH_APPR
+		SET	 
+			 DECSN_YEAR 	= NULL
+			,DECSN_NO		= NULL
+			,SEQ			= NULL
+		WHERE DECSN_YEAR	= #DSNMASTR.DECSN_YEAR#
+		  AND DECSN_NO   	= #DSNMASTR.DECSN_NO#
+		  AND SEQ 			= #SEQ#
+	</update>
+	
+	<!-- 집행실적 초과금액 -->
+	<select id="ACC020203DAO.selectExcessAmt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH T_DECSN AS (
+		    SELECT t3.BCNC_CODE, NVL(SUM(t3.DECSN_AMOUNT),0) AS DECSN_AMOUNT
+		    FROM TBACC_EXP_DSN_MASTR t1
+		         INNER JOIN TBACC_EXP_DSN_MTR_DET t2
+		         ON  t1.DECSN_YEAR  = t2.DECSN_YEAR
+		         AND t1.DECSN_NO    = t2.DECSN_NO
+		         INNER JOIN TBACC_EXP_DSN_DETAIL t3
+		         ON  t1.DECSN_YEAR  = t3.DECSN_YEAR
+		         AND t1.DECSN_NO    = t3.DECSN_NO
+		    WHERE t1.BUDGET_YEAR    = #DSNMASTR.BUDGET_YEAR#
+		      AND t2.CNTRCT_MTHD    = '04'
+		      AND t3.BCNC_CODE      = #BCNC_CODE#
+		<isNotEmpty property="SEQ">
+		      AND NOT EXISTS (
+		      	SELECT 1
+		      	FROM TBACC_EXP_DSN_DETAIL t4
+		      	WHERE t3.DECSN_YEAR = t4.DECSN_YEAR
+		      	  AND t3.DECSN_NO	= t4.DECSN_NO
+		      	  AND t3.SEQ		= t4.SEQ
+		      	  AND t4.DECSN_YEAR = #DECSN_YEAR# 
+		      	  AND t4.DECSN_NO	= #DECSN_NO#
+		      	  AND t4.SEQ		= #SEQ#
+		      )
+		</isNotEmpty>
+		    GROUP BY t3.BCNC_CODE
+		)
+		SELECT NVL(t3.INTGR_PREPAR_VALUE,0) AS EXCUT_STDR_AMT
+		     , CASE WHEN NVL(EXCUT_CNRL_EXCP_AT,'0') = '0' AND NVL(t2.DECSN_AMOUNT,0) + NVL(#DECSN_AMOUNT#,0) - NVL(t3.INTGR_PREPAR_VALUE,0) > 0
+		            THEN NVL(t2.DECSN_AMOUNT,0)  + NVL(#DECSN_AMOUNT#,0) - NVL(t3.INTGR_PREPAR_VALUE,0)
+		            ELSE 0
+		       END AS EXCESS_AMT
+		FROM TBCTR_BCNC_MASTR t1
+		     LEFT OUTER JOIN T_DECSN t2
+		     ON  t1.BCNC_CODE = t2.BCNC_CODE
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		     ON  t3.GRP_CODE = 'ACC047'
+		     AND t3.CODE = '01'
+		WHERE t1.BCNC_CODE = #BCNC_CODE#
+	</select>
+	
+	<!-- 전표상세정보 삭제 -->
+	<delete id="ACC020203DAO.deleteChitDetail" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBACC_CHIT_DETAIL T1
+		 WHERE (T1.ACCNUT_YEAR, T1.CHIT_NO) IN (
+		                                        SELECT C1.ACCNUT_YEAR
+		                                              ,C1.CHIT_NO
+		                                          FROM TBACC_CHIT_MASTR C1
+		                                         WHERE C1.DECSN_YEAR = #DECSN_YEAR#
+		                                           AND C1.DECSN_NO   = #DECSN_NO#
+		                                           AND C1.CHIT_SE    = '2' /*지출전표*/
+		                                        )
+	</delete>
+	
+	<!-- 전표마스터정보 삭제 -->
+	<delete id="ACC020203DAO.deleteChitMastr" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBACC_CHIT_MASTR T1
+		 WHERE T1.DECSN_YEAR = #DECSN_YEAR#
+		   AND T1.DECSN_NO   = #DECSN_NO#
+		   AND T1.CHIT_SE    = '2' /*지출전표*/
+	</delete>
+	
+	<!-- 지출결의서 결재초기화 -->
+	<update id="ACC020203DAO.updateSanctnNo" parameterClass="java.util.HashMap">
+		UPDATE TBACC_EXP_DSN_MASTR
+		   SET SANCTN_NO = #SANCTN_NO#
+		      ,UPDUSR_ID = #S_USER_ID#
+		      ,UPDT_DT   = SYSDATE
+		 WHERE DECSN_YEAR = #DECSN_YEAR#
+		   AND DECSN_NO = #DECSN_NO#
+	</update>
+</sqlMap>

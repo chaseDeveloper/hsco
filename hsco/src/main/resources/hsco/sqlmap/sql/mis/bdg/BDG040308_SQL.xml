@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG040308_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+
+	<!-- 수입예산총계 조회 -->
+	<select id="BDG040308DAO.selectIncmeBudgetTot" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG040308DAO.selectIncmeBudgetTot*/]]>
+		WITH LV4_BUDGET AS (
+		    SELECT lv4.YEAR, lv4.BSNS_SE, lv4.BALC_SE, lv4.BUDGET_ACNT_CODE, lv4.BUDGET_ACNT_NM, lv4.ACNT_LEVEL, lv4.UPPER_ACNT_CODE
+		    FROM   TBBDG_BUDGET_ACNT_CODE lv4
+		    WHERE  lv4.ACNT_LEVEL IN ('4', '7')
+		    AND    lv4.YEAR    = #YEAR#
+		    AND    lv4.BALC_SE = '1'
+		), LV3_BUDGET AS (
+		    SELECT lv3.YEAR, lv3.BSNS_SE, lv3.BALC_SE, lv3.BUDGET_ACNT_CODE, lv3.BUDGET_ACNT_NM, lv3.ACNT_LEVEL, lv3.UPPER_ACNT_CODE
+		    FROM   TBBDG_BUDGET_ACNT_CODE lv3
+		    WHERE  lv3.ACNT_LEVEL = '3'
+		    AND    lv3.BUDGET_ACNT_CODE IN (
+		                                    SELECT lv4.UPPER_ACNT_CODE
+		                                    FROM   LV4_BUDGET lv4
+		                                    WHERE  lv4.ACNT_LEVEL IN ('4', '7')
+		                                    AND    lv4.YEAR       = lv3.YEAR
+		                                    AND    lv4.BSNS_SE    = lv3.BSNS_SE
+		                                    AND    lv4.BALC_SE    = lv3.BALC_SE
+		                                   )
+		), LV2_BUDGET AS (
+		    SELECT lv2.YEAR, lv2.BSNS_SE, lv2.BALC_SE, lv2.BUDGET_ACNT_CODE, lv2.BUDGET_ACNT_NM, lv2.ACNT_LEVEL, lv2.UPPER_ACNT_CODE
+		    FROM   TBBDG_BUDGET_ACNT_CODE lv2
+		    WHERE  lv2.ACNT_LEVEL = '2'
+		    AND    lv2.BUDGET_ACNT_CODE IN (
+		                                    SELECT lv3.UPPER_ACNT_CODE
+		                                    FROM   LV3_BUDGET lv3
+		                                    WHERE  lv3.ACNT_LEVEL = '3'
+		                                    AND    lv3.YEAR       = lv2.YEAR
+		                                    AND    lv3.BSNS_SE    = lv2.BSNS_SE
+		                                    AND    lv3.BALC_SE    = lv2.BALC_SE
+		                                   )
+		), LV1_BUDGET AS (
+		    SELECT lv1.YEAR, lv1.BSNS_SE, lv1.BALC_SE, lv1.BUDGET_ACNT_CODE, lv1.BUDGET_ACNT_NM, lv1.ACNT_LEVEL, lv1.UPPER_ACNT_CODE
+		    FROM   TBBDG_BUDGET_ACNT_CODE lv1
+		    WHERE  lv1.ACNT_LEVEL = '1'
+		    AND    lv1.BUDGET_ACNT_CODE IN (
+		                                    SELECT lv2.UPPER_ACNT_CODE
+		                                    FROM   LV2_BUDGET lv2
+		                                    WHERE  lv2.ACNT_LEVEL = '2'
+		                                    AND    lv2.YEAR       = lv1.YEAR
+		                                    AND    lv2.BSNS_SE    = lv1.BSNS_SE
+		                                    AND    lv2.BALC_SE    = lv1.BALC_SE
+		                                   )
+		), VWBDG_BUDGET_ACNT_CODE AS (
+		    SELECT YEAR, BSNS_SE, BALC_SE, BUDGET_ACNT_CODE, BUDGET_ACNT_NM, ACNT_LEVEL, UPPER_ACNT_CODE
+		    FROM   LV1_BUDGET
+		    UNION ALL
+		    SELECT YEAR, BSNS_SE, BALC_SE, BUDGET_ACNT_CODE, BUDGET_ACNT_NM, ACNT_LEVEL, UPPER_ACNT_CODE
+		    FROM   LV2_BUDGET
+		    UNION ALL
+		    SELECT YEAR, BSNS_SE, BALC_SE, BUDGET_ACNT_CODE, BUDGET_ACNT_NM, ACNT_LEVEL, UPPER_ACNT_CODE
+		    FROM   LV3_BUDGET
+		    UNION ALL
+		    SELECT YEAR, BSNS_SE, BALC_SE, BUDGET_ACNT_CODE, BUDGET_ACNT_NM, ACNT_LEVEL, UPPER_ACNT_CODE
+		    FROM   LV4_BUDGET
+		), BUDGET_ACNT_TREE AS (
+		    SELECT ROWNUM         AS RNUM
+		          ,t1.YEAR
+		          ,t1.BSNS_SE
+		          ,t1.BALC_SE
+		          ,t1.BUDGET_ACNT_CODE
+		          ,t1.BUDGET_ACNT_NM
+		          ,SYS_CONNECT_BY_PATH(t1.BUDGET_ACNT_NM,'|')||'|'     AS ACNT_NM_PATH
+		          ,DECODE(t1.ACNT_LEVEL,'7','4',t1.ACNT_LEVEL)         AS ACNT_LEVEL
+		          ,t1.UPPER_ACNT_CODE
+		    FROM   VWBDG_BUDGET_ACNT_CODE t1
+		    START WITH t1.UPPER_ACNT_CODE IS NULL
+		    CONNECT BY PRIOR t1.BUDGET_ACNT_CODE = t1.UPPER_ACNT_CODE
+		    ORDER SIBLINGS BY t1.YEAR
+		                     ,t1.BSNS_SE
+		                     ,t1.BALC_SE
+		                     ,t1.BUDGET_ACNT_CODE
+		), BUDGET_STACNT AS (
+		    SELECT c1.YEAR                                                                                                      AS YEAR
+		          ,c1.BSNS_SE                                                                                                   AS BSNS_SE
+		          ,c1.BALC_SE                                                                                                   AS BALC_SE
+		          ,c1.BUDGET_ACNT_CODE                                                                                          AS BUDGET_ACNT_CODE
+		          ,NVL(c1.ORIBDGT,0)                                                                                            AS ORIBDGT
+		          ,NVL(c1.RVSPBGT_1_ODR,0)+NVL(c1.RVSPBGT_2_ODR,0)+NVL(c1.RVSPBGT_3_ODR,0)+NVL(c1.RVSPBGT_4_ODR,0)              AS RVSPBGT_ODR
+		          ,NVL(c1.RSVFND_REQST_AM,0)                                                                                    AS RSVFND_REQST_AM
+		          ,NVL(c1.MVMN_AM,0)+NVL(c1.DVR_AM,0)                                                                           AS MVMN_AM
+		          ,NVL(c1.CYFD_BUDGET,0)                                                                                        AS CYFD_BUDGET
+		          ,NVL(c1.ORIBDGT,0)+NVL(c1.RVSPBGT_1_ODR,0)+NVL(c1.RVSPBGT_2_ODR,0)+NVL(c1.RVSPBGT_3_ODR,0)+
+		           NVL(c1.RVSPBGT_4_ODR,0)+NVL(c1.MVMN_AM,0)+NVL(c1.DVR_AM,0)+NVL(c1.RSVFND_REQST_AM,0)                         AS TOT_BUDGET_AM
+		          ,NVL(c1.CAUSE_ACTION_AM,0)                                                                                    AS CAUSE_ACTION_AM
+		          ,NVL(c1.DET_DCSN_AM,0)                                                                                        AS DET_DCSN_AM
+		          ,NVL(c1.EXCUT_AM,0)                                                                                           AS EXCUT_AM
+		          ,NVL(c1.CYFD_EXCUT_AM,0)                                                                                      AS CYFD_EXCUT_AM
+		          ,NVL(c1.CYFD_AM,0)                                                                                            AS CYFD_AM
+		          ,NVL(c1.CYFD_AM_CNSTRC_IMPRV,0)                                                                               AS CYFD_AM_CNSTRC_IMPRV
+		          ,NVL(c1.CYFD_AM_ACDNT,0)                                                                                      AS CYFD_AM_ACDNT
+		          ,NVL(c1.CYFD_AM_CTNU,0)                                                                                       AS CYFD_AM_CTNU
+		          ,NVL(c1.DISUSE_AM,0)                                                                                          AS DISUSE_AM
+		    FROM   TBBDG_BUDGET_STACNT c1
+		    WHERE  c1.EXPNDTR_UNIT_CODE IS NULL
+		    AND    c1.MTH = #MTH#
+		    AND    c1.STACNT_LEVEL = '1'
+		)
+		SELECT t1.YEAR
+		      ,DECODE(t1.BSNS_SE,'1','수익적지출','자본적지출')           AS BUDGET_ACNT_NM
+		      ,t2.ORIBDGT
+		      ,t2.RVSPBGT_ODR
+		      ,t2.TOT_BUDGET_AM
+		      ,t2.DET_DCSN_AM - t2.CYFD_EXCUT_AM                    AS DET_DCSN_AM
+		      ,t2.EXCUT_AM                                          AS EXCUT_AM
+		      ,t2.DET_DCSN_AM - (t2.EXCUT_AM + t2.CYFD_EXCUT_AM)    AS UNPAY_AM
+		      ,t2.CYFD_AM
+		      ,t2.DISUSE_AM
+		FROM   BUDGET_ACNT_TREE t1
+		       INNER JOIN BUDGET_STACNT t2
+		            ON t1.YEAR = t2.YEAR
+		           AND t1.BSNS_SE = t2.BSNS_SE
+		           AND t1.BALC_SE = t2.BALC_SE
+		           AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		WHERE  1=1
+	</select>
+
+
+	<!-- 지출예산총계 조회 -->
+	<select id="BDG040308DAO.selectExpndtrBudgetTot" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG040308DAO.selectExpndtrBudgetTot*/]]>
+		WITH LV4_BUDGET AS (
+		    SELECT lv4.YEAR, lv4.BSNS_SE, lv4.BALC_SE, lv4.BUDGET_ACNT_CODE, lv4.BUDGET_ACNT_NM, lv4.ACNT_LEVEL, lv4.UPPER_ACNT_CODE
+		    FROM   TBBDG_BUDGET_ACNT_CODE lv4
+		    WHERE  lv4.ACNT_LEVEL IN ('4', '7')
+		    AND    lv4.YEAR    = #YEAR#
+		    AND    lv4.BALC_SE = '2'
+		), LV3_BUDGET AS (
+		    SELECT lv3.YEAR, lv3.BSNS_SE, lv3.BALC_SE, lv3.BUDGET_ACNT_CODE, lv3.BUDGET_ACNT_NM, lv3.ACNT_LEVEL, lv3.UPPER_ACNT_CODE
+		    FROM   TBBDG_BUDGET_ACNT_CODE lv3
+		    WHERE  lv3.ACNT_LEVEL = '3'
+		    AND    lv3.BUDGET_ACNT_CODE IN (
+		                                    SELECT lv4.UPPER_ACNT_CODE
+		                                    FROM   LV4_BUDGET lv4
+		                                    WHERE  lv4.ACNT_LEVEL IN ('4', '7')
+		                                    AND    lv4.YEAR       = lv3.YEAR
+		                                    AND    lv4.BSNS_SE    = lv3.BSNS_SE
+		                                    AND    lv4.BALC_SE    = lv3.BALC_SE
+		                                   )
+		), LV2_BUDGET AS (
+		    SELECT lv2.YEAR, lv2.BSNS_SE, lv2.BALC_SE, lv2.BUDGET_ACNT_CODE, lv2.BUDGET_ACNT_NM, lv2.ACNT_LEVEL, lv2.UPPER_ACNT_CODE
+		    FROM   TBBDG_BUDGET_ACNT_CODE lv2
+		    WHERE  lv2.ACNT_LEVEL = '2'
+		    AND    lv2.BUDGET_ACNT_CODE IN (
+		                                    SELECT lv3.UPPER_ACNT_CODE
+		                                    FROM   LV3_BUDGET lv3
+		                                    WHERE  lv3.ACNT_LEVEL = '3'
+		                                    AND    lv3.YEAR       = lv2.YEAR
+		                                    AND    lv3.BSNS_SE    = lv2.BSNS_SE
+		                                    AND    lv3.BALC_SE    = lv2.BALC_SE
+		                                   )
+		), LV1_BUDGET AS (
+		    SELECT lv1.YEAR, lv1.BSNS_SE, lv1.BALC_SE, lv1.BUDGET_ACNT_CODE, lv1.BUDGET_ACNT_NM, lv1.ACNT_LEVEL, lv1.UPPER_ACNT_CODE
+		    FROM   TBBDG_BUDGET_ACNT_CODE lv1
+		    WHERE  lv1.ACNT_LEVEL = '1'
+		    AND    lv1.BUDGET_ACNT_CODE IN (
+		                                    SELECT lv2.UPPER_ACNT_CODE
+		                                    FROM   LV2_BUDGET lv2
+		                                    WHERE  lv2.ACNT_LEVEL = '2'
+		                                    AND    lv2.YEAR       = lv1.YEAR
+		                                    AND    lv2.BSNS_SE    = lv1.BSNS_SE
+		                                    AND    lv2.BALC_SE    = lv1.BALC_SE
+		                                   )
+		), VWBDG_BUDGET_ACNT_CODE AS (
+		    SELECT YEAR, BSNS_SE, BALC_SE, BUDGET_ACNT_CODE, BUDGET_ACNT_NM, ACNT_LEVEL, UPPER_ACNT_CODE
+		    FROM   LV1_BUDGET
+		    UNION ALL
+		    SELECT YEAR, BSNS_SE, BALC_SE, BUDGET_ACNT_CODE, BUDGET_ACNT_NM, ACNT_LEVEL, UPPER_ACNT_CODE
+		    FROM   LV2_BUDGET
+		    UNION ALL
+		    SELECT YEAR, BSNS_SE, BALC_SE, BUDGET_ACNT_CODE, BUDGET_ACNT_NM, ACNT_LEVEL, UPPER_ACNT_CODE
+		    FROM   LV3_BUDGET
+		    UNION ALL
+		    SELECT YEAR, BSNS_SE, BALC_SE, BUDGET_ACNT_CODE, BUDGET_ACNT_NM, ACNT_LEVEL, UPPER_ACNT_CODE
+		    FROM   LV4_BUDGET
+		), BUDGET_ACNT_TREE AS (
+		    SELECT ROWNUM         AS RNUM
+		          ,t1.YEAR
+		          ,t1.BSNS_SE
+		          ,t1.BALC_SE
+		          ,t1.BUDGET_ACNT_CODE
+		          ,t1.BUDGET_ACNT_NM
+		          ,SYS_CONNECT_BY_PATH(t1.BUDGET_ACNT_NM,'|')||'|'     AS ACNT_NM_PATH
+		          ,DECODE(t1.ACNT_LEVEL,'7','4',t1.ACNT_LEVEL)         AS ACNT_LEVEL
+		          ,t1.UPPER_ACNT_CODE
+		    FROM   VWBDG_BUDGET_ACNT_CODE t1
+		    START WITH t1.UPPER_ACNT_CODE IS NULL
+		    CONNECT BY PRIOR t1.BUDGET_ACNT_CODE = t1.UPPER_ACNT_CODE
+		    ORDER SIBLINGS BY t1.YEAR
+		                     ,t1.BSNS_SE
+		                     ,t1.BALC_SE
+		                     ,t1.BUDGET_ACNT_CODE
+		), BUDGET_STACNT AS (
+		    SELECT c1.YEAR                                                                                                      AS YEAR
+		          ,c1.BSNS_SE                                                                                                   AS BSNS_SE
+		          ,c1.BALC_SE                                                                                                   AS BALC_SE
+		          ,c1.BUDGET_ACNT_CODE                                                                                          AS BUDGET_ACNT_CODE
+		          ,NVL(c1.ORIBDGT,0)                                                                                            AS ORIBDGT
+		          ,NVL(c1.RVSPBGT_1_ODR,0)+NVL(c1.RVSPBGT_2_ODR,0)+NVL(c1.RVSPBGT_3_ODR,0)+NVL(c1.RVSPBGT_4_ODR,0)              AS RVSPBGT_ODR
+		          ,NVL(c1.RSVFND_REQST_AM,0)                                                                                    AS RSVFND_REQST_AM
+		          ,NVL(c1.MVMN_AM,0)+NVL(c1.DVR_AM,0)                                                                           AS MVMN_AM
+		          ,NVL(c1.CYFD_BUDGET,0)                                                                                        AS CYFD_BUDGET
+		          ,NVL(c1.ORIBDGT,0)+NVL(c1.RVSPBGT_1_ODR,0)+NVL(c1.RVSPBGT_2_ODR,0)+NVL(c1.RVSPBGT_3_ODR,0)+
+		           NVL(c1.RVSPBGT_4_ODR,0)+NVL(c1.MVMN_AM,0)+NVL(c1.DVR_AM,0)+NVL(c1.RSVFND_REQST_AM,0)                         AS TOT_BUDGET_AM
+		          ,NVL(c1.CAUSE_ACTION_AM,0)                                                                                    AS CAUSE_ACTION_AM
+		          ,NVL(c1.DET_DCSN_AM,0)                                                                                        AS DET_DCSN_AM
+		          ,NVL(c1.EXCUT_AM,0)                                                                                           AS EXCUT_AM
+		          ,NVL(c1.CYFD_EXCUT_AM,0)                                                                                      AS CYFD_EXCUT_AM
+		          ,NVL(c1.CYFD_AM,0)                                                                                            AS CYFD_AM
+		          ,NVL(c1.CYFD_AM_CNSTRC_IMPRV,0)                                                                               AS CYFD_AM_CNSTRC_IMPRV
+		          ,NVL(c1.CYFD_AM_ACDNT,0)                                                                                      AS CYFD_AM_ACDNT
+		          ,NVL(c1.CYFD_AM_CTNU,0)                                                                                       AS CYFD_AM_CTNU
+		          ,NVL(c1.DISUSE_AM,0)                                                                                          AS DISUSE_AM
+		    FROM   TBBDG_BUDGET_STACNT c1
+		    WHERE  c1.EXPNDTR_UNIT_CODE IS NULL
+		    AND    c1.MTH = #MTH#
+		    AND    c1.STACNT_LEVEL = '1'
+		)
+		SELECT t1.YEAR
+		      ,DECODE(t1.BSNS_SE,'1','수익적지출','자본적지출')           AS BUDGET_ACNT_NM
+		      ,t2.ORIBDGT
+		      ,t2.RVSPBGT_ODR
+		      ,t2.TOT_BUDGET_AM
+		      ,t2.DET_DCSN_AM - t2.CYFD_EXCUT_AM                    AS DET_DCSN_AM
+		      ,t2.EXCUT_AM                                          AS EXCUT_AM
+		      ,t2.DET_DCSN_AM - (t2.EXCUT_AM + t2.CYFD_EXCUT_AM)    AS UNPAY_AM
+		      ,t2.CYFD_AM
+		      ,t2.DISUSE_AM
+		FROM   BUDGET_ACNT_TREE t1
+		       INNER JOIN BUDGET_STACNT t2
+		            ON t1.YEAR = t2.YEAR
+		           AND t1.BSNS_SE = t2.BSNS_SE
+		           AND t1.BALC_SE = t2.BALC_SE
+		           AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		WHERE  1=1
+		UNION ALL
+		SELECT YEAR
+		      ,'이월재원(지출)'              AS BUDGET_ACNT_NM
+		      ,SUM(CYFD_BUDGET)     AS ORIBDGT
+		      ,0                    AS RVSPBGT_ODR
+		      ,SUM(CYFD_BUDGET)     AS TOT_BUDGET_AM
+		      ,SUM(CYFD_EXCUT_AM)   AS DET_DCSN_AM
+		      ,SUM(CYFD_EXCUT_AM)   AS EXCUT_AM
+		      ,0                    AS UNPAY_AM
+		      ,0                    AS CYFD_AM
+		      ,SUM(CYFD_BUDGET)-SUM(CYFD_EXCUT_AM)  AS DISUSE_AM
+		FROM   BUDGET_STACNT
+		WHERE  1=1
+		AND    YEAR    = #YEAR#
+		AND    BALC_SE = '2'
+		GROUP BY YEAR
+	</select>
+
+
+</sqlMap>

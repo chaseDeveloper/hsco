@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS080304_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   
+   
+   	<!-- 토지계약자 계약목록 조회 -->
+	<select id="SLS080304DAO.selectLadLcntrctrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+			WITH
+			TAB_01 AS
+			(
+			SELECT LAD_CSTMR_NO
+				  ,CSTMR_NM
+				  ,IHIDNUM
+				  ,ZIP
+				  ,ADRES
+				  ,ADRES_DETAIL
+				  ,TELNO
+				  ,MBTLNO
+				  ,EMAIL
+			  FROM TBSLS_LAD_CSTMR
+			 WHERE 1 = 1
+			),
+			TAB_02 AS
+			(
+			SELECT T1.LAD_CODE
+				  ,T1.BLCK
+				  ,T1.LOT
+				  ,T1.LOT_TY
+				  ,T1.BLCK || '-' || T1.LOT || '-' || T1.LOT_TY AS BLCK_LOT_TY
+				  ,T1.LAD_SE
+				  ,T1.PRPOS_SE
+				  ,T1.CNTRCT_STTUS
+				  ,T1.RENT_GTN AS BFCHG_RENT_GTN			/* 임대보증금        */
+				  ,T1.FYER_RNTCHRG AS BFCHG_FYER_RNTCHRG	/* 연간임대료       */
+				   
+				  ,T2.CNTRCTR_NO
+				  ,(
+				    SELECT S1.LAD_NM
+					  FROM TBSLS_LAD_INFO S1
+				     WHERE S1.LAD_CODE = T1.LAD_CODE
+				    ) AS LAD_NM
+				  ,T2.LAD_CSTMR_NO
+				  ,T2.CNTRCT_TY
+				  ,T2.SUPLY_SE
+				  ,T2.CANCL_DE
+				  ,T2.CNTRCT_DE          /* 계약일자                           */
+				  ,T2.RENT_BGNDE AS BFCHG_RENT_BGNDE         /* 변경전임대시작일자                       */
+				  ,T2.RENT_ENDDE AS BFCHG_RENT_ENDDE         /* 변경전임대종료일자                       */
+					
+				  ,T3.APPLC_YM /* 젹용년월        */
+				  ,NVL(T3.APPLC_YM, SUBSTR(T2.RENT_BGNDE,0,6)) AS BFCHG_APPLC_YM /* 변경전젹용년월        */
+				
+			  FROM TBSLS_LAD_DETAIL_INFO T1
+				  ,TBSLS_LCNTRCTR T2
+				  ,TBSLS_LCNTRCTR_RE_CNTRCT T3
+			 WHERE 1 = 1
+			   AND T1.LAD_CODE = T2.LAD_CODE
+			   AND T1.BLCK = T2.BLCK
+			   AND T1.LOT = T2.LOT
+			   AND T1.LOT_TY = T2.LOT_TY
+			   AND T2.CNTRCT_TY = 'RN'
+			   AND T2.CNTRCTR_NO = T3.CNTRCTR_NO(+)
+			   AND T2.CNTRCTR_NO IS NOT NULL
+			 
+			)
+			SELECT B.LAD_CODE
+				  ,B.BLCK
+				  ,B.LOT
+				  ,B.LOT_TY
+				  ,B.BLCK_LOT_TY
+				  ,B.CNTRCTR_NO
+				  ,B.LAD_SE
+				  ,B.PRPOS_SE
+				  ,B.CNTRCT_TY
+				  ,SFCOM_CODE_NM('LAD0A4',B.CNTRCT_TY,'ALL_CODE_NM') AS CNTRCT_TY_NM
+				  ,B.CNTRCT_STTUS
+				  ,B.SUPLY_SE
+				  ,B.LAD_NM
+				  ,B.CANCL_DE
+				  
+				  ,B.CNTRCT_DE        	/* 계약일자          */
+				  ,B.BFCHG_RENT_BGNDE 	/* 변경전임대시작일자      */
+				  ,B.BFCHG_RENT_ENDDE 	/* 변경전임대종료일자      */
+				  ,B.BFCHG_RENT_GTN	  	/* 변경전임대보증금        */
+				  ,B.BFCHG_FYER_RNTCHRG	/* 변경전연간임대료        */				  
+				  ,B.APPLC_YM			/* 젹용년월        */
+				  ,B.BFCHG_APPLC_YM     /* 변경전젹용년월        */
+				  
+				  ,A.LAD_CSTMR_NO
+				  ,A.CSTMR_NM
+				  ,CASE WHEN B.CNTRCTR_NO IS NULL THEN '' ELSE RPAD(A.CSTMR_NM,10,' ') || ' [' || B.CNTRCTR_NO || ']' END AS ALL_CNTRCTR_NO
+			  FROM TAB_01 A
+				  ,TAB_02 B
+			 WHERE 1 = 1
+
+			   AND A.LAD_CSTMR_NO(+) = B.LAD_CSTMR_NO
+			   
+			<isNotEmpty property="LAD_CODE">
+			   AND B.LAD_CODE = #LAD_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="BLCK">
+			   AND B.BLCK = #BLCK#
+			</isNotEmpty>
+			<isNotEmpty property="LOT">
+			   AND B.LOT = #LOT#
+			</isNotEmpty>
+			<isNotEmpty property="LOT_TY">
+			   AND B.LOT_TY = #LOT_TY#
+			</isNotEmpty>
+			<isNotEmpty property="APPLC_YM">
+			   AND B.APPLC_YM = #APPLC_YM#
+			</isNotEmpty>
+
+			<isEqual property="CANCL_SE" compareValue="1">
+			   AND B.CANCL_DE IS NOT NULL
+			</isEqual>
+			
+			 ORDER BY B.LAD_CODE,TO_NUMBER(B.BLCK),TO_NUMBER(B.LOT),B.LOT_TY
+	</select>
+	
+	
+	<!-- 토지계약자 재계약목록 조회 -->
+	<select id="SLS080304DAO.selectLcntrctrReCntrctList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+		  SELECT 0 AS CHK
+		        ,A.CNTRCTR_NO           /* 계약자번호         */
+				,A.RE_CNTRCT_SN         /* 재계약일련번호     */
+				,A.RE_CNTRCT_DE         /* 재계약일자         */
+				,A.APPLC_YM             /* 적용년월           */
+				,( SELECT NVL(APPLC_YM, SUBSTR(B.RENT_BGNDE,0,6)) 
+					 FROM TBSLS_LCNTRCTR_RE_CNTRCT 
+					WHERE 1 = 1 
+					  AND CNTRCTR_NO = #CNTRCTR_NO# 
+					  AND RE_CNTRCT_SN = (SELECT MAX(RE_CNTRCT_SN) - 1 
+										    FROM TBSLS_LCNTRCTR_RE_CNTRCT 
+										   WHERE 1 = 1 
+										     AND CNTRCTR_NO = #CNTRCTR_NO#) ) AS BFCHG_APPLC_YM /* 변경전젹용년월        */
+				,A.BFCHG_RENT_BGNDE     /* 변경전임대시작일자 */
+				,A.BFCHG_RENT_ENDDE     /* 변경전임대종료일자 */
+				,A.BFCHG_RENT_GTN       /* 변경전임대보증금   */
+				,A.BFCHG_FYER_RNTCHRG   /* 변경전연간임대료   */
+				,A.RENT_BGNDE           /* 임대시작일자       */
+				,A.RENT_ENDDE           /* 임대종료일자       */
+				,A.RENT_GTN             /* 임대보증금         */
+				,A.FYER_RNTCHRG         /* 연간임대료         */
+				,A.PAY_TMLMT            /* 납부기한일         */
+				,( SELECT NVL(PAY_TMLMT, B.RENT_ENDDE) 
+					 FROM TBSLS_LCNTRCTR_RE_CNTRCT 
+					WHERE 1 = 1 
+					  AND CNTRCTR_NO = #CNTRCTR_NO# 
+					  AND RE_CNTRCT_SN = (SELECT MAX(RE_CNTRCT_SN) - 1 
+										    FROM TBSLS_LCNTRCTR_RE_CNTRCT 
+										   WHERE 1 = 1 
+										     AND CNTRCTR_NO = #CNTRCTR_NO#) ) AS BFCHG_PAY_TMLMT /* 변경전납부기한일        */
+				,A.INSTLMT_AT           /* 할부여부           */
+				,A.INSTLMT_CO           /* 할부횟수           */
+				,A.INSTLMT_TMLMT_DE     /* 할부기한일자       */
+				,A.CONFM_AT             /* 승인여부           */
+				,A.RETURN_PRVONSH       /* 반려사유           */
+				,A.REGISTER_ID          /* 등록자ID       */
+				,A.REGIST_DT            /* 등록일시           */
+				,A.UPDUSR_ID            /* 수정자ID       */
+				,A.UPDT_DT              /* 수정일시           */
+				
+				,B.CNTRCTR_NO         /* 계약자번호
+				,B.LAD_CODE           /* 토지코드                           */
+				,B.BLCK               /* 블록                               */
+				,B.LOT                /* 롯트                               */
+				,B.LOT_TY             /* 롯트타입                           */
+				,B.LAD_CSTMR_NO       /* 토지고객번호                       */
+				,B.CNTRCTR_MTLTY      /* 계약자상호                         */
+				,B.BDNBR              /* 건물번호                           */
+				,B.ZIP_DM             /* DM우편번호                         */
+				,B.BASS_ADRES_DM      /* DM기본주소                         */
+				,B.DETAIL_ADRES_DM    /* DM상세주소                         */
+				,B.BDNBR_DM           /* DM건물번호                         */
+				,B.ETC_CTTPC          /* 기타연락처                         */
+				,B.FAXNO              /* 팩스번호                           */
+				,B.RM                 /* 비고                               */
+				,B.CNTRCT_DE          /* 계약일자                           */
+				,B.RENT_BGNDE AS RENT_BGNDE_ORG         /* 임대시작일자                       */
+				,B.RENT_ENDDE AS RENT_ENDDE_ORG         /* 임대종료일자                       */
+				,B.SUPLY_SE           /* 공급구분                           */
+				,B.CNTRCT_TY          /* 계약타입                           */
+				,B.CANCL_DE           /* 해약일자                           */
+				,B.NMCHANGE_CNNC_CODE /* 명의변경 건에 대한 순번.. 연결코드 */
+				,B.ENTRPS_CHARGER     /* 업체담당자                         */
+				,B.ENTRPS_DEPT        /* 업체부서                           */
+				,B.ENTRPS_TELNO       /* 업체전화번호                       */
+				,B.CTRTC_FILE_COURS   /* 계약서파일경로                     */
+				,B.CTRTC_FILE         /* 계약서파일                         */
+				,(SELECT C.CSTMR_NM FROM TBSLS_LAD_CSTMR C /* 토지고객 */ 
+				   WHERE B.LAD_CSTMR_NO = C.LAD_CSTMR_NO) || ' [' || B.CNTRCTR_NO || ']' AS CSTMR_NM
+				,B.BLCK || '-' || B.LOT || '-' || B.LOT_TY AS BLCK_LOT_TY
+				
+			FROM TBSLS_LCNTRCTR_RE_CNTRCT A
+			  	,TBSLS_LCNTRCTR 		  B
+		    WHERE 1 = 1
+			  AND A.CNTRCTR_NO = B.CNTRCTR_NO
+			  AND B.CNTRCT_TY = 'RN'
+
+			<isNotEmpty property="LAD_CODE">
+			  AND B.LAD_CODE = #LAD_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="BLCK">
+			  AND B.BLCK = #BLCK#
+			</isNotEmpty>
+			<isNotEmpty property="LOT">
+			  AND B.LOT = #LOT#
+			</isNotEmpty>
+			<isNotEmpty property="LOT_TY">
+			  AND B.LOT_TY = #LOT_TY#
+			</isNotEmpty>
+			<isNotEmpty property="APPLC_YM">
+			  AND A.APPLC_YM = #APPLC_YM#
+			</isNotEmpty>
+			
+			ORDER BY B.LAD_CODE,TO_NUMBER(B.BLCK),TO_NUMBER(B.LOT),B.LOT_TY
+	</select>
+	
+	
+	<!-- 토지계약자 재계약 추가  -->
+	<insert id="SLS080304DAO.insertLcntrctrReCntrctList" parameterClass="java.util.Map">
+	      INSERT INTO TBSLS_LCNTRCTR_RE_CNTRCT
+		  (    
+		     CNTRCTR_NO           /* 계약자번호         */
+			,RE_CNTRCT_SN         /* 재계약일련번호     */
+			,RE_CNTRCT_DE         /* 재계약일자         */
+			,APPLC_YM             /* 적용년월           */
+			,BFCHG_RENT_BGNDE     /* 변경전임대시작일자 */
+			,BFCHG_RENT_ENDDE     /* 변경전임대종료일자 */
+			,BFCHG_RENT_GTN       /* 변경전임대보증금   */
+			,BFCHG_FYER_RNTCHRG   /* 변경전연간임대료   */
+			,RENT_BGNDE           /* 임대시작일자       */
+			,RENT_ENDDE           /* 임대종료일자       */
+			,RENT_GTN             /* 임대보증금         */
+			,FYER_RNTCHRG         /* 연간임대료         */
+			,PAY_TMLMT            /* 납부기한일         */
+			,INSTLMT_AT           /* 할부여부           */
+			,INSTLMT_CO           /* 할부횟수           */
+			,INSTLMT_TMLMT_DE     /* 할부기한일자       */
+			,CONFM_AT             /* 승인여부           */
+			,RETURN_PRVONSH       /* 반려사유           */
+			,REGISTER_ID          /* 등록자ID       */
+			,REGIST_DT            /* 등록일시           */
+			,UPDUSR_ID            /* 수정자ID       */
+			,UPDT_DT              /* 수정일시           */          
+			                
+		  ) VALUES (
+		         	     
+		 	 #CNTRCTR_NO#                    /*계약자번호                  */          
+			,#RE_CNTRCT_SN#					 /*재계약일련번호     */
+			,NVL(#RE_CNTRCT_DE#, TO_CHAR(SYSDATE, 'YYYYMMDD')) /* 재계약일자         */
+			,#APPLC_YM#             /* 적용년월           */
+			,#BFCHG_RENT_BGNDE#     /* 변경전임대시작일자 */
+			,#BFCHG_RENT_ENDDE#     /* 변경전임대종료일자 */
+			,#BFCHG_RENT_GTN#       /* 변경전임대보증금   */
+			,#BFCHG_FYER_RNTCHRG#   /* 변경전연간임대료   */
+			,#RENT_BGNDE#           /* 임대시작일자       */
+			,#RENT_ENDDE#           /* 임대종료일자       */
+			,#RENT_GTN#             /* 임대보증금         */
+			,#FYER_RNTCHRG#         /* 연간임대료         */
+			,#PAY_TMLMT#            /* 납부기한일         */
+			,#INSTLMT_AT#           /* 할부여부           */
+			,#INSTLMT_CO#           /* 할부횟수           */
+			,#INSTLMT_TMLMT_DE#     /* 할부기한일자       */
+			,#CONFM_AT#             /* 승인여부           */
+			,#RETURN_PRVONSH#       /* 반려사유           */
+			,#S_USER_ID#            /*등록자ID        */        
+			,SYSDATE       			/*등록일시             */
+			,#S_USER_ID#            /*수정자ID        */          
+			,SYSDATE                /*수정일시             */      
+		  )
+	  
+	  </insert>
+	  
+	  
+	  <!-- 토지계약자 재계약 수정  -->
+	  <update id="SLS080304DAO.updateLcntrctrReCntrctList" parameterClass="java.util.Map">
+		  UPDATE TBSLS_LCNTRCTR_RE_CNTRCT
+		     SET APPLC_YM         	= #APPLC_YM#			/* 적용년월     */
+		     	,RENT_BGNDE         = #RENT_BGNDE#		 	/* 임대시작일자 */
+		        ,RENT_ENDDE         = #RENT_ENDDE#			/* 임대종료일자 */
+		        ,RENT_GTN 			= #RENT_GTN#			/* 임대보증금   */
+		        ,FYER_RNTCHRG       = #FYER_RNTCHRG#		/* 연간임대료   */
+		        ,PAY_TMLMT         	= #PAY_TMLMT#			/* 납부기한일   */
+		        ,INSTLMT_AT         = #INSTLMT_AT#			/* 할부여부     */
+		        ,INSTLMT_CO         = #INSTLMT_CO#			/* 할부횟수     */           
+		        ,INSTLMT_TMLMT_DE	= #INSTLMT_TMLMT_DE#	/* 할부기한일자 */
+		        ,UPDUSR_ID          = #S_USER_ID#
+		        ,UPDT_DT            = SYSDATE
+		   WHERE 1 = 1
+		     AND CNTRCTR_NO   = #CNTRCTR_NO#
+		     AND RE_CNTRCT_SN = #RE_CNTRCT_SN#
+	  	  
+	  </update>
+	  
+	  
+	 <!-- 토지계약자 재계약 삭제  -->
+	 <delete id="SLS080304DAO.deleteLcntrctrReCntrctList" parameterClass="java.util.Map">
+	      DELETE TBSLS_LCNTRCTR_RE_CNTRCT
+		   WHERE 1 = 1
+             AND CNTRCTR_NO   = #CNTRCTR_NO#
+             AND RE_CNTRCT_SN = #RE_CNTRCT_SN#
+		   
+	 </delete>
+	 
+	<!-- 압류여부  -->
+	<select id="SLS080304DAO.selectConfmAt" parameterClass="java.util.Map" resultClass="String">
+		SELECT DECODE(T.CONFM_AT, '1', 'Y', 'N') AS CONFM_AT
+		  FROM TBSLS_LCNTRCTR_RE_CNTRCT T
+		 WHERE T.CNTRCTR_NO   = #CNTRCTR_NO#
+		   AND T.RE_CNTRCT_SN = #RE_CNTRCT_SN#
+	</select>
+	
+	
+	<!-- 토지계약자 임대기간 수정  -->
+	<update id="SLS080304DAO.updateLcntrctrRentDe" parameterClass="java.util.Map">
+		  UPDATE TBSLS_LCNTRCTR
+		     SET RENT_BGNDE         = #RENT_BGNDE#		 	/* 임대시작일자 */
+		        ,RENT_ENDDE         = #RENT_ENDDE#			/* 임대종료일자 */		        
+		        ,UPDUSR_ID          = #S_USER_ID#
+		        ,UPDT_DT            = SYSDATE
+		   WHERE 1 = 1
+		     AND CNTRCTR_NO   = #CNTRCTR_NO#
+	 	  
+	</update>
+	
+	<!-- 토지계약자 최근임대기간  -->
+	<select id="SLS080304DAO.selectMaxRentDe" parameterClass="java.util.Map" resultClass="String">
+	   SELECT BFCHG_RENT_BGNDE || '/' || BFCHG_RENT_ENDDE AS MAX_RENT_DE
+		 FROM TBSLS_LCNTRCTR_RE_CNTRCT 
+		WHERE 1 = 1 
+		  AND CNTRCTR_NO = #CNTRCTR_NO# 
+		  AND RE_CNTRCT_SN = (SELECT MAX(RE_CNTRCT_SN) 
+							    FROM TBSLS_LCNTRCTR_RE_CNTRCT 
+							   WHERE 1 = 1 
+							     AND CNTRCTR_NO = #CNTRCTR_NO#)
+	</select>
+	
+	<!-- 토지계약자 재계약차수 -->
+	<select id="SLS080304DAO.selectReCntrctSn" parameterClass="java.util.Map" resultClass="String">
+		 
+		 SELECT NVL(MAX(RE_CNTRCT_SN),0) + 1 AS RE_CNTRCT_SN
+		   FROM TBSLS_LCNTRCTR_RE_CNTRCT 
+		  WHERE 1 = 1 
+		    AND CNTRCTR_NO = #CNTRCTR_NO#
+
+	</select>
+	
+	<!-- 제계약 임대료 납부정보 전체삭제 -->
+	<delete id="SLS080304DAO.deleteAllLcntrctrPayList" parameterClass="java.util.Map">
+		DELETE
+		  FROM TBSLS_LCNTRCTR_PAY
+		 WHERE 1 = 1
+		   AND CNTRCTR_NO = #CNTRCTR_NO#		  
+		   AND RENT_ODR = #RE_CNTRCT_SN#
+	</delete>
+	
+	
+	
+</sqlMap>

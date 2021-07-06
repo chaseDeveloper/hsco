@@ -1,0 +1,1446 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01060500SQL">	
+
+	<!-- 쿼리명 : 부가세내역조회
+	설명 : 부가세내역조회 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.29
+	-->
+	<select id="RNT01060500DAO.selectVatInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT b.CNTRCTR_NO,
+                P.NM,
+                SFCOM_DEC_ALL(P.IHIDNUM) AS IHIDNUM,
+                b.RENT_HOUSE_CODE,
+                c.RENT_HOUSE_NM,
+                b.DONG,
+                b.HO,
+                a.BIZRNO,
+                a.OCCRRNC_YEAR,
+                a.OCCRRNC_QU,
+                a.CNTRCT_DE, /* 계약일자 */
+                a.CNTRCT_AMOUNT, /* 계약금액 */
+                a.REGARD_RNTCHRG, /* 간주임대료 */
+                a.VAT,  /* 부가세 */
+                a.OCCRRNC_DE_1, /* 임대료발생일1 */
+                a.OCCRRNC_DE_2, /* 임대료발생일2 */
+                a.OCCRRNC_DE_3, /* 임대료발생일3 */
+                a.RNTCHRG_1, /* 임대료1 */
+                a.RNTCHRG_2, /* 임대료2 */
+                a.RNTCHRG_3, /* 임대료3 */
+                a.SUPLY_AMOUNT_1, /* 공급금액1 */ 
+                a.SUPLY_AMOUNT_2, /* 공급금액2 */
+                a.SUPLY_AMOUNT_3, /* 공급금액3 */
+                a.VAT_1, /* 부가세1 */
+                a.VAT_2, /* 부가세2 */
+                a.VAT_3, /* 부가세3 */
+                a.RNTCHRG_1 + a.RNTCHRG_2 + a.RNTCHRG_3 TOT_RNTCHRG,
+                a.SUPLY_AMOUNT_1 + a.SUPLY_AMOUNT_2 + a.SUPLY_AMOUNT_3 TOT_SUPLY_AMOUNT,
+                a.VAT_1 + a.VAT_2 + a.VAT_3 TOT_VAT,
+                a.TOT_DAYCNT, /* 총일수 */
+                (SFPMS_GET_INTRT_RATE('RN1','','R3','20160803','')) AS REGARD_RNTCHRG_QU, /* 세율 */
+                a.REGISTER_ID,
+                a.REGIST_DT,
+                a.UPDUSR_ID,
+                a.UPDT_DT,
+                d.MTLTY, /* 상호명 */
+                (SELECT ADRES || ' ' || ADRES_DETAIL
+                   FROM TBRNT_RENT_HOUSE_DONG z
+                   WHERE RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+                     AND DONG = b.DONG) ADRES,
+                d.BIZCND,  /* 업태 */
+                d.ITEM, /* 업종 */
+                p.MBTLNO,
+                d.USEPRPS /* 사용용도 */
+           FROM TBRNT_RENT_VAT a,
+                TBRNT_RENT_CNTRCT b,
+                TBRNT_RENT_HOUSE c,
+                TBRNT_SOPSRT_BSNM d,
+                TBRNT_PRMANENT_RENT_CSTMR P
+           WHERE a.OCCRRNC_YEAR = #year#
+            AND  a.OCCRRNC_QU = #quarter#
+            AND  a.CNTRCTR_NO = b.CNTRCTR_NO
+            AND  b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+         <isNotEmpty property="rentHouseCode">
+	        AND  b.RENT_HOUSE_CODE = #rentHouseCode#
+         </isNotEmpty>
+            AND  a.CNTRCTR_NO = d.CNTRCTR_NO(+)
+            AND  b.PRMANENT_CSTMR_NO = p.PRMANENT_CSTMR_NO(+)
+         <isEqual property="cntractSe" compareValue="1">
+            AND  NOT EXISTS(SELECT 'X'
+                              FROM TBRNT_RENT_RESCI z
+                              WHERE CNTRCTR_NO = b.CNTRCTR_NO
+                                AND CANCL_DE > b.CNTRCT_DE) /* 계약자 */
+         </isEqual>
+         <isEqual property="cntractSe" compareValue="2">
+            AND  EXISTS(SELECT 'X'
+                          FROM TBRNT_RENT_RESCI z
+                          WHERE CNTRCTR_NO = b.CNTRCTR_NO
+                            AND CANCL_DE > b.CNTRCT_DE)   /* 해약자 */
+         </isEqual>
+          ORDER BY b.RENT_HOUSE_CODE,
+                   b.DONG,
+                   b.HO
+
+	</select>
+	
+	<!-- 쿼리명 : 기존 부가세정보 확인
+	설명 : 기존 부가세정보 확인
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.29
+	-->
+	<select id="RNT01060500DAO.selectVatInfoChk" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		
+		SELECT COUNT(1) CNT
+		  FROM TBRNT_RENT_VAT a,
+		       TBRNT_RENT_CNTRCT b
+		  WHERE a.CNTRCTR_NO = b.CNTRCTR_NO
+		    AND a.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+		    AND a.OCCRRNC_QU = #QUARTER#
+		 <isNotEmpty property="RENT_HOUSE_CODE">
+	        AND  b.RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+         </isNotEmpty>
+		    AND b.RENT_HOUSE_CODE IN(SELECT RENT_HOUSE_CODE
+		                               FROM TBRNT_RENT_HOUSE 
+		                               WHERE HOUSE_SE = 'R3')
+	</select>
+	
+	<!-- 쿼리명 : 기존 부가세정보 삭제
+	설명 : 기존 부가세정보 확인
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.29
+	-->
+	<delete id="RNT01060500DAO.deleteVatInfoProc" parameterClass="java.util.HashMap">
+		
+		DELETE FROM TBRNT_RENT_VAT 
+		WHERE CNTRCTR_NO IN(SELECT CNTRCTR_NO
+		                      FROM TBRNT_RENT_CNTRCT
+		                      WHERE 1 = 1
+		                      <isNotEmpty property="RENT_HOUSE_CODE">
+	                            AND  RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+                              </isNotEmpty>
+		                       AND RENT_HOUSE_CODE IN(SELECT RENT_HOUSE_CODE
+		                                                FROM TBRNT_RENT_HOUSE 
+		                                               WHERE HOUSE_SE = 'R3'))
+		   AND  OCCRRNC_YEAR = #OCCRRNC_YEAR#
+		   AND  OCCRRNC_QU   = #QUARTER#
+	</delete>
+	
+	<!-- 	
+	쿼리명 : 부가세생성
+	설명 : 부가세생성 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.29 
+	-->
+	<insert id="RNT01060500DAO.insertVatInfoProc" parameterClass="java.util.Map">
+	
+	<![CDATA[
+		
+		INSERT INTO TBRNT_RENT_VAT
+	       (CNTRCTR_NO,     /* 계약자번호 */
+	        BIZRNO,         /* 사업자등록번호 */
+	        OCCRRNC_YEAR,   /* 발생년도 */
+	        OCCRRNC_QU,     /* 발생분기 */
+	        CNTRCT_DE,      /* 계약일자 */
+	        CNTRCT_AMOUNT,  /* 계약금액 */
+	        REGARD_RNTCHRG, /* 간주임대료 */
+	        VAT,            /* 부가세 */
+	        OCCRRNC_DE_1,   /* 발생일자1 */
+	        RNTCHRG_1,      /* 임대료1 */
+	        SUPLY_AMOUNT_1, /* 공급금액1 */
+	        VAT_1,          /* 부가세1 */
+	        OCCRRNC_DE_2,   /* 발생일자2 */
+	        RNTCHRG_2,      /* 임대료2*/
+	        SUPLY_AMOUNT_2, /* 공급금액2 */
+	        VAT_2,          /* 부가세2 */
+	        OCCRRNC_DE_3,   /* 발생일자3 */
+	        RNTCHRG_3,      /* 임대료3 */
+	        SUPLY_AMOUNT_3, /* 공급금액3 */
+	        VAT_3,          /* 부가세3 */
+	        TOT_DAYCNT,     /* 총일수 */
+	        REGISTER_ID,
+	        REGIST_DT,
+	        UPDUSR_ID,
+	        UPDT_DT
+	        , BILL_SE1, BILL_SE2, BILL_SE3
+	        )
+	
+	SELECT a.CNTRCTR_NO,
+	       nvl((select BIZRNO
+	             from TBRNT_SOPSRT_BSNM e
+	             where e.CNTRCTR_NO = a.CNTRCTR_NO),
+	            substr(SFCOM_DEC_ALL(p.IHIDNUM),1,13) ) AS BIZRNO,  /* 추후 주민번호 복호진행 */
+	       #OCCRRNC_YEAR# ,
+	       #QUARTER#, 
+	       a.CNTRCT_DE,
+	       a.CNTRCT_AMOUNT + a.SURLUS AS CNTRCT_AMOUNT,
+	
+	                /*   간주임대료 계산  */
+	
+	       (CASE #QUARTER# /* in_tax_quarter */
+	
+	           WHEN '1'
+	
+	              THEN TRUNC (  (a.CNTRCT_AMOUNT + a.SURLUS)
+	
+	                          * (SFPMS_GET_INTRT_RATE('RN1','','R3',#CURRENT_DE#,'') / 100)
+	
+	                          * (d.tot_day / (TO_DATE(#OCCRRNC_YEAR# || '1231','YYYYMMDD') - TO_DATE(#OCCRRNC_YEAR# || '0101','YYYYMMDD') + 1)),
+	
+	                          0
+	
+	                         )
+	
+	           WHEN '2'
+	
+	              THEN TRUNC (  (a.CNTRCT_AMOUNT + a.SURLUS)
+	
+	                          * (SFPMS_GET_INTRT_RATE('RN1','','R3',#CURRENT_DE#,'') / 100)
+	
+	                          * (d.tot_day / (TO_DATE(#OCCRRNC_YEAR# || '1231','YYYYMMDD') - TO_DATE(#OCCRRNC_YEAR# || '0101','YYYYMMDD')+1)),
+	
+	                          0
+	
+	                         )
+	
+	           WHEN '3'
+	
+	              THEN TRUNC (  (a.CNTRCT_AMOUNT + a.SURLUS)
+	
+	                          * (SFPMS_GET_INTRT_RATE('RN1','','R3',#CURRENT_DE#,'') / 100)
+	
+	                          * (d.tot_day /  (TO_DATE(#OCCRRNC_YEAR# || '1231','YYYYMMDD') - TO_DATE(#OCCRRNC_YEAR# || '0101','YYYYMMDD')+1)),
+	
+	                          0
+	
+	                         )
+	
+	           WHEN '4'
+	
+	              THEN TRUNC (  (a.CNTRCT_AMOUNT + a.SURLUS)
+	
+	                          * (SFPMS_GET_INTRT_RATE('RN1','','R3',#CURRENT_DE#,'') / 100)
+	
+	                          * (d.tot_day /  (TO_DATE(#OCCRRNC_YEAR# || '1231','YYYYMMDD') - TO_DATE(#OCCRRNC_YEAR# || '0101','YYYYMMDD')+1)),
+	
+	                          0
+	
+	                         )
+	
+	           ELSE 0
+	
+	        END
+	
+	       ) AS quarter_amt,
+	
+	
+	
+	      /* 간주임대료부가세  */
+	
+	       (CASE #QUARTER# /* in_tax_quarter */
+	
+	           WHEN '1'
+	
+	              THEN TRUNC ( TRUNC (  (a.CNTRCT_AMOUNT + a.SURLUS)
+	
+	                          * (SFPMS_GET_INTRT_RATE('RN1','','R3',#CURRENT_DE#,'') / 100)
+	
+	                          * (d.tot_day /  (TO_DATE(#OCCRRNC_YEAR# || '1231','YYYYMMDD') - TO_DATE(#OCCRRNC_YEAR# || '0101','YYYYMMDD')+1)),
+	
+	                          0
+	
+	                         ) * 0.1 , 0)
+	
+	           WHEN '2'
+	
+	              THEN TRUNC (TRUNC (  (a.CNTRCT_AMOUNT + a.SURLUS)
+	
+	                          * (SFPMS_GET_INTRT_RATE('RN1','','R3',#CURRENT_DE#,'') / 100)
+	
+	                          * (d.tot_day / (TO_DATE(#OCCRRNC_YEAR# || '1231','YYYYMMDD') - TO_DATE(#OCCRRNC_YEAR#|| '0101','YYYYMMDD')+1)),
+	
+	                          0
+	
+	                         ) * 0.1 , 0)
+	
+	           WHEN '3'
+	
+	              THEN TRUNC (TRUNC (  (a.CNTRCT_AMOUNT + a.SURLUS)
+	
+	                          * (SFPMS_GET_INTRT_RATE('RN1','','R3',#CURRENT_DE#,'') / 100)
+	
+	                          * (d.tot_day / (TO_DATE(#OCCRRNC_YEAR# || '1231','YYYYMMDD') - TO_DATE(#OCCRRNC_YEAR# || '0101','YYYYMMDD')+1)),
+	
+	                          0
+	
+	                         ) * 0.1 , 0)
+	
+	           WHEN '4'
+	
+	              THEN TRUNC (TRUNC (  (a.CNTRCT_AMOUNT + a.SURLUS)
+	
+	                          * (SFPMS_GET_INTRT_RATE('RN1','','R3',#CURRENT_DE#,'') / 100)
+	
+	                          * (d.tot_day / (TO_DATE(#OCCRRNC_YEAR# || '1231','YYYYMMDD') - TO_DATE(#OCCRRNC_YEAR# || '0101','YYYYMMDD')+1)),
+	
+	                          0
+	
+	                         ) * 0.1 , 0)
+	
+	           ELSE 0
+	
+	        END
+	
+	       ) AS quarter_vat,
+	       d.RENT_DATE_1,
+	       d.RNTCHRG_1,
+	       d.supply_amt1,
+	       d.vat1,
+	       d.RENT_DATE_2,
+	       d.RNTCHRG_2,
+	       d.supply_amt2,
+	       d.vat2,
+	       d.RENT_DATE_3,
+	       d.RNTCHRG_3,
+	       d.supply_amt3,
+	       d.vat3,
+	       tot_day,
+	       #S_USER_ID#,
+	       sysdate,
+	       #S_USER_ID#,
+	       sysdate
+	       , bill_se1, bill_se2, bill_se3
+	  FROM TBRNT_RENT_CNTRCT a,
+	       TBRNT_RENT_HOUSE b,
+	       (SELECT   c.CNTRCTR_NO,
+	                 SUM (c.RNTCHRG_1) AS RNTCHRG_1,
+	                 TRUNC (SUM(c.RNTCHRG_1) / 1.1, 0) AS supply_amt1,
+	                 SUM(c.RNTCHRG_1) - TRUNC (SUM(c.RNTCHRG_1) / 1.1, 0) AS vat1,
+	                 SUM (c.RNTCHRG_2) AS RNTCHRG_2,
+	                 TRUNC (SUM(c.RNTCHRG_2) / 1.1, 0) AS supply_amt2,
+	                 SUM(c.RNTCHRG_2) - TRUNC (SUM(c.RNTCHRG_2) / 1.1, 0) AS vat2,
+	                 SUM (c.RNTCHRG_3) AS RNTCHRG_3,
+	                 TRUNC (SUM(c.RNTCHRG_3) / 1.1, 0) AS supply_amt3,
+	                 SUM(c.RNTCHRG_3) - TRUNC (SUM(c.RNTCHRG_3) / 1.1, 0) AS vat3,
+	                 SUM (c.RENT_DAY_1) AS RENT_DAY_1,
+	                 SUM (c.RENT_DAY_2) AS RENT_DAY_2,
+	                 SUM (c.RENT_DAY_3) AS RENT_DAY_3,
+	                 MAX (c.RENT_DATE_1) AS RENT_DATE_1,
+	                 MAX (c.RENT_DATE_2) AS RENT_DATE_2,
+	                 MAX (c.RENT_DATE_3) AS RENT_DATE_3,	                 
+	                 MAX (c.bill_se1) AS bill_se1,
+	                 MAX (c.bill_se2) AS bill_se2,
+	                 MAX (c.bill_se3) AS bill_se3,	                 
+	                 nvl(TO_DATE(c.CANCL_DE,'YYYYMMDD'),last_day(nvl(TO_DATE(MAX(c.RENT_DATE_3),'YYYYMMDD'),nvl(TO_DATE(MAX(c.RENT_DATE_2),'YYYYMMDD'), TO_DATE(MAX(c.RENT_DATE_1),'YYYYMMDD') )))) -
+	                         case when (c.FRST_CNTRCT_DE = c.CNTRCT_DE)
+	                                       and SUBSTR(nvl(MAX(c.RENT_DATE_1), nvl(MAX(c.RENT_DATE_2),MAX(c.RENT_DATE_3))),1,6) between SUBSTR(c.CNTRCT_DE,1,6) and to_char(add_months(TO_DATE(c.CNTRCT_DE,'YYYYMMDD'),1),'YYYYMM')
+	                                  then TO_DATE(c.RENT_BGNDE,'YYYYMMDD')
+	                            else to_date(SUBSTR(nvl(MAX(c.RENT_DATE_1), nvl(MAX(c.RENT_DATE_2),MAX(c.RENT_DATE_3))),1,6) || '01','YYYYMMDD')
+	                        END + 1   tot_day	                        
+	        FROM (SELECT v.CNTRCTR_NO,
+	                     v.MDAT_YM,
+	                     a.FRST_CNTRCT_DE,
+	                     a.CNTRCT_DE,
+	                    (SELECT MAX(CANCL_DE)
+	                      FROM TBRNT_RENT_RESCI z
+	                      WHERE CNTRCTR_NO = a.CNTRCTR_NO
+	                        AND  CANCL_DE > a.CNTRCT_DE) CANCL_DE,
+	                     a.RENT_BGNDE,
+	                     CASE WHEN SUBSTR (v.MDAT_YM, 5, 2) = q.minmm
+	                                 THEN NVL (v.RNTCHRG, 0) + NVL (v.RDCAMT_AMOUNT, 0)
+	                               ELSE 0
+	                      END RNTCHRG_1,
+	
+	                     CASE WHEN (SUBSTR (v.MDAT_YM, 5, 2) > q.minmm)
+	                                       AND (SUBSTR (v.MDAT_YM, 5, 2) < q.maxmm)
+	                                  THEN NVL (v.RNTCHRG, 0) + NVL (v.RDCAMT_AMOUNT, 0)
+	                          ELSE 0
+	                      END RNTCHRG_2,
+	
+	                     CASE WHEN SUBSTR (v.MDAT_YM, 5, 2) = q.maxmm
+	                                 THEN NVL(v.RNTCHRG, 0) + NVL(v.RDCAMT_AMOUNT,0)
+	                          ELSE 0
+	                      END RNTCHRG_3,
+	
+	                     CASE WHEN SUBSTR (v.MDAT_YM, 5, 2) = q.minmm
+	                                 THEN TO_CHAR(NVL(TO_DATE((SELECT MAX(CANCL_DE)
+	                                                              FROM TBRNT_RENT_RESCI z
+	                                                              WHERE CNTRCTR_NO = a.CNTRCTR_NO
+	                                                                AND  CANCL_DE > a.CNTRCT_DE),'YYYYMMDD'),LAST_DAY(TO_DATE (#OCCRRNC_YEAR# || q.firstday,'YYYYMMDD' ))),'DD')
+	                          ELSE TO_CHAR(0)
+	                      END  RENT_DAY_1,
+	
+	                     CASE WHEN (SUBSTR (v.MDAT_YM, 5, 2) > q.minmm)
+	                                      AND (SUBSTR (v.MDAT_YM, 5, 2) < q.maxmm)
+	                                 THEN TO_CHAR(NVL(TO_DATE((SELECT MAX(CANCL_DE)
+	                                                              FROM TBRNT_RENT_RESCI z
+	                                                              WHERE CNTRCTR_NO = a.CNTRCTR_NO
+	                                                                AND  CANCL_DE > a.CNTRCT_DE),'YYYYMMDD'), LAST_DAY(TO_DATE (#OCCRRNC_YEAR# ||  q.midmm || '01','YYYYMMDD' ))),'DD')
+	                          ELSE TO_CHAR(0)
+	                      END RENT_DAY_2,
+	
+	                     CASE WHEN SUBSTR (v.MDAT_YM, 5, 2) = q.maxmm
+	                                 THEN TO_CHAR(NVL(TO_DATE((SELECT MAX(CANCL_DE)
+	                                                              FROM TBRNT_RENT_RESCI z
+	                                                              WHERE CNTRCTR_NO = a.CNTRCTR_NO
+	                                                                AND  CANCL_DE > a.CNTRCT_DE),'YYYYMMDD'),LAST_DAY(TO_DATE(#OCCRRNC_YEAR#||q.lastday,'YYYYMMDD'))),'DD')
+	                          ELSE TO_CHAR(0)
+	                      END RENT_DAY_3,
+	
+	
+	                     nvl(TO_DATE((SELECT MAX(CANCL_DE)
+	                                    FROM TBRNT_RENT_RESCI z
+	                                    WHERE CNTRCTR_NO = a.CNTRCTR_NO
+	                                      AND  CANCL_DE > a.CNTRCT_DE),'YYYYMMDD'), to_date(#OCCRRNC_YEAR# || q.lastday,'YYYYMMDD' ))  -
+	                           (case when a.FRST_CNTRCT_DE > (#OCCRRNC_YEAR# || q.firstday )
+	                                      then TO_DATE(a.FRST_CNTRCT_DE,'YYYYMMDD')
+	                                 else to_date(#OCCRRNC_YEAR#  || q.firstday,'YYYYMMDD' )
+	                             end) + 1  TOT_DAY,
+	
+	                     CASE  WHEN SUBSTR (v.MDAT_YM, 5, 2) = q.minmm
+	                                  THEN least(nvl(v.RCIV_DE,v.PAY_TMLMT),v.PAY_TMLMT)
+	                           ELSE NULL
+	                      END  RENT_DATE_1,
+	
+	                     CASE WHEN (SUBSTR (v.MDAT_YM, 5, 2) > q.minmm)
+	                                        AND (SUBSTR (v.MDAT_YM, 5, 2) < q.maxmm)
+	                                  THEN least(nvl(v.RCIV_DE,v.PAY_TMLMT),v.PAY_TMLMT)
+	                          ELSE NULL
+	                      END  RENT_DATE_2,
+	
+	                     CASE WHEN SUBSTR (v.MDAT_YM, 5, 2) = q.maxmm
+	                                 THEN least(nvl(v.RCIV_DE,v.PAY_TMLMT),v.PAY_TMLMT)
+	                          ELSE NULL
+	                      END RENT_DATE_3,
+	                      
+	                      (CASE
+                             WHEN SUBSTR (v.MDAT_YM, 5, 2) = q.minmm THEN
+                                  (case when v.RCIV_DE is null then '02' 
+                                       when v.RCIV_DE <= v.PAY_TMLMT then '01'
+                                       else '02' end) 
+                             ELSE NULL
+                          END
+                         ) AS bill_se1,
+                         
+                         (CASE
+                             WHEN (SUBSTR (v.MDAT_YM, 5, 2) > q.minmm) AND (SUBSTR (v.MDAT_YM, 5, 2) < q.maxmm) THEN 
+                                  (case when v.RCIV_DE is null then '02' 
+                                       when v.RCIV_DE <= v.PAY_TMLMT  then '01'
+                                       else '02' end) 
+                             ELSE NULL
+                          END
+                         ) AS bill_se2,
+                         
+                         (CASE
+                             WHEN SUBSTR (v.MDAT_YM, 5, 2) = q.maxmm THEN 
+                                  (case when v.RCIV_DE is null then '02' 
+                                       when v.RCIV_DE <= v.PAY_TMLMT then '01'
+                                       else '02' end) 
+                             ELSE NULL
+                          END
+                         ) AS bill_se3
+                                                  
+	               FROM  TBRNT_RENT_CNTRCT a,
+	                     TBRNT_RENT_MT_RNTCHRG v,
+	                     (SELECT   QUARTER,
+	                               minMM,
+	                               midMM,
+	                               maxMM,
+	                               minMM || '01' FirstDay,
+	                               TO_CHAR(LAST_DAY(TO_DATE(#OCCRRNC_YEAR# || maxMM,'YYYYMM')),'MMDD') LastDay
+	                         FROM(SELECT ROWNUM QUARTER,
+	                                     CASE WHEN (ROWNUM * 3) - 2 < 10
+	                                               THEN '0' || TO_CHAR((ROWNUM * 3) - 2)
+	                                          ELSE TO_CHAR((ROWNUM * 3) - 2)
+	                                      END minMM,
+	                                     CASE WHEN (ROWNUM * 3) - 1 < 10
+	                                               THEN '0' || TO_CHAR((ROWNUM * 3) - 1)
+	                                          ELSE TO_CHAR((ROWNUM * 3) - 1)
+	                                      END midMM,
+	                                     CASE WHEN (ROWNUM * 3)  < 10
+	                                               THEN '0' || TO_CHAR((ROWNUM * 3))
+	                                          ELSE TO_CHAR((ROWNUM * 3) )
+	                                      END maxMM
+	
+	                                FROM DUAL
+	                                CONNECT BY ROWNUM < 5)) q
+	                 WHERE a.CNTRCTR_NO = v.CNTRCTR_NO
+	                   AND a.RENT_HOUSE_CODE IN(SELECT RENT_HOUSE_CODE
+	                                                FROM TBRNT_RENT_HOUSE
+	                                                WHERE HOUSE_SE = 'R3')
+	                   AND q.QUARTER = #QUARTER#
+	                   AND v.MDAT_YM BETWEEN #OCCRRNC_YEAR# || minMM  AND #OCCRRNC_YEAR# || maxMM) c
+	
+	          GROUP BY c.CNTRCTR_NO,
+	                   c.FRST_CNTRCT_DE,
+	                   c.CNTRCT_DE,
+	                   c.CANCL_DE,
+	                   c.RENT_BGNDE) d,
+	         TBRNT_PRMANENT_RENT_CSTMR P
+	 WHERE a.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+	
+	   AND a.PRMANENT_CSTMR_NO = P.PRMANENT_CSTMR_NO
+	
+	   AND b.HOUSE_SE = 'R3'
+	
+	   AND SUBSTR (b.RENT_HOUSE_CODE, 1, 1) = '6'
+	
+	   AND a.CNTRCT_DE IS NOT NULL
+	
+	   AND a.CNTRCTR_NO = d.CNTRCTR_NO
+	   ]]>
+	  <isNotEmpty property="RENT_HOUSE_CODE">
+	   AND a.RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+	  </isNotEmpty>
+	</insert>
+
+	<!-- 	
+		쿼리명 : 부가세 수정
+		설명 : 부가세 수정
+		수정일  수정자  수정내용
+		
+		작성자 : 김지훈
+		최초작성일 : 2015.12.29 
+		-->
+	<update id="RNT01060500DAO.updateVatInfoList" parameterClass="java.util.Map">
+	  UPDATE TBRNT_RENT_VAT
+	     SET TOT_DAYCNT     = #TOT_DAYCNT#,
+	         REGARD_RNTCHRG = #REGARD_RNTCHRG#,
+	         VAT            = #VAT#,
+	         UPDUSR_ID      = #S_USER_ID#,
+	         UPDT_DT        = SYSDATE
+	  WHERE CNTRCTR_NO   = #CNTRCTR_NO#
+	    AND OCCRRNC_YEAR = #OCCRRNC_YEAR#
+	    AND  OCCRRNC_QU  = #OCCRRNC_QU#        
+	</update>
+
+
+	<!-- 매출조서 -->
+	<select id="RNT01060500DAO.selectSaleReport" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT '1' AS ORD
+			      ,0 AS TOT_CNT
+			      ,B.CNTRCTR_NO
+			      ,NVL(D.MTLTY
+			          ,(SELECT BB.NM
+			             FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			            WHERE BB.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO)) AS NM
+			       /* ,SUBSTR(CRYPTO.DEC('PATTERN8', B.IHIDNUM), 1, 14) AS IHIDNUM */
+			      ,(SELECT BB.IHIDNUM
+			          FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			         WHERE BB.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO) AS IHIDNUM
+			      ,B.RENT_HOUSE_CODE
+			      ,C.RENT_HOUSE_NM
+			      ,B.DONG
+			      ,B.HO
+			      ,B.DONG || '-' || B.HO AS DONGHO
+			      ,A.BIZRNO
+			      ,A.OCCRRNC_YEAR
+			      ,A.OCCRRNC_QU
+			      ,A.CNTRCT_DE
+			      ,A.CNTRCT_AMOUNT
+			      ,A.REGARD_RNTCHRG
+			      ,A.VAT
+			      ,SUBSTR(A.OCCRRNC_DE_1, 5, 2) AS MONTH_1
+			      ,A.OCCRRNC_DE_1
+			      ,A.RNTCHRG_1
+			      ,A.SUPLY_AMOUNT_1
+			      ,A.VAT_1
+			      ,SUBSTR(A.OCCRRNC_DE_2, 5, 2) AS MONTH_2
+			      ,A.OCCRRNC_DE_2
+			      ,A.RNTCHRG_2
+			      ,A.SUPLY_AMOUNT_2
+			      ,A.VAT_2
+			      ,SUBSTR(A.OCCRRNC_DE_3, 5, 2) AS MONTH_3
+			      ,A.OCCRRNC_DE_3
+			      ,A.RNTCHRG_3
+			      ,A.SUPLY_AMOUNT_3
+			      ,A.VAT_3
+			      ,(A.RNTCHRG_1 + A.RNTCHRG_2 + A.RNTCHRG_3) AS TOT_RNTCHRG
+			      ,(A.SUPLY_AMOUNT_1 + A.SUPLY_AMOUNT_2 + A.SUPLY_AMOUNT_3) AS TOT_SUPLY_AMOUNT
+			      ,(A.VAT_1 + A.VAT_2 + A.VAT_3) AS TOT_VAT
+			      /*
+			      ,0 AS TCNTRCT_AMOUNT
+			      ,0 AS TREGARD_RNTCHRG
+			      ,0 AS TVAT
+			      ,0 AS TRNTCHRG_1
+			      ,0 AS TSUPLY_AMOUNT_1
+			      ,0 AS TVAT_1
+			      ,0 AS TRNTCHRG_2
+			      ,0 AS TSUPLY_AMOUNT_2
+			      ,0 AS TVAT_2
+			      ,0 AS TRNTCHRG_3
+			      ,0 AS TSUPLY_AMOUNT_3
+			      ,0 AS TVAT_3
+			      ,0 AS TTOT_RNTCHRG
+			      ,0 AS TTOT_SUPLY_AMOUNT
+			      ,0 AS TTOT_VAT
+			      */
+			      ,(SELECT BB.NM
+			          FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			         WHERE BB.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO) AS NM1
+			
+			  FROM TBRNT_RENT_VAT    A /* 임대부가세 */
+			      ,TBRNT_RENT_CNTRCT B /* 계약정보 */
+			      ,TBRNT_RENT_HOUSE  C /* 임대주택 */
+			      ,TBRNT_SOPSRT_BSNM D /* 상가사업자정보 */
+			
+			 WHERE A.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+			   AND A.OCCRRNC_QU = #QUARTER#
+			   AND A.CNTRCTR_NO = B.CNTRCTR_NO
+			   AND B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		
+		<isNotEmpty property="RENT_HOUSE_CODE">
+			   AND B.RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		</isNotEmpty>
+		
+			   AND A.CNTRCTR_NO = D.CNTRCTR_NO(+)
+			
+			UNION ALL
+			
+			SELECT '2' AS ORD
+			      ,COUNT(1) AS TOT_CNT
+			      ,NULL
+			      ,COUNT(1) || '건'
+			      ,NULL
+			      ,B.RENT_HOUSE_CODE
+			      ,C.RENT_HOUSE_NM
+			      ,B.DONG
+			      ,NULL AS HO
+			      ,'** 소 계 **' AS DONGHO
+			      ,NULL
+			      ,A.OCCRRNC_YEAR
+			      ,A.OCCRRNC_QU
+			      ,NULL
+			      ,SUM(A.CNTRCT_AMOUNT)
+			      ,SUM(A.REGARD_RNTCHRG)
+			      ,SUM(A.VAT)
+			      ,NULL
+			      ,NULL
+			      ,SUM(A.RNTCHRG_1)
+			      ,SUM(A.SUPLY_AMOUNT_1)
+			      ,SUM(A.VAT_1)
+			      ,NULL
+			      ,NULL
+			      ,SUM(A.RNTCHRG_2)
+			      ,SUM(A.SUPLY_AMOUNT_2)
+			      ,SUM(A.VAT_2)
+			      ,NULL
+			      ,NULL
+			      ,SUM(A.RNTCHRG_3)
+			      ,SUM(A.SUPLY_AMOUNT_3)
+			      ,SUM(A.VAT_3)
+			      ,SUM(A.RNTCHRG_1 + A.RNTCHRG_2 + A.RNTCHRG_3) AS TOT_RNTCHRG
+			      ,SUM(A.SUPLY_AMOUNT_1 + A.SUPLY_AMOUNT_2 + A.SUPLY_AMOUNT_3) AS TOT_SUPLY_AMOUNT
+			      ,SUM(A.VAT_1 + A.VAT_2 + A.VAT_3) AS TOT_VAT
+			      /*
+			      ,SUM(A.CNTRCT_AMOUNT)
+			      ,SUM(A.REGARD_RNTCHRG)
+			      ,SUM(A.VAT)
+			      ,SUM(A.RNTCHRG_1)
+			      ,SUM(A.SUPLY_AMOUNT_1)
+			      ,SUM(A.VAT_1)
+			      ,SUM(A.RNTCHRG_2)
+			      ,SUM(A.SUPLY_AMOUNT_2)
+			      ,SUM(A.VAT_2)
+			      ,SUM(A.RNTCHRG_3)
+			      ,SUM(A.SUPLY_AMOUNT_3)
+			      ,SUM(A.VAT_3)
+			      ,SUM(A.RNTCHRG_1 + A.RNTCHRG_2 + A.RNTCHRG_3) AS TOT_RNTCHRG
+			      ,SUM(A.SUPLY_AMOUNT_1 + A.SUPLY_AMOUNT_2 + A.SUPLY_AMOUNT_3) AS TOT_SUPLY_AMOUNT
+			      ,SUM(A.VAT_1 + A.VAT_2 + A.VAT_3) AS TOT_VAT
+			      */
+			      ,NULL AS NM1
+			
+			  FROM TBRNT_RENT_VAT    A /* 임대부가세 */
+			      ,TBRNT_RENT_CNTRCT B /* 계약정보 */
+			      ,TBRNT_RENT_HOUSE  C /* 임대주택 */
+			      ,TBRNT_SOPSRT_BSNM D /* 상가사업자정보 */
+			
+			 WHERE A.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+			   AND A.OCCRRNC_QU = #QUARTER#
+			   AND A.CNTRCTR_NO = B.CNTRCTR_NO
+			   AND B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		
+		<isNotEmpty property="RENT_HOUSE_CODE">
+			   AND B.RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		</isNotEmpty>
+		
+			   AND A.CNTRCTR_NO = D.CNTRCTR_NO(+)
+			 GROUP BY B.RENT_HOUSE_CODE
+			         ,C.RENT_HOUSE_NM
+			         ,B.DONG
+			         ,A.OCCRRNC_YEAR
+			         ,A.OCCRRNC_QU
+			 ORDER BY RENT_HOUSE_CODE, DONG, HO, ORD
+	</select>
+	
+	<!-- 임대공급명세서 -->
+	<select id="RNT01060500DAO.selectRentSupplyBill" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	SELECT A.*
+	     , B.TOT_GTN
+	     , B.TOT_SUPLY_AMOUNT
+	     , B.TOT_REGARD_RNTCHRG
+	     , B.TOTAL_SUPPLY_AMT
+	     , B.TOTAL_AMT
+	     , B.TOT_CNT
+	  FROM
+	  (
+			SELECT A.RENT_HOUSE_CODE
+			      ,D.RENT_HOUSE_NM
+			      ,A.DONG
+			      ,A.HO
+			      ,A.DONG || '-' || A.HO AS DONGHO
+			      ,(SELECT SFCOM_DEC_ALL(BB.IHIDNUM)
+			          FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			         WHERE BB.PRMANENT_CSTMR_NO = A.PRMANENT_CSTMR_NO) AS IHIDNUM /* 주민번호 */
+			      ,C.BIZRNO
+			      ,NVL(C.BIZRNO
+			          ,(SELECT SFCOM_DEC_ALL(BB.IHIDNUM)
+			             FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			            WHERE BB.PRMANENT_CSTMR_NO = A.PRMANENT_CSTMR_NO)) AS BIZRNO1 /* 사업자번호 */
+			       ,NVL(V.MTLTY
+			          ,(SELECT BB.NM
+			             FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			            WHERE BB.PRMANENT_CSTMR_NO = A.PRMANENT_CSTMR_NO)) AS NM /* 상호 */
+			      ,CASE
+			         WHEN (A.FRST_CNTRCT_DE = A.CNTRCT_DE) AND
+			              (SUBSTR(NVL(C.OCCRRNC_DE_1
+			                         ,NVL(C.OCCRRNC_DE_2, C.OCCRRNC_DE_3))
+			                     ,0
+			                     ,6) BETWEEN SUBSTR(A.CNTRCT_DE, 0, 6) AND
+			              TO_CHAR(ADD_MONTHS(TO_DATE(A.CNTRCT_DE, 'YYYYMMDD'), 1)
+			                      ,'YYYYMM')) THEN
+			          A.RENT_BGNDE
+			         ELSE
+			          SUBSTR(NVL(C.OCCRRNC_DE_1, NVL(C.OCCRRNC_DE_2, C.OCCRRNC_DE_3))
+			                ,0
+			                ,6) || '01'
+			       END AS RENT_BGNDE /* 임대시작 */
+			      ,NVL((SELECT CANCL_DE
+			             FROM TBRNT_RENT_RESCI
+			            WHERE CNTRCTR_NO = A.CNTRCTR_NO)
+			          ,TO_CHAR(LAST_DAY(NVL(C.OCCRRNC_DE_3
+			                       ,NVL(C.OCCRRNC_DE_2, C.OCCRRNC_DE_1))),'YYYYMMDD')) AS RENT_ENDDE /* 퇴거일 */
+			      ,TO_NUMBER(SUBSTR(A.HO, 1, 2)) AS FLOOR
+			      ,B.DVR_AR + B.CMNUSE_AR AS TOT_AREA /* 총면적 */
+			      ,(A.CNTRCT_AMOUNT + A.SURLUS) AS GTN /* 보증금 */
+			      ,A.RNTCHRG /* 임대료 */
+			      ,TRUNC(A.RNTCHRG / 1.1, 0) AS SUPLY_AMOUNT /* 월세 */
+			      ,C.REGARD_RNTCHRG /* 간주임대료  = 보증금이자 */ 
+			      ,(C.SUPLY_AMOUNT_1 + C.SUPLY_AMOUNT_2 + C.SUPLY_AMOUNT_3) AS TOT_SUPPLY_AMT /* 월세계 */
+			      ,C.REGARD_RNTCHRG + (C.SUPLY_AMOUNT_1 + C.SUPLY_AMOUNT_2 + C.SUPLY_AMOUNT_3) AS TOT_AMT /* 합계 */
+			      ,(SELECT BB.NM
+			          FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			         WHERE BB.PRMANENT_CSTMR_NO = A.PRMANENT_CSTMR_NO) AS NM1 /* 성명 */
+			  FROM TBRNT_RENT_CNTRCT     A /* 계약정보 */
+			      ,TBRNT_RENT_HOUSE_BILD B /* 임대주택건축물 */
+			      ,TBRNT_RENT_VAT        C /* 임대부가세 */
+			      ,TBRNT_RENT_HOUSE      D /* 임대주택 */
+			      ,TBRNT_SOPSRT_BSNM     V /* 상가사업자정보 */
+			 WHERE A.CNTRCTR_NO = C.CNTRCTR_NO
+			   AND A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+			   AND A.DONG = B.DONG
+			   AND A.HO = B.HO
+			   AND C.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+			   AND C.OCCRRNC_QU = #QUARTER#
+			   AND A.RENT_HOUSE_CODE = D.RENT_HOUSE_CODE			   
+		<isNotEmpty property="RENT_HOUSE_CODE">
+			   AND A.RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		</isNotEmpty>
+			   AND A.CNTRCTR_NO = V.CNTRCTR_NO(+)			
+			 ) A
+	    LEFT JOIN (SELECT  SUM((A.CNTRCT_AMOUNT + A.SURLUS)) AS TOT_GTN
+		                 , SUM(TRUNC (A.RNTCHRG / 1.1, 0)) AS TOT_SUPLY_AMOUNT                   
+		                 , SUM(C.REGARD_RNTCHRG) AS TOT_REGARD_RNTCHRG
+		                 , SUM((C.SUPLY_AMOUNT_1 + C.SUPLY_AMOUNT_2 + C.SUPLY_AMOUNT_3)) AS TOTAL_SUPPLY_AMT
+		                 , SUM(C.REGARD_RNTCHRG) + SUM((C.SUPLY_AMOUNT_1 + C.SUPLY_AMOUNT_2 + C.SUPLY_AMOUNT_3)) AS TOTAL_AMT    
+		                 , COUNT(*) AS TOT_CNT
+		              FROM TBRNT_RENT_CNTRCT     A /* 계약정보 */
+		                  ,TBRNT_RENT_HOUSE_BILD B /* 임대주택건축물 */
+		                  ,TBRNT_RENT_VAT        C /* 임대부가세 */
+		                  ,TBRNT_RENT_HOUSE      D /* 임대주택 */
+		                  ,TBRNT_SOPSRT_BSNM     V /* 상가사업자정보 */
+		             WHERE A.CNTRCTR_NO = C.CNTRCTR_NO
+		               AND A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		               AND A.DONG = B.DONG
+		               AND A.HO = B.HO                              
+		               AND C.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+		               AND C.OCCRRNC_QU = #QUARTER#
+		               AND A.RENT_HOUSE_CODE = D.RENT_HOUSE_CODE               
+		        <isNotEmpty property="RENT_HOUSE_CODE">
+		               AND A.RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		        </isNotEmpty>
+		               AND A.CNTRCTR_NO = V.CNTRCTR_NO(+)) B ON 1=1
+       			 ORDER BY 1, 3, 4
+	</select>
+	
+	
+	<!-- 세금계산서_개별 -->
+	<select id="RNT01060500DAO.selectHouseTaxbillIndvdlzList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT (SELECT BB.NM
+			          FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			         WHERE BB.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO) AS CSTMR_NM
+			      ,CASE
+			         WHEN V1.BIZRNO IS NOT NULL THEN
+			          SUBSTR(V1.BIZRNO, 1, 3) || '-' || SUBSTR(V1.BIZRNO, 4, 2) || '-' ||
+			          SUBSTR(V1.BIZRNO, 6, 5)
+			         ELSE
+			          ''
+			       END AS RBIZ_NO
+			      ,V1.MTLTY AS RCORP_NAME
+			      ,(SELECT BB.NM
+			          FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			         WHERE BB.PRMANENT_CSTMR_NO = V1.PRMANENT_CSTMR_NO) AS ROWNER_NM
+			      ,V1.BIZCND AS RBIZCND
+			      ,V1.ITEM AS RINDUTY
+			      ,(SELECT BB.ADRES || ' ' || BB.ADRES_DETAIL
+			          FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			         WHERE BB.PRMANENT_CSTMR_NO = V1.PRMANENT_CSTMR_NO) AS RADDR
+			      ,A.RENT_HOUSE_NM || ' ' || C.DONG || '/' || C.HO AS RADDR1
+			      ,V.LASTDAY AS LAST_DAY
+			      ,V.SUPLY_AMOUNT AS PAY_SUPLY_AMOUNT
+			      ,V.VAT AS PAY_VAT
+			      ,V.TOTAL
+			      ,V.BLANK
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 1, 1) AS PAY_SUPLY_AMOUNT_1
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 2, 1) AS PAY_SUPLY_AMOUNT_2
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 3, 1) AS PAY_SUPLY_AMOUNT_3
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 4, 1) AS PAY_SUPLY_AMOUNT_4
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 5, 1) AS PAY_SUPLY_AMOUNT_5
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 6, 1) AS PAY_SUPLY_AMOUNT_6
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 7, 1) AS PAY_SUPLY_AMOUNT_7
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 8, 1) AS PAY_SUPLY_AMOUNT_8
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 9, 1) AS PAY_SUPLY_AMOUNT_9
+			      ,SUBSTR(V.SUPLY_AMOUNT_1, 10, 1) AS PAY_SUPLY_AMOUNT_10
+			      ,SUBSTR(V.VAT_1, 1, 1) AS PAY_VAT_1
+			      ,SUBSTR(V.VAT_1, 2, 1) AS PAY_VAT_2
+			      ,SUBSTR(V.VAT_1, 3, 1) AS PAY_VAT_3
+			      ,SUBSTR(V.VAT_1, 4, 1) AS PAY_VAT_4
+			      ,SUBSTR(V.VAT_1, 5, 1) AS PAY_VAT_5
+			      ,SUBSTR(V.VAT_1, 6, 1) AS PAY_VAT_6
+			      ,SUBSTR(V.VAT_1, 7, 1) AS PAY_VAT_7
+			      ,SUBSTR(V.VAT_1, 8, 1) AS PAY_VAT_8
+			      ,SUBSTR(V.VAT_1, 9, 1) AS PAY_VAT_9
+			      ,S.*
+			  FROM (SELECT CNTRCTR_NO
+			              ,TO_CHAR(LAST_DAY(OCCRRNC_DE_1), 'YYYY-MM-DD') AS LASTDAY
+			              ,SUPLY_AMOUNT_1 AS SUPLY_AMOUNT
+			              ,VAT_1 AS VAT
+			              ,SUPLY_AMOUNT_1 + VAT_1 AS TOTAL
+			              ,LPAD(SUPLY_AMOUNT_1, 10, '*') AS SUPLY_AMOUNT_1
+			              ,LPAD(VAT_1, 9, '*') AS VAT_1
+			              ,14 - LENGTH(SUPLY_AMOUNT_1) AS BLANK
+			          FROM TBRNT_RENT_VAT A
+			         WHERE A.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+			           AND A.OCCRRNC_QU = #OCCRRNC_QU#
+			        UNION ALL
+			        SELECT CNTRCTR_NO
+			              ,TO_CHAR(LAST_DAY(OCCRRNC_DE_2), 'YYYY-MM-DD') AS LASTDAY
+			              ,SUPLY_AMOUNT_2
+			              ,VAT_2
+			              ,SUPLY_AMOUNT_2 + VAT_2 AS TOTAL
+			              ,LPAD(SUPLY_AMOUNT_2, 10, '*') AS SUPLY_AMOUNT_1
+			              ,LPAD(VAT_2, 9, '*') AS VAT_1
+			              ,14 - LENGTH(SUPLY_AMOUNT_2) AS BLANK
+			          FROM TBRNT_RENT_VAT A
+			         WHERE A.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+			           AND A.OCCRRNC_QU = #OCCRRNC_QU#
+			        UNION ALL
+			        SELECT CNTRCTR_NO
+			              ,TO_CHAR(LAST_DAY(OCCRRNC_DE_3), 'YYYY-MM-DD') AS LASTDAY
+			              ,SUPLY_AMOUNT_3
+			              ,VAT_3
+			              ,SUPLY_AMOUNT_3 + VAT_3 AS TOTAL
+			              ,LPAD(SUPLY_AMOUNT_3, 10, '*') AS SUPLY_AMOUNT_1
+			              ,LPAD(VAT_3, 9, '*') AS VAT_1
+			              ,10 - LENGTH(SUPLY_AMOUNT_3) AS BLANK
+			          FROM TBRNT_RENT_VAT A /* 임대부가세 */
+			         WHERE A.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+			           AND A.OCCRRNC_QU = #OCCRRNC_QU#) V
+			      ,TBPMS_CPR_INFO S /* 법인정보 */
+			      ,TBRNT_SOPSRT_BSNM V1
+			      ,TBRNT_RENT_HOUSE A
+			      ,TBRNT_RENT_CNTRCT C
+			 WHERE V.CNTRCTR_NO = V1.CNTRCTR_NO(+)
+			   AND V.CNTRCTR_NO = C.CNTRCTR_NO
+			   AND C.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+			   
+		<!-- 개별 시작 -->   
+		<isNotEmpty property="RENT_HOUSE_CODE">
+			   AND C.RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		</isNotEmpty>
+		
+		<isNotEmpty property="CNTRCTR_NO">
+			   AND C.CNTRCTR_NO = #CNTRCTR_NO#
+		</isNotEmpty>
+		<!-- 개별 끝 -->
+			   
+			 ORDER BY C.RENT_HOUSE_CODE, C.DONG, C.HO, V.LASTDAY
+	</select>
+	
+	
+	<!-- 세금계산서_합계 -->
+	<select id="RNT01060500DAO.selectHouseTaxbillSumList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+			SELECT V1.MIN_DATE
+			      ,V1.MAX_DATE
+			      ,TO_CHAR(TO_DATE(V1.MIN_DATE), 'YYYY-MM-DD') || ' ~ ' ||
+			       TO_CHAR(TO_DATE(V1.MAX_DATE), 'YYYY-MM-DD') AS BETWEEN_DATE
+			      ,V1.BIZ_CNT1
+			      ,V1.TAX_CNT1
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 1, 1) AS PAY_SUPLY_AMOUNT1_1
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 2, 1) AS PAY_SUPLY_AMOUNT1_2
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 3, 1) AS PAY_SUPLY_AMOUNT1_3
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 4, 1) AS PAY_SUPLY_AMOUNT1_4
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 5, 1) AS PAY_SUPLY_AMOUNT1_5
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 6, 1) AS PAY_SUPLY_AMOUNT1_6
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 7, 1) AS PAY_SUPLY_AMOUNT1_7
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 8, 1) AS PAY_SUPLY_AMOUNT1_8
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 9, 1) AS PAY_SUPLY_AMOUNT1_9
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 10, 1) AS PAY_SUPLY_AMOUNT1_10
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 11, 1) AS PAY_SUPLY_AMOUNT1_11
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 12, 1) AS PAY_SUPLY_AMOUNT1_12
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 13, 1) AS PAY_SUPLY_AMOUNT1_13
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_1, 14, 1) AS PAY_SUPLY_AMOUNT1_14
+			      ,SUBSTR(V1.TOT_VAT1, 1, 1) AS PAY_VAT1_1
+			      ,SUBSTR(V1.TOT_VAT1, 2, 1) AS PAY_VAT1_2
+			      ,SUBSTR(V1.TOT_VAT1, 3, 1) AS PAY_VAT1_3
+			      ,SUBSTR(V1.TOT_VAT1, 4, 1) AS PAY_VAT1_4
+			      ,SUBSTR(V1.TOT_VAT1, 5, 1) AS PAY_VAT1_5
+			      ,SUBSTR(V1.TOT_VAT1, 6, 1) AS PAY_VAT1_6
+			      ,SUBSTR(V1.TOT_VAT1, 7, 1) AS PAY_VAT1_7
+			      ,SUBSTR(V1.TOT_VAT1, 8, 1) AS PAY_VAT1_8
+			      ,SUBSTR(V1.TOT_VAT1, 9, 1) AS PAY_VAT1_9
+			      ,SUBSTR(V1.TOT_VAT1, 10, 1) AS PAY_VAT1_10
+			      ,SUBSTR(V1.TOT_VAT1, 11, 1) AS PAY_VAT1_11
+			      ,SUBSTR(V1.TOT_VAT1, 12, 1) AS PAY_VAT1_12
+			      ,SUBSTR(V1.TOT_VAT1, 13, 1) AS PAY_VAT1_13
+			      ,V1.BIZ_CNT2
+			      ,V1.TAX_CNT2
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 1, 1) AS PAY_SUPLY_AMOUNT2_1
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 2, 1) AS PAY_SUPLY_AMOUNT2_2
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 3, 1) AS PAY_SUPLY_AMOUNT2_3
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 4, 1) AS PAY_SUPLY_AMOUNT2_4
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 5, 1) AS PAY_SUPLY_AMOUNT2_5
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 6, 1) AS PAY_SUPLY_AMOUNT2_6
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 7, 1) AS PAY_SUPLY_AMOUNT2_7
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 8, 1) AS PAY_SUPLY_AMOUNT2_8
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 9, 1) AS PAY_SUPLY_AMOUNT2_9
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 10, 1) AS PAY_SUPLY_AMOUNT2_10
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 11, 1) AS PAY_SUPLY_AMOUNT2_11
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 12, 1) AS PAY_SUPLY_AMOUNT2_12
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 13, 1) AS PAY_SUPLY_AMOUNT2_13
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_2, 14, 1) AS PAY_SUPLY_AMOUNT2_14
+			      ,SUBSTR(V1.TOT_VAT2, 1, 1) AS PAY_VAT2_1
+			      ,SUBSTR(V1.TOT_VAT2, 2, 1) AS PAY_VAT2_2
+			      ,SUBSTR(V1.TOT_VAT2, 3, 1) AS PAY_VAT2_3
+			      ,SUBSTR(V1.TOT_VAT2, 4, 1) AS PAY_VAT2_4
+			      ,SUBSTR(V1.TOT_VAT2, 5, 1) AS PAY_VAT2_5
+			      ,SUBSTR(V1.TOT_VAT2, 6, 1) AS PAY_VAT2_6
+			      ,SUBSTR(V1.TOT_VAT2, 7, 1) AS PAY_VAT2_7
+			      ,SUBSTR(V1.TOT_VAT2, 8, 1) AS PAY_VAT2_8
+			      ,SUBSTR(V1.TOT_VAT2, 9, 1) AS PAY_VAT2_9
+			      ,SUBSTR(V1.TOT_VAT2, 10, 1) AS PAY_VAT2_10
+			      ,SUBSTR(V1.TOT_VAT2, 11, 1) AS PAY_VAT2_11
+			      ,SUBSTR(V1.TOT_VAT2, 12, 1) AS PAY_VAT2_12
+			      ,SUBSTR(V1.TOT_VAT2, 13, 1) AS PAY_VAT2_13
+			      ,V1.BIZ_CNT3
+			      ,V1.TAX_CNT3
+			      ,V1.T_AMT3
+			      ,V1.T_VAT3
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 1, 1) AS PAY_SUPLY_AMOUNT3_1
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 2, 1) AS PAY_SUPLY_AMOUNT3_2
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 3, 1) AS PAY_SUPLY_AMOUNT3_3
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 4, 1) AS PAY_SUPLY_AMOUNT3_4
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 5, 1) AS PAY_SUPLY_AMOUNT3_5
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 6, 1) AS PAY_SUPLY_AMOUNT3_6
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 7, 1) AS PAY_SUPLY_AMOUNT3_7
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 8, 1) AS PAY_SUPLY_AMOUNT3_8
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 9, 1) AS PAY_SUPLY_AMOUNT3_9
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 10, 1) AS PAY_SUPLY_AMOUNT3_10
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 11, 1) AS PAY_SUPLY_AMOUNT3_11
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 12, 1) AS PAY_SUPLY_AMOUNT3_12
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 13, 1) AS PAY_SUPLY_AMOUNT3_13
+			      ,SUBSTR(V1.TOT_SUPLY_AMOUNT_3, 14, 1) AS PAY_SUPLY_AMOUNT3_14
+			      ,SUBSTR(V1.TOT_VAT3, 1, 1) AS PAY_VAT3_1
+			      ,SUBSTR(V1.TOT_VAT3, 2, 1) AS PAY_VAT3_2
+			      ,SUBSTR(V1.TOT_VAT3, 3, 1) AS PAY_VAT3_3
+			      ,SUBSTR(V1.TOT_VAT3, 4, 1) AS PAY_VAT3_4
+			      ,SUBSTR(V1.TOT_VAT3, 5, 1) AS PAY_VAT3_5
+			      ,SUBSTR(V1.TOT_VAT3, 6, 1) AS PAY_VAT3_6
+			      ,SUBSTR(V1.TOT_VAT3, 7, 1) AS PAY_VAT3_7
+			      ,SUBSTR(V1.TOT_VAT3, 8, 1) AS PAY_VAT3_8
+			      ,SUBSTR(V1.TOT_VAT3, 9, 1) AS PAY_VAT3_9
+			      ,SUBSTR(V1.TOT_VAT3, 10, 1) AS PAY_VAT3_10
+			      ,SUBSTR(V1.TOT_VAT3, 11, 1) AS PAY_VAT3_11
+			      ,SUBSTR(V1.TOT_VAT3, 12, 1) AS PAY_VAT3_12
+			      ,SUBSTR(V1.TOT_VAT3, 13, 1) AS PAY_VAT3_13
+			      ,S.*
+			  FROM (SELECT MAX(V.MIN_DATE) AS MIN_DATE
+			              ,MAX(V.MAX_DATE) AS MAX_DATE
+			              ,SUM(V.BIZ_CNT2 + V.BIZ_CNT3) AS BIZ_CNT1
+			              ,SUM(V.TAX_CNT1) AS TAX_CNT1
+			              ,LPAD(SUM(V.TOT_SUPLY_AMOUNT_1), 14, '*') AS TOT_SUPLY_AMOUNT_1
+			              ,LPAD(SUM(V.TOT_VAT1), 13, '*') AS TOT_VAT1
+			              ,SUM(V.BIZ_CNT2) AS BIZ_CNT2
+			              ,SUM(V.TAX_CNT2) AS TAX_CNT2
+			              ,LPAD(SUM(V.TOT_SUPLY_AMOUNT_2), 14, '*') AS TOT_SUPLY_AMOUNT_2
+			              ,LPAD(SUM(V.TOT_VAT2), 13, '*') AS TOT_VAT2
+			              ,SUM(V.BIZ_CNT3) AS BIZ_CNT3
+			              ,SUM(V.TAX_CNT3) AS TAX_CNT3
+			              ,LPAD(SUM(V.TOT_SUPLY_AMOUNT_3), 14, '*') AS TOT_SUPLY_AMOUNT_3
+			              ,LPAD(SUM(V.TOT_VAT3), 13, '*') AS TOT_VAT3
+			              ,SUM(V.TOT_SUPLY_AMOUNT_3) AS T_AMT3
+			              ,SUM(V.TOT_VAT3) AS T_VAT3
+			          FROM (SELECT SUBSTR(MIN(A.OCCRRNC_DE_1), 0, 6) || '01' AS MIN_DATE
+			                      ,MAX(A.OCCRRNC_DE_3) AS MAX_DATE
+			                      ,COUNT(1) AS BIZ_CNT1
+			                      ,SUM(DECODE((A.RNTCHRG_1), 0, 0, 1) +
+			                           DECODE((A.RNTCHRG_2), 0, 0, 1) +
+			                           DECODE((A.RNTCHRG_3), 0, 0, 1)) AS TAX_CNT1
+			                      ,SUM((SUPLY_AMOUNT_1 + SUPLY_AMOUNT_2 + SUPLY_AMOUNT_3)) AS TOT_SUPLY_AMOUNT_1
+			                      ,SUM((VAT_1 + VAT_2 + VAT_3)) AS TOT_VAT1
+			                      ,0 AS BIZ_CNT2
+			                      ,0 AS TAX_CNT2
+			                      ,0 AS TOT_SUPLY_AMOUNT_2
+			                      ,0 AS TOT_VAT2
+			                      ,0 AS BIZ_CNT3
+			                      ,0 AS TAX_CNT3
+			                      ,0 AS TOT_SUPLY_AMOUNT_3
+			                      ,0 AS TOT_VAT3
+			                  FROM TBRNT_RENT_VAT A
+			                 WHERE A.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+			                   AND A.OCCRRNC_QU = #OCCRRNC_QU#
+			                UNION ALL
+			                SELECT NULL AS MIN_DATE
+			                      ,NULL AS MAX_DATE
+			                      ,0 AS BIZ_CNT1
+			                      ,0 AS TAX_CNT1
+			                      ,0 AS TOT_SUPLY_AMOUNT_1
+			                      ,0 AS TOT_VAT1
+			                      ,COUNT(DISTINCT BIZRNO) AS BIZ_CNT2
+			                      ,SUM(DECODE((A.RNTCHRG_1), 0, 0, 1) +
+			                           DECODE((A.RNTCHRG_2), 0, 0, 1) +
+			                           DECODE((A.RNTCHRG_3), 0, 0, 1)) AS TAX_CNT12
+			                      ,SUM((SUPLY_AMOUNT_1 + SUPLY_AMOUNT_2 + SUPLY_AMOUNT_3)) AS TOT_SUPLY_AMOUNT_2
+			                      ,SUM((VAT_1 + VAT_2 + VAT_3)) AS TOT_VAT2
+			                      ,0 AS BIZ_CNT3
+			                      ,0 AS TAX_CNT3
+			                      ,0 AS TOT_SUPLY_AMOUNT_3
+			                      ,0 AS TOT_VAT3
+			                  FROM TBRNT_RENT_VAT A
+			                 WHERE A.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+			                   AND A.OCCRRNC_QU = #OCCRRNC_QU#
+			                   AND EXISTS (SELECT 1
+			                          FROM TBRNT_SOPSRT_BSNM V
+			                         WHERE A.CNTRCTR_NO = V.CNTRCTR_NO
+			                           AND V.BIZRNO IS NOT NULL)
+			                UNION ALL
+			                SELECT NULL AS MIN_DATE
+			                      ,NULL AS MAX_DATE
+			                      ,0 AS BIZ_CNT1
+			                      ,0 AS TAX_CNT1
+			                      ,0 AS TOT_SUPLY_AMOUNT_1
+			                      ,0 AS TOT_VAT1
+			                      ,0 AS BIZ_CNT2
+			                      ,0 AS TAX_CNT2
+			                      ,0 AS TOT_SUPLY_AMOUNT_2
+			                      ,0 AS TOT_VAT2
+			                      ,COUNT(1) BIZ_CNT3
+			                      ,SUM(DECODE((A.RNTCHRG_1), 0, 0, 1) +
+			                           DECODE((A.RNTCHRG_2), 0, 0, 1) +
+			                           DECODE((A.RNTCHRG_3), 0, 0, 1)) AS TAX_CNT3
+			                      ,SUM((SUPLY_AMOUNT_1 + SUPLY_AMOUNT_2 + SUPLY_AMOUNT_3)) AS TOT_SUPLY_AMOUNT_3
+			                      ,SUM((VAT_1 + VAT_2 + VAT_3)) AS TOT_VAT3
+			                  FROM TBRNT_RENT_VAT A
+			                 WHERE A.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+			                   AND A.OCCRRNC_QU = #OCCRRNC_QU#
+			                   AND NOT EXISTS (SELECT 1
+			                          FROM TBRNT_SOPSRT_BSNM V
+			                         WHERE A.CNTRCTR_NO = V.CNTRCTR_NO
+			                           AND V.BIZRNO IS NOT NULL)) V) V1
+			      ,TBPMS_CPR_INFO S	
+	
+	</select>
+	
+	<!-- 세금계산서_합계_상세 -->
+	<select id="RNT01060500DAO.selectHouseTaxbillSumDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+		SELECT B.BIZRNO
+		      ,C.RENT_HOUSE_CODE AS HOUSE_CODE
+		      ,C.DONG
+		      ,C.HO
+		      ,B.BLANK
+		      ,B.TAX_CNT
+		      ,B.SUPLY_AMOUNT AS PAY_SUPLY_AMOUNT
+		      ,B.VAT AS PAY_VAT
+		      ,V.MTLTY AS MTLTY_NM
+		      ,V.BIZCND
+		      ,V.ITEM AS INDUTY
+		      ,SUBSTR(B.SUPLY_AMOUNT, 1, 1) AS PAY_SUPLY_AMOUNT_1
+		      ,SUBSTR(B.SUPLY_AMOUNT, 2, 1) AS PAY_SUPLY_AMOUNT_2
+		      ,SUBSTR(B.SUPLY_AMOUNT, 3, 1) AS PAY_SUPLY_AMOUNT_3
+		      ,SUBSTR(B.SUPLY_AMOUNT, 4, 1) AS PAY_SUPLY_AMOUNT_4
+		      ,SUBSTR(B.SUPLY_AMOUNT, 5, 1) AS PAY_SUPLY_AMOUNT_5
+		      ,SUBSTR(B.SUPLY_AMOUNT, 6, 1) AS PAY_SUPLY_AMOUNT_6
+		      ,SUBSTR(B.SUPLY_AMOUNT, 7, 1) AS PAY_SUPLY_AMOUNT_7
+		      ,SUBSTR(B.SUPLY_AMOUNT, 8, 1) AS PAY_SUPLY_AMOUNT_8
+		      ,SUBSTR(B.SUPLY_AMOUNT, 9, 1) AS PAY_SUPLY_AMOUNT_9
+		      ,SUBSTR(B.SUPLY_AMOUNT, 10, 1) AS PAY_SUPLY_AMOUNT_10
+		      ,SUBSTR(B.SUPLY_AMOUNT, 11, 1) AS PAY_SUPLY_AMOUNT_11
+		      ,SUBSTR(B.SUPLY_AMOUNT, 12, 1) AS PAY_SUPLY_AMOUNT_12
+		      ,SUBSTR(B.SUPLY_AMOUNT, 13, 1) AS PAY_SUPLY_AMOUNT_13
+		      ,SUBSTR(B.SUPLY_AMOUNT, 14, 1) AS PAY_SUPLY_AMOUNT_14
+		      ,SUBSTR(B.VAT, 1, 1) AS PAY_VAT_1
+		      ,SUBSTR(B.VAT, 2, 1) AS PAY_VAT_2
+		      ,SUBSTR(B.VAT, 3, 1) AS PAY_VAT_3
+		      ,SUBSTR(B.VAT, 4, 1) AS PAY_VAT_4
+		      ,SUBSTR(B.VAT, 5, 1) AS PAY_VAT_5
+		      ,SUBSTR(B.VAT, 6, 1) AS PAY_VAT_6
+		      ,SUBSTR(B.VAT, 7, 1) AS PAY_VAT_7
+		      ,SUBSTR(B.VAT, 8, 1) AS PAY_VAT_8
+		      ,SUBSTR(B.VAT, 9, 1) AS PAY_VAT_9
+		      ,SUBSTR(B.VAT, 10, 1) AS PAY_VAT_10
+		      ,SUBSTR(B.VAT, 11, 1) AS PAY_VAT_11
+		      ,SUBSTR(B.VAT, 12, 1) AS PAY_VAT_12
+		      ,SUBSTR(B.VAT, 13, 1) AS PAY_VAT_13
+		  FROM TBRNT_RENT_CNTRCT C
+		      ,(SELECT BIZRNO
+		              ,SUM(DECODE(NVL(A.RNTCHRG_1, 0), 0, 0, 1) +
+		                   DECODE(NVL(A.RNTCHRG_2, 0), 0, 0, 1) +
+		                   DECODE(NVL(A.RNTCHRG_3, 0), 0, 0, 1)) AS TAX_CNT
+		              ,14 - LENGTH(SUM((SUPLY_AMOUNT_1 + SUPLY_AMOUNT_2 +
+		                               SUPLY_AMOUNT_3))) AS BLANK
+		              ,LPAD(SUM((SUPLY_AMOUNT_1 + SUPLY_AMOUNT_2 + SUPLY_AMOUNT_3))
+		                   ,14
+		                   ,'*') AS SUPLY_AMOUNT
+		              ,LPAD(SUM((VAT_1 + VAT_2 + VAT_3)), 13, '*') AS VAT
+		          FROM TBRNT_RENT_VAT A
+		         WHERE A.OCCRRNC_YEAR = #OCCRRNC_YEAR#
+		           AND A.OCCRRNC_QU = #OCCRRNC_QU#
+		         GROUP BY BIZRNO) B
+		      ,(SELECT V1.*
+		          FROM TBRNT_SOPSRT_BSNM V1, TBRNT_RENT_CNTRCT C1
+		         WHERE V1.CNTRCTR_NO = C1.CNTRCTR_NO
+		           AND V1.PRMANENT_CSTMR_NO = C1.PRMANENT_CSTMR_NO
+		           AND DONG = (SELECT MIN(DONG)
+		                         FROM TBRNT_SOPSRT_BSNM V2, TBRNT_RENT_CNTRCT C2
+		                        WHERE V2.CNTRCTR_NO = C2.CNTRCTR_NO
+		                          AND V2.PRMANENT_CSTMR_NO = C2.PRMANENT_CSTMR_NO
+		                          AND V1.BIZRNO = V2.BIZRNO)
+		           AND HO = (SELECT MIN(HO)
+		                       FROM TBRNT_SOPSRT_BSNM V2, TBRNT_RENT_CNTRCT C2
+		                      WHERE V2.CNTRCTR_NO = C2.CNTRCTR_NO
+		                        AND V2.PRMANENT_CSTMR_NO = C2.PRMANENT_CSTMR_NO
+		                        AND V1.BIZRNO = V2.BIZRNO
+		                        AND C1.DONG = C2.DONG)) V
+		
+		 WHERE C.CNTRCTR_NO = V.CNTRCTR_NO
+		   AND B.BIZRNO = V.BIZRNO
+		 ORDER BY C.RENT_HOUSE_CODE, C.DONG, C.HO
+
+	</select>
+	
+	
+	<!-- 전자세금계산서 -->
+	<select id="RNT01060500DAO.selectHouseElecTaxbillList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		
+		<![CDATA[ 
+			SELECT '01' AS TAX_KIND
+			      ,LEAST(TO_CHAR(SYSDATE, 'YYYYMM') ||
+			             GREATEST(DATE1
+			                     ,NVL(DATE2, DATE1)
+			                     ,NVL(DATE3, DATE1)
+			                     ,NVL(DATE4, DATE1))
+			            ,TO_CHAR(SYSDATE, 'YYYYMMDD')) AS MADE_DATE
+			      ,REPLACE(S.BIZRNO, '-', '') AS OWNER_BIZ_NO
+			      ,' ' AS OWN_SUB_BIZ_NO
+			      ,S.MTLTY AS OWNER_CORP_NAME
+			      ,S.RPRSNTV AS OWNERER_NAME
+			      ,S.ADRES || ' ' || S.ADRES_DETAIL AS OWNER_ADDR
+			      ,S.BIZCND AS OWNER_BIZCND
+			      ,S.ITEM AS OWNER_INDUTY
+			      ,(SELECT R.CHRCTR_PREPAR_VALUE_1 
+			          FROM TBCOM_CMMN_CODE R
+			         WHERE   R.GRP_CODE = 'PCOM07' AND R.CODE = 'RN1011'
+			           ) AS OWNER_EMAIL
+			      ,REPLACE(CASE
+			                 WHEN V.BIZRNO IS NULL THEN
+			                  (SELECT BB.IHIDNUM
+			                     FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			                    WHERE BB.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO)
+			                 ELSE
+			                  CASE
+			                    WHEN LENGTH(REPLACE(V.BIZRNO, '-', '')) <= 10 THEN
+			                     SUBSTR(REPLACE(V.BIZRNO, '-', ''), 1, 3) || '-' ||
+			                     SUBSTR(REPLACE(V.BIZRNO, '-', ''), 4, 2) || '-' ||
+			                     SUBSTR(REPLACE(V.BIZRNO, '-', ''), 6, 5)
+			                    ELSE
+			                     V.BIZRNO
+			                  END
+			               END
+			              ,'-'
+			              ,'') AS RBIZ_NO
+			      ,' ' AS RBIZ_SUB_NO
+			      ,NVL(V.CORP_NM
+			          ,(SELECT BB.NM
+			             FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			            WHERE BB.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO)) AS RCORP_NAME
+			      ,NVL(V.BIZ_OWNER_NM  , (SELECT BB.NM
+			             FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			            WHERE BB.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO)) AS ROWNERER_NM
+			      ,A.RENT_HOUSE_NM || ' ' || C.DONG || '동 ' || C.HO || '호' AS RADDR1
+			      ,V.BIZCND AS RBIZCND
+			      ,V.ITEM AS RINDUTY
+			      ,V.BIZ_MAIL AS C_EMAIL
+			      ,' ' C_EMAIL2
+			      ,V.SUPLY_AMOUNT AS PAY_SUPLY_AMOUNT
+			      ,V.VAT AS PAY_VAT
+			      ,LEAST(DECODE(V.DATE1, '', '', V.DATE1), TO_CHAR(SYSDATE, 'DD')) AS DATE1
+			      ,V.PAY_CODE1
+			      ,V.SUPLY_AMOUNT_1
+			      ,V.VAT_1
+			      ,DECODE(V.PAY_CODE1, '', '', '02') AS TAX_KIND1
+			      ,LEAST(DECODE(V.DATE2, '', '', V.DATE2), TO_CHAR(SYSDATE, 'DD')) AS DATE2
+			      ,V.PAY_CODE2
+			      ,V.SUPLY_AMOUNT_2
+			      ,V.VAT_2
+			      ,DECODE(V.PAY_CODE2, '', '', '02') AS TAX_KIND2
+			      ,LEAST(DECODE(V.DATE3, '', '', V.DATE3), TO_CHAR(SYSDATE, 'DD')) AS DATE3
+			      ,V.PAY_CODE3
+			      ,V.SUPLY_AMOUNT_3
+			      ,V.VAT_3
+			      ,DECODE(V.PAY_CODE3, '', '', '02') AS TAX_KIND3
+			      ,LEAST(DECODE(V.DATE4, '', '', V.DATE4), TO_CHAR(SYSDATE, 'DD')) AS DATE4
+			      ,V.PAY_CODE4
+			      ,V.SUPLY_AMOUNT_4
+			      ,V.VAT_4
+			      ,DECODE(V.PAY_CODE4, '', '', '02') AS TAX_KIND4
+			      ,(SELECT BB.NM
+			          FROM TBRNT_PRMANENT_RENT_CSTMR BB
+			         WHERE BB.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO) AS NM
+			      ,NVL(V.BIZ_ADDR
+			          ,A.RENT_HOUSE_NM || ' ' || C.DONG || '동 ' || C.HO || '호') AS RADDR
+			      , greatest(nvl(bill_div1,'00'),nvl(bill_div2,'00'),nvl(bill_div3,'00'),nvl(bill_div4,'00')) as BILL_DIV 
+			  FROM (SELECT A.CNTRCTR_NO
+			              ,TO_CHAR(LAST_DAY(TO_DATE(#OCCRRNC_MONTH#||'01','YYYYMMDD')),'YYYYMMDD') AS LASTDAY
+			              ,NVL(A.SUPLY_AMOUNT_1, 0) + NVL(A.SUPLY_AMOUNT_2, 0) +
+			               NVL(A.SUPLY_AMOUNT_3, 0) + NVL(A.SUPLY_AMOUNT_4, 0) AS SUPLY_AMOUNT
+			              ,NVL(A.VAT_1, 0) + NVL(A.VAT_2, 0) + NVL(A.VAT_3, 0) +
+			               NVL(A.VAT_4, 0) AS VAT
+			              ,NVL(A.SUPLY_AMOUNT_1, 0) + NVL(A.SUPLY_AMOUNT_2, 0) +
+			               NVL(A.SUPLY_AMOUNT_3, 0) + NVL(A.SUPLY_AMOUNT_4, 0) +
+			               NVL(A.VAT_1, 0) + NVL(A.VAT_2, 0) + NVL(A.VAT_3, 0) +
+			               NVL(A.VAT_4, 0) AS TOTAL
+			              ,SUPLY_AMOUNT_1
+			              ,VAT_1
+			              ,OCCRRNC_DE_1 AS DATE1
+			              ,DECODE(A.SUPLY_AMOUNT_1, '', '', '임대료') AS PAY_CODE1
+			              ,SUPLY_AMOUNT_2
+			              ,VAT_2
+			              ,OCCRRNC_DE_2 AS DATE2
+			              ,DECODE(A.SUPLY_AMOUNT_2, '', '', '임대료') AS PAY_CODE2
+			              ,SUPLY_AMOUNT_3
+			              ,VAT_3
+			              ,OCCRRNC_DE_3 AS DATE3
+			              ,DECODE(A.SUPLY_AMOUNT_3, '', '', '임대료') AS PAY_CODE3
+			              ,SUPLY_AMOUNT_4
+			              ,VAT_4
+			              ,OCCRRNC_DE_4 AS DATE4
+			              ,DECODE(A.SUPLY_AMOUNT_4, '', '', '임대료') AS PAY_CODE4
+			              ,A.MONTH_INX
+			              
+			              ,A.BIZRNO
+			              ,B.MTLTY AS CORP_NM
+			              ,B.BIZ_OWNER_NM AS BIZ_OWNER_NM /* 성명 */
+			              , B.BIZCND AS BIZCND
+			              , B.ITEM AS ITEM
+			              , B.ADRES AS BIZ_ADDR
+			              , B.EMAIL AS BIZ_MAIL
+			              , BILL_DIV, BILL_DIV1 , BILL_DIV2, BILL_DIV3, BILL_DIV4
+			          FROM (SELECT REPLACE(BIZRNO, '-', '') AS BIZRNO
+			                      ,OCCRRNC_YEAR
+			                      ,OCCRRNC_QU
+			                      ,MIN(CNTRCTR_NO) AS CNTRCTR_NO
+			                      ,COUNT(1) AS CNT
+			                      ,SFRNT_GET_ETAX(1
+			                                     ,1
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS OCCRRNC_DE_1
+			                      ,SFRNT_GET_ETAX(2
+			                                     ,1
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS SUPLY_AMOUNT_1
+			                      ,SFRNT_GET_ETAX(3
+			                                     ,1
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS VAT_1
+			                      ,SFRNT_GET_ETAX(4
+			                                     ,1
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS BILL_DIV
+			                      ,SFRNT_GET_ETAX(1
+			                                     ,2
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS OCCRRNC_DE_2
+			                      ,SFRNT_GET_ETAX(2
+			                                     ,2
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS SUPLY_AMOUNT_2
+			                      ,SFRNT_GET_ETAX(3
+			                                     ,2
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS VAT_2
+			                      ,SFRNT_GET_ETAX(1
+			                                     ,3
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS OCCRRNC_DE_3
+			                      ,SFRNT_GET_ETAX(2
+			                                     ,3
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS SUPLY_AMOUNT_3
+			                      ,SFRNT_GET_ETAX(3
+			                                     ,3
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS VAT_3
+			                      ,SFRNT_GET_ETAX(1
+			                                     ,4
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS OCCRRNC_DE_4
+			                      ,SFRNT_GET_ETAX(2
+			                                     ,4
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS SUPLY_AMOUNT_4
+			                      ,SFRNT_GET_ETAX(3
+			                                     ,4
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS VAT_4
+			                      ,CASE
+			                         WHEN SUBSTR(#OCCRRNC_MONTH#, 5, 2) IN
+			                              ('01', '04', '07', '10') THEN
+			                          1
+			                         WHEN SUBSTR(#OCCRRNC_MONTH#, 5, 2) IN
+			                              ('02', '05', '08', '11') THEN
+			                          2
+			                         WHEN SUBSTR(#OCCRRNC_MONTH#, 5, 2) IN
+			                              ('03', '06', '09', '12') THEN
+			                          3
+			                       END AS MONTH_INX
+			                       
+			                      ,SFRNT_GET_ETAX(4
+			                                     ,1
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS BILL_DIV1
+			                       ,SFRNT_GET_ETAX(4
+			                                     ,2
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS BILL_DIV2
+			                      ,SFRNT_GET_ETAX(4
+			                                     ,3
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS BILL_DIV3
+			                      ,SFRNT_GET_ETAX(4
+			                                     ,4
+			                                     ,OCCRRNC_YEAR
+			                                     ,OCCRRNC_QU
+			                                     ,REPLACE(BIZRNO, '-', '')
+			                                     ,#OCCRRNC_MONTH#) AS BILL_DIV4
+			                  FROM TBRNT_RENT_VAT
+			                 WHERE OCCRRNC_YEAR = SUBSTR(#OCCRRNC_MONTH# , 0, 4)
+			                   AND OCCRRNC_QU = (CASE
+										           WHEN SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '01' OR
+										                SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '02' OR
+										                SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '03' THEN
+										            '1'
+										           WHEN SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '04' OR
+										                SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '05' OR
+										                SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '06' THEN
+										            '2'
+										           WHEN SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '07' OR
+										                SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '08' OR
+										                SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '09' THEN
+										            '3'
+										           WHEN SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '10' OR
+										                SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '11' OR
+										                SUBSTR(#OCCRRNC_MONTH# , 5, 2) = '12' THEN
+										            '4'
+										           ELSE
+										            '0'
+										         END)
+			                   AND (CASE
+			                         WHEN SUBSTR(#OCCRRNC_MONTH#, 5, 2) IN
+			                              ('01', '04', '07', '10') THEN
+			                          SUBSTR(OCCRRNC_DE_1, 0, 6)
+			                         WHEN SUBSTR(#OCCRRNC_MONTH#, 5, 2) IN
+			                              ('02', '05', '08', '11') THEN
+			                          SUBSTR(OCCRRNC_DE_2, 0, 6)
+			                         WHEN SUBSTR(#OCCRRNC_MONTH#, 5, 2) IN
+			                              ('03', '06', '09', '12') THEN
+			                          SUBSTR(OCCRRNC_DE_3, 0, 6)
+			                       END) = #OCCRRNC_MONTH#
+			                   AND (SUPLY_AMOUNT_1 + SUPLY_AMOUNT_2 + SUPLY_AMOUNT_3) <> 0
+			                 GROUP BY REPLACE(BIZRNO, '-', ''), OCCRRNC_YEAR, OCCRRNC_QU) A
+			              ,TBRNT_SOPSRT_BSNM B /* 상가사업자정보 */
+			         WHERE A.CNTRCTR_NO = B.CNTRCTR_NO(+)) V
+			      ,TBPMS_CPR_INFO S /* 법인정보 */
+			      ,TBRNT_RENT_CNTRCT     C
+			      ,TBRNT_RENT_HOUSE      A
+			      ,TBRNT_RENT_HOUSE_DONG B
+			 WHERE V.CNTRCTR_NO = C.CNTRCTR_NO
+			   AND V.SUPLY_AMOUNT <> 0
+			   AND C.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+			   AND C.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+			   AND C.DONG = B.DONG
+		]]>
+		   
+		<isNotEmpty property="RENT_HOUSE_CODE">
+			   AND C.RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		</isNotEmpty>			   
+			  
+			   AND SUBSTR(V.LASTDAY, 0, 6) = #OCCRRNC_MONTH#
+			 ORDER BY C.RENT_HOUSE_CODE, C.DONG, C.HO, V.MONTH_INX
+ 
+	</select>
+	
+
+</sqlMap>

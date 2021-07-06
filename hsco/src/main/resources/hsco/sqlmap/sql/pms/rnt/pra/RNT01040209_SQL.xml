@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01040209_SQL">	
+   <!--  설명  : 특별대상자관리
+		작성자 : 지효정 -->
+		
+	<!-- 특별대상자 목록 -->
+	<select id="RNT01040209DAO.speclManageTrgterList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 A.*
+		    ,B.RENT_HOUSE_CODE	/*주택코드*/
+		    ,B.DONG				/*동*/
+		    ,B.HO				/*호*/
+		    ,C.RENT_HOUSE_NM	/*주택명*/
+		    ,D.NM				/*계약자명*/
+		    ,D.IHIDNUM			/*주민번호*/
+		    ,E.CANCL_DE			/*해약일자*/
+		FROM(
+		    SELECT 
+		        A.CNTRCTR_NO
+		        ,SUM(A.NPYM_AMOUNT) AS NPYM_AMOUNT	/*체납금액 합계*/
+		        ,SUM(A.OVDINTR) AS OVDINTR			/*연체이자 합계*/
+		    FROM 
+		        TBRNT_SPECL_MANAGE_TRGTER A
+		        ,TBRNT_RENT_CNTRCT B
+		        ,TBRNT_RENT_HOUSE C
+		    WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+		    AND   B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE 
+		    <isNotEmpty property="houseSe">
+			AND   #houseSe# LIKE '%' || C.HOUSE_SE || '%'
+			</isNotEmpty>
+			<isNotEmpty property="rentHouseCode">
+			AND   B.RENT_HOUSE_CODE = #rentHouseCode#
+			</isNotEmpty>
+			<isNotEmpty property="dong">
+			AND   B.DONG = #dong#
+			</isNotEmpty>
+			<isNotEmpty property="ho">
+			AND   B.HO = #ho#
+			</isNotEmpty>
+		    GROUP BY A.CNTRCTR_NO
+		) A
+		,TBRNT_RENT_CNTRCT B
+		,TBRNT_RENT_HOUSE C
+		,TBRNT_PRMANENT_RENT_CSTMR D
+		,TBRNT_RENT_RESCI E
+		WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+		AND   B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		AND   B.PRMANENT_CSTMR_NO = D.PRMANENT_CSTMR_NO
+		AND   B.CNTRCTR_NO = E.CNTRCTR_NO(+)
+	 	<isNotEmpty property="houseSe">
+		AND   #houseSe# LIKE '%' || C.HOUSE_SE || '%'
+		</isNotEmpty>
+		<isNotEmpty property="rentHouseCode">
+		AND   B.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND   B.DONG = #dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND   B.HO = #ho#
+		</isNotEmpty>
+		ORDER BY B.RENT_HOUSE_CODE, B.DONG, B.HO
+	</select>
+	
+	<!-- 특별대상자 상세 목록 -->
+	<select id="RNT01040209DAO.speclManageTrgterDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		     CNTRCTR_NO 	/*계약자번호*/
+		    ,PAY_TMLMT  	/*납부기한*/
+		    ,NPYM_SN    	/*체납순번*/
+		    ,PAY_SE
+		    ,SFCMP_GET_CODENM('RNT009', PAY_SE) AS PAY_SE_NM    	/*납부구분 공통코드 RN009*/
+		    ,NPYM_AMOUNT	/*체납금액*/
+		    ,OVDINTR    	/*연체이자*/
+		    ,PROCESS_DE 	/*처리일자*/
+		FROM TBRNT_SPECL_MANAGE_TRGTER
+		WHERE CNTRCTR_NO = #cntrctrNo#
+	</select>
+	
+	<!-- 연체자 목록 -->
+	<select id="RNT01040209DAO.ovdManList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			A.CNTRCTR_NO
+		    , A.RENT_HOUSE_CODE
+		    , C.RENT_HOUSE_NM
+		    , A.DONG
+		    , A.HO
+		    , D.NM
+		    , D.IHIDNUM
+		    ,SUM( B.RNTCHRG + NVL(B.RDCAMT_AMOUNT,0) ) AS DEL_AMT
+		    , SUM(B.OVDINTR) AS DEL_INT
+		    , COUNT(1) CNT
+		FROM 
+			TBRNT_RENT_CNTRCT A
+		    , TBRNT_RENT_MT_RNTCHRG B
+		    , TBRNT_RENT_HOUSE C
+		    ,TBRNT_PRMANENT_RENT_CSTMR D
+		WHERE A.CNTRCTR_NO     = B.CNTRCTR_NO
+		AND   A.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		AND   A.PRMANENT_CSTMR_NO = D.PRMANENT_CSTMR_NO
+		AND   B.RCIV_DE  IS NULL
+		AND   NOT EXISTS(
+			SELECT 1
+			FROM TBRNT_SPECL_MANAGE_TRGTER
+			WHERE CNTRCTR_NO = A.CNTRCTR_NO
+		)
+	 	<isNotEmpty property="houseSe">
+		AND   #houseSe# LIKE '%' || C.HOUSE_SE || '%'
+		</isNotEmpty>
+		<isNotEmpty property="rentHouseCode">
+		AND   A.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND   A.DONG = #dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND   A.HO = #ho#
+		</isNotEmpty>
+		GROUP BY 
+			A.CNTRCTR_NO
+		    , A.RENT_HOUSE_CODE
+		    , C.RENT_HOUSE_NM
+		    , A.DONG
+		    , A.HO
+		    , D.NM
+		    , D.IHIDNUM
+		HAVING SUM( B.RNTCHRG + NVL(B.RDCAMT_AMOUNT,0)) BETWEEN #stOvdintr# AND #edOvdintr#
+		AND COUNT(1) BETWEEN #stOvdintrCnt# AND #edOvdintrCnt#
+		ORDER BY A.RENT_HOUSE_CODE, A.DONG, A.HO
+	</select>
+	
+	<select id="RNT01040209DAO.ovdManDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			B.CNTRCTR_NO	/**/
+		    , B.MDAT_YM		/**/
+		    , B.PAY_TMLMT	/**/
+		    ,B.RNTCHRG + NVL(B.RDCAMT_AMOUNT,0) AS DEL_AMT	/**/
+		    , B.OVDINTR AS DEL_INT	/**/
+		FROM TBRNT_RENT_MT_RNTCHRG B
+		WHERE B.CNTRCTR_NO = #cntrctrNo#
+		AND B.RCIV_DE IS NULL
+		ORDER BY B.MDAT_YM
+	</select>
+	
+	<insert id="RNT01040209DAO.ovdManDetailC" parameterClass="java.util.HashMap">
+		INSERT INTO TBRNT_SPECL_MANAGE_TRGTER(
+			 CNTRCTR_NO 
+		    ,PAY_TMLMT  
+		    ,NPYM_SN    
+		    ,PAY_SE     
+		    ,NPYM_AMOUNT
+		    ,OVDINTR    
+		    ,PROCESS_DE 
+		    ,REGISTER_ID
+		    ,REGIST_DT  
+		    ,UPDUSR_ID  
+		    ,UPDT_DT    
+		)
+		SELECT 
+			 A.CNTRCTR_NO
+		    ,A.PAY_TMLMT
+			,RowNum
+			,'2' AS PAY_SE
+		    ,A.RNTCHRG + A.RDCAMT_AMOUNT
+		    ,A.OVDINTR
+		    ,NULL
+		    ,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		FROM TBRNT_RENT_MT_RNTCHRG A
+		WHERE A.CNTRCTR_NO = #cntrctrNo#
+		AND   A.RCIV_DE is null
+	</insert>
+	
+	<insert id="RNT01040209DAO.ovdManDetailD" parameterClass="java.util.HashMap">
+		DELETE FROM TBRNT_SPECL_MANAGE_TRGTER
+		WHERE CNTRCTR_NO = #CNTRCTR_NO#
+	</insert>
+	
+</sqlMap>

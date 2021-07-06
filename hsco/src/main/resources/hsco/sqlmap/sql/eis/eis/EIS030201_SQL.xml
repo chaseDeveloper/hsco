@@ -1,0 +1,923 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="EIS030201_SQL">
+
+	<!-- 사업목록 ================================================== -->
+	<select id="EIS030201DAO.bsnsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 BC.BSNS_CODE			/* 사업코드 */
+			,BC.BSNS_NM				/* 사업명 */
+			,'[' || BC.BSNS_CODE || '] ' || BC.BSNS_NM AS BSNS_ALL_NM	/* 사업명 */
+			,BC.BSNS_TY				/* 사업유형 */
+			<!-- ,BC.BSNS_TY_NM			/* 사업유형명 */
+			,BC.BSNS_BEGIN_YM		/* 사업시작년월 */
+			,BC.BSNS_END_YM			/* 사업종료년월 */ -->
+			,BC.RM					/* 비고 */
+			<!-- ,BC.CL_SE				/* 분류구분 */
+			,BC.SLE_SE				/* 판매구분 */ -->
+			,BS.STRWRK_DE			/* 착공일자 */
+			,BS.COMPET_DE			/* 준공일자 */
+			,DECODE(BS.COMPET_DE, NULL, 1, 2) AS GB			/* 진행구분 */
+			,BS.BSNS_CONFM_DE		/* 사업승인일자 */
+			,BS.MVN_DE				/* 입주일자 */
+			,ROW_NUMBER() OVER (ORDER BY BC.BSNS_CODE) AS RN
+		FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+		LEFT JOIN TBPRJ_BSNS_SUMRY BS ON BS.BSNS_CODE = BC.BSNS_CODE
+		WHERE 1=1
+		  <isNotEmpty property="GB">
+		    <isEqual property="GB" compareValue ="1">        /* 진행 */
+		  		AND #CRIT_DT# BETWEEN BC.BSNS_BEGIN_YM AND BC.BSNS_END_YM 
+		    </isEqual>
+		    <isEqual property="GB" compareValue="2">      /* 예정 */
+		    	 <![CDATA[
+		 		 AND BC.BSNS_BEGIN_YM  IS NOT NULL AND #CRIT_DT# < BC.BSNS_BEGIN_YM
+		 		 ]]> 
+		    </isEqual>
+		    <isEqual property="GB" compareValue="3">      /* 완료 */
+		  		 AND BC.BSNS_BEGIN_YM IS NOT NULL AND BC.BSNS_END_YM IS NOT NULL
+		  		 <![CDATA[
+		 		 AND BC.BSNS_END_YM < #CRIT_DT#
+		 		 ]]>
+		   	</isEqual>
+		</isNotEmpty>
+		ORDER BY 1
+	</select>
+	
+	<!-- 사업상세정보 -->
+	<select id="EIS030201DAO.bsnsDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 B.BSNS_CODE	/* 사업코드 */
+			,B.BSNS_TY		/* 사업유형 */
+			,A.ZIP					/* 우편번호 */
+			,A.ADRES				/* 주소 */
+			,A.ADRES_DETAIL			/* 주소_상세 */
+			,A.TOT_WCT				/* 총사업비 */
+			,A.BGNDE_PD				/* 시작일자_기간 */
+			,A.ENDDE_PD				/* 종료일자_기간 */
+			,A.BSNS_CONFM_DE		/* 사업승인일자 */
+			,A.REWARD_PBLANC_DE		/* 보상공고일자 */
+			,A.STRWRK_DE			/* 착공일자 */
+			,A.COMPET_DE			/* 준공일자 */
+			,A.MVN_DE				/* 입주일자 */
+			,A.BSNS_AR				/* 사업면적 */
+			,A.TOTAR				/* 연면적 */
+			,A.BILDNG_AR			/* 건축면적 */
+			,A.OPERTN_AR			/* 시행면적 */
+			,A.CMPNS_AR				/* 유상면적 */
+			,A.BDTLDR				/* 건폐율 */
+			,A.MEASRMT_RT			/* 용적율 */
+			,A.GREENS_RT			/* 녹지율 */
+			,A.CNTRWK_SUMRY			/* 공사개요 */
+			,A.TCHNLGY_ND_MSRC		/* 기술및공법 */
+			,A.ERC_SCALE			/* 건립규모 */
+			,A.TY_ACCTO_HSHLD		/* 유형별세대 */
+			,A.DSGN_ENTRPS			/* 설계업체 */
+			,A.CNSTRCT_ENTRPS		/* 시공업체 */
+			,A.SPRVISN_ENTRPS		/* 감리업체 */
+			,A.SPT_AGENT			/* 현장대리인 */
+			,A.INQRY_TLPHON			/* 문의전화 */
+			,NVL2(A.BSNS_CODE, 1, 0) AS IS_YN
+		FROM TBPRJ_BSNS_CODE B			/* 사업코드 */
+		LEFT JOIN TBPRJ_BSNS_SUMRY A ON B.BSNS_CODE = A.BSNS_CODE			/* 사업개요 */
+		WHERE B.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		ORDER BY 1
+	</select>
+	
+	<select id="EIS030201DAO.bsnsDetailFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.BSNS_CODE			/* 사업코드 */
+			,A.OPERT_YM				/* 작업년월 */
+			,A.FILE_NO				/* 파일번호 */
+			,A.ATCH_FILE_SE			/* 첨부파일구분 : 1-위치도,2-배치도,3-조감도,4-공정사진,5-첨부  */
+			,A.COURS_NM				/* 경로명 */
+			, SUBSTR(A.COURS_NM, 0, INSTR(A.COURS_NM, '|')-1) AS FILE_SN	/* 파일일련번호 */
+			, SUBSTR(A.COURS_NM, INSTR(A.COURS_NM, '|')+1, LENGTH(A.COURS_NM) - INSTR(A.COURS_NM, '|')) AS FILE_ORDR /* 파일순차번호 */
+			,A.FILE_NM				/* 파일명 */
+		FROM TBPRJ_BSNS_SUMRY_ATCH A			/* 사업개요첨부 */
+		WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		ORDER BY 1,2,3
+	</select>	
+	
+	<!-- 사업추진일정 -->
+	<select id="EIS030201DAO.bsnsPlanList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.BSNS_CODE	/* 사업코드 */
+			,A.BSNS_STEP	/* 사업단계 */
+			,A.JOB_CODE		/* 업무코드 */
+			,A.CL_SE			/* 분류구분 */
+			,A.LCLAS_NM			/* 대분류명 */
+			,A.MLSFC_NM			/* 중분류명 */
+			,A.SCLAS_NM			/* 소분류명 */
+			,A.DEPT_CODE		/* 부서코드 */
+			,A.JOB_SE			/* 업무구분 */
+			,A.RM				/* 비고 */
+		FROM TBPRJ_STD_JOB_CL A			/* 표준업무분류 */
+		WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		ORDER BY 1,2,3
+	</select>
+		
+		
+	<select id="EIS030201DAO.bsnsPlanDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">		
+		SELECT
+			 A.BSNS_CODE			/* 사업코드 */
+			,A.BSNS_STEP			/* 사업단계 */
+			,A.JOB_CODE				/* 업무코드 */
+			,A.SN					/* 일련번호 */
+			,A.PRTN_DTLS			/* 추진내역 */
+			,A.BGNDE_PLAN			/* 시작일자_계획 */
+			,A.COMPT_DE_PLAN		/* 완료일자_계획 */
+			,A.BGNDE_ACMSLT			/* 시작일자_실적 */
+			,A.COMPT_DE_ACMSLT		/* 완료일자_실적 */
+			,A.DELAY_PRVONSH		/* 지연사유 */
+			,A.UPDUSR_ID AS USER_ID
+			,H.EMPNM AS USER_NM
+			,H.DEPT_CODE
+			,SFPRJ_GETDEPTNM(A.UPDUSR_ID) AS DEPT_NM
+			,(SELECT MAX(C.COURS_NM)	/* 파일번호 */
+			FROM TBPRJ_JOB_PRTN_ATCH C			/* 업무추진첨부 */
+			WHERE C.BSNS_CODE = A.BSNS_CODE		/* 사업코드 */
+			  AND C.BSNS_STEP = A.BSNS_STEP		/* 사업단계 */
+			  AND C.JOB_CODE = A.JOB_CODE		/* 업무코드 */
+			  AND C.SN = A.SN					/* 일련번호 */
+			) AS FILE_SN
+		FROM TBPRJ_JOB_PRTN A			/* 업무추진 */
+		LEFT JOIN TBHRM_HR_MASTR H ON H.EMPNO = A.UPDUSR_ID
+		WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		  AND A.BSNS_STEP = #BSNS_STEP#			/* 사업단계 */
+		  AND A.JOB_CODE = #JOB_CODE#			/* 업무코드 */
+		ORDER BY 1,2,3,4
+	</select>
+	
+	<select id="EIS030201DAO.bsnsPlanDetailFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">		
+		SELECT
+			 A.BSNS_CODE			/* 사업코드 */
+			,A.BSNS_STEP			/* 사업단계 */
+			,A.JOB_CODE				/* 업무코드 */
+			,A.SN					/* 일련번호 */
+			,NVL(B.ODR, 1) AS ODR	/* 차수 : 1 고정 */
+			,F.FILE_SN				/* 파일일련번호 : COURS_NM */
+			,F.FILE_ORDR			/* 파일순차 : FILE_NO */
+			,F.ORGINL_FILE_NM		/* 원본파일명 */
+			,B.OTHBC_DE				/* 공개일자 */
+			,CASE WHEN B.UPDUSR_ID = #S_USER_ID# OR									/* 본인여부 확인 */
+					   TO_CHAR(SYSDATE,'YYYYMMDD') >= NVL(B.OTHBC_DE, '19000101')	/* 공개일자 */
+				  THEN 1
+				  ELSE 0
+			 END AS OTHBC_YN		/* 공개여부 : 0-비공개,1-공개 */
+		FROM TBPRJ_JOB_PRTN A				/* 업무추진 */
+		JOIN TBCOM_CMMN_ATCHMNFL F			/* 공통첨부파일 : 첨부파일 먼저 조인 */
+		  ON F.FILE_SN IN
+			(SELECT DISTINCT COURS_NM			/* 경로명 */
+			FROM TBPRJ_JOB_PRTN_ATCH C			/* 업무추진첨부 */
+			WHERE C.BSNS_CODE = A.BSNS_CODE		/* 사업코드 */
+			  AND C.BSNS_STEP = A.BSNS_STEP		/* 사업단계 */
+			  AND C.JOB_CODE = A.JOB_CODE		/* 업무코드 */
+			  AND C.SN = A.SN					/* 일련번호 */
+			)
+		 AND F.USE_AT='1'					/* 사용여부 */
+		LEFT JOIN TBPRJ_JOB_PRTN_ATCH B			/* 업무추진첨부 : 추가,수정시 MERGE로 처리 */
+		  ON B.BSNS_CODE = A.BSNS_CODE		/* 사업코드 */
+		 AND B.BSNS_STEP = A.BSNS_STEP		/* 사업단계 */
+		 AND B.JOB_CODE = A.JOB_CODE		/* 업무코드 */
+		 AND B.SN = A.SN					/* 일련번호 */
+		 AND B.ODR = 1						/* 차수 */
+		 AND B.COURS_NM = F.FILE_SN			/* 파일일련번호 */
+		 AND B.FILE_NO = F.FILE_ORDR		/* 파일순차 */
+		WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		  AND A.BSNS_STEP = #BSNS_STEP#			/* 사업단계 */
+		  AND A.JOB_CODE = #JOB_CODE#			/* 업무코드 */
+		  AND A.SN = #SN#						/* 일련번호 */
+		ORDER BY 1,2,3,4,5,6,7
+	</select>
+		
+	<!-- 보상현황(토지) 조회 -->
+	<select id="EIS030201DAO.landRewardMainList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.THING_SE			/** 물건구분(1:토지, 2:지장물) */
+			,A.BSNS_CODE			/** 사업코드 */
+			,A.BSNS_NM			/** 사업명 */
+			,A.NMPR_CO			/** 인원수 */
+			,A.LNDPCL_CO			/** 필지수 */
+			,A.EVL_AMOUNT			/** 평가금액 */
+			,A.DSCSS_CO			/** 협의건수 */
+			,A.DSCSS_AMOUNT			/** 협의금액 */
+			,A.EXPNDTR_CO			/** 지출건수 */
+			,A.EXPNDTR_AMOUNT			/** 지출금액 */
+			,A.PROGRS_RT			/** 진행율 */
+			,A.UN_DSCSS_CO			/** 미협의건수 */
+			,A.LWST_CO			/** 소송건수 */
+		FROM TBEIS_REWARD_SM A			/** 보상집계 */
+		WHERE 1=1
+		  AND A.THING_SE = '1'			/** 물건구분(1:토지, 2:지장물) */
+		  AND A.BSNS_CODE = #BSNS_CODE#			/** 사업코드 */
+		ORDER BY 1,2,3
+	</select>	
+
+
+	<!-- 보상현황(물건) 조회 -->
+	<select id="EIS030201DAO.thingRewardMainList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+					 A.THING_SE			/** 물건구분(1:토지, 2:지장물) */
+					,A.BSNS_CODE			/** 사업코드 */
+					,A.BSNS_NM			/** 사업명 */
+					,A.NMPR_CO			/** 인원수 */
+					,A.LNDPCL_CO			/** 필지수 */
+					,A.EVL_AMOUNT			/** 평가금액 */
+					,A.DSCSS_CO			/** 협의건수 */
+					,A.DSCSS_AMOUNT			/** 협의금액 */
+					,A.EXPNDTR_CO			/** 지출건수 */
+					,A.EXPNDTR_AMOUNT			/** 지출금액 */
+					,A.PROGRS_RT			/** 진행율 */
+					,A.UN_DSCSS_CO			/** 미협의건수 */
+					,A.LWST_CO			/** 소송건수 */
+				FROM TBEIS_REWARD_SM A			/** 보상집계 */
+				WHERE 1=1
+				  AND A.THING_SE = '2'			/** 물건구분(1:토지, 2:지장물) */
+				  AND A.BSNS_CODE = #BSNS_CODE#			/** 사업코드 */
+				ORDER BY 1,2,3
+	</select>	
+	<!-- 보상현황상세조회 -->	
+	<select id="EIS030201DAO.landRewardDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.THING_SE				/** 물건구분(1:토지, 2:지장물) */
+			,A.BSNS_CODE			/** 사업코드 */
+			,A.THING_SN				/** 물건일련번호 */
+			,A.OWNER_SN				/** 소유자일련번호 */
+			,A.BSNS_NM				/** 사업명 */
+			,A.THING_LNM			/** 물건지번 */
+			,A.THING_NM				/** 물건명 */
+			,A.STRCT_STNDRD			/** 구조규격 */
+			,A.NOW_USE_STTUS		/** 현재이용현황 */
+			,A.AR					/** 면적 */
+			,A.EVL_AMOUNT			/** 평가금액 */
+			,A.DSCSS_AMOUNT			/** 협의금액 */
+			,A.DSCSS_DE				/** 협의일자 */
+			,A.EXPNDTR_DE			/** 지출일자 */
+			,A.EXPNDTR_AMOUNT		/** 지출금액 */
+			,A.OWNER_NO				/** 소유자번호 */
+			,A.OWNER_NM				/** 소유자명 */
+		FROM TBEIS_REWARD_STTUS A			/** 보상현황 */
+		WHERE 1=1
+		  AND A.THING_SE = #THING_SE#			/** 물건구분(1:토지, 2:지장물) */
+		  AND A.BSNS_CODE = #BSNS_CODE#			/** 사업코드 */
+		ORDER BY 1,2,3	
+	</select>
+	<!-- 보상현황상세조회 -->
+	<select id="EIS030201DAO.thingRewardDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.THING_SE				/** 물건구분(1:토지, 2:지장물) */
+			,A.BSNS_CODE			/** 사업코드 */
+			,A.THING_SN				/** 물건일련번호 */
+			,A.OWNER_SN				/** 소유자일련번호 */
+			,A.BSNS_NM				/** 사업명 */
+			,A.THING_LNM			/** 물건지번 */
+			,A.THING_NM				/** 물건명 */
+			,A.STRCT_STNDRD			/** 구조규격 */
+			,A.NOW_USE_STTUS		/** 현재이용현황 */
+			,A.AR					/** 면적 */
+			,A.EVL_AMOUNT			/** 평가금액 */
+			,A.DSCSS_AMOUNT			/** 협의금액 */
+			,A.DSCSS_DE				/** 협의일자 */
+			,A.EXPNDTR_DE			/** 지출일자 */
+			,A.EXPNDTR_AMOUNT		/** 지출금액 */
+			,A.OWNER_NO				/** 소유자번호 */
+			,A.OWNER_NM				/** 소유자명 */
+		FROM TBEIS_REWARD_STTUS A			/** 보상현황 */
+		WHERE 1=1
+		  AND A.THING_SE = #THING_SE#			/** 물건구분(1:토지, 2:지장물) */
+		  AND A.BSNS_CODE = #BSNS_CODE#			/** 사업코드 */
+		ORDER BY 1,2,3	
+	</select>
+	
+	<!-- 보상현황챠트(건수) -->
+	<select id="EIS030201DAO.coRewardChart" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT TITLE,
+		       TITLE2,
+		       CASE VAL.SN
+		          WHEN 1 THEN PLAN_DSCSS_CO
+		          WHEN 2 THEN DSCSS_CO
+		          WHEN 3 THEN PLAN_EXPNDTR_CO
+		          WHEN 4 THEN EXPNDTR_CO
+		       END
+		          VALUE
+		  FROM (SELECT ROWNUM AS NO, T1.TITLE AS TITLE, T2.TITLE AS TITLE2
+		          FROM (SELECT '협의 건수' AS TITLE FROM DUAL
+		                UNION ALL
+		                SELECT '지출 건수' AS TITLE FROM DUAL) T1,
+		               (SELECT '계획' AS TITLE FROM DUAL
+		                UNION ALL
+		                SELECT '실적' AS TITLE FROM DUAL) T2) NM,
+		       (SELECT SN,
+		               0 AS PLAN_DSCSS_CO,
+		               DSCSS_CO,
+		               EXPNDTR_CO,
+		               0 AS PLAN_EXPNDTR_CO
+		          FROM TBEIS_REWARD_SM A,
+		               (    SELECT ROWNUM SN
+		                      FROM DUAL
+		                     <![CDATA[ 
+		                CONNECT BY ROWNUM < 5
+		                	 ]]>	)
+		         WHERE A.THING_SE = #THING_SE# AND BSNS_CODE = #BSNS_CODE#) VAL
+		 WHERE NM.NO = VAL.SN
+	</select>
+	
+	<!-- 보상현황챠트(금액) -->
+	<select id="EIS030201DAO.amountRewardChart" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT TITLE,
+		       TITLE2,
+		       CASE VAL.SN
+		          WHEN 1 THEN PLAN_DSCSS_AMOUNT
+		          WHEN 2 THEN DSCSS_AMOUNT
+		          WHEN 3 THEN PLAN_EXPNDTR_AMOUNT
+		          WHEN 4 THEN EXPNDTR_AMOUNT
+		       END
+		          VALUE
+		  FROM (SELECT ROWNUM AS NO, T1.TITLE AS TITLE, T2.TITLE AS TITLE2
+		          FROM (SELECT '협의 금액' AS TITLE FROM DUAL
+		                UNION ALL
+		                SELECT '지출 금액' AS TITLE FROM DUAL) T1,
+		               (SELECT '계획' AS TITLE FROM DUAL
+		                UNION ALL
+		                SELECT '실적' AS TITLE FROM DUAL) T2) NM,
+		       (SELECT SN,
+		               0 AS PLAN_DSCSS_AMOUNT,
+		               DSCSS_AMOUNT,
+		               EXPNDTR_AMOUNT,
+		               0 AS PLAN_EXPNDTR_AMOUNT
+		          FROM TBEIS_REWARD_SM A,
+		               (    SELECT ROWNUM SN
+		                      FROM DUAL
+		                      <![CDATA[ 
+		                CONNECT BY ROWNUM < 5
+		                	    ]]>				)
+		         WHERE A.THING_SE =  #THING_SE# AND BSNS_CODE = #BSNS_CODE#) VAL
+		 WHERE NM.NO = VAL.SN
+	</select>
+	<!-- 공사현황조회(계약) -->
+	<select id="EIS030201DAO.cntrWkSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT A.STDR_YEAR                     /** 기준년도 */
+               , A.BSNS_CODE                     /** 사업코드 */
+               , A.CNTRCT_NO                     /** 계약번호 */
+               , A.BSNS_NM                       /** 사업명 */
+               , A.CNTRCT_NM                     /** 계약명 */
+               , A.CNTRCT_DE
+               , A.CNTRCT_AMOUNT                 /** 계약금액 */
+               , A.STRWRK_DE_CNTRCT
+               , A.COMPET_DE_CNTRCT                    
+		    FROM TBEIS_CNTRWK_STTUS A                         /** 공사현황 */
+		   WHERE 1 = 1 AND A.BSNS_CODE = #BSNS_CODE#
+		GROUP BY A.STDR_YEAR,
+		         A.BSNS_CODE,
+		         A.CNTRCT_NO,
+		         A.BSNS_NM,
+		         A.CNTRCT_NM,
+		         A.CNTRCT_DE,
+		         A.CNTRCT_AMOUNT,
+		         A.STRWRK_DE_CNTRCT,
+		         A.COMPET_DE_CNTRCT
+				<isNotEmpty property="CD1" >
+				</isNotEmpty>
+				ORDER BY 1,2,3
+	</select>
+		
+	<!--  계약 공종 조회 -->
+	<select id="EIS030201DAO.cntrFairList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT A.STDR_YEAR                     /** 기준년도 */
+		       , A.BSNS_CODE                     /** 사업코드 */
+		       , A.CNTRCT_NO                     /** 계약번호 */
+		       , A.CNST_CODE                     /** 공종코드 */
+		       , A.BSNS_NM                       /** 사업명 */
+		       , A.CNTRCT_NM                     /** 계약명 */
+		       , A.FAIR_NM
+		       , A.FYER_PLAN
+		       , A.FYER_ACMSLT
+		       , A.ACMTL_PLAN
+		       , A.ACMTL_ACMSLT
+		       , A.CNTRCT_DE
+		       , A.CNTRCT_AMOUNT                 /** 계약금액 */
+		       , A.STRWRK_DE_CNST
+		       , A.COMPET_DE_CNST               
+		    FROM TBEIS_CNTRWK_STTUS A                         /** 공사현황 */
+		   WHERE 1 = 1
+		     AND A.STDR_YEAR  = #STDR_YEAR#
+		     AND A.BSNS_CODE = #BSNS_CODE#
+		     AND A.CNTRCT_NO = #CNTRCT_NO#
+		 ORDER BY 1,2,3
+	</select>
+	
+	<!--  계약 공종 상세 조회 -->	
+	<select id="EIS030201DAO.cntrFairDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT SN,
+		         SN || '월' AS PERMON,
+		         CASE
+		            WHEN SN = 1 THEN PLAN_FAIR_1
+		            WHEN SN = 2 THEN PLAN_FAIR_2
+		            WHEN SN = 3 THEN PLAN_FAIR_3
+		            WHEN SN = 4 THEN PLAN_FAIR_4
+		            WHEN SN = 5 THEN PLAN_FAIR_5
+		            WHEN SN = 6 THEN PLAN_FAIR_6
+		            WHEN SN = 7 THEN PLAN_FAIR_7
+		            WHEN SN = 8 THEN PLAN_FAIR_8
+		            WHEN SN = 9 THEN PLAN_FAIR_9
+		            WHEN SN = 10 THEN PLAN_FAIR_10
+		            WHEN SN = 11 THEN PLAN_FAIR_11
+		            WHEN SN = 12 THEN PLAN_FAIR_12
+		            ELSE 0 END PLAN_FAIR,
+		         CASE
+		            WHEN SN = 1 THEN ACMSLT_FAIR_1
+		            WHEN SN = 2 THEN ACMSLT_FAIR_2
+		            WHEN SN = 3 THEN ACMSLT_FAIR_3
+		            WHEN SN = 4 THEN ACMSLT_FAIR_4
+		            WHEN SN = 5 THEN ACMSLT_FAIR_5
+		            WHEN SN = 6 THEN ACMSLT_FAIR_6
+		            WHEN SN = 7 THEN ACMSLT_FAIR_7
+		            WHEN SN = 8 THEN ACMSLT_FAIR_8
+		            WHEN SN = 9 THEN ACMSLT_FAIR_9
+		            WHEN SN = 10 THEN ACMSLT_FAIR_10
+		            WHEN SN = 11 THEN ACMSLT_FAIR_11
+		            WHEN SN = 12 THEN ACMSLT_FAIR_12
+		            ELSE 0 END ACMSLT_FAIR,
+		         CASE
+		            WHEN SN = 1 THEN PROVS_1
+		            WHEN SN = 2 THEN PROVS_2
+		            WHEN SN = 3 THEN PROVS_3
+		            WHEN SN = 4 THEN PROVS_4
+		            WHEN SN = 5 THEN PROVS_5
+		            WHEN SN = 6 THEN PROVS_6
+		            WHEN SN = 7 THEN PROVS_7
+		            WHEN SN = 8 THEN PROVS_8
+		            WHEN SN = 9 THEN PROVS_9
+		            WHEN SN = 10 THEN PROVS_10
+		            WHEN SN = 11 THEN PROVS_11
+		            WHEN SN = 12 THEN PROVS_12
+		            ELSE 0 END PROVS
+		    FROM (SELECT  A.PLAN_FAIR_1            /** 계획공정_1 */
+		                            ,A.PLAN_FAIR_2            /** 계획공정_2 */
+		                            ,A.PLAN_FAIR_3            /** 계획공정_3 */
+		                            ,A.PLAN_FAIR_4            /** 계획공정_4 */
+		                            ,A.PLAN_FAIR_5            /** 계획공정_5 */
+		                            ,A.PLAN_FAIR_6            /** 계획공정_6 */
+		                            ,A.PLAN_FAIR_7            /** 계획공정_7 */
+		                            ,A.PLAN_FAIR_8            /** 계획공정_8 */
+		                            ,A.PLAN_FAIR_9            /** 계획공정_9 */
+		                            ,A.PLAN_FAIR_10            /** 계획공정_10 */
+		                            ,A.PLAN_FAIR_11            /** 계획공정_11 */
+		                            ,A.PLAN_FAIR_12            /** 계획공정_12 */
+		                            ,A.ACMSLT_FAIR_1            /** 실적공정_1 */
+		                            ,A.ACMSLT_FAIR_2            /** 실적공정_2 */
+		                            ,A.ACMSLT_FAIR_3            /** 실적공정_3 */
+		                            ,A.ACMSLT_FAIR_4            /** 실적공정_4 */
+		                            ,A.ACMSLT_FAIR_5            /** 실적공정_5 */
+		                            ,A.ACMSLT_FAIR_6            /** 실적공정_6 */
+		                            ,A.ACMSLT_FAIR_7            /** 실적공정_7 */
+		                            ,A.ACMSLT_FAIR_8            /** 실적공정_8 */
+		                            ,A.ACMSLT_FAIR_9            /** 실적공정_9 */
+		                            ,A.ACMSLT_FAIR_10            /** 실적공정_10 */
+		                            ,A.ACMSLT_FAIR_11            /** 실적공정_11 */
+		                            ,A.ACMSLT_FAIR_12            /** 실적공정_12 */
+		                            ,A.PROVS_1            /** 대비_1 */
+		                            ,A.PROVS_2            /** 대비_2 */
+		                            ,A.PROVS_3            /** 대비_3 */
+		                            ,A.PROVS_4            /** 대비_4 */
+		                            ,A.PROVS_5            /** 대비_5 */
+		                            ,A.PROVS_6            /** 대비_6 */
+		                            ,A.PROVS_7            /** 대비_7 */
+		                            ,A.PROVS_8            /** 대비_8 */
+		                            ,A.PROVS_9            /** 대비_9 */
+		                            ,A.PROVS_10            /** 대비_10 */
+		                            ,A.PROVS_11            /** 대비_11 */
+		                            ,A.PROVS_12            /** 대비_12 */
+		            FROM TBEIS_CNTRWK_STTUS A
+		           WHERE     1 = 1
+		                 AND A.STDR_YEAR = #STDR_YEAR#
+		                 AND A.BSNS_CODE = #BSNS_CODE#
+		                 AND A.CNTRCT_NO = #CNTRCT_NO#
+		                 AND A.CNST_CODE = #CNST_CODE#) A,
+		             (SELECT ROWNUM SN
+		               FROM DUAL
+		               <![CDATA[
+		               CONNECT BY ROWNUM < 13
+		               ]]> ) B
+					ORDER BY SN                
+	</select>	
+	
+	<!--  공사현황 챠트 조회 -->
+	<select id="EIS030201DAO.cntrFairChart" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	  SELECT SN || '월' AS TITLE,
+	         TITLE AS TITLE2,
+	         CASE
+	            WHEN SN = 1 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_1
+	            WHEN SN = 1 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_1
+	            WHEN SN = 2 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_2
+	            WHEN SN = 2 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_2
+	            WHEN SN = 3 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_3
+	            WHEN SN = 3 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_3
+	            WHEN SN = 4 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_4
+	            WHEN SN = 4 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_4
+	            WHEN SN = 5 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_5
+	            WHEN SN = 5 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_5
+	            WHEN SN = 6 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_6
+	            WHEN SN = 6 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_6
+	            WHEN SN = 7 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_7
+	            WHEN SN = 7 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_7
+	            WHEN SN = 8 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_8
+	            WHEN SN = 8 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_8
+	            WHEN SN = 9 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_9
+	            WHEN SN = 9 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_9
+	            WHEN SN = 10 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_10
+	            WHEN SN = 10 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_10
+	            WHEN SN = 11 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_11
+	            WHEN SN = 11 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_11
+	            WHEN SN = 12 AND TITLE_SN = 1 THEN SUM_PLAN_FAIR_12
+	            WHEN SN = 12 AND TITLE_SN = 2 THEN SUM_ACMSLT_FAIR_12
+	            ELSE 0
+	         END VALUE
+	    FROM (  SELECT SUM (A.PLAN_FAIR_1) AS SUM_PLAN_FAIR_1,
+	                   SUM (A.PLAN_FAIR_2) AS SUM_PLAN_FAIR_2,
+	                   SUM (A.PLAN_FAIR_3) AS SUM_PLAN_FAIR_3,
+	                   SUM (A.PLAN_FAIR_4) AS SUM_PLAN_FAIR_4,
+	                   SUM (A.PLAN_FAIR_5) AS SUM_PLAN_FAIR_5,
+	                   SUM (A.PLAN_FAIR_6) AS SUM_PLAN_FAIR_6,
+	                   SUM (A.PLAN_FAIR_7) AS SUM_PLAN_FAIR_7,
+	                   SUM (A.PLAN_FAIR_8) AS SUM_PLAN_FAIR_8,
+	                   SUM (A.PLAN_FAIR_9) AS SUM_PLAN_FAIR_9,
+	                   SUM (A.PLAN_FAIR_10) AS SUM_PLAN_FAIR_10,
+	                   SUM (A.PLAN_FAIR_11) AS SUM_PLAN_FAIR_11,
+	                   SUM (A.PLAN_FAIR_12) AS SUM_PLAN_FAIR_12,
+	                   SUM (A.ACMSLT_FAIR_1) AS SUM_ACMSLT_FAIR_1,
+	                   SUM (A.ACMSLT_FAIR_2) AS SUM_ACMSLT_FAIR_2,
+	                   SUM (A.ACMSLT_FAIR_3) AS SUM_ACMSLT_FAIR_3,
+	                   SUM (A.ACMSLT_FAIR_4) AS SUM_ACMSLT_FAIR_4,
+	                   SUM (A.ACMSLT_FAIR_5) AS SUM_ACMSLT_FAIR_5,
+	                   SUM (A.ACMSLT_FAIR_6) AS SUM_ACMSLT_FAIR_6,
+	                   SUM (A.ACMSLT_FAIR_7) AS SUM_ACMSLT_FAIR_7,
+	                   SUM (A.ACMSLT_FAIR_8) AS SUM_ACMSLT_FAIR_8,
+	                   SUM (A.ACMSLT_FAIR_9) AS SUM_ACMSLT_FAIR_9,
+	                   SUM (A.ACMSLT_FAIR_10) AS SUM_ACMSLT_FAIR_10,
+	                   SUM (A.ACMSLT_FAIR_11) AS SUM_ACMSLT_FAIR_11,
+	                   SUM (A.ACMSLT_FAIR_12) AS SUM_ACMSLT_FAIR_12
+	              FROM TBEIS_CNTRWK_STTUS A
+	             WHERE     1 = 1
+	                   AND A.STDR_YEAR = #STDR_YEAR#
+	                   AND A.BSNS_CODE = #BSNS_CODE#
+	                   AND A.CNTRCT_NO = #CNTRCT_NO#
+	          GROUP BY A.STDR_YEAR, A.BSNS_CODE, A.CNTRCT_NO) A,
+	         (SELECT '월간계획' AS TITLE, 1 AS TITLE_SN FROM DUAL
+	          UNION ALL
+	          SELECT '월간실적' AS TITLE, 2 AS TITLE_SN FROM DUAL),
+	         (    SELECT ROWNUM SN
+	                FROM DUAL
+	                <![CDATA[
+	          CONNECT BY ROWNUM < 13
+	          		]]>	) C
+	ORDER BY SN
+	</select>		
+	
+	<!--  공사현황 챠트 조회(누계) -->
+	<select id="EIS030201DAO.cntrFairTotalChart" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT TITLE,
+		         TITLE2,
+		         CASE
+		            WHEN TITLE_SN = 1 AND TITLE2_SN = 1 THEN PLAN_VALUE
+		            WHEN TITLE_SN = 1 AND TITLE2_SN = 2 THEN ACMSLT_VALUE
+		            WHEN TITLE_SN = 2 AND TITLE2_SN = 1 THEN PLAN_VALUE
+		            WHEN TITLE_SN = 2 AND TITLE2_SN = 2 THEN ACMSLT_VALUE
+		         END
+		            VALUE
+		    FROM (SELECT '연간누계' AS TITLE,
+		                 1 AS TITLE_SN,
+		                 NVL(SUM (FYER_PLAN), 0) AS PLAN_VALUE,
+		                 NVL(SUM (FYER_ACMSLT), 0) AS ACMSLT_VALUE
+		            FROM TBEIS_CNTRWK_STTUS
+		           WHERE STDR_YEAR = #STDR_YEAR# AND BSNS_CODE = #BSNS_CODE# AND CNTRCT_NO = #CNTRCT_NO#
+		          UNION ALL
+		          SELECT '전체누계' AS TITLE,
+		                 2 AS TITLE_SN,
+		                 NVL(SUM (ACMTL_PLAN), 0) AS PLAN_VALUE,
+		                 NVL(SUM (ACMTL_ACMSLT), 0) AS ACMSLT_VALUE
+		            FROM TBEIS_CNTRWK_STTUS
+		           WHERE BSNS_CODE = #BSNS_CODE# AND CNTRCT_NO = #CNTRCT_NO#) A,
+		         (SELECT 1 AS TITLE2_SN, '계획' AS TITLE2 FROM DUAL
+		          UNION ALL
+		          SELECT 2 AS TITLE2_SN, '실적' AS TITLE2 FROM DUAL) B
+		ORDER BY TITLE_SN, TITLE2_SN	
+	</select>			
+	<!--  주택코드 리스트 -->
+	<select id="EIS030201DAO.houseCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT DISTINCT A.STDR_YM, A.LTTOT_SE, A.BSNS_CODE, A.HOUSE_CODE, A.HOUSE_CODE_NM
+		  FROM TBEIS_LTTOT_INCME A
+		 WHERE A.LTTOT_SE = '1' AND A.BSNS_CODE = #BSNS_CODE#
+		 ORDER BY A.HOUSE_CODE
+	</select>	
+	
+	<!--  토지코드 리스트 -->
+	<select id="EIS030201DAO.landCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT DISTINCT A.STDR_YM, A.LTTOT_SE, A.BSNS_CODE, A.HOUSE_CODE, A.HOUSE_CODE_NM
+		  FROM TBEIS_LTTOT_INCME A
+		 WHERE A.LTTOT_SE = '2' AND A.BSNS_CODE = #BSNS_CODE#
+		 ORDER BY A.HOUSE_CODE
+	</select>
+	
+	<!--  주택수입현황 리스트 -->
+	<select id="EIS030201DAO.houseIncmeDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.STDR_YM			/** 기준년월 */
+			,A.LTTOT_SE			/** 분양구분(1:주택, 2:토지, 3:기타) */
+			,A.BSNS_CODE			/** 사업코드 */
+			,A.HOUSE_CODE			/** 주택코드 : 분양구분이 기타인 경우 '0000' */
+			,A.SUPLY_TY_CODE			/** 공급유형코드 */
+			,A.BLCK			/** 블록 : 공급유형이 토지가 아닌경우 '000' */
+			,A.BSNS_NM			/** 사업명 */
+			,A.HOUSE_CODE_NM			/** 주택코드명 */
+			,A.SUPLY_TY_NM			/** 공급유형명 */
+			,A.HSHLD_CO			/** 세대수 */
+			,A.LTTOT_RT			/** 분양율 */
+			,A.SPLPC			/** 공급가격 */
+			,A.RCIV_PLAN			/** 수납계획 */
+			,A.RCIV_ACMSLT			/** 수납실적 */
+		FROM TBEIS_LTTOT_INCME A			/** 분양수입 */
+		WHERE 1=1
+		  AND A.STDR_YM = #STDR_YM#			/** 기준년월 */
+		  AND A.LTTOT_SE = '1'				/** 분양구분(1:주택, 2:토지, 3:기타) */
+		  AND A.BSNS_CODE = #BSNS_CODE#			/** 사업코드 */
+		  AND A.HOUSE_CODE = #HOUSE_CODE#			/** 주택코드 : 분양구분이 기타인 경우 '0000' */
+		ORDER BY 1,2,3,4,5
+	</select>
+
+	<!--  토지수입현황 리스트 -->
+	<select id="EIS030201DAO.landIncmeDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.STDR_YM			/** 기준년월 */
+			,A.LTTOT_SE			/** 분양구분(1:주택, 2:토지, 3:기타) */
+			,A.BSNS_CODE			/** 사업코드 */
+			,A.HOUSE_CODE			/** 주택코드 : 분양구분이 기타인 경우 '0000' */
+			,A.SUPLY_TY_CODE			/** 공급유형코드 */
+			,A.BLCK			/** 블록 : 공급유형이 토지가 아닌경우 '000' */
+			,A.BSNS_NM			/** 사업명 */
+			,A.HOUSE_CODE_NM			/** 주택코드명 */
+			,A.SUPLY_TY_NM			/** 공급유형명 */
+			,A.HSHLD_CO			/** 세대수 */
+			,A.LTTOT_RT			/** 분양율 */
+			,A.SPLPC			/** 공급가격 */
+			,A.RCIV_PLAN			/** 수납계획 */
+			,A.RCIV_ACMSLT			/** 수납실적 */
+		FROM TBEIS_LTTOT_INCME A			/** 분양수입 */
+		WHERE 1=1
+		  AND A.STDR_YM = #STDR_YM#			/** 기준년월 */
+		  AND A.LTTOT_SE = #LTTOT_SE#			/** 분양구분(1:주택, 2:토지, 3:기타) */
+		  AND A.BSNS_CODE = #BSNS_CODE#			/** 사업코드 */
+		  AND A.HOUSE_CODE = #HOUSE_CODE#			/** 주택코드 : 분양구분이 기타인 경우 '0000' */
+		ORDER BY 1,2,3
+	</select>	
+	
+	<!--  기타수입현황 리스트 -->
+	<select id="EIS030201DAO.etcIncmeDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.STDR_YM			/** 기준년월 */
+			,A.LTTOT_SE			/** 분양구분(1:주택, 2:토지, 3:기타) */
+			,A.BSNS_CODE			/** 사업코드 */
+			,A.HOUSE_CODE			/** 주택코드 : 분양구분이 기타인 경우 '0000' */
+			,A.SUPLY_TY_CODE			/** 공급유형코드 */
+			,A.BLCK			/** 블록 : 공급유형이 토지가 아닌경우 '000' */
+			,A.BSNS_NM			/** 사업명 */
+			,A.HOUSE_CODE_NM			/** 주택코드명 */
+			,A.SUPLY_TY_NM			/** 공급유형명 */
+			,A.HSHLD_CO			/** 세대수 */
+			,A.LTTOT_RT			/** 분양율 */
+			,A.SPLPC			/** 공급가격 */
+			,A.RCIV_PLAN			/** 수납계획 */
+			,A.RCIV_ACMSLT			/** 수납실적 */
+		FROM TBEIS_LTTOT_INCME A			/** 분양수입 */
+		WHERE 1=1
+		  AND SUBSTR(A.STDR_YM, 1,4) = #CRIT_YEAR#			/** 기준년월 */
+		  AND A.LTTOT_SE = #LTTOT_SE#			/** 분양구분(1:주택, 2:토지, 3:기타) */
+		  AND A.BSNS_CODE = #BSNS_CODE#			/** 사업코드 */
+		  AND A.HOUSE_CODE = #HOUSE_CODE#			/** 주택코드 : 분양구분이 기타인 경우 '0000' */
+		ORDER BY 1,2,3
+	</select>		
+	
+	<!--  수입현황 월별 챠트 -->
+	<select id="EIS030201DAO.incmeChart" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT TITLE,
+		       TITLE2,
+		       CASE
+		          WHEN TITLE_SN = 1 THEN NVL (PLAN_VALUE, 0)
+		          WHEN TITLE_SN = 2 THEN NVL (ACMSLT_VALUE, 0)
+		       END
+		          VALUE
+		  FROM (  SELECT SN || '월' AS TITLE,
+		                 TITLE2,
+		                 PLAN_VALUE,
+		                 ACMSLT_VALUE,
+		                 TITLE_SN
+		            FROM (  SELECT LTRIM (SUBSTR (A.STDR_YM, 5, 2), '0') AS MONTH_SN,
+		                           NVL(SUM (RCIV_PLAN), 0) AS PLAN_VALUE,
+		                           NVL(SUM (RCIV_ACMSLT), 0) AS ACMSLT_VALUE
+		                      FROM TBEIS_LTTOT_INCME A
+		                     WHERE     A.LTTOT_SE = #LTTOT_SE#
+		                           AND A.BSNS_CODE = #BSNS_CODE#
+		                           AND SUBSTR (A.STDR_YM, 1, 4) = #CRIT_YEAR#
+		                           AND A.HOUSE_CODE = #HOUSE_CODE#
+		                  GROUP BY A.STDR_YM) A,
+		                 (    SELECT ROWNUM SN
+		                        FROM DUAL
+		                        	<![CDATA[
+		                  CONNECT BY ROWNUM < 13
+		                             ]]>     ) B,
+		                 (SELECT '월간계획' AS TITLE2, 1 AS TITLE_SN FROM DUAL
+		                  UNION ALL
+		                  SELECT '월간실적' AS TITLE2, 2 AS TITLE_SN FROM DUAL) C
+		           WHERE B.SN = A.MONTH_SN(+)
+		        ORDER BY SN)
+	</select>	
+	<!--  수입현황 누계 챠트 -->
+	<select id="EIS030201DAO.incmeTotalChart" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT TITLE,
+		         TITLE2,
+		         CASE
+		            WHEN TITLE_SN = 1 AND TITLE2_SN = 1 THEN PLAN_VALUE
+		            WHEN TITLE_SN = 1 AND TITLE2_SN = 2 THEN ACMSLT_VALUE
+		            WHEN TITLE_SN = 2 AND TITLE2_SN = 1 THEN PLAN_VALUE
+		            WHEN TITLE_SN = 2 AND TITLE2_SN = 2 THEN ACMSLT_VALUE
+		         END
+		            VALUE
+		    FROM (  SELECT '연간누계' AS TITLE,
+		                   1 AS TITLE_SN,
+		                   NVL(SUM (RCIV_PLAN), 0) AS PLAN_VALUE,
+		                   NVL(SUM (RCIV_ACMSLT), 0) AS ACMSLT_VALUE
+		              FROM TBEIS_LTTOT_INCME A
+		             WHERE     A.LTTOT_SE = #LTTOT_SE#
+		                   AND A.BSNS_CODE = #BSNS_CODE#
+		                   AND SUBSTR (A.STDR_YM, 1, 4) = #CRIT_YEAR#
+		                   AND A.HOUSE_CODE = #HOUSE_CODE#
+		          GROUP BY SUBSTR (A.STDR_YM, 1, 4)
+		          UNION ALL
+		          SELECT '전체누계' AS TITLE,
+		                 2 AS TITLE_SN,
+		                 NVL(SUM (RCIV_PLAN), 0) AS PLAN_VALUE,
+		                 NVL(SUM (RCIV_ACMSLT), 0) AS ACMSLT_VALUE
+		            FROM TBEIS_LTTOT_INCME A
+		           WHERE     A.LTTOT_SE = #LOTTE_SE#
+		                 AND A.BSNS_CODE = #BSNS_CODE#
+		                 AND A.HOUSE_CODE = #HOUSE_CODE#) A,
+		         (SELECT 1 AS TITLE2_SN, '계획' AS TITLE2 FROM DUAL
+		          UNION ALL
+		          SELECT 2 AS TITLE2_SN, '실적' AS TITLE2 FROM DUAL) B
+		ORDER BY TITLE_SN, TITLE2_SN
+	</select>	
+		
+	<!-- 연체현황 -->
+	<select id="EIS030201DAO.rentList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+             A.STDR_DE
+            ,A.BSNS_CODE            /** 사업코드 */
+            ,A.HOUSE_CODE            /** 주택코드 */
+            ,A.DONG            /** 동 */
+            ,A.HO            /** 호 */
+            ,A.BSNS_NM            /** 사업명 */
+            ,A.NM            /** 성명 */
+            ,A.RQEST_AMOUNT            /** 청구금액 */
+            ,A.ARRRG_AMOUNT            /** 연체금액 */
+            ,A.LWST_REQEST_DE
+            ,A.INCDNT_NO            /** 사건번호 */
+            ,A.LWST_CT            /** 소송비용 */
+            ,A.JUDMN_DE
+            ,A.WTHDRW_DE
+            ,A.RCIV_DE
+            ,A.RCIV_AMOUNT            /** 수납금액 */
+        FROM TBEIS_RENT_ARRRG A            /** 임대사업 연체 및 소송내역 */
+        WHERE 1=1
+         AND BSNS_CODE = #BSNS_CODE#
+         AND STDR_DE BETWEEN #CRIT_YEAR#||#CRIT_MONTH#||'01' AND  #CRIT_YEAR#||#CRIT_MONTH#||'31'
+        ORDER BY 1,2,3
+	</select>
+	
+	<!-- 연체현황 상세 -->
+	<select id="EIS030201DAO.rentDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.STDR_DE
+			,A.BSNS_CODE			/** 사업코드 */
+			,A.HOUSE_CODE			/** 주택코드 */
+			,A.DONG			/** 동 */
+			,A.HO			/** 호 */
+			,A.ARRRG_DE
+			,A.ARRRG_AMOUNT			/** 연체금액 */
+			,A.PAY_DE
+			,A.PAYAMT			/** 납부금액 */
+			,A.ARRRG_BLCE			/** 연체잔액 */
+		FROM TBEIS_RENT_ARRRG_DETAIL A			/** 임대사업 연체내역 상세 */
+		WHERE 1=1
+		  AND A.STDR_DE = #STDR_DE#
+		  AND A.BSNS_CODE = #BSNS_CODE#			/** 사업코드 */
+		  AND A.HOUSE_CODE = #HOUSE_CODE#			/** 주택코드 */
+		  AND A.DONG = #DONG#			/** 동 */
+		  AND A.HO = #HO#			/** 호 */
+		ORDER BY 1,2,3
+	</select>	
+	
+	<!-- 연체현황 챠트 -->
+	<select id="EIS030201DAO.rentChart" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT TITLE,
+		       TITLE2,
+		       CASE
+		          WHEN TITLE_SN = 1 THEN NVL (SUM_RQEST_AMOUNT, 0)
+		          WHEN TITLE_SN = 2 THEN NVL (SUM_ARRRG_AMOUNT, 0)
+		       END
+		          VALUE
+		  FROM (  SELECT SN || '월' AS TITLE,
+		                 TITLE2,
+		                 SUM_RQEST_AMOUNT,
+		                 SUM_ARRRG_AMOUNT,
+		                 TITLE_SN
+		            FROM (  SELECT LTRIM (SUBSTR (A.STDR_DE, 5, 2), '0') AS MONTH_SN,
+		                           SUM (A.RQEST_AMOUNT) AS SUM_RQEST_AMOUNT,
+		                           SUM (A.ARRRG_AMOUNT) AS SUM_ARRRG_AMOUNT
+		                      FROM TBEIS_RENT_ARRRG A
+		                     WHERE     1 = 1
+		                           AND SUBSTR (A.STDR_DE, 1, 4) = #CRIT_YEAR#
+		                           AND A.BSNS_CODE = #BSNS_CODE#
+		                  GROUP BY SUBSTR (A.STDR_DE, 5, 2)) A,
+		                 (    SELECT ROWNUM SN
+		                        FROM DUAL
+		                        <![CDATA[
+		                  CONNECT BY ROWNUM < 13
+		                          ]]>              ) B,
+		                 (SELECT '청구' AS TITLE2, 1 AS TITLE_SN FROM DUAL
+		                  UNION ALL
+		                  SELECT '연체' AS TITLE2, 2 AS TITLE_SN FROM DUAL) C
+		           WHERE B.SN = A.MONTH_SN(+)
+		        ORDER BY SN)
+	</select>
+
+
+	<!-- 보상현황 -->
+	<select id="EIS030201DAO.rewardMainList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* EIS030201DAO.rewardMainList[보상현황] */
+		SELECT A.*
+			  /********************************************************************************************************************/
+			  /* 합계 */
+			  /********************************************************************************************************************/
+			  ,T1_AMT + T2_AMT				AS T_AMT			/* 보상총금액 */
+			  ,L1_OWNER_CNT + L2_OWNER_CNT	AS L_OWNER_CNT		/* 토지인원 */
+			  ,L1_CNT + L2_CNT				AS L_CNT			/* 토지필지 */
+			  ,L1_AR_AMT + L2_AR_AMT		AS L_AR_AMT			/* 토지보상면적 */
+			  ,L1_AMT + L2_AMT				AS L_AMT			/* 토지보상금액 */
+			  ,M1_CNT + M2_CNT				AS M_CNT			/* 물건건수 */
+			  ,M1_AMT + M2_AMT				AS M_AMT			/* 물건보상금액 */
+			  ,ROUND(T3_AMT / (T1_AMT + T2_AMT) * 100, 2)	AS PROGRS_RT		/* 진행률 */
+		  FROM (
+				SELECT BSNS_AREA_CODE
+					  /********************************************************************************************************************/
+					  /* 소유자별 청구(협의)  누계액  계산 */
+					  /********************************************************************************************************************/
+					  ,SUM(CASE WHEN RQEST_SE = '1' THEN RWMNY ELSE 0 END)							AS T1_AMT			/* 보상총금액(협의) */
+					  ,COUNT(DISTINCT CASE WHEN RQEST_SE = '1' AND SE = '1'  THEN OWNER_NO END)		AS L1_OWNER_CNT		/* 토지인원(협의) */
+					  ,COUNT(DISTINCT CASE WHEN RQEST_SE = '1' AND SE = '1'  THEN THING_SN END)		AS L1_CNT			/* 토지필지(협의) */
+					  ,SUM(CASE WHEN RQEST_SE = '1' AND SE = '1' THEN AR	 ELSE 0 END)			AS L1_AR_AMT		/* 토지보상면적(협의) */
+					  ,SUM(CASE WHEN RQEST_SE = '1' AND SE = '1' THEN RWMNY  ELSE 0 END)			AS L1_AMT			/* 토지보상금액(협의) */
+					  ,COUNT(DISTINCT CASE WHEN RQEST_SE = '1' AND SE != '1' THEN OWNER_NO END)		AS M1_CNT			/* 물건건수(협의) */
+					  ,SUM(CASE WHEN RQEST_SE = '1' AND SE != '1' THEN RWMNY ELSE 0 END)			AS M1_AMT			/* 물건보상금액(협의) */
+					  /********************************************************************************************************************/
+					  /* 소유자별 미청구(미협의)  누계액  계산 */
+					  /********************************************************************************************************************/
+					  ,SUM(CASE WHEN RQEST_SE != '1'  THEN  RWMNY ELSE 0 END )						AS T2_AMT			/* 보상총금액(미협의) */
+					  ,COUNT(DISTINCT CASE WHEN RQEST_SE != '1' AND SE = '1'  THEN OWNER_NO END)	AS L2_OWNER_CNT		/* 토지인원(미협의) */
+					  ,COUNT(DISTINCT CASE WHEN RQEST_SE != '1' AND SE = '1'  THEN THING_SN  END)	AS L2_CNT			/* 토지필지(미협의) */
+					  ,SUM(CASE WHEN RQEST_SE != '1' AND SE = '1' THEN AR	 ELSE 0 END)			AS L2_AR_AMT		/* 토지보상면적(미협의) */
+					  ,SUM(CASE WHEN RQEST_SE != '1' AND SE = '1' THEN RWMNY  ELSE 0 END)			AS L2_AMT			/* 토지보상금액(미협의) */
+					  ,COUNT(DISTINCT CASE WHEN RQEST_SE != '1' AND SE != '1' THEN OWNER_NO END)	AS M2_CNT			/* 물건건수(미협의) */
+					  ,SUM(CASE WHEN RQEST_SE != '1' AND SE != '1' THEN RWMNY ELSE 0 END)			AS M2_AMT			/* 물건보상금액(미협의) */
+					  /********************************************************************************************************************/
+					  /* 소유자별 지출 누계액  계산 */
+					  /********************************************************************************************************************/
+					  ,(SELECT SUM(RQEST_AMOUNT) AS RQEST_AMOUNT
+						  FROM TBCMP_RWMNY_PYMNT
+						 WHERE BSNS_AREA_CODE LIKE #BSNS_CODE# || '%'
+						   AND RWMNY_PYMNT_SE = '1'
+						)																			AS T3_AMT			/* 물건보상 지출금액 */
+				  FROM (   
+						SELECT A.BSNS_AREA_CODE
+							  ,NVL(B.RQEST_SE,'0') AS RQEST_SE
+							  ,C.CHRCTR_PREPAR_VALUE_2 AS SE
+							  ,B.RWMNY		/* 보상금액 */
+							  ,B.OWNER_NO
+							  ,A.THING_SN
+							  ,B.AR
+						  FROM TBCMP_THING_WTNNC A
+						 INNER JOIN TBCMP_THING_OWNER B
+							ON B.BSNS_AREA_CODE = A.BSNS_AREA_CODE
+						   AND B.THING_SN = A.THING_SN
+						 INNER JOIN (
+								SELECT *
+								  FROM TBCOM_CMMN_CODE 
+								 WHERE GRP_CODE = 'CMP001'
+							   ) C
+							ON C.CODE = A.THING_CL
+						 WHERE A.BSNS_AREA_CODE LIKE #BSNS_CODE# || '%'
+						 
+					   )
+				 GROUP BY BSNS_AREA_CODE
+			   ) A
+	</select>	
+</sqlMap>

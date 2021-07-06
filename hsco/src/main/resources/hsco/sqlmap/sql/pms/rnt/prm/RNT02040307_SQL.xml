@@ -1,0 +1,585 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02040307_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 관리비 수납처리 현황 조회
+			 설명 : 매입임대 관리비 수납처리 현황 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.25
+	-->	
+	<select id="RNT02040307DAO.selectRcivList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+SELECT 
+  RowNum
+	,RCIV_NO
+	,RENT_HOUSE_CODE
+	,RENT_HOUSE_NM
+	,DONG
+	,HO
+	,NM
+	,IHIDNUM
+	,OPERT_SE_NM
+	,OPERT_SE
+	,PROCESS_STTUS_NM
+	,PROCESS_STTUS
+	,MANAGECT
+	,OVDINTR
+	,MANAGECT_TOTAL
+	,RCIV_AMOUNT
+	,(
+		CASE 
+			WHEN OPERT_SE = 'O'
+				THEN RCIV_AMOUNT - nvl(MANAGECT_TOTAL, 0)
+			ELSE 0
+			END
+		) AS FALT_AMOUNT
+	,PAY_TMLMT
+	,RCIV_DE
+	,RCIV_AMOUNT - nvl(MANAGECT_TOTAL, 0) AS RDCAMT_AMOUNT
+FROM (
+	SELECT RCIV_NO
+		,b.RENT_HOUSE_CODE
+		,c.RENT_HOUSE_NM
+		,b.DONG
+		,b.HO
+		,f.NM
+		,f.IHIDNUM
+		,(
+			CASE a.OPERT_SE
+				WHEN 'N'
+					THEN '미확인'
+				WHEN 'J'
+					THEN '정상'
+				WHEN 'O'
+					THEN '과오납'
+				WHEN 'H'
+					THEN '확인요망'
+				ELSE a.OPERT_SE
+				END
+			) AS OPERT_SE_NM
+		,a.OPERT_SE
+		,(
+			CASE a.PROCESS_STTUS
+				WHEN 'N'
+					THEN '미 처 리'
+				WHEN 'C'
+					THEN '처리완료'
+				ELSE a.PROCESS_STTUS
+				END
+			) AS PROCESS_STTUS_NM
+		,a.PROCESS_STTUS
+		,CASE 
+			WHEN OPERT_SE = 'O'
+				AND (
+					a.RCIV_AMOUNT = d.MANAGECT
+					OR a1.CNT <![CDATA[ > ]]> 1
+					)
+				THEN 0
+			ELSE d.MANAGECT
+			END AS MANAGECT
+		,CASE 
+			WHEN OPERT_SE = 'O'
+				AND (
+					a.RCIV_AMOUNT = d.MANAGECT
+					OR a1.CNT <![CDATA[ > ]]> 1
+					)
+				THEN 0
+			ELSE d.OVDINTR
+			END AS OVDINTR
+		,CASE 
+			WHEN OPERT_SE = 'O'
+				AND (
+					a.RCIV_AMOUNT = d.MANAGECT
+					OR a1.CNT <![CDATA[  > ]]> 1
+					)
+				THEN 0
+			ELSE d.MANAGECT_TOTAL
+			END AS MANAGECT_TOTAL
+		,a.RCIV_AMOUNT
+		,a.FALT_AMOUNT
+		,a.PAY_TMLMT
+		,a.RCIV_DE
+	FROM TBRNT_PUCHAS_RCIV a
+		,TBRNT_PUCHAS_CNTRCT b
+		,TBRNT_PUCHAS_HOUSE c
+		,(
+			SELECT CNTRCTR_NO
+				,sum(MANAGECT) AS MANAGECT
+				,sum(OVDINTR) AS OVDINTR
+				,sum(MANAGECT_TOTAL) AS MANAGECT_TOTAL
+			FROM (
+				SELECT CNTRCTR_NO
+					,PAY_TMLMT
+					,trunc(sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0)), - 1) AS MANAGECT
+					,sum(nvl(OVDINTR, 0)) AS OVDINTR
+					,trunc(sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0) + nvl(OVDINTR, 0)), - 1) AS MANAGECT_TOTAL
+				FROM TBRNT_MT_MANAGECT v
+				WHERE (
+						RCIV_DE LIKE #rcivDe#
+						OR (
+							PAY_TMLMT <![CDATA[ <= ]]> (
+								SELECT max(d.PAY_TMLMT)
+								FROM TBRNT_PUCHAS_RCIV d
+								WHERE v.CNTRCTR_NO = d.CNTRCTR_NO
+									AND d.RCIV_DE LIKE #rcivDe#
+								)
+							AND RCIV_DE IS NULL
+							)
+						)
+				GROUP BY CNTRCTR_NO
+					,PAY_TMLMT
+				)
+			GROUP BY CNTRCTR_NO
+			) d
+		,(
+			SELECT CNTRCTR_NO
+				,count(1) AS CNT
+			FROM TBRNT_PUCHAS_RCIV
+			WHERE RCIV_DE LIKE #rcivDe#
+			  AND NTIC_SE = '2'
+			  AND PAYMTHD <![CDATA[ <> ]]> 'V'
+			GROUP BY CNTRCTR_NO
+			) a1
+    ,TBRNT_PUCHAS_RENT_CSTMR f
+	WHERE a.CNTRCTR_NO = b.CNTRCTR_NO
+    AND b.PUCHAS_CSTMR_NO = f.PUCHAS_CSTMR_NO
+		AND a.RCIV_DE LIKE #rcivDe#
+		AND a.PAYMTHD LIKE #rcivSe#
+		AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+		AND a.CNTRCTR_NO = d.CNTRCTR_NO(+)
+		AND a.CNTRCTR_NO = a1.CNTRCTR_NO
+		<isNotEmpty property="houseCode">
+		AND b.RENT_HOUSE_CODE LIKE #houseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND b.DONG LIKE #dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND b.HO LIKE #ho#
+		</isNotEmpty>
+		AND a.PAYMTHD <![CDATA[ <> ]]> 'V'
+		AND A.NTIC_SE = '2'
+	
+	UNION ALL
+	
+	SELECT RCIV_NO
+		,b.RENT_HOUSE_CODE
+		,c.RENT_HOUSE_NM
+		,b.DONG
+		,b.HO
+		,f.NM
+		,f.IHIDNUM
+		,(
+			CASE a.OPERT_SE
+				WHEN 'N'
+					THEN '미확인'
+				WHEN 'J'
+					THEN '정상'
+				WHEN 'O'
+					THEN '과오납'
+				WHEN 'H'
+					THEN '확인요망'
+				ELSE a.OPERT_SE
+				END
+			) AS OPERT_SE_NM
+		,a.OPERT_SE
+		,(
+			CASE a.PROCESS_STTUS
+				WHEN 'N'
+					THEN '미 처 리'
+				WHEN 'C'
+					THEN '처리완료'
+				ELSE a.PROCESS_STTUS
+				END
+			) AS PROCESS_STTUS_NM
+		,a.PROCESS_STTUS
+		,CASE 
+			WHEN OPERT_SE = 'O'
+				AND (
+					a.RCIV_AMOUNT = d.MANAGECT
+					OR a1.CNT <![CDATA[ > ]]> 1
+					)
+				THEN 0
+			ELSE d.MANAGECT
+			END AS MANAGECT
+		,CASE 
+			WHEN OPERT_SE = 'O'
+				AND (
+					a.RCIV_AMOUNT = d.MANAGECT
+					OR a1.CNT <![CDATA[ > ]]> 1
+					)
+				THEN 0
+			ELSE d.OVDINTR
+			END AS OVDINTR
+		,CASE 
+			WHEN OPERT_SE = 'O'
+				AND (
+					a.RCIV_AMOUNT = d.MANAGECT
+					OR a1.CNT <![CDATA[ > ]]> 1
+					)
+				THEN 0
+			ELSE d.MANAGECT_TOTAL
+			END AS MANAGECT_TOTAL
+		,a.RCIV_AMOUNT
+		,a.FALT_AMOUNT
+		,a.PAY_TMLMT
+		,a.RCIV_DE
+	FROM TBRNT_PUCHAS_RCIV a
+		,TBRNT_PUCHAS_CNTRCT b
+		,TBRNT_PUCHAS_HOUSE c
+		,(
+			SELECT CNTRCTR_NO
+				,PAY_TMLMT
+				,trunc(sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0)), - 1) AS MANAGECT
+				,sum(nvl(OVDINTR, 0)) AS OVDINTR
+				,trunc(sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0) + nvl(OVDINTR, 0)), - 1) AS MANAGECT_TOTAL
+			FROM TBRNT_MT_MANAGECT v
+			WHERE (
+					RCIV_DE LIKE #rcivDe#
+					OR RCIV_DE IS NULL
+					)
+			GROUP BY CNTRCTR_NO
+				,PAY_TMLMT
+			) d
+		,(
+			SELECT CNTRCTR_NO
+				,count(1) AS CNT
+			FROM TBRNT_PUCHAS_RCIV
+			WHERE RCIV_DE LIKE #rcivDe#
+			  AND NTIC_SE = '2'
+			  AND PAYMTHD = 'V'
+			GROUP BY CNTRCTR_NO
+			) a1
+    ,TBRNT_PUCHAS_RENT_CSTMR f
+	WHERE a.CNTRCTR_NO = b.CNTRCTR_NO
+    AND b.PUCHAS_CSTMR_NO = f.PUCHAS_CSTMR_NO
+		AND a.RCIV_DE LIKE #rcivDe#
+		AND a.PAYMTHD LIKE #rcivSe#
+		AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+		AND a.CNTRCTR_NO = d.CNTRCTR_NO(+)
+		AND a.PAY_TMLMT = d.PAY_TMLMT(+)
+		AND a.CNTRCTR_NO = a1.CNTRCTR_NO
+		<isNotEmpty property="houseCode">
+		AND b.RENT_HOUSE_CODE LIKE #houseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND b.DONG LIKE #dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND b.HO LIKE #ho#
+		</isNotEmpty>
+		AND a.PAYMTHD = 'V'
+		AND A.NTIC_SE = '2'
+	)
+	ORDER BY RENT_HOUSE_CODE , DONG , HO , PAY_TMLMT
+	</select>
+	
+	
+	
+	<!-- 쿼리명 : 매입임대 관리비 수납처리 현황 건수 조회
+			 설명 : 매입임대 관리비 수납처리 현황 건수 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.25
+	-->	
+	<select id="RNT02040307DAO.selectRcivCntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT 
+		  Count(1) AS Cnt_T
+			,sum(a.RCIV_AMOUNT) AS AMT_T
+			,sum(CASE 
+					WHEN a.OPERT_SE = 'J'
+						THEN 1
+					ELSE 0
+					END) AS Cnt_J
+			,sum(CASE 
+					WHEN a.OPERT_SE = 'J'
+						THEN RCIV_AMOUNT
+					ELSE 0
+					END) AS AMT_J
+			,sum(CASE 
+					WHEN a.OPERT_SE = 'O'
+						THEN 1
+					ELSE 0
+					END) AS Cnt_O
+			,sum(CASE 
+					WHEN a.OPERT_SE = 'O'
+						THEN RCIV_AMOUNT
+					ELSE 0
+					END) AS AMT_O
+			,sum(CASE 
+					WHEN a.OPERT_SE IN (
+							'H'
+							,'N'
+							)
+						THEN 1
+					ELSE 0
+					END) AS Cnt_H
+			,sum(CASE 
+					WHEN a.OPERT_SE IN (
+							'H'
+							,'N'
+							)
+						THEN RCIV_AMOUNT
+					ELSE 0
+					END) AS AMT_H
+		FROM (
+			SELECT RCIV_NO
+				,b.RENT_HOUSE_CODE
+				,c.RENT_HOUSE_NM
+				,b.DONG
+				,b.HO
+				,f.NM
+				,f.IHIDNUM
+				,(
+					CASE a.OPERT_SE
+						WHEN 'N'
+							THEN '미확인'
+						WHEN 'J'
+							THEN '정상'
+						WHEN 'O'
+							THEN '과오납'
+						WHEN 'H'
+							THEN '확인요망'
+						ELSE a.OPERT_SE
+						END
+					) AS OPERT_SE_NM
+				,a.OPERT_SE
+				,(
+					CASE a.PROCESS_STTUS
+						WHEN 'N'
+							THEN '미 처 리'
+						WHEN 'C'
+							THEN '처리완료'
+						ELSE a.PROCESS_STTUS
+						END
+					) AS PROC_STATE_Nm
+				,a.PROCESS_STTUS
+				,CASE 
+					WHEN OPERT_SE = 'O'
+						AND (
+							a.RCIV_AMOUNT = d.MANAGECT
+							OR a1.CNT <![CDATA[ > ]]> 1
+							)
+						THEN 0
+					ELSE d.MANAGECT
+					END AS MANAGECT
+				,CASE 
+					WHEN OPERT_SE = 'O'
+						AND (
+							a.RCIV_AMOUNT = d.MANAGECT
+							OR a1.CNT <![CDATA[ > ]]> 1
+							)
+						THEN 0
+					ELSE d.OVDINTR
+					END AS OVDINTR
+				,CASE 
+					WHEN OPERT_SE = 'O'
+						AND (
+							a.RCIV_AMOUNT = d.MANAGECT
+							OR a1.CNT <![CDATA[ > ]]> 1
+							)
+						THEN 0
+					ELSE d.MANAGECT_TOTAL
+					END AS MANAGECT_TOTAL
+				,a.RCIV_AMOUNT
+				,a.FALT_AMOUNT
+				,a.PAY_TMLMT
+				,a.RCIV_DE
+			FROM TBRNT_PUCHAS_RCIV a
+				,TBRNT_PUCHAS_CNTRCT b
+				,TBRNT_PUCHAS_HOUSE c
+				,(
+					SELECT CNTRCTR_NO
+						,sum(MANAGECT) AS MANAGECT
+						,sum(OVDINTR) AS OVDINTR
+						,sum(MANAGECT_TOTAL) AS MANAGECT_TOTAL
+					FROM (
+						SELECT CNTRCTR_NO
+							,PAY_TMLMT
+							,trunc(sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0)), - 1) AS MANAGECT
+							,sum(nvl(OVDINTR, 0)) AS OVDINTR
+							,trunc(sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0) + nvl(OVDINTR, 0)), - 1) AS MANAGECT_TOTAL
+						FROM TBRNT_MT_MANAGECT v
+						WHERE (
+								RCIV_DE LIKE #rcivDe#
+								OR (
+									PAY_TMLMT <![CDATA[ <= ]]> (
+										SELECT max(d.PAY_TMLMT)
+										FROM TBRNT_PUCHAS_RCIV d
+										WHERE v.CNTRCTR_NO = d.CNTRCTR_NO
+											AND d.RCIV_DE LIKE #rcivDe#
+										)
+									AND RCIV_DE IS NULL
+									)
+								)
+						GROUP BY CNTRCTR_NO
+							,PAY_TMLMT
+						)
+					GROUP BY CNTRCTR_NO
+					) d
+				,(
+					SELECT CNTRCTR_NO
+						,count(1) AS CNT
+					FROM TBRNT_PUCHAS_RCIV
+					WHERE RCIV_DE LIKE #rcivDe#
+					GROUP BY CNTRCTR_NO
+					) a1
+		    ,TBRNT_PUCHAS_RENT_CSTMR f
+			WHERE a.CNTRCTR_NO = b.CNTRCTR_NO
+		    AND b.PUCHAS_CSTMR_NO = f.PUCHAS_CSTMR_NO
+				AND a.RCIV_DE LIKE #rcivDe#
+				AND a.PAYMTHD LIKE #rcivSe#
+				AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+				AND a.CNTRCTR_NO = d.CNTRCTR_NO(+)
+				AND a.CNTRCTR_NO = a1.CNTRCTR_NO
+				<isNotEmpty property="houseCode">
+				AND b.RENT_HOUSE_CODE LIKE #houseCode#
+				</isNotEmpty>
+				<isNotEmpty property="dong">
+				AND b.DONG LIKE #dong#
+				</isNotEmpty>
+				<isNotEmpty property="ho">
+				AND b.HO LIKE #ho#
+				</isNotEmpty>
+				AND a.PAYMTHD <![CDATA[ <> ]]> 'V'
+				AND A.NTIC_SE = '2'
+			
+			UNION ALL
+			
+			SELECT 
+		    RCIV_NO
+				,b.RENT_HOUSE_CODE
+				,c.RENT_HOUSE_NM
+				,b.DONG
+				,b.HO
+				,f.NM
+				,f.IHIDNUM
+				,(
+					CASE a.OPERT_SE
+						WHEN 'N'
+							THEN '미확인'
+						WHEN 'J'
+							THEN '정상'
+						WHEN 'O'
+							THEN '과오납'
+						WHEN 'H'
+							THEN '확인요망'
+						ELSE a.OPERT_SE
+						END
+					) AS OPERT_SE_NM
+				,a.OPERT_SE
+				,(
+					CASE a.PROCESS_STTUS
+						WHEN 'N'
+							THEN '미 처 리'
+						WHEN 'C'
+							THEN '처리완료'
+						ELSE a.PROCESS_STTUS
+						END
+					) AS PROCESS_STTUS_NM
+				,a.PROCESS_STTUS
+				,CASE 
+					WHEN OPERT_SE = 'O'
+						AND (
+							a.RCIV_AMOUNT = d.MANAGECT
+							OR a1.CNT <![CDATA[ > ]]> 1
+							)
+						THEN 0
+					ELSE d.MANAGECT
+					END AS MANAGECT
+				,CASE 
+					WHEN OPERT_SE = 'O'
+						AND (
+							a.RCIV_AMOUNT = d.MANAGECT
+							OR a1.CNT <![CDATA[ > ]]> 1
+							)
+						THEN 0
+					ELSE d.OVDINTR
+					END AS OVDINTR
+				,CASE 
+					WHEN OPERT_SE = 'O'
+						AND (
+							a.RCIV_AMOUNT = d.MANAGECT
+							OR a1.CNT <![CDATA[ > ]]> 1
+							)
+						THEN 0
+					ELSE d.MANAGECT_TOTAL
+					END AS MANAGECT_TOTAL
+				,a.RCIV_AMOUNT
+				,a.FALT_AMOUNT
+				,a.PAY_TMLMT
+				,a.RCIV_DE
+			FROM TBRNT_PUCHAS_RCIV a
+				,TBRNT_PUCHAS_CNTRCT b
+				,TBRNT_PUCHAS_HOUSE c
+				,(
+					SELECT CNTRCTR_NO
+		        ,PAY_TMLMT
+						,RCIV_DE
+						,trunc(sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0)), - 1) AS MANAGECT
+						,sum(nvl(OVDINTR, 0)) AS OVDINTR
+						,trunc(sum(nvl(MANAGECT, 0) + nvl(RDCAMT_AMOUNT, 0) + nvl(OVDINTR, 0)), - 1) AS MANAGECT_TOTAL
+					FROM TBRNT_MT_MANAGECT v
+					WHERE (
+							RCIV_DE LIKE #rcivDe#
+							OR RCIV_DE IS NULL
+							)
+					GROUP BY CNTRCTR_NO
+		        ,PAY_TMLMT
+						,RCIV_DE
+					) d
+				,(
+					SELECT CNTRCTR_NO
+						,count(1) AS CNT
+					FROM TBRNT_PUCHAS_RCIV
+					WHERE RCIV_DE LIKE #rcivDe#
+					GROUP BY CNTRCTR_NO
+					) a1
+		      ,TBRNT_PUCHAS_RENT_CSTMR f
+			WHERE a.CNTRCTR_NO = b.CNTRCTR_NO
+		     AND b.PUCHAS_CSTMR_NO = f.PUCHAS_CSTMR_NO
+		  	AND a.RCIV_DE LIKE #rcivDe#
+				AND a.PAYMTHD LIKE #rcivSe#
+				AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+				AND a.CNTRCTR_NO = d.CNTRCTR_NO(+)
+				AND a.PAY_TMLMT = d.PAY_TMLMT(+)
+				AND a.CNTRCTR_NO = a1.CNTRCTR_NO
+				<isNotEmpty property="houseCode">
+				AND b.RENT_HOUSE_CODE LIKE #houseCode#
+				</isNotEmpty>
+				<isNotEmpty property="dong">
+				AND b.DONG LIKE #dong#
+				</isNotEmpty>
+				<isNotEmpty property="ho">				
+				AND b.HO LIKE #ho#
+				</isNotEmpty>
+				AND a.PAYMTHD = 'V'
+				AND A.NTIC_SE = '2'
+        )a
+	</select>
+
+
+	<!-- 쿼리명 : 매입임대 수납처리,취소  프로시저 호출
+			 설명 : 매입임대 일괄납부요청  프로시저 호출
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.25
+	-->		 
+	<parameterMap id="in_param" class="java.util.HashMap">
+		<parameter property="rcivDe" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="rcivSe" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="houseCode" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="dong" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="ho" jdbcType="VARCHAR" javaType="string" mode="IN" />						
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+	</parameterMap>	
+	
+	<procedure id="RNT02040307DAO.SPRNT_REC_DESC_RECEIPT_DG" parameterMap="in_param">
+		{ CALL SPRNT_REC_DESC_RECEIPT_DG( ? , ? , ? , ? , ? , ?)}
+	</procedure>	
+	
+	<procedure id="RNT02040307DAO.SPRNT_REC_DESC_CANCEL_DG" parameterMap="in_param">
+		{ CALL SPRNT_REC_DESC_CANCEL_DG( ? , ? , ? , ? , ? , ?)}
+	</procedure>	
+</sqlMap>

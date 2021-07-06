@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP030200_SQL">
+
+<!--  설명  : 보상액결정조서
+    작성자 : 지효정 -->
+
+    <!-- 조서 목록(소재지별) -->
+    <select id="CMP030200DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT A.BSNS_AREA_CODE , 
+		       A.THING_SN , 
+		       A.LOCPLC_CODE , 
+		       SFCMP_GET_LOCPLC(A.BSNS_AREA_CODE, A.LOCPLC_CODE) || ' ' || DECODE(A.SLNO, NULL, A.LNM, A.LNM || '-' || A.SLNO) AS FULL_LOCPLC_CODE_NM , 
+		       A.LNM , 
+		       A.LNM_SE , 
+		       A.SLNO , 
+		       TRIM(A.THING_CL) AS THING_CL , 
+		       A.THING_NM , 
+		       A.STRCT_STNDRD , 
+		       A.AR_LGSTR , 
+		       A.AR_INCRPR , 
+		       A.UNIT , 
+		       A.THING_UNTPC AS UNTPC , 
+		       A.RWMNY , 
+		       A.RM_1 , 
+		       A.LNDCGR_LGSTR,
+		       A.LNDCGR_INCRPR,
+			   BC.BCNC_CODE1, 			/* 평가사1 */
+			   BC.UNTPC1,				/* 평가사1 단가 */
+			   BC.EVL_AMOUNT1,			/* 평가사1 평가금액 */
+			   BC.BCNC_NM1,			/* 평가사1의 이름 */
+			   BC.BCNC_CODE2, 			/* 평가사2 */
+			   BC.UNTPC2,				/* 평가사2 단가 */
+			   BC.EVL_AMOUNT2,			/* 평가사2 평가금액 */
+			   BC.BCNC_NM2,			/* 평가사2의 이름 */
+			   BC.BCNC_CODE3,			/* 평가사3 */
+			   BC.UNTPC3,				/* 평가사3 단가 */
+			   BC.EVL_AMOUNT3,			/* 평가사3 평가금액 */
+			   BC.BCNC_NM3,			/* 평가사3의 이름 */
+		       C.ADRES , 
+		       B1.AR , 
+		       CASE 
+		           WHEN B1.CNT = 1 
+		           THEN C.OWNER_NM 
+		           ELSE C.OWNER_NM || ' 외' || (B1.CNT - 1) 
+		       END AS NM ,  
+               A.REWARD_STLE|| 
+               CASE NVL(A.REWARD_STLE,'0') 
+                   WHEN '0' 
+                   THEN LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+                   ELSE 
+                       CASE 
+                           WHEN A.RWMNY > 0 
+                           THEN '00' 
+                           ELSE LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+                       END 
+               END AS SORT_ORDR                
+		  FROM TBCMP_THING_WTNNC A, 
+		       TBCMP_THING_OWNER B, 
+		       TBCMP_OWNER C , 
+		       (SELECT S.BSNS_AREA_CODE, 
+		              S.THING_SN, 
+		              MIN (S.THING_SEQ) AS MIN_SEQ 
+		         FROM TBCMP_THING_WTNNC S, 
+		              TBCMP_THING_OWNER O, 
+		              TBCMP_OWNER D 
+		        WHERE S.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+                      AND S.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+                      AND O.OWNER_NO = D.OWNER_NO
+                      AND '1' = D.OWNER_SE
+            <isNotEmpty property="LOCPLC_CODE">
+                      AND S.LOCPLC_CODE = #LOCPLC_CODE#
+            </isNotEmpty>
+            <isEqual property="SELECT" compareValue="0">
+			<isNotEmpty property="THING_CL">
+			          AND S.THING_CL IN 
+			<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+			          #ARR_THING_CL[]#
+			</iterate>				
+			</isNotEmpty>
+			</isEqual>
+            <isNotEmpty property="NM">
+                      AND D.OWNER_NM LIKE '%' || #NM# || '%'
+            </isNotEmpty>
+		              AND S.BSNS_AREA_CODE = O.BSNS_AREA_CODE 
+		              AND S.THING_SN = O.THING_SN 
+		        GROUP BY S.BSNS_AREA_CODE, 
+		              S.THING_SN 
+		       ) A1, 
+		       (SELECT BSNS_AREA_CODE, 
+		              THING_SN, 
+		              MIN(OWNER_SN) AS OWNER_SN, 
+		              COUNT(1) AS CNT, 
+		              SUM (AR) AS AR 
+		         FROM TBCMP_THING_OWNER 
+		        WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE# 
+		        GROUP BY BSNS_AREA_CODE, 
+		              THING_SN 
+		       ) B1, 
+			   (SELECT
+			         MAX(BSNS_AREA_CODE) AS BSNS_AREA_CODE
+			        ,THING_SN
+			        ,MAX(REWARD_STLE) AS REWARD_STLE
+			        ,MAX(BNDE_APPLC_GROUP) AS BNDE_APPLC_GROUP
+			        ,MAX(SERVC_ENTRPS_CNT) AS SERVC_ENTRPS_CNT
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE1, BCNC_CODE1, NULL)) AS BCNC_CODE1
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE1, DECODE(UNTPC, NULL, 0, UNTPC), 0)) AS UNTPC1
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE1, DECODE(EVL_AMOUNT, NULL, 0, EVL_AMOUNT), 0)) AS EVL_AMOUNT1
+			        ,MAX(BCNC_NM1) AS BCNC_NM1
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE2, BCNC_CODE2, NULL)) AS BCNC_CODE2
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE2, DECODE(UNTPC, NULL, 0, UNTPC), 0)) AS UNTPC2
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE2, DECODE(EVL_AMOUNT, NULL, 0, EVL_AMOUNT), 0)) AS EVL_AMOUNT2
+			        ,MAX(BCNC_NM2) AS BCNC_NM2
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE3, BCNC_CODE3, NULL)) AS BCNC_CODE3
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE3, DECODE(UNTPC, NULL, 0, UNTPC), 0)) AS UNTPC3
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE3, DECODE(EVL_AMOUNT, NULL, 0, EVL_AMOUNT), 0)) AS EVL_AMOUNT3
+			        ,MAX(BCNC_NM3) AS BCNC_NM3
+			    FROM(
+			        SELECT
+			        	 B.*
+			        	,C.BCNC_CODE AS BCNC_CODE
+			        	,C.THING_UNTPC AS UNTPC
+			        	,C.EVL_AMOUNT
+			        	,C.THING_SN
+			        	,C.REWARD_STLE		    /* 일괄적용여부 */
+						,C.BNDE_APPLC_GROUP		/* 일괄적용그룹 */
+			        FROM(
+			            SELECT
+			                 MAX(BSNS_AREA_CODE) AS BSNS_AREA_CODE
+			                ,MAX(DECODE(RNUM, 1, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM1
+			                ,MAX(DECODE(RNUM, 2, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM2
+			                ,MAX(DECODE(RNUM, 3, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM3
+			                ,MAX(DECODE(RNUM, 1, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE1
+			                ,MAX(DECODE(RNUM, 2, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE2
+			                ,MAX(DECODE(RNUM, 3, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE3
+			                ,MAX(RNUM) AS SERVC_ENTRPS_CNT
+			            FROM(
+			                SELECT
+			                	 RANK()OVER(ORDER BY BA.SORT_ORDR) AS RNUM
+			                	,BA.BCNC_CODE
+			                	,#BSNS_AREA_CODE# AS BSNS_AREA_CODE
+			                	,BB.ENTRPS_NM AS BCNC_NM
+			                FROM TBCMP_BSNSBY_PRPRAPR BA, TBCTR_SERVC_ENTRPS BB
+			                WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			                AND   BA.BCNC_CODE = BB.SERVC_ENTRPS_CODE
+			                AND   BB.ENTRPS_SE = '01'
+			            )
+			        )B, TBCMP_APASMT C
+			        WHERE B.BSNS_AREA_CODE = C.BSNS_AREA_CODE(+)
+			        AND   (C.BCNC_CODE IN(B.BCNC_CODE1, B.BCNC_CODE2, B.BCNC_CODE3))
+			    )
+			    GROUP BY THING_SN
+			  ) BC, TBCMP_LOCPLC_INFO X, TBCOM_CMMN_CODE Y 
+		 WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+            <isNotEmpty property="LNM">
+               AND A.LNM LIKE #LNM#||'%'
+            </isNotEmpty>
+            <isNotEmpty property="SLNO">
+               AND A.SLNO LIKE #SLNO#||'%'
+            </isNotEmpty>
+            <isNotEmpty property="LOCPLC_CODE">
+               AND A.LOCPLC_CODE = #LOCPLC_CODE#
+            </isNotEmpty>
+            <isNotEmpty property="REWARD_ODR">
+               AND A.REWARD_ODR = #REWARD_ODR#
+            </isNotEmpty>
+			<isEqual property="SELECT" compareValue="0">
+			<isNotEmpty property="THING_CL">
+			   AND A.THING_CL IN 
+			<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+			   #ARR_THING_CL[]#
+			</iterate>				
+			</isNotEmpty>
+			</isEqual>
+            <isNotEmpty property="NM">
+               AND C.OWNER_NM LIKE '%' || #NM# || '%'
+            </isNotEmpty>
+		       AND A.BSNS_AREA_CODE = B.BSNS_AREA_CODE 
+		       AND A.THING_SN = B.THING_SN 
+		       AND A.BSNS_AREA_CODE = C.BSNS_AREA_CODE 
+		       AND B.OWNER_NO = C.OWNER_NO
+		       AND B.OWNER_SN = B1.OWNER_SN 
+		       AND '1' = C.OWNER_SE 
+		       AND A.BSNS_AREA_CODE = A1.BSNS_AREA_CODE 
+		       AND A.THING_SN = A1.THING_SN 
+		       AND A.BSNS_AREA_CODE = B1.BSNS_AREA_CODE 
+		       AND A.THING_SN = B1.THING_SN 
+		       AND A.BSNS_AREA_CODE = BC.BSNS_AREA_CODE(+) 
+		       AND A.THING_SN = BC.THING_SN(+)  
+		       AND A.BSNS_AREA_CODE = X.BSNS_AREA_CODE AND A.LOCPLC_CODE = X.LOCPLC_CODE AND 'CMP001' = Y.GRP_CODE AND A.THING_CL = Y.CODE
+		ORDER BY X.SORT_ORDR, TO_NUMBER(A.LNM), TO_NUMBER(A.SLNO), SORT_ORDR, A.BNDE_APPLC_GROUP    
+	</select>
+	
+    <!-- 조서 목록(소유자별) -->
+    <select id="CMP030200DAO.thingWtnncList2" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT A.BSNS_AREA_CODE , 
+		       A.THING_SN , 
+		       A.LOCPLC_CODE , 
+		       SFCMP_GET_LOCPLC(A.BSNS_AREA_CODE, A.LOCPLC_CODE) || ' ' || DECODE(A.SLNO, NULL, A.LNM, A.LNM || '-' || A.SLNO) AS FULL_LOCPLC_CODE_NM , 
+		       A.LNM , 
+		       A.LNM_SE , 
+		       A.SLNO , 
+		       TRIM(A.THING_CL) AS THING_CL , 
+		       A.THING_NM , 
+		       A.STRCT_STNDRD , 
+		       A.AR_LGSTR , 
+		       A.AR_INCRPR , 
+		       A.UNIT , 
+		       A.THING_UNTPC AS UNTPC,
+		       B.RWMNY , 
+		       A.RM_1 , 
+		       A.LNDCGR_LGSTR,
+		       A.LNDCGR_INCRPR,
+	           BC.BCNC_CODE1, /* 평가사1 */
+	           DECODE(ROW_NUMBER () OVER (PARTITION BY A.BSNS_AREA_CODE, A.THING_SN ORDER BY A.THING_SN ,C.OWNER_NM ),1, BC.UNTPC1, 0) AS UNTPC1,/* 평가사1 단가 */
+	           DECODE(ROW_NUMBER () OVER (PARTITION BY A.BSNS_AREA_CODE, A.THING_SN ORDER BY A.THING_SN ,C.OWNER_NM ),1, BC.EVL_AMOUNT1, 0) AS EVL_AMOUNT1,/* 평가사1 평가금액 */
+	           BC.BCNC_NM1,         /* 평가사1의 이름 */
+	           BC.BCNC_CODE2,         /* 평가사2 */
+	           DECODE(ROW_NUMBER () OVER (PARTITION BY A.BSNS_AREA_CODE, A.THING_SN ORDER BY A.THING_SN ,C.OWNER_NM ),1, BC.UNTPC2, 0) AS UNTPC2,         /* 평가사2 단가 */
+	           DECODE(ROW_NUMBER () OVER (PARTITION BY A.BSNS_AREA_CODE, A.THING_SN ORDER BY A.THING_SN ,C.OWNER_NM ),1, BC.EVL_AMOUNT2, 0) AS EVL_AMOUNT2,         /* 평가사2 평가금액 */
+	           BC.BCNC_NM2,         /* 평가사2의 이름 */
+	           BC.BCNC_CODE3,         /* 평가사3 */
+	           DECODE(ROW_NUMBER () OVER (PARTITION BY A.BSNS_AREA_CODE, A.THING_SN ORDER BY A.THING_SN ,C.OWNER_NM ),1, BC.UNTPC3, 0) AS UNTPC3,         /* 평가사3 단가 */
+	           DECODE(ROW_NUMBER () OVER (PARTITION BY A.BSNS_AREA_CODE, A.THING_SN ORDER BY A.THING_SN ,C.OWNER_NM ),1, BC.EVL_AMOUNT3, 0) AS EVL_AMOUNT3,         /* 평가사3 평가금액 */
+	           BC.BCNC_NM3,         /* 평가사3의 이름 */
+		       C.ADRES , 
+		       B.AR , 
+		       C.OWNER_NM  AS NM ,  
+               A.REWARD_STLE|| 
+               CASE NVL(A.REWARD_STLE,'0') 
+                   WHEN '0' 
+                   THEN LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+                   ELSE 
+                       CASE 
+                           WHEN A.RWMNY > 0 
+                           THEN '00' 
+                           ELSE LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+                       END 
+               END AS SORT_ORDR ,
+               B.OWNER_SN               
+		  FROM TBCMP_THING_WTNNC A, 
+		       TBCMP_THING_OWNER B, 
+		       TBCMP_OWNER C , 
+			   (SELECT
+			         MAX(BSNS_AREA_CODE) AS BSNS_AREA_CODE
+			        ,THING_SN
+			        ,MAX(REWARD_STLE) AS REWARD_STLE
+			        ,MAX(BNDE_APPLC_GROUP) AS BNDE_APPLC_GROUP
+			        ,MAX(SERVC_ENTRPS_CNT) AS SERVC_ENTRPS_CNT
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE1, BCNC_CODE1, NULL)) AS BCNC_CODE1
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE1, DECODE(UNTPC, NULL, 0, UNTPC), 0)) AS UNTPC1
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE1, DECODE(EVL_AMOUNT, NULL, 0, EVL_AMOUNT), 0)) AS EVL_AMOUNT1
+			        ,MAX(BCNC_NM1) AS BCNC_NM1
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE2, BCNC_CODE2, NULL)) AS BCNC_CODE2
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE2, DECODE(UNTPC, NULL, 0, UNTPC), 0)) AS UNTPC2
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE2, DECODE(EVL_AMOUNT, NULL, 0, EVL_AMOUNT), 0)) AS EVL_AMOUNT2
+			        ,MAX(BCNC_NM2) AS BCNC_NM2
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE3, BCNC_CODE3, NULL)) AS BCNC_CODE3
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE3, DECODE(UNTPC, NULL, 0, UNTPC), 0)) AS UNTPC3
+			        ,MAX(DECODE(BCNC_CODE, BCNC_CODE3, DECODE(EVL_AMOUNT, NULL, 0, EVL_AMOUNT), 0)) AS EVL_AMOUNT3
+			        ,MAX(BCNC_NM3) AS BCNC_NM3
+			    FROM(
+			        SELECT
+			        	 B.*
+			        	,C.BCNC_CODE AS BCNC_CODE
+			        	,C.THING_UNTPC AS UNTPC
+			        	,C.EVL_AMOUNT
+			        	,C.THING_SN
+			        	,C.REWARD_STLE		    /* 일괄적용여부 */
+						,C.BNDE_APPLC_GROUP		/* 일괄적용그룹 */
+			        FROM(
+			            SELECT
+			                 MAX(BSNS_AREA_CODE) AS BSNS_AREA_CODE
+			                ,MAX(DECODE(RNUM, 1, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM1
+			                ,MAX(DECODE(RNUM, 2, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM2
+			                ,MAX(DECODE(RNUM, 3, DECODE(BCNC_CODE, NULL, NULL, BCNC_NM))) AS BCNC_NM3
+			                ,MAX(DECODE(RNUM, 1, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE1
+			                ,MAX(DECODE(RNUM, 2, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE2
+			                ,MAX(DECODE(RNUM, 3, DECODE(BCNC_CODE, NULL, NULL, BCNC_CODE))) AS BCNC_CODE3
+			                ,MAX(RNUM) AS SERVC_ENTRPS_CNT
+			            FROM(
+			                SELECT
+			                	 RANK()OVER(ORDER BY BA.SORT_ORDR) AS RNUM
+			                	,BA.BCNC_CODE
+			                	,#BSNS_AREA_CODE# AS BSNS_AREA_CODE
+			                	,BB.ENTRPS_NM AS BCNC_NM
+			                FROM TBCMP_BSNSBY_PRPRAPR BA, TBCTR_SERVC_ENTRPS BB
+			                WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			                AND   BA.BCNC_CODE = BB.SERVC_ENTRPS_CODE
+			                AND   BB.ENTRPS_SE = '01'
+			            )
+			        )B, TBCMP_APASMT C
+			        WHERE B.BSNS_AREA_CODE = C.BSNS_AREA_CODE(+)
+			        AND   (C.BCNC_CODE IN(B.BCNC_CODE1, B.BCNC_CODE2, B.BCNC_CODE3))
+			    )
+			    GROUP BY THING_SN
+			  ) BC, TBCMP_LOCPLC_INFO X, TBCOM_CMMN_CODE Y 
+		 WHERE A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+            <isNotEmpty property="LNM">
+               AND A.LNM = #LNM#
+            </isNotEmpty>
+            <isNotEmpty property="SLNO">
+               AND A.SLNO = #SLNO#
+            </isNotEmpty>
+            <isNotEmpty property="LOCPLC_CODE">
+               AND A.LOCPLC_CODE = #LOCPLC_CODE#
+            </isNotEmpty>
+            <isNotEmpty property="REWARD_ODR">
+               AND A.REWARD_ODR = #REWARD_ODR#
+            </isNotEmpty>
+			<isEqual property="SELECT" compareValue="0">
+			<isNotEmpty property="THING_CL">
+			   AND A.THING_CL IN 
+			<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+			   #ARR_THING_CL[]#
+			</iterate>				
+			</isNotEmpty>
+			</isEqual>
+            <isNotEmpty property="NM">
+               AND C.OWNER_NM LIKE '%' || #NM# || '%'
+            </isNotEmpty>
+		       AND B.BSNS_AREA_CODE = A.BSNS_AREA_CODE 
+		       AND B.THING_SN = A.THING_SN 
+		       AND A.BSNS_AREA_CODE = C.BSNS_AREA_CODE 
+		       AND B.OWNER_NO = C.OWNER_NO
+		       AND '1' = C.OWNER_SE
+		       AND A.BSNS_AREA_CODE = BC.BSNS_AREA_CODE(+) 
+		       AND A.THING_SN = BC.THING_SN(+)  
+		       AND A.BSNS_AREA_CODE = X.BSNS_AREA_CODE AND A.LOCPLC_CODE = X.LOCPLC_CODE AND 'CMP001' = Y.GRP_CODE AND A.THING_CL = Y.CODE
+		ORDER BY X.SORT_ORDR, TO_NUMBER(A.LNM), TO_NUMBER(A.SLNO), SORT_ORDR, A.BNDE_APPLC_GROUP, C.OWNER_NM, B.RWMNY DESC
+	</select>	
+</sqlMap>

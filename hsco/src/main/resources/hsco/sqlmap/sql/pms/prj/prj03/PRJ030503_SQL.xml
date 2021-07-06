@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj03">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBPRJ_PRMPC_CODE				원가코드
+		 R   : TBPRJ_ACMSLT_PRMPC_SM		실적원가집계
+		 R   : TBPRJ_INDRCT_DLRY			간접비배부
+		 R   : TBACC_CHIT_MASTR				전표마스터
+		 R   : TBACC_CHIT_DETAIL			전표상세
+
+		 R   : TBACC_EXP_DSN_MASTR			지출결의
+	-->
+
+	<!-- 상세내역(직접비) ================================================== -->
+
+	<select id="PRJ030503.d1List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.ACCNUT_ACNT_CODE		/* 회계계정코드 */
+	,AC.ACCNUT_ACNT_NM		/* 회계계정과목명 */
+	,A.DT					/* 지출일자 */
+
+	,A.AMT					/* 대변금액 */
+	,A.SUMRY				/* 적요 */
+FROM (
+<include refid="pms_prj.v_prj_acc_detail"/>
+) A				/* 실적원가집계 */
+LEFT JOIN TBPRJ_PRMPC_ACNT_MAPNG AM			/* 원가계정맵핑 */
+  ON AM.ACCNUT_YEAR = A.ACCNUT_YEAR
+ AND AM.ACCNUT_ACNT_CODE = A.ACCNUT_ACNT_CODE
+LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT AC		/* 회계계정과목 */
+  ON AC.ACCNUT_YEAR = A.ACCNUT_YEAR
+ AND AC.ACCNUT_ACNT_CODE = A.ACCNUT_ACNT_CODE
+WHERE A.ACCNUT_YEAR = SUBSTR(#BSNS_YM#,1,4)		/* 회계년도 */
+  AND A.DT LIKE #BSNS_YM#||'%'					/* 지출일자 */
+  AND A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+  AND AM.STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 상세내역(간접비) ================================================== -->
+
+	<select id="PRJ030503.d2List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.ACNT_CODE				/* 계정코드 */
+	,A.DLRY_STDR_CODE			/* 배부코드 */
+	,B.ACCNUT_ACNT_NM			/* 회계계정과목명 */
+	,DC.DLRY_STDR_NM			/* 배부기준명 */
+	,DR.DLRY_RT AS RT			/* 배부율 */
+	,A.DLRY_AMOUNT AS AMT		/* 배부금액 */
+FROM TBPRJ_INDRCT_DLRY A					/* 간접비배부 */
+LEFT JOIN TBPRJ_BSNS_CODE BC			/* 사업코드 */
+  ON BC.BSNS_CODE = A.BSNS_CODE
+LEFT JOIN TBPRJ_PRMPC_ACNT_MAPNG AM			/* 원가계정맵핑 */
+  ON AM.ACCNUT_YEAR = SUBSTR(A.BSNS_YM,1,4)
+ AND AM.ACCNUT_ACNT_CODE = A.ACNT_CODE
+LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT B		/* 회계계정과목 */
+  ON B.ACCNUT_YEAR = AM.ACCNUT_YEAR
+ AND B.ACCNUT_ACNT_CODE = A.ACNT_CODE
+LEFT JOIN TBPRJ_DLRY_STDR_CODE DC			/* 배부계정코드 */
+  ON DC.STDR_YEAR = AM.ACCNUT_YEAR
+ AND DC.DLRY_STDR_CODE = A.DLRY_STDR_CODE
+LEFT JOIN TBPRJ_DLRY_STDR_RATE DR			/* 배부기준비율 */
+  ON DR.STDR_YEAR = AM.ACCNUT_YEAR		/* 기준년도 */
+ AND DR.BSNS_CODE = A.BSNS_CODE			/* 사업코드 */
+ AND DR.BSNS_TY = BC.BSNS_TY			/* 사업유형 */
+ AND DR.DLRY_STDR_CODE = A.DLRY_STDR_CODE	/* 배부기준코드 */
+WHERE A.BSNS_YM = #BSNS_YM#				/* 사업년월 */
+  AND A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+  AND AM.STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+ORDER BY 1,2,3
+	</select>
+
+</sqlMap>

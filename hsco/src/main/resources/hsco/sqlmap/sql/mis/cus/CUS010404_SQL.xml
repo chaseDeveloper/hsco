@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010404_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+   <!--기타민원처리(접점별 처리현황) 목록 조회 -->
+	<select id="CUS010404DAO.selectCcntPrcSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBL AS (
+			    SELECT
+			         t2.INQRY_KND_DETAIL
+			        ,NVL(SUM(DECODE(t1.RCEPT_MTH,'A1',1,'A2',1,0)),0) AS CNT_A  /* 인터넷 (감사이첩 포함) */
+			        ,NVL(SUM(DECODE(t1.RCEPT_MTH,'B1',1,0)),0)        AS CNT_B1 /* 전화 */
+			        ,NVL(SUM(DECODE(t1.RCEPT_MTH,'B2',1,0)),0)        AS CNT_B2 /* 팩스 */
+			        ,NVL(SUM(DECODE(t1.RCEPT_MTH,'B3',1,0)),0)        AS CNT_B3 /* 우편 */
+			        ,NVL(SUM(DECODE(t1.RCEPT_MTH,'B4',1,0)),0)        AS CNT_B4 /* 방문 */
+			        ,NVL(SUM(DECODE(t1.RCEPT_MTH,'B6',1,0)),0)        AS CNT_B6 /* 이첩 */
+			        ,NVL(SUM(DECODE(t1.RCEPT_MTH,'B7',1,0)),0)        AS CNT_B7 /* 기타 */
+			        ,NVL(SUM(CASE WHEN t1.RCEPT_MTH IN ('A1','A2','B1','B2','B3','B4','B6','B7') THEN 1 ELSE 0 END),0) AS TOT_CNT
+			    FROM TBCUS_HMPG_CSTMR_CVPL t1
+			         INNER JOIN TBCUS_HMPG_CVPL_DSTB t2
+			         ON  t1.RCEPT_NO      = t2.RCEPT_NO
+			    WHERE t1.RCEPT_DT IS NOT NULL
+			      AND TO_CHAR(t1.RCEPT_DT,'YYYYMMDD') BETWEEN #BGN_DE# AND #END_DE#
+			      AND t2.CVPL_STTUS IN ('5','6')  			/* 5:처리완료, 6:응답완료 */
+			      AND SUBSTR(t2.CVPL_NO,1,1) IN ('A','B')	/* A:온라인	 , B:오프라인 */
+		]]>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				(t2.CHRG_DEPT_CODE = #DEPT_CODE# OR t2.HELP_DEPT_CODE = #DEPT_CODE#)
+			</isNotEmpty>
+		<![CDATA[
+			    GROUP BY t2.INQRY_KND_DETAIL
+			)
+			SELECT
+			     t3.CODE            AS INQRY_KND
+			    ,t3.CODE_NM         AS INQRY_KND_NM
+			    ,t1.CODE		    AS INQRY_KND_DETAIL
+			    ,t1.CODE_NM			AS INQRY_KND_DETAIL_NM
+			    ,NVL(t2.CNT_A,0)    AS CNT_A				/* 인터넷 (감사이첩 포함) */ 
+			    ,NVL(t2.CNT_B1,0)   AS CNT_B1               /* 전화 */            
+			    ,NVL(t2.CNT_B2,0)   AS CNT_B2               /* 팩스 */            
+			    ,NVL(t2.CNT_B3,0)   AS CNT_B3               /* 우편 */            
+			    ,NVL(t2.CNT_B4,0)   AS CNT_B4               /* 방문 */            
+			    ,NVL(t2.CNT_B6,0)   AS CNT_B6               /* 이첩 */            
+			    ,NVL(t2.CNT_B7,0)   AS CNT_B7               /* 기타 */
+			    ,NVL(t2.TOT_CNT,0)  AS TOT_CNT				/* 소계 */            
+			FROM TBCOM_CMMN_CODE t1
+			     LEFT OUTER JOIN TBL t2
+			     ON  t1.CODE = t2.INQRY_KND_DETAIL
+			     AND t1.GRP_CODE  = 'CUS003'
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+			     ON  t3.GRP_CODE = 'CUS001'
+			     AND SUBSTR(t1.CODE,1,1) = t3.CODE
+			WHERE t1.GRP_CODE = 'CUS003'
+			ORDER BY t1.CODE_ORDR
+		]]>
+	</select>
+
+	<!--기타민원처리(민원등급별 현황) 목록 조회. -->
+	<select id="CUS010404DAO.selectCvplGradPrcSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBL AS (
+			    SELECT
+			         t2.CHRG_DEPT_CODE
+			        ,NVL(SUM(DECODE(t1.CVPL_GRAD,'01',1,0)),0)        AS GRAD1  /* 우호 */
+			        ,NVL(SUM(DECODE(t1.CVPL_GRAD,'02',1,NULL,1,0)),0) AS GRAD2  /* 일반(NULL 포함) */
+			        ,NVL(SUM(DECODE(t1.CVPL_GRAD,'03',1,0)),0)        AS GRAD3  /* 악성 */
+			        ,COUNT(1)                                         AS TOTCNT /* 총계 */
+			    FROM TBCUS_HMPG_CSTMR_CVPL t1
+			         INNER JOIN TBCUS_HMPG_CVPL_DSTB t2
+			         ON  t1.RCEPT_NO      = t2.RCEPT_NO
+			    WHERE t1.RCEPT_DT IS NOT NULL
+			      AND TO_CHAR(t1.RCEPT_DT,'YYYYMMDD') BETWEEN #BGN_DE# AND #END_DE#
+			      AND t2.CVPL_STTUS IN ('5','6')  			/* 5:처리완료, 6:응답완료 */
+			      AND SUBSTR(t2.CVPL_NO,1,1) IN ('A','B')	/* A:온라인	 , B:오프라인 */
+			    GROUP BY t2.CHRG_DEPT_CODE
+			)
+			SELECT
+			     t1.DEPT_CODE		AS DEPT_CODE
+			    ,t1.DEPT_NM			AS DEPT_NM
+			    ,NVL(t2.GRAD1,0)    AS GRAD1				/* 우호 */          
+			    ,NVL(t2.GRAD2,0)    AS GRAD2                /* 일반(NULL 포함) */ 
+			    ,NVL(t2.GRAD3,0)    AS GRAD3                /* 악성 */          
+			    ,NVL(t2.TOTCNT,0)   AS TOTCNT               /* 총계 */              
+			FROM VWHRM_DEPT t1
+			     LEFT OUTER JOIN TBL t2
+			      ON t1.DEPT_CODE = t2.CHRG_DEPT_CODE
+			WHERE t1.DEPT_CODE NOT IN ('000000')	/* 화성도시공사 제외 */
+			  AND (t1.USE_AT = '1'
+			       OR EXISTS (
+			           SELECT 1
+			           FROM TBL t3
+			           WHERE t1.DEPT_CODE = t3.CHRG_DEPT_CODE)
+			      )
+		]]>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			ORDER BY t1.OUTPT_ORDR
+	</select>
+
+	<!--기타민원처리(반려사유별 처리상태) 목록조회 -->
+	<select id="CUS010404DAO.selectReturnPrcSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBL AS (
+			SELECT 
+			     t3.DEPT_CODE
+			    ,NVL(SUM(DECODE(t3.RETURN_SE,'1',1,0)),0) AS RETURN_SE1
+			    ,NVL(SUM(DECODE(t3.RETURN_SE,'2',1,0)),0) AS RETURN_SE2
+			    ,NVL(SUM(DECODE(t3.RETURN_SE,'3',1,0)),0) AS RETURN_SE3
+			    ,COUNT(1)								  AS TOTAL
+			FROM TBCUS_HMPG_CSTMR_CVPL t1
+			     INNER JOIN TBCUS_HMPG_CVPL_DSTB t2
+			     ON t1.RCEPT_NO = t2.RCEPT_NO
+			     INNER JOIN TBCUS_RETURN t3
+			     ON t2.CVPL_NO  = t3.CVPL_NO
+			WHERE t1.RCEPT_DT IS NOT NULL
+			  AND TO_CHAR(t1.RCEPT_DT,'YYYYMMDD') BETWEEN #BGN_DE# AND #END_DE#
+			GROUP BY t3.DEPT_CODE
+			)
+			SELECT 
+			     t1.DEPT_CODE
+			    ,t1.DEPT_NM
+			    ,NVL(RETURN_SE1,0) AS RETURN_SE1
+			    ,NVL(RETURN_SE2,0) AS RETURN_SE2
+			    ,NVL(RETURN_SE3,0) AS RETURN_SE3
+			    ,NVL(TOTAL,0)	   AS TOTAL
+			FROM VWHRM_DEPT t1
+			     LEFT OUTER JOIN TBL t2
+			     ON t1.DEPT_CODE = t2.DEPT_CODE
+			WHERE t1.DEPT_CODE NOT IN ('000000')	/* 화성도시공사 제외 */
+			  AND (t1.USE_AT = '1'
+			       OR EXISTS (
+			           SELECT 1
+			           FROM TBL t3
+			           WHERE t1.DEPT_CODE = t3.DEPT_CODE)
+			      )
+		]]>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			ORDER BY t1.OUTPT_ORDR
+	</select>
+
+	<!--온라인/오프라인 민원처리현황에 사용되는 iterate를 위한 부서목록 조회 -->
+	<select id="CUS010404DAO.selectDeptcodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT 
+				 DEPT_CODE
+				,DEPT_NM
+			FROM VWHRM_DEPT
+		]]>
+	</select>
+
+	<!--기타민원처리(온라인 민원처리현황) 목록조회 -->
+	<select id="CUS010404DAO.selectOnCvplPrcSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		WITH TBL AS (
+		SELECT
+		     t2.INQRY_KND_DETAIL
+		    ,t2.CHRG_DEPT_CODE
+		FROM TBCUS_HMPG_CSTMR_CVPL t1
+		     INNER JOIN TBCUS_HMPG_CVPL_DSTB t2
+		     ON  t1.RCEPT_NO      = t2.RCEPT_NO
+		WHERE t1.RCEPT_DT IS NOT NULL
+		  AND TO_CHAR(t1.RCEPT_DT,'YYYYMMDD') BETWEEN #BGN_DE# AND #END_DE#
+		  AND t2.CVPL_STTUS IN ('5','6')  			/* 5:처리완료, 6:응답완료 */
+		  AND SUBSTR(t2.CVPL_NO,1,1) IN ('A')	/* A:온라인	 , B:오프라인 */
+		<isNotEmpty property="DEPT_CODE" prepend="AND">
+			(t2.CHRG_DEPT_CODE = #DEPT_CODE# OR t2.HELP_DEPT_CODE = #DEPT_CODE#)
+		</isNotEmpty>
+		GROUP BY t2.INQRY_KND_DETAIL, t2.CHRG_DEPT_CODE
+		)
+		SELECT
+		       SUBSTR(t1.CODE,1,1) AS INQRY_KND
+		      ,t1.CODE             AS INQRY_KND_DETAIL
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020100',1,0)),0) AS DEPT020100
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020200',1,0)),0) AS DEPT020200
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'030200',1,0)),0) AS DEPT030200
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020300',1,0)),0) AS DEPT020300
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'021200',1,0)),0) AS DEPT021200
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'030600',1,0)),0) AS DEPT030600
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'031300',1,0)),0) AS DEPT031300
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020800',1,0)),0) AS DEPT020800
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020900',1,0)),0) AS DEPT020900
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'021000',1,0)),0) AS DEPT021000
+		FROM TBCOM_CMMN_CODE t1
+		     LEFT OUTER JOIN TBL t2
+		     ON t1.CODE = t2.INQRY_KND_DETAIL
+		WHERE GRP_CODE = 'CUS003'
+		GROUP BY t1.CODE
+		ORDER BY t1.CODE
+    </select>
+    
+  <!--기타민원처리(오프라인 민원처리현황) 목록조회 -->
+	<select id="CUS010404DAO.selectOffCvplPrcSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap"  remapResults="true">
+		WITH TBL AS (
+		SELECT
+		     t2.INQRY_KND_DETAIL
+		    ,t2.CHRG_DEPT_CODE
+		FROM TBCUS_HMPG_CSTMR_CVPL t1
+		     INNER JOIN TBCUS_HMPG_CVPL_DSTB t2
+		     ON  t1.RCEPT_NO      = t2.RCEPT_NO
+		WHERE t1.RCEPT_DT IS NOT NULL
+		  AND TO_CHAR(t1.RCEPT_DT,'YYYYMMDD') BETWEEN #BGN_DE# AND #END_DE#
+		  AND t2.CVPL_STTUS IN ('5','6')  			/* 5:처리완료, 6:응답완료 */
+		  AND SUBSTR(t2.CVPL_NO,1,1) IN ('B')	/* A:온라인	 , B:오프라인 */
+		<isNotEmpty property="DEPT_CODE" prepend="AND">
+			(t2.CHRG_DEPT_CODE = #DEPT_CODE# OR t2.HELP_DEPT_CODE = #DEPT_CODE#)
+		</isNotEmpty>
+		GROUP BY t2.INQRY_KND_DETAIL, t2.CHRG_DEPT_CODE
+		)
+		SELECT
+		       SUBSTR(t1.CODE,1,1) AS INQRY_KND
+		      ,t1.CODE             AS INQRY_KND_DETAIL
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020100',1,0)),0) AS DEPT020100
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020200',1,0)),0) AS DEPT020200
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'030200',1,0)),0) AS DEPT030200
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020300',1,0)),0) AS DEPT020300
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'021200',1,0)),0) AS DEPT021200
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'030600',1,0)),0) AS DEPT030600
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'031300',1,0)),0) AS DEPT031300
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020800',1,0)),0) AS DEPT020800
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'020900',1,0)),0) AS DEPT020900
+		      ,NVL(SUM(DECODE(t2.CHRG_DEPT_CODE,'021000',1,0)),0) AS DEPT021000
+		FROM TBCOM_CMMN_CODE t1
+		     LEFT OUTER JOIN TBL t2
+		     ON t1.CODE = t2.INQRY_KND_DETAIL
+		WHERE GRP_CODE = 'CUS003'
+		GROUP BY t1.CODE
+		ORDER BY t1.CODE
+    </select>
+
+  <!--기타민원처리(직원별 처리현황) 목록조회 -->
+	<select id="CUS010404DAO.selectEmpPrcSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBL AS (
+			  SELECT
+			       t2.CHARGER_EMPNO
+			      ,t2.CVPL_STTUS
+			      ,CASE WHEN t2.PROCESS_DT < (TO_DATE(TO_CHAR(t2.APPN_DT,'YYYYMMDD'),'YYYYMMDD')+TO_NUMBER(PROCESS_TMLMT)+1)
+			            THEN 1
+			            ELSE 0
+			       END AS INTIME
+			      ,CASE WHEN t2.PROCESS_DT < (TO_DATE(TO_CHAR(t2.APPN_DT,'YYYYMMDD'),'YYYYMMDD')+TO_NUMBER(PROCESS_TMLMT)+1)
+			            THEN 0
+			            ELSE 1
+			       END AS OVERTIME
+			      ,t2.STSFDG_EVL_1
+			      ,t2.STSFDG_EVL_2
+			      ,t2.STSFDG_EVL_3
+			      ,DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1) AS SC_CNT
+			      ,CASE WHEN DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1) > 0 
+			            THEN CEIL((NVL(t3.INTGR_PREPAR_VALUE,0)+NVL(t4.INTGR_PREPAR_VALUE,0)+NVL(t5.INTGR_PREPAR_VALUE,0))
+			                 / (DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1)))
+			            ELSE NULL
+			       END AS SCORE
+			  FROM TBCUS_HMPG_CSTMR_CVPL t1
+			       INNER JOIN TBCUS_HMPG_CVPL_DSTB t2
+			       ON  t1.RCEPT_NO      = t2.RCEPT_NO
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+			       ON  t3.GRP_CODE      = 'CUS007'
+			       AND t2.STSFDG_EVL_1  = t3.CODE
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			       ON  t4.GRP_CODE      = 'CUS007'
+			       AND t2.STSFDG_EVL_2  = t4.CODE
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+			       ON  t5.GRP_CODE      = 'CUS007'
+			       AND t2.STSFDG_EVL_3  = t5.CODE
+			  WHERE t1.RCEPT_DT IS NOT NULL
+			    AND TO_CHAR(t1.RCEPT_DT,'YYYYMMDD') BETWEEN #BGN_DE# AND #END_DE#
+			    AND t2.CVPL_STTUS IN ('5','6')  			/* 5:처리완료, 6:응답완료 */
+			    AND SUBSTR(t2.CVPL_NO,1,1) IN ('A','B')	/* A:온라인	 , B:오프라인 */
+			)
+			SELECT 
+			     t1.DEPT_CODE       AS DEPT_CODE
+			    ,t3.DEPT_NM         AS DEPT_NM
+			    ,t1.EMPNO       		AS EMPNO
+			    ,t1.EMPNM     			AS EMPNM
+			    ,NVL(t2.CNT,0)      AS CNT			/*처리건*/
+			    ,NVL(t2.PER,0)      AS PER			/*구성비*/
+			    ,NVL(t2.INTIME,0)   AS INTIME		/*기간내*/
+			    ,NVL(t2.OVERTIME,0) AS OVERTIME		/*지연*/
+			    ,NVL(t2.EVL0,0)     AS EVL0			/*무응답*/
+			    ,NVL(t2.EVL1,0)     AS EVL1			/*매우만족*/
+			    ,NVL(t2.EVL2,0)     AS EVL2			/*만족*/
+			    ,NVL(t2.EVL3,0)     AS EVL3			/*보통*/
+			    ,NVL(t2.EVL4,0)     AS EVL4			/*불만족*/
+			    ,NVL(t2.EVL5,0)     AS EVL5			/*매우불만족*/
+			    ,NVL(t2.CNT,0) /* 건당 점수 */ + NVL(t2.OVERTIME,0) * -0.5 /* 지연건당 -0.5점 */ + NVL(t2.EVL_SCR,0) /* 만족도 점수 */ AS SCORE /* 개인점수 */
+			FROM TBHRM_HR_MASTR t1
+			     INNER JOIN
+			     (SELECT
+			           CHARGER_EMPNO                                    AS CHARGER_EMPNO
+			          ,COUNT(1)                                         AS CNT
+			          ,ROUND(COUNT(1)/(SELECT COUNT(1) FROM TBL)*100,1) AS PER
+			          ,NVL(SUM(INTIME),0)                               AS INTIME
+			          ,NVL(SUM(OVERTIME),0)                             AS OVERTIME
+			          ,NVL(SUM(DECODE(SC_CNT,0,1,0)),0)                 AS EVL0
+			          ,SUM(CASE WHEN t2.CODE = '1' THEN 1 ELSE 0 END)   AS EVL1
+			          ,SUM(CASE WHEN t2.CODE = '2' THEN 1 ELSE 0 END)   AS EVL2
+			          ,SUM(CASE WHEN t2.CODE = '3' THEN 1 ELSE 0 END)   AS EVL3
+			          ,SUM(CASE WHEN t2.CODE = '4' THEN 1 ELSE 0 END)   AS EVL4
+			          ,SUM(CASE WHEN t2.CODE = '5' THEN 1 ELSE 0 END)   AS EVL5
+			          ,SUM(NVL(t2.MSTK_PREPAR_VALUE,0))                 AS EVL_SCR
+			      FROM TBL t1
+			           LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+			           ON  t2.GRP_CODE = 'CUS007'
+			           AND t1.SCORE    = INTGR_PREPAR_VALUE
+			      GROUP BY CHARGER_EMPNO
+			      ) t2
+			      ON t1.EMPNO = t2.CHARGER_EMPNO
+			      LEFT OUTER JOIN VWHRM_DEPT t3
+			      ON t1.DEPT_CODE = t3.DEPT_CODE
+			WHERE 1=1
+		]]>
+		<isNotEmpty property="DEPT_CODE" prepend="AND">
+			t3.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+			ORDER BY t3.OUTPT_ORDR, t1.HR_CLSF_SE, t1.RSPOFC_SE
+	</select>
+ </sqlMap>

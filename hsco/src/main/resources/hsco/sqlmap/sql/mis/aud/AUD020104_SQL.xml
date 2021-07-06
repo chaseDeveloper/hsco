@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUD020104_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+
+	<!-- 사업코드 콤보박스 목록조회 -->
+	<select id="AUD020104DAO.selectBsnsCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*AUD020104DAO.selectBsnsCodeList*/]]>
+		SELECT BSNS_CODE
+		     , BSNS_NM
+		     , '[' || BSNS_CODE || ']' || BSNS_NM    AS ALL_NM 
+		  FROM TBPRJ_BSNS_CODE
+		ORDER BY BSNS_CODE
+	</select>  
+
+	<!-- 거래내역모니터링 목록조회 -->
+	<select id="AUD020104DAO.selectCntrctList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*AUD020104DAO.selectCntrctList*/]]>
+		SELECT T.CNTRCT_DE
+		     , T.BSNS_CODE
+		     , T.BSNS_NM
+		     , T.CNTRCT_SE
+		     , T.CNTRCT_NO
+		     , T.BCNC_CODE
+		     , T.BCNC_NM
+		     , T.CNTRCT_NM
+		     , T.CNTRCT_AMOUNT
+		     , T.CNTRCT_AMOUNT_ORIGN
+		     , T.PRVCNTR_PRVONSH
+		     , T.CNTRCT_MTH_SE
+		     , T.CNTRCT_MTH_NM
+		  FROM (
+		        SELECT T1.CNTRCT_DE
+		             , T1.BSNS_CODE
+		             , T9.BSNS_NM
+		             , T1.CNTRCT_SE
+		             , T1.CNTRCT_NO           AS CNTRCT_NO
+		             , T2.BCNC_CODE           AS BCNC_CODE
+		             , T3.BCNC_NM             AS BCNC_NM
+		             , T1.CNTRCT_NM           AS CNTRCT_NM
+		             , CASE WHEN T5.CNTRCT_AMOUNT IS NOT NULL AND T5.CNTRCT_AMOUNT > 0 THEN T5.CNTRCT_AMOUNT
+		                    ELSE T2.CNTRCT_AMOUNT
+		               END                    AS CNTRCT_AMOUNT
+		             , T2.CNTRCT_AMOUNT       AS CNTRCT_AMOUNT_ORIGN
+		             , T1.PRVCNTR_PRVONSH     AS PRVCNTR_PRVONSH
+		             , T1.CNTRCT_MTH_SE
+		             , T6.CODE_NM             AS CNTRCT_MTH_NM
+		          FROM TBCTR_CNTRCT T1
+		               INNER JOIN TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS T2
+		                    ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		               INNER JOIN TBCTR_BCNC_MASTR T3
+		                    ON T2.BCNC_CODE = T3.BCNC_CODE
+		               LEFT OUTER JOIN ( SELECT CNTRCT_NO
+		                                      , BCNC_CODE
+		                                      , MAX(AFTCH_CNTRCT_AMOUNT) KEEP(DENSE_RANK FIRST ORDER BY CNTRCT_CHANGE_ODR DESC) AS CNTRCT_AMOUNT
+		                                   FROM TBCTR_ENTRPS_ACCTO_CNTRCT_CHAN
+		                                  WHERE CHANGE_SE IN ('1', '3') /*1:계약금액변경, 3:계약금액과 준공일자변경*/
+		                                 GROUP BY CNTRCT_NO
+		                                        , BCNC_CODE
+		                               ) T5
+		                    ON T2.CNTRCT_NO = T5.CNTRCT_NO
+		                   AND T2.BCNC_CODE = T5.BCNC_CODE
+		               LEFT OUTER JOIN TBCOM_CMMN_CODE T6
+		                    ON T1.CNTRCT_MTH_SE = T6.CODE
+		                   AND T6.GRP_CODE = 'CTR049'
+		               LEFT OUTER JOIN TBPRJ_BSNS_CODE T9
+		                    ON T1.BSNS_CODE = T9.BSNS_CODE
+		       ) T
+		 WHERE 1=1
+		<isNotEmpty property="BCNC_NM">
+		   AND T.BCNC_NM LIKE '%' || #BCNC_NM# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+		   AND T.BSNS_CODE = #BSNS_CODE# 
+		</isNotEmpty>
+		<isNotEmpty property="AMOUNT_BGN">
+		<![CDATA[
+		   AND T.CNTRCT_AMOUNT >= #AMOUNT_BGN#
+		]]>
+		</isNotEmpty>
+		<isNotEmpty property="AMOUNT_END">
+		<![CDATA[
+		   AND T.CNTRCT_AMOUNT <= #AMOUNT_END#
+		]]>
+		</isNotEmpty>
+		ORDER BY T.BSNS_CODE
+		       , T.CNTRCT_DE DESC
+		       , T.CNTRCT_NO
+	</select>
+
+</sqlMap>

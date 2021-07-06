@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC030107_SQL">	
+	
+	<!-- 공통매입세액 안분 계산명세 -->
+	<select id="ACC030107DAO.select" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+	<![CDATA[/*ACC030107DAO.select*/]]>
+	WITH TBL_COM_PUC_TAX AS (
+	    SELECT
+	         t4.STTEMNT_YEAR
+	        ,t4.STTEMNT_HRSMN
+	        ,t4.PRPDVS_TRGET_CODE
+	        ,SUM(t2.SUPLY_AMOUNT) AS SUPLY_AMOUNT   /*공급가액*/
+	        ,SUM(t2.VAT) AS VAT                     /*부가세*/
+	    FROM TBACC_EXP_DSN_MASTR t1
+	         INNER JOIN TBACC_EXP_DSN_DETAIL t2
+	         ON  t1.DECSN_YEAR = t2.DECSN_YEAR
+	         AND t1.DECSN_NO   = t2.DECSN_NO
+	         INNER JOIN TBACC_COM_PUC_TAX_EXPNDTR_DTLS t4
+	         ON  t2.PRPDVS_TRGET_CODE = t4.PRPDVS_TRGET_CODE
+	         AND t2.DECSN_YEAR = t4.DECSN_YEAR
+	         AND t2.DECSN_NO = t4.DECSN_NO
+	         AND t2.SEQ = t4.SEQ
+	    WHERE t4.STTEMNT_YEAR = #STTEMNT_YEAR# /* 신고년도 */
+	      AND t4.STTEMNT_HRSMN = #STTEMNT_HRSMN# /* 신고기수 */
+	    GROUP BY t4.STTEMNT_YEAR, t4.STTEMNT_HRSMN, t4.PRPDVS_TRGET_CODE
+	)
+	SELECT 
+	     t2.STTEMNT_YEAR      /*신고년도*/
+	    ,t2.STTEMNT_HRSMN     /*신고기수*/
+	    ,t1.PRPDVS_TRGET_CODE /*안분대상코드*/
+	    ,t1.PRPDVS_TRGET_NM   /*건명*/
+	    ,t2.SUPLY_AMOUNT      /*공급가액*/
+	    ,t2.VAT               /*세액*/
+	    ,t1.TOT_USE_AR        /*총공급가액(총사용면적)*/
+	    ,t1.TAXXPT_AR         /*면세공급가액(면세면적)*/
+	    ,ROUND(t2.VAT * (t1.TAXXPT_AR / t1.TOT_USE_AR),0) AS NDDT_TAXAMT  /*불공제매입세액*/
+	FROM TBACC_COM_PUC_TAX_PRP_TRG t1
+	     INNER JOIN TBL_COM_PUC_TAX t2
+	     ON t1.PRPDVS_TRGET_CODE = t2.PRPDVS_TRGET_CODE
+	</select>
+	
+	<!-- 지출내역 -->
+	<select id="ACC030107DAO.dtls" resultClass="java.util.HashMap" parameterClass="java.util.HashMap" remapResults="true">
+	<![CDATA[/*ACC030107DAO.dtls*/]]>
+	SELECT
+	     t4.STTEMNT_YEAR            /*신고년도*/
+	    ,t4.STTEMNT_HRSMN           /*신고기수*/
+	    ,t2.PRPDVS_TRGET_CODE       /*안분대상코드*/
+	    ,t2.DECSN_YEAR              /*결의년도*/
+	    ,t2.DECSN_NO                /*결의번호*/
+	    ,t2.SEQ                     /*순번*/
+	    ,t1.DET_DCSN_DE             /*채무확정일자*/
+	    ,t1.CPTAL_EXPNDTR_ACNTBK_DE /*자금지출일자*/
+	    ,t1.CHECK_NO                /*수표번호*/
+	    ,t1.SUMRY                   /*적요*/
+	    ,t3.BCNC_NM                 /*거래처명*/
+	    ,t2.DECSN_AMOUNT            /*결의금액*/
+	    ,t2.SUPLY_AMOUNT            /*공급가액*/
+	    ,t2.VAT                     /*부가세*/
+	FROM TBACC_EXP_DSN_MASTR t1
+	     INNER JOIN TBACC_EXP_DSN_DETAIL t2
+	     ON  t1.DECSN_YEAR = t2.DECSN_YEAR
+	     AND t1.DECSN_NO   = t2.DECSN_NO
+	     LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+	     ON t2.BCNC_CODE = t3.BCNC_CODE
+	     INNER JOIN TBACC_COM_PUC_TAX_EXPNDTR_DTLS t4
+	     ON  t2.PRPDVS_TRGET_CODE = t4.PRPDVS_TRGET_CODE
+	     AND t2.DECSN_YEAR = t4.DECSN_YEAR
+	     AND t2.DECSN_NO = t4.DECSN_NO
+	     AND t2.SEQ = t4.SEQ
+	WHERE t4.STTEMNT_YEAR = #STTEMNT_YEAR# /* 신고년도 */
+	  AND t4.STTEMNT_HRSMN = #STTEMNT_HRSMN# /* 신고기수 */
+	  AND t4.PRPDVS_TRGET_CODE = #PRPDVS_TRGET_CODE# /*안분대상코드*/
+	ORDER BY t1.CPTAL_EXPNDTR_ACNTBK_DE, t2.SEQ
+	</select>
+</sqlMap>

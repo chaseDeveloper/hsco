@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS100400SQL">	
+
+	<!-- 쿼리명 : 세입관리 결의서조회
+	설명 : 세입관리 결의서조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.04
+	-->
+	<select id="SLS100400DAO.selectDecsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT a.DECSN_SE,         		/* 결의구분 */
+		         a.DECSN_DE,         		/* 결의일자 */
+		         a.LAD_DECSN_NO,         	/* 조정결의번호 */
+		         a.PAY_CODE,         		/* 납부구분 */
+		         c.LAD_NM,
+		         a.LAD_CODE,
+		         a.BLCK,
+		         a.LOT,
+		         a.LOT_TY,
+		         a.PRPOS_SE,
+		         (SELECT p.CSTMR_NM
+		            FROM TBSLS_LCNTRCTR z,
+		                 TBSLS_LAD_CSTMR p
+		           WHERE z.LAD_CSTMR_NO = p.LAD_CSTMR_NO
+		             AND z.CNTRCTR_NO   = a.CNTRCTR_NO
+		         )
+		         NM,
+		         (
+		         SELECT ALL_AR
+		           FROM TBSLS_LAD_DETAIL_INFO z
+		          WHERE 1=1
+		            AND  z.LAD_CODE = a.LAD_CODE
+		            AND  z.BLCK     = a.BLCK
+		            AND  z.LOT      = a.LOT
+		            AND	z.LOT_TY	 = a.LOT_TY
+		         ) AEA, 
+		         a.DECSN_AMOUNT,         	/* 결의금액 */
+		         a.PAY_TMLMT,         		/* 납부기한 */
+		         a.BSNS_SE,        			/* 사업구분(계정구분) */
+		         a.BUDGET_ACNT_CODE,        /* 계정코드(계정과목) */
+		         a.EXPNDTR_UNIT_CODE,       /* 지출단위코드(부기코드) */
+		         a.SUMRY,         			/* 적요 */
+		         a.CNTRCTR_NO ,        		/* 계약자번호 */
+		         (SELECT CODE_NM
+		            FROM TBCOM_CMMN_CODE z
+		           WHERE GRP_CODE = 'BDG001'
+		             AND CODE     = a.BSNS_SE
+		         )
+		         BSNS_SE_NM,         		/* 사업구분명 */
+		         (SELECT BUDGET_ACNT_NM
+		            FROM TBBDG_BUDGET_ACNT_CODE z
+		           WHERE z.YEAR             = a.BUDGET_YEAR
+		             AND z.BSNS_SE          = a.BSNS_SE
+		             AND z.BUDGET_ACNT_CODE = a.BUDGET_ACNT_CODE
+		         )
+		         AS BUDGET_ACNT_NM,         /* 예산계정코드명 */
+		
+		         (SELECT EXPNDTR_UNIT_NM TBBDG_TAXITM_CODE
+		            FROM TBBDG_EXPNDTR_UNIT_CODE z
+		           WHERE z.YEAR              = a.BUDGET_YEAR
+		             AND z.BSNS_SE           = a.BSNS_SE
+		             AND z.BUDGET_ACNT_CODE  = a.BUDGET_ACNT_CODE
+		             AND z.EXPNDTR_UNIT_CODE = a.EXPNDTR_UNIT_CODE
+		         )AS
+		         EXPNDTR_UNIT_NM,          /* 지출단위코드명 */
+		         BUDGET_YEAR,
+		         a.BSNS_SE || '1' AS BUDGET_ACNT_SE,
+         		 DEPT_CODE
+		    FROM TBSLS_LAD_DECSN a,
+		         TBSLS_LAD_INFO c
+		   WHERE 1=1
+			<isNotEmpty property="decsn_chk">
+             AND DECSN_SE IN
+            <iterate property="arr_decsn_chk" open="(" close=")" conjunction=",">
+              #arr_decsn_chk[]#
+            </iterate>
+ 			</isNotEmpty>
+             AND a.DECSN_DE BETWEEN #FM_DECSN_DE# AND #TO_DECSN_DE#
+             AND a.LAD_CODE = c.LAD_CODE
+           <isNotEmpty property="LAD_CODE">
+	         AND a.LAD_CODE LIKE #LAD_CODE#
+            </isNotEmpty>
+            <isNotEmpty property="BLCK">
+             AND a.BLCK LIKE '%' || #BLCK# || '%'
+            </isNotEmpty>
+            <isNotEmpty property="LOT">
+             AND a.LOT  LIKE '%' || #LOT# || '%'
+            </isNotEmpty>
+            <isNotEmpty property="LOT_TY">
+             AND a.LOT_TY  LIKE '%' || #LOT_TY# || '%'
+            </isNotEmpty>
+           ORDER BY a.LAD_CODE,
+			        a.BLCK,
+			        a.LOT,
+			        a.LOT_TY,
+			        a.DECSN_DE,
+			        a.DECSN_SE
+
+	</select>
+	
+	<!-- 세입관리 결의서신규등록  -->
+	<insert id="SLS100400DAO.DecsnListInsert" parameterClass="java.util.HashMap" >
+				INSERT INTO TBSLS_LAD_DECSN
+
+                              ( DECSN_SE,
+                                DECSN_DE,
+                                LAD_DECSN_NO,
+                                PAY_CODE,
+                                CNTRCTR_NO,
+                                LAD_CODE,
+                                BLCK,
+                                LOT,
+                                LOT_TY,
+                                PRPOS_SE,
+                                DECSN_AMOUNT,
+                                PAY_TMLMT,
+                                SUMRY,
+                                BUDGET_YEAR,
+                                BSNS_SE,
+                                BUDGET_ACNT_CODE,
+                                EXPNDTR_UNIT_CODE,
+                                DEPT_CODE,
+                                REGISTER_ID,
+                                REGIST_DT,
+                                UPDUSR_ID,
+                                UPDT_DT
+                              )
+                      VALUES( #DECSN_SE#,
+                              #DECSN_DE#,
+                             (SELECT NVL (MAX(LAD_DECSN_NO), 0)
+                                FROM TBSLS_LAD_DECSN
+                                WHERE DECSN_SE = #DECSN_SE#
+                                  AND DECSN_DE  = #DECSN_DE#) + 1,
+                             #PAY_CODE#,
+                             #CNTRCTR_NO#,
+                             #LAD_CODE#,
+                             #BLCK#,
+                             #LOT#,
+                             #LOT_TY#,
+                             #PRPOS_SE#,
+                             #DECSN_AMOUNT#,
+                             #PAY_TMLMT#,
+                             #SUMRY#,
+                             #BUDGET_YEAR#,         /* 예산계정 팝업에서 적용할예정 */
+                             #BSNS_SE#,             /* 예산계정 팝업에서 적용할예정 */
+                             #BUDGET_ACNT_CODE#,    /* 예산계정 팝업에서 적용할예정 */
+                             #EXPNDTR_UNIT_CODE#,   /* 예산계정 팝업에서 적용할예정 */
+                             #DEPT_CODE#,           /* 예산계정 팝업에서 적용할예정 */
+                             #S_USER_ID#,
+                             SYSDATE,
+                             #S_USER_ID#,
+                             SYSDATE)
+	</insert>
+	
+	<!-- 세입관리 결의서수정 -->
+	<update id="SLS100400DAO.DecsnListUpdate" parameterClass="java.util.HashMap" >
+			   UPDATE TBSLS_LAD_DECSN
+			              SET
+			                  DECSN_AMOUNT       =  #DECSN_AMOUNT#,
+			                  PAY_TMLMT          =  #PAY_TMLMT#,
+			                  SUMRY              =  #SUMRY#,
+			                  BUDGET_YEAR        =  #BUDGET_YEAR#,
+			                  BSNS_SE            =  #BSNS_SE#,
+			                  BUDGET_ACNT_CODE   =  #BUDGET_ACNT_CODE#,
+			                  EXPNDTR_UNIT_CODE  =  #EXPNDTR_UNIT_CODE#,
+			                  DEPT_CODE          =  #DEPT_CODE#,
+			                  UPDUSR_ID          =  #S_USER_ID#,
+			                  PAY_CODE           =  #PAY_CODE#,
+			                  UPDT_DT            =  SYSDATE
+			          WHERE DECSN_SE             =  #DECSN_SE#
+			            AND DECSN_DE             =  #DECSN_DE#
+			            AND LAD_DECSN_NO       =  #LAD_DECSN_NO#
+				</update>
+	
+	<!-- 세입관리 결의서삭제-->
+	<delete id="SLS100400DAO.DecsnListDelete" parameterClass="java.util.HashMap">
+   DELETE FROM TBSLS_LAD_DECSN
+    WHERE DECSN_SE 			=  #DECSN_SE#
+     AND  DECSN_DE  		=  #DECSN_DE#
+     AND  LAD_DECSN_NO  	=  #LAD_DECSN_NO#
+	</delete>
+
+
+	
+<!-- ***************************************************** 신규 팝업 SQL SLS100400_P01.xfdl ****************************************************** -->	
+<!-- 주택 고객 목록 조회 -->	
+	<select id="SLS100400DAO.ladCntrctCstmrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.CNTRCTR_NO ,
+       		   A.LAD_CODE ,
+		       B.LAD_NM ,
+		       A.BLCK ,
+          	   A.LOT ,
+		       A.LOT_TY ,
+		       C.LAD_CSTMR_NO ,
+		       C.CSTMR_NM AS NM, 
+		       SFCOM_DEC_ALL(C.IHIDNUM) AS IHIDNUM ,
+		       C.ZIP ,
+		       C.ADRES ,
+		       C.ADRES_DETAIL ,
+		       C.TELNO ,
+		       C.MBTLNO ,
+		       C.EMAIL ,
+		       E.PRPOS_SE
+		  FROM TBSLS_LCNTRCTR A ,
+		       TBSLS_LAD_INFO B ,
+		       TBSLS_LAD_CSTMR C ,
+		       TBSLS_LCNTRCTR_CANCL D ,
+		       TBSLS_LAD_DETAIL_INFO E
+		 WHERE A.LAD_CODE   = B.LAD_CODE
+		   AND A.LAD_CSTMR_NO = C.LAD_CSTMR_NO
+		   AND A.CNTRCTR_NO        = D.CNTRCTR_NO(+)
+		   AND A.LAD_CODE   = E.LAD_CODE
+	       AND A.BLCK			= E.BLCK
+	       AND A.LOT		= E.LOT
+	       AND A.LOT_TY	= E.LOT_TY
+		<isNotEmpty property="ladCode">
+		   AND A.LAD_CODE = #ladCode#
+		</isNotEmpty>
+		<isNotEmpty property="blck">
+		   AND A.BLCK like '%' || #blck# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="lot">
+		   AND A.LOT like '%' || #lot# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="lotTy">
+		   AND A.LOT_TY like '%' || #lotTy# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+		   AND C.CSTMR_NM like '%' || #nm# || '%'
+		</isNotEmpty>   
+		 ORDER BY A.LAD_CODE, A.BLCK , A.LOT , A.LOT_TY
+	</select>
+<!-- ***************************************************** 계정과목 팝업 SQL SLS100400_P02.xfdl ****************************************************** -->
+	<select id="SLS100400DAO.budgetAcntRentMapngList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT '당년도 예산' AS NM
+	           ,t1.BUDGET_YEAR AS BUDGET_YEAR
+	           ,t1.HOUSE_SE AS HOUSE_SE
+	           ,t1.PAY_SE AS PAY_SE
+	           ,t1.BSNS_SE AS BSNS_SE
+	           ,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE ='BDG001' AND CODE = t1.BSNS_SE) AS BSNS_NM
+	           ,t1.BALC_SE AS BALC_SE
+	           ,t1.BUDGET_ACNT_CODE AS BUDGET_ACNT_CODE
+	           ,r1.BUDGET_ACNT_NM AS BUDGET_ACNT_NM
+	           ,t1.EXPNDTR_UNIT_CODE AS EXPNDTR_UNIT_CODE
+	           ,r2.EXPNDTR_UNIT_NM AS EXPNDTR_UNIT_NM
+	           ,r2.DEPT_CODE
+	      FROM TBACC_BUDGET_ACNT_RENT_MAPNG t1
+	           LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE r1
+	       		 ON t1.BUDGET_YEAR             = r1.YEAR
+	            AND t1.BSNS_SE                 = r1.BSNS_SE
+	            AND t1.BALC_SE                 = r1.BALC_SE
+	            AND t1.BUDGET_ACNT_CODE        = r1.BUDGET_ACNT_CODE
+	           LEFT OUTER JOIN TBBDG_EXPNDTR_UNIT_CODE r2
+	             ON t1.BUDGET_YEAR             = r2.YEAR
+	            AND t1.BSNS_SE                 = r2.BSNS_SE
+	            AND t1.BALC_SE                 = r2.BALC_SE
+	            AND t1.BUDGET_ACNT_CODE        = r2.BUDGET_ACNT_CODE
+	            AND t1.EXPNDTR_UNIT_CODE       = r2.EXPNDTR_UNIT_CODE
+	           LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE p1
+	             ON t1.BUDGET_YEAR-1           = p1.YEAR
+	            AND t1.PSTYR_BSNS_SE           = p1.BSNS_SE
+	            AND t1.PSTYR_BALC_SE           = p1.BALC_SE
+	            AND t1.PSTYR_BUDGET_ACNT_CODE  = p1.BUDGET_ACNT_CODE
+	           LEFT OUTER JOIN TBBDG_EXPNDTR_UNIT_CODE p2
+	             ON t1.BUDGET_YEAR-1           = p2.YEAR
+	            AND t1.PSTYR_BSNS_SE           = p2.BSNS_SE
+	            AND t1.PSTYR_BALC_SE           = p2.BALC_SE
+	            AND t1.PSTYR_BUDGET_ACNT_CODE  = p2.BUDGET_ACNT_CODE
+	            AND t1.PSTYR_EXPNDTR_UNIT_CODE = p2.EXPNDTR_UNIT_CODE
+		 WHERE t1.BUDGET_YEAR = #BUDGET_YEAR#
+	UNION
+	    SELECT '과년도 예산' AS NM
+	           ,t1.BUDGET_YEAR AS BUDGET_YEAR
+	           ,t1.HOUSE_SE AS HOUSE_SE
+	           ,t1.PAY_SE AS PAY_SE
+	           ,t1.PSTYR_BSNS_SE AS BSNS_SE
+	           ,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'BDG001' AND CODE = t1.PSTYR_BSNS_SE) AS BSNS_NM              
+	           ,t1.PSTYR_BALC_SE AS BALC_SE
+	           ,t1.PSTYR_BUDGET_ACNT_CODE AS BUDGET_ACNT_CODE
+	           ,p1.BUDGET_ACNT_NM AS BUDGET_ACNT_NM
+	           ,t1.PSTYR_EXPNDTR_UNIT_CODE AS EXPNDTR_UNIT_CODE
+	           ,p2.EXPNDTR_UNIT_NM  AS EXPNDTR_UNIT_NM
+	           ,r2.DEPT_CODE
+	      FROM TBACC_BUDGET_ACNT_RENT_MAPNG t1
+	           LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE r1
+	             ON t1.BUDGET_YEAR             = r1.YEAR
+	            AND t1.BSNS_SE                 = r1.BSNS_SE
+	            AND t1.BALC_SE                 = r1.BALC_SE
+	            AND t1.BUDGET_ACNT_CODE        = r1.BUDGET_ACNT_CODE
+	           LEFT OUTER JOIN TBBDG_EXPNDTR_UNIT_CODE r2
+	             ON t1.BUDGET_YEAR             = r2.YEAR
+	            AND t1.BSNS_SE                 = r2.BSNS_SE
+	            AND t1.BALC_SE                 = r2.BALC_SE
+	            AND t1.BUDGET_ACNT_CODE        = r2.BUDGET_ACNT_CODE
+	            AND t1.EXPNDTR_UNIT_CODE       = r2.EXPNDTR_UNIT_CODE
+	           LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE p1
+	             ON t1.BUDGET_YEAR-1           = p1.YEAR
+	            AND t1.PSTYR_BSNS_SE           = p1.BSNS_SE
+	            AND t1.PSTYR_BALC_SE           = p1.BALC_SE
+	            AND t1.PSTYR_BUDGET_ACNT_CODE  = p1.BUDGET_ACNT_CODE
+	           LEFT OUTER JOIN TBBDG_EXPNDTR_UNIT_CODE p2
+	             ON t1.BUDGET_YEAR-1           = p2.YEAR
+	            AND t1.PSTYR_BSNS_SE           = p2.BSNS_SE
+	            AND t1.PSTYR_BALC_SE           = p2.BALC_SE
+	            AND t1.PSTYR_BUDGET_ACNT_CODE  = p2.BUDGET_ACNT_CODE
+	            AND t1.PSTYR_EXPNDTR_UNIT_CODE = p2.EXPNDTR_UNIT_CODE		
+		 WHERE t1.BUDGET_YEAR = #BUDGET_YEAR#
+         ORDER BY BUDGET_YEAR     
+	              ,BSNS_SE
+	              ,BALC_SE
+	              ,PAY_SE  
+	</select>	
+</sqlMap>

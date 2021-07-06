@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL020103_SQL">	
+	
+	<!-- 가족수당신청정보 목록조회 -->
+	<select id="SAL020103DAO.selectFamilyAllwncReqstInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 t1.REQST_SN				/*신청순번*/ 
+			,t1.REQST_DE				/*신청일자*/
+			,t1.SALARY_CONFM_AT			/*승인여부*/
+			,t1.SALARY_CONFM_DE			/*승인일자*/
+			,t1.RETURN_CN				/*반려내용*/
+			,v1.DEPT_NM					/*부서명*/
+			,t1.EMPNO					/*사번*/
+			,t2.EMPNM					/*사원명*/
+			,t2.HR_CLSF_SE				/*직급*/
+			,t2.ADRES					/*주소*/
+			,t1.RM						/*비고*/
+			,t1.FILE_SN
+		FROM TBSAL_FAMILY_ALLWNC_REQST t1
+			LEFT OUTER JOIN TBHRM_HR_MASTR  t2 ON t1.EMPNO 	  = t2.EMPNO
+			LEFT OUTER JOIN VWHRM_DEPT	    v1 ON t2.DEPT_CODE = v1.DEPT_CODE
+		<dynamic prepend="WHERE">
+			<isNotEmpty prepend="AND" property="EMPNO">
+				t1.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="REQST_DE">
+				<isNotEmpty prepend="AND" property="REQST_DE2">
+					t1.REQST_DE BETWEEN #REQST_DE# AND #REQST_DE2#
+				</isNotEmpty>
+			</isNotEmpty>
+			<isNotEmpty prepend="AND" property="SALARY_CONFM_AT">
+				t1.SALARY_CONFM_AT = #SALARY_CONFM_AT#
+			</isNotEmpty>
+		</dynamic>
+		ORDER BY t1.REQST_DE DESC
+    </select>
+
+	<!-- 가족수당신청정보 생성-->
+	<insert id="SAL020103DAO.familyAllwncReqstInfoC" parameterClass="java.util.HashMap">
+		INSERT INTO TBSAL_FAMILY_ALLWNC_REQST
+		(
+			 REQST_SN
+			,REQST_DE
+			,EMPNO
+			,DEPT_CODE
+			,CLSF_CODE
+			,SRCLS
+			,ADRES
+			,RETURN_CN
+			,SALARY_CONFM_DE
+			,SALARY_CONFM_AT
+			,RM
+			,FILE_SN
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)
+		SELECT
+			(SELECT NVL(MAX(REQST_SN), 0)+1 FROM TBSAL_FAMILY_ALLWNC_REQST) 
+			,#REQST_DE#
+			,EMPNO
+			,DEPT_CODE
+			,#CLSF_CODE#
+			,#SRCLS#
+			,#ADRES#
+			,#RETURN_CN#
+			,''
+			,'1'
+			,#RM#
+			,#FILE_SN#
+			,#S_USER_ID#
+		    ,SYSDATE    
+		    ,#S_USER_ID#
+		    ,SYSDATE 
+		FROM TBHRM_HR_MASTR
+    	WHERE EMPNO = #EMPNO#
+    	
+    	<selectKey resultClass="int" keyProperty="REQST_SN">
+    		SELECT NVL(MAX(REQST_SN), 0) FROM TBSAL_FAMILY_ALLWNC_REQST
+    	</selectKey>
+	</insert>
+
+	<!-- 가족수당신청정보 팝업 승인정보 및 첨부파일 변경-->		
+	<update id="SAL020103DAO.familyAllwncReqstInfoU" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_FAMILY_ALLWNC_REQST
+		SET 
+			 SALARY_CONFM_DE = #SALARY_CONFM_DE#
+			,SALARY_CONFM_AT = #SALARY_CONFM_AT# 
+			,FILE_SN		 = #FILE_SN#
+			,RETURN_CN       = #RETURN_CN# 
+			,UPDUSR_ID 		 = #S_USER_ID#
+			,RM				= #RM#
+			,UPDT_DT		 = SYSDATE
+		WHERE REQST_SN = #REQST_SN#
+	</update>
+	
+	<!-- 가족수당신청정보 삭제-->	
+	<delete id="SAL020103DAO.familyAllwncReqstInfoD" parameterClass="java.util.HashMap">
+		DELETE FROM TBSAL_FAMILY_ALLWNC_REQST
+		WHERE REQST_SN = #REQST_SN# 
+	</delete>
+	
+	<!-- 가족수당신청정보 팝업 승인정보, 신청인정보(기본정보) 조회-->
+	<select id="SAL020103DAO.selectConfmInfoApplcntInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   	SELECT
+			 t1.EMPNO				/*사원번호*/
+			,t1.EMPNM				/*사원명*/
+			,v1.DEPT_NM				/*부서명*/
+			,t1.HR_CLSF_SE			/*직급*/
+			,t1.ADRES				/*주소*/
+			,t2.SALARY_CONFM_AT		/*승인여부*/
+			,t2.SALARY_CONFM_DE		/*승인일자*/
+			,t2.RETURN_CN			/*반려내용*/
+			,t2.REQST_DE
+			,t2.REQST_SN	
+			,t2.FILE_SN
+			,t2.RM
+		FROM TBHRM_HR_MASTR t1 
+			LEFT OUTER JOIN VWHRM_DEPT	v1 ON t1.DEPT_CODE = v1.DEPT_CODE
+			LEFT OUTER JOIN (
+								SELECT *
+								FROM TBSAL_FAMILY_ALLWNC_REQST
+								WHERE REQST_SN = #REQST_SN#
+							)
+							t2 ON t1.EMPNO	 = t2.EMPNO
+		WHERE t1.EMPNO = #EMPNO#
+	</select> 
+
+	<!-- 가족수당신청정보 팝업 신청인정보(가족정보) 조회-->
+	<select id="SAL020103DAO.selectApplcntFamilyInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 SEQ				/*순번*/
+			,FAMILY_RELATE_SE	/*관계*/
+			,FAMILY_NM			/*성명*/
+			,SEXDSTN_SE			/*성별*/
+			,BRTHDY				/*생년월일*/
+			,OCCP_NM			/*직업*/
+			,ACDMCR_SE			/*학력구분*/
+			,TROBL_AT			/*장애*/
+			,SUPORT_AT			/*부양*/
+			,ALLWNC_PYMNT_AT	/*수당*/
+		FROM TBHRM_HR_FAMILY 
+		WHERE EMPNO = #EMPNO#
+		ORDER BY SEQ
+	</select>
+	
+
+	<!-- 가족수당신청정보 팝업 가족수당대상자목록 조회-->
+	<select id="SAL020103DAO.selectFamilyAllwncTrgterList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 t1.REQST_SN
+			,t2.SN
+			,t2.REQST_SE
+			,t2.RELATE
+			,t2.FAMILY_NM
+			,t2.SEXDSTN_SE	
+			,t2.BRTHDY
+			,t2.OCCP_NM
+			,t2.ACDMCR_SE
+			,t2.TROBL_AT
+			,t2.SUPORT_AT
+			,t2.CHANGE_PRVONSH
+			,t2.CHANGE_PRVONSH_DE
+			,t2.RM
+		FROM TBSAL_FAMILY_ALLWNC_REQST t1
+			INNER JOIN TBSAL_FAMILY_ALLWNC_REQST_DTLS t2 ON t1.REQST_SN = t2.REQST_SN
+		WHERE t1.REQST_SN = #REQST_SN#
+	</select>
+	
+	<!-- 가족수당신청정보 팝업 가족수당대상 생성(취득)-->
+	<insert id="SAL020103DAO.familyAllwncTrgterC" parameterClass="java.util.HashMap">
+		INSERT INTO TBSAL_FAMILY_ALLWNC_REQST_DTLS
+			(
+				 REQST_SN
+				,SN
+				,REQST_SE
+				,FAMILY_NM
+				,RELATE
+				,CHANGE_PRVONSH
+				,CHANGE_PRVONSH_DE
+				,SEXDSTN_SE
+				,BRTHDY
+				,OCCP_NM
+				,ACDMCR_SE
+				,TROBL_AT
+				,SUPORT_AT
+				,RM
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+			)
+		VALUES 
+			(
+				#REQST_SN#
+				,(
+					SELECT NVL(MAX(t2.SN), 0)+1
+					FROM TBSAL_FAMILY_ALLWNC_REQST t1
+					INNER JOIN TBSAL_FAMILY_ALLWNC_REQST_DTLS t2
+					ON t1.REQST_SN = t2.REQST_SN
+					WHERE t1.EMPNO  = #EMPNO#
+					AND t2.REQST_SN = #REQST_SN#
+				 )
+				,#REQST_SE#
+				,#FAMILY_NM#
+				,#RELATE#
+				,#CHANGE_PRVONSH#
+				,#CHANGE_PRVONSH_DE#
+				,#SEXDSTN_SE#
+				,#BRTHDY#
+				,#OCCP_NM#
+				,#ACDMCR_SE#
+				,#TROBL_AT#
+				,#SUPORT_AT#
+				,#RM#
+				,#S_USER_ID#
+			    ,SYSDATE    
+			    ,#S_USER_ID#
+			    ,SYSDATE 
+			)
+	</insert>
+	
+	<!-- 가족수당신청정보 팝업 가족수당대상자 수정-->
+	<update id="SAL020103DAO.familyAllwncTrgterU" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_FAMILY_ALLWNC_REQST_DTLS
+		SET
+			 REQST_SE	          = #REQST_SE#
+			,FAMILY_NM             = #FAMILY_NM#
+			,RELATE                = #RELATE#
+			,CHANGE_PRVONSH        = #CHANGE_PRVONSH#
+			,CHANGE_PRVONSH_DE     = #CHANGE_PRVONSH_DE#
+			,SEXDSTN_SE            = #SEXDSTN_SE#
+			,BRTHDY                = #BRTHDY#
+			,OCCP_NM               = #OCCP_NM#
+			,ACDMCR_SE             = #ACDMCR_SE#
+			,TROBL_AT              = #TROBL_AT#
+			,SUPORT_AT             = #SUPORT_AT#
+			,RM                    = #RM#
+			,UPDUSR_ID             = #S_USER_ID#
+			,UPDT_DT		       = SYSDATE	  
+		WHERE	REQST_SN = #REQST_SN#
+		  AND	SN  	 = #SN#
+	</update>
+	
+	<!-- 가족수당신청정보 팝업 가족수당대상자 삭제-->
+	<delete id="SAL020103DAO.familyAllwncTrgterD" parameterClass="java.util.HashMap">
+		DELETE FROM TBSAL_FAMILY_ALLWNC_REQST_DTLS
+		WHERE	REQST_SN = #REQST_SN#
+		  AND	SN  	 = #SN#
+	</delete>
+	
+		
+	<!-- 가족수당신청정보 팝업 가족수당대상자 모두 삭제-->
+	<delete id="SAL020103DAO.familyAllwncTrgterAllD" parameterClass="java.util.HashMap">
+		DELETE FROM TBSAL_FAMILY_ALLWNC_REQST_DTLS
+		WHERE	REQST_SN = #REQST_SN#
+	</delete>
+
+	<!-- 인사가족정보 입력, 수정-->
+	<insert id="SAL020103DAO.hrmFamilyInfoCU" parameterClass="java.util.HashMap">		
+		MERGE INTO TBHRM_HR_FAMILY t1
+			USING (
+					SELECT	 s1.EMPNO
+							,s2.RELATE
+							,s2.FAMILY_NM
+							,s2.SEXDSTN_SE
+							,s2.BRTHDY
+							,s2.ACDMCR_SE
+							,s2.OCCP_NM
+							,s2.RM
+							,s2.TROBL_AT
+							,s2.SUPORT_AT
+							,s1.SALARY_CONFM_AT
+							,s1.SALARY_CONFM_DE
+							,CASE WHEN s2.REQST_SE = '2' THEN '1' ELSE '' END AS ALLWNC_PYMNT_AT
+							,(SELECT NVL(MAX(SEQ), 0) FROM TBHRM_HR_FAMILY WHERE EMPNO = s1.EMPNO) + ROWNUM  AS RNUM
+					FROM	TBSAL_FAMILY_ALLWNC_REQST s1
+						RIGHT OUTER JOIN	TBSAL_FAMILY_ALLWNC_REQST_DTLS s2
+						ON s1.REQST_SN = s2.REQST_SN
+					WHERE   s2.REQST_SN  = #REQST_SN#
+					  AND	s1.EMPNO	 = #EMPNO#
+					) t2
+			ON (t1.EMPNO = t2.EMPNO AND t1.FAMILY_NM = t2.FAMILY_NM)
+			WHEN MATCHED THEN
+				UPDATE
+					SET  t1.FAMILY_RELATE_SE	= t2.RELATE
+						,t1.SEXDSTN_SE			= t2.SEXDSTN_SE
+						,t1.BRTHDY				= t2.BRTHDY
+						,t1.ACDMCR_SE			= t2.ACDMCR_SE
+						,t1.OCCP_NM				= t2.OCCP_NM
+						,t1.RM					= t2.RM
+						,t1.TROBL_AT			= t2.TROBL_AT
+						,t1.SUPORT_AT			= t2.SUPORT_AT
+						,t1.ALLWNC_PYMNT_AT		= t2.ALLWNC_PYMNT_AT
+						,t1.ALLWNC_REQST_DE		= t2.SALARY_CONFM_DE
+						,t1.UPDUSR_ID			= #S_USER_ID#
+						,t1.UPDT_DT				= SYSDATE
+			WHEN NOT MATCHED THEN
+				INSERT 
+					(
+					 t1.EMPNO
+					,t1.SEQ
+					,t1.FAMILY_RELATE_SE
+					,t1.FAMILY_NM
+					,t1.SEXDSTN_SE
+					,t1.BRTHDY
+					,t1.ACDMCR_SE
+					,t1.OCCP_NM
+					,t1.RM
+					,t1.CNFIRM_AT
+					,t1.TROBL_AT
+					,t1.SUPORT_AT
+					,t1.ALLWNC_PYMNT_AT
+					,t1.ALLWNC_REQST_DE
+					,t1.REGISTER_ID
+					,t1.REGIST_DT
+					,t1.UPDUSR_ID
+					,t1.UPDT_DT
+					)
+				VALUES 
+					(
+					 t2.EMPNO
+					,t2.RNUM
+					,t2.RELATE
+					,t2.FAMILY_NM
+					,t2.SEXDSTN_SE
+					,t2.BRTHDY
+					,t2.ACDMCR_SE
+					,t2.OCCP_NM
+					,t2.RM
+					,''
+					,t2.TROBL_AT
+					,t2.SUPORT_AT
+					,t2.ALLWNC_PYMNT_AT
+					,t2.SALARY_CONFM_AT
+					,#S_USER_ID#
+					,SYSDATE    
+					,#S_USER_ID#
+					,SYSDATE    
+					)
+	</insert>
+	
+	<!-- 인사가족정보 삭제-->
+	<delete id="SAL020103DAO.hrmFamilyInfoD" parameterClass="java.util.HashMap">	
+		DELETE FROM TBHRM_HR_FAMILY
+		WHERE EMPNO = #EMPNO#
+		  AND FAMILY_NM = #FAMILY_NM#
+	</delete>
+</sqlMap>

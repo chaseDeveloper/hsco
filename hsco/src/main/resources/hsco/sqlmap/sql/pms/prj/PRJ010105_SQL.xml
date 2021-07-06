@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PRJ010105_SQL">
+	
+	<!-- 사업별 계약정보조회 -->
+	<select id="PRJ010105DAO.selectDs_Main" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ /* PRJ010105DAO.selectDs_Main */ ]]>
+		SELECT t2.CODE                  AS CNTRCT_SE
+		      ,t1.CNTRCT_NO
+		      ,REGEXP_REPLACE(t1.CNTRCT_NO, '([0-9]{4})([0-9]{1})([0-9]{5})', '\1-\2-\3')       AS CNTRCT_VIEW
+		      ,t1.UPPER_CNTRCT_NO
+		      ,ROWNUM                   AS RNUM
+		      ,LEVEL                    AS TREE_LVL
+		      ,LPAD(' ', (LEVEL-1)*5, ' ') || REGEXP_REPLACE(t1.CNTRCT_NO, '([0-9]{4})([0-9]{1})([0-9]{5})', '\1-\2-\3')       AS "트리구조_검증용"
+		      ,t1.CNTRCT_NM
+		      ,t3.DEPT_NM               AS MNG_DEPT_NM
+		      ,t4.BCNC_NM
+		      ,t1.CNTRCT_DE
+		      ,t1.STRWRK_DE
+		      ,t1.COMPET_DE
+		      ,TO_DATE(t1.COMPET_DE,'YYYYMMDD') - TO_DATE(t1.STRWRK_DE,'YYYYMMDD') + 1                  AS DAYS_BETWEEN
+		      ,SFCTR_CNTRCT_AMOUNT(t1.CNTRCT_NO, NULL)                                                  AS CNTRCT_AMOUNT
+		      ,t5.DECSN_AMOUNT
+		      ,TRUNC(NVL(t5.DECSN_AMOUNT,0) / SFCTR_CNTRCT_AMOUNT(t1.CNTRCT_NO, NULL) * 100, 3)         AS DSCSN_RT
+		      ,t1.SCSBID_RT
+		      ,'계약대장조회'                                                                             AS "계약대장조회"
+		      ,t1.PROGRS_SE
+		FROM   TBCTR_CNTRCT t1
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		            ON t1.CNTRCT_SE = t2.CODE
+		           AND t2.GRP_CODE = 'CTR022'
+		       LEFT OUTER JOIN TBHRM_DEPT t3
+		            ON t1.MNG_DEPT_CODE = t3.DEPT_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT s1.CNTRCT_NO
+		                              ,LISTAGG(s2.BCNC_NM, CHR(13)||CHR(10)) WITHIN GROUP(ORDER BY s1.QOTA_RT, s1.BCNC_CODE)     AS BCNC_NM
+		                              ,s2.BCNC_CODE
+		                        FROM   TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS s1
+		                               LEFT OUTER JOIN TBCTR_BCNC_MASTR s2
+		                                    ON s1.BCNC_CODE = s2.BCNC_CODE
+		                        GROUP BY s1.CNTRCT_NO,s2.BCNC_CODE
+		                       ) t4
+		            ON t1.CNTRCT_NO = t4.CNTRCT_NO
+		       LEFT OUTER JOIN (
+		                        SELECT d1.CNTRCT_NO
+		                              ,SUM(d1.DECSN_AMOUNT)    AS DECSN_AMOUNT
+		                        FROM   TBCTR_CNTRCT_DECSN d1
+		                               LEFT OUTER JOIN TBACC_EXP_DSN_MASTR d2
+		                                    ON d1.CNTRCT_DECSN_YEAR = d2.DECSN_YEAR
+		                                   AND d1.DECSN_NO = d2.DECSN_NO
+		                        /*WHERE  d2.EXPNDTR_CNFIRM_AT = '1'*/
+		                        GROUP BY d1.CNTRCT_NO
+		                       ) t5
+		            ON t1.CNTRCT_NO = t5.CNTRCT_NO
+		       INNER JOIN TBPRJ_USER_BSNS t6
+		            ON t1.BSNS_CODE = t6.BSNS_CODE
+		            AND t6.EMPNO = #EMPNO#
+		WHERE  1=1
+		<isNotEmpty property="CNTRCT_SE">
+		  AND  t2.CODE = #CNTRCT_SE#
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_DE_ST">
+		  AND  t1.CNTRCT_DE BETWEEN #CNTRCT_DE_ST# AND #CNTRCT_DE_ED#
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+		  AND  t1.BSNS_CODE = #BSNS_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="PROGRS_SE">
+		  AND  t1.PROGRS_SE = #PROGRS_SE#
+		</isNotEmpty>
+		CONNECT BY PRIOR t1.CNTRCT_NO = t1.UPPER_CNTRCT_NO
+		START WITH t1.UPPER_CNTRCT_NO IS NULL
+		ORDER SIBLINGS BY t1.CNTRCT_NO
+	</select>
+	
+</sqlMap>

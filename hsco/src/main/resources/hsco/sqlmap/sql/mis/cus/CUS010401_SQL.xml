@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010401_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+    
+  <!--고객통계 조회 -->
+	<select id="CUS010401DAO.selectCstmrGradList" resultClass="java.util.HashMap">
+			SELECT 
+				 CSTMR_SE								  AS CSTMR_SE          /*고객구분*/
+				,NVL(SUM(DECODE(B.CSTMR_GRAD, '01',1)),0) AS CSTMR_GRAD_1      /*고객등급(우호)*/
+				,NVL(SUM(DECODE(B.CSTMR_GRAD, '02',1)),0) AS CSTMR_GRAD_2      /*고객등급(일반)*/
+				,NVL(SUM(DECODE(B.CSTMR_GRAD, '03',1)),0) AS CSTMR_GRAD_3      /*고객등급(악성)*/
+				,NVL(SUM(DECODE(B.CSTMR_GRAD, '01',1)),0) + NVL(SUM(DECODE(B.CSTMR_GRAD, '02',1)),0) + NVL(SUM(DECODE(B.CSTMR_GRAD, '03',1)),0) 
+														  AS SUM               /*고객구분 별 고객 수*/
+			  FROM ( 
+			       /*기타고객 정보*/
+				   SELECT
+					       '01'               AS CSTMR_SE
+						 , CSTMR_NM           AS NM
+						 , MBTLNO             AS MBTLNO
+				         , MAX(GNRL_TLPHON)   AS TELNO
+				   FROM TBCUS_HMPG_CSTMR_INFO
+				   GROUP BY CSTMR_NM, MBTLNO
+				   
+				   UNION ALL
+				   
+				   /*영구임대고객 정보*/
+				   
+                   SELECT 
+                           '02'                                         AS CSTMR_SE          /*고객구분*/
+                          , REPLACE(MAX(A.NM),'　','')                  AS NM
+                          , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+                          , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+				   FROM TBRNT_PRMANENT_RENT_CSTMR A
+				        INNER JOIN TBRNT_RENT_CNTRCT B
+                        		ON A.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO
+				   GROUP BY A.PRMANENT_CSTMR_NO
+				   
+				   UNION ALL
+				   
+				   /*매입임대고객 정보*/
+				   
+		           SELECT 
+		           	       '04'                                         AS CSTMR_SE          /*고객구분*/
+		           	      , REPLACE(MAX(A.NM),'　','')                  AS NM
+		           	      , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+		                  , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+		           FROM  TBRNT_PUCHAS_RENT_CSTMR A                           /*매입임대고객*/
+		                 INNER JOIN TBRNT_PUCHAS_CNTRCT B                    /*매입계약*/
+                                 ON A.PUCHAS_CSTMR_NO = B.PUCHAS_CSTMR_NO
+                         INNER JOIN TBRNT_PUCHAS_HOUSE C                          /*매입주택*/
+		            	         ON B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+                                AND C.HOUSE_SE        =	'R2'
+                   GROUP BY A.PUCHAS_CSTMR_NO
+                   
+				   UNION ALL
+				   
+				   /*전세고객 정보*/
+				   
+                   SELECT 
+                    	   '05'                                         AS CSTMR_SE          /*고객구분*/
+                    	  , REPLACE(MAX(A.NM),'　','')                  AS NM
+                    	  , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+                          , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+                   FROM TBRNT_LFSTS_CSTMR  A						/* 전세고객 */
+                        INNER JOIN TBRNT_LFSTS_CNTRCT B   			/* 전세계약자 */
+                                ON A.LFSTS_CSTMR_NO = B.LFSTS_CSTMR_NO
+                        INNER JOIN TBRNT_LFSTS_RENT_PSN D
+                                ON B.CNTRCTR_NO = D.CNTRCTR_NO
+                               AND B.CNTRCT_CO = D.CNTRCTR_CO
+                   WHERE 1=1
+                     AND D.RNTAGNT_NO = (
+                                         SELECT NVL (MAX (RNTAGNT_NO), 1)
+                                           FROM TBRNT_LFSTS_RENT_PSN
+                                          WHERE CNTRCTR_NO = B.CNTRCTR_NO
+                                            AND CNTRCTR_CO = B.CNTRCT_CO
+                   	                    )
+				   GROUP BY A.LFSTS_CSTMR_NO	  
+					  
+				   UNION ALL
+				   
+				   /*보상고객 정보*/
+				   
+                   SELECT   '06'                                          AS CSTMR_SE       
+                          , B.OWNER_NM                                    AS NM
+                          , MAX(B.TELNO_2)                                AS MBTLNO            /*휴대폰번호*/
+                          , MAX(B.TELNO_1)                                AS TELNO             /*전화번호*/
+                   FROM   TBCMP_THING_OWNER A
+                          INNER JOIN TBCMP_OWNER B
+                                  ON A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+                                 AND A.OWNER_NO = B.OWNER_NO
+                          INNER JOIN TBCMP_THING_WTNNC C
+                                  ON A.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                                 AND A.THING_SN = C.THING_SN
+                          INNER JOIN TBCMP_RWMNY_PYMNT D
+                                  ON B.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+                                 AND B.OWNER_NO = D.OWNER_NO   
+				   GROUP BY B.OWNER_NM, B.IHIDNUM	
+						
+				   UNION ALL
+				   
+				   /*토지고객 정보만*/
+				   
+                   SELECT 
+                    	   '07'                                         AS CSTMR_SE          /*고객구분*/
+                    	  , REPLACE(MAX(A.CSTMR_NM),'　','')            AS NM
+                    	  , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+                          , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+                   FROM TBSLS_LAD_CSTMR A							/* 토지고객 */
+                        INNER JOIN TBSLS_LCNTRCTR B       			/* 토지계약자 */
+                    	        ON A.LAD_CSTMR_NO = B.LAD_CSTMR_NO
+                   GROUP BY A.LAD_CSTMR_NO
+				   
+				   UNION ALL
+				   
+				   /*주택고객 정보*/
+				   
+                   SELECT 
+                   	       '08'                                         AS CSTMR_SE          /*고객구분*/
+                   	      , REPLACE(MAX(A.CSTMR_NM),'　','')            AS NM
+                   	      , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+                          , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+                   FROM  TBSLS_HOUSE_CSTMR  A								/* 주택고객 */
+                   	     INNER JOIN TBSLS_HCNTRCTR B					/* 주택계약자 */
+                   	             ON A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+                         INNER JOIN TBSLS_HOUSE_DONG_HO C
+                                 ON B.HOUSE_CODE = C.HOUSE_CODE
+                   	            AND B.DONG = C.DONG
+                   	 		    AND B.HO   = C.HO
+                   	     INNER JOIN TBSLS_HOUSE_INFO D
+                   	             ON C.HOUSE_CODE = D.HOUSE_CODE
+                   			    AND D.USE_AT = '1'
+				   GROUP BY A.HOUSE_CSTMR_NO
+					
+					
+				   ) A
+				   INNER JOIN (
+					            SELECT  NM     AS NM
+						              , MBTLNO AS MBTLNO
+						              , NVL(MAX(CSTMR_GRAD), '02') AS CSTMR_GRAD
+						        FROM TBCUS_HMPG_CSTMR_CVPL
+						        GROUP BY NM, MBTLNO 
+				   ) B
+				   ON  A.NM     = B.NM
+				   AND (
+				        TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890') = B.MBTLNO 
+				       OR 
+				        TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890') = B.MBTLNO
+				       )
+			GROUP BY CSTMR_SE
+			ORDER BY CSTMR_SE
+    </select>
+</sqlMap>

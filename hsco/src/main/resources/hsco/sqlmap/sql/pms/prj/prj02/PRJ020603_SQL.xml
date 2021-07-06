@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_LAD_SLE_PLAN_ACMSLT	토지판매계획및실적
+		 R   : TBPRJ_HOUSE_SLE_PLAN_ACMSLT	주택판매계획실적
+		 R   : TBPRJ_PRSMP_PRMPC			추정원가
+		 R   : TBACC_EXPNDTR_DECSN_MASTR	지출결의
+		 R   : TBSLS_HCNTRCTR_PAY_DETAIL	주택계약자납부상세
+		 R   : TBSLS_LCNTRCTR_PAY_DETAIL	토지계약자납부상세
+		CRUD : TBPRJ_INVT_RTRVL_PLAN		투자회수계획
+
+		 R   : TBPRJ_LAD_BLCK_INFO		토지블럭정보		토지판매회수계획 ~
+		 R   : TBPRJ_					주택판매회수계획 ^
+		 R   : TBPRJ_PRSMP_PRMPC		추정원가
+		 R   : TBACC_					지출정보 ^
+		 R   : TBSLS_					수납정보 ^
+		 R   : TBSLS_					체납정보 ^
+	-->
+
+	<!-- 투자회수계획 ================================================== -->
+
+	<!-- 투자회수계획 조회 -->
+	<select id="PRJ020603.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_YEAR		/* 사업년도 */
+	,A.BSNS_CODE		/* 사업코드 */
+	,A.HOUSE_CODE		/* 주택코드 */
+
+	,A.INVT_PLAN_AMOUNT		/* 투자계획금액 */
+	,A.INVT_ACMSLT_AMOUNT	/* 투자실적금액 */
+	,A.DIFF1				/* 차액1(투자) */
+	,A.RTRVL_PLAN_AMOUNT	/* 회수계획금액 */
+	,A.RTRVL_ACMSLT_AMOUNT	/* 회수실적금액 */
+	,A.RTRVL_DFNNT			/* 회수차액 */
+	,A.DIFF2				/* 차액2(회수) */
+	,A.DIFF3				/* 차액3(회수-투자) */
+
+	,B.CNTRWK_CT			/* 공사(건축)비 */
+	,B.REWARD_CT			/* 보상(대지)비 */
+	,B.DSGN_CT				/* 설계(사업)비 */
+	,B.ETC_CT				/* 기타비용 */
+	,B.AMT_S				/* 합계(투자) */
+
+	,B.RTRVL_PLAN_AMOUNT2	/* 회수계획금액 */
+	,B.DIFF4				/* 차액4(회수-투자) */
+
+	,BC.BSNS_NM				/* 사업명 */
+	,NVL(LC.LAD_CODE_NM, HC.HOUSE_CODE_NM) AS HOUSE_NM					/* 토지(주택)명 */
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+
+JOIN (
+SELECT
+	 A.BSNS_YEAR		/* 사업년도 */
+	,A.BSNS_CODE		/* 사업코드 */
+	,A.HOUSE_CODE		/* 주택코드 */
+
+	,SUM(A.INVT_PLAN_AMOUNT) AS INVT_PLAN_AMOUNT		/* 투자계획금액 */
+	,SUM(A.INVT_ACMSLT_AMOUNT) AS INVT_ACMSLT_AMOUNT	/* 투자실적금액 */
+	,SUM(-A.INVT_PLAN_AMOUNT
+		 +A.INVT_ACMSLT_AMOUNT) AS DIFF1		/* 차액(투자) */
+
+	,SUM(A.RTRVL_PLAN_AMOUNT) AS RTRVL_PLAN_AMOUNT		/* 회수계획금액 */
+	,SUM(A.RTRVL_ACMSLT_AMOUNT) AS RTRVL_ACMSLT_AMOUNT	/* 회수실적금액 */
+	,SUM(A.RTRVL_DFNNT) AS RTRVL_DFNNT			/* 회수차액 */
+	,SUM(-A.RTRVL_PLAN_AMOUNT
+		 +A.RTRVL_ACMSLT_AMOUNT) AS DIFF2		/* 차액(회수) */
+	,SUM(+A.INVT_PLAN_AMOUNT
+		 -A.INVT_ACMSLT_AMOUNT
+		 -A.RTRVL_PLAN_AMOUNT
+		 +A.RTRVL_ACMSLT_AMOUNT) AS DIFF3		/* 차액(회수-투자) */
+FROM TBPRJ_INVT_RTRVL_PLAN A		/* 투자회수계획 */
+WHERE #STDR_YM# >= A.STDR_YM			/* 기준년월 */
+GROUP BY BSNS_YEAR, BSNS_CODE, HOUSE_CODE
+) A ON A.BSNS_CODE = BC.BSNS_CODE		/* 투자회수계획 : 기준년월까지 */
+
+LEFT JOIN (
+SELECT
+	 A.BSNS_YEAR		/* 사업년도 */
+	,A.BSNS_CODE		/* 사업코드 */
+	,A.HOUSE_CODE		/* 주택코드 */
+
+	,SUM(A.CNTRWK_CT) AS CNTRWK_CT		/* 공사(건축)비 */
+	,SUM(A.REWARD_CT) AS REWARD_CT		/* 보상(대지)비 */
+	,SUM(A.DSGN_CT) AS DSGN_CT			/* 설계(사업)비 */
+	,SUM(A.ETC_CT) AS ETC_CT			/* 기타비용 */
+	,SUM( A.CNTRWK_CT
+		 +A.REWARD_CT
+		 +A.DSGN_CT
+		 +A.ETC_CT) AS AMT_S			/* 합계(투자) */
+
+	,SUM(A.RTRVL_PLAN_AMOUNT) AS RTRVL_PLAN_AMOUNT2		/* 회수계획금액 */
+	,SUM(A.RTRVL_DFNNT) AS RTRVL_DFNNT			/* 회수차액 */
+	,SUM(-(A.CNTRWK_CT
+		 +A.REWARD_CT
+		 +A.DSGN_CT
+		 +A.ETC_CT)
+		 +A.RTRVL_PLAN_AMOUNT) AS DIFF4		/* 차액4(회수-투자) */
+FROM TBPRJ_INVT_RTRVL_PLAN A		/* 투자회수계획 */
+WHERE A.STDR_YM > #STDR_YM#			/* 기준년월 */
+GROUP BY BSNS_YEAR, BSNS_CODE, HOUSE_CODE
+) B ON B.BSNS_CODE = BC.BSNS_CODE			/* 투자회수계획 : 기준년월이후 */
+
+LEFT JOIN TBPRJ_LAD_CODE LC						/* 토지코드 */
+  ON A.BSNS_CODE = LC.BSNS_CODE
+LEFT JOIN TBPRJ_HOUSE_CODE HC					/* 주택코드 */
+  ON A.BSNS_CODE = HC.BSNS_CODE
+WHERE 1=1
+<isNotEmpty property="BSNS_GB" >
+  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+</isNotEmpty>
+ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 투자회수계획 삭제 -->
+	<delete id="PRJ020603.mD" parameterClass="map">
+DELETE FROM TBPRJ_INVT_RTRVL_PLAN			/* 투자회수계획 */
+WHERE BSNS_CODE IN 
+(SELECT BC.BSNS_CODE
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+WHERE NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 : 1-진행,2-완료*/
+)
+	</delete>
+<!--
+WHERE STDR_YM = #STDR_YM#			/* 기준년월 */
+  AND BSNS_YEAR = #BSNS_YEAR#		/* 사업년도 */
+  AND BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND HOUSE_CODE = #HOUSE_CODE#		/* 주택코드 */
+-->
+
+	<!-- 투자회수계획 생성 ================================================== -->
+
+	<insert id="PRJ020603.make" parameterClass="map">
+INSERT INTO TBPRJ_INVT_RTRVL_PLAN (			/* 투자회수계획 */
+	 STDR_YM		/* 기준년월 */
+	,BSNS_YEAR		/* 사업년도 */
+	,BSNS_CODE		/* 사업코드 */
+	,HOUSE_CODE		/* 주택코드 */
+
+	,INVT_PLAN_AMOUNT		/* 투자계획금액 */
+	,INVT_ACMSLT_AMOUNT		/* 투자실적금액 */
+
+	,CNTRWK_CT			/* 공사비용 */
+	,REWARD_CT			/* 보상비용 */
+	,DSGN_CT			/* 설계비용 */
+	,ETC_CT				/* 기타비용 */
+	,RTRVL_PLAN_AMOUNT		/* 회수계획금액 */
+	,RTRVL_ACMSLT_AMOUNT	/* 회수실적금액 */
+	,RTRVL_DFNNT			/* 회수차액 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+)
+SELECT
+	 A.STDR_YM		/* 기준년월 */
+	,A.BSNS_YEAR	/* 사업년도 */
+	,A.BSNS_CODE	/* 사업코드 */
+	,A.HOUSE_CODE	/* 주택코드 */
+
+	,A.PLAN_AMOUNT		/* 계획금액 */
+	,A.ACMSLT_AMOUNT	/* 실적금액 */
+
+	,0 AS CNTRWK_CT		/* 공사비용 */
+	,0 AS REWARD_CT		/* 보상비용 */
+	,0 AS DSGN_CT			/* 설계비용 */
+	,0 AS ETC_CT			/* 기타비용 */
+	,0 AS RTRVL_PLAN_AMOUNT	/* 회수계획금액 */
+	,0 AS RTRVL_ACMSLT_AMOUNT	/* 회수실적금액 */
+	,0 AS RTRVL_DFNNT			/* 회수차액 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+FROM (
+	SELECT
+		 A.LTTOT_YM AS STDR_YM					/* 기준년월 */
+		,SUBSTR(A.LTTOT_YM, 1,4) AS BSNS_YEAR	/* 사업년도 */
+		,A.BSNS_CODE							/* 사업코드 */
+		,A.LAD_CODE AS HOUSE_CODE				/* 주택코드 */
+
+		,SUM(A.PLAN_AMOUNT) AS PLAN_AMOUNT		/* 계획금액 */
+		,SUM(A.ACMSLT_AMOUNT) AS ACMSLT_AMOUNT	/* 실적금액 */
+	FROM TBPRJ_LAD_SLE_PLAN_ACMSLT A		/* 토지판매계획및실적 */
+	GROUP BY A.LTTOT_YM, BSNS_CODE, LAD_CODE, PRPOS_CODE
+
+	UNION ALL
+
+	SELECT
+		 A.LTTOT_YM AS STDR_YM					/* 기준년월 */
+		,SUBSTR(A.LTTOT_YM, 1,4) AS BSNS_YEAR	/* 사업년도 */
+		,A.BSNS_CODE							/* 사업코드 */
+		,A.HOUSE_CODE							/* 주택코드 */
+
+		,SUM(A.PLAN_AMOUNT) AS PLAN_AMOUNT		/* 계획금액 */
+		,SUM(A.ACMSLT_AMOUNT) AS ACMSLT_AMOUNT	/* 실적금액 */
+	FROM TBPRJ_HOUSE_SLE_PLAN_ACMSLT A		/* 주택판매계획및실적 */
+	GROUP BY A.LTTOT_YM, BSNS_CODE, HOUSE_CODE, SUPLY_TY_CODE
+) A 
+WHERE #STDR_YM# >= A.STDR_YM				/* 분양년월 */
+  AND A.BSNS_CODE IN 
+(SELECT BC.BSNS_CODE
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+WHERE NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 : 1-진행,2-완료*/
+)
+ORDER BY 1,2,3,4
+	</insert>
+
+</sqlMap>

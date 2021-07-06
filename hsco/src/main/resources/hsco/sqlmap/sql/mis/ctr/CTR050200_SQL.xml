@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR050100_SQL">	
+
+	<!-- 조회 -->
+	<select id="CTR050200DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR050200DAO.select*/]]>
+		WITH EXP_DSN_T AS (
+		    SELECT DECSN_YN
+		          ,CYFD_SE
+		          ,CHIT_YN
+		          ,ITNC_DE
+		          ,CAUSE_ACTION_DE
+		          ,DET_DCSN_DE
+		          ,CPTAL_EXPNDTR_ACNTBK_DE
+		          ,CHECK_NO
+		          ,DECSN_YEAR
+		          ,DECSN_NO
+		          ,SEQ
+		          ,ANACT_KND
+		          ,SUMRY
+		          ,ROUND(DECSN_AMOUNT * NVL(TRIM(#PLAN_RT#),100) / 100)   AS DECSN_AMOUNT
+		          ,SUPLY_AMOUNT
+		          ,VAT_AMOUNT
+		          ,TAXXPT_AMOUNT
+		          ,BIZRNO
+		          ,BCNC_CODE
+		          ,BCNC_NM
+		          ,BSNS_BALC_NM
+		          ,BUDGET_ACNT_CODE
+		          ,BUDGET_ACNT_NM
+		          ,EXPNDTR_UNIT_CODE
+		          ,EXPNDTR_UNIT_NM
+		          ,CNTRCT_SE
+		          ,ENTRPRS_SE
+		          ,MTHD_SE
+		          ,SMLPZ
+		          ,FEMALE_ENTRPRS
+		          ,DSPSN
+		          ,DSPSN_STD_BPLC
+		          ,SRSILL_DSPSN
+		          ,SOCTY_ENTRPRS
+		          ,SOCTY_CPER_MXTR
+		          ,TCNDVLP
+		          ,GREEN_PRDUCT
+		          ,DEPT_CODE
+		          ,DEPT_NAME
+		          ,TAXBILL_NO
+		          ,PBLICTE_DE
+		          ,NTS_CONFM_NO
+		          ,BILL_KND
+		          ,TAXT_AT
+		          ,RQEST_RCPT_SE
+		          ,PBLICTE_AT
+		          ,PXCOND_ODR
+		          ,CNTRCT_NO
+		          ,INFRML_CNTRCT_AT
+		    FROM   (
+		            SELECT CASE WHEN TRIM(t3.DECSN_NO) IS NULL THEN '0' ELSE '1' END   AS DECSN_YN         /*지출여부*/
+		                  ,NVL(t3.CYFD_SE, '0')                                        AS CYFD_SE          /*이월구분*/
+		                  ,CASE WHEN t4.CHIT_NO IS NOT NULL THEN '1' ELSE '0' END      AS CHIT_YN          /*전표여부*/
+		                  ,t3.ITNC_DE                                                                      /* 발의일자(결의일자) */
+		                  ,t5.CNSUL_DE                                                 AS CAUSE_ACTION_DE  /*원인행위일자*/
+		                  ,t3.DET_DCSN_DE                                                                  /*채무확정일자*/
+		                  ,t3.CPTAL_EXPNDTR_ACNTBK_DE
+		                  ,t3.CHECK_NO
+		                  ,t2.DECSN_YEAR
+		                  ,t2.DECSN_NO
+		                  ,t2.SEQ
+		                  ,t3.ANACT_KND
+		                  ,t3.SUMRY
+		                  ,DECODE(t14.ISSU_ID, NULL, DECODE(NVL(t1.SM_AMOUNT,0), 0, NVL(t1.SUPLY_AMOUNT,0)+NVL(t1.TAXAMT,0), t1.SM_AMOUNT), t14.TOTL_AMT)   AS DECSN_AMOUNT     /*결의금액*/
+		                  ,DECODE(t14.ISSU_ID, NULL, t1.SUPLY_AMOUNT, t14.CHRG_AMT)                                                                         AS SUPLY_AMOUNT     /*공급가액*/
+		                  ,DECODE(t14.ISSU_ID, NULL, t1.TAXAMT,       t14.TAX_AMT)                                                                          AS VAT_AMOUNT       /*부가세금액*/
+		                  ,t2.TAXXPT_AMOUNT                         /*면세금액*/
+		                  ,DECODE(t14.ISSU_ID, NULL, t1.BIZRNO,    t14.SELR_CORP_NO)    AS BIZRNO
+		                  ,t1.BCNC_CODE
+		                  ,DECODE(t14.ISSU_ID, NULL, t1.BCNC_NM,   t14.SELR_CORP_NM)    AS BCNC_NM
+		                  ,t8.CODE_NM           AS BSNS_BALC_NM     /*계정구분명*/
+		                  ,t3.BUDGET_ACNT_CODE
+		                  ,t7.BUDGET_ACNT_NM
+		                  ,t3.EXPNDTR_UNIT_CODE      /*지출단위코드*/
+		                  ,t9.BUKIP_NM                                             AS EXPNDTR_UNIT_NM
+		                  ,CASE WHEN t12.CNTRCT_SE IS NOT NULL THEN t12.CNTRCT_SE
+		                        WHEN t12.CNTRCT_SE IS NULL AND t3.ANACT_KND = '06' THEN '1'     /* 공사 : 계약과의 연결점 없이 공사와집행결의 */
+		                        WHEN t12.CNTRCT_SE IS NULL AND t3.ANACT_KND = '02' THEN '3'     /* 물품 : 계약과의 연결점 없이 구입과지출결의 */
+		                        WHEN t12.CNTRCT_SE IS NULL AND t3.ANACT_KND = '03' AND DECODE(NVL(t10.DATA_COUNT,0), 0, '2', '1') = '1' THEN '3'     /* 물품 : 계약과의 연결점 없이 일반지출결의 이면서 대지급 */
+		                        WHEN t12.CNTRCT_SE IS NULL AND t3.ANACT_KND = '03' THEN '2'     /* 용역 : 계약과의 연결점 없이 일반지출결의 */
+		                   END          AS CNTRCT_SE
+		                  ,DECODE(t2.ENTRPRS_SE,'3' ,'3', '1')                     AS ENTRPRS_SE
+		                  ,DECODE(NVL(t10.DATA_COUNT,0), 0, '2', '1')              AS MTHD_SE
+		                  ,DECODE(t2.ENTRPRS_SE,'3' ,'3', '1')                     AS SMLPZ            /*중소기업여부*/
+		                  ,t2.FEMALE_ENTRPRS
+		                  ,t2.DSPSN
+		                  ,t2.DSPSN_STD_BPLC
+		                  ,t2.SRSILL_DSPSN
+		                  ,t2.SOCTY_ENTRPRS
+		                  ,t2.SOCTY_CPER_MXTR
+		                  ,t2.TCNDVLP
+		                  ,t2.GREEN_PRDUCT
+		                  ,t3.DEPT_CODE 
+		                  ,SFSAL_GETDEPTNM_01(t3.DEPT_CODE)                         AS DEPT_NAME
+		                  ,t1.TAXBILL_NO
+		                  ,t1.PBLICTE_DE
+		                  ,t1.NTS_CONFM_NO
+		                  ,t1.BILL_KND
+		                  ,t1.TAXT_AT
+		                  ,t1.RQEST_RCPT_SE
+		                  ,t1.PBLICTE_AT
+		                  ,DECODE(t11.PXCOND_SE, NULL, NULL, t13.CODE_NM || ' ' || t11.PXCOND_ODR || '차')     AS PXCOND_ODR
+		                  ,t12.CNTRCT_NO
+		                  ,t12.INFRML_CNTRCT_AT
+		            FROM   TBACC_TAXBIL_MASTER t1
+		                   LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t2
+		                        ON t1.DECSN_YEAR = t2.DECSN_YEAR
+		                       AND t1.DECSN_NO = t2.DECSN_NO
+		                       AND t1.DECSN_SEQ = t2.SEQ
+		                   INNER JOIN TBACC_EXP_DSN_MASTR t3
+		                        ON t2.DECSN_YEAR = t3.DECSN_YEAR
+		                       AND t2.DECSN_NO = t3.DECSN_NO
+		                   LEFT OUTER JOIN (
+		                                    SELECT DECSN_YEAR
+		                                          ,DECSN_NO
+		                                          ,MAX(CHIT_NO)        AS CHIT_NO
+		                                    FROM   TBACC_CHIT_MASTR
+		                                    GROUP BY DECSN_YEAR, DECSN_NO
+		                                   ) t4
+		                        ON t3.DECSN_YEAR = t4.DECSN_YEAR
+		                       AND t3.DECSN_NO   = t4.DECSN_NO
+		                   LEFT OUTER JOIN TBACC_CNSUL t5
+		                        ON t3.CAUSE_ACTION_NO = t5.CAUSE_ACTION_NO
+		                   LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t7
+		                        ON t3.BUDGET_YEAR = t7.YEAR
+		                       AND t3.BSNS_SE = t7.BSNS_SE
+		                       AND t3.BALC_SE = t7.BALC_SE
+		                       AND t3.BUDGET_ACNT_CODE = t7.BUDGET_ACNT_CODE
+		                   LEFT OUTER JOIN TBCOM_CMMN_CODE t8
+		                        ON t8.GRP_CODE = 'BDG017'
+		                       AND t8.USE_AT = '1' 
+		                       AND t3.BSNS_SE = SUBSTR(t8.CODE,1,1)
+		                       AND t3.BALC_SE = SUBSTR(t8.CODE,2,1)
+		                   LEFT OUTER JOIN TBBDG_BUKIP_CODE t9
+		                        ON t3.EXPNDTR_UNIT_CODE = t9.BUKIP_CODE
+		                   LEFT OUTER JOIN (
+		                                    SELECT DECSN_YEAR
+		                                          ,DECSN_NO
+		                                          ,COUNT(1)       AS DATA_COUNT
+		                                    FROM   TBACC_EXP_DSN_DETAIL
+		                                    WHERE  BCNC_CODE = '001370'  /* 인천지방조달청 */
+		                                    GROUP BY DECSN_YEAR
+		                                            ,DECSN_NO
+		                                   ) t10
+		                        ON t3.DECSN_YEAR = t10.DECSN_YEAR
+		                       AND t3.DECSN_NO = t10.DECSN_NO
+		                   LEFT OUTER JOIN TBCTR_CNTRCT_DECSN t11
+		                        ON t3.DECSN_YEAR = t11.DECSN_YEAR
+		                       AND t3.DECSN_NO = t11.DECSN_NO
+		                   LEFT OUTER JOIN TBCTR_CNTRCT t12
+		                        ON t11.CNTRCT_NO = t12.CNTRCT_NO
+		                   LEFT OUTER JOIN TBCOM_CMMN_CODE t13
+		                        ON t11.PXCOND_SE = t13.CODE
+		                       AND t13.GRP_CODE = 'CTR039'
+		                   LEFT OUTER JOIN DET_ISSU_MSTR t14
+		                        ON t1.NTS_CONFM_NO = t14.ISSU_ID
+		                   LEFT OUTER JOIN INTRAWARE.VIEW_MIS_SANCTN_KND@DL_INTRACITY t15
+                                ON t3.SANCTN_NO  = t15.SANCTN_NO
+		            WHERE  t3.ANACT_KND IN ('02', '03', '06')                                            /* 결의서종류(02:구입과지출, 03:일반지출, 06:공사와집행) */
+		            AND   (t3.SANCTN_NO = '0' OR t15.SANCTN_KND = '5')                                      /* 결의서 전자결재 완료 */
+		            AND    t3.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#              /* 자금지출장부일자 */
+		           )
+		    WHERE  NTS_CONFM_NO IS NOT NULL       /* 세금계산서 국세청발행여부 */
+	<isNotEmpty property="DEPT_CODE">
+		    AND    DEPT_CODE IN (SELECT DEPT_CODE FROM TABLE(SFHRM_DEPT_TREE(#DEPT_CODE#)))     /* 부서코드 */
+	</isNotEmpty>
+	<isNotEmpty property="MTHD_SE">
+		    AND    MTHD_SE = #MTHD_SE#   /* 조달여부(1:조달,2:자체) */
+	</isNotEmpty>
+		), DATA_GRP_T AS (
+		    SELECT 'SMLPZ'              AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  SMLPZ = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'FEMALE_ENTRPRS'     AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  FEMALE_ENTRPRS = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'DSPSN'              AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  DSPSN = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'DSPSN_STD_BPLC'     AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  DSPSN_STD_BPLC = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'SRSILL_DSPSN'       AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  SRSILL_DSPSN = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'SOCTY_ENTRPRS'      AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  SOCTY_ENTRPRS = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'SOCTY_CPER_MXTR'    AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  SOCTY_CPER_MXTR = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'TCNDVLP'            AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  TCNDVLP = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'GREEN_PRDUCT'       AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  GREEN_PRDUCT = '1'
+		    GROUP BY CNTRCT_SE
+		), DATA_HEAD_T AS (
+		    SELECT 'SMLPZ'   AS EXP_COL
+		          ,'중소기업 제품'           AS EXP_COL_NM
+		          ,1                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('1','2','3') THEN '0' ELSE '1' END)     AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'FEMALE_ENTRPRS'   AS EXP_COL
+		          ,'여성기업 제품'           AS EXP_COL_NM
+		          ,2                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('1','2','3') THEN '0' ELSE '1' END)     AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'DSPSN'   AS EXP_COL
+		          ,'장애인기업 생산품'           AS EXP_COL_NM
+		          ,3                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('1','2','3') THEN '0' ELSE '1' END)     AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'DSPSN_STD_BPLC'   AS EXP_COL
+		          ,'장애인표준사업장 생산품'           AS EXP_COL_NM
+		          ,4                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('2','3') THEN '0' ELSE '1' END)         AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'SRSILL_DSPSN'   AS EXP_COL
+		          ,'중증장애인 생산품'           AS EXP_COL_NM
+		          ,5                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('2','3') THEN '0' ELSE '1' END)         AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'SOCTY_ENTRPRS'   AS EXP_COL
+		          ,'사회적기업 제품'           AS EXP_COL_NM
+		          ,6                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('2','3') THEN '0' ELSE '1' END)         AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'SOCTY_CPER_MXTR'   AS EXP_COL
+		          ,'사회적협동조합 제품'           AS EXP_COL_NM
+		          ,7                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('2','3') THEN '0' ELSE '1' END)         AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'TCNDVLP'   AS EXP_COL
+		          ,'중소기업 기술개발제품'           AS EXP_COL_NM
+		          ,8                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('3') THEN '0' ELSE '1' END)             AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'GREEN_PRDUCT'   AS EXP_COL
+		          ,'녹색 제품'           AS EXP_COL_NM
+		          ,9               AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('3') THEN '0' ELSE '1' END)             AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    ORDER BY SORT_RANK, CNTRCT_SE
+		), ALL_DATA_T AS (
+		    SELECT CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS ALL_DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  1=1
+		    GROUP BY CNTRCT_SE
+		), DATA_T AS (
+		    SELECT EXP_COL
+		          ,EXP_COL_NM
+		          ,NRMLT_AT
+		          ,SORT_RANK
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)        AS DECSN_AMOUNT
+		    FROM   (
+		            SELECT t1.EXP_COL
+		                  ,t1.EXP_COL_NM
+		                  ,t1.SORT_RANK
+		                  ,t1.CNTRCT_SE
+		                  ,t1.CNTRCT_SE_NM
+		                  ,NVL(t2.DECSN_AMOUNT,0)     AS DECSN_AMOUNT
+		                  ,t1.NRMLT_AT
+		            FROM   DATA_HEAD_T t1
+		                   LEFT OUTER JOIN DATA_GRP_T t2
+		                   ON t1.EXP_COL = t2.EXP_COL
+		                   AND t1.CNTRCT_SE = t2.CNTRCT_SE
+		            WHERE  1=1
+		            ORDER BY t1.SORT_RANK, t1.CNTRCT_SE, t1.NRMLT_AT
+		           )
+		    GROUP BY EXP_COL, EXP_COL_NM, SORT_RANK, CNTRCT_SE, NRMLT_AT
+		    ORDER BY NRMLT_AT DESC, SORT_RANK
+		)
+		SELECT t1.EXP_COL
+		      ,t1.EXP_COL_NM
+		      ,t1.NRMLT_AT
+		      ,t1.SORT_RANK
+		      ,t1.CNTRCT_SE
+		      ,t2.ALL_DECSN_AMOUNT
+		      ,t1.DECSN_AMOUNT
+		      ,ROUND(t1.DECSN_AMOUNT / t2.ALL_DECSN_AMOUNT * 100, 2)      AS DECSN_PER
+		      ,T3.GOAL_RATE
+		FROM   DATA_T t1
+		       LEFT OUTER JOIN ALL_DATA_T t2
+		            ON t1.CNTRCT_SE = t2.CNTRCT_SE
+		       LEFT OUTER JOIN TBCTR_PUBLIC_PURCHS_GOAL T3
+		            ON T1.EXP_COL = T3.PRDUCT_SE
+		            AND T1.CNTRCT_SE = T3.CNTRCT_SE
+		WHERE  1=1
+		ORDER BY NRMLT_AT DESC, SORT_RANK
+	</select>
+
+
+</sqlMap>

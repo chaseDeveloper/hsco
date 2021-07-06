@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT040404DAO">
+
+<!-- 쿼리명 : 장기수선상세계획 조회
+	설명 : 장기수선상세계획 조회 쿼리
+	수정일  수정자  수정내용
+	
+	수정자 : 김선진
+	최종수정일 : 2016.12.14
+-->
+<select id="RNT040404DAO.selectplan" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+
+SELECT  A.NUM
+       ,A.PLAN_YEAR
+       ,A.CODE
+       ,NVL(B.CODE_NM, DECODE(A.NUM, '2', '소계', '3', '합계')) AS CNTRWK_SE
+       ,CASE A.RPAIRS_SE
+          WHEN '1' THEN '개별'
+          WHEN '2' THEN '공용'
+        END AS RPAIRS_SE
+       ,A.HOUSE_CODE_600
+       ,A.HOUSE_CODE_601
+       ,A.HOUSE_CODE_602
+       ,A.HOUSE_CODE_603
+       ,A.HOUSE_CODE_604
+  FROM    (  SELECT 1 as NUM,
+                    PLAN_YEAR,
+                    CODE,
+                    RPAIRS_SE,
+                    MAX (지산) AS HOUSE_CODE_600,
+                    MAX (까치) AS HOUSE_CODE_601,
+                    MAX (강남) AS HOUSE_CODE_602,
+                    MAX (용지) AS HOUSE_CODE_603,
+                    MAX (비둘기) AS HOUSE_CODE_604
+               FROM (  SELECT PLAN_YEAR,
+                              A.HOUSE_CODE,
+                              C.CODE,
+                              RPAIRS_SE,
+                              REPLACE(DECODE(C.CODE , A.CNTRWK_SE , DECODE(A.HOUSE_CODE , '600', TO_CHAR(WM_CONCAT(A.CNTRWK_NM||' ['|| TRUNC(A.PLAN_AMOUNT / 1000000) || '백만원' ||']' || chr(10))), '' ) , ''), ',') AS 지산,  
+                              REPLACE(DECODE(C.CODE , A.CNTRWK_SE , DECODE(A.HOUSE_CODE , '601', TO_CHAR(WM_CONCAT(A.CNTRWK_NM||' ['|| TRUNC(A.PLAN_AMOUNT / 1000000) || '백만원' ||']' || chr(10))), '' ) , ''), ',') AS 까치,
+                              REPLACE(DECODE(C.CODE , A.CNTRWK_SE , DECODE(A.HOUSE_CODE , '602', TO_CHAR(WM_CONCAT(A.CNTRWK_NM||' ['|| TRUNC(A.PLAN_AMOUNT / 1000000) || '백만원' ||']' || chr(10))), '' ) , ''), ',') AS 강남,
+                              REPLACE(DECODE(C.CODE , A.CNTRWK_SE , DECODE(A.HOUSE_CODE , '603', TO_CHAR(WM_CONCAT(A.CNTRWK_NM||' ['|| TRUNC(A.PLAN_AMOUNT / 1000000) || '백만원' ||']' || chr(10))), '' ) , ''), ',') AS 용지,
+                              REPLACE(DECODE(C.CODE , A.CNTRWK_SE , DECODE(A.HOUSE_CODE , '604', TO_CHAR(WM_CONCAT(A.CNTRWK_NM||' ['|| TRUNC(A.PLAN_AMOUNT / 1000000) || '백만원' ||']' || chr(10))), '' ) , ''), ',') AS 비둘기
+                         FROM TBRNT_INORG_RPAIRS_M A
+                              JOIN TBRNT_RENT_HOUSE B
+                                 ON A.HOUSE_CODE = B.RENT_HOUSE_CODE
+                              LEFT JOIN (SELECT CODE, CODE_NM
+                                           FROM TBCOM_CMMN_CODE C
+                                          WHERE     GRP_CODE = 'RNT015'
+                                                AND CHRCTR_PREPAR_VALUE_0 = 'M') C
+                                 ON 1 = 1
+                        WHERE PLAN_YEAR BETWEEN #PLAN_YEAR1# AND #PLAN_YEAR2#
+                          <isNotEmpty property="RPAIRS_SE">    
+                          and A.RPAIRS_SE = #RPAIRS_SE#
+                          </isNotEmpty>
+                     GROUP BY A.PLAN_YEAR,
+                              A.HOUSE_CODE,
+                              RPAIRS_SE,
+                              C.CODE,
+                              A.CNTRWK_SE)
+           GROUP BY PLAN_YEAR, RPAIRS_SE, CODE
+     ) A
+       LEFT JOIN
+          (SELECT CODE, CODE_NM
+             FROM TBCOM_CMMN_CODE
+            WHERE GRP_CODE = 'RNT015' AND CHRCTR_PREPAR_VALUE_0 = 'M') B
+       ON A.CODE = B.CODE
+ WHERE 1 = 1
+    UNION ALL
+    SELECT 2 AS NUM
+         , PLAN_YEAR
+         , '' AS CODE
+         , '소계' AS CNTRWK_SE
+         , '' AS RPAIRS_SE
+         , TO_CHAR(SUM(DECODE(A.HOUSE_CODE , '600' , A.PLAN_AMOUNT , 0))) AS HOUSE_CODE_600
+         , TO_CHAR(SUM(DECODE(A.HOUSE_CODE , '601' , A.PLAN_AMOUNT , 0))) AS HOUSE_CODE_601
+         , TO_CHAR(SUM(DECODE(A.HOUSE_CODE , '602' , A.PLAN_AMOUNT , 0))) AS HOUSE_CODE_602
+         , TO_CHAR(SUM(DECODE(A.HOUSE_CODE , '603' , A.PLAN_AMOUNT , 0))) AS HOUSE_CODE_603
+         , TO_CHAR(SUM(DECODE(A.HOUSE_CODE , '604' , A.PLAN_AMOUNT , 0))) AS HOUSE_CODE_604
+      FROM TBRNT_INORG_RPAIRS_M A
+     WHERE 1=1
+       and PLAN_YEAR BETWEEN #PLAN_YEAR1# AND #PLAN_YEAR2#
+       <isNotEmpty property="RPAIRS_SE">    
+       and A.RPAIRS_SE = #RPAIRS_SE#
+       </isNotEmpty>
+     GROUP BY PLAN_YEAR
+ order by PLAN_YEAR, NUM, RPAIRS_SE, CODE
+ 
+</select>
+
+</sqlMap>

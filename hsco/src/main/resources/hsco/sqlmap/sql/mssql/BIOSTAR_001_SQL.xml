@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BIOSTAR_001_SQL">
+	
+	
+	<!-- 근태기DB 접속-->
+	<select id="biostarDAO.selectDclzDBInfoList" resultClass="java.util.HashMap">
+		SELECT 
+			 t1.nUserIdn	AS DCLZ_ID
+			,t1.sUserName   AS DCLZ_NM
+			,t2.sName		AS DCLZ_DEPT_NM
+			,t1.sUserId		AS GRPWR_NO
+		FROM TB_USER t1
+		LEFT OUTER JOIN TB_USER_DEPT t2 ON t1.nDepartmentIdn = t2.nDepartmentIdn
+    </select>
+    
+    <!-- 근태기내역 조회 -->
+	<select id="biostarDAO.selectDclzDtlsList" resultClass="java.util.HashMap" remapResults="true">
+		<![CDATA[ /** 근태기내역 조회 */ ]]>
+			SELECT 
+			     MIN(tM.NEVENTLOGIDN) AS EVENT_ID
+			     ,tm.WORK_DE
+			     ,tm.NUSERIDN         AS DCLZ_ID
+			     ,MAX(tm.SUSERNAME)   AS DCLZ_NM
+			     ,MAX(tm.SDEPARTMENT) AS DCLZ_DEPT_NM
+			     , MIN(CASE WHEN tm.NTNAEVENT = '0' THEN tm.WORK_TIME ELSE NULL END) AS BEGIN_TM
+			     , CASE WHEN MAX(CASE WHEN tm.NTNAEVENT = '1' THEN tm.WORK_TIME ELSE NULL END) IS NULL THEN 
+			            CASE WHEN SUM(CASE WHEN tm.NTNAEVENT = '0' THEN 1 ELSE 0 END) > 1 THEN 
+			                  CASE WHEN MAX(tm.LAST_DATE) IS NOT NULL THEN MAX(tm.LAST_DATE) ELSE NULL 
+			                  END ELSE NULL END
+			            ELSE MAX(CASE WHEN tm.NTNAEVENT = '1' THEN tm.WORK_TIME ELSE NULL END)
+			       END END_TM
+                 , CASE WHEN MAX(CASE WHEN tm.NTNAEVENT = '1' THEN tm.WORK_TIME ELSE NULL END) IS NOT NULL 
+                               AND (SUM(CASE WHEN tm.NTNAEVENT = '1' THEN 1 ELSE 0 END) > 1) 
+                               AND (MIN(CASE WHEN tm.NTNAEVENT = '1' THEN tm.WORK_TIME ELSE NULL END)) BETWEEN '0000' AND '1000'
+                            THEN MIN(CASE WHEN tm.NTNAEVENT = '1' THEN tm.WORK_TIME ELSE NULL END)
+                        ELSE (
+                        		CASE WHEN (MIN(CASE WHEN tm.NTNAEVENT = '1' THEN tm.WORK_TIME ELSE NULL END)) BETWEEN '0000' AND '1000' 
+                       					THEN (MIN(CASE WHEN tm.NTNAEVENT = '1' THEN tm.WORK_TIME ELSE NULL END)) ELSE NULL 
+                       			END
+                        )
+       	    		END END_TM_BF_DAY
+			FROM (
+			    SELECT REPLACE(CONVERT(CHAR(10), DATEADD(SECOND, NDATETIME, '1970-01-01 00:00:00'), 23), '-', '')  AS WORK_DE
+			         , REPLACE(SUBSTRING(CONVERT(CHAR(19), CONVERT(CHAR(19), DATEADD(SECOND, NDATETIME, '1970-01-01 00:00:00'), 120), 120), 12, 5), ':', '') AS WORK_TIME
+			         , t1.NEVENTLOGIDN
+			         , t1.NDATETIME
+			         , t1.NREADERIDN
+			         , t1.NUSERID
+			         , t1.NTNAEVENT
+			         , t2.NUSERIDN
+			         , t2.SUSERNAME
+			         , t2.NDEPARTMENTIDN
+			         , t3.SDEPARTMENT
+			         , (
+			            SELECT MAX(REPLACE(SUBSTRING(CONVERT(CHAR(19), CONVERT(CHAR(19), DATEADD(SECOND, NDATETIME, '1970-01-01 00:00:00'), 120), 120), 12, 5), ':', '')) AS LAST_WORK_TIME
+			            FROM TB_EVENT_LOG s1
+			            WHERE t1.NUSERID = s1.NUSERID
+			            AND   REPLACE(CONVERT(CHAR(10), DATEADD(SECOND, t1.NDATETIME, '1970-01-01 00:00:00'), 23), '-', '')+1 = REPLACE(CONVERT(CHAR(10), DATEADD(SECOND, s1.NDATETIME, '1970-01-01 00:00:00'), 23), '-', '')
+			            AND   s1.NTNAEVENT = '1'
+			            AND   REPLACE(SUBSTRING(CONVERT(CHAR(19), CONVERT(CHAR(19), DATEADD(SECOND, s1.NDATETIME, '1970-01-01 00:00:00'), 120), 120), 12, 5), ':', '') BETWEEN '0000' AND '0900'
+			           ) AS LAST_DATE
+			    FROM TB_EVENT_LOG t1
+			        LEFT OUTER JOIN TB_USER t2
+			        ON  t1.NUSERID = t2.SUSERID
+			        LEFT OUTER JOIN TB_USER_DEPT T3
+			        ON  T2.NDEPARTMENTIDN = T3.NDEPARTMENTIDN
+			    WHERE 1=1
+			    
+			    <isNotEmpty property="WORK_DE">
+			    	<isNotEmpty property="WORK_DE2" prepend=" AND">
+			    		REPLACE(CONVERT(CHAR(10), DATEADD(SECOND, NDATETIME, '1970-01-01 00:00:00'), 23), '-', '') BETWEEN #WORK_DE# AND #WORK_DE2#
+			    	</isNotEmpty>
+			    </isNotEmpty>
+			    <isNotEmpty property="WORK_DE">
+			    	<isEmpty property="WORK_DE2" prepend=" AND">
+			    		REPLACE(CONVERT(CHAR(10), DATEADD(SECOND, NDATETIME, '1970-01-01 00:00:00'), 23), '-', '') = #WORK_DE#
+			    	</isEmpty>
+			    </isNotEmpty>
+			    <isEmpty property="WORK_DE" prepend=" AND">
+			   			REPLACE(CONVERT(CHAR(10), DATEADD(SECOND, NDATETIME, '1970-01-01 00:00:00'), 23), '-', '') = REPLACE(CONVERT(VARCHAR(10), GETDATE(), 120), '-', '')
+			    </isEmpty>
+				
+			    AND t2.NUSERIDN IS NOT NULL
+			    AND t1.NUSERID <![CDATA[ <> ]]> '0'
+			) tm
+			WHERE 1=1
+			<isNotEmpty property="dclzIdList">
+				AND CAST(tm.NUSERIDN AS CHAR(10)) IN (
+					<iterate conjunction="," property="dclzIdList">
+						CAST(#dclzIdList[].DCLZ_ID# AS CHAR(10))
+					</iterate>
+			     	 )    
+			</isNotEmpty>
+			GROUP BY tm.WORK_DE
+			       , tm.NUSERIDN
+			ORDER BY MAX(tm.NDEPARTMENTIDN) ASC
+		
+    </select>
+    
+</sqlMap>

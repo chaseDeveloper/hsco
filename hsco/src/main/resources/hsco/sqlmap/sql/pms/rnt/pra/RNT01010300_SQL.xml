@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01010300_SQL">	
+   <!--  설명  : 계약및 납부현황
+		작성자 : 지효정 -->
+	
+	<!-- 기준년도목록 -->
+	<select id="RNT01010300DAO.stdrYearList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 STDR_YEAR AS CODE
+			,STDR_YEAR AS CODE_NM
+		FROM TBRNT_RNTCHRG_STDR
+		WHERE 1=1
+		<isNotEmpty property="RENT_HOUSE_CODE">
+		AND   RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		</isNotEmpty>
+		GROUP BY STDR_YEAR
+		ORDER BY STDR_YEAR
+	</select>
+	
+	<!-- 보증금임대료 목록 -->
+	<select id="RNT01010300DAO.rntchrgStdrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT ROWNUM AS RNUM,
+			   A.*
+		  FROM (
+				SELECT #stdrYear# AS STDR_YEAR, /* 기준년도 */
+				       A1.RENT_HOUSE_CODE,		/* 임대주택코드 */
+				       A1.RENT_HOUSE_NM,		/* 임대주택명 */
+				       B1.AEA,        			/* 평형 */ 
+				       B1.QUALF_LEVEL,        	/* 정렬순서 */ 
+				       B1.QUALF_SE,        		/* 자격구분 */ 
+				       B1.FLOOR_SE,        		/* 층구분 */ 
+				       B1.QUALF_NM,				/* 자격구분명 */
+		               B1.FLOOR_NM,				/* 층구분명 */
+				       C1.RENT_GTN,        		/* 임대보증금 */ 
+				       C1.MT_RNTCHRG,        	/* 월임대료 */
+		       		   D1.BEFR_RENT_GTN,		/* 전년도 임대보증금 */
+		       		   D1.BEFR_MT_RNTCHRG		/* 전년도 월임대료 */
+				  FROM TBRNT_RENT_HOUSE A1 
+				   INNER JOIN 
+				       (SELECT DISTINCT A.RENT_HOUSE_CODE,             	/* 임대주택코드 */ 
+				              A.AEA,               						/* 평형 */ 
+				              B.CODE AS QUALF_SE,               		/* 자격구분 */ 
+				              B.CHRCTR_PREPAR_VALUE_0 AS QUALF_LEVEL,	/* 정렬순서 */ 
+				              B.CODE_NM AS QUALF_NM,
+				              C.CODE AS FLOOR_SE,               			/* 층구분 */
+				              C.CODE_NM AS FLOOR_NM 
+				         FROM TBRNT_RENT_HOUSE_BILD A, 
+				              (SELECT CODE,
+				              		  CODE_NM,
+				                      CHRCTR_PREPAR_VALUE_0 
+				                 FROM TBCOM_CMMN_CODE 
+				                WHERE GRP_CODE 	= 'RNT001'              /* 자격구분 (RNT001) */ 
+				                      AND USE_AT = '1' 
+				                      AND CHRCTR_PREPAR_VALUE_1 IN (0, 1)
+				              ) B, 
+				              (SELECT CODE,
+				                      CODE_NM
+				                FROM TBCOM_CMMN_CODE 
+				               WHERE GRP_CODE 	= 'RNT008'              /* 층구분 (RNT008) */ 
+				              ) C 
+				       ) B1 
+				       ON A1.RENT_HOUSE_CODE = B1.RENT_HOUSE_CODE 
+				   LEFT JOIN 
+				       (SELECT STDR_YEAR, 
+				              RENT_HOUSE_CODE, 
+				              AEA, 
+				              QUALF_SE, 
+				              FLOOR_SE, 
+				              RENT_GTN, 
+				              MT_RNTCHRG 
+				         FROM TBRNT_RNTCHRG_STDR 
+				        WHERE STDR_YEAR = #stdrYear#
+				       ) C1 
+				       ON B1.RENT_HOUSE_CODE 	= C1.RENT_HOUSE_CODE 
+				       AND B1.AEA 				= C1.AEA 
+				       AND B1.QUALF_SE 			= C1.QUALF_SE 
+				       AND B1.FLOOR_SE 			= C1.FLOOR_SE
+				   LEFT JOIN 
+				       (SELECT STDR_YEAR AS BEFR_STDR_YEAR,
+				       		  RENT_HOUSE_CODE AS BEFR_RENT_HOUSE_CODE, 
+				              AEA AS BEFR_AEA, 
+				              QUALF_SE AS BEFR_QUALF_SE, 
+				              FLOOR_SE AS BEFR_FLOOR_SE, 
+						      RENT_GTN AS BEFR_RENT_GTN,			/* 전년도 임대보증금 */ 
+				              MT_RNTCHRG AS BEFR_MT_RNTCHRG			/* 전년도 월읾대료 */
+				         FROM TBRNT_RNTCHRG_STDR 
+				        WHERE STDR_YEAR = #stdrYear# - 1
+				       ) D1 
+				       ON B1.RENT_HOUSE_CODE = D1.BEFR_RENT_HOUSE_CODE 
+				       AND B1.AEA = D1.BEFR_AEA 
+				       AND B1.QUALF_SE = D1.BEFR_QUALF_SE 
+				       AND B1.FLOOR_SE = D1.BEFR_FLOOR_SE 
+				 WHERE A1.HOUSE_SE 	= 'R1'		/* 주택구분- R1: 임대(영구), R3: 상가임대(영구) */
+				<isNotEmpty property="rentHouseCode">
+				   AND A1.RENT_HOUSE_CODE = #rentHouseCode#
+				</isNotEmpty>
+				<isNotEmpty property="qualfSe">
+				   AND B1.QUALF_SE = #qualfSe#
+				</isNotEmpty>
+				   AND B1.QUALF_SE NOT IN ('98', '99')
+				 ORDER BY A1.RENT_HOUSE_CODE, 
+				       B1.AEA, 
+				       B1.QUALF_LEVEL, 
+				       B1.QUALF_SE, 
+				       B1.FLOOR_SE 
+			   ) A
+	</select>
+	
+	<!-- 보증금임대료생성 -->
+	<insert id="RNT01010300DAO.rntchrgStdrC" parameterClass="java.util.HashMap">
+		INSERT INTO TBRNT_RNTCHRG_STDR(
+			 STDR_YEAR      	/*기준년도*/	 
+			,RENT_HOUSE_CODE 	/*임대주택코드*/
+			,AEA             	/*평수*/
+			,QUALF_SE        	/*자격구분*/
+			,FLOOR_SE        	/*층구분*/
+			,RENT_GTN        	/*임대보증금*/
+			,MT_RNTCHRG			/*월임대료*/
+			,REGISTER_ID
+			,REGIST_DT  
+			,UPDUSR_ID  
+			,UPDT_DT
+		)
+		VALUES(
+			 #STDR_YEAR#      	/*기준년도*/	 
+			,#RENT_HOUSE_CODE# 	/*임대주택코드*/
+			,#AEA#             	/*평수*/
+			,#QUALF_SE#        	/*자격구분*/
+			,#FLOOR_SE#        	/*층구분*/
+			,#RENT_GTN#        	/*임대보증금*/
+			,#MT_RNTCHRG#		/*월임대료*/
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+	
+	<!-- 보증금임대료수정 -->
+	<update id="RNT01010300DAO.rntchrgStdrU" parameterClass="java.util.HashMap">
+	MERGE INTO TBRNT_RNTCHRG_STDR A
+		USING DUAL
+		ON ( 	A.STDR_YEAR 		= #STDR_YEAR# 
+			AND A.RENT_HOUSE_CODE 	= #RENT_HOUSE_CODE# 
+			AND A.AEA 				= #AEA#
+			AND A.QUALF_SE 			= #QUALF_SE#
+			AND A.FLOOR_SE 			= #FLOOR_SE#
+			)
+		WHEN MATCHED THEN
+		UPDATE 
+			SET 
+				RENT_GTN 			= #RENT_GTN#,
+				MT_RNTCHRG 			= #MT_RNTCHRG#,
+				UPDUSR_ID 			= #S_USER_ID#,
+				UPDT_DT 			= SYSDATE
+		WHERE
+				A.STDR_YEAR 		= #STDR_YEAR# 
+		AND   	A.RENT_HOUSE_CODE 	= #RENT_HOUSE_CODE#
+		AND   	A.AEA 				= #AEA#
+		AND   	A.QUALF_SE 			= #QUALF_SE#
+		AND   	A.FLOOR_SE 			= #FLOOR_SE#
+		
+		WHEN NOT MATCHED THEN
+		INSERT (
+					 STDR_YEAR      	/*기준년도*/	 
+					,RENT_HOUSE_CODE 	/*임대주택코드*/
+					,AEA             	/*평수*/
+					,QUALF_SE        	/*자격구분*/
+					,FLOOR_SE        	/*층구분*/
+					,RENT_GTN        	/*임대보증금*/
+					,MT_RNTCHRG			/*월임대료*/
+					,REGISTER_ID
+					,REGIST_DT  
+					,UPDUSR_ID  
+					,UPDT_DT
+				)
+		VALUES (
+					 #STDR_YEAR#      	/*기준년도*/	 
+					,#RENT_HOUSE_CODE# 	/*임대주택코드*/
+					,#AEA#             	/*평수*/
+					,#QUALF_SE#        	/*자격구분*/
+					,#FLOOR_SE#        	/*층구분*/
+					,#RENT_GTN#        	/*임대보증금*/
+					,#MT_RNTCHRG#		/*월임대료*/
+					,#S_USER_ID#
+					,SYSDATE
+					,#S_USER_ID#
+					,SYSDATE
+			)
+	</update>
+	
+	<!-- 보증금임대료삭제 -->
+	<delete id="RNT01010300DAO.rntchrgStdrD" parameterClass="java.util.HashMap">
+		DELETE FROM TBRNT_RNTCHRG_STDR
+		WHERE STDR_YEAR 		= #STDR_YEAR#
+		AND   RENT_HOUSE_CODE 	= #RENT_HOUSE_CODE#
+		AND   AEA 				= #AEA#
+		AND   QUALF_SE 			= #QUALF_SE#
+		AND   FLOOR_SE 			= #FLOOR_SE#
+	</delete>
+</sqlMap>

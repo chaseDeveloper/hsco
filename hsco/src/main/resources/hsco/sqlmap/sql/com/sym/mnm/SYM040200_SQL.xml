@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM040200_SQL">
+	
+
+	<select id="SYM040200DAO.SYM040200Code" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+	<![CDATA[
+		SELECT DISTINCT 
+				SYS_SE_CODE AS CODE,
+				SYS_SE_CODE AS CODE_NM,
+				SYS_SE_CODE || ':' ||SYS_SE_CODE AS ALL_CODE_NM
+		FROM TBCOM_MENU
+		]]>
+				
+	</select>
+	
+	<!-- 메뉴 목록조회 -->
+	<select id="SYM040200DAO.SYM040200List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+	        SELECT 
+	        		  0 AS CHK
+                     ,TMI.MENU_ID     
+                     ,TMI.PAGE_ID     
+                     ,TMI.SYS_SE_CODE 
+                     ,TMI.JOB_SE AS JOB_SE_CODE
+                     ,TMI.MENU_NM     
+                     ,TMI.MENU_LVL    
+                     ,TMI.MENU_GRP    
+                     ,TMI.UPPER_MENU 
+                     , (SELECT B.MENU_NM FROM TBCOM_MENU B WHERE B.MENU_ID = TMI.UPPER_MENU) AS UPPER_MENU_NM 
+                     ,TMI.MENU_ORDR   
+                     ,TMI.MENU_OPTP   
+                     ,TMI.MENU_PARAMTR
+                     ,TMI.MENU_STTUS  
+                     ,TMI.MENU_DC     
+                     ,TMI.USE_AT      
+                     ,TMI.MNL_SN      
+                     ,TMI.REGISTER_ID 
+                     ,TO_CHAR(TMI.REGIST_DT, 'YYYY-MM-DD HH:MI:SS') AS REGIST_DT
+                     ,TMI.UPDUSR_ID   
+                     ,TO_CHAR(TMI.UPDT_DT, 'YYYY-MM-DD HH:MI:SS') AS UPDT_DT
+                     ,TSI.PAGE_ID
+                     ,TSI.PAGE_NM 
+                     ,TSI.PAGE_URL
+                     ,(SELECT MAX(MENU_LVL) FROM TBCOM_MENU WHERE UPPER_MENU = TMI.UPPER_MENU) AS MENU_LVL_MAX   
+            FROM   TBCOM_MENU TMI,
+                   TBCOM_PAGE TSI
+            WHERE TMI.PAGE_ID = TSI.PAGE_ID(+)
+            <isNotEmpty property="SYS_SE_CODE">
+                AND TMI.SYS_SE_CODE = #SYS_SE_CODE#
+            </isNotEmpty>
+            CONNECT BY PRIOR TMI.MENU_ID = TMI.UPPER_MENU
+            START   WITH TMI.MENU_ID IN (NVL(#UPPER_MENU#,0))
+            ORDER SIBLINGS BY TMI.MENU_ORDR
+	 		        	     
+    </select>
+    
+    <select id="SYM040200DAO.SYM040200DownloadMenuList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+   	<![CDATA[
+   			SELECT 
+   			LTRIM( REGEXP_SUBSTR(LTRIM (SYS_CONNECT_BY_PATH (MENU_NM, ' > '), ' > ROOT > '), '[^>]+',1,1),'> ') AS MENU_PATH1,
+			LTRIM( REGEXP_SUBSTR(LTRIM (SYS_CONNECT_BY_PATH (MENU_NM, ' > '), ' > ROOT > '), '[^>]+',1,2),'> ') AS MENU_PATH2,
+			LTRIM( REGEXP_SUBSTR(LTRIM (SYS_CONNECT_BY_PATH (MENU_NM, ' > '), ' > ROOT > '), '[^>]+',1,3),'> ') AS MENU_PATH3,
+			LTRIM( REGEXP_SUBSTR(LTRIM (SYS_CONNECT_BY_PATH (MENU_NM, ' > '), ' > ROOT > '), '[^>]+',1,4),'> ') AS MENU_PATH4,
+			LTRIM( REGEXP_SUBSTR(LTRIM (SYS_CONNECT_BY_PATH (MENU_NM, ' > '), ' > ROOT > '), '[^>]+',1,5),'> ') AS MENU_PATH5, 
+   			MENU_NM, 
+   			to_char(MENU_ID) AS MENU_ID,
+   			SYS_SE_CODE
+ 		FROM  TBCOM_MENU 
+ 		WHERE USE_AT ='1'
+		AND PAGE_ID IS NOT NULL 
+	]]> 
+ 		<isNotEmpty property="SYS_SE_CODE">
+          AND SYS_SE_CODE = #SYS_SE_CODE#
+        </isNotEmpty>
+        START WITH MENU_ID= NVL(#UPPER_MENU#,0)
+ 		CONNECT BY PRIOR MENU_ID=UPPER_MENU
+		/*ORDER BY sys_connect_by_path(TO_CHAR(menu_ordr,'099'),',') ASC*/
+
+   <!-- 
+        SELECT 
+              A.UPPER_MENU
+            , (SELECT B.MENU_NM FROM TBCOM_MENU B WHERE B.MENU_ID = A.UPPER_MENU) AS UPPER_MENU_NM
+            , A.MENU_LVL
+            , A.MENU_ID
+            , A.MENU_NM
+            , A.MENU_ORDR
+            , DECODE(D.MENU_ID, NULL, '메인화면', '팝업화') AS MAIN_GB
+            , DECODE(A.PAGE_ID, NULL, '', '최종메뉴') AS LAST_GB_NM
+            , DECODE(A.USE_AT, '1', '사용', '미사용') AS USE_STTUS
+        FROM TBCOM_MENU A
+         , (
+            SELECT
+            C.MENU_ID
+            FROM TBCOM_MENU C
+            WHERE C.USE_AT='1' 
+              AND C.MENU_ID > 0
+            CONNECT BY PRIOR C.MENU_ID = C.UPPER_MENU
+            START WITH C.MENU_ID= 90
+         ) D
+        WHERE A.USE_AT='1' 
+          AND A.MENU_ID > 0
+          <isNotEmpty property="SYS_SE_CODE">
+                AND A.SYS_SE_CODE = #SYS_SE_CODE#
+          </isNotEmpty>
+          AND A.MENU_ID = D.MENU_ID(+)
+        CONNECT BY PRIOR A.MENU_ID = A.UPPER_MENU
+        START WITH A.MENU_ID= NVL(#UPPER_MENU#,0)
+        ORDER SIBLINGS BY TO_CHAR(A.MENU_GRP), A.MENU_ORDR, TO_CHAR(A.MENU_ID) ASC
+    -->
+   
+    </select>
+ 
+    <insert id="SYM040200DAO.SYM040200C" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			INSERT INTO TBCOM_MENU ( 
+					MENU_ID     
+					,PAGE_ID     
+					,SYS_SE_CODE 
+					,JOB_SE 
+					,MENU_NM     
+					,MENU_LVL    
+					,MENU_GRP    
+					,UPPER_MENU  
+					,MENU_ORDR   
+					,MENU_OPTP   
+					,MENU_PARAMTR
+					,MENU_STTUS  
+					,MENU_DC     
+					,USE_AT      
+					,MNL_SN      
+					,REGISTER_ID 
+					,REGIST_DT   
+					,UPDUSR_ID   
+					,UPDT_DT     
+			) VALUES (
+					#MENU_ID#
+					,#PAGE_ID#   
+					,#SYS_SE_CODE#
+					,#JOB_SE_CODE#
+					,#MENU_NM#
+					,#MENU_LVL#
+					,#MENU_GRP#
+					,#UPPER_MENU#
+					,#MENU_ORDR#
+					,#MENU_OPTP#
+					,#MENU_PARAMTR#
+					,#MENU_STTUS#
+					,#MENU_DC#
+					,NVL(#USE_AT#, 0)     
+					,#MNL_SN#
+					,#S_USER_ID#
+					,SYSDATE
+					,#S_USER_ID#
+					,SYSDATE
+			)
+		]]>
+	</insert>
+	
+	<update id="SYM040200DAO.SYM040200U" parameterClass="java.util.HashMap" >
+	    <![CDATA[
+	      	UPDATE TBCOM_MENU
+			SET 
+				  SYS_SE_CODE = #SYS_SE_CODE#
+				, JOB_SE = #JOB_SE_CODE#
+				, PAGE_ID = #PAGE_ID#
+				, MENU_NM = #MENU_NM#
+				, MENU_LVL = #MENU_LVL#
+				, MENU_GRP = #MENU_GRP#
+				, UPPER_MENU = #UPPER_MENU#
+				, MENU_ORDR = #MENU_ORDR#
+				, MENU_OPTP = #MENU_OPTP#
+				, MENU_PARAMTR = #MENU_PARAMTR#
+				, MENU_STTUS = #MENU_STTUS#
+				, MENU_DC = #MENU_DC#
+				, MNL_SN = #MNL_SN#
+				, USE_AT = NVL(#USE_AT#, 0)
+				, UPDUSR_ID = #S_USER_ID#
+				, UPDT_DT = SYSDATE
+			WHERE  MENU_ID = #MENU_ID#
+	    ]]>
+    </update>
+    
+    <delete id="SYM040200DAO.SYM040200D" parameterClass="java.util.HashMap" >
+	    <![CDATA[
+	      	DELETE FROM TBCOM_MENU
+	      	WHERE MENU_ID = #MENU_ID#
+	    ]]>
+    </delete>
+    
+    <!-- 화면 버튼 삭제(page->menu로 변경예정) -->
+    <delete id="SYM040200DAO.deleteScrinButton" parameterClass="java.util.HashMap" >
+	    <![CDATA[
+	      	DELETE FROM TBCOM_SCRIN_BUTTON
+	      	WHERE PAGE_ID = #MENU_ID#
+	    ]]>
+    </delete>
+    
+     <delete id="SYM040200DAO.deleteAuthGrpMenu" parameterClass="java.util.HashMap" >
+	    <![CDATA[
+	      	DELETE FROM TBCOM_AUTH_GRP_MENU
+	      	WHERE MENU_ID = #MENU_ID#
+	    ]]>
+    </delete>
+    
+    <select id="SYM040200DAO.SYM040200PageIdChk" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+           SELECT #PAGE_ID# AS PAGE_ID,
+                  NVL((SELECT 1
+                         FROM TBCOM_PAGE a
+                         WHERE a.PAGE_ID = decode(#PAGE_ID#,'',a.PAGE_ID,#PAGE_ID#)
+                           and ROWNUM = 1 ),0) AS CNT
+             FROM DUAL			
+	</select>
+    <select id="SYM040200DAO.SYM040200MenuKey" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<isEqual property="MENU_LVL" compareValue="0">
+		    <![CDATA[
+			SELECT max(menu_id)+1 AS MENU_ID 
+	    	FROM TBCOM_MENU 
+	    	WHERE LENGTH(tbcom_menu.menu_id) = 2 
+	    	AND menu_id < '90'
+	    		    ]]>
+		</isEqual>
+	    <isEqual property="MENU_LVL" compareValue="1">
+	        <![CDATA[
+	   SELECT CASE WHEN EXISTS	
+	   ( SELECT A.MENU_ID FROM 
+	      	(SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#||'00')),0,4))+1)*1000000  AS MENU_ID
+	    	FROM TBCOM_MENU 
+	    	WHERE  menu_id > TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,2))*100000000
+	    	 AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,2))+1)*100000000 
+	     	 AND upper_menu=#UPPER_MENU_ID# ) A, 
+	     		TBCOM_MENU B WHERE A.menu_id = B.menu_id ) 
+	    THEN   
+	           	(SELECT MAX(MENU_ID)+1 AS MENU_ID  
+          	 FROM TBCOM_MENU          
+          	 WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(#UPPER_MENU_ID#),0,2))*100000000          
+  				AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(#UPPER_MENU_ID#),0,2))+1)*100000000)
+  		ELSE
+  		 	(SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#||'00')),0,4))+1)*1000000  AS MENU_ID
+	    	FROM TBCOM_MENU 
+	    	WHERE  menu_id > TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,2))*100000000
+	    	 AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,2))+1)*100000000 
+	     	 AND upper_menu=#UPPER_MENU_ID# )
+  		END AS MENU_ID FROM dual  
+	     	]]>
+	    </isEqual> 
+	    <isEqual property="MENU_LVL" compareValue="2">
+	   	<![CDATA[
+	     SELECT CASE WHEN EXISTS	
+	    	  ( SELECT A.MENU_ID FROM 
+	    	  		(SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#)),0,6))+1)*10000 AS MENU_ID
+	    			FROM TBCOM_MENU 	WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,4))*1000000
+	     			AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,4))+1)*1000000 
+	     			AND upper_menu=#UPPER_MENU_ID# )A, 
+	     		TBCOM_MENU B WHERE A.menu_id = B.menu_id )           
+         THEN 
+          	(SELECT MAX(MENU_ID)+1 AS MENU_ID  
+          	 FROM TBCOM_MENU          
+          	 WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(#UPPER_MENU_ID#),0,4))*1000000          
+  				AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(#UPPER_MENU_ID#),0,4))+1)*1000000)
+  		 ELSE 
+  		 	(SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#)),0,6))+1)*10000 AS MENU_ID
+	    		FROM TBCOM_MENU 	WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,4))*1000000
+	     		AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,4))+1)*1000000 
+	     		AND upper_menu=#UPPER_MENU_ID#) 
+	     END AS MENU_ID FROM dual  
+  
+	    ]]> 
+	    </isEqual>
+		<isEqual property="MENU_LVL" compareValue="3">
+		   <![CDATA[
+	     SELECT CASE WHEN EXISTS	
+	    	  ( SELECT A.MENU_ID FROM 
+	    	  		(SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#)),0,8))+1)*100 AS MENU_ID
+	    			FROM TBCOM_MENU 	WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,6))*10000
+	     			AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,6))+1)*10000 
+	     			AND upper_menu=#UPPER_MENU_ID# )A, 
+	     		TBCOM_MENU B WHERE A.menu_id = B.menu_id )           
+         THEN 
+          	(SELECT MAX(MENU_ID)+1 AS MENU_ID  
+          	 FROM TBCOM_MENU          
+          	 WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(#UPPER_MENU_ID#),0,6))*10000          
+  				AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(#UPPER_MENU_ID#),0,6))+1)*10000)
+  		 ELSE 
+  		 	(SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#)),0,8))+1)*100 AS MENU_ID
+	    		FROM TBCOM_MENU 	WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,6))*10000
+	     		AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,6))+1)*10000 
+	     		AND upper_menu=#UPPER_MENU_ID#) 
+	     END AS MENU_ID FROM dual  
+  
+      ]]> 
+		  <!--	SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#)),0,8))+1)*100 AS MENU_ID
+	   		FROM TBCOM_MENU 
+	    	WHERE menu_id > TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,6))*10000
+	     	AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,6))+1)*10000  
+	     	AND upper_menu=#UPPER_MENU_ID# -->
+	
+	    </isEqual>
+	    <isEqual property="MENU_LVL" compareValue="4">
+		   <![CDATA[
+	     SELECT CASE WHEN EXISTS	
+	    	  ( SELECT A.MENU_ID FROM 
+	    	  		(SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#)),0,10))+1) AS MENU_ID
+	    			FROM TBCOM_MENU 	WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,8))*100
+	     			AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,8))+1)*100 
+	     			AND upper_menu=#UPPER_MENU_ID# )A, 
+	     		TBCOM_MENU B WHERE A.menu_id = B.menu_id )           
+         THEN 
+          	(SELECT MAX(MENU_ID)+1 AS MENU_ID  
+          	 FROM TBCOM_MENU          
+          	 WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(#UPPER_MENU_ID#),0,8))*100          
+  				AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(#UPPER_MENU_ID#),0,8))+1)*100)
+  		 ELSE 
+  		 	(SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#)),0,10))+1) AS MENU_ID
+	    		FROM TBCOM_MENU 	WHERE menu_id >  TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,8))*100
+	     		AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,8))+1)*100 
+	     		AND upper_menu=#UPPER_MENU_ID#) 
+	     END AS MENU_ID FROM dual  
+		      ]]>      	
+	 <!--     			  	SELECT (TO_NUMBER(SUBSTR(TO_CHAR(NVL(max(menu_id),#UPPER_MENU_ID#)),0,10))+1) AS MENU_ID
+	   		FROM TBCOM_MENU 
+	    	WHERE menu_id > TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,8))*100
+	     	AND menu_id < (TO_NUMBER(SUBSTR(TO_CHAR(upper_menu),0,8))+1)*100  
+	     	AND upper_menu=#UPPER_MENU_ID#
+ -->
+	    </isEqual>         
+	</select>
+
+</sqlMap>

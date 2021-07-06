@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02050600_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 특별관리대상 조회
+		    설명 : 매입임대 특별관리대상 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.10.21
+	-->
+	<select id="RNT02050600DAO.selectSpeclManageList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02050600DAO.selectSpeclManageList[매입임대 특별관리대상 조회] */
+		SELECT B.RENT_HOUSE_NM,
+			   A.RENT_HOUSE_CODE,
+			   A.DONG,
+			   A.HO,
+			   A.CNTRCTR_NO,
+			   D.NM,
+			   D.TELNO,
+			   D.MBTLNO,
+			   A.CNTRCT_DE,
+			   A.RENT_ENDDE,
+			   A.QUALF_SE,
+			   A.HOUSE_POSESN_AT,
+			   F.GUAR_CHK,
+			   F.GUAR_CNT,
+			   G.MAMT,
+			   G.MCNT,
+			   (SELECT DECODE(COUNT(0), 0, '', '소송중')
+				  FROM TBRNT_PUCHAS_LWST S
+				 WHERE S.CNTRCTR_NO = A.CNTRCTR_NO) AS S_CHK,
+			   SUBSTR (C.ZIP, 1, 3) || '-' || SUBSTR (C.ZIP, 4, 3) AS ZIP,
+			   RTRIM (C.ADRES || ' ' || C.ADRES_DETAIL) AS ADDR
+		  FROM TBRNT_PUCHAS_CNTRCT A
+		 INNER JOIN TBRNT_PUCHAS_HOUSE B
+			ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		 INNER JOIN TBRNT_PUCHAS_HOUSE_DONG C
+			ON C.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		   AND C.DONG = A.DONG
+		 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR D
+			ON D.PUCHAS_CSTMR_NO = A.PUCHAS_CSTMR_NO
+		 INNER JOIN (		/* 특별관리대상 */
+				   SELECT CNTRCTR_NO
+					 FROM TBRNT_PUCHAS_CNTRCT
+					WHERE RENT_ENDDE <![CDATA[ < ]]> #stdDe#
+					   OR HOUSE_POSESN_AT = '1'
+					UNION
+				   SELECT CNTRCTR_NO
+					 FROM TBRNT_PUCHAS_MT_RNTCHRG
+					WHERE RCIV_DE IS NULL
+					  AND NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) + NVL(OVDINTR, 0) > 0
+					GROUP BY CNTRCTR_NO
+				   HAVING COUNT (1) >= #npymMonth#
+			   ) E
+			ON E.CNTRCTR_NO = A.CNTRCTR_NO
+		  LEFT JOIN (
+					SELECT CNTRCTR_NO,
+						   CASE WHEN SUM(CNT1) > 0 THEN '압류(' || SUM(CNT1) || ')' END ||
+						   CASE WHEN SUM(CNT2) > 0 THEN '가압류(' || SUM(CNT2) || ')' END ||
+						   CASE WHEN SUM(CNT3) > 0 THEN '기타압류(' || SUM(CNT3) || ')' END AS GUAR_CHK,
+						   COUNT(0) AS GUAR_CNT
+					  FROM (SELECT CNTRCTR_NO,
+								   CASE WHEN SEIZR_SE IN ('00', '02', '03') THEN 1
+										ELSE 0
+									END AS CNT1,
+								   CASE WHEN SEIZR_SE = '01' THEN 1 ELSE 0 END AS CNT2,
+								   CASE WHEN NVL(SEIZR_SE, '99') NOT IN ('00', '01', '02', '03') THEN 1
+										ELSE 0
+									END AS CNT3
+							  FROM TBRNT_PUCHAS_SEIZR
+							 WHERE RELIS_DE IS NULL
+								OR RELIS_DE = ''
+						   )
+					 GROUP BY CNTRCTR_NO
+			   ) F
+			ON F.CNTRCTR_NO = A.CNTRCTR_NO
+		  LEFT JOIN (
+					SELECT CNTRCTR_NO,
+						   SUM(NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) + NVL(OVDINTR, 0)) AS MAMT,
+						   COUNT (1) AS MCNT
+					  FROM TBRNT_PUCHAS_MT_RNTCHRG
+					 WHERE RCIV_DE IS NULL
+					   AND NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) + NVL(OVDINTR, 0) > 0
+					 GROUP BY CNTRCTR_NO
+			   ) G
+			ON G.CNTRCTR_NO = A.CNTRCTR_NO
+		 WHERE A.CANCL_DE IS NULL
+		<isNotEmpty property="houseCode">
+		   AND A.RENT_HOUSE_CODE =  #houseCode#
+		</isNotEmpty>
+		 ORDER BY A.RENT_HOUSE_CODE, A.DONG, A.HO
+	</select>
+</sqlMap>

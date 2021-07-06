@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01040205_SQL">	
+   <!--  설명  : 수납파일변환
+		작성자 : 지효정 -->
+	
+	<!-- 수납파일 목록 -->
+	<select id="RNT01040205DAO.ocrRcivList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		     TO_CHAR(REC_DATE , 'YYYYMMDD') AS REC_DATE    		/*수납일자*/    
+			,SEQ_ID             	/*일련번호*/
+			,A.APT_CODE		/*주택코드*/
+		    ,B.RENT_HOUSE_NM	/*주택명*/
+		    ,A.DONG				/*동*/
+		    ,A.HO				/*호*/
+		    ,A.PAY_DIV			/*납부구분*/
+		    ,TO_CHAR(TO_DATE(A.PAYEND_DATE) , 'YYYYMMDD') AS PAYEND_DATE		/*납입기한*/
+		    ,A.BK_CODE	/*수납기관코드*/
+		    ,A.REC_AMT		/*수납구분*/
+		    ,A.WORK_DIV			/*작업구분*/
+		    ,DECODE(A.WORK_DIV, 'I', '소인등록', A.WORK_DIV) AS WORK_DIV_NM	/*작업구분명*/ 
+		    ,(SELECT COUNT(1) -1  FROM SLX_OCRFILE A1
+		      WHERE A1.APT_CODE = A.APT_CODE
+		        AND A1.DONG = A.DONG
+		        AND A1.HO = A.HO
+		        AND A1.PAY_DIV = A.PAY_DIV
+		        AND A1.REC_DATE = A.REC_DATE) AS CNT	/*중복갯수*/
+		FROM 
+			SLX_OCRFILE A
+		    ,TBRNT_RENT_HOUSE B
+		WHERE TO_CHAR(A.REC_DATE,'YYYYMMDD') = #rcivDe#
+		AND   A.APT_CODE like #rentHouseCode#
+		<isNotEmpty property="dong">
+		AND   A.DONG LIKE '%' || #dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND   A.HO LIKE '%' || #ho#
+		</isNotEmpty>
+		AND   A.APT_CODE = B.RENT_HOUSE_CODE(+)
+		/*AND   B.HOUSE_SE IN('R1', 'R3')*/
+		ORDER BY A.APT_CODE, A.DONG, A.HO
+	</select>
+	
+	<!-- 수납파일 생성 -->
+	<insert id="RNT01040205DAO.ocrRcivC" parameterClass="java.util.HashMap">
+		INSERT INTO SLX_OCRFILE(
+			 REC_DATE    		/*수납일자*/    
+			,SEQ_ID             	/*일련번호*/
+			,PAY_DIV         	/*납부구분 공통코드 RNT009*/
+			,APT_CODE     	/*주택코드*/
+			,DONG           	/*동*/
+			,HO             	/*호*/
+			,PAYEND_DATE      	/*납부기한*/
+			,REC_AMT    	/*수납금액*/
+			,WORK_DIV       	/*작업구분*/
+		)
+		VALUES(
+			 TO_DATE(#REC_DATE#)        
+			,(SELECT NVL(MAX(SEQ_ID), 0) + 1 FROM SLX_OCRFILE)           
+			,#PAY_DIV#         
+			,#APT_CODE#     
+			,LPAD(#DONG#, 4 , '0')           
+			,LPAD(#HO#, 4, '0')             
+			,TO_CHAR(TO_DATE(#PAYEND_DATE#),'YYYY-MM-DD')      
+			,#REC_AMT#    
+			,#WORK_DIV#       
+		)
+	</insert>
+	
+	<!-- 수납파일 수정 -->
+	<update id="RNT01040205DAO.ocrRcivU" parameterClass="java.util.HashMap">
+		UPDATE SLX_OCRFILE SET
+			 PAY_DIV = #PAY_DIV#         
+			,APT_CODE = #APT_CODE#     
+			,DONG = #DONG#           
+			,HO = #HO#             
+			,PAYEND_DATE = TO_CHAR(TO_DATE(#PAYEND_DATE#),'YYYY-MM-DD')            
+			,BK_CODE = #BK_CODE#
+			,REC_AMT = #REC_AMT#     
+			,WORK_DIV = #WORK_DIV#       
+		WHERE TO_CHAR(REC_DATE,'YYYYMMDD') = #REC_DATE#        
+		AND   SEQ_ID = #SEQ_ID#
+	</update>
+	
+	<!-- 수납파일 삭제 -->
+	<delete id="RNT01040205DAO.ocrRcivD" parameterClass="java.util.HashMap">
+		DELETE FROM SLX_OCRFILE
+		WHERE TO_CHAR(REC_DATE,'YYYYMMDD') = #REC_DATE#        
+		AND   SEQ_ID = #SEQ_ID#
+	</delete>
+</sqlMap>

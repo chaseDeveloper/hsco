@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBPRJ_ISSNO_ADIT_INFO		호별추가정보
+		CRUD : TBPRJ_HOUSE_SLE_PLAN_ACMSLT	주택판매계획실적
+		 R   : TBPRJ_HOUSE_CODE				주택코드
+		 R   : TBPRJ_HOUSE_SUPLY_TY			주택공급유형
+
+
+		 R   : TBPRJ_HOUSE_SUPLY_TY			주택공급유형		주택건설계획 ~
+		CRUD : TBPRJ_HOUSE_SLE_PLAN_ACMSLT	주택판매계획실적	주택판매회수계획 ~
+	-->
+
+	<!-- 호별추가정보 ================================================== -->
+
+	<!-- 호별추가정보 조회 -->
+	<select id="PRJ020503.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 HC.BSNS_CODE			/* 사업코드 */
+	,HC.HOUSE_CODE			/* 주택코드 */
+	,HC.HOUSE_CODE_NM		/* 주택코드명 */
+
+	,HT.SUPLY_TY_CODE	/* 공급유형코드 */
+	,HT.LTTOT_PLAN_YM	/* 분양계획년월 */
+	,SUBSTR(HT.LTTOT_PLAN_YM, 1,4) AS YY
+	,SUBSTR(HT.LTTOT_PLAN_YM, 5,2) AS MM
+
+	,A.TY_CODE			/* 타입코드 */
+	,A.DRC_CODE			/* 방향코드 */
+	,A.AMT				/* 분양단가 */
+	,A.CNT				/* 세대수 */
+
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.TY_CODE) AS TY_CODE_NM	/* 타입(블럭) */
+FROM TBPRJ_HOUSE_CODE HC			/* 주택코드 */
+JOIN TBPRJ_BSNS_CODE BC ON HC.BSNS_CODE = BC.BSNS_CODE
+LEFT JOIN TBPRJ_HOUSE_SUPLY_TY HT			/* 주택공급유형 */
+  ON HT.BSNS_CODE = HC.BSNS_CODE
+ AND HT.HOUSE_CODE = HC.HOUSE_CODE
+LEFT JOIN (
+	SELECT
+		 A.BSNS_CODE			/* 사업코드 */
+		,A.HOUSE_CODE			/* 주택코드 */
+		,A.SUPLY_TY_CODE		/* 공급유형코드 */
+		,A.TY_CODE				/* 타입코드 */
+		,A.DRC_CODE				/* 방향코드 */
+		,AVG(A.SUPLY_AMOUNT) AS AMT		/* 분양단가 */
+		,COUNT(A.BSNS_CODE) AS CNT		/* 세대수 */
+	FROM TBPRJ_ISSNO_ADIT_INFO A			/* 호별추가정보 */
+	GROUP BY A.BSNS_CODE,A.HOUSE_CODE,A.SUPLY_TY_CODE,A.TY_CODE,A.DRC_CODE
+) A
+  ON A.BSNS_CODE = HT.BSNS_CODE
+ AND A.HOUSE_CODE = HT.HOUSE_CODE
+ AND A.SUPLY_TY_CODE = HT.SUPLY_TY_CODE
+WHERE HC.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2,3,4,5,6
+	</select>
+
+	<!-- 주택공급유형 수정 -->
+	<update id="PRJ020503.mU" parameterClass="map">
+UPDATE TBPRJ_HOUSE_SUPLY_TY			/* 주택공급유형 */
+  SET
+	 LTTOT_PLAN_YM = #LTTOT_PLAN_YM#	/* 분양계획년월 */
+	,UPDUSR_ID = #S_USER_ID#			/* 수정자ID */
+	,UPDT_DT = SYSDATE					/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND HOUSE_CODE = #HOUSE_CODE#			/* 주택코드 */
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#	/* 공급유형코드 */
+	</update>
+
+	<!-- 주택판매계획실적 ================================================== -->
+
+	<!-- 주택판매계획실적 조회 -->
+	<select id="PRJ020503.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.HOUSE_CODE			/* 주택코드 */
+	,A.SUPLY_TY_CODE		/* 공급유형코드 */
+	,A.TY_CODE				/* 타입코드 */
+	,A.LTTOT_YM				/* 분양년월 */
+	,A.WIK_ODR				/* 주간차수 */
+	,SUBSTR(A.LTTOT_YM, 1,4) AS YY
+	,SUBSTR(A.LTTOT_YM, 5,2) AS MM
+
+	,A.HSHLD_CO_PLAN		/* 세대수_계획 */
+	,A.PLAN_AMOUNT			/* 계획금액 */
+	,A.LTTOT_PRIC_PLAN		/* 분양대금_계획 */
+	,A.ATMPT_AMOUNT_PLAN	/* 미수금_계획 */
+
+	,A.LTTOT_PRIC_PLAN
+	+A.ATMPT_AMOUNT_PLAN
+	 AS AMT_S				/* 합계 */
+
+	,A.PLAN_AMOUNT			/* 계획금액 - 합계 */
+	-A.LTTOT_PRIC_PLAN
+	-A.ATMPT_AMOUNT_PLAN
+	 AS AMT_D				/* 차액 */
+
+FROM TBPRJ_HOUSE_SLE_PLAN_ACMSLT A		/* 주택판매계획실적 */
+WHERE A.BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+  AND A.HOUSE_CODE = #HOUSE_CODE#			/* 주택코드 */
+  AND A.SUPLY_TY_CODE = #SUPLY_TY_CODE#		/* 공급유형코드 */
+  AND A.TY_CODE = #TY_CODE#			/* 타입코드 */
+  AND A.LTTOT_YM = #LTTOT_YM#				/* 분양년월 */
+ORDER BY 1,2,3,4,5,6
+	</select>
+
+	<!-- 주택판매계획실적 추가 -->
+	<insert id="PRJ020503.rC" parameterClass="map">
+INSERT INTO TBPRJ_HOUSE_SLE_PLAN_ACMSLT (			/* 주택판매계획실적 */
+	 BSNS_CODE			/* 사업코드 */
+	,HOUSE_CODE			/* 주택코드 */
+	,SUPLY_TY_CODE		/* 공급유형코드 */
+	,TY_CODE			/* 타입코드 */
+	,LTTOT_YM			/* 분양년월 */
+	,WIK_ODR			/* 주간차수 */
+
+	,HSHLD_CO_PLAN			/* 세대수_계획 */
+	,PLAN_AMOUNT			/* 계획금액 */
+	,LTTOT_PRIC_PLAN		/* 분양대금_계획 */
+	,ATMPT_AMOUNT_PLAN		/* 미수금_계획 */
+	,HSHLD_CO_ACMSLT		/* 세대수_실적 */
+	,ACMSLT_AMOUNT			/* 실적금액 */
+	,LTTOT_PRIC_ACMSLT		/* 분양대금_실적 */
+	,ATMPT_AMOUNT_ACMSLT	/* 미수금_실적 */
+
+	,REGISTER_ID		/* 등록자ID */
+	,REGIST_DT			/* 등록일시 */
+	,UPDUSR_ID			/* 수정자ID */
+	,UPDT_DT			/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#		/* 사업코드 */
+	,#HOUSE_CODE#		/* 주택코드 */
+	,#SUPLY_TY_CODE#	/* 공급유형코드 */
+	,#TY_CODE#			/* 타입코드 */
+	,#LTTOT_YM#			/* 분양년월 */
+	,#WIK_ODR#			/* 주간차수 */
+
+	,#HSHLD_CO_PLAN#		/* 세대수_계획 */
+	,#PLAN_AMOUNT#			/* 계획금액 */
+	,#LTTOT_PRIC_PLAN#		/* 분양대금_계획 */
+	,#ATMPT_AMOUNT_PLAN#	/* 미수금_계획 */
+	,#HSHLD_CO_ACMSLT#		/* 세대수_실적 */
+	,#ACMSLT_AMOUNT#		/* 실적금액 */
+	,#LTTOT_PRIC_ACMSLT#	/* 분양대금_실적 */
+	,#ATMPT_AMOUNT_ACMSLT#	/* 미수금_실적 */
+
+	,#S_USER_ID#		/* 등록자ID */
+	,SYSDATE			/* 등록일시 */
+	,#S_USER_ID#		/* 수정자ID */
+	,SYSDATE			/* 수정일시 */
+)
+	</insert>
+
+	<!-- 주택판매계획실적 수정 -->
+	<update id="PRJ020503.rU" parameterClass="map">
+UPDATE TBPRJ_HOUSE_SLE_PLAN_ACMSLT			/* 주택판매계획실적 */
+  SET
+	 HSHLD_CO_PLAN = #HSHLD_CO_PLAN#				/* 세대수_계획 */
+	,PLAN_AMOUNT = #PLAN_AMOUNT#					/* 계획금액 */
+	,LTTOT_PRIC_PLAN = #LTTOT_PRIC_PLAN#			/* 분양대금_계획 */
+	,ATMPT_AMOUNT_PLAN = #ATMPT_AMOUNT_PLAN#		/* 미수금_계획 */
+	,HSHLD_CO_ACMSLT = #HSHLD_CO_ACMSLT#			/* 세대수_실적 */
+	,ACMSLT_AMOUNT = #ACMSLT_AMOUNT#				/* 실적금액 */
+	,LTTOT_PRIC_ACMSLT = #LTTOT_PRIC_ACMSLT#		/* 분양대금_실적 */
+	,ATMPT_AMOUNT_ACMSLT = #ATMPT_AMOUNT_ACMSLT#	/* 미수금_실적 */
+	,UPDUSR_ID = #S_USER_ID#						/* 수정자ID */
+	,UPDT_DT = SYSDATE								/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+  AND HOUSE_CODE = #HOUSE_CODE#				/* 주택코드 */
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#		/* 공급유형코드 */
+  AND TY_CODE = #TY_CODE#					/* 타입코드 */
+  AND LTTOT_YM = #LTTOT_YM#					/* 분양년월 */
+  AND WIK_ODR = #WIK_ODR#					/* 주간차수 */
+	</update>
+
+	<!-- 주택판매계획실적 삭제 -->
+	<delete id="PRJ020503.rD" parameterClass="map">
+DELETE FROM TBPRJ_HOUSE_SLE_PLAN_ACMSLT			/* 주택판매계획실적 */
+WHERE BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND HOUSE_CODE = #HOUSE_CODE#			/* 주택코드 */
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#	/* 공급유형코드 */
+  AND TY_CODE = #TY_CODE#				/* 타입코드 */
+  AND LTTOT_YM = #LTTOT_YM#				/* 분양년월 */
+<isNotEmpty property="WIK_ODR" >
+  AND WIK_ODR = #WIK_ODR#				/* 주간차수 */
+</isNotEmpty>
+	</delete>
+
+</sqlMap>

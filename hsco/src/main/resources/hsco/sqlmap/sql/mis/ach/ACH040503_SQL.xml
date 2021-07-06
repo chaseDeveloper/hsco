@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH040503_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 평가군 성과 순위 조회 -->
+	<select id="ACH040503DAO.selectList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH V_SETUP AS 
+		  (SELECT A.EVL_YEAR
+		        , A.ODR_SE
+		        , A.CUR_MT
+		        , B.SEQ
+		   FROM TBACH_EVL_ODR A
+		      , TBACH_EVL_SM_STDR B
+		   WHERE 1=1
+		     AND A.EVL_YEAR = B.EVL_YEAR
+		     AND A.ODR_SE   = B.ODR_SE
+		     AND B.APPLC_AT = '1'
+		     AND A.EVL_YEAR = #EVL_YEAR#
+		     AND A.ODR_SE   = #ODR_SE#
+		   )
+		, V_ORGNZT AS (
+		  SELECT A.EVL_YEAR, A.ODR_SE, A.EVL_GROUP_SE, COUNT(*) AS ORG_CNT
+		  FROM TBACH_EVL_TRGET_ORGNZT A
+		     , V_SETUP V
+		  WHERE A.EVL_YEAR = V.EVL_YEAR
+		    AND A.ODR_SE   = V.ODR_SE
+		  GROUP BY A.EVL_YEAR, A.ODR_SE, A.EVL_GROUP_SE
+		)
+		, V_TEMP AS (
+		  SELECT EVL_YEAR, ODR_SE, EVL_GROUP_SE
+		       , ACMTL_SCORE, ORG_CNT
+		       , RANK() OVER(PARTITION BY EVL_YEAR, ODR_SE ORDER BY ACMTL_SCORE DESC) AS ACMTL_RNAK
+		  FROM (
+		        SELECT AA.EVL_YEAR, AA.ODR_SE, AA.EVL_GROUP_SE, MAX(V2.ORG_CNT) AS ORG_CNT
+		             , ROUND((SUM(NVL(AA.ACMTL_SCORE,0)) / (MAX(V2.ORG_CNT) * 100)) * 100, 2) AS ACMTL_SCORE
+		        FROM TBACH_EVL_SM_DETAIL AA
+		           , V_SETUP V
+		           , V_ORGNZT V2
+		        WHERE 1 = 1
+		          AND AA.EVL_YEAR = V.EVL_YEAR
+		          AND AA.ODR_SE   = V.ODR_SE
+		          AND AA.SEQ      = V.SEQ
+		          AND AA.MT_SE    = V.CUR_MT
+		          AND AA.EVL_YEAR = V2.EVL_YEAR
+		          AND AA.ODR_SE   = V2.ODR_SE
+		          AND AA.EVL_GROUP_SE = V2.EVL_GROUP_SE
+		  GROUP BY AA.EVL_YEAR, AA.ODR_SE, AA.EVL_GROUP_SE
+		  )
+		)
+		SELECT * 
+		  FROM 
+		       (
+		        SELECT A.EVL_YEAR
+		              ,A.ODR_SE
+		              ,A.MT
+		              ,A.EVL_GROUP_SE
+		              ,SFCOM_CODE_NM('ACH013', A.EVL_GROUP_SE, 'CODE_NM')        AS EVL_GROUP_NM
+		              ,B.EVL_SCORE                                               AS M_ACMSLTVAL_RT
+		              ,RANK() OVER(PARTITION BY B.MT ORDER BY B.EVL_SCORE DESC ) AS M_RANK
+		              ,B.ACMTL_SCORE                                             AS R_ACMSLTVAL_RT
+		              ,B.ACMTL_RNAK                                              AS R_RANK 
+		        FROM  (SELECT A.EVL_YEAR, A.ODR_SE, A.EVL_GROUP_SE, B.MT
+		               FROM TBACH_EVL_TRGET_ORGNZT A
+		                  , (SELECT TO_CHAR(LEVEL) AS MT FROM DUAL CONNECT BY LEVEL <![CDATA[<=]]> 12) B
+		                  , V_SETUP C
+		               WHERE 1 = 1
+		                 AND A.EVL_YEAR = C.EVL_YEAR
+		                 AND A.ODR_SE = C.ODR_SE
+		               GROUP BY A.EVL_YEAR, A.ODR_SE, A.EVL_GROUP_SE, B.MT
+		              ) A
+		        LEFT OUTER JOIN (SELECT A.EVL_YEAR AS EVL_YEAR 
+		                               ,A.ODR_SE AS ODR_SE
+		                               ,A.MT_SE AS MT
+		                               ,A.EVL_GROUP_SE AS EVL_GROUP_SE 
+		                               ,ROUND((SUM(NVL(A.ACMTL_SCORE,0)) / (MAX(AA.ORG_CNT) * 100)) * 100, 2) AS EVL_SCORE 
+		                               ,MAX(AA.ACMTL_SCORE) AS ACMTL_SCORE
+		                               ,MAX(AA.ACMTL_RNAK)  AS ACMTL_RNAK
+		                         FROM TBACH_EVL_SM_DETAIL A
+		                         INNER JOIN V_SETUP V
+		                                  ON A.EVL_YEAR = V.EVL_YEAR
+		                                 AND A.ODR_SE = V.ODR_SE
+		                                 AND A.SEQ = V.SEQ
+		                         LEFT OUTER JOIN V_TEMP AA
+		                                 ON A.EVL_YEAR    = AA.EVL_YEAR
+		                                AND A.ODR_SE      = AA.ODR_SE
+		                                AND A.EVL_GROUP_SE = AA.EVL_GROUP_SE
+		                         WHERE 1=1
+		                         GROUP BY A.EVL_YEAR , A.ODR_SE , A.MT_SE , A.EVL_GROUP_SE
+		                         HAVING A.EVL_GROUP_SE IS NOT NULL
+		                        ) B
+		                ON A.EVL_YEAR = B.EVL_YEAR
+		               AND A.ODR_SE = B.ODR_SE
+		               AND A.MT = B.MT
+		               AND A.EVL_GROUP_SE = B.EVL_GROUP_SE
+		        WHERE 1=1
+		       ) PIVOT ( MAX(M_ACMSLTVAL_RT) AS RT ,MAX(M_RANK) AS RK FOR MT IN (1 AS M1,2 AS M2,3 AS M3,4 AS M4,5 AS M5,6 AS M6,7 AS M7,8 AS M8,9 AS M9,10 AS M10,11 AS M11,12 AS M12) ) 
+		ORDER BY TO_NUMBER(EVL_GROUP_SE)
+    </select>
+
+</sqlMap>

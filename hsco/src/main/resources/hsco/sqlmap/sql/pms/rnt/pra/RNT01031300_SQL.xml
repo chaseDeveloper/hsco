@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01031300_SQL">
+
+
+	<!-- 계약가능 주택정보 목록 -->
+	<select id="RNT01031300DAO.rentHouseBildList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT01031300DAO.rentHouseBildList[계약가능 주택정보 목록] */
+		SELECT B.RENT_HOUSE_CODE								/* 임대주택코드 */
+			  ,B.DONG											/* 동 */
+			  ,B.HO												/* 호 */
+			  ,B.DVR_AR											/* 전용면적 */
+			  ,B.CMNUSE_AR										/* 공용면적 */
+			  ,B.AEA											/* 면적 */
+			  ,B.FLOOR											/* 층 */
+			  ,A.RENT_HOUSE_NM									/* 임대주택명 */
+			  ,B.DVR_AR + B.CMNUSE_AR AS TOT_AR					/* 총면적 */
+			  ,B.SUPLY_SE										/* 공급가능여부 */
+			  ,(SELECT X.ADRES || ' ' || X.ADRES_DETAIL
+				  FROM TBRNT_RENT_HOUSE_DONG X
+				 WHERE X.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+				   AND X.DONG = B.DONG) AS RENT_HOUSE_ADRES		/* 주택소재지 */
+		  FROM TBRNT_RENT_HOUSE A
+		 INNER JOIN TBRNT_RENT_HOUSE_BILD B
+			ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		 WHERE A.HOUSE_SE = 'R3'
+		   AND B.SUPLY_SE = '1'
+		   AND B.CNTRCTR_NO IS NULL
+		<isNotEmpty property="rentHouseCode">
+		   AND B.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+	</select>
+
+
+	<!-- 임대료기준(상가) -->
+	<select id="RNT01031300DAO.rntchrgStdrStore" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT01031300DAO.rntchrgStdrStore[임대료기준(상가)] */
+		SELECT RENT_GTN AS GTN						/* 보증금 */
+			  ,MT_RNTCHRG AS RNTCHRG				/* 임대료 */
+			  ,RENT_GTN * 0.2 AS CNTRCT_AMOUNT		/* 계약금 */
+			  ,RENT_GTN * 0.8 AS SURLUS				/* 잔금 */
+		  FROM TBRNT_RNTCHRG_STDR_STORE
+		 WHERE STDR_YEAR = #stdrYear#
+		   AND RENT_HOUSE_CODE = #rentHouseCode#
+		   AND DONG = #dong#
+		   AND HO = #ho#
+	</select>
+
+
+	<!-- 계약날짜 정보 -->
+	<select id="RNT01031300DAO.cntrctDe" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT01031300DAO.cntrctDe[계약날짜 정보] */
+		SELECT TO_CHAR(SYSDATE, 'YYYYMMDD') AS CNTRCT_DE			/* 계약일자 */
+			  ,TO_CHAR(LAST_DAY(SYSDATE), 'YYYYMMDD') AS PAY_TMLMT	/* 납부기한 */
+			  ,TO_CHAR(SYSDATE + 7, 'YYYYMMDD') AS RENT_BGNDE		/* 임대기간 - 시작 */
+			  ,TO_CHAR(ADD_MONTHS(SYSDATE, 24), 'YYYY') || 
+			   DECODE(TO_CHAR(SYSDATE - 1, 'Q'), '1', '0331', '2', '0630', '3', '0930', '4', '1231') AS RENT_ENDDE	/* 임대기간 - 종료 */
+		  FROM DUAL
+	</select>
+
+
+	<!-- 계약자번호조회 -->
+	<select id="RNT01031300DAO.cntrctrNo" parameterClass="java.util.HashMap" resultClass="String">
+		/* RNT01031300DAO.cntrctrNo[계약자번호조회] */
+		SELECT (SELECT #RENT_HOUSE_CODE# || SUBSTR(HOUSE_SE, 1 , 2)
+				  FROM TBRNT_RENT_HOUSE
+				 WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#)
+			   ||
+			   (SELECT LPAD(NVL(MAX(SUBSTR(CNTRCTR_NO, 6, 5)), 0) + 1, 5, '0')
+				  FROM TBRNT_RENT_CNTRCT
+				 WHERE SUBSTR(CNTRCTR_NO, 1,5) = (SELECT #RENT_HOUSE_CODE# || SUBSTR(HOUSE_SE , 1 , 2)
+													FROM TBRNT_RENT_HOUSE
+												   WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#))
+		  FROM DUAL
+	</select>
+
+
+	<!-- 계약등록(상가) -->
+	<insert id="RNT01031300DAO.rentCntrctCUD" parameterClass="java.util.HashMap">
+		/* RNT01031300DAO.rentCntrctCUD[계약등록(상가)] */
+		BEGIN
+			/* 계약정보 등록 */
+			INSERT INTO TBRNT_RENT_CNTRCT(
+				   CNTRCTR_NO				/* 계약자번호 */
+				  ,RENT_HOUSE_CODE			/* 임대주택코드 */
+				  ,DONG						/* 동 */
+				  ,HO						/* 호 */
+				  ,HOUSE_POSESN_AT			/* 주택소유여부 */
+				  ,PRMANENT_CSTMR_NO		/* 영구고객번호 */
+				  ,CNTRCT_DE				/* 계약일자 */
+				  ,CNTRCT_SE				/* 계약구분 */
+				  ,CNTRCT_CO				/* 계약횟수 */
+				  ,QUALF_SE					/* 자격구분 */
+				  ,RENT_BGNDE				/* 임대시작일자 */
+				  ,RENT_ENDDE				/* 임대종료일자 */
+				  ,CNTRCT_AMOUNT			/* 계약금액 */
+				  ,SURLUS					/* 잔금 */
+				  ,GTN						/* 보증금 */
+				  ,RNTCHRG					/* 임대료 */
+				  ,PAY_TMLMT				/* 납부기한 */
+				  ,RCIV_DE					/* 수납일자 */
+				  ,RCIV_AMOUNT				/* 수납금액 */
+				  ,MANAGE_CN				/* 관리내용 */
+				  ,RM						/* 비고 */
+				  ,FAMILY_CO				/* 가족수 */
+				  ,FRST_CNTRCT_DE			/* 최초계약일자 */
+				  ,DEATH_AT					/* 사망여부 */
+				  ,TROBL_AT					/* 장애여부 */
+				  ,SPORT_TRGET_AT			/* 지원대상여부 */
+				  ,SPORT_AMOUNT				/* 지원금액 */
+				  ,LWST_PROGRS_AT			/* 소송진행여부 */
+				  ,INCOME_EXCESS			/* 소득초과여부 */
+				  ,PORTAL_REGIST_AT			/* 포털등록여부 */
+				  ,CANCL_DE					/* 해약일자 */
+				  ,REGISTER_ID				/* 등록자ID */
+				  ,REGIST_DT				/* 등록일시 */
+				  ,UPDUSR_ID				/* 수정자ID */
+				  ,UPDT_DT					/* 수정일시 */
+			)
+			VALUES(
+				   #CNTRCTR_NO#				/* 계약자번호 */
+				  ,#RENT_HOUSE_CODE#		/* 임대주택코드 */
+				  ,#DONG#					/* 동 */
+				  ,#HO#						/* 호 */
+				  ,#HOUSE_POSESN_AT#		/* 주택소유여부 */
+				  ,#PRMANENT_CSTMR_NO#		/* 영구고객번호 */
+				  ,#CNTRCT_DE#				/* 계약일자 */
+				  ,NULL						/* 계약구분 */
+				  ,1						/* 계약횟수 */
+				  ,NULL						/* 자격구분 */
+				  ,#RENT_BGNDE#				/* 임대시작일자 */
+				  ,#RENT_ENDDE#				/* 임대종료일자 */
+				  ,#CNTRCT_AMOUNT#			/* 계약금액 : 컬럼 삭제예정 */
+				  ,#SURLUS#					/* 잔금 : 컬럼 삭제예정 */
+				  ,#GTN#					/* 보증금 */
+				  ,#RNTCHRG#				/* 임대료 */
+				  ,#PAY_TMLMT#				/* 납부기한 */
+				  ,NULL						/* 수납일자 */
+				  ,NULL						/* 수납금액 */
+				  ,NULL						/* 관리내용 */
+				  ,#RM#						/* 비고 */
+				  ,'0'						/* 가족수 */
+				  ,#CNTRCT_DE#				/* 최초계약일자 */
+				  ,'0'						/* 사망여부 */
+				  ,'0'						/* 장애여부 */
+				  ,'0'						/* 지원대상여부 */
+				  ,'0'						/* 지원금액 */
+				  ,'0'						/* 소송진행여부 */
+				  ,'0'						/* 소득초과여부 */
+				  ,'0'						/* 포털등록여부 */
+				  ,NULL						/* 해약일자 */
+				  ,#S_USER_ID#				/* 등록자ID */
+				  ,SYSDATE					/* 등록일시 */
+				  ,#S_USER_ID#				/* 수정자ID */
+				  ,SYSDATE					/* 수정일시 */
+			);
+
+			/* 건축물정보 업데이트 - 공급불가로 수정 */
+			UPDATE TBRNT_RENT_HOUSE_BILD
+			   SET CNTRCTR_NO = #CNTRCTR_NO#		/* 계약자번호 */
+				  ,SUPLY_SE = '0'					/* 공급가능여부 */
+				  ,UPDUSR_ID = #S_USER_ID#			/* 수정자ID */
+				  ,UPDT_DT = SYSDATE				/* 수정일시 */
+			 WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+			   AND DONG = #DONG#
+			   AND HO = #HO#;
+
+			/* 보증금정보 등록 */
+			INSERT INTO TBRNT_RENT_GTN(
+				   CNTRCTR_NO						/* 계약자번호 */
+				  ,GTN_SN							/* 보증금순번 */
+				  ,GTN_SE							/* 보증금구분 */
+				  ,CNTRCT_YEAR						/* 계약년도 */
+				  ,QUALF_SE							/* 자격구분 */
+				  ,GTN								/* 보증금 */
+				  ,PAY_TMLMT						/* 납부기한 */
+				  ,RCIV_DE							/* 수납일자 */
+				  ,SN								/* 일련번호 */
+				  ,RM								/* 비고 */
+				  ,OVDINTR							/* 연체이자 */
+				  ,REGISTER_ID						/* 등록자ID */
+				  ,REGIST_DT						/* 등록일시 */
+				  ,UPDUSR_ID						/* 수정자ID */
+				  ,UPDT_DT							/* 수정일시 */
+			)
+			VALUES(
+				   #CNTRCTR_NO#						/* 계약자번호 */
+				  ,(SELECT NVL(MAX(GTN_SN), 0) + 1 FROM TBRNT_RENT_GTN WHERE CNTRCTR_NO = #CNTRCTR_NO#)       /* 보증금순번 */
+				  ,'4'								/* 보증금구분 : 신규계약(보증금) */
+				  ,SUBSTR(#CNTRCT_DE#, 1, 4)		/* 계약년도 */
+				  ,NULL								/* 자격구분 */
+				  ,#GTN#							/* 보증금 */
+				  ,#PAY_TMLMT#						/* 납부기한 */
+				  ,NULL								/* 수납일자 */
+				  ,(SELECT NVL(MAX(GTN_SN), 0) + 1 FROM TBRNT_RENT_GTN WHERE CNTRCTR_NO = #CNTRCTR_NO#)       /* 일련번호 */
+				  ,NULL								/* 비고 */
+				  ,0								/* 연체이자 */
+				  ,#S_USER_ID#						/* 등록자ID */
+				  ,SYSDATE							/* 등록일시 */
+				  ,#S_USER_ID#						/* 수정자ID */
+				  ,SYSDATE							/* 수정일시 */
+			);
+
+			/* 가상계좌 등록(임대료) */
+			SP_VA_MAST_U('RN', '', #CNTRCTR_NO#, '', '1', #S_USER_ID#);
+
+			/* 가상계좌 등록(보증금) */
+			SP_VA_MAST_U('RN', '', #CNTRCTR_NO#, '', '1', #S_USER_ID#, 'BJ');
+		END;
+	</insert>
+</sqlMap>

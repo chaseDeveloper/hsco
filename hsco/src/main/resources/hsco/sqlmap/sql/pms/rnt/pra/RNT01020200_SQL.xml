@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01020200_SQL">	
+   <!--  설명  : 입주대기자 조회
+		작성자 : 지효정 -->
+	
+	<!-- 입주대기자목록 -->
+	<select id="RNT01020200DAO.mvnWaitrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 A.RENT_HOUSE_CODE   	/*임대주택코드*/
+			,A.RCEPT_DE          	/*접수일자*/
+			,A.RCEPT_SN          	/*접수일련번호(주택코드별 일련번호)*/
+			,A.PRMANENT_CSTMR_NO 	/*영구고객번호(SQ_TBRNT_PRMANENT_RENT_CSTMR_1)*/
+			,A.DONG              	/*동*/
+			,A.HO                	/*호*/
+			,A.DONG || '/' || A.HO AS DONGHO
+			,A.FAMILY_CO         	/*가족수*/
+			,A.QUALF_SE          	/*자격구분*/
+			,A.HOPE_AEA          	/*희망평형*/
+			,A.GDCC_SNDNG_DE	   	/*안내문발송일자1*/
+			,A.CNTRCTR_NO        	/*계약자번호*/
+			,A.RM                	/*비고*/
+			,A.RETRN_DE          	/*반송일자*/
+			,A.RETRN_PRVONSH     	/*반송사유*/
+			,A.WAIT_NO           	/*대기번호*/
+			,A.CRNCY_DE          	/*통화일자*/
+			,A.CRNCY_DTLS        	/*통화내역*/
+			,NVL(A.SPORT_TRGET_AT, '0') AS SPORT_TRGET_AT    	/*지원대상여부*/
+			,A.EXAMIN_ID         	/*조사ID*/
+			,A.ALLOT             	/*배점*/
+			,NVL(A.HOUSE_POSESN_AT, '0') AS	HOUSE_POSESN_AT		/*주택소유여부*/
+			,B.NM           		/*고객명*/
+			,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM	/*고객주민번호*/
+			,B.ZIP          		/*고객우편번호*/
+			,B.ADRES        		/*고객주소*/
+			,B.ADRES_DETAIL 		/*고객상세주소*/
+			,B.TELNO        		/*고객전화번호*/
+			,B.MBTLNO       		/*고객휴대전화번호*/
+			,B.EMAIL     			/*고객이메일*/
+			,C.RENT_HOUSE_NM		/*주택명*/
+            ,D.CNTRCT_DE			/*계약일자*/
+            ,A.RCEPT_SEQ			/* 접수순번 */
+            ,(
+            	SELECT MIN(DVR_AR + CMNUSE_AR)
+				FROM TBRNT_RENT_HOUSE_BILD
+				WHERE RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+				AND   AEA = A.HOPE_AEA
+			 )AS TOT_AR				/*총 면적*/
+            ,(
+            	SELECT '금' || TRIM(TO_CHAR(MAX(RENT_GTN), '999,999,999,999')) || '원'
+                FROM TBRNT_RNTCHRG_STDR
+                WHERE STDR_YEAR = #stdrYear#
+                AND   RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+                AND   AEA =  A.HOPE_AEA
+                AND   QUALF_SE = A.QUALF_SE
+             )AS RENT_GTN			/*임대보증금*/
+            ,(
+            	SELECT '금' || TRIM(TO_CHAR(MAX(MT_RNTCHRG), '999,999,999,999')) || '원'
+                FROM TBRNT_RNTCHRG_STDR
+                WHERE STDR_YEAR = #stdrYear#
+                AND   RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+                AND   AEA =  A.HOPE_AEA
+                AND   QUALF_SE = A.QUALF_SE
+             )AS MT_RNTCHRG			/*월임대료*/
+             ,CASE WHEN A.RENT_HOUSE_CODE IN('600','603','604') 
+             	   THEN DECODE(A.HOPE_AEA,'12','금72,000원' ,'15','금90,000원','19','금114,000원')
+               	   ELSE '입주시 관리사무소 별도 납부' 
+         	  END AS MANAGE_AMT		/*관리비 선수금*/
+         	 ,B.NM || ' 님의 입주 가능한 공가세대' AS SEC_TITLE	/*두번째 페이지 타이틀*/
+             ,C.RENT_HOUSE_NM || ' ' || A.HOPE_AEA || '평형' AS GRID_TITLE	/*공가현황 그리드 타이틀*/
+             ,C.RENT_HOUSE_NM || ' 관리사무소 : ' || MANAGE_CHARGER_TELNO AS MANAGE_CHARGER_TELNO	/*관리사무소 정보*/
+             ,C.RENT_HOUSE_NM || '(' || 
+	             (
+	            	SELECT MIN(DVR_AR + CMNUSE_AR)
+					FROM TBRNT_RENT_HOUSE_BILD
+					WHERE RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+					AND   AEA = A.HOPE_AEA
+				 ) || '㎡)' AS NM_TOT_AEA /*주택명 + 총면적*/
+		FROM 
+			 TBRNT_MVN_WAITR A
+			,TBRNT_PRMANENT_RENT_CSTMR B
+			,TBRNT_RENT_HOUSE C
+			,TBRNT_RENT_CNTRCT D
+		WHERE 1=1
+		AND   A.RENT_HOUSE_CODE = #rentHouseCode#
+		<isNotEmpty property="houseSe">
+		AND   #houseSe# LIKE '%' || C.HOUSE_SE || '%'
+		</isNotEmpty>
+		<isNotEmpty property="stRceptDe">
+		AND   A.RCEPT_DE <![CDATA[>=]]> #stRceptDe#
+		</isNotEmpty>
+		<isNotEmpty property="edRceptDe">
+		AND   A.RCEPT_DE <![CDATA[<=]]> #edRceptDe#
+		</isNotEmpty>
+		<isNotEmpty property="stWaitNo">
+		AND   A.WAIT_NO <![CDATA[>=]]> #stWaitNo#
+		</isNotEmpty>
+		<isNotEmpty property="edWaitNo">
+		AND   A.WAIT_NO <![CDATA[<=]]> #edWaitNo#
+		</isNotEmpty>
+		<isNotEmpty property="hopeAea">
+		AND   A.HOPE_AEA = #hopeAea#
+		</isNotEmpty>
+		<isEqual property="sndngSe" compareValue="0">
+		AND   A.GDCC_SNDNG_DE IS NULL
+		</isEqual>
+		<isEqual property="sndngSe" compareValue="1">
+		AND   A.GDCC_SNDNG_DE IS NOT NULL
+		<isNotEmpty property="sndngDe">
+		AND	  A.GDCC_SNDNG_DE = #sndngDe#
+		</isNotEmpty>
+		</isEqual>
+		AND   A.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO 
+		AND   A.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		AND   A.CNTRCTR_NO = D.CNTRCTR_NO(+)
+		AND   A.CNTRCTR_NO IS NULL
+		ORDER BY A.RCEPT_DE, A.RENT_HOUSE_CODE, A.HOPE_AEA, A.RCEPT_SEQ, A.WAIT_NO
+	</select>
+	
+	<!-- 발송완료처리 -->
+	<update id="RNT01020200DAO.mvnWaitrGdccSndngDeU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_MVN_WAITR SET
+			GDCC_SNDNG_DE = TO_CHAR(SYSDATE, 'YYYYMMDD')
+		WHERE 1=1
+		AND   RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		AND   RCEPT_DE = #RCEPT_DE#
+		AND   RCEPT_SN = #RCEPT_SN#
+		AND   GDCC_SNDNG_DE IS NULL				
+	</update>
+	
+	<select id="RNT01020200DAO.rentHouseBildList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT DONG, HO, AEA
+		 FROM TBRNT_RENT_HOUSE_BILD
+		 WHERE RENT_HOUSE_CODE = #rentHouseCode#
+		 AND   CNTRCTR_NO IS NULL
+		 AND   SUPLY_SE = '1'
+	</select>
+	
+	<!-- 발송일자 조회 -->
+	<select id="RNT01020200DAO.mvnWaitrGdccSndngDeList" resultClass="java.util.HashMap">
+		SELECT   GDCC_SNDNG_DE ,
+		         GDCC_VALUE
+		FROM     ( SELECT DISTINCT GDCC_SNDNG_DE                                            AS GDCC_VALUE,
+		                          TO_CHAR(TO_DATE(GDCC_SNDNG_DE, 'YYYYMMDD'), 'YYYY-MM-DD') AS GDCC_SNDNG_DE
+		         FROM             TBRNT_MVN_WAITR
+		         WHERE            GDCC_SNDNG_DE IS NOT NULL
+		         )
+		ORDER BY GDCC_VALUE DESC
+	</select>
+
+</sqlMap>

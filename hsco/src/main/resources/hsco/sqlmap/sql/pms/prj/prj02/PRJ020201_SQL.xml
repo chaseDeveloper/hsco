@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_BSNS_CMMN_CODE		사업공통코드
+		CRUD : TBPRJ_LAD_PRPOS			토지용도
+	-->
+
+
+	<!-- 토지용도 조회 -->
+	<select id="PRJ020201.mList" parameterClass="map" resultClass="hashmap">
+		/* PRJ020201.mList[토지용도 조회] */
+		SELECT #BSNS_CODE# AS BSNS_CODE,
+			   A.SAL_SE,
+			   A.UPPER_CODE AS PRPOS_CODE,
+			   A.CODE AS SUPLY_CODE,
+			   B.SN,
+			   B.AR,
+			   B.PRVISNL_AR,
+			   B.SUPLY_SE,
+			   B.AR_CMPNTRT,
+			   B.PRVISNL_AR_CMPNTRT
+		  FROM (
+				SELECT *
+				  FROM (
+						SELECT LEVEL AS LVL,
+							   SAL_SE,
+							   CODE,
+							   UPPER_CODE
+						  FROM TBPRJ_CMMN_CODE
+						 WHERE USE_AT = '1'
+						   AND SAL_SE = '1'
+						 START WITH UPPER_CODE IS NULL
+						   AND SAL_SE = '1'
+					   CONNECT BY PRIOR CODE = UPPER_CODE
+						   AND SAL_SE = '1'
+						   AND LEVEL = 2
+					   )
+				 WHERE LVL = 2
+				 ORDER BY CODE
+			   ) A
+		  LEFT JOIN (
+				  SELECT A.*,
+						 ROUND (AR / AR_SUM * 100, 3) AS AR_CMPNTRT,
+						 ROUND (PRVISNL_AR / PRVISNL_AR_SUM * 100, 3) AS PRVISNL_AR_CMPNTRT
+					FROM (
+						  SELECT BSNS_CODE,												/* 사업코드 */
+								 PRPOS_CODE,											/* 용도코드 */
+								 SUPLY_CODE,											/* 공급코드 */
+								 SN,													/* 순번 */
+								 NVL (AR, 0) AS AR,										/* 면적 */
+								 NVL (PRVISNL_AR, 0) AS PRVISNL_AR,						/* 가처분면적 */
+								 SUPLY_SE,												/* 공급구분 */
+								 SUM (NVL (AR, 0)) OVER () AS AR_SUM,
+								 SUM (NVL (PRVISNL_AR, 0)) OVER () AS PRVISNL_AR_SUM
+							FROM TBPRJ_LAD_PRPOS										/* 토지용도 */
+						   WHERE BSNS_CODE = #BSNS_CODE#								/* 사업코드 */
+						  ) A
+			   ) B
+			ON B.SUPLY_CODE = A.CODE
+		 ORDER BY A.CODE, B.SN
+	</select>
+
+
+	<!-- 토지용도 등록,수정 -->
+	<update id="PRJ020201.mCU" parameterClass="map">
+		/* PRJ020201.mCU[토지용도 등록,수정] */
+		MERGE INTO TBPRJ_LAD_PRPOS A
+		USING DUAL
+		ON (	A.BSNS_CODE		= #BSNS_CODE#		/* 사업코드 */
+			AND A.PRPOS_CODE	= #PRPOS_CODE#		/* 용도코드 */
+			AND A.SUPLY_CODE	= #SUPLY_CODE#		/* 공급코드 */
+			AND A.SN			= #SN#				/* 순번 */
+		   )
+		WHEN MATCHED THEN
+		UPDATE 
+			SET  AR				= #AR#				/* 면적 */
+				,PRVISNL_AR		= #PRVISNL_AR#		/* 가처분면적 */
+				,SUPLY_SE		= #SUPLY_SE#		/* 공급구분 */
+				,UPDUSR_ID		= #S_USER_ID#		/* 수정자ID */
+				,UPDT_DT		= SYSDATE			/* 수정일시 */
+		WHEN NOT MATCHED THEN
+		INSERT (
+				 BSNS_CODE							/* 사업코드 */
+				,PRPOS_CODE							/* 용도코드 */
+				,SUPLY_CODE							/* 공급코드 */
+				,SN									/* 순번 */
+				,AR									/* 면적 */
+				,PRVISNL_AR							/* 가처분 면적 */
+				,SUPLY_SE							/* 공급구분 */
+				,REGISTER_ID						/* 등록자ID */
+				,REGIST_DT							/* 등록일시 */
+				,UPDUSR_ID							/* 수정자ID */
+				,UPDT_DT							/* 수정일시 */
+		)
+		VALUES (
+				 #BSNS_CODE#						/* 사업코드 */
+				,#PRPOS_CODE#						/* 용도코드 */
+				,#SUPLY_CODE#						/* 공급코드 */
+				,(
+					SELECT NVL(MAX(SN), 0) + 1
+					  FROM TBPRJ_LAD_PRPOS
+					 WHERE BSNS_CODE = #BSNS_CODE#
+				 )									/* 순번 */
+				,#AR#								/* 면적 */
+				,#PRVISNL_AR#						/* 가처분면적 */
+				,#SUPLY_SE#							/* 공급구분 */
+				,#S_USER_ID#						/* 등록자ID */
+				,SYSDATE							/* 등록일시 */
+				,#S_USER_ID#						/* 수정자ID */
+				,SYSDATE							/* 수정일시 */
+		)
+	</update>
+
+
+	<!-- 토지용도 삭제 -->
+	<delete id="PRJ020201.mD" parameterClass="map">
+		/* PRJ020201.mD[토지용도 삭제] */
+		DELETE FROM TBPRJ_LAD_PRPOS				/* 토지용도 */
+		WHERE BSNS_CODE		= #BSNS_CODE#		/* 사업코드 */
+		  AND PRPOS_CODE	= #PRPOS_CODE#		/* 용도코드 */
+		  AND SUPLY_CODE	= #SUPLY_CODE#		/* 공급코드 */
+		  AND SN			= #SN#				/* 순번 */
+	</delete>
+
+
+
+
+
+	<!-- 사업관리 공통코드 조회 -->
+	<select id="PRJ020201.cmmCodeList" parameterClass="map" resultClass="hashmap">
+		/* PRJ020201.cmmCodeList[사업관리 공통코드 조회] */
+		SELECT LEVEL AS LVL,
+			   SAL_SE,
+			   CODE,
+			   CODE_NM,
+			   UPPER_CODE
+		  FROM TBPRJ_CMMN_CODE
+		 WHERE USE_AT = '1'
+		   AND SAL_SE = #SAL_SE#
+		 START WITH UPPER_CODE IS NULL
+		   AND SAL_SE = #SAL_SE#
+	   CONNECT BY PRIOR CODE = UPPER_CODE
+		   AND SAL_SE = #SAL_SE#
+		   AND LEVEL = 2
+		 ORDER BY CODE
+	</select>
+</sqlMap>

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010105_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!--해피콜 목록 조회 -->
+	<select id="CUS010105DAO.selectHppCallList" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+		<![CDATA[
+			SELECT 
+				/*민원접수정보*/
+				  A.INQRY_KND                                    AS INQRY_KND
+				, A.INQRY_KND_DETAIL                             AS INQRY_KND_DETAIL
+				, A.CVPL_NO                                      AS CVPL_NO
+				, A.RCEPT_NO                                     AS RCEPT_NO
+				, A.PROCESS_CN                                   AS PROCESS_CN
+				, A.ATCH_FILE                                    AS PROCESS_ATCH_FILE
+				, A.PROCESS_MTH                                  AS PROCESS_MTH
+				, A.CHRG_DEPT_CODE                               AS CHRG_DEPT_CODE
+				, (SELECT SFSAL_GETDEPTNM_01(A.CHRG_DEPT_CODE) FROM DUAL)
+				                                                 AS CHRG_DEPT_NM    /*담당부서명*/
+				, A.APPN_CHARGER                                 AS CHARGER_EMPNO   /*지정담당자사번*/
+				, (SELECT SFSAL_GETEMPNO_01(A.APPN_CHARGER) FROM DUAL)
+				                                                 AS CHARGER_NM      /*지정담당자명*/   
+				, (SELECT SFHRM_GET_OFCPSCD(EMPNO, JSSFC_SE, HR_CLSF_SE, ECNY_DE) FROM TBHRM_HR_MASTR WHERE EMPNO = A.APPN_CHARGER)
+				                                                 AS CHARGER_OFCPSCD  
+				, A.HELP_DEPT_CODE                               AS HELP_DEPT_CODE  /*협조부서코드*/
+				, (SELECT SFSAL_GETDEPTNM_01(A.HELP_DEPT_CODE) FROM DUAL)
+				                                                 AS HELP_DEPT_NM    /*협조부서명*/
+				, (SELECT SFHRM_GET_OFCPSCD(EMPNO, JSSFC_SE, HR_CLSF_SE, ECNY_DE) FROM TBHRM_HR_MASTR WHERE EMPNO = A.HELP_APPN_CHARGER)
+				                                                 AS HELP_CHARGER_OFCPSCD /*협조부서담당자직위*/
+				, A.HELP_CHARGER_EMPNO                           AS HELP_CHARGER_EMPNO   /*협조부서지정담당자사번*/
+				, (SELECT SFSAL_GETEMPNO_01(A.HELP_CHARGER_EMPNO) FROM DUAL)
+				                                                 AS HELP_CHARGER_NM      /*협조부서지정담당자이름*/
+				, A.PROCESS_DT                                   AS PROCESS_DT
+				, B.RCEPT_DT                                     AS RCEPT_DT
+				, B.RCEPT_MTH                                    AS RCEPT_MTH            /*접수방법*/
+				, B.SJ                                           AS SJ
+				, B.CN                                           AS CN 
+				, B.ATCH_FILE                                    AS ATCH_FILE
+				, B.NM                                           AS CSTMR_NM             /*민원인성명*/
+				, B.MBTLNO                                       AS MBTLNO              
+				, B.GNRL_TLPHON                                  AS GNRL_TLPHON
+				, B.CVPL_GRAD                                    AS CVPL_GRAD
+				, B.EMAIL                                        AS EMAIL
+				, B.ADRES                                        AS ADRES
+				, B.ZIP                                          AS ZIP
+				, A.STSFDG_EVL_1                                 AS STSFDG_EVL_1  		/*만족도평가1*/
+				, A.STSFDG_EVL_1_CN                              AS STSFDG_EVL_1_CN		/*만족도평가1내용*/
+				, A.STSFDG_EVL_2                                 AS STSFDG_EVL_2		/*만족도평가2*/
+				, A.STSFDG_EVL_2_CN                              AS STSFDG_EVL_2_CN		/*만족도평가2내용*/
+				, A.STSFDG_EVL_3                                 AS STSFDG_EVL_3		/*만족도평가3*/
+				, A.STSFDG_EVL_3_CN                              AS STSFDG_EVL_3_CN		/*만족도평가3내용*/
+				, A.LBRTY_OPINION                                AS LBRTY_OPINION		/*자유의견*/
+				, A.FDBCK_CN                                     AS FDBCK_CN 			/*피드백내용*/
+				, A.FDBCK_ETC                                    AS FDBCK_ETC			/*피드백기타*/
+				, NVL(A.HPPCAL_AT,2)                             AS HPPCAL_AT			/*해피콜여부*/
+                , CASE WHEN DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1) > 0 
+			              THEN CEIL((NVL(t3.INTGR_PREPAR_VALUE,0)+NVL(t4.INTGR_PREPAR_VALUE,0)+NVL(t5.INTGR_PREPAR_VALUE,0))
+			                   / (DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1)))
+			              ELSE NULL
+			         END                                         AS RESULT_SCORE		/*만족도결과점수*/
+			    , SUBSTR(B.CVPL_NO,1,1)                          AS RCEPT_COURS			/*접수경로*/     
+		  FROM TBCUS_HMPG_CVPL_DSTB A
+			LEFT OUTER JOIN TBCUS_HMPG_CSTMR_CVPL B
+				 ON A.CVPL_NO       = B.CVPL_NO
+				AND A.RCEPT_NO      = B.RCEPT_NO
+			INNER JOIN TBCUS_HMPG_CVPL_DSTB t2
+			         ON  B.RCEPT_NO      = t2.RCEPT_NO
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+			         ON  t3.GRP_CODE      = 'CUS007'
+			         AND t2.STSFDG_EVL_1  = t3.CODE
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			         ON  t4.GRP_CODE      = 'CUS007'
+			         AND t2.STSFDG_EVL_2  = t4.CODE
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+			         ON  T5.GRP_CODE      = 'CUS007'
+			         AND t2.STSFDG_EVL_3  = t5.CODE				
+			  WHERE  1=1
+				AND A.PROCESS_DT <= #PROCESS_END_DT#
+				AND A.PROCESS_DT >= #PROCESS_BGN_DT#
+				AND SUBSTR(B.CVPL_NO,1,1) <> 'C'
+		
+		]]>
+		 <isNotEmpty property="HPPCAL_AT">
+				AND NVL(A.HPPCAL_AT,2) = #HPPCAL_AT#
+		 </isNotEmpty>
+		 <isNotEqual property="HPPCAL_AT" compareValue="1">
+				AND A.CVPL_STTUS = '5'
+		</isNotEqual>
+		<isNotEmpty property="NM"> 
+				AND B.NM LIKE '%' || #NM# || '%'		
+		</isNotEmpty> 
+		<isNotEmpty property="CVPL_NO">
+				AND A.CVPL_NO LIKE '%' || #CVPL_NO# || '%'
+		</isNotEmpty> 
+		<isNotEmpty property="CVPL_SE">
+				AND SUBSTR(B.CVPL_NO,1,1) = #CVPL_SE# 
+		</isNotEmpty>
+		<![CDATA[
+			ORDER BY A.PROCESS_DT DESC
+		]]>
+	</select>
+
+	<!--해피콜목록 수정 -->
+	<update id="CUS010105DAO.hppCallListU" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBCUS_HMPG_CVPL_DSTB SET
+						 STSFDG_EVL_1      = #STSFDG_EVL_1#
+						,STSFDG_EVL_1_CN   = #STSFDG_EVL_1_CN#
+						,STSFDG_EVL_2      = #STSFDG_EVL_2#
+						,STSFDG_EVL_2_CN   = #STSFDG_EVL_2_CN#
+						,STSFDG_EVL_3      = #STSFDG_EVL_3#
+						,STSFDG_EVL_3_CN   = #STSFDG_EVL_3_CN#
+						,HPPCAL_AT         = 1
+						,CVPL_STTUS        = '6'
+						,LBRTY_OPINION     = #LBRTY_OPINION#
+						,FDBCK_CN          = #FDBCK_CN#
+						,FDBCK_ETC         = #FDBCK_ETC#
+						,UPDUSR_ID         = #S_USER_ID#
+						,UPDT_DT           = SYSDATE
+					WHERE CVPL_NO  = #CVPL_NO#
+					  AND RCEPT_NO = #RCEPT_NO#
+		]]>
+	</update>
+	
+	<!--분양(주택) 고객정보조회 -->
+	<select id="CUS010105DAO.selectHcntrctrInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+				   T2.CNTRCTR_NO
+				 , T2.HOUSE_CODE
+				 , T2.DONG
+				 , T2.HO
+				 , T1.HOUSE_CSTMR_NO AS CNTRCTR_CSTMR_NO
+				 , T1.CSTMR_NM AS CNTRCTR_NM
+				 , T1.IHIDNUM AS CNTRCTR_IHIDNUM
+				 , T1.ZIP
+				 , T2.BDNBR
+				 , T1.ADRES
+				 , T1.ADRES_DETAIL
+				 , T1.TELNO
+				 , T1.MBTLNO
+				 , T2.ETC_CTTPC
+				 , T1.EMAIL
+				 , T2.RQEST_ESTBS_DM
+				 , T2.ZIP_DM
+				 , T2.BDNBR_DM
+				 , T2.BASS_ADRES_DM
+				 , T2.DETAIL_ADRES_DM
+				 , T2.CNTRCTR_STTUS_CODE
+				 , T2.LTTOT_QUALF_SE
+				 , T2.RENT_QUALF_SE
+				 , T2.CNTRCT_DE
+				 , T2.CTRTC_FILE_COURS
+				 , T2.CTRTC_FILE
+				 , T2.RENT_BGNDE
+				 , T2.RENT_ENDDE
+				 , T2.RENT_MVN_PRARNDE
+				 , T2.RENT_MVN_TIME
+				 , T2.RENT_LVHS_DE
+				 , T2.RENT_LTTOT_CNVRS_DE
+				 , T2.VAT_AT
+				 , T2.RESALE_AT
+				 , T2.NMCHANGE_CNNC_CODE
+				 , T2.CANCL_DE
+				 , T2.RM
+				 , T3.FLOOR
+				 , T3.HOUSE_TY_CODE
+				 , T3.LTTOT_TY_CODE
+				 , T3.RENT_TY_CODE
+				 , T3.BASS_LTTOT_AMOUNT
+				 , T3.BASS_GTN
+				 , T3.BASS_RNTCHRG
+				 , T3.LTTOT_AMOUNT
+				 , T3.RNTCHRG
+				 , T3.GTN
+				  FROM TBSLS_HOUSE_CSTMR T1 
+           INNER JOIN TBSLS_HCNTRCTR T2
+          ON T1.HOUSE_CSTMR_NO = T2.HOUSE_CSTMR_NO
+					LEFT OUTER JOIN TBSLS_HOUSE_DONG_HO T3
+          ON T2.HOUSE_CODE = T3.HOUSE_CODE
+				   AND T2.DONG = T3.DONG
+				   AND T2.HO = T3.HO
+          WHERE 1=1
+           AND T1.CSTMR_NM LIKE '%' || #NM# || '%'
+           AND (T1.TELNO  LIKE '%' || #TELNO# || '%' OR T1.MBTLNO LIKE '%' || #MBTLNO# || '%')
+    </select>
+</sqlMap>

@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+
+<sqlMap namespace="SancDAO">
+ 
+	<select id="SancDAO.selectSancEmpInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.USER_ID
+		      ,t1.EMP_CODE
+		      ,t2.DEPT_CODE
+		      ,t3.USER_KEY
+		      ,t4.EMPNO
+		FROM   USR_GLOBAL@DL_INTRACITY t1
+		       INNER JOIN DEPT_GLOBAL@DL_INTRACITY t2
+		            ON t1.DEPT_ID = t2.DEPT_ID
+		       INNER JOIN USR_CACHE_INFO@DL_INTRACITY t3
+		            ON t1.USER_ID = t3.USER_ID
+		       INNER JOIN TBHRM_DCLZ_MAPPING_MANAGE t4
+		            ON t1.EMP_CODE = t4.GRPWR_NO
+		       INNER JOIN TBCOM_USER t5
+		            ON t4.EMPNO = t5.EMPNO
+		WHERE t1.STATUS = '1'
+		AND   t5.USER_ID  = #S_USER_ID#
+	]]>
+	</select>
+
+
+	<!-- 결재상태 검색 -->
+	<select id="SancDAO.getSanctnKnd" resultClass="java.lang.String">
+	<![CDATA[
+		SELECT SANCTN_KND
+		FROM VIEW_MIS_SANCTN_KND@DL_INTRACITY
+		WHERE SANCTN_NO = #SANCTN_NO#
+	]]>
+	</select>
+
+
+	<!-- 결재번호 채번 -->
+	<select id="SancDAO.getSanctnNo" resultClass="java.lang.String">
+	<![CDATA[
+		SELECT SQ_SANCTN_NO.NEXTVAL AS SANCTN_NO
+		FROM DUAL
+	]]>
+	</select>
+
+
+	<!-- MIS 전자결재 테이블에 데이터 추가 -->
+	<insert id="SancDAO.insertElctrnSanctnMastr" parameterClass="java.util.HashMap">
+		INSERT INTO TBCOM_ELCTRN_SANCTN_MASTR (
+		     SANCTN_NO
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDT_DT
+		    ,TABLE_NAME
+		    ,MIS_KEY_LIST
+		    ,MIS_VAL_LIST
+		    ,MIS_KEY_MAP
+		    ,FORM_ID
+		    ,SANCTN_SJ
+		) 
+		VALUES (
+		     #SANCTN_NO#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,SYSDATE
+		    ,#TABLE_NAME#
+		    ,#MIS_KEY_LIST#
+		    ,#MIS_VAL_LIST#
+		    ,#MIS_KEY_MAP#
+		    ,#FORM_ID#
+		    ,#SANCTN_SJ#
+		)
+	</insert>
+
+
+	<update id="SancDAO.updateElctrnSanctnMastr" parameterClass="java.util.HashMap">
+		UPDATE TBCOM_ELCTRN_SANCTN_MASTR t1
+		SET    t1.DOC_ID              = #docId#
+			  ,t1.SANCTN_KND          = #sanctnKnd#
+		      ,t1.UPDT_DT             = SYSDATE
+		WHERE SANCTN_NO	= #misKey#  
+	</update>
+
+
+	<select id="SancDAO.getFormId" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+        SELECT NVL(FORM_ID, (SELECT FORMID FROM   APPROVAL@DL_INTRACITY WHERE  APPRID = #docId#)) AS FORMID
+		FROM TBCOM_ELCTRN_SANCTN_MASTR
+		WHERE SANCTN_NO = #misKey#
+	</select>
+
+	<select id="SancDAO.selectSanDocInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT a.DOC_ID
+		      ,b.USER_KEY
+		FROM  TBCOM_ELCTRN_SANCTN_MASTR a
+		      LEFT OUTER JOIN (
+		                       SELECT t1.USER_ID
+		                             ,t4.USER_KEY
+		                             ,t3.DEPT_CODE
+		                             ,t1.EMP_CODE
+		                       FROM   USR_GLOBAL@DL_INTRACITY t1
+		                              INNER JOIN TBHRM_DCLZ_MAPPING_MANAGE t2
+		                                   ON t1.EMP_CODE = t2.GRPWR_NO
+		                              INNER JOIN DEPT_GLOBAL@DL_INTRACITY t3
+		                                   ON t1.DEPT_ID = t3.DEPT_ID
+		                              LEFT OUTER JOIN USR_CACHE_INFO@DL_INTRACITY t4
+		                                   ON t1.USER_ID = t4.USER_ID
+		                       WHERE  t1.STATUS = '1'
+		                       AND    t2.EMPNO  = (SELECT EMPNO FROM TBCOM_USER WHERE USER_ID = #S_USER_ID#)
+		                      ) b
+		           ON 1=1
+		WHERE a.SANCTN_NO = #SANCTN_NO#
+		AND   ROWNUM = 1
+	</select>
+
+
+	<insert id="SancDAO.insertSancResult" parameterClass="java.lang.String">
+		INSERT INTO TBCOM_SANC_RESULT (
+		     SEQ
+		    ,PARAM
+		    ,INPUT_DT
+		) VALUES (
+		     (SELECT NVL(MAX(SEQ),0) +1 FROM TBCOM_SANC_RESULT)
+		    ,#value#
+		    ,SYSDATE
+		)
+	</insert>
+
+
+	<update id="SancDAO.updateMisTable" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE $TABLE_NAME$
+			SET    $SANCTN_COLUMN$ = #SANCTN_NO#
+			WHERE  1=1
+		]]>
+		<iterate property="misKeyList">
+			AND    $misKeyList[].misKey$ = #misKeyList[].misValue#
+		</iterate>
+	</update>
+
+
+	<!-- 그룹웨어 기안 후처리 START -->
+	<parameterMap id="sancAfterProcParam" class="java.util.HashMap">
+		<parameter property="P_SANCTN_NO" jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+	</parameterMap>
+	
+	<procedure id="SancDAO.SP_M_01_1" parameterMap="sancAfterProcParam"> { call PKG_SANC_AFTER_PROC.SP_M_01_1(?) } </procedure>
+	<procedure id="SancDAO.SP_M_01_5" parameterMap="sancAfterProcParam"> { call PKG_SANC_AFTER_PROC.SP_M_01_5(?) } </procedure>
+	<procedure id="SancDAO.SP_M_04"   parameterMap="sancAfterProcParam"> { call PKG_SANC_AFTER_PROC.SP_M_04(?)   } </procedure>
+	<procedure id="SancDAO.SP_M_06"   parameterMap="sancAfterProcParam"> { call PKG_SANC_AFTER_PROC.SP_M_06(?)   } </procedure>
+	<procedure id="SancDAO.SP_M_07"   parameterMap="sancAfterProcParam"> { call PKG_SANC_AFTER_PROC.SP_M_07(?)   } </procedure>
+	<procedure id="SancDAO.SP_M_08"   parameterMap="sancAfterProcParam"> { call PKG_SANC_AFTER_PROC.SP_M_08(?)   } </procedure>
+	<procedure id="SancDAO.SP_M_28_5" parameterMap="sancAfterProcParam"> { call PKG_SANC_AFTER_PROC.SP_M_28_5(?) } </procedure>
+	<procedure id="SancDAO.SP_M_29_5" parameterMap="sancAfterProcParam"> { call PKG_SANC_AFTER_PROC.SP_M_29_5(?) } </procedure>
+	
+	<!-- 그룹웨어 기안 후처리 END -->
+
+</sqlMap>

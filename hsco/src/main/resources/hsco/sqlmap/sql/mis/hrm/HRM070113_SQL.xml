@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070113_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 신청자 정보 조회 -->
+	<select id="HRM070113DAO.selectEmpnoInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+             SELECT T1.EMPNO                           AS EMPNO
+                  , T1.EMPNM                           AS EMPNM
+                  , T1.DEPT_CODE                       AS DEPT_CODE
+                  , NVL(T2.DEPT_NM, '알수없음')        AS DEPT_NM
+                  , T1.JSSFC_SE                        AS JSSFC_SE
+                  , T3.CODE_NM                         AS JSSFC_NM
+                  , T1.HR_CLSF_SE                      AS HR_CLSF_SE
+                  , T4.CODE_NM                         AS HR_CLSF_NM
+                  , T1.OFCPS_SE                        AS OFCPS_SE
+                  , T5.CODE_NM                         AS OFCPS_NM
+                  , T1.ADRES || ' ' || T1.ADRES_DETAIL AS ADDRESS
+                  , H_DECRYPT(T1.TELNO_2)                         AS TELNO
+               FROM TBHRM_HR_MASTR T1
+               LEFT OUTER JOIN TBHRM_DEPT T2
+                       ON T1.DEPT_CODE = T2.DEPT_CODE
+               LEFT OUTER JOIN TBCOM_CMMN_CODE T3
+                       ON T1.JSSFC_SE = T3.CODE
+                      AND T3.GRP_CODE = 'HRM001'
+               LEFT OUTER JOIN TBCOM_CMMN_CODE T4
+                       ON T1.HR_CLSF_SE = T4.CODE
+                      AND T4.GRP_CODE = 'HRM002'
+               LEFT OUTER JOIN TBCOM_CMMN_CODE T5
+                       ON T1.OFCPS_SE = T5.CODE
+                      AND T5.GRP_CODE = 'HRM003'
+              WHERE T1.EMPNO = #EMPNO#
+		]]>
+    </select>
+    
+    <!-- 영유아 조회 -->
+	<select id="HRM070113DAO.selectInfantList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[		
+			SELECT T1.SEQ
+			     , T1.FAMILY_NM
+			     , T1.BRTHDY
+			     , T1.SEXDSTN_SE
+			FROM TBHRM_HR_FAMILY T1
+			WHERE T1.FAMILY_RELATE_SE = '007'
+			  AND T1.CNFIRM_AT = '1'
+			  AND T1.EMPNO = #EMPNO#
+			ORDER BY T1.SEQ
+		]]>
+    </select>
+    
+	<!-- 휴직신청 조회 -->
+	<select id="HRM070113DAO.selectLayOffList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH HRM AS (
+				SELECT T1.EMPNO
+				     , T1.EMPNM
+				     , T1.BRTHDY
+				     , T1.DEPT_CODE
+				     , NVL(T2.DEPT_NM, '알수없음')    AS DEPT_NM
+				     , T1.HR_CLSF_SE
+				     , T3.CODE_NM                     AS HR_CLSF_NM
+				  FROM TBHRM_HR_MASTR T1
+				  LEFT OUTER JOIN VWHRM_DEPT T2
+				          ON T1.DEPT_CODE = T2.DEPT_CODE
+				  LEFT OUTER JOIN TBCOM_CMMN_CODE T3
+				          ON T1.HR_CLSF_SE = T3.CODE
+				         AND T3.GRP_CODE = 'HRM002'
+			)
+			SELECT t1.LAYOFF_SN                                        AS LAYOFF_SN
+				 , DECODE(t5.DEPT_NM, NULL, t2.DEPT_NM, t5.DEPT_NM)    AS DEPT_NM
+				 , DECODE(t5.CLSF_NM, NULL, t2.HR_CLSF_NM, t5.CLSF_NM) AS CLSF_NM
+				 , t1.EMPNO                                            AS EMPNO
+				 , t2.EMPNM                                            AS EMPNM
+				 , t2.BRTHDY                                           AS BRTHDY
+				 , t1.SANCTN_NO                                        AS SANCTN_NO
+				 , SFCOM_GET_SANCTN_KND(t1.SANCTN_NO)                  AS SANCTN_STS
+				 , NVL(t1.GNFD_AT, '0')                                AS GNFD_AT
+				 , t1.LAYOFF_SE                                        AS LAYOFF_SE
+				 , t1.LAYOFF_BGNDE                                     AS LAYOFF_BGNDE
+				 , t1.LAYOFF_ENDDE                                     AS LAYOFF_ENDDE
+				 , t1.LAYOFF_PRVONSH                                   AS LAYOFF_PRVONSH
+				 , t1.INFANT_SN                                        AS INFANT_SN
+				 , t4.FAMILY_NM                                        AS INFANT_NM
+				 , t4.BRTHDY                                           AS INFANT_BRTHDY
+				 , t3.DEPT_NM                                          AS VRSC_DEPT_NM
+				 , t3.HR_CLSF_NM                                       AS VRSC_CLSF_NM
+				 , t1.JOB_VRSC_EMPNO                                   AS VRSC_EMPNO
+				 , t3.EMPNM                                            AS VRSC_EMPNM
+				 , t1.WNRD_ADRES                                       AS WNRD_ADRES
+				 , t1.WNRD_CTTPC                                       AS WNRD_CTTPC
+				 , t1.REGISTER_ID                                      AS REGISTER_ID
+				 , TO_CHAR(t1.REGIST_DT,'YYYYMMDD')                    AS REGIST_DT
+				 , CASE WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '1' THEN '0'      /* 결재상태 - 1:기안 */
+			            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '4' THEN '0'      /* 결재상태 - 4:중간결재 */
+			            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5' THEN '0'      /* 결재상태 - 5:결재완료 */
+			            WHEN t1.GNFD_AT = '1' THEN '0'
+			            ELSE '1'
+			            END                           AS UPDATE_POSBL_AT  /* 수정가능여부판단변수 */
+			  FROM TBHRM_LAYOFF t1
+			  LEFT OUTER JOIN HRM t2
+					  ON t1.EMPNO = t2.EMPNO
+			  LEFT OUTER JOIN HRM t3
+					  ON t1.JOB_VRSC_EMPNO = t3.EMPNO
+			  LEFT OUTER JOIN TBHRM_HR_FAMILY t4
+					  ON t4.FAMILY_RELATE_SE = '007'
+					 AND t1.EMPNO = t4.EMPNO
+					 AND t1.INFANT_SN = t4.SEQ
+			  LEFT OUTER JOIN TBHRM_GNFD_DTLS t5
+			          ON t1.GNFD_SN = t5.GNFD_SEQ
+			         AND T1.EMPNO = t5.EMPNO
+			 WHERE 1=1
+			   AND (t1.LAYOFF_BGNDE BETWEEN #BGN_DE# AND #END_DE#
+			        OR
+			        t1.LAYOFF_ENDDE BETWEEN #BGN_DE# AND #END_DE#
+			       )
+			   
+		]]>	
+			<isNotEmpty property="EMPNO" prepend="AND">
+			       t1.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="SE" prepend="AND">
+			       t1.LAYOFF_SE = #SE#
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+			       t2.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+		<![CDATA[	
+			 ORDER BY t2.DEPT_CODE, TO_DATE(t1.LAYOFF_BGNDE, 'YYYYMMDD')
+		]]>
+    </select>
+    
+	<!-- 휴직신청 정보 추가 -->
+	<insert id="HRM070113DAO.insertLayOff" parameterClass="java.util.HashMap">
+		INSERT INTO TBHRM_LAYOFF (
+               EMPNO
+             , LAYOFF_SN
+             , LAYOFF_SE
+             , INFANT_SN
+             , LAYOFF_BGNDE
+             , LAYOFF_ENDDE
+             , LAYOFF_PRVONSH
+             , JOB_VRSC_EMPNO
+             , WNRD_ADRES
+             , WNRD_CTTPC
+             , GNFD_AT
+             , SANCTN_NO
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+		) VALUES (
+               #EMPNO#
+             , (SELECT NVL(MAX(LAYOFF_SN),0)+1 FROM TBHRM_LAYOFF WHERE EMPNO = #EMPNO#)
+             , #LAYOFF_SE#
+             , #INFANT_SN#
+             , #LAYOFF_BGNDE#
+             , #LAYOFF_ENDDE#
+             , #LAYOFF_PRVONSH#
+             , #VRSC_EMPNO#
+             , #WNRD_ADRES#
+             , #WNRD_CTTPC#
+             , '0'
+             , #SANCTN_NO#
+             , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+        )
+	</insert>
+	
+	<!-- 휴직신청 수정 -->
+	<update id="HRM070113DAO.updateLayOff" parameterClass="java.util.HashMap">
+		UPDATE TBHRM_LAYOFF
+           SET LAYOFF_SE      = #LAYOFF_SE#
+             , INFANT_SN      = #INFANT_SN#
+             , LAYOFF_BGNDE   = #LAYOFF_BGNDE#
+             , LAYOFF_ENDDE   = #LAYOFF_ENDDE#
+             , LAYOFF_PRVONSH = #LAYOFF_PRVONSH#
+             , JOB_VRSC_EMPNO = #VRSC_EMPNO#
+             , WNRD_ADRES     = #WNRD_ADRES#
+             , WNRD_CTTPC     = #WNRD_CTTPC#
+             , GNFD_AT        = #GNFD_AT#
+             , SANCTN_NO      = #SANCTN_NO#
+             , UPDUSR_ID      = #S_USER_ID#
+             , UPDT_DT        = SYSDATE
+         WHERE EMPNO          = #EMPNO#
+           AND LAYOFF_SN      = #LAYOFF_SN#
+	</update>
+	
+	<!-- 휴직신청 삭제 -->
+	<delete id="HRM070113DAO.deleteLayOff" parameterClass="java.util.HashMap">
+		DELETE
+          FROM TBHRM_LAYOFF
+         WHERE EMPNO     = #EMPNO#
+           AND LAYOFF_SN = #LAYOFF_SN#
+	</delete>
+    
+    
+    
+    
+    
+    
+    
+    
+    <!-- 
+    	복직관련 쿼리 부분
+     -->
+    
+	<!-- 복직신청 조회 -->
+	<select id="HRM070113DAO.selectReinsat" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT t7.REINSAT_SN                                     AS REINSAT_SN
+			     , t1.LAYOFF_SN                                      AS LAYOFF_SN
+				 , DECODE(t5.DEPT_NM, NULL, t3.DEPT_NM, t5.DEPT_NM)  AS DEPT_NM
+				 , DECODE(t5.CLSF_NM, NULL, t4.CODE_NM, t5.CLSF_NM)  AS CLSF_NM
+				 , t1.EMPNO                                          AS EMPNO
+				 , t2.EMPNM                                          AS EMPNM
+				 , t2.BRTHDY                                         AS BRTHDY
+				 , t7.SANCTN_NO                                      AS SANCTN_NO
+				 , SFCOM_GET_SANCTN_KND(t7.SANCTN_NO)                AS SANCTN_STS
+				 , NVL(t7.GNFD_AT, '0')                              AS GNFD_AT
+				 , t1.LAYOFF_SE                                      AS LAYOFF_SE
+				 , t1.LAYOFF_BGNDE                                   AS LAYOFF_BGNDE
+				 , t1.LAYOFF_ENDDE                                   AS LAYOFF_ENDDE
+				 , t1.LAYOFF_PRVONSH                                 AS LAYOFF_PRVONSH
+				 , t1.INFANT_SN                                      AS INFANT_SN
+				 , t6.FAMILY_NM                                      AS INFANT_NM
+				 , t6.BRTHDY                                         AS INFANT_BRTHDY
+				 , t1.WNRD_ADRES                                     AS WNRD_ADRES
+				 , t1.WNRD_CTTPC                                     AS WNRD_CTTPC
+				 , t7.REINSAT_PRARNDE                                AS REINSAT_PRARNDE
+				 , t7.REGISTER_ID                                    AS REGISTER_ID
+				 , TO_CHAR(t7.REGIST_DT,'YYYYMMDD')                  AS REGIST_DT
+				 , CASE WHEN SFCOM_GET_SANCTN_KND(t7.SANCTN_NO) = '1' THEN '0'      /* 결재상태 - 1:기안 */
+			            WHEN SFCOM_GET_SANCTN_KND(t7.SANCTN_NO) = '4' THEN '0'      /* 결재상태 - 4:중간결재 */
+			            WHEN SFCOM_GET_SANCTN_KND(t7.SANCTN_NO) = '5' THEN '0'      /* 결재상태 - 5:결재완료 */
+			            WHEN t7.GNFD_AT = '1' THEN '0'
+			            ELSE '1'
+			            END                           AS UPDATE_POSBL_AT  /* 수정가능여부판단변수 */
+			  FROM TBHRM_LAYOFF t1
+			  LEFT OUTER JOIN TBHRM_HR_MASTR t2
+					  ON t1.EMPNO = t2.EMPNO
+			  LEFT OUTER JOIN VWHRM_DEPT t3
+					  ON t2.DEPT_CODE = t3.DEPT_CODE
+			  LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			          ON t4.GRP_CODE = 'HRM002'
+			         AND t2.HR_CLSF_SE = t4.CODE
+			  LEFT OUTER JOIN TBHRM_GNFD_DTLS t5
+			          ON t1.GNFD_SN = t5.GNFD_SEQ
+			         AND t1.EMPNO   = t5.EMPNO
+			  LEFT OUTER JOIN TBHRM_HR_FAMILY t6
+					  ON t6.FAMILY_RELATE_SE = '007'
+					 AND t1.EMPNO = t6.EMPNO
+					 AND t1.INFANT_SN = t6.SEQ
+			  LEFT OUTER JOIN TBHRM_REINSAT t7
+					  ON t1.EMPNO = t7.EMPNO
+					 AND t1.LAYOFF_SN = t7.LAYOFF_SN
+			 WHERE 1=1
+			   AND t1.GNFD_AT = '1'
+			   AND (t1.LAYOFF_BGNDE BETWEEN #BGN_DE# AND #END_DE#
+			        OR
+			        t1.LAYOFF_ENDDE BETWEEN #BGN_DE# AND #END_DE#
+			       )
+			   
+		]]>	
+			<isNotEmpty property="EMPNO" prepend="AND">
+			       t1.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="SE" prepend="AND">
+			       t1.LAYOFF_SE = #SE#
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+			       t2.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+		<![CDATA[	
+			 ORDER BY t2.DEPT_CODE, TO_DATE(t1.LAYOFF_BGNDE, 'YYYYMMDD')
+		]]>
+    </select>
+	
+	<!-- 복직신청 등록 및 수정 -->
+	<update id="HRM070113DAO.updateReinsat" parameterClass="java.util.HashMap">
+		MERGE INTO TBHRM_REINSAT
+			USING DUAL 
+			ON (EMPNO = #EMPNO# AND LAYOFF_SN = #LAYOFF_SN# AND REINSAT_SN = #REINSAT_SN#)
+			WHEN MATCHED THEN
+				UPDATE SET 
+					 REINSAT_PRARNDE = #REINSAT_PRARNDE#
+					,GNFD_AT         = #GNFD_AT#
+					,SANCTN_NO       = #SANCTN_NO#
+					,UPDUSR_ID       = #S_USER_ID#
+					,UPDT_DT         = SYSDATE
+			WHEN NOT MATCHED THEN
+				INSERT (
+					 EMPNO
+					,LAYOFF_SN
+					,REINSAT_SN
+					,REINSAT_PRARNDE
+					,SANCTN_NO
+					,GNFD_AT
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+				) VALUES (
+					 #EMPNO#
+					,#LAYOFF_SN#
+					,(SELECT NVL(MAX(REINSAT_SN),0)+1 FROM TBHRM_REINSAT WHERE EMPNO = #EMPNO# AND LAYOFF_SN = #LAYOFF_SN#)
+					,#REINSAT_PRARNDE#
+					,#SANCTN_NO#
+					,#GNFD_AT#
+					,#S_USER_ID#
+					,SYSDATE
+					,#S_USER_ID#
+					,SYSDATE
+				)
+	</update>
+	
+	<!-- 복직신청 삭제 -->
+	<delete id="HRM070113DAO.deleteReinsat" parameterClass="java.util.HashMap">
+		DELETE
+          FROM TBHRM_REINSAT
+         WHERE EMPNO      = #EMPNO#
+           AND LAYOFF_SN  = #LAYOFF_SN#
+           AND REINSAT_SN = #REINSAT_SN#
+	</delete>
+</sqlMap>

@@ -1,0 +1,1178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS040400_SQL">
+
+	<!-- 쿼리명 : 수입조정일계표 조회
+	설명 : 수입조정일계표 조회
+	수정일  		수정자  	수정내용
+	2016.01.20	박병일	최초생성
+	작성자 : 박병일
+	최초작성일 : 2016.01.20
+	-->
+	<select id="SLS040400DAO.selectIncmeMdatDailyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH V_TBSLS_HOUSE_DECSN AS (
+								     SELECT DECSN_DE,
+								            BUDGET_YEAR,
+								            BSNS_SE,
+								            BUDGET_ACNT_CODE,
+								            EXPNDTR_UNIT_CODE,
+								            GWAN_CD,
+								            GWAN_NM,
+								            HANG_CD,
+								            HANG_NM,
+								            SEHANG_CD,
+								            SEHANG_NM,
+								            MOK_NM,
+								            SUM (PAY_CNT) AS PAY_CNT,
+								            SUM (PAY_AMT) AS PAY_AMT,
+								            SUM (REC_CNT) AS REC_CNT,
+								            SUM (REC_AMT) AS REC_AMT
+								       FROM ( <!-- 조정액 -->
+								             SELECT   V.DECSN_DE,
+								                      V.BUDGET_YEAR,
+								                      V.BSNS_SE,
+								                      V.BUDGET_ACNT_CODE,
+								                      V.EXPNDTR_UNIT_CODE,
+								                      MAX(D.GWAN_CD) AS GWAN_CD,
+								                      MAX(D.GWAN_NM) AS GWAN_NM,
+								                      MAX(D.HANG_CD) AS HANG_CD,
+								                      MAX(D.HANG_NM) AS HANG_NM,
+								                      MAX(D.SEHANG_CD) AS SEHANG_CD,
+								                      MAX(D.SEHANG_NM) AS SEHANG_NM,
+								                      MAX(D.MOK_NM) AS MOK_NM,
+								                      (CASE WHEN (V.BUDGET_ACNT_CODE LIKE '6121%') OR ((V.BUDGET_ACNT_CODE LIKE '6410%'))
+								                            THEN COUNT (DISTINCT V.HOUSE_CODE || V.DONG || V.HO)
+								                            ELSE COUNT (V.HOUSE_CODE || V.DONG || V.HO)
+								                       END)
+								                         AS PAY_CNT,
+								                      SUM (V.DECSN_AMOUNT) AS PAY_AMT,
+								                      0 AS REC_CNT,
+								                      0 AS REC_AMT
+								                 FROM TBSLS_HOUSE_DECSN V, VHBDG_BUDGET_ACNT_CODE D
+								                WHERE 1=1
+								                  AND V.BUDGET_YEAR = D.YEAR(+)
+								                  AND V.BSNS_SE = D.BSNS_SE(+)
+								                  AND V.BUDGET_ACNT_CODE = D.BUDGET_ACNT_CODE(+)
+								                  AND V.DECSN_SE IN ('1', '4')
+								             GROUP BY V.DECSN_DE,
+								                      V.BUDGET_YEAR,
+								                      V.BSNS_SE,
+								                      V.BUDGET_ACNT_CODE,
+								                      V.EXPNDTR_UNIT_CODE
+								             UNION ALL
+								               <!-- 수납액 -->
+								               SELECT V.DECSN_DE,
+								                      V.BUDGET_YEAR,
+								                      V.BSNS_SE,
+								                      V.BUDGET_ACNT_CODE,
+								                      V.EXPNDTR_UNIT_CODE,
+								                      MAX(D.GWAN_CD) AS GWAN_CD,
+								                      MAX(D.GWAN_NM) AS GWAN_NM,
+								                      MAX(D.HANG_CD) AS HANG_CD,
+								                      MAX(D.HANG_NM) AS HANG_NM,
+								                      MAX(D.SEHANG_CD) AS SEHANG_CD,
+								                      MAX(D.SEHANG_NM) AS SEHANG_NM,
+								                      MAX(D.MOK_NM) AS MOK_NM,
+								                      0 AS PAY_CNT,
+								                      0 AS PAY_AMT,
+								                      SUM (OCCRRNC_CO),
+								                      SUM (DECSN_AMOUNT)
+								                 FROM TBSLS_HOUSE_DECSN V, VHBDG_BUDGET_ACNT_CODE D
+								                WHERE 1=1
+								                  AND V.BUDGET_YEAR = D.YEAR(+)
+								                  AND V.BSNS_SE = D.BSNS_SE(+)
+								                  AND V.BUDGET_ACNT_CODE = D.BUDGET_ACNT_CODE(+)
+								                  AND V.DECSN_SE IN ('2', '3')
+								             GROUP BY V.DECSN_DE,
+								                      V.BUDGET_YEAR,
+								                      V.BSNS_SE,
+								                      V.BUDGET_ACNT_CODE,
+								                      V.EXPNDTR_UNIT_CODE
+								                      )
+								   GROUP BY DECSN_DE,
+								            BUDGET_YEAR,
+								            BSNS_SE,
+								            BUDGET_ACNT_CODE,
+								            EXPNDTR_UNIT_CODE,
+								            GWAN_CD,
+								            GWAN_NM,
+								            HANG_CD,
+								            HANG_NM,
+								            SEHANG_CD,
+								            SEHANG_NM,
+								            MOK_NM
+		)
+		SELECT '1' ORD,
+		       '1' AS ORD1,
+		       '총    계' GWAN_NM,
+		       NULL AS HANG_NM,
+		       NULL AS HANG_CD,
+		       NULL AS SEHANG_NM,
+		       NULL AS SEHANG_CD,
+		       NULL AS MOK_NM,
+		       '1' AS BSNS_SE,
+		       '1' AS BUDGET_ACNT_CODE,
+		       '          총                       계' AS COL_TITLE,
+		       SUM(PAY_CNT) AS PAY_CNT,
+		       SUM(PAY_AMT) AS PAY_AMT,
+		       SUM(REC_CNT) AS REC_CNT,
+		       SUM(REC_AMT) AS REC_AMT
+		  FROM V_TBSLS_HOUSE_DECSN
+		 WHERE 1=1
+		   AND DECSN_DE BETWEEN #APPLC_DE# AND #APPLC_DE#
+		UNION ALL
+		SELECT '2' ORD,
+		       '2' AS ORD1,
+		       GWAN_NM,
+		       NULL AS HANG_NM,
+		       '1' AS HANG_CD,
+		       NULL AS SEHANG_NM,
+		       NULL AS SEHANG_CD,
+		       NULL AS MOK_NM,
+		       BSNS_SE,
+		       '1' AS BUDGET_ACNT_CODE,
+		       GWAN_NM AS COL_TITLE,
+		       SUM(PAY_CNT) AS PAY_CNT,
+		       SUM(PAY_AMT) AS PAY_AMT,
+		       SUM(REC_CNT) AS REC_CNT,
+		       SUM(REC_AMT) AS REC_AMT
+		  FROM V_TBSLS_HOUSE_DECSN
+		 WHERE 1=1
+		   AND DECSN_DE BETWEEN #APPLC_DE# AND #APPLC_DE#
+		 GROUP BY GWAN_NM,
+		          BSNS_SE
+		UNION ALL
+		SELECT '3' ORD,
+		       '2' AS ORD1,
+		       GWAN_NM,
+		       HANG_NM,
+		       HANG_CD,
+		       NULL AS SEHANG_NM,
+		       '1' AS SEHANG_CD,
+		       NULL AS MOK_NM,
+		       BSNS_SE,
+		       '2' AS BUDGET_ACNT_CODE,
+		       LPAD(' ',5,' ') || HANG_NM AS COL_TITLE,
+		       SUM(PAY_CNT) AS PAY_CNT,
+		       SUM(PAY_AMT) AS PAY_AMT,
+		       SUM(REC_CNT) AS REC_CNT,
+		       SUM(REC_AMT) AS REC_AMT
+		  FROM V_TBSLS_HOUSE_DECSN
+		 WHERE 1=1
+		   AND DECSN_DE BETWEEN #APPLC_DE# AND #APPLC_DE#
+		 GROUP BY GWAN_NM,
+		          HANG_NM,
+		          BSNS_SE,
+		          HANG_CD
+		UNION ALL
+		SELECT '4' ORD,
+		       '2' AS ORD1,
+		       GWAN_NM,
+		       HANG_NM,
+		       HANG_CD,
+		       SEHANG_NM,
+		       SEHANG_CD,
+		       NULL AS MOK_NM,
+		       BSNS_SE,
+		       '3' AS BUDGET_ACNT_CODE,
+		       LPAD(' ',14,' ') || SEHANG_NM AS COL_TITLE,
+		       SUM(PAY_CNT) AS PAY_CNT,
+		       SUM(PAY_AMT) AS PAY_AMT,
+		       SUM(REC_CNT) AS REC_CNT,
+		       SUM(REC_AMT) AS REC_AMT
+		  FROM V_TBSLS_HOUSE_DECSN
+		 WHERE 1=1
+		   AND DECSN_DE BETWEEN #APPLC_DE# AND #APPLC_DE#
+		 GROUP BY GWAN_NM,
+		       HANG_NM,
+		       HANG_CD,
+		       SEHANG_NM,
+		       SEHANG_CD,
+		       BSNS_SE
+		UNION ALL
+		SELECT '5' ORD,
+		       '2' AS ORD1,
+		       GWAN_NM,
+		       HANG_NM,
+		       HANG_CD,
+		       SEHANG_NM,
+		       SEHANG_CD,
+		       MOK_NM,
+		       BSNS_SE,
+		       BUDGET_ACNT_CODE,
+		       LPAD(' ',25,' ') || MOK_NM AS COL_TITLE,
+		       SUM(PAY_CNT) AS PAY_CNT,
+		       SUM(PAY_AMT) AS PAY_AMT,
+		       SUM(REC_CNT) AS REC_CNT,
+		       SUM(REC_AMT) AS REC_AMT
+		  FROM V_TBSLS_HOUSE_DECSN
+		 WHERE 1=1
+		   AND DECSN_DE BETWEEN #APPLC_DE# AND #APPLC_DE#
+		 GROUP BY GWAN_NM,
+		          HANG_NM,
+		          HANG_CD,
+		          SEHANG_NM,
+		          SEHANG_CD,
+		          MOK_NM,
+		          BSNS_SE,
+		          BUDGET_ACNT_CODE
+		ORDER BY ORD1,
+		         BSNS_SE,
+		         GWAN_NM,
+		         HANG_CD,
+		         SEHANG_CD,
+		         ORD	
+    </select>
+    
+	<!-- 쿼리명 : 월별징수현황 조회
+	설명 : 월별징수현황 조회
+	수정일  		수정자  	수정내용
+	2016.01.20	박병일	최초생성
+	작성자 : 박병일
+	최초작성일 : 2016.01.20
+	-->
+   	<parameterMap id="SPSLS_HOUSE_TEMP_DECSN_ID_PARAM" class="java.util.HashMap">
+		<parameter property="IN_DTA_SE"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_DECSN_MT"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="OUT_RESULT_CD"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"	jdbcType="VARCHAR"	javaType="string"	mode="OUT" />		
+	</parameterMap>
+	
+   	<procedure id="SLS040400DAO.SPSLS_HOUSE_TEMP_DECSN_ID" parameterMap="SPSLS_HOUSE_TEMP_DECSN_ID_PARAM">
+		{ call SPSLS_HOUSE_TEMP_DECSN_ID(?, ?, ?, ?) }
+	</procedure> 
+
+	<select id="SLS040400DAO.selectMonthlyLevList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT '          총                 계' AS COL_TITLE,
+		       SUM(MDAT_CO) AS PAY_CNT,
+		       SUM(MDAT_AMOUNT) AS PAY_AMT,
+		       SUM(RCIV_CO) AS REC_CNT,
+		       SUM(RCIV_AMOUNT) AS REC_AMT,
+		       SUM(MDAT_CO_ACMTL) AS PAY_CNTT,
+		       SUM(MDAT_AMOUNT_ACMTL) AS PAY_AMTT,
+		       SUM(RCIV_CO_ACMTL) AS REC_CNTT,
+		       SUM(RCIV_AMOUNT_ACMTL) AS REC_AMTT,
+		       SUM(MDAT_AMOUNT) - SUM(RCIV_AMOUNT) AS DEL_AMT,
+		       SUM(MDAT_AMOUNT_ACMTL) - SUM(RCIV_AMOUNT_ACMTL) AS DEL_AMTT,
+		       SUM(NVL(BUDGET_AM,0)) AS BUDGET_AM,
+		       '1' ORD,
+		       '1' AS ORD1,
+		       '총    계' KWAN_NM,
+		       NULL AS HANG_NM,
+		       NULL AS HANG_CODE,
+		       NULL AS SEHN_NM,
+		       NULL AS SEHN_CODE,
+		       NULL AS MOK_NM,
+		       '1' AS BSNS_SE,
+		       '1' AS BUDGET_ACNT_CODE
+		  FROM TBSLS_MDAT_INCME_OUTPT R
+		 WHERE 1=1
+		   AND DTA_SE = '3'
+		    UNION ALL
+		SELECT KWAN_NM AS COL_TITLE,
+		       SUM(MDAT_CO) AS PAY_CNT,
+		       SUM(MDAT_AMOUNT) AS PAY_AMT,
+		       SUM(RCIV_CO) AS REC_CNT,
+		       SUM(RCIV_AMOUNT) AS REC_AMT,
+		       SUM(MDAT_CO_ACMTL) AS PAY_CNTT,
+		       SUM(MDAT_AMOUNT_ACMTL) AS PAY_AMTT,
+		       SUM(RCIV_CO_ACMTL) AS REC_CNTT,
+		       SUM(RCIV_AMOUNT_ACMTL) AS REC_AMTT,
+		       SUM(MDAT_AMOUNT) - SUM(RCIV_AMOUNT) AS DEL_AMT,
+		       SUM(MDAT_AMOUNT_ACMTL) - SUM(RCIV_AMOUNT_ACMTL) AS DEL_AMTT,
+		       SUM(NVL(BUDGET_AM,0)) AS BUDGET_AM,
+		       '2' ORD,
+		       '2' AS ORD1,
+		       KWAN_NM,
+		       NULL AS HANG_NM,
+		       '1' AS HANG_CODE,
+		       NULL AS SEHN_NM,
+		       NULL AS SEHN_CODE,
+		       NULL AS MOK_NM,
+		       BSNS_SE,
+		       '1' AS BUDGET_ACNT_CODE
+		  FROM TBSLS_MDAT_INCME_OUTPT
+		 WHERE 1=1
+		   AND DTA_SE = '3'
+		 GROUP BY KWAN_NM,
+		       BSNS_SE
+		    UNION ALL
+		SELECT LPAD(' ',10,' ') || HANG_NM AS COL_TITLE,
+		       SUM(MDAT_CO) AS PAY_CNT,
+		       SUM(MDAT_AMOUNT) AS PAY_AMT,
+		       SUM(RCIV_CO) AS REC_CNT,
+		       SUM(RCIV_AMOUNT) AS REC_AMT,
+		       SUM(MDAT_CO_ACMTL) AS PAY_CNTT,
+		       SUM(MDAT_AMOUNT_ACMTL) AS PAY_AMTT,
+		       SUM(RCIV_CO_ACMTL) AS REC_CNTT,
+		       SUM(RCIV_AMOUNT_ACMTL) AS REC_AMTT,
+		       SUM(MDAT_AMOUNT) - SUM(RCIV_AMOUNT) AS DEL_AMT,
+		       SUM(MDAT_AMOUNT_ACMTL) - SUM(RCIV_AMOUNT_ACMTL) AS DEL_AMTT,
+		       SUM(NVL(BUDGET_AM,0)) AS BUDGET_AM,
+		       '3' ORD,
+		       '2' AS ORD1,
+		       KWAN_NM,
+		       HANG_NM,
+		       HANG_CODE,
+		       NULL AS SEHN_NM,
+		       '1' AS SEHN_CODE,
+		       NULL AS MOK_NM,
+		       BSNS_SE,
+		       '2' AS BUDGET_ACNT_CODE
+		  FROM TBSLS_MDAT_INCME_OUTPT
+		 WHERE 1=1
+		   AND DTA_SE = '3'
+		 GROUP BY KWAN_NM,
+		       HANG_NM,
+		       BSNS_SE,
+		       HANG_CODE
+		    UNION ALL
+		SELECT LPAD(' ',23,' ') || SEHN_NM AS COL_TITLE,
+		       SUM(MDAT_CO) AS PAY_CNT,
+		       SUM(MDAT_AMOUNT) AS PAY_AMT,
+		       SUM(RCIV_CO) AS REC_CNT,
+		       SUM(RCIV_AMOUNT) AS REC_AMT,
+		       SUM(MDAT_CO_ACMTL) AS PAY_CNTT,
+		       SUM(MDAT_AMOUNT_ACMTL) AS PAY_AMTT,
+		       SUM(RCIV_CO_ACMTL) AS REC_CNTT,
+		       SUM(RCIV_AMOUNT_ACMTL) AS REC_AMTT,
+		       SUM(MDAT_AMOUNT) - SUM(RCIV_AMOUNT) AS DEL_AMT,
+		       SUM(MDAT_AMOUNT_ACMTL) - SUM(RCIV_AMOUNT_ACMTL) AS DEL_AMTT,
+		       SUM(NVL(BUDGET_AM,0)) AS BUDGET_AM,
+		       '4' ORD,
+		       '2' AS ORD1,
+		       KWAN_NM,
+		       HANG_NM,
+		       HANG_CODE,
+		       SEHN_NM,
+		       SEHN_CODE,
+		       NULL AS MOK_NM,
+		       BSNS_SE,
+		       '3' AS BUDGET_ACNT_CODE
+		  FROM TBSLS_MDAT_INCME_OUTPT
+		 WHERE 1=1
+		   AND DTA_SE = '3'
+		 GROUP BY KWAN_NM,
+		       HANG_NM,
+		       HANG_CODE,
+		       SEHN_NM,
+		       SEHN_CODE,
+		       BSNS_SE
+		    UNION ALL
+		SELECT LPAD(' ',37,' ') || MOK_NM AS COL_TITLE,
+		       SUM(MDAT_CO) AS PAY_CNT,
+		       SUM(MDAT_AMOUNT) AS PAY_AMT,
+		       SUM(RCIV_CO) AS REC_CNT,
+		       SUM(RCIV_AMOUNT) AS REC_AMT,
+		       SUM(MDAT_CO_ACMTL) AS PAY_CNTT,
+		       SUM(MDAT_AMOUNT_ACMTL) AS PAY_AMTT,
+		       SUM(RCIV_CO_ACMTL) AS REC_CNTT,
+		       SUM(RCIV_AMOUNT_ACMTL) AS REC_AMTT,
+		       SUM(MDAT_AMOUNT) - SUM(RCIV_AMOUNT) AS DEL_AMT,
+		       SUM(MDAT_AMOUNT_ACMTL) - SUM(RCIV_AMOUNT_ACMTL) AS DEL_AMTT,
+		       SUM(NVL(BUDGET_AM,0)) AS BUDGET_AM,
+		       '5' ORD,
+		       '2' AS ORD1,
+		       KWAN_NM,
+		       HANG_NM,
+		       HANG_CODE,
+		       SEHN_NM,
+		       SEHN_CODE,
+		       MOK_NM,
+		       BSNS_SE,
+		       BUDGET_ACNT_CODE
+		  FROM TBSLS_MDAT_INCME_OUTPT
+		 WHERE DTA_SE = '3'
+		 GROUP BY KWAN_NM,
+		       HANG_NM,
+		       HANG_CODE,
+		       SEHN_NM,
+		       SEHN_CODE,
+		       MOK_NM,
+		       BSNS_SE,
+		       BUDGET_ACNT_CODE
+		ORDER BY ORD1,
+		       BSNS_SE,
+		       KWAN_NM,
+		       HANG_CODE,
+		       SEHN_CODE,
+		       ORD,
+		       BUDGET_ACNT_CODE
+	</select>	  
+
+	<!-- 쿼리명 : 자금수입기록부 조회
+	설명 : 결의일자기준 자금수입기록부 조회
+	수정일  		수정자  	수정내용
+	2016.01.20	박병일	최초생성
+	작성자 : 박병일
+	최초작성일 : 2016.01.20
+	-->
+	<select id="SLS040400DAO.selectCptalIncmeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT MAX(DECSN_DE) AS DECSN_DE  , 
+		        A.BUDGET_ACNT_CODE AS BUDGET_ACNT_CODE  , 
+		        ( SELECT BUDGET_ACNT_NM 
+		            FROM TBBDG_BUDGET_ACNT_CODE
+		           WHERE 1=1
+		             AND YEAR = A.BUDGET_YEAR
+		             AND BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE ) AS CODE_NM  ,
+		        A.BUDGET_YEAR  , 
+		        A.BSNS_SE  , 
+		        SUM(A.DECSN_AMOUNT) AS GUM1  , 
+		        0 AS GUM2  , 
+		        SUM(A.DECSN_AMOUNT) AS GUM3  , 
+		        0 AS GUM4  , 
+		        '' AS ETC_CODE_NM
+		   FROM TBSLS_HOUSE_DECSN A  
+		  WHERE A.DECSN_DE = #APPLC_DE#
+	        AND A.DECSN_SE IN ('2','3')  
+	        AND A.BUDGET_ACNT_CODE NOT IN ('613300','612100','613100','411100','411400','411600', '6133000','6121000','6131000','4111000','4114000','4116000')  
+		  GROUP BY A.BUDGET_YEAR,
+		           A.BSNS_SE,
+		           A.BUDGET_ACNT_CODE		                 
+		 UNION ALL		
+		 SELECT MAX(DECSN_DE) AS DECSN_DE  , 
+		        '' AS BUDGET_ACNT_CODE  , 
+		        '일   계' AS CODE_NM  , 
+		        '' BUDGET_YEAR  , 
+		        '' BSNS_SE  ,
+		        NVL(MAX((SELECT NVL(SUM(DECSN_AMOUNT),0) 
+		                  FROM TBSLS_HOUSE_DECSN 
+		                  WHERE DECSN_DE = A.DECSN_DE 
+		                  AND DECSN_SE IN ('2','3') 
+		                  AND BUDGET_ACNT_CODE IN ('613300','612100','613100','411100','411400','411600', '6133000','6121000','6131000','4111000','4114000','4116000'))),0) + 
+		        NVL(MAX ( (SELECT NVL(SUM(DECSN_AMOUNT),0) 
+		                    FROM TBSLS_HOUSE_DECSN 
+		                    WHERE DECSN_DE = A.DECSN_DE 
+		                    AND DECSN_SE IN ('2','3') 
+		                    AND BUDGET_ACNT_CODE NOT IN ('613300','612100','613100','411100','411400','411600', '6133000','6121000','6131000','4111000','4114000','4116000') 
+		                    GROUP BY DECSN_DE) ),0) AS GUM1 , 
+		        NVL(MAX( (SELECT NVL(SUM(DECSN_AMOUNT),0) 
+		                  FROM TBSLS_HOUSE_DECSN 
+		                  WHERE DECSN_DE = A.DECSN_DE 
+		                  AND DECSN_SE IN ('2','3') 
+		                  AND BUDGET_ACNT_CODE IN ('613300','612100','613100','411100','411400','411600', '6133000','6121000','6131000','4111000','4114000','4116000')) ) ,0) AS GUM2 , 
+		        NVL(MAX( (SELECT NVL(SUM(DECSN_AMOUNT),0) 
+		                    FROM TBSLS_HOUSE_DECSN 
+		                    WHERE DECSN_DE = A.DECSN_DE 
+		                    AND DECSN_SE IN ('2','3') 
+		                    AND BUDGET_ACNT_CODE NOT IN ('613300','612100','613100','411100','411400','411600', '6133000','6121000','6131000','4111000','4114000','4116000') 
+		                    GROUP BY DECSN_DE )) ,0) AS GUM3 ,
+		        0 AS GUM4 ,
+		        ''AS ETC_CODE_NM
+	        FROM TBSLS_HOUSE_DECSN A  
+	       WHERE A.DECSN_DE = #APPLC_DE#
+	         AND A.DECSN_SE IN ('2','3')		            
+		UNION ALL		                      
+		SELECT MAX(DECSN_DE) 		AS DECSN_DE  , 
+		       '' 					AS BUDGET_ACNT_CODE  , 
+		       '누   계' 			    AS CODE_NM  , 
+		       '' 					AS BUDGET_YEAR  , 
+		       '' 					AS BSNS_SE  , 
+		       NVL(MAX ((SELECT NVL(SUM(DECSN_AMOUNT),0) 
+		                  FROM TBSLS_HOUSE_DECSN 
+		                 WHERE DECSN_DE BETWEEN SUBSTR(A.DECSN_DE,1,4) || '0101' AND A.DECSN_DE  
+		                   AND DECSN_SE IN ('2','3') ) ),0) +	
+		                   + MAX((SELECT AMOUNT FROM TBRNT_PSTYR_ATMPT_AMOUNT WHERE MDAT_DE BETWEEN SUBSTR(#APPLC_DE#,1,4)||'0101' AND #APPLC_DE# AND JOB_SE_CODE = 'HOU' AND PAY_SE = '2'))
+		                   AS GUM1  , 
+		       NVL(MAX ((SELECT NVL(SUM(DECSN_AMOUNT),0) 
+		                  FROM TBSLS_HOUSE_DECSN 
+		                 WHERE DECSN_DE BETWEEN SUBSTR(A.DECSN_DE,1,4) || '0101' AND A.DECSN_DE  
+		                   AND DECSN_SE IN ('2','3')  
+		                   AND BUDGET_ACNT_CODE IN ('613300','612100','613100','411100','411400','411600', '6133000','6121000','6131000','4111000','4114000','4116000') ) ),0) AS GUM2  , 
+		       NVL(MAX ((SELECT NVL(SUM(DECSN_AMOUNT),0) 
+		                   FROM TBSLS_HOUSE_DECSN 
+		                  WHERE DECSN_DE BETWEEN SUBSTR(A.DECSN_DE,1,4) || '0101' AND A.DECSN_DE  
+		                    AND DECSN_SE IN ('2','3')  
+		                    AND BUDGET_ACNT_CODE NOT IN ('613300','612100','613100','411100','411400','411600', '6133000','6121000','6131000','4111000','4114000','4116000') ) ),0) AS GUM3  , 
+		        0 AS GUM4  ,
+		         '' AS ETC_CODE_NM 
+	    FROM TBSLS_HOUSE_DECSN A  
+	   WHERE A.DECSN_DE = #APPLC_DE# 
+	     AND A.DECSN_SE IN ('2','3')		   
+	</select>
+	
+	<!-- 쿼리명 : 수입예산정리부 조회
+	설명 : 결의일자기준 수입예산정리부 조회
+	수정일  		수정자  	수정내용
+	2016.01.20	박병일	최초생성
+	작성자 : 박병일
+	최초작성일 : 2016.01.20
+	-->
+	<select id="SLS040400DAO.selectIncmeBdgArngList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT X.SORTING 			AS ORD,
+		       X.DECSN_DE 			AS DECSN_DE,
+		       X.BUDGET_YEAR 		AS BUDGET_YEAR,
+		       X.BSNS_SE 			AS BSNS_SE,
+		       X.BUDGET_ACNT_CODE 	AS BUDGET_ACNT_CODE,
+		       (SELECT A1.BUDGET_ACNT_NM
+                  FROM TBBDG_BUDGET_ACNT_CODE A1
+                 WHERE 1=1
+                   AND A1.YEAR = X.BUDGET_YEAR
+                   AND A1.BUDGET_ACNT_CODE = X.BUDGET_ACNT_CODE) AS BG_ACCT_NAME,
+		       X.HOUSE_CODE 		AS HOUSE_CODE,
+		       X.DONG 				AS MAIN_CODE,
+		       X.HO 				AS SUB_CODE,
+		       X.SUMRY				AS JUK,
+		       X.CNAME 				AS NAME,
+		       X.OCCRRNC_CO 		AS OCCRRNC_CO,
+		       X.DECSN_AMOUNT 		AS DECSN_AMOUNT,
+		       X.OCCRRNC_CO2 		AS OCCRRNC_CO2,
+		       X.DECSN_AMOUNT2 		AS DECSN_AMOUNT2,
+		       (X.DECSN_AMOUNT - DECSN_AMOUNT2) AS OPEN_AMT,
+		       0 AS BUDGET_AMT
+		  FROM (
+		         SELECT '1' SORTING,
+		                T.DECSN_DE,
+		                T.BUDGET_YEAR,
+		                T.BSNS_SE,
+		                T.BUDGET_ACNT_CODE,
+		                T.HOUSE_CODE,
+		                T.DONG,
+		                T.HO,
+		                T.SUMRY,
+		                T.CNAME,
+		                T.PAY_TMLMT,
+		                SUM(T.OCCRRNC_CO) 		AS OCCRRNC_CO,
+		                SUM(T.DECSN_AMOUNT) 	AS DECSN_AMOUNT,
+		                SUM(T.OCCRRNC_CO2) 		AS OCCRRNC_CO2,
+		                SUM(T.DECSN_AMOUNT2) 	AS DECSN_AMOUNT2
+		           FROM
+		                (SELECT A.DECSN_DE,
+		                       A.BUDGET_YEAR,
+		                       A.BSNS_SE,
+		                       A.BUDGET_ACNT_CODE,
+		                       A.HOUSE_CODE,
+		                       A.DONG,
+		                       A.HO,
+		                       NVL(A.SUMRY,'') SUMRY,
+		                       ( SELECT Y.CSTMR_NM
+                                   FROM TBSLS_HCNTRCTR X
+                                      , TBSLS_HOUSE_CSTMR Y
+                                  WHERE X.HOUSE_CSTMR_NO = Y.HOUSE_CSTMR_NO
+                                    AND X.CNTRCTR_NO = A.CNTRCTR_NO ) AS CNAME,
+		                       A.PAY_TMLMT,
+		                       DECODE(DECSN_SE,'1',A.OCCRRNC_CO,'4',A.OCCRRNC_CO,0) 	AS OCCRRNC_CO,
+		                       DECODE(DECSN_SE,'1',A.DECSN_AMOUNT,'4',A.DECSN_AMOUNT,0) AS DECSN_AMOUNT,
+		                       DECODE(DECSN_SE,'2',A.OCCRRNC_CO,'3',A.OCCRRNC_CO,0) 	AS OCCRRNC_CO2,
+		                       DECODE(DECSN_SE,'2',A.DECSN_AMOUNT,'3',A.DECSN_AMOUNT,0) AS DECSN_AMOUNT2
+		                  FROM TBSLS_HOUSE_DECSN A
+		                 WHERE 1=1
+		                   AND SUBSTR(A.DECSN_DE,1,6) = #APPLC_MT#
+		                   <isNotEmpty property="HOUSE_CODE">	                   
+		                   AND NVL(A.HOUSE_CODE,'%') LIKE #HOUSE_CODE#
+		                   </isNotEmpty>		                   
+                        UNION ALL
+                        SELECT #APPLC_MT# AS DECSN_DE,
+                               BUDGET_YEAR,
+                               SUBSTR(BUDGET_ACNT_SE,1,1) AS BSNS_SE,
+                               BUDGET_ACNTCTGR AS BUDGET_ACNT_CODE,
+                               '' AS HOUSE_CODE,
+                               '' AS DONG,
+                               '' AS HO,
+                               RM AS SUMRY,
+                               '' AS CNAME,
+                               '' AS PAY_TMLMT,
+                               (CASE WHEN SUBSTR(#APPLC_MT# , 5, 2) = '01'  THEN 1 ELSE 0 END) OCCRRNC_CO,
+                               (CASE WHEN SUBSTR(#APPLC_MT# , 5, 2) = '01'  THEN AMOUNT ELSE 0 END) AS DECSN_AMOUNT,
+                               (CASE WHEN SUBSTR(#APPLC_MT# , 5, 2) = '01'  THEN 1 ELSE 0 END) AS OCCRRNC_CO2,
+                               (CASE WHEN SUBSTR(#APPLC_MT# , 5, 2) = '01'  THEN AMOUNT ELSE 0 END) AS DECSN_AMOUNT2
+                          FROM TBRNT_PSTYR_ATMPT_AMOUNT 
+                         WHERE BUDGET_YEAR = SUBSTR (#APPLC_MT#, 1, 4)
+                           AND JOB_SE_CODE = 'HOU' 
+                           AND BUDGET_ACNTCTGR NOT IN (SELECT BUDGET_ACNT_CODE FROM TBSLS_HOUSE_DECSN WHERE BUDGET_YEAR = SUBSTR(#APPLC_MT#, 1, 4))
+                           AND PAY_SE = '1'   		                   
+		                ) T
+		          GROUP BY T.DECSN_DE,
+		                   T.BUDGET_YEAR,
+		                   T.BSNS_SE,
+		                   T.BUDGET_ACNT_CODE,
+		                   T.HOUSE_CODE,
+		                   T.DONG,
+		                   T.HO,
+		                   T.SUMRY,
+		                   T.CNAME,
+		                   T.PAY_TMLMT
+		         UNION ALL
+		         SELECT '2' AS SORTING,
+		                NULL AS DECSN_DE,
+		                Y.BUDGET_YEAR,
+		                Y.BSNS_SE,
+		                Y.BUDGET_ACNT_CODE,
+		                '' HOUSE_CODE,
+		                '' DONG,
+		                '' HO,
+		                '월계' AS SUMRY,
+		                '' CNAME,
+		                '' PAY_TMLMT,
+		                NVL(SUM(Y.OCCRRNC_CO),0) 		AS OCCRRNC_CO,
+		                NVL(SUM(Y.DECSN_AMOUNT),0) 	AS DECSN_AMOUNT,
+		                NVL(SUM(Y.OCCRRNC_CO2),0) 	AS OCCRRNC_CO2,
+		                NVL(SUM(Y.DECSN_AMOUNT2),0) 	AS DECSN_AMOUNT2
+		           FROM
+		                (SELECT A.BUDGET_YEAR,
+		                       A.BSNS_SE,
+		                       A.BUDGET_ACNT_CODE,
+		                       SUM(DECODE(A.DECSN_SE,'1',A.OCCRRNC_CO,'4',A.OCCRRNC_CO,0)) OCCRRNC_CO,
+		                       SUM(DECODE(A.DECSN_SE,'1',A.DECSN_AMOUNT,'4',A.DECSN_AMOUNT,0)) DECSN_AMOUNT,
+		                       SUM(DECODE(A.DECSN_SE,'2',A.OCCRRNC_CO,'3',A.OCCRRNC_CO,0)) OCCRRNC_CO2,
+		                       SUM(DECODE(A.DECSN_SE,'2',A.DECSN_AMOUNT,'3',A.DECSN_AMOUNT,0)) DECSN_AMOUNT2
+		                  FROM TBSLS_HOUSE_DECSN A
+		                 WHERE 1=1
+		                   AND SUBSTR(A.DECSN_DE,1,6) = #APPLC_MT#
+		                   <isNotEmpty property="HOUSE_CODE">		                   
+		                   AND NVL(A.HOUSE_CODE,'%') LIKE #HOUSE_CODE#
+		                   </isNotEmpty>
+		                 GROUP BY A.BUDGET_YEAR,
+		                          A.BSNS_SE,
+		                          A.BUDGET_ACNT_CODE
+		                ) Y
+		          GROUP BY Y.BUDGET_YEAR,
+		                   Y.BSNS_SE,
+		                   Y.BUDGET_ACNT_CODE
+		         UNION ALL
+		         SELECT '3' SORTING,
+		                NULL AS DECSN_DE,
+		                Z.BUDGET_YEAR,
+		                Z.BSNS_SE,
+		                Z.BUDGET_ACNT_CODE,
+		                ''HOUSE_CODE,
+		                ''DONG,
+		                ''HO,
+		                '누계' AS SUMRY,
+		                '' CNAME,
+		                '' PAY_TMLMT,
+		                NVL(SUM(Z.OCCRRNC_CO),0) AS OCCRRNC_CO,
+		                NVL(SUM(Z.DECSN_AMOUNT),0) AS DECSN_AMOUNT,
+		                NVL(SUM(Z.OCCRRNC_CO2),0) AS OCCRRNC_CO2,
+		                NVL(SUM(Z.DECSN_AMOUNT2),0) AS DECSN_AMOUNT2
+		           FROM
+		                (SELECT A.BUDGET_YEAR,
+		                       A.BSNS_SE,
+		                       A.BUDGET_ACNT_CODE,
+		                       SUM(DECODE(A.DECSN_SE,'1',A.OCCRRNC_CO,'4',A.OCCRRNC_CO,0)) OCCRRNC_CO,		                       
+                               (CASE WHEN BSNS_SE = '3' 
+                                     THEN (SELECT SUM(AMOUNT) FROM TBRNT_PSTYR_ATMPT_AMOUNT WHERE JOB_SE_CODE = 'HOU' AND BUDGET_ACNTCTGR = BUDGET_ACNT_CODE AND BUDGET_YEAR = '2016')
+                                     + NVL(SUM(DECODE (A.DECSN_SE, '1', A.DECSN_AMOUNT, '4', A.DECSN_AMOUNT, 0)) ,0) 
+                                          ELSE   
+                                           SUM(DECODE (A.DECSN_SE, '1', A.DECSN_AMOUNT, '4', A.DECSN_AMOUNT, 0))
+                                           END) AS DECSN_AMOUNT,
+		                       SUM(DECODE(A.DECSN_SE,'2',A.OCCRRNC_CO,'3',A.OCCRRNC_CO,0)) OCCRRNC_CO2,
+		                       SUM(DECODE(A.DECSN_SE,'2',A.DECSN_AMOUNT,'3',A.DECSN_AMOUNT,0)) DECSN_AMOUNT2
+		                  FROM TBSLS_HOUSE_DECSN A
+		                 WHERE 1=1
+		                   AND SUBSTR(A.DECSN_DE,1,4) = SUBSTR(#APPLC_MT#,1,4)
+						<![CDATA[		                   
+		                   AND SUBSTR(A.DECSN_DE,1,6) <= #APPLC_MT#
+		                ]]>
+						<isNotEmpty property="HOUSE_CODE">		                
+		                   AND NVL(A.HOUSE_CODE,'%') LIKE #HOUSE_CODE#
+		                </isNotEmpty>
+		                 GROUP BY A.BUDGET_YEAR,
+		                          A.BSNS_SE,
+		                          A.BUDGET_ACNT_CODE
+                        UNION ALL
+                        SELECT BUDGET_YEAR,
+                               SUBSTR(BUDGET_ACNT_SE,1,1) AS BSNS_SE,
+                               BUDGET_ACNTCTGR AS BUDGET_ACNT_CODE,
+                               1 AS OCCRRNC_CO,
+                               AMOUNT AS DECSN_AMOUNT,
+                               1 AS OCCRRNC_CO2,
+                               AMOUNT AS DECSN_AMOUNT2
+                          FROM TBRNT_PSTYR_ATMPT_AMOUNT 
+                         WHERE BUDGET_YEAR = SUBSTR (#APPLC_MT#, 1, 4)
+                           AND JOB_SE_CODE = 'HOU' 
+                           AND BUDGET_ACNTCTGR NOT IN (SELECT BUDGET_ACNT_CODE FROM TBSLS_HOUSE_DECSN WHERE BUDGET_YEAR = SUBSTR(#APPLC_MT#,1,4))
+                           AND PAY_SE = '1'   		                          
+		                ) Z
+		          GROUP BY Z.BUDGET_YEAR,
+		                   Z.BSNS_SE,
+		                   Z.BUDGET_ACNT_CODE
+		       ) X
+		ORDER BY X.BUDGET_YEAR,
+		         X.BSNS_SE,
+		         X.BUDGET_ACNT_CODE,
+		         X.SORTING,
+		         X.DECSN_DE,
+		         X.HOUSE_CODE,
+		         X.DONG,
+		         X.HO
+	</select>
+	
+	<!-- 쿼리명 : 지구별 수입예산정리부_월계표 조회
+	설명 : 지구별 수입예산정리부_월계표 조회
+	수정일  		수정자  	수정내용
+	2016.01.28	박병일	최초생성
+	작성자 : 박병일
+	최초작성일 : 2016.01.28
+	-->
+	<select id="SLS040400DAO.selectAreaIncmeBdgArngList1" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT X.SORTING AS ORD,
+		       X.HOUSE_CODE AS HOUSE_CODE,
+		       SUBSTR(X.HOUSE_CODE || ' ' ||
+		       (SELECT SFSLS_HOUSE_NM(X.HOUSE_CODE)
+		          FROM DUAL
+		       ),1,40) AS HOUSE_NM,
+		       X.DONG AS MAIN_CODE,
+		       X.HO AS SUB_CODE,
+		       X.CNAME AS NAME,
+		       X.DECSN_DE AS DECSN_DE,
+		       X.BUDGET_YEAR AS BUDGET_YEAR,
+		       X.BSNS_SE AS BSNS_SE,
+		       X.BUDGET_ACNT_CODE AS BUDGET_ACNT_CODE,
+		       X.ACC_NAME AS BG_ACCT_NAME,
+		       (X.SUMRY) AS JUK,
+		       (X.OCCRRNC_CO) AS OCCRRNC_CO,
+		       (X.DECSN_AMOUNT) AS DECSN_AMOUNT,
+		       (X.OCCRRNC_CO2) AS OCCRRNC_CO2,
+		       (X.DECSN_AMOUNT2) AS DECSN_AMOUNT2,
+		       (X.DECSN_AMOUNT - DECSN_AMOUNT2) AS OPEN_AMT,
+		       0 AS BUDGET_AMT
+		  FROM
+		       (SELECT '1' SORTING,
+		              T.HOUSE_CODE,
+		              T.DONG,
+		              T.HO,
+		              T.DECSN_DE,
+		              T.BUDGET_YEAR,
+		              T.BSNS_SE,
+		              T.BUDGET_ACNT_CODE,
+		             (SELECT SUBSTR(C.BUDGET_ACNT_NM,1,30) || '(' || C.BUDGET_ACNT_CODE || ')'
+		                FROM TBBDG_BUDGET_ACNT_CODE C
+		               WHERE C.BSNS_SE = T.BSNS_SE
+		                 AND C.BUDGET_ACNT_CODE = T.BUDGET_ACNT_CODE
+		                 AND C.YEAR = T.BUDGET_YEAR) AS ACC_NAME,
+		              (T.SUMRY) AS SUMRY,
+		              (T.CNAME) AS CNAME,
+		              (T.OCCRRNC_CO) AS OCCRRNC_CO,
+		              (T.DECSN_AMOUNT) AS DECSN_AMOUNT,
+		              (T.OCCRRNC_CO2) AS OCCRRNC_CO2,
+		              (T.DECSN_AMOUNT2) AS DECSN_AMOUNT2
+		         FROM
+		              (SELECT A.HOUSE_CODE,
+		                     A.DONG,
+		                     A.HO,
+		                     A.DECSN_DE,
+		                     A.BUDGET_YEAR,
+		                     A.BSNS_SE,
+		                     A.BUDGET_ACNT_CODE,
+		                     (A.SUMRY) AS SUMRY,
+		                     ( SELECT Y.CSTMR_NM
+		                         FROM TBSLS_HCNTRCTR X
+		                            , TBSLS_HOUSE_CSTMR Y
+		                        WHERE X.HOUSE_CSTMR_NO = Y.HOUSE_CSTMR_NO
+		                          AND X.CNTRCTR_NO = A.CNTRCTR_NO ) AS CNAME,
+		                     (DECODE(DECSN_SE,'1',A.OCCRRNC_CO,'4',A.OCCRRNC_CO,0)) OCCRRNC_CO,
+		                     (DECODE(DECSN_SE,'1',A.DECSN_AMOUNT,'4',A.DECSN_AMOUNT,0)) DECSN_AMOUNT,
+		                     (DECODE(DECSN_SE,'2',A.OCCRRNC_CO,'3',A.OCCRRNC_CO,0)) OCCRRNC_CO2,
+		                     (DECODE(DECSN_SE,'2',A.DECSN_AMOUNT,'3',A.DECSN_AMOUNT,0)) DECSN_AMOUNT2
+		                FROM TBSLS_HOUSE_DECSN A
+		               WHERE 1=1
+		                 AND A.BUDGET_ACNT_CODE IN ('613100','613300','6131000','6133000')
+						
+						 <isNotEmpty property="HOUSE_CODE">
+						 AND A.HOUSE_CODE <![CDATA[ >= ]]> #HOUSE_CODE#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="HOUSE_CODE_TO">
+						 AND A.HOUSE_CODE <![CDATA[ <= ]]> #HOUSE_CODE_TO#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="BSNS_SE">	                 
+						 AND A.BSNS_SE = #BSNS_SE#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="BUDGET_ACNT_CODE">		                 
+						 AND A.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="EXPNDTR_UNIT_CODE">		                 
+						 AND A.EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+						 </isNotEmpty>
+						 
+		                 AND SUBSTR(A.DECSN_DE,1,6) = #APPLC_MT#
+		              UNION ALL
+		              SELECT A.HOUSE_CODE,
+		                     A.DONG,
+		                     A.HO,
+		                     A.DECSN_DE,
+		                     A.BUDGET_YEAR,
+		                     A.BSNS_SE,
+		                     A.BUDGET_ACNT_CODE,
+		                     (A.SUMRY) SUMRY,
+		                     ( SELECT Y.CSTMR_NM
+		                         FROM TBSLS_HCNTRCTR X
+		                            , TBSLS_HOUSE_CSTMR Y
+		                        WHERE X.HOUSE_CSTMR_NO = Y.HOUSE_CSTMR_NO
+		                          AND X.CNTRCTR_NO = A.CNTRCTR_NO ) AS CNAME,
+		                     (DECODE(DECSN_SE,'1',A.OCCRRNC_CO,'4',A.OCCRRNC_CO,0)) OCCRRNC_CO,
+		                     (DECODE(DECSN_SE,'1',A.DECSN_AMOUNT,'4',A.DECSN_AMOUNT,0)) DECSN_AMOUNT,
+		                     (DECODE(DECSN_SE,'2',A.OCCRRNC_CO,'3',A.OCCRRNC_CO,0)) OCCRRNC_CO2,
+		                     (DECODE(DECSN_SE,'2',A.DECSN_AMOUNT,'3',A.DECSN_AMOUNT,0)) DECSN_AMOUNT2
+		                FROM TBSLS_HOUSE_DECSN A
+		               WHERE 1=1
+		                 AND SUBSTR(A.DECSN_DE,1,6) = #APPLC_MT#
+		                 AND A.BUDGET_ACNT_CODE NOT IN ('613100','613300', '6131000','6133000')
+						
+						 <isNotEmpty property="HOUSE_CODE">
+						 AND A.HOUSE_CODE <![CDATA[ >= ]]> #HOUSE_CODE#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="HOUSE_CODE_TO">
+						 AND A.HOUSE_CODE <![CDATA[ <= ]]> #HOUSE_CODE_TO#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="BSNS_SE">	                 
+						 AND A.BSNS_SE = #BSNS_SE#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="BUDGET_ACNT_CODE">		                 
+						 AND A.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="EXPNDTR_UNIT_CODE">		                 
+						 AND A.EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+						 </isNotEmpty>
+						 
+		              ) T
+		       UNION ALL
+		       SELECT '2' AS SORTING,
+		              Y.HOUSE_CODE AS HOUSE_CODE,
+		              '' AS DONG,
+		              '' AS HO,
+		              NULL AS DECSN_DE,
+		              Y.BUDGET_YEAR,
+		              Y.BSNS_SE,
+		              Y.BUDGET_ACNT_CODE,
+		              '월  계' AS ACC_NAME,
+		              '월계' AS SUMRY,
+		              '' AS CNAME,
+		              SUM(Y.OCCRRNC_CO) AS OCCRRNC_CO,
+		              SUM(Y.DECSN_AMOUNT) AS DECSN_AMOUNT,
+		              SUM(Y.OCCRRNC_CO2) AS OCCRRNC_CO2,
+		              SUM(Y.DECSN_AMOUNT2) AS DECSN_AMOUNT2
+		         FROM
+		              (SELECT A.HOUSE_CODE,
+		                     A.BUDGET_YEAR,
+		                     A.BSNS_SE,
+		                     A.BUDGET_ACNT_CODE,
+		                     SUM(DECODE(DECSN_SE,'1',A.OCCRRNC_CO,'4',A.OCCRRNC_CO,0)) OCCRRNC_CO,
+		                     SUM(DECODE(DECSN_SE,'1',A.DECSN_AMOUNT,'4',A.DECSN_AMOUNT,0)) DECSN_AMOUNT,
+		                     SUM(DECODE(DECSN_SE,'2',A.OCCRRNC_CO,'3',A.OCCRRNC_CO,0)) OCCRRNC_CO2,
+		                     SUM(DECODE(DECSN_SE,'2',A.DECSN_AMOUNT,'3',A.DECSN_AMOUNT,0)) DECSN_AMOUNT2
+		                FROM TBSLS_HOUSE_DECSN A
+		               WHERE 1=1
+		                 AND A.DECSN_SE IN ('1','2','3','4')
+		                 AND SUBSTR(A.DECSN_DE,1,6) = #APPLC_MT#
+		                 
+		                 <isNotEmpty property="HOUSE_CODE">
+		                 AND A.HOUSE_CODE <![CDATA[ >= ]]> #HOUSE_CODE#
+		                 </isNotEmpty>
+		                 
+		                 <isNotEmpty property="HOUSE_CODE_TO">
+		                 AND A.HOUSE_CODE <![CDATA[ <= ]]> #HOUSE_CODE_TO#
+		                 </isNotEmpty>
+		                 
+		                 <isNotEmpty property="BSNS_SE">	                 
+		                 AND A.BSNS_SE = #BSNS_SE#
+		                 </isNotEmpty>
+		                 
+		                 <isNotEmpty property="BUDGET_ACNT_CODE">		                 
+		                 AND A.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		                 </isNotEmpty>
+		                 
+		                 <isNotEmpty property="EXPNDTR_UNIT_CODE">		                 
+		                 AND A.EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+		                 </isNotEmpty>
+		                 
+		               GROUP BY A.HOUSE_CODE,
+		                        A.BUDGET_YEAR,
+		                        A.BSNS_SE,
+		                        A.BUDGET_ACNT_CODE
+		              ) Y
+		        GROUP BY Y.HOUSE_CODE,
+		                 Y.BUDGET_YEAR,
+		                 Y.BSNS_SE,
+		                 Y.BUDGET_ACNT_CODE
+		       UNION ALL
+		       SELECT '3' AS SORTING,
+		              Z.HOUSE_CODE,
+		              '' AS DONG,
+		              '' AS HO,
+		              NULL AS DECSN_DE,
+		              Z.BUDGET_YEAR,
+		              Z.BSNS_SE,
+		              Z.BUDGET_ACNT_CODE,
+		              '누  계' AS ACC_NAME,
+		              '누계' AS SUMRY,
+		              '' CNAME,
+		              SUM(Z.OCCRRNC_CO) AS OCCRRNC_CO,
+		              SUM(Z.DECSN_AMOUNT) AS DECSN_AMOUNT,
+		              SUM(Z.OCCRRNC_CO2) AS OCCRRNC_CO2,
+		              SUM(Z.DECSN_AMOUNT2) AS DECSN_AMOUNT2
+		         FROM
+		              (SELECT A.HOUSE_CODE,
+		                     A.BUDGET_YEAR,
+		                     A.BSNS_SE,
+		                     A.BUDGET_ACNT_CODE,
+		                     NVL(SUM(DECODE(A.DECSN_SE,'1',A.OCCRRNC_CO,'4',A.OCCRRNC_CO,0)),0) OCCRRNC_CO,
+		                     NVL(SUM(DECODE(A.DECSN_SE,'1',A.DECSN_AMOUNT,'4',A.DECSN_AMOUNT,0)),0) DECSN_AMOUNT,
+		                     NVL(SUM(DECODE(A.DECSN_SE,'2',A.OCCRRNC_CO,'3',A.OCCRRNC_CO,0)),0) OCCRRNC_CO2,
+		                     NVL(SUM(DECODE(A.DECSN_SE,'2',A.DECSN_AMOUNT,'3',A.DECSN_AMOUNT,0)),0) DECSN_AMOUNT2
+		                FROM TBSLS_HOUSE_DECSN A
+		               WHERE 1=1
+		                 AND SUBSTR(A.DECSN_DE,1,6) BETWEEN SUBSTR(#APPLC_MT#,1,4) || '01' AND #APPLC_MT#
+		                 
+						 <isNotEmpty property="HOUSE_CODE">
+						 AND A.HOUSE_CODE <![CDATA[ >= ]]> #HOUSE_CODE#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="HOUSE_CODE_TO">
+						 AND A.HOUSE_CODE <![CDATA[ <= ]]> #HOUSE_CODE_TO#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="BSNS_SE">	                 
+						 AND A.BSNS_SE = #BSNS_SE#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="BUDGET_ACNT_CODE">		                 
+						 AND A.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+						 </isNotEmpty>
+								                 
+						 <isNotEmpty property="EXPNDTR_UNIT_CODE">		                 
+						 AND A.EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+						 </isNotEmpty>
+						
+		               GROUP BY A.HOUSE_CODE,
+		                     A.BUDGET_YEAR,
+		                     A.BSNS_SE,
+		                     A.BUDGET_ACNT_CODE
+		              ) Z
+		        GROUP BY Z.HOUSE_CODE,
+		                 Z.BUDGET_YEAR,
+		                 Z.BSNS_SE,
+		                 Z.BUDGET_ACNT_CODE
+		       ) X
+		ORDER BY X.BUDGET_ACNT_CODE,
+		         X.HOUSE_CODE,
+		         X.DECSN_DE,
+		         X.DONG,
+		         X.HO,
+		         X.SORTING
+	</select>
+	
+	<!-- 쿼리명 : 지구별 수입예산정리부_집계표 조회
+	설명 : 지구별 수입예산정리부_집계표 조회
+	수정일  		수정자  	수정내용
+	2016.01.28	박병일	최초생성
+	작성자 : 박병일
+	최초작성일 : 2016.01.28
+	-->
+	<select id="SLS040400DAO.selectAreaIncmeBdgArngList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT    MAX(X.HOUSE_CODE) AS HOUSE_CODE,
+		          MAX(X.HOUSE_CODE) || ' ' || NVL(MAX ((SELECT SFSLS_HOUSE_NM(X.HOUSE_CODE) FROM DUAL)) ,'') AS HOUSE_NM,
+		          X.BUDGET_YEAR AS BUDGET_YEAR,
+		          X.BSNS_SE AS BSNS_SE,
+		          X.BUDGET_ACNT_CODE AS BUDGET_ACNT_CODE,
+		          (SELECT SUBSTR(C.BUDGET_ACNT_NM,1,30) || '(' || C.BUDGET_ACNT_CODE || ')'
+		             FROM TBBDG_BUDGET_ACNT_CODE C
+		            WHERE C.BSNS_SE = X.BSNS_SE
+		              AND C.BUDGET_ACNT_CODE = X.BUDGET_ACNT_CODE
+		              AND C.YEAR = X.BUDGET_YEAR) AS ACC_NAME,
+		          SUM(X.MON_CNT) AS MON_CNT,
+		          SUM(X.MON_GUM) AS MON_GUM,
+		          SUM(X.TOT_MON_CNT) AS TOT_MON_CNT,
+		          SUM(X.TOT_MON_GUM) AS TOT_MON_GUM,
+		          SUM(X.MON_CNT2) AS MON_CNT2,
+		          SUM(X.MON_GUM2) AS MON_GUM2,
+		          SUM(X.TOT_MON_CNT2) AS TOT_MON_CNT2,
+		          SUM(X.TOT_MON_GUM2) AS TOT_MON_GUM2,
+		          (SUM(X.TOT_MON_GUM) - SUM(X.TOT_MON_GUM2)) AS OPEN_AMT
+		     FROM
+		          (SELECT Y.HOUSE_CODE,
+		                 Y.BUDGET_YEAR,
+		                 Y.BSNS_SE,
+		                 Y.BUDGET_ACNT_CODE,
+		                 SUM(Y.MON_CNT) AS MON_CNT,
+		                 SUM(Y.MON_GUM) AS MON_GUM,
+		                 0 TOT_MON_CNT,
+		                 0 TOT_MON_GUM,
+		                 SUM(Y.MON_CNT2) AS MON_CNT2,
+		                 SUM(Y.MON_GUM2) AS MON_GUM2,
+		                 0 TOT_MON_CNT2,
+		                 0 TOT_MON_GUM2
+		            FROM
+		                 (SELECT A.HOUSE_CODE,
+		                        A.BUDGET_YEAR,
+		                        A.BSNS_SE,
+		                        A.BUDGET_ACNT_CODE,
+		                        SUM(DECODE(DECSN_SE,'1',A.OCCRRNC_CO,'4',A.OCCRRNC_CO,0)) MON_CNT,
+		                        SUM(DECODE(DECSN_SE,'1',A.DECSN_AMOUNT,'4',A.DECSN_AMOUNT,0)) MON_GUM,
+		                        0 TOT_MON_CNT,
+		                        0 TOT_MON_GUM,
+		                        SUM(DECODE(DECSN_SE,'2',A.OCCRRNC_CO,'3',A.OCCRRNC_CO,0)) MON_CNT2,
+		                        SUM(DECODE(DECSN_SE,'2',A.DECSN_AMOUNT,'3',A.DECSN_AMOUNT,0)) MON_GUM2,
+		                        0 TOT_MON_CNT2,
+		                        0 TOT_MON_GUM2
+		                   FROM TBSLS_HOUSE_DECSN A
+		                  WHERE 1=1
+		                    AND SUBSTR(A.DECSN_DE,1,6) = #APPLC_MT#
+		                    
+							<isNotEmpty property="HOUSE_CODE">
+							AND A.HOUSE_CODE <![CDATA[ >= ]]> #HOUSE_CODE#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="HOUSE_CODE_TO">
+							AND A.HOUSE_CODE <![CDATA[ <= ]]> #HOUSE_CODE_TO#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="BSNS_SE">	                 
+							AND A.BSNS_SE = #BSNS_SE#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="BUDGET_ACNT_CODE">		                 
+							AND A.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="EXPNDTR_UNIT_CODE">		                 
+							AND A.EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+							</isNotEmpty>
+							
+		                  GROUP BY A.HOUSE_CODE,
+		                           A.BUDGET_YEAR,
+		                           A.BSNS_SE,
+		                           A.BUDGET_ACNT_CODE
+		                 ) Y
+		           GROUP BY Y.HOUSE_CODE,
+		                 Y.BUDGET_YEAR,
+		                 Y.BSNS_SE,
+		                 Y.BUDGET_ACNT_CODE
+		          UNION ALL
+		          SELECT Z.HOUSE_CODE,
+		                 Z.BUDGET_YEAR,
+		                 Z.BSNS_SE,
+		                 Z.BUDGET_ACNT_CODE,
+		                 0 MON_CNT,
+		                 0 MON_GUM,
+		                 SUM(Z.TOT_MON_CNT) AS TOT_MON_CNT,
+		                 SUM(Z.TOT_MON_GUM) AS TOT_MON_GUM,
+		                 0 MON_CNT2,
+		                 0 MON_GUM2,
+		                 SUM(Z.TOT_MON_CNT2) AS TOT_MON_CNT2,
+		                 SUM(Z.TOT_MON_GUM2) AS TOT_MON_GUM2
+		            FROM
+		                 (SELECT A.HOUSE_CODE,
+		                        A.BUDGET_YEAR,
+		                        A.BSNS_SE,
+		                        A.BUDGET_ACNT_CODE,
+		                        0 MON_CNT,
+		                        0 MON_GUM,
+		                        NVL(SUM(DECODE(A.DECSN_SE,'1',A.OCCRRNC_CO,'4',A.OCCRRNC_CO,0)),0) TOT_MON_CNT,
+		                        NVL(SUM(DECODE(A.DECSN_SE,'1',A.DECSN_AMOUNT,'4',A.DECSN_AMOUNT,0)),0) TOT_MON_GUM,
+		                        0 MON_CNT2,
+		                        0 MON_GUM2,
+		                        NVL(SUM(DECODE(A.DECSN_SE,'2',A.OCCRRNC_CO,'3',A.OCCRRNC_CO,0)),0) TOT_MON_CNT2,
+		                        NVL(SUM(DECODE(A.DECSN_SE,'2',A.DECSN_AMOUNT,'3',A.DECSN_AMOUNT,0)),0) TOT_MON_GUM2
+		                   FROM TBSLS_HOUSE_DECSN A
+		                  WHERE 1=1
+		                    AND SUBSTR(A.DECSN_DE,1,6)<![CDATA[ <= ]]> #APPLC_MT#
+		                    AND SUBSTR(A.DECSN_DE,1,4) = SUBSTR(#APPLC_MT# , 1 ,4)
+		                    
+							<isNotEmpty property="HOUSE_CODE">
+							AND A.HOUSE_CODE <![CDATA[ >= ]]> #HOUSE_CODE#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="HOUSE_CODE_TO">
+							AND A.HOUSE_CODE <![CDATA[ <= ]]> #HOUSE_CODE_TO#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="BSNS_SE">	                 
+							AND A.BSNS_SE = #BSNS_SE#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="BUDGET_ACNT_CODE">		                 
+							AND A.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="EXPNDTR_UNIT_CODE">		                 
+							AND A.EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+							</isNotEmpty>
+							
+		                  GROUP BY A.HOUSE_CODE,
+		                           A.BUDGET_YEAR,
+		                           A.BSNS_SE,
+		                           A.BUDGET_ACNT_CODE
+		                 ) Z
+		           GROUP BY Z.HOUSE_CODE,
+		                    Z.BUDGET_YEAR,
+		                    Z.BSNS_SE,
+		                    Z.BUDGET_ACNT_CODE		     
+                  UNION ALL
+                  SELECT AA.HOUSE_CODE,
+                         AA.BUDGET_YEAR,
+                         AA.BSNS_SE,
+                         AA.BUDGET_ACNT_CODE,
+                         0 MON_CNT,
+                         0 MON_GUM,
+                         SUM(AA.TOT_MON_CNT) AS TOT_MON_CNT,
+                         SUM(AA.TOT_MON_GUM) AS TOT_MON_GUM,
+                         0 MON_CNT2,
+                         0 MON_GUM2,
+                         SUM(AA.TOT_MON_CNT2) AS TOT_MON_CNT2,
+                         SUM(AA.TOT_MON_GUM2) AS TOT_MON_GUM2
+                    FROM
+                         (SELECT A.HOUSE_CODE,
+                                A.BUDGET_YEAR,
+                                SUBSTR(A.BUDGET_ACNT_SE,1,1) AS BSNS_SE,
+                                A.BUDGET_ACNTCTGR AS BUDGET_ACNT_CODE,
+                                0 MON_CNT,
+                                0 MON_GUM,
+                                COUNT(A.AMOUNT) AS TOT_MON_CNT,
+                                SUM(A.AMOUNT) AS TOT_MON_GUM,
+                                0 MON_CNT2,
+                                0 MON_GUM2,
+                                NVL(COUNT(DECODE(A.PAY_SE,'2', 1 , NULL)),0) AS TOT_MON_CNT2,
+                                NVL(SUM(DECODE(A.PAY_SE,'2',A.AMOUNT,0)),0) TOT_MON_GUM2
+                           FROM TBRNT_PSTYR_ATMPT_AMOUNT A
+                          WHERE 1=1		  
+		                    AND SUBSTR(A.MDAT_DE,1,6)<![CDATA[ <= ]]> #APPLC_MT#
+		                    AND SUBSTR(A.MDAT_DE,1,4) = SUBSTR(#APPLC_MT# , 1 ,4)
+		                    AND A.JOB_SE_CODE = 'HOU'
+							<isNotEmpty property="HOUSE_CODE">
+							AND A.HOUSE_CODE <![CDATA[ >= ]]> #HOUSE_CODE#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="HOUSE_CODE_TO">
+							AND A.HOUSE_CODE <![CDATA[ <= ]]> #HOUSE_CODE_TO#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="BSNS_SE">	                 
+							AND SUBSTR(A.BUDGET_ACNT_SE,1,1) = #BSNS_SE#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="BUDGET_ACNT_CODE">		                 
+							AND A.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+							</isNotEmpty>
+									                 
+							<isNotEmpty property="EXPNDTR_UNIT_CODE">		                 
+							AND A.EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+							</isNotEmpty>
+							
+                          GROUP BY A.HOUSE_CODE,
+                                   A.BUDGET_YEAR,
+                                   A.BUDGET_ACNT_SE,
+                                   A.BUDGET_ACNTCTGR                  
+                         ) AA
+                   GROUP BY AA.HOUSE_CODE,
+                            AA.BUDGET_YEAR,
+                            AA.BSNS_SE,
+                            AA.BUDGET_ACNT_CODE                                                         
+		          ) X
+		    GROUP BY X.BUDGET_YEAR,
+		             X.BSNS_SE,
+		             X.BUDGET_ACNT_CODE,
+		             X.HOUSE_CODE
+		 ORDER BY X.BUDGET_ACNT_CODE,
+		          X.HOUSE_CODE
+	</select>
+	
+</sqlMap>

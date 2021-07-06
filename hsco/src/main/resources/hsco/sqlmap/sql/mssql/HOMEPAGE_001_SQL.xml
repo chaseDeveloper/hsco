@@ -1,0 +1,438 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="Homepage_001_SQL">
+	
+	
+	<!-- 공사홈페이지 회원목록 조회  -->
+	<select id="HomepageDAO.mberList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT
+				 t1.MBER_ID		/*회원ID*/
+				,t1.MBER_NM		/*회원명*/
+				,t1.GRP_NM		/*단체명*/
+				,t1.SEXDSTN		/*성별*/
+				,t1.MBTLNUM		/*휴대폰번호*/
+				,t1.SRBDE		/*가입일자*/	
+				,(CASE WHEN t1.BIZPLC_CODE = ISNULL(#BIZPLC_CODE#, '9999') THEN t1.CONFM_SE ELSE null  END)		AS CONFM_SE		/*승인구분*/
+				,(CASE WHEN t1.BIZPLC_CODE = ISNULL(#BIZPLC_CODE#, '9999') THEN t1.MBER_SE  ELSE '001' END)		AS MBER_SE		/*회원구분*/
+			FROM
+				(
+				SELECT 
+					 m_id									AS MBER_ID			   
+					,m_name									AS MBER_NM
+					,m_text    								AS GRP_NM  /*단체명*/
+					,m_gender								AS SEXDSTN
+					,m_hand									AS MBTLNUM
+					,case when m_status = '100' then '001' 
+					      when m_status IN ('110', '300', '500') then '002'
+					      else '001'
+					 /*정시신청 : 100, 상시신청 : 110(300, 500)*/
+					 end AS MBER_SE /*회원구분*/
+					,CASE WHEN m_kind IN ('R', 'B')   THEN '002'
+					      WHEN m_kind IN ('SR', 'SB') THEN '001'
+					      WHEN m_kind IN ('H') 		  THEN '001'
+					      ELSE '0'
+					 END AS CONFM_SE	/*승인여부*/
+					,REPLACE(m_reg_date, '-', '')			AS SRBDE
+					,CASE WHEN m_kind IN ('R', 'SR') THEN 'C006'
+					      WHEN m_kind IN ('B', 'SB') THEN 'B001'
+					      ELSE '9999'
+					 END AS BIZPLC_CODE	/*사업소코드*/
+				]]>
+				FROM MEMBER
+				WHERE 1=1  /* SR : 잔디구장(미승인), R : 잔디구장(승인), SB : 야구장(미승인), H : 일반회원, B : 야구장(승인) */
+				) t1
+				WHERE 1=1 
+				<isEmpty prepend="AND" property="SEARCH_IEM">
+					<isNotEmpty property="SEARCH_VAL">
+						(	 t1.MBER_ID LIKE '%' + #SEARCH_VAL# + '%'
+						  OR t1.MBER_NM LIKE '%' + #SEARCH_VAL# + '%'
+						  OR t1.GRP_NM 	LIKE '%' + #SEARCH_VAL# + '%' )
+					</isNotEmpty>
+				</isEmpty>
+				<isNotEmpty property="SEARCH_IEM">
+					<isNotEmpty property="SEARCH_VAL">
+						<isEqual prepend="AND" property="SEARCH_IEM" compareValue="001">
+								t1.MBER_ID LIKE '%' + #SEARCH_VAL# + '%'
+						</isEqual>
+						<isEqual prepend="AND" property="SEARCH_IEM" compareValue="002">
+							t1.MBER_NM LIKE '%' + #SEARCH_VAL# + '%'
+						</isEqual>
+						<isEqual prepend="AND" property="SEARCH_IEM" compareValue="003">
+							t1.GRP_NM  LIKE '%' + #SEARCH_VAL# + '%'
+						</isEqual>
+					</isNotEmpty>
+				</isNotEmpty>
+		ORDER BY t1.SRBDE DESC
+    </select>
+    
+    <!-- 시설정보 -->
+	<select id="HomepageDAO.fcltsInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		     '050200'			AS DEPT_CODE 
+		     /*Y : 유료, M : 무료, B : 야구*/
+		    ,CASE kind_value WHEN 'Y' THEN '001'
+                             WHEN 'M' THEN '001'
+                             WHEN 'B' THEN '002'
+		     END AS FCLTS_SE					/*구분 001 :  축구장, 002 : 야구장*/
+            ,CASE kind_value WHEN 'Y' THEN '1'
+                  			 WHEN 'M' THEN '0'
+                  			 WHEN 'B' THEN '1'
+		      END AS FCLTS_CL					/*분류 1 : 유료, 0 : 무료*/
+		    ,institution_name   AS FCLTS_NM
+		    ,addr               AS ADRES
+		    /*사용시간구분 T: 사용, F:사용안함*/
+		    ,CASE time_ck WHEN 'F' THEN '0'
+		                  WHEN 'T' THEN '1'
+		     END AS USE_TIME_SE_AT
+            ,CASE WHEN time_ck ='F' 					 THEN '003' 
+		          WHEN time_ck ='T' AND kind_value = 'B' THEN '004' 
+		          WHEN time_ck ='T' AND kind_value = 'Y' THEN '003' 
+		          WHEN time_ck ='T' AND kind_value = 'M' THEN '003' 
+             END AS MUMM_RESVE_TIME_SE		     /*최소예약시간구분*/
+		    ,CASE WHEN stime_01 = 'N' THEN null 
+		          ELSE stime_01 
+		          END           AS WKDAY_RESVE_POSBL_BEGIN_TIME
+		    ,CASE WHEN etime_01 = 'N' THEN null 
+		          ELSE etime_01 
+		          END           AS WKDAY_RESVE_POSBL_END_TIME
+		    ,CASE WHEN stime_02 = 'N' THEN null 
+		          ELSE stime_02 
+		          END           AS RESTDE_RESVE_POSBL_BEGIN_TIME
+		    ,CASE WHEN etime_02 = 'N' THEN null 
+		          ELSE etime_02 
+		          END           AS RESTDE_RESVE_POSBL_END_TIME
+		    ,price_n01          AS WKDAY_DAYTM_USE_CHRGE
+		    ,price_n02          AS WKDAY_NIGHT_USE_CHRGE
+		    ,price_h01          AS RESTDE_DAYTM_USE_CHRGE
+		    ,price_h02          AS RESTDE_NIGHT_USE_CHRGE
+		    ,CASE status WHEN 'T' THEN '1'
+		          		 WHEN 'F' THEN '0'
+		     END                AS USE_AT
+		    ,'0'				AS INNER_AT
+		FROM institution_info
+		ORDER BY idx
+    </select>
+    
+    <!-- 신청정보 -->
+	<select id="HomepageDAO.reqstInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+				 '050200'      AS DEPT_CODE 
+	            ,h_id       AS MBER_ID
+	            ,CASE i_idx WHEN 1018 THEN 21  
+	                           WHEN 1019 THEN 22
+	                           WHEN 2019 THEN 23
+	                           WHEN 2020 THEN 24
+	                           WHEN 2021 THEN 25
+	                           WHEN 2022 THEN 26
+	                           WHEN 2023 THEN 27
+	                           WHEN 2024 THEN 33
+	                           ELSE i_idx
+	            END AS FCLTS_SN
+	            ,s_year+s_month+s_day   AS USE_DE
+	            ,SUBSTRING(s_time, 1, 2)+'00' AS BEGIN_TIME
+	            ,CASE WHEN CHARINDEX('-', s_time) > 0 THEN 
+	                                                CASE WHEN  i_idx IN ( 2021, 2022 ) THEN CONVERT(char(2), CONVERT(int, SUBSTRING(s_time, LEN(s_time)-1, 2))+3)+'00'
+	                                                     ELSE  CONVERT(char(2), CONVERT(int, SUBSTRING(s_time, LEN(s_time)-1, 2))+2)+'00'
+	                                                     END
+	                  ELSE   CASE WHEN  i_idx IN ( 2021, 2022 ) THEN CONVERT(char(2), (s_time+3))+'00'
+	                         ELSE  REPLICATE('0', 2 - LEN(RTRIM(CONVERT(char(2), (s_time+2)))))+ RTRIM(CONVERT(char(2), (s_time+2))) +'00'
+	                         END
+	             END AS END_TIME
+	            ,CASE WHEN CHARINDEX('-', s_time) > 0 THEN REPLACE(s_time, '-', '00-')+'00'
+	                      
+	                  ELSE s_time+'00'
+	             END AS USE_TIME
+	            ,CASE use_value WHEN '체육' THEN '0'
+	                            WHEN '일반' THEN '1'
+	             END AS USE_PRPOS_SE
+	            ,subject    AS USE_CN
+	            ,cnt        AS USE_NMPR
+	            ,price      AS USE_AM
+	            ,price      AS SETLE_AM
+	            ,etc        AS RM
+	            ,CASE status WHEN 'S' THEN '001'
+	                            WHEN 'D' THEN '002'
+	                            WHEN 'T' THEN '003'
+	                            WHEN 'P' THEN '004'
+	                            WHEN 'E' THEN '005'
+	                            WHEN 'C' THEN '006'
+	                            WHEN 'Z' THEN '007'
+	             END AS SETLE_STTUS
+	            ,receipt_bank_name  AS REFND_BANK_NM
+	            ,REPLACE(receipt_account_num, '-', '') AS REFND_ACNUTNO   
+	            ,receipt_account_name AS REFND_DPSTR
+	            ,CASE pay_kind WHEN '계좌이체'   THEN '001'
+	                           WHEN '무통장입금' THEN '002'
+	                           WHEN '카드결제'   THEN '003'
+	             END AS SETLE_SE
+	            ,bank_name          AS  RCPMNY_BANK_NM
+	            ,REPLACE(account_num, '-', '')        AS RCPMNY_ACNUTNO
+	            ,account_name       AS RCPMNYER
+	            ,SUBSTRING(r_date, 1, 8)     AS JDGMN_COMPT_DE
+	            ,REPLACE(si_date, '-', '')    AS SETLE_COMPT_DE
+	            ,w_date 			AS REQST_DT
+	            ,company_name		AS GRP_NM
+	            ,name               AS MBER_NM
+	            ,addr               AS ADRES
+	            ,CASE WHEN status = 'C' OR status = 'Z' THEN REPLACE(r_date, '-', '')
+	                  ELSE null
+	             END AS REFND_REQST_DT
+	            ,tel                AS TELNO
+	            ,hp              	AS MBTLNUM
+	            ,order_code			AS ORDER_NO
+	            ,RENT_CANCL_AT
+	            ,DELETE_AT
+	            ,CASE WHEN RTRIM(h_id) = 'admin' THEN '1'
+	                  ELSE '0'
+	             END AS MNGR_REGIST_AT 
+	            ,'1' AS trnsferAt
+	            ,MUMM_RESVE_TIME_SE
+		FROM (
+	    (SELECT  t1.idx
+	            ,t1.order_code
+	            ,t1.h_id
+	            ,t1.company_name
+	            ,t1.name
+	            ,t1.i_idx
+	            ,t1.s_year
+	            ,t1.s_month
+	            ,t1.s_day
+	            ,t1.s_time
+	            ,t1.use_value
+	            ,t1.subject
+	            ,t1.cnt
+	            ,t1.price
+	            ,t1.etc
+	            ,t1.status
+	            ,t1.receipt_bank_name
+	            ,t1.receipt_account_num
+	            ,t1.receipt_account_name
+	            ,t1.pay_kind
+	            ,t1.bank_name
+	            ,t1.account_num
+	            ,t1.account_name
+	            ,t1.hp
+	            ,t1.tel
+	            ,t1.addr
+	            ,t1.p_code
+	            ,t1.r_date
+	            ,t1.si_date
+	            ,t1.w_date
+	            ,'0' AS RENT_CANCL_AT
+	            ,'0' AS DELETE_AT
+	            ,CASE WHEN kind_value = 'B' THEN '004' 
+			          ELSE '003' 
+	            END AS MUMM_RESVE_TIME_SE		     /*최소예약시간구분*/
+	        FROM institution_request t1
+	            LEFT OUTER JOIN institution_info t2
+	              ON t1.i_idx = t2.idx)
+	    UNION ALL
+	    (SELECT t1.idx
+	            ,t1.order_code
+	            ,t1.h_id
+	            ,t1.company_name
+	            ,t1.name
+	            ,t1.i_idx
+	            ,t1.s_year
+	            ,t1.s_month
+	            ,t1.s_day
+	            ,t1.s_time
+	            ,t1.use_value
+	            ,t1.subject
+	            ,t1.cnt
+	            ,t1.price
+	            ,t1.etc
+	            ,t1.status
+	            ,t1.receipt_bank_name
+	            ,t1.receipt_account_num
+	            ,t1.receipt_account_name
+	            ,t1.pay_kind
+	            ,t1.bank_name
+	            ,t1.account_num
+	            ,t1.account_name
+	            ,t1.hp
+	            ,t1.tel
+	            ,t1.addr
+	            ,t1.p_code
+	            ,t1.r_date
+	            ,t1.si_date
+	            ,t1.w_date
+	            ,'1' AS RENT_CANCL_AT
+	            ,'0' AS DELETE_AT
+	            ,CASE WHEN kind_value = 'B' THEN '004' 
+			          ELSE '003' 
+	            END AS MUMM_RESVE_TIME_SE		     /*최소예약시간구분*/
+	        FROM institution_request_del  t1
+	            LEFT OUTER JOIN institution_info t2
+	              ON t1.i_idx = t2.idx)
+    	) s1
+		<dynamic prepend="WHERE">
+			<isEqual property="SEARCH_CND" compareValue="001">
+				<isNotEmpty property="BGNDE">
+					<isNotEmpty prepend="AND" property="ENDDE">
+						(s1.s_year + s1.s_month + s_day) BETWEEN #BGNDE# AND #ENDDE#
+					</isNotEmpty>
+				</isNotEmpty>
+			</isEqual>
+			<isEqual  property="SEARCH_CND" compareValue="002">
+				<isNotEmpty property="BGNDE">
+					<isNotEmpty prepend="AND" property="ENDDE">
+						SUBSTRING(s1.w_date, 1, 8) BETWEEN #BGNDE# AND #ENDDE#
+					</isNotEmpty>
+				</isNotEmpty>
+			</isEqual>
+		</dynamic>
+		ORDER BY s1.idx
+    </select>
+    
+	<select id="HomepageDAO.selectHvofInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT CONCAT(year, month, day) AS HVOF_DE
+		      ,HVOF_SE
+		      ,HVOF_AT
+		FROM (
+		SELECT  year
+		       ,CASE WHEN LEN(month) = 1 THEN CONCAT('0', month)
+		            ELSE CONVERT(CHAR(2), month)
+		        END AS month
+		       ,CASE WHEN LEN(day) = 1 THEN CONCAT('0', day)
+		            ELSE CONVERT(CHAR(2), day)
+		        END AS day
+		        ,day_name
+		       ,CASE day_name WHEN '신정' THEN '001'
+		                      WHEN '새해' THEN '001'
+		                      WHEN '설날' THEN '002'
+		                      WHEN '설연휴' THEN '003'
+		                      WHEN '삼일절' THEN '004'
+		                      WHEN '석가탄신일' THEN '005'
+		                      WHEN '어린이날' THEN '006'
+		                      WHEN '임시공휴일' THEN '007'
+		                      WHEN '현충일' THEN '008'
+		                      WHEN '광복절' THEN '009'
+		                      WHEN '개천절' THEN '010'
+		                      WHEN '추석' THEN '011'
+		                      WHEN '추석연휴' THEN '012'
+		                      WHEN '한글날' THEN '013'
+		                      WHEN '성탄절' THEN '014'
+		                      WHEN '국회의원선거' THEN '015'
+		        END AS HVOF_SE
+		       ,CASE status WHEN 'H' THEN '0'
+		                    WHEN 'F' THEN '1'
+		        END HVOF_AT
+		    from day_kind
+		) t1
+    </select>
+    
+	<select id="HomepageDAO.selectMberInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	<![CDATA[
+    	SELECT 
+    		 m_id									AS MBER_ID
+    		,m_name									AS MBER_NM
+			,CASE WHEN m_tel = '0-0-0'                  THEN null
+                  WHEN PATINDEX ('%[0-9]%', m_tel ) > 0 THEN m_tel
+                  ELSE	null
+                  END								AS TELNO
+			,m_hand									AS MBTLNUM
+			,m_zipcode +' '+ REPLACE(m_addr, '&nbsp;', '') +' '+ m_addr2 	AS ADRES
+    	FROM MEMBER
+    	WHERE m_id = #MBER_ID#
+    	]]>
+    </select>
+    
+	<select id="HomepageDAO.selectMinwonList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* 접수여부, 조치구분, 신고일자, 신고자, 연락처, 직업, 주소, 제목, 내용, 첨부파일*/
+		SELECT 
+		     t1.MID            /*민원번호*/
+		    ,t1.USERID         /*신청자ID*/
+		    ,t1.USERNM         /*신청자명*/
+		    ,REPLACE(t1.RGST_DATE, '-', '') AS RGST_DATE     /*신청일자*/    
+		    ,REPLACE(t1.CMPT_DATE, '-', '') AS CMPT_DATE     /*신청일자*/    
+		    ,t1.CMPT_DATE      /*답변일자*/
+		    ,t1.GENDER         /*회원의 성별*/
+		    ,t1.PHONE          /*휴대폰번호*/
+		    ,t1.ADDRESS        /*주소*/
+		    ,t1.KIND           /*접수방법*/
+		    ,t1.TITLE          /*제목*/
+		    ,t1.CONTENT        /*내용*/
+		    ,t1.ANSWER         /*답변*/
+		    ,t1.EVALUATION     /*답변평가*/
+		    ,t1.ADD_ANSWER     
+		    ,t1.STATUS         /*상태 */
+		    ,t1.CONF_DEPTNM    /*담당부서*/
+		    ,t1.UPLOADCHK
+		    ,CASE WHEN t1.OPENCHK = 'Y' THEN '공개'
+		          ELSE '비공개'
+		     END AS OPENCHK
+		     ,t2.FLID
+		     ,t2.FLNM
+		FROM MINWON t1
+		    LEFT OUTER JOIN TB_FILE t2
+		      ON t1.MID = t2.MID
+		WHERE 1=1
+		  AND REPLACE(t1.RGST_DATE, '-', '') BETWEEN #BGNDE# AND #ENDDE#
+		<isNotEmpty property="STATUS">
+			AND STATUS = #STATUS#
+			/*접수상태구분 : 완료, 요청, 접수중, 취하*/
+		</isNotEmpty>
+		ORDER BY
+		  t1.RGST_DATE DESC
+    </select>
+    
+    <!-- 첨부파일 조회 -->
+	<select id="HomepageDAO.selectFile" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		      FLID
+		     ,FLNM
+		     ,RIGHT(FLNM,CHARINDEX('.', REVERSE(FLNM))-1) AS FILE_EXTSN
+		     ,'theme://images/fileUpDownload/file_icon_'
+		    + CASE WHEN RIGHT(FLNM,CHARINDEX('.', REVERSE(FLNM))-1) IN ('zip', 'rar', '7z', 'ZIP') THEN 'ZIP'
+		           WHEN RIGHT(FLNM,CHARINDEX('.', REVERSE(FLNM))-1) IN ('jpg', 'jpeg', 'gif', 'png', 'bmp') THEN 'IMG'
+		           WHEN RIGHT(FLNM,CHARINDEX('.', REVERSE(FLNM))-1) IN ('txt', 'xml')  THEN 'TXT'
+		           WHEN RIGHT(FLNM,CHARINDEX('.', REVERSE(FLNM))-1) IN ('doc', 'docx') THEN 'DOC'
+		           WHEN RIGHT(FLNM,CHARINDEX('.', REVERSE(FLNM))-1) IN ('ppt', 'pptx') THEN 'PPT'
+		           WHEN RIGHT(FLNM,CHARINDEX('.', REVERSE(FLNM))-1) = 'pdf'            THEN 'PDF'
+		           WHEN RIGHT(FLNM,CHARINDEX('.', REVERSE(FLNM))-1) IN ('hwp', 'hwt')  THEN 'HWP'
+		           ELSE 'ETC'
+		      END
+   		    + '.png'                            AS FILE_IMAGE
+		FROM TB_FILE
+		WHERE 1=1
+		  AND MID = #MID#
+    </select>
+	
+   <!-- 문자전송 -->
+	<insert id="HomepageDAO.sendMssage" parameterClass="java.util.HashMap">
+		INSERT INTO SDK_MMS_SEND (
+		       USER_ID
+		     , SCHEDULE_TYPE
+		     , SUBJECT
+		     , NOW_DATE
+		     , SEND_DATE 
+		     , CALLBACK
+		     , DEST_COUNT
+		     , DEST_INFO
+		     , MSG_TYPE
+		     , MMS_MSG 
+		     , CONTENT_COUNT
+		     , CONTENT_DATA
+		)
+		VALUES ( 
+		       #USER_ID#
+		     , #SCHEDULE_TYPE#
+		     , #SUBJECT#
+		     , CONVERT(CHAR(8), GETDATE(), 112) + REPLACE(CONVERT(CHAR(8), GETDATE(), 108), ':', '')
+		     , CONVERT(CHAR(8), GETDATE(), 112) + REPLACE(CONVERT(CHAR(8), GETDATE(), 108), ':', '')
+		     , #CALLBACK#
+		     , #DEST_COUNT#
+		     , #DEST_INFO#
+		     , #MSG_TYPE#
+		     , #MMS_MSG#
+		     , #CONTENT_COUNT#
+		     , #CONTENT_DATA#
+		)
+	</insert>
+
+
+</sqlMap>
+
+

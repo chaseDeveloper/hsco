@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS020102_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!--오프라인민원관리 목록조회 -->
+	<select id="CUS020102DAO.selectOfflineCvplList" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+		<![CDATA[
+			SELECT 
+				 A.RCEPT_NO                AS         RCEPT_NO
+				,A.CVPL_NO                 AS         CVPL_NO 
+				,A.INQRY_KND               AS         INQRY_KND                 
+				,A.INQRY_KND_DETAIL        AS         INQRY_KND_DETAIL
+				,A.SJ                      AS         SJ       
+				,A.CN                      AS         CN
+				,A.RCEPT_EMPNO             AS         RCEPT_EMPNO
+				,(SELECT SFSAL_GETEMPNO_01(A.RCEPT_EMPNO) FROM DUAL) AS RCEPT_EMPNM
+				,TO_CHAR(A.RCEPT_DT ,'YYYYMMDD')               
+				                           AS         RCEPT_DT   
+				,A.RCEPT_MTH               AS         RCEPT_MTH  
+				,A.NM                      AS         NM
+				,A.ZIP                     AS         ZIP
+				,A.ADRES                   AS         ADRES
+				,A.MBTLNO                  AS         MBTLNO
+				,A.ATCH_FILE               AS         ATCH_FILE
+				,TO_CHAR(C.PROCESS_DT,'YYYYMMDD')
+				                           AS         PROCESS_DT
+				,C.CHRG_DEPT_CODE          AS         CHRG_DEPT_CODE
+				,(SELECT SFSAL_GETDEPTNM_01(C.CHRG_DEPT_CODE) FROM DUAL)
+				                           AS CHRG_DEPT_NM
+				,C.APPN_CHARGER            AS         APPN_CHARGER
+				,(SELECT SFSAL_GETEMPNO_01(C.APPN_CHARGER) FROM DUAL)
+				                           AS         APPN_CHARGER_NM
+				,C.ATCH_FILE               AS         PROCESS_ATCH_FILE
+				,C.PROCESS_CN              AS         PROCESS_CN
+				,C.CVPL_STTUS			   AS         CVPL_STTUS
+				,C.DRFT_DE                 AS         DRFT_DE
+				,C.DRFT_JOB_CONFM_NO       AS         DRFT_JOB_CONFM_NO
+				,D.LAST_SANCTN_STTUS       AS         LAST_SANCTN_STTUS
+				,C.INNER_SANCTN_ID		   AS 		  INNER_SANCTN_ID
+				,SFCOM_GET_IN_SANCTNSTS('MIS', 'CUS', C.CVPL_NO || '^' || C.RCEPT_NO||'^'||TO_CHAR(C.REGIST_DT, 'YYYYMMDDHH24MISS'), C.REGIST_DT) AS INNER_SANCTN_STTUS		/*내부결재 상태*/
+			    ,SFCOM_GET_IN_SANCTNSTS_IMG('MIS', 'CUS', C.CVPL_NO || '^' || C.RCEPT_NO||'^'||TO_CHAR(C.REGIST_DT, 'YYYYMMDDHH24MISS'), C.REGIST_DT) INNER_SANCTN_STTUS_IMG /*내부결재 상태 이미지*/
+				,C.REGISTER_ID             AS         REGISTER_ID
+				,TO_CHAR(C.REGIST_DT, 'YYYYMMDDHH24MISS')     AS         REGIST_DT
+				,C.UPDUSR_ID               AS         UPDUSR_ID
+				,C.UPDT_DT                 AS         UPDT_DT
+				,TO_CHAR(C.REGIST_DT, 'YYYYMMDDHH24MISS')	  AS INNER_SANCTN_KEY
+			 FROM TBCUS_HMPG_CSTMR_CVPL A
+  LEFT OUTER JOIN TBCUS_HMPG_CSTMR_INFO B
+			   ON A.NM = B.CSTMR_NM
+			  AND A.MBTLNO = B.MBTLNO
+  LEFT OUTER JOIN TBCUS_HMPG_CVPL_DSTB C
+			   ON A.CVPL_NO = C.CVPL_NO
+			  AND A.RCEPT_NO = C.RCEPT_NO
+  LEFT OUTER JOIN TBCOM_INNER_SANCTN_MASTR D
+			   ON C.INNER_SANCTN_ID = D.INNER_SANCTN_ID
+			WHERE A.RCEPT_DT >= TO_DATE(#RCEPT_BGN_DT#, 'YYYYMMDD')
+			  AND A.RCEPT_DT <  TO_DATE(#RCEPT_END_DT#, 'YYYYMMDD') + 1
+			  AND SUBSTR(A.CVPL_NO, 1, 1) = 'C'
+			]]>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+			  	C.CHRG_DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="INQRY_KND">
+				AND A.INQRY_KND = #INQRY_KND#
+			</isNotEmpty>
+			<isNotEmpty property="INQRY_KND_DETAIL">
+				AND A.INQRY_KND_DETAIL = #INQRY_KND_DETAIL#
+			</isNotEmpty>
+			<isNotEmpty property="PRC_STATUS">
+				AND C.CVPL_STTUS = #PRC_STATUS#
+			</isNotEmpty>
+			<isNotEmpty property="RCEPT_MTH">
+				AND A.RCEPT_MTH = #RCEPT_MTH#
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE">
+				AND C.CHRG_DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="APPN_CHARGER_NM">
+				AND (SELECT SFSAL_GETEMPNO_01(A.RCEPT_EMPNO) FROM DUAL) LIKE '%' || #APPN_CHARGER_NM# || '%'
+			</isNotEmpty>
+		<![CDATA[
+		ORDER BY A.RCEPT_DT DESC ,A.CVPL_NO
+		]]>
+	</select>
+
+	<!--오프라인민원관리 등록 -->
+	<insert id="CUS020102DAO.offlineCvplListC" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			INSERT INTO TBCUS_HMPG_CSTMR_CVPL
+				(
+					RCEPT_NO
+					,CVPL_NO
+					,INQRY_KND
+					,INQRY_KND_DETAIL
+					,SJ
+					,NM
+					,RCEPT_EMPNO
+					,RCEPT_DT
+					,RCEPT_MTH
+					,MBTLNO
+					,ADRES
+					,CN
+					,CSTMR_REGIST_DT
+					,ATCH_FILE
+					,ZIP
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+				 )VALUES(
+							(SELECT TO_CHAR(SYSDATE,'YYYY')||'0'||LPAD(NVL(TO_NUMBER(MAX(SUBSTR(RCEPT_NO,5,6))),0)+1,5,'0')
+							   FROM TBCUS_HMPG_CSTMR_CVPL
+							  WHERE RCEPT_NO LIKE TO_CHAR(SYSDATE,'YYYY') || '0%')      	      
+							,'C' || (SELECT TO_CHAR(SYSDATE,'YYYY')||'0'||LPAD(NVL(TO_NUMBER(MAX(SUBSTR(RCEPT_NO,5,6))),0)+1,5,'0')
+									   FROM TBCUS_HMPG_CSTMR_CVPL
+									  WHERE RCEPT_NO LIKE TO_CHAR(SYSDATE,'YYYY') || '0%')  
+							,#INQRY_KND#
+							,#INQRY_KND_DETAIL#
+							,#SJ#
+							,#NM#
+							,#RCEPT_EMPNO#
+							,TO_DATE(#RCEPT_DT#,'YYYYMMDD')
+							,#RCEPT_MTH#
+							,#MBTLNO#
+							,#ADRES#
+							,#CN#
+							,SYSDATE
+							,#ATCH_FILE#
+							,#ZIP#
+							,#S_USER_ID#
+							,SYSDATE
+							,#S_USER_ID#
+							,SYSDATE
+							)
+		]]>
+	</insert>
+ <!--오프라인민원 처리 등록 -->
+	<insert id="CUS020102DAO.offlineCvplDstbC" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			INSERT INTO TBCUS_HMPG_CVPL_DSTB
+				(  
+					 RCEPT_NO
+					,CVPL_NO
+					,INQRY_KND
+					,INQRY_KND_DETAIL
+					,PROCESS_DT
+					,CHRG_DEPT_CODE
+					,APPN_CHARGER
+					,PROCESS_CN
+					,ATCH_FILE
+					,DRFT_DE
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+					,CVPL_STTUS
+					,PROCESS_TMLMT
+					,PROCESS_TMLMT_DETAIL
+					,EXPECT_PROCESS_DT
+					,APPN_DT
+						)VALUES(
+								 (SELECT TO_CHAR(SYSDATE,'YYYY')||'0'||LPAD(NVL(TO_NUMBER(MAX(SUBSTR(RCEPT_NO,5,6))),0),5,'0')
+									FROM TBCUS_HMPG_CSTMR_CVPL
+								   WHERE RCEPT_NO LIKE TO_CHAR(SYSDATE,'YYYY') || '0%')      	      
+								,'C' || (SELECT TO_CHAR(SYSDATE,'YYYY')||'0'||LPAD(NVL(TO_NUMBER(MAX(SUBSTR(RCEPT_NO,5,6))),0),5,'0')
+										  FROM TBCUS_HMPG_CSTMR_CVPL
+										 WHERE RCEPT_NO LIKE TO_CHAR(SYSDATE,'YYYY') || '0%')  
+								,#INQRY_KND#
+								,#INQRY_KND_DETAIL#
+								,#PROCESS_DT#
+								,#CHRG_DEPT_CODE#
+								,#APPN_CHARGER#
+								,#PROCESS_CN#
+								,#PROCESS_ATCH_FILE#
+								,#DRFT_DE#
+								,#S_USER_ID#
+								,SYSDATE
+								,#S_USER_ID#
+								,SYSDATE
+								,#CVPL_STTUS#
+								,'7'
+								,(SELECT (CASE WHEN SUBSTR(TO_CHAR(SYSDATE,'YYYYMMDDHH24'),9,2) < 13 THEN 1 
+											WHEN SUBSTR(TO_CHAR(SYSDATE,'YYYYMMDDHH24'),9,2) > 12 THEN 2
+											ELSE NULL END) FROM DUAL)
+								,(SELECT (CASE /*처리기한상세가 '1'인경우 (오전)*/
+										  WHEN ( SELECT (CASE WHEN SUBSTR(TO_CHAR(SYSDATE,'YYYYMMDDHH24'),9,2) < 13 THEN 1 
+															  WHEN SUBSTR(TO_CHAR(SYSDATE,'YYYYMMDDHH24'),9,2) > 12 THEN 2
+														 ELSE NULL END) 
+												 FROM DUAL) = '1' 
+										  THEN TO_DATE(CONCAT(SUBSTR(TO_CHAR(SYSDATE + (INTERVAL '7' DAY),'YYYYMMDDHH24'),0,8),'13'),'YYYYMMDDHH24')
+												/*처리기한상세가 '2'인경우 (오후)*/
+										  WHEN ( SELECT (CASE WHEN SUBSTR(TO_CHAR(SYSDATE,'YYYYMMDDHH24'),9,2) < 13 THEN 1 
+															  WHEN SUBSTR(TO_CHAR(SYSDATE,'YYYYMMDDHH24'),9,2) > 12 THEN 2
+														 ELSE NULL END) FROM DUAL) = '2' 
+										  THEN TO_DATE(CONCAT(SUBSTR(TO_CHAR(SYSDATE + (INTERVAL '8' DAY),'YYYYMMDDHH24'),0,8),'00'),'YYYYMMDDHH24')
+										  ELSE NULL END)
+								FROM DUAL)
+								,SYSDATE
+				)
+		]]>
+	</insert>
+	<!--오프라인민원관리 수정 -->
+	<update id="CUS020102DAO.offlineCvplListU" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		UPDATE TBCUS_HMPG_CSTMR_CVPL SET 
+				 INQRY_KND           = #INQRY_KND#
+				,INQRY_KND_DETAIL    = #INQRY_KND_DETAIL#
+				,RCEPT_EMPNO         = #RCEPT_EMPNO#
+				,RCEPT_MTH           = #RCEPT_MTH#
+				,SJ                  = #SJ#
+				,CN                  = #CN#
+				,NM                  = #NM#
+				,MBTLNO              = #MBTLNO#
+				,ADRES               = #ADRES#
+				,ATCH_FILE           = #ATCH_FILE#
+				,UPDUSR_ID           = #S_USER_ID#
+				,UPDT_DT             = SYSDATE
+		 WHERE RCEPT_NO = #RCEPT_NO#
+		   AND  CVPL_NO = #CVPL_NO#
+		]]>
+	</update>
+	<!--오프라인민원 처리 수정 -->
+	<update id="CUS020102DAO.offlineCvplDstbU" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		UPDATE TBCUS_HMPG_CVPL_DSTB SET 
+				 INQRY_KND           = #INQRY_KND# 
+				,INQRY_KND_DETAIL    = #INQRY_KND_DETAIL#
+				,CHRG_DEPT_CODE      = #CHRG_DEPT_CODE#
+				,APPN_CHARGER        = #APPN_CHARGER#
+				,PROCESS_CN          = #PROCESS_CN#
+				,DRFT_DE             = #DRFT_DE#
+				,ATCH_FILE           = #PROCESS_ATCH_FILE#
+				,UPDUSR_ID           = #S_USER_ID#
+				,UPDT_DT             = SYSDATE
+				,DRFT_JOB_CONFM_NO   = #DRFT_JOB_CONFM_NO#
+				,CVPL_STTUS          = #CVPL_STTUS#
+				,PROCESS_DT          = TO_DATE(#PROCESS_DT#,'YYYYMMDD')
+		  WHERE CVPL_NO = #CVPL_NO#
+		    AND RCEPT_NO = #RCEPT_NO#
+		]]>
+	</update>
+	<!--오프라인민원관리 삭제 -->
+	<delete id="CUS020102DAO.offlineCvplListD" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE FROM TBCUS_HMPG_CSTMR_CVPL
+		 WHERE CVPL_NO = #CVPL_NO#
+		   AND RCEPT_NO = #RCEPT_NO#
+		]]>
+	</delete>
+	
+	<!--오프라인민원 처리 삭제 -->
+	<delete id="CUS020102DAO.offlineCvplDstbD" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE FROM TBCUS_HMPG_CVPL_DSTB
+		 WHERE CVPL_NO = #CVPL_NO#
+		   AND RCEPT_NO = #RCEPT_NO#
+		]]>
+	</delete>
+
+	<!--내부결재 레포트 데이터셋 -->
+	<select id="CUS020102DAO.innerSanctnUbiDataset" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[	
+			SELECT 
+				 A.RCEPT_NO					AS RCEPT_NO
+				,A.CVPL_NO					AS CVPL_NO 
+				,A.NM
+				,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'CUS001' AND CODE = A.INQRY_KND)
+											AS INQRY_KND
+				,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'CUS003' AND CODE = A.INQRY_KND_DETAIL)
+											AS INQRY_KND_DETAIL
+				,A.SJ						AS SJ
+				,TO_CHAR(A.CN)				AS CN
+				,A.RCEPT_EMPNO				AS RCEPT_EMPNO
+				,(SELECT SFSAL_GETEMPNO_01(A.RCEPT_EMPNO) FROM DUAL) 
+											AS RCEPT_EMPNM
+				,TO_CHAR(A.RCEPT_DT ,'yyyy-mm-dd hh:mi:ss')
+											AS RCEPT_DT
+				,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'CUS006' AND CODE = A.RCEPT_MTH)
+											AS RCEPT_MTH  
+				,B.CSTMR_NM					AS NM
+				,B.ZIP						AS ZIP
+				,B.ADRES					AS ADRES
+				,B.MBTLNO					AS MBTLNO
+				,A.ATCH_FILE				AS ATCH_FILE
+				,TO_CHAR(C.PROCESS_DT,'YYYYMMDD')
+											AS PROCESS_DT
+				,C.CHRG_DEPT_CODE			AS CHRG_DEPT_CODE
+				,(SELECT SFSAL_GETDEPTNM_01(C.CHRG_DEPT_CODE) FROM DUAL)
+											AS CHRG_DEPT_NM
+				,C.APPN_CHARGER				AS APPN_CHARGER
+				,(SELECT SFSAL_GETEMPNO_01(C.APPN_CHARGER) FROM DUAL)
+											AS APPN_CHARGER_NM
+				,C.ATCH_FILE				AS PROCESS_ATCH_FILE
+				,TO_CHAR(C.PROCESS_CN)		AS PROCESS_CN
+				,C.DRFT_DE					AS DRFT_DE
+				,C.DRFT_JOB_CONFM_NO		AS DRFT_JOB_CONFM_NO
+			  FROM TBCUS_HMPG_CSTMR_CVPL A
+		 LEFT JOIN TBCUS_HMPG_CSTMR_INFO B
+				ON A.NM = B.CSTMR_NM
+			   AND A.MBTLNO = B.MBTLNO
+		 LEFT JOIN TBCUS_HMPG_CVPL_DSTB C
+				ON A.CVPL_NO = C.CVPL_NO
+			   AND A.RCEPT_NO = C.RCEPT_NO
+			 WHERE 1 = 1
+			   AND A.CVPL_NO = #CVPL_NO# 
+			   AND A.RCEPT_NO = #RCEPT_NO#
+		  ]]>
+	</select>
+
+	<!--최초 내부결재 진행 여부 체크-->
+	<select id="CUS020102DAO.selectInnerSanctnMasterCheck" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ 
+		SELECT COUNT(1) AS CHK
+		      ,MAX(LAST_SANCTN_STTUS) AS LAST_SANCTN_STTUS
+		  FROM TBCOM_INNER_SANCTN_MASTR		       
+		 WHERE INNER_SANCTN_ID = #KEY#
+		  ]]>
+	</select>
+	
+	<!-- 민원 내부결재 ID 업데이트 -->
+	<update id="CUS020102DAO.drftInfoU" parameterClass="java.util.HashMap">
+		UPDATE TBCUS_HMPG_CVPL_DSTB 
+		SET    DRFT_JOB_CONFM_NO = #KEY#
+		      ,DRFT_DE = TO_CHAR(SYSDATE, 'YYYYMMDD')
+		      ,UPDUSR_ID  = #S_USER_ID# 
+			  ,UPDT_DT    = SYSDATE      
+		WHERE  RCEPT_NO = #RCEPT_NO#
+		  AND  CVPL_NO  = #CVPL_NO#
+	</update>
+	
+    <!-- 후처리 -->
+    <!-- 후처리_결의번호조회 -->
+	<select id="CUS020102DAO.selectExpDsnMtr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT CVPL_NO
+			  ,RCEPT_NO
+		FROM   TBCUS_HMPG_CVPL_DSTB
+		WHERE DRFT_JOB_CONFM_NO 	= #INNER_SANCTN_ID#
+	</select>
+	
+    <!-- 민원처리상태 업데이트 -->
+	<update id="CUS020102DAO.cvplSttusU" parameterClass="java.util.HashMap">
+		UPDATE TBCUS_HMPG_CVPL_DSTB 
+		SET    CVPL_STTUS = #CVPL_STTUS#
+		      ,UPDUSR_ID  = #S_USER_ID# 
+			  ,UPDT_DT    = SYSDATE      
+		WHERE  RCEPT_NO = #RCEPT_NO#
+		  AND  CVPL_NO  = #CVPL_NO#
+	</update>	
+
+    <!-- 내부결재번호 업데이트 -->
+	<update id="CUS020102DAO.innerSanctU" parameterClass="java.util.HashMap">
+UPDATE TBCUS_HMPG_CVPL_DSTB 
+		SET    INNER_SANCTN_ID = #INNER_SANCTN_ID#
+				,DRFT_DE      = TO_CHAR(SYSDATE,'YYYYMMDD')
+		      	,UPDUSR_ID  = #S_USER_ID# 
+			  	,UPDT_DT     = SYSDATE      
+		WHERE  RCEPT_NO = #RCEPT_NO#
+		  AND  CVPL_NO  = #CVPL_NO#
+</update>	
+</sqlMap>

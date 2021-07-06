@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL020203_SQL">	
+	
+	<!-- 사원정보 목록조회 -->
+	<select id="SAL020203DAO.selectEmpList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		   v1.DEPT_NM
+		  ,t1.HR_CLSF_SE
+		  ,t1.EMPNO
+		  ,t1.EMPNM
+		  ,t2.SBSCRB_DE
+		  ,t2.SECSN_DE
+		  ,CASE
+		        WHEN t2.SBSCRB_DE IS NOT NULL
+		        THEN '1'
+		        ELSE '0'
+		    END AS SBSCRB_AT
+		FROM TBHRM_HR_MASTR t1
+		LEFT OUTER JOIN 
+		    (
+		    SELECT s1.EMPNO, s1.SN, s1.SBSCRB_DE, s1.SECSN_DE 
+		    FROM TBSAL_LBUN_MANAGE s1
+		    INNER JOIN (SELECT EMPNO, MAX(SN) AS SN  FROM TBSAL_LBUN_MANAGE WHERE TO_CHAR(SYSDATE, 'yyyymmdd') BETWEEN SBSCRB_DE AND NVL(SECSN_DE, '99991231')-1 GROUP BY EMPNO) s2
+		      ON s1.EMPNO = s2.EMPNO
+		     AND s1.SN = s2.SN
+		    ) t2
+		ON  t1.EMPNO = t2.EMPNO
+		LEFT OUTER JOIN VWHRM_DEPT v1
+		ON  t1.DEPT_CODE     = v1.DEPT_CODE
+		WHERE 1=1
+		<isNotEmpty prepend="AND" property="EMPNO">
+			t1.EMPNO = #EMPNO#
+		</isNotEmpty>
+		<isNotEqual prepend="AND" property="RETIRE_EMPL" compareValue="1">
+			t1.STTUS_SE NOT IN ('009')
+		</isNotEqual>
+		<isEqual prepend="AND" property="SBSCRB_AT" compareValue="1">
+			t2.SBSCRB_DE IS NOT NULL
+		</isEqual>
+		ORDER BY v1.OUTPT_ORDR, t1.JSSFC_SE, t1.HR_CLSF_SE, t1.EMPNO
+    </select> 
+
+
+	<!-- 노동조합 가입/탈퇴내역 조회 -->
+	<select id="SAL020203DAO.selectLbunManage" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 t1.SN
+			,v1.DEPT_NM
+			,t2.HR_CLSF_SE
+			,t1.EMPNO
+			,t2.EMPNM
+			,t1.SBSCRB_DE
+			,t1.SECSN_DE
+			,t1.LBUN_RSPOFC
+			,t1.RM
+		FROM TBSAL_LBUN_MANAGE t1
+		LEFT OUTER JOIN TBHRM_HR_MASTR t2 ON t1.EMPNO 	  = t2.EMPNO
+		LEFT OUTER JOIN VWHRM_DEPT	   v1 ON t2.DEPT_CODE = v1.DEPT_CODE
+		WHERE t1.EMPNO = #EMPNO#
+		ORDER BY t1.SN		
+    </select>
+    
+    
+    <!-- 노동조합 가입/탈퇴내역 추가 -->
+    <insert id="SAL020203DAO.lbunManageC" parameterClass="java.util.HashMap">
+		INSERT INTO TBSAL_LBUN_MANAGE
+		(
+			 EMPNO
+			,SN
+			,SBSCRB_DE
+			,SECSN_DE
+			,LBUN_RSPOFC
+			,RM
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)
+		SELECT
+			 #EMPNO#
+			,NVL(MAX(SN), 0)+1
+			,#SBSCRB_DE#
+			,#SECSN_DE#
+			,#LBUN_RSPOFC#
+			,#RM#
+			,#S_USER_ID#
+			,SYSDATE    
+			,#S_USER_ID#
+			,SYSDATE 
+		FROM TBSAL_LBUN_MANAGE
+		WHERE EMPNO = #EMPNO#
+    </insert>
+    
+    
+    <!-- 노동조합 가입/탈퇴내역 수정 -->
+    <update id="SAL020203DAO.lbunManageU" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_LBUN_MANAGE
+		SET
+			 SBSCRB_DE	 = #SBSCRB_DE#
+			,SECSN_DE    = #SECSN_DE#
+			,LBUN_RSPOFC = #LBUN_RSPOFC#
+			,RM          = #RM#
+			,UPDUSR_ID   = #S_USER_ID#
+			,UPDT_DT     = SYSDATE
+		WHERE EMPNO = #EMPNO#
+		  AND SN = #SN#
+    </update>
+    
+    
+    <!-- 노동조합 가입/탈퇴내역 삭제 -->
+	<delete id="SAL020203DAO.lbunManageD" parameterClass="java.util.HashMap">
+		DELETE
+		FROM TBSAL_LBUN_MANAGE
+		WHERE EMPNO = #EMPNO#
+		  AND SN	= #SN#
+	</delete>
+    
+</sqlMap>

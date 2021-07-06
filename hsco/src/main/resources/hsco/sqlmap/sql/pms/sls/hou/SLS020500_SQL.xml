@@ -1,0 +1,543 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS020500_SQL">	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   	  
+      
+	  <!-- 쿼리명     : 주택 입주대기자 
+           설명       : 주택 입주대기자 리스트 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.10.12
+
+	       수정일  수정자  수정내용
+	   -->        
+      <select id="SLS020500DAO.selectHouseMvnWaitrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		
+			SELECT 
+                '0'  AS   CHK                           /*  체크및 박스     */
+/*  입주대기자정보 */
+               ,T1.HOUSE_CODE                           /* 주택코드         */
+               ,T1.HOUSE_SN                             /* 주택일련번호     */
+               ,T1.DONG                                 /* 동               */
+               ,T1.HO                                   /* 호               */
+               ,T1.DONG || '-' || T1.HO AS ST_DONGHO    /* 동-호            */
+               ,T1.HOUSE_TY_CODE                        /* 주택타입코드     */
+               ,T1.AEA                                  /* 평수             */
+               ,T1.WAIT_RCEPT_DE                        /* 대기접수일자     */
+               ,T1.WAIT_RCEPT_SN                        /* 대기접수일련번호 */
+               ,T1.WAIT_SN                              /* 대기일련번호     */
+               ,T1.HOUSE_CSTMR_NO                       /* 주택고객번호     */
+               ,T1.QUALF_SE                             /* 자격구분         */
+               ,T1.CNTRCT_DE                            /* 계약일자         */
+               ,T1.CNTRCT_NTICE_DE                      /* 계약통지일자     */
+               ,T1.WAITR_CANCL_PRVONSH                  /* 대기자취소사유   */
+               ,T1.FAMILY_CO                            /* 가족수           */
+               ,T1.WAIT_PROCESS_SE                      /* 대기처리구분     */
+               ,T1.RM                                   /* 비고             */
+               ,T1.REGISTER_ID                          /* 등록자ID         */
+               ,T1.REGIST_DT                            /* 등록일시         */
+               ,T1.UPDUSR_ID                            /* 수정자ID         */
+               ,T1.UPDT_DT                              /* 수정일시         */
+               , CASE WHEN T1.WAIT_PROCESS_SE > '10' 
+                      THEN '미계약' 
+                      ELSE T1.CNTRCT_DE 
+                 END 
+                   AS ST_CONT_DATE                       /* 처리상태        */
+       
+/* 고객정보 */
+               ,T2.CSTMR_NM                                    /* 성명             */
+               ,SFCOM_DEC_ALL(T2.IHIDNUM) AS IHIDNUM            /* 주민등록번호     */
+               ,T2.ZIP                                   /* 우편번호         */
+               ,T2.ADRES                                 /* 주소             */
+               ,T2.ADRES_DETAIL                          /* 상세주소         */
+               ,T2.TELNO                                 /* 전화번호         */
+               ,T2.MBTLNO                                /* 휴대전화번호     */
+               ,T2.EMAIL                                 /* 이메일           */
+               ,T2.ADRES || T2.ADRES_DETAIL AS ST_ADRES  /*  전체주소        */
+               ,'['||T3.HOUSE_CODE||']'|| T3.HOUSE_NM AS HOUSE_CODE_NM  /* 주택코드명       */
+               ,T3.HOUSE_NM                           AS HOUSE_NM       /* 주택명           */
+           FROM TBSLS_HOUSE_MVN_WAITR T1                 /* TBL : 주택입주대기자  */
+               ,TBSLS_HOUSE_CSTMR    T2                  /* TBL : 주택고객        */
+               ,TBSLS_HOUSE_INFO     T3                  /* TBL : 주택정보        */
+
+           WHERE 1 = 1      
+             AND T1.WAIT_SN BETWEEN #ST_NO#  AND #END_NO#
+           <isNotEmpty property="HOUSE_CODE">
+             AND T1.HOUSE_CODE     = #HOUSE_CODE#
+           </isNotEmpty>
+             AND T1.HOUSE_CODE     = T3.HOUSE_CODE(+)
+             AND T1.HOUSE_CSTMR_NO = T2.HOUSE_CSTMR_NO(+)
+     
+             /*  처리구분(WAIT_PROCESS_SE)  01:계약, 02:입주계약, 11:미계약, 99:계약포기  */
+             <isNotEmpty property="SNDDNG_SE">
+                 <isEqual compareValue ="1" property="SNDDNG_SE">
+		    	     AND T1.CNTRCT_NTICE_DE  IS NULL               /*  미발송 */ 
+		    	     AND NVL(T1.WAIT_PROCESS_SE, '11') != '99'   
+		    	      
+		    	 </isEqual>
+		    	 <isEqual compareValue ="2" prepend="AND"  property="SNDDNG_SE">
+		    	     T1.CNTRCT_NTICE_DE  IS NOT NULL                /*   발송  */ 
+		    	 </isEqual>
+             </isNotEmpty>
+            
+             /*  평수  */
+             <isNotEmpty property="HOUSE_AEA">
+			  AND T1.AEA = #HOUSE_AEA#
+			 </isNotEmpty>
+			 
+			 /*  주민번호  */
+             <isNotEmpty property="JUMIN_NO">
+			  AND SFCOM_DEC_ALL(T2.IHIDNUM) LIKE '%'||#JUMIN_NO#||'%'
+			 </isNotEmpty>
+			
+			/*  대기자명  */
+             <isNotEmpty property="CSTMR_NM">
+			  AND T2.CSTMR_NM LIKE '%'||#CSTMR_NM#||'%'
+			 </isNotEmpty>
+			 
+			/*  접수일자:시작일  */
+            <isNotEmpty property="FROM_DATE">
+			    <![CDATA[	
+			        AND T1.WAIT_RCEPT_DE >= #FROM_DATE#
+			    ]]>
+			  
+			</isNotEmpty>
+			 
+			/*  접수일자:종료일  */
+            <isNotEmpty property="TO_DATE">
+			   <![CDATA[	
+			       AND T1.WAIT_RCEPT_DE <= #TO_DATE#
+			   ]]>	
+			</isNotEmpty>
+			
+             <isNotEmpty property="CSTMR_NO">
+			  AND T1.HOUSE_CSTMR_NO = #CSTMR_NO#
+			 </isNotEmpty>			
+			
+             
+           ORDER BY T1.HOUSE_CODE      /* 주택코드         */
+                  , T1.AEA             /* 주택타입코드     */
+                  , T1.WAIT_RCEPT_DE   /* 접수일자         */ 
+                  , T1.WAIT_RCEPT_SN
+                  , T1.WAIT_SN   /* 대기접수일련번호 */
+                 
+	  </select>	  
+	  
+	  
+	  <!-- 쿼리명      : 주택입주 대기자 신규 등록
+	        설명       : 주택입주 대기자 신규 등록 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.10.13
+
+	        수정일  수정자  수정내용
+	   -->
+	   
+	  <insert id="SLS020500DAO.insertHouseMvnWaitrList" parameterClass="java.util.Map">
+	      INSERT INTO TBSLS_HOUSE_MVN_WAITR
+		  (    
+		     HOUSE_CODE           
+            ,HOUSE_SN             
+            ,DONG                 
+            ,HO                   
+            ,HOUSE_TY_CODE        
+            ,AEA                  
+            ,WAIT_RCEPT_DE        
+            ,WAIT_RCEPT_SN         
+            ,HOUSE_CSTMR_NO       
+            ,QUALF_SE             
+            ,CNTRCT_DE            
+            ,CNTRCT_NTICE_DE      
+            ,WAITR_CANCL_PRVONSH  
+            ,FAMILY_CO            
+            ,WAIT_PROCESS_SE      
+            ,RM                   
+            ,REGISTER_ID          
+            ,REGIST_DT            
+            ,UPDUSR_ID            
+            ,UPDT_DT              
+                   
+
+		  ) VALUES (
+		     #HOUSE_CODE#                                               /* 주택코드         */                 
+             ,( SELECT NVL(MAX(HOUSE_SN),0) + 1 AS HOUSE_SN             /* 주택일련번호     */
+                  FROM TBSLS_HOUSE_MVN_WAITR
+                 WHERE HOUSE_CODE= #HOUSE_CODE#
+               )  
+            ,#DONG#                                                     /* 동 */
+            ,#HO#                                                       /* 호 */
+            ,#HOUSE_TY_CODE#                                            /* 주택타입코드     */
+            ,#AEA#                                                      /* 평수             */
+            ,#WAIT_RCEPT_DE#                                            /* 대기접수일자     */  
+            ,( SELECT NVL(MAX(WAIT_RCEPT_SN), 0) + 1 AS WAIT_RCEPT_SN   /* 대기접수일련번호 */
+                 FROM TBSLS_HOUSE_MVN_WAITR
+                WHERE HOUSE_CODE= #HOUSE_CODE#
+                  AND WAIT_RCEPT_DE= #WAIT_RCEPT_DE#
+                  AND AEA= #AEA#
+              )
+            ,#HOUSE_CSTMR_NO#                                            /* 주택고객번호    */    
+            ,#QUALF_SE#                                                  /* 자격구분        */
+            ,#CNTRCT_DE#                                                 /* 계약일자        */
+            ,#CNTRCT_NTICE_DE#                                           /* 계약통지일자    */
+            ,#WAITR_CANCL_PRVONSH#                                       /* 대기자취소사유  */ 
+            ,#FAMILY_CO#                                                 /* 가족수          */
+            ,#WAIT_PROCESS_SE#                                           /* 대기처리구분    */
+            ,#RM#                                                        /* 비고            */
+            ,#S_USER_ID#                                                 /* 등록자ID        */
+            ,SYSDATE                                                     /* 등록일시        */
+            ,#S_USER_ID#                                                 /* 수정자ID        */
+            ,SYSDATE                                                     /* 수정일시        */
+		         	     
+		  )
+	  </insert>   
+
+	  <insert id="SLS020500DAO.insertHouseMvnWaitrFamily" parameterClass="java.util.Map">
+			INSERT INTO TBSLS_HOUSE_MVN_WAITR_FAMILY (
+			   HOUSE_CODE, HOUSE_SN, FAMILY_SN, 
+			   HOUSE_CSTMR_NO, FAMILY_RELATE, RM, 
+			   REGISTER_ID, REGIST_DT, UPDUSR_ID, 
+			   UPDT_DT) 
+			SELECT A.HOUSE_CODE,
+			       A.HOUSE_SN,
+			       (SELECT COUNT(1) FROM TBSLS_HOUSE_MVN_WAITR_FAMILY 
+			         WHERE HOUSE_CODE = A.HOUSE_CODE AND HOUSE_SN = A.HOUSE_SN)+1 AS FAMILY_SN,
+			       #HOUSE_CSTMR_NO# AS HOUSE_CSTMR_NO,
+			       NVL((SELECT CODE FROM TBCOM_CMMN_CODE
+			         WHERE GRP_CODE = 'HRM013'  AND CODE_CN = #FAMILY_RELATE# ), '999') AS FAMILY_RELATE,
+			         #FAMILY_RELATE# AS RM,
+			       #S_USER_ID# AS REGITER_ID,
+			       SYSDATE AS REGIST_DT,
+			       #S_USER_ID# AS UPDUSR_ID,
+			       SYSDATE AS UPDT_DT
+			 FROM TBSLS_HOUSE_MVN_WAITR A,
+			      TBSLS_HOUSE_CSTMR C      
+			 WHERE A.HOUSE_CSTMR_NO = C.HOUSE_CSTMR_NO
+			   AND C.IHIDNUM = SFCOM_ENC_ALL(REPLACE(#MST_IHIDNUM#, '-', ''))
+			   AND A.HOUSE_CODE = #HOUSE_CODE#
+	  </insert>	  
+
+	  
+	   <!-- 쿼리명     : 주택계약 입주 대기자 수정
+	        설명       : 주택계약 입주 대기자 수정 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.10.13
+
+	        수정일  수정자  수정내용
+	   -->
+	  <update id="SLS020500DAO.updateHouseMvnWaitrList" parameterClass="java.util.Map" >
+	    UPDATE TBSLS_HOUSE_MVN_WAITR
+          SET DONG               = #DONG#                  /*  동            */
+             ,HO                 = #HO#                    /* 호             */
+             ,HOUSE_TY_CODE      = #HOUSE_TY_CODE#         /* 주택타입코드   */
+             ,WAIT_RCEPT_DE      = #WAIT_RCEPT_DE#         /* 대기접수일자   */
+             ,AEA                = #AEA#                   /* 평수           */
+             ,WAIT_SN      = ( SELECT NVL(MAX(WAIT_SN), 0) + 1 AS WAIT_SN   /* 대기접수일련번호 */
+                                       FROM TBSLS_HOUSE_MVN_WAITR
+                                      WHERE HOUSE_CODE    = #HOUSE_CODE#
+                                        AND WAIT_RCEPT_DE = #WAIT_RCEPT_DE#
+                                        AND AEA= #AEA#
+                                    )
+             ,HOUSE_CSTMR_NO      = #HOUSE_CSTMR_NO#        /* 주택고객번호   */
+             ,QUALF_SE            = #QUALF_SE#              /* 자격구분       */
+             ,CNTRCT_DE           = #CNTRCT_DE#             /* 계약일자       */
+             ,CNTRCT_NTICE_DE     = #CNTRCT_NTICE_DE#       /* 계약통지일자   */
+             ,WAITR_CANCL_PRVONSH = #WAITR_CANCL_PRVONSH#   /* 대기자취소사유 */
+             ,FAMILY_CO           = #FAMILY_CO#             /* 가족수         */
+             ,WAIT_PROCESS_SE     = #WAIT_PROCESS_SE#       /* 대기처리구분   */
+             ,RM                  = #RM#                    /* 비고           */
+             ,UPDUSR_ID           = #S_USER_ID#             /* 수정자ID       */
+             ,UPDT_DT             = SYSDATE                 /* 수정일시       */
+             
+             
+        WHERE 1 = 1
+          AND HOUSE_CODE  = #HOUSE_CODE#                     /* 주택코드       */
+          AND HOUSE_SN    = #HOUSE_SN#                       /* 주택일련번호   */
+	  	  
+	  </update>
+	  
+	  
+	   <!-- 쿼리명     : 주택계약 입주대기자 삭제
+	        설명       : 주택계약 입주대기자 삭제 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.10.13
+
+	        수정일  수정자  수정내용
+	   -->
+	  <delete id="SLS020500DAO.deleteHouseMvnWaitrList" parameterClass="java.util.Map">
+		
+	      DELETE TBSLS_HOUSE_MVN_WAITR
+		    WHERE 1 = 1
+              AND HOUSE_CODE  = #HOUSE_CODE#   /* 주택코드     */
+              AND HOUSE_SN    = #HOUSE_SN#     /* 주택일련번호 */
+	  </delete>   	  
+
+	  <delete id="SLS020500DAO.deleteHouseMvnWaitrFamily" parameterClass="java.util.Map">		
+	      DELETE TBSLS_HOUSE_MVN_WAITR_FAMILY
+		    WHERE 1 = 1
+              AND HOUSE_CODE  = #HOUSE_CODE#   /* 주택코드     */
+              AND HOUSE_SN    = #HOUSE_SN#     /* 주택일련번호 */
+	  </delete>   	  
+	  
+	  
+	  <!-- 쿼리명      : 주택계약 입주 대기자 대기일련번호 업데이트
+	        설명       : 주택계약 입주 대기자 대기일련번호 업데이트 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.10.13
+
+	        수정일  수정자  수정내용
+	   -->
+	  <update id="SLS020500DAO.updateHouseMvnWaitrSn" parameterClass="java.util.Map" >
+	    <![CDATA[
+	    UPDATE TBSLS_HOUSE_MVN_WAITR A
+          SET WAIT_SN = NVL(( SELECT COUNT (1)                                                                                
+                                FROM TBSLS_HOUSE_MVN_WAITR B                                                                           
+                                WHERE 1=1
+                                  AND B.CNTRCT_NTICE_DE IS NULL  
+                                  AND NVL(B.WAIT_PROCESS_SE,'11') != '99'                                      
+                                  AND B.HOUSE_CODE   = A.HOUSE_CODE
+                                  AND B.AEA          = A.AEA
+                                  AND B.WAIT_RCEPT_DE|| LPAD(B.WAIT_RCEPT_SN,6,'0') < A.WAIT_RCEPT_DE|| LPAD(A.WAIT_RCEPT_SN,6,'0')  
+                           ),0) + 1                                                                                            
+
+          WHERE A.HOUSE_CODE   = #HOUSE_CODE#
+            AND A.AEA          = #AEA#                                                                                          
+            AND A.CNTRCT_NTICE_DE IS NULL
+            AND NVL(A.WAIT_PROCESS_SE, '11') != '99'
+             ]]>
+	  	  
+	  </update>
+	  
+	  
+	  <!-- 쿼리명     : 주택 입주대기자 가족리스트 
+           설명       : 주택 입주대기자 가족 리스트 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.10.12
+
+	       수정일  수정자  수정내용
+	   -->        
+      <select id="SLS020500DAO.selectCstmrFamilyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		
+			SELECT SFCOM_DEC_ALL(T2.IHIDNUM) AS IHIDNUM  /* 주민번호 */
+                  ,T2.CSTMR_NM               /* 성명     */
+                  ,T1.FAMILY_RELATE    /* 관계     */
+                  ,T1.HOUSE_CODE
+                  ,T1.HOUSE_SN
+                  ,T1.FAMILY_SN
+                  ,T1.HOUSE_CSTMR_NO
+                  ,( SELECT CODE_NM 
+                       FROM TBCOM_CMMN_CODE 
+                      WHERE USE_AT = '1'
+                        AND GRP_CODE = 'HRM013'
+                        AND CODE = T1.FAMILY_RELATE
+                   ) AS FAMILY_RELATE_NM  
+                  ,T1.RM                 /* 비고   */
+              FROM TBSLS_HOUSE_MVN_WAITR_FAMILY T1 
+                  ,TBSLS_HOUSE_CSTMR     T2 
+             WHERE 1 = 1
+               AND T1.HOUSE_CODE     = #HOUSE_CODE#
+               AND T1.HOUSE_SN       = #HOUSE_SN#
+               AND T1.HOUSE_CSTMR_NO = T2.HOUSE_CSTMR_NO(+)
+                 
+	  </select>	  
+	  
+      
+      
+	 <!-- 쿼리명      : 주택 입주대기자 고객 시퀀스 추출
+           설명       : 주택 입주대기자 고객 시퀀스 추출
+	       작성자     : 정윤원
+	       최초작성일 : 2015.10.12
+
+	       수정일  수정자  수정내용
+	   -->  
+	<select id="SLS020500DAO.selectCstmrNo" resultClass="Integer">	
+		SELECT SQ_TBSLS_HOUSE_CSTMR_1.NEXTVAL FROM DUAL
+	</select>
+	
+
+	<select id="SLS020500DAO.selectCstmrNoFrom" parameterClass="java.util.HashMap" resultClass="Integer">	
+		SELECT HOUSE_CSTMR_NO FROM TBSLS_HOUSE_CSTMR 
+		WHERE IHIDNUM = SFCOM_ENC_ALL(REPLACE(#IHIDNUM#, '-', ''))
+		  AND CSTMR_NM = #CSTMR_NM#
+	</select>
+
+	
+	 <!-- 쿼리명      : 주택 입주대기자 주택고객 등록
+           설명       : 주택 입주대기자 주택고객 등록 쿼리문
+	       작성자     : 정윤원
+	       최초작성일 : 2015.10.14
+
+	       수정일  수정자  수정내용
+	   -->  
+	 <insert id="SLS020500DAO.insertShouseCstmrInfo" parameterClass="java.util.Map">
+		INSERT INTO TBSLS_HOUSE_CSTMR
+		(
+			  HOUSE_CSTMR_NO           /* 주택고객번호  */
+			, CSTMR_NM                       /* 성명          */
+			, IHIDNUM                  /* 주민번호      */
+			, ADRES                    /* 주소          */
+			, ADRES_DETAIL             /* 상세주소      */
+			, TELNO                    /* 전화번호      */
+			, MBTLNO                   /* 휴대폰번호    */
+			, REGISTER_ID
+			, REGIST_DT
+			, UPDUSR_ID
+			, UPDT_DT
+		)
+		VALUES
+		(   
+		     #HOUSE_CSTMR_NO#          /* 주택고객번호 */
+		    ,#CSTMR_NM#                      /* 성명         */
+		    ,SFCOM_ENC_ALL(REPLACE(#IHIDNUM#, '-', ''))   /* 주민번호     */
+		    ,#ADRES#                   /* 주소         */
+		    ,#ADRES_DETAIL#            /* 상세주소     */
+			,#TELNO#                   /* 전화번호     */
+			,#MBTLNO#                  /* 휴대폰번호   */
+			,#S_USER_ID#               /* 등록자ID     */
+			,SYSDATE                   /* 등록일시     */
+			,#S_USER_ID#               /* 수정자ID     */
+			,SYSDATE                   /* 수정일시     */
+		)
+	</insert>
+	
+	 <!-- 쿼리명      : 주택 입주대기자 주택고객 정보 업데이트
+           설명       : 
+	       작성자     : 박태혁
+	       최초작성일 : 2016.8.5
+
+	       수정일  수정자  수정내용
+	   -->  
+	 <update id="SLS020500DAO.updateShouseCstmrInfo" parameterClass="java.util.Map">
+		UPDATE TBSLS_HOUSE_CSTMR SET
+			  ADRES         = #ADRES#
+			, ADRES_DETAIL  = #ADRES_DETAIL#
+			, TELNO         = #TELNO#
+			, MBTLNO        = #MBTLNO#
+			, UPDUSR_ID     = #S_USER_ID#
+			, UPDT_DT       = SYSDATE
+		WHERE HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#
+	</update>
+	
+	
+	<!-- 쿼리명        : 주택입주 대기자 일괄등록
+	        설명       : 주택입주 대기자 일괄등록록 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.10.13
+
+	        수정일  수정자  수정내용
+	   -->
+	   
+	  <insert id="SLS020500DAO.insertHouseMvnWaitrPouUp" parameterClass="java.util.Map">
+	      INSERT INTO TBSLS_HOUSE_MVN_WAITR
+		  (    
+		     HOUSE_CODE                                                 /* 주택코드         */
+            ,HOUSE_SN                                                   /* 주택일련번호     */
+            ,AEA                                                        /* 평수             */
+            ,WAIT_RCEPT_DE                                              /* 대기접수일자     */  
+            ,WAIT_RCEPT_SN                                              /* 대기접수일련번호 */
+            ,HOUSE_CSTMR_NO                                             /* 주택고객번호     */
+            ,QUALF_SE                                                   /* 자격구분         */
+            ,REGISTER_ID                                                /* 등록자ID         */ 
+            ,REGIST_DT                                                  /* 등록일시         */
+            ,UPDUSR_ID                                                  /* 수정자ID         */
+            ,UPDT_DT                                                    /* 수정일시         */
+		  ) VALUES (
+		     #HOUSE_CODE#                                               /* 주택코드         */                 
+             ,( SELECT NVL(MAX(HOUSE_SN),0) + 1 AS HOUSE_SN             /* 주택일련번호     */
+                  FROM TBSLS_HOUSE_MVN_WAITR
+                 WHERE HOUSE_CODE= #HOUSE_CODE#
+               )  
+            ,#AEA#                                                      /* 평수             */
+            ,#WAIT_RCEPT_DE#                                            /* 대기접수일자     */  
+            ,#WAIT_RCEPT_SN#
+            ,#HOUSE_CSTMR_NO#                                            /* 주택고객번호    */    
+            ,(select code from tbcom_cmmn_code
+               where grp_code = 'HOU004'  and code_cn = #QUALF_SE#)      /* 자격구분        */
+            ,#S_USER_ID#                                                 /* 등록자ID        */
+            ,SYSDATE                                                     /* 등록일시        */
+            ,#S_USER_ID#                                                 /* 수정자ID        */
+            ,SYSDATE                                                     /* 수정일시        */
+		  )
+	  </insert>   
+	  
+	  
+	  <!-- 쿼리명      : 주택계약 입주 대기자 계약통지일자 업데이트
+	        설명       : 주택계약 입주 대기자 계약통지일자 업데이트 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.10.15
+
+	        수정일  수정자  수정내용
+	   -->
+	  <update id="SLS020500DAO.updateNticeDeList" parameterClass="java.util.Map" >
+	    UPDATE TBSLS_HOUSE_MVN_WAITR
+          SET CNTRCT_NTICE_DE     = TO_CHAR(SYSDATE,'YYYYMMDD')       /* 계약통지일자   */
+             ,UPDUSR_ID           = #S_USER_ID#                       /* 수정자ID       */
+             ,UPDT_DT             = SYSDATE                           /* 수정일시       */
+        WHERE 1 = 1
+          AND HOUSE_CODE = #HOUSE_CODE#
+          AND HOUSE_SN   = #HOUSE_SN#
+          AND CNTRCT_NTICE_DE IS NULL 
+	  	  
+	  </update>
+
+	<insert id="SLS020500DAO.insertMvnFamily" parameterClass="java.util.Map">
+		INSERT INTO TBSLS_HOUSE_MVN_WAITR_FAMILY (
+			HOUSE_CODE, 
+			HOUSE_SN, 
+			FAMILY_SN, 
+			HOUSE_CSTMR_NO, 
+			FAMILY_RELATE, 
+			RM, 
+			REGISTER_ID, 
+			REGIST_DT, 
+			UPDUSR_ID, 
+			UPDT_DT) 
+		VALUES (
+			#HOUSE_CODE#, 
+			#HOUSE_SN#, 
+			(SELECT NVL(MAX(FAMILY_SN), 0) FROM TBSLS_HOUSE_MVN_WAITR_FAMILY 
+			         WHERE HOUSE_CODE = #HOUSE_CODE# AND HOUSE_SN = #HOUSE_SN#)+1, 
+			#HOUSE_CSTMR_NO#,
+			#FAMILY_RELATE#, 
+			#RM#, 
+			#S_USER_ID#, 
+			SYSDATE, 
+			#S_USER_ID#, 
+			SYSDATE) 
+	</insert>	  
+
+	<update id="SLS020500DAO.updateMvnFamily" parameterClass="java.util.Map" >
+	    UPDATE TBSLS_HOUSE_MVN_WAITR_FAMILY
+          SET RM            = #RM#
+             ,FAMILY_RELATE = #FAMILY_RELATE#
+             ,UPDUSR_ID     = #S_USER_ID#                       /* 수정자ID       */
+             ,UPDT_DT       = SYSDATE                           /* 수정일시       */
+        WHERE 1 = 1
+          AND HOUSE_CODE = #HOUSE_CODE#
+          AND HOUSE_SN   = #HOUSE_SN#
+          AND FAMILY_SN  = #FAMILY_SN#
+	</update>
+
+	<delete id="SLS020500DAO.deleteMvnFamily" parameterClass="java.util.Map">		
+		DELETE TBSLS_HOUSE_MVN_WAITR_FAMILY
+		 WHERE 1 = 1
+		   AND HOUSE_CODE = #HOUSE_CODE#   /* 주택코드     */
+		   AND HOUSE_SN   = #HOUSE_SN#     /* 주택일련번호 */
+		   AND FAMILY_SN  = #FAMILY_SN#
+	</delete>
+	
+      <select id="SLS020500DAO.selectHeaderInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT C.ZIP,
+			       C.ADRES || ' ' || C.ADRES_DETAIL AS ADDR,
+			       A.CHRCTR_PREPAR_VALUE_2 AS TEL,
+			       CHRCTR_PREPAR_VALUE_1 AS FAX,
+			       A.CHRCTR_PREPAR_VALUE_0 AS CHIEF,
+			       (SELECT CHRCTR_PREPAR_VALUE_0
+			          FROM TBCOM_CMMN_CODE A
+			         WHERE     A.GRP_CODE = 'PCOM07'
+			               AND A.CODE = 'HOU002')
+			          AS WORKER
+			  FROM TBCOM_CMMN_CODE A, TBPMS_CPR_INFO C
+			 WHERE     A.GRP_CODE = 'PCOM07'
+			       AND CODE = 'HOU001'		 
+	  </select>		  
+</sqlMap>
+

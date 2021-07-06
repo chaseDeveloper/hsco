@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT030408">
+
+	<!-- 쿼리명 : 과오납 조회
+	설명 : 신청자 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.26 
+	-->
+	<select id="RNT030408DAO.getList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+SELECT 
+       A.AREA_SE
+     , A.CNTRCTR_NO
+     , A.DONG
+     , A.HO
+     , D.NM
+     , D.ZIP
+     , D.ADRES ||' '|| D.ADRES_DETAIL AS ADRES
+     , D.ADRES_DETAIL
+     , D.TELNO
+     , D.MBTLNO
+     , SFCOM_DEC_ALL(D.IHIDNUM) AS IHIDNUM
+     , A.RCIV_NO
+     , A.DEDT_DE
+     , A.RCIV_SE
+     , A.RCIV_DE
+     , A.RCIV_AMOUNT
+     , A.FALT_AMOUNT
+     , NVL(E.RNTCHRG,0) AS RNTCHRG
+     , NVL(F.OVDINTR,0) AS OVDINTR
+     , (SELECT VACCT_NO FROM VA_MAST WHERE BANK_CD = '031' AND OPT1 = '1' AND CUST_CD = B.CNTRCTR_NO) AS VACCT_NO     
+     , B.FALT_RETURN_DE
+     , B.FALT_RETURN_AT
+     , B.RETURN_BANK_CODE
+     , SFCOM_CODE_NM('COM021', B.RETURN_BANK_CODE , 'CODE_NM') AS RETURN_BANK_NM
+     , B.RETURN_ACNUTNO
+     , B.RETURN_DPSTR
+     , B.PROCESS_DTLS
+     , B.RM
+     , B.DECSN_YEAR
+     , B.EXPNDTR_DECSN_NO
+  FROM TBRNT_LFSTS_RCIV A
+  LEFT JOIN TBRNT_LFSTS_OVERRPAY B ON A.CNTRCTR_NO = B.CNTRCTR_NO AND A.RCIV_DE = B.RCIV_DE
+  JOIN TBRNT_LFSTS_CNTRCT C ON A.CNTRCTR_NO = C.CNTRCTR_NO
+  JOIN TBRNT_LFSTS_CSTMR D ON  C.LFSTS_CSTMR_NO = D.LFSTS_CSTMR_NO
+  LEFT JOIN (SELECT CNTRCTR_NO 
+                  , SUM(NVL(RNTCHRG_THSMON,0)) + SUM(NVL(RSVMNEY_THSMON,0)) + SUM(NVL(OVDINTR,0)) + SUM(NVL(RNTCHRG_RDCAMT,0)) + SUM(NVL(RSVMNEY_RDCAMT,0)) AS RNTCHRG
+               FROM TBRNT_LFSTS_MT_RNTCHRG 
+              WHERE RCIV_DE IS NULL
+              GROUP BY CNTRCTR_NO) E ON A.CNTRCTR_NO = E.CNTRCTR_NO
+  LEFT JOIN (SELECT CNTRCTR_NO 
+                  , SUM(NVL(OVDINTR,0)) AS OVDINTR
+               FROM TBRNT_LFSTS_SPRMNY_RETURN 
+              WHERE RETURN_DE IS NULL
+              GROUP BY CNTRCTR_NO) F ON A.CNTRCTR_NO = F.CNTRCTR_NO        
+ WHERE A.OPERT_SE = 'O'  
+   AND A.PROCESS_STTUS = 'C'
+   AND A.RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+<isNotEmpty property="AREA_SE"> 
+  AND A.AREA_SE = #AREA_SE#
+</isNotEmpty>      
+ ORDER BY A.CNTRCTR_NO 
+	</select>
+
+	<!-- 쿼리명 : 
+	과오납 신규 , 수정 , 결의서 INSERT
+	설명 : 과오납 신규 수정 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.26
+	-->  
+<select id="RNT030408DAO.SP_RN_RENT_REC_DESC_MISS_IU" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+{ CALL SP_RN_RENT_REC_DESC_MISS_IU(
+     #RCIV_SE#
+    ,#CNTRCTR_NO#
+    ,#RCIV_NO#
+    ,#DEDT_DE#
+    ,#RCIV_DE#
+    ,#RCIV_AMOUNT#
+    ,#FALT_AMOUNT#
+    ,#FALT_RETURN_AT#
+    ,#FALT_RETURN_DE#
+    ,#RETURN_BANK_CODE#
+    ,#RETURN_ACNUTNO#
+    ,#RETURN_DPSTR#
+    ,#PROCESS_DTLS#
+    ,#RM#
+	,#S_USER_ID#
+	)}
+</select> 
+
+	<!-- 쿼리명 : 과오납 조회
+	설명 : 신청자 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.26 
+	-->
+	<select id="RNT030408DAO.PRINT" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+	SELECT 
+        CNTRCTR_NO
+      , A.RCIV_DE
+      , A.RCIV_AMOUNT 
+      , A.MT_AMOUNT 
+      , A.FALT_AMOUNT
+      , A.NM
+      , A.ZIP
+      , A.ADRES
+      , A.ADRES_DETAIL
+      , A.PROCESS_DTLS
+      , A.RM 
+      , B.*
+  FROM
+  (
+    SELECT  DISTINCT A.CNTRCTR_NO
+          , F.NM
+          , F.ZIP
+          , F.ADRES
+          , F.ADRES_DETAIL
+          , SUBSTR(B.RCIV_DE , 1, 4) AS YYYY
+          , TO_CHAR(TO_DATE(B.RCIV_DE) , 'YYYY-MM-DD') AS RCIV_DE
+          , B.RCIV_AMOUNT
+          , B.RCIV_AMOUNT - B.FALT_AMOUNT AS MT_AMOUNT      
+          , B.FALT_AMOUNT
+          , D.BUDGET_ACNT_CODE
+          , D.BSNS_SE
+          , D.BALC_SE
+          , A.PROCESS_DTLS
+          , A.RM          
+      FROM TBRNT_LFSTS_OVERRPAY A
+      JOIN TBRNT_LFSTS_RCIV B ON A.CNTRCTR_NO = B.CNTRCTR_NO
+      JOIN TBRNT_LFSTS_ANACT C ON B.CNTRCTR_NO = C.CNTRCTR_NO AND B.FALT_AMOUNT = C.ANACT_AMOUNT 
+      JOIN TBACC_BUDGET_ACNT_RENT_MAPNG D ON C.BUDGET_ACNT_CODE = D.BUDGET_ACNT_CODE
+      JOIN TBRNT_LFSTS_CNTRCT E ON A.CNTRCTR_NO = E.CNTRCTR_NO
+      JOIN TBRNT_LFSTS_CSTMR F ON E.LFSTS_CSTMR_NO = F.LFSTS_CSTMR_NO
+     WHERE 1=1
+       AND B.OPERT_SE = 'O'
+       AND B.CNTRCTR_NO = #CNTRCTR_NO#
+       AND B.RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+   ) A
+   JOIN (SELECT 
+                A.YEAR
+              , A.BSNS_SE
+              , A.BALC_SE
+              , A.BUDGET_ACNT_CODE AS LV5_CODE 
+              , A.BUDGET_ACNT_NM   AS LV5_NM
+              , B.BUDGET_ACNT_CODE AS LV4_CODE
+              , B.BUDGET_ACNT_NM   AS LV4_NM 
+              , C.BUDGET_ACNT_CODE AS LV3_CODE
+              , C.BUDGET_ACNT_NM   AS LV3_NM 
+              , D.BUDGET_ACNT_CODE AS LV2_CODE
+              , D.BUDGET_ACNT_NM   AS LV2_NM
+              , E.BUDGET_ACNT_CODE AS LV1_CODE
+              , E.BUDGET_ACNT_NM   AS LV1_NM
+          FROM TBBDG_BUDGET_ACNT_CODE A
+          LEFT JOIN TBBDG_BUDGET_ACNT_CODE B ON A.UPPER_ACNT_CODE = B.BUDGET_ACNT_CODE AND A.YEAR = B.YEAR AND A.BSNS_SE = B.BSNS_SE AND A.BALC_SE = B.BALC_SE
+          LEFT JOIN TBBDG_BUDGET_ACNT_CODE C ON B.UPPER_ACNT_CODE = C.BUDGET_ACNT_CODE AND C.YEAR = B.YEAR AND C.BSNS_SE = B.BSNS_SE AND C.BALC_SE = B.BALC_SE
+          LEFT JOIN TBBDG_BUDGET_ACNT_CODE D ON C.UPPER_ACNT_CODE = D.BUDGET_ACNT_CODE AND C.YEAR = D.YEAR AND C.BSNS_SE = D.BSNS_SE AND C.BALC_SE = D.BALC_SE
+          LEFT JOIN TBBDG_BUDGET_ACNT_CODE E ON D.UPPER_ACNT_CODE = E.BUDGET_ACNT_CODE AND D.YEAR = E.YEAR AND D.BSNS_SE = E.BSNS_SE AND D.BALC_SE = E.BALC_SE          
+         ) B ON A.YYYY = B.YEAR AND A.BUDGET_ACNT_CODE = B.LV5_CODE  AND A.BSNS_SE = B.BSNS_SE AND A.BALC_SE = B.BALC_SE
+	</select>
+
+<!--  지출결의번호 , 결의년도 업데이트 -->
+	<update id="RNT030408DAO.updateExpndtrDecsnNo" parameterClass="java.util.Map">
+		UPDATE TBRNT_LFSTS_OVERRPAY SET
+			 DECSN_YEAR = #DSNMASTR.DECSN_YEAR#
+			,EXPNDTR_DECSN_NO  	= #DSNMASTR.DECSN_NO#
+		WHERE CNTRCTR_NO = #CNTRCTR_NO#
+		  AND RCIV_DE = #RCIV_DE#
+		  AND RCIV_NO = #RCIV_NO#
+	</update>
+
+</sqlMap>

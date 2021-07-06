@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS100204DAO">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   
+	  <!-- 결의서 목록 -->
+	  <select id="SLS100204DAO.selectLadDecsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+					
+			SELECT 0 AS CHK
+			      ,A.DECSN_SE
+			      ,A.BSNS_SE
+			      ,A.BUDGET_ACNT_CODE
+			      ,SFCOM_CODE_NM('HOU0Z2', A.DECSN_SE, 'ALL_CODE_NM') AS DECSN_SE_NM
+			      ,SFCOM_CODE_NM('BDG017', A.BSNS_SE || '1', 'ALL_CODE_NM') AS BSNS_SE_NM
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X
+			         WHERE X.YEAR 				= A.BUDGET_YEAR
+			           AND X.BSNS_SE 			= A.BSNS_SE
+			           AND X.BALC_SE 			= '1'
+			           AND X.BUDGET_ACNT_CODE 	= A.BUDGET_ACNT_CODE) AS BUDGET_ACNT_NM /* 예산계정코드명 */
+			      ,SFSLS_LAD_BUDGET_ACCT_NAME('AA'
+			                                 ,A.BUDGET_YEAR
+			                                 ,A.BSNS_SE || '1' /* BALC_SE */
+			                                 ,A.BUDGET_ACNT_CODE
+			                                 ,A.EXPNDTR_UNIT_CODE) AS BUDGET_ACNT_NM2
+			      ,B.F_CNT
+			      ,B.DECSN_AMOUNT_SUM
+			      ,SFSLS_LAD_NM(A.LAD_CODE, 'ALL_LAD_NM') AS ALL_LAD_NM
+			      ,B.PAY_TMLMT
+			      ,A.DECSN_DE
+			      ,SUMRY
+			      ,RM
+			      ,(SELECT CC.ADRES || '' || CC.ADRES_DETAIL
+			          FROM  TBSLS_LCNTRCTR C /* 토지계약자 */, TBSLS_LAD_CSTMR CC /* 토지고객 */
+			         WHERE C.LAD_CSTMR_NO 	= CC.LAD_CSTMR_NO
+			           AND C.CNTRCTR_NO 	= A.CNTRCTR_NO
+			           AND C.LAD_CODE 		= A.LAD_CODE
+			           AND C.BLCK 			= A.BLCK
+			           AND C.LOT 			= A.LOT
+			           AND C.LOT_TY 		= A.LOT_TY) AS ADDR,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   X.ACNT_LEVEL = 1
+                            AND SUBSTR (BUDGET_ACNT_CODE, 1, 1) =
+                                  SUBSTR (A.BUDGET_ACNT_CODE, 1, 1)
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_1,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   X.ACNT_LEVEL = 2
+                            AND SUBSTR (BUDGET_ACNT_CODE, 1, 2) =
+                                  SUBSTR (A.BUDGET_ACNT_CODE, 1, 2)
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_2,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   X.ACNT_LEVEL = 3
+                            AND SUBSTR (BUDGET_ACNT_CODE, 1, 3) =
+                                  SUBSTR (A.BUDGET_ACNT_CODE, 1, 3)
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_3,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_4			           
+			  FROM TBSLS_LAD_DECSN A /* 토지결의 */
+			      ,(SELECT MIN(LAD_DECSN_NO) AS F_LAD_DECSN_NO
+			              ,DECSN_SE
+			              ,BUDGET_YEAR
+			              ,BSNS_SE
+			              ,BUDGET_ACNT_CODE
+			              ,SUM(1) AS F_CNT
+			              ,SUM(DECSN_AMOUNT) AS DECSN_AMOUNT_SUM
+			              ,CASE
+			                 WHEN PAY_CODE IN ('PA', 'PP', 'HG', 'HC', 'GB') THEN
+			                  DECSN_DE
+			                 ELSE
+			                  PAY_TMLMT
+			               END AS PAY_TMLMT
+			              ,DECSN_DE
+			          FROM TBSLS_LAD_DECSN /* 토지결의 */
+			         WHERE  1 = 1
+			           AND SUBSTR(DECSN_DE,1,6) = #mdat_de#
+			     
+			     <isNotEmpty property="DECSN_SE">
+			   		   AND DECSN_SE = #DECSN_SE#
+				 </isNotEmpty>
+				
+			         GROUP BY DECSN_SE
+			                 ,BUDGET_YEAR
+			                 ,BSNS_SE
+			                 ,BUDGET_ACNT_CODE
+			                 ,CASE
+			                    WHEN PAY_CODE IN ('PA', 'PP', 'HG', 'HC', 'GB') THEN
+			                     DECSN_DE
+			                    ELSE
+			                     PAY_TMLMT
+			                  END
+			                 ,DECSN_DE) B
+			 WHERE A.DECSN_DE 		= B.DECSN_DE
+			   AND A.LAD_DECSN_NO 	= B.F_LAD_DECSN_NO
+			 ORDER BY A.DECSN_SE
+			         ,A.DECSN_DE DESC
+			         ,A.BUDGET_YEAR
+			         ,A.BSNS_SE
+			         ,A.BUDGET_ACNT_CODE
+	  </select>
+	  
+	  <!-- 수입 결의서 조회 -->
+	  <select id="SLS100204DAO.selectLadIncmeDecsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT A.DECSN_SE
+			      ,SFCOM_CODE_NM('HOU0Z2', A.DECSN_SE, 'ALL_CODE_NM') AS DECSN_SE_NM
+			      ,A.BSNS_SE
+			      ,A.BUDGET_ACNT_CODE
+			      ,TO_CHAR(TO_DATE(A.DECSN_DE), 'YYYY-MM-DD') AS DECSN_DE
+			      ,TO_CHAR(TO_DATE(A.PAY_TMLMT), 'YYYY-MM-DD') AS PAY_TMLMT
+			      ,A.BUDGET_YEAR
+			      ,B.F_CNT
+			      ,B.DECSN_AMOUNT_SUM
+			      ,CASE F_CNT
+			         WHEN 1 THEN
+			          SUMRY || ' ' ||
+			          (SELECT CC.CSTMR_NM
+			             FROM TBSLS_LAD_CSTMR CC /* 토지고객 */
+			            WHERE C.LAD_CSTMR_NO = CC.LAD_CSTMR_NO)
+			         ELSE
+			          SUMRY || ' ' ||
+			          (SELECT CC.CSTMR_NM
+			             FROM TBSLS_LAD_CSTMR CC /* 토지고객 */
+			            WHERE C.LAD_CSTMR_NO = CC.LAD_CSTMR_NO) || ' 외' ||
+			          TO_CHAR(F_CNT - 1) || '건'
+			       END AS F_SUMRY
+			      ,SFSLS_LAD_NM(A.LAD_CODE, 'ALL_LAD_NM') AS ALL_LAD_NM
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X
+			         WHERE X.BUDGET_ACNT_CODE 	= SUBSTR(A.BUDGET_ACNT_CODE, 1, 1) || '000000'
+			           AND X.YEAR 				= A.BUDGET_YEAR
+			           AND X.BSNS_SE 			= A.BSNS_SE) AS F_ACCT_1
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X
+			         WHERE X.BUDGET_ACNT_CODE 	= SUBSTR(A.BUDGET_ACNT_CODE, 1, 2) || '00000'
+			           AND X.YEAR 				= A.BUDGET_YEAR
+			           AND X.BSNS_SE 			= A.BSNS_SE) AS F_ACCT_2
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X
+			         WHERE X.BUDGET_ACNT_CODE 	= SUBSTR(A.BUDGET_ACNT_CODE, 1, 3) || '0000'
+			           AND X.YEAR 				= A.BUDGET_YEAR
+			           AND X.BSNS_SE 			= A.BSNS_SE) AS F_ACCT_3
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X
+			         WHERE X.BUDGET_ACNT_CODE 	= A.BUDGET_ACNT_CODE
+			           AND X.BSNS_SE 			= A.BSNS_SE
+			           AND X.YEAR 				= A.BUDGET_YEAR) AS F_ACCT_4
+			      ,CASE F_CNT
+			         WHEN 1 THEN
+			          A.RM
+			         ELSE
+			          A.RM || ' 외 기타'
+			       END AS F_RM
+			      ,CASE F_CNT
+			         WHEN 1 THEN
+			          ((SELECT CC.ADRES || ' ' || CC.ADRES_DETAIL
+			              FROM TBSLS_LAD_CSTMR CC /* 토지고객 */
+			             WHERE C.LAD_CSTMR_NO = CC.LAD_CSTMR_NO) || ' ' ||
+			          (SELECT CC.CSTMR_NM
+			              FROM TBSLS_LAD_CSTMR CC /* 토지고객 */
+			             WHERE C.LAD_CSTMR_NO = CC.LAD_CSTMR_NO))
+			         ELSE
+			          ((SELECT CC.ADRES || ' ' || CC.ADRES_DETAIL
+			              FROM TBSLS_LAD_CSTMR CC /* 토지고객 */
+			             WHERE C.LAD_CSTMR_NO = CC.LAD_CSTMR_NO) || ' ' ||
+			          (SELECT CC.CSTMR_NM
+			              FROM TBSLS_LAD_CSTMR CC /* 토지고객 */
+			             WHERE C.LAD_CSTMR_NO = CC.LAD_CSTMR_NO)) || ' 외 ' ||
+			          (F_CNT - 1) || ' 건'
+			       END AS F_ADDR
+			      ,TO_CHAR(TO_DATE(A.NHT_PBLICTE_DE), 'YYYY-MM-DD') AS NHT_PBLICTE_DE /* 고지서발행일자 */
+			      ,A.NHT_NO /* 고지서번호 */
+			      ,TO_CHAR(TO_DATE(A.RGIST_DE), 'YYYY-MM-DD') AS ACNTBK_STATE_DE /* 정리부기재일자 */	
+			      ,NM1
+		          ,NM2
+		          ,NM3   			      		       
+			  FROM TBSLS_LAD_DECSN A /* 토지결의 */
+			      ,TBSLS_LCNTRCTR C /* 토지계약자 */
+			      ,(SELECT MIN(LAD_DECSN_NO) AS F_LAD_DECSN_NO
+			              ,DECSN_SE
+			              ,BUDGET_YEAR
+			              ,BSNS_SE
+			              ,BUDGET_ACNT_CODE
+			              ,CASE
+			                 WHEN PAY_CODE IN ('PA', 'PP', 'HG', 'HC', 'GB') THEN
+			                  DECSN_DE
+			                 ELSE
+			                  PAY_TMLMT
+			               END AS PAY_TMLMT
+			              ,SUM(1) AS F_CNT
+			              ,SUM(DECSN_AMOUNT) AS DECSN_AMOUNT_SUM
+			          FROM TBSLS_LAD_DECSN /* 토지결의 */
+			         WHERE DECSN_DE = #DECSN_DE#
+			         GROUP BY DECSN_SE
+			                 ,BUDGET_YEAR
+			                 ,BSNS_SE
+			                 ,BUDGET_ACNT_CODE
+			                 ,CASE
+			                    WHEN PAY_CODE IN ('PA', 'PP', 'HG', 'HC', 'GB') THEN
+			                     DECSN_DE
+			                    ELSE
+			                     PAY_TMLMT
+			                  END        
+			        ) B
+			       , (SELECT MAX(DECODE(SANCTN_SN , '0' , EMPNM , '')) AS NM1  
+			              , MAX(DECODE(SANCTN_SN , '1' , EMPNM , '')) AS NM2
+			              , MAX(DECODE(SANCTN_SN , '2' , EMPNM , '')) AS NM3
+			          FROM (
+			                SELECT B.SANCTN_SN,
+			                       B.SANCTNER_ID,
+			                       CASE
+			                         WHEN AGNCY_SANCTNER_ID IS NULL THEN U.USER_NM 
+			                         ELSE U.USER_NM||CHR(13)||CHR(10)||'('||U1.USER_NM||')' 
+			                       END EMPNM,
+			                       B.SANCTN_STEP,
+			                       C.CODE_NM SANCTN_STEP_NM,
+			                       B.SANCTN_STTUS,
+			                       D.CODE_NM SANCTN_STTUS_NM,
+			                       E.CODE OFCPS_SE,
+			                       E.CODE_NM OFCPS_NM,
+			                       TO_CHAR(B.SANCTN_DT,'MM/DD') SANCTN_DT
+			                  FROM TBCOM_INNER_SANCTN_DTLS B
+			                 INNER JOIN TBCOM_INNER_SANCTNER S ON (S.INNER_SANCTN_ID=B.INNER_SANCTN_ID
+			                                                       AND S.SANCTN_SN=B.SANCTN_SN
+			                                                       AND S.SANCTNER_ID=B.SANCTNER_ID)
+			                  LEFT OUTER JOIN TBCOM_USER U ON (U.USER_ID=B.SANCTNER_ID)
+			                  LEFT OUTER JOIN TBCOM_USER U1 ON (U1.USER_ID=B.AGNCY_SANCTNER_ID)
+			                  LEFT OUTER JOIN TBHRM_HR_MASTR A ON (A.EMPNO=U.EMPNO)
+			                  LEFT OUTER JOIN TBCOM_CMMN_CODE C ON (C.GRP_CODE='COM028'
+			                                                        AND C.CODE=B.SANCTN_STEP)
+			                  LEFT OUTER JOIN TBCOM_CMMN_CODE D ON (D.GRP_CODE='COM032'
+			                                                        AND D.CODE=B.SANCTN_STTUS)
+			                  LEFT OUTER JOIN TBCOM_CMMN_CODE E ON (E.GRP_CODE='HRM021'
+			                                                        AND E.CODE=S.OFCPS_NM)
+			                 WHERE B.INNER_SANCTN_ID= (SELECT INNER_SANCTN_NO FROM TBPMS_DECSN_SANCTN WHERE JOB_SE = 'LAD' AND FORMAT_SE = '005' AND DECSN_YM = SUBSTR(#DECSN_DE#,1,6))
+			                   AND B.SANCTN_STEP IN ('S1','S2')
+			                   AND D.CODE = 'S01'
+                 ORDER BY B.SANCTN_SN)) Z   			
+			 WHERE A.LAD_DECSN_NO 		= B.F_LAD_DECSN_NO
+			   AND A.CNTRCTR_NO 		= C.CNTRCTR_NO
+			   AND A.LAD_CODE 			= C.LAD_CODE
+			   AND A.BLCK 				= C.BLCK
+			   AND A.LOT 				= C.LOT
+			   AND A.LOT_TY 			= C.LOT_TY
+			   AND A.DECSN_DE 			= #DECSN_DE#
+			   AND A.DECSN_SE 			= #DECSN_SE#
+			   AND A.BSNS_SE 			= #BSNS_SE#
+			   AND A.BUDGET_ACNT_CODE 	= #BUDGET_ACNT_CODE#
+			   AND B.PAY_TMLMT 			= #PAY_TMLMT#
+			 ORDER BY A.DECSN_SE, A.BUDGET_YEAR, A.BSNS_SE, A.BUDGET_ACNT_CODE					
+	  </select>
+	  
+	  <!-- 수입 결의서 조회2 -->
+	  <select id="SLS100204DAO.selectLadIncmeDecsnList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[		
+				SELECT MAX(SUMRY) AS SUMRY
+				      ,MAX((SELECT CC.CSTMR_NM
+				             FROM TBSLS_LCNTRCTR C /* 토지계약자 */, TBSLS_LAD_CSTMR CC /* 토지고객 */
+				            WHERE C.LAD_CSTMR_NO = CC.LAD_CSTMR_NO
+				              AND C.LAD_CODE = A.LAD_CODE
+				              AND C.CNTRCTR_NO = A.CNTRCTR_NO
+				              AND C.BLCK = A.BLCK
+				              AND C.LOT = A.LOT
+				              AND C.LOT_TY = A.LOT_TY)) AS CSTMR_NM
+				      ,COUNT(*) AS CNT
+				      ,MAX(CASE
+				             WHEN SUBSTR(DECSN_DE, 0, 4) = BUDGET_YEAR THEN '(금년)'
+				             WHEN SUBSTR(DECSN_DE, 0, 4) < BUDGET_YEAR THEN '(과년)'
+				           END) AS YEAR_GB
+				      ,SUM(DECSN_AMOUNT) AS SUM
+				
+				  FROM TBSLS_LAD_DECSN A /* 토지결의 */
+				 WHERE DECSN_DE 		= #DECSN_DE#
+				   AND DECSN_SE 		= #DECSN_SE#
+				   AND BSNS_SE 			= #BSNS_SE#
+				   AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+				   AND (CASE
+				         WHEN PAY_CODE IN ('PA', 'PP', 'HG', 'HC', 'GB') THEN
+				          DECSN_DE
+				         ELSE
+				          PAY_TMLMT
+				       END) 			= #PAY_TMLMT#
+				 ORDER BY A.LAD_CODE, A.CNTRCTR_NO
+		]]>
+	  </select>
+	  
+	  <!-- 결의 내역서 조회 -->
+	  <select id="SLS100204DAO.selectLadIncmeDtstmnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT DECSN_DE
+			      ,DECODE(A.DECSN_SE
+			             ,'1'
+			             ,'수입결의 내역서'
+			             ,'2'
+			             ,'수납결의 내역서'
+			             ,'3'
+			             ,'과오납결의 내역서'
+			             ,'4'
+			             ,'감액결의 내역서') AS DECSN_SE_NM
+			      ,SFSLS_LAD_NM(A.LAD_CODE, 'ALL_LAD_NM') AS ALL_LAD_NM
+			      ,SFCOM_CODE_NM('BDG017', A.BSNS_SE || '1', 'ALL_CODE_NM') AS BSNS_SE_NM
+			      ,A.BUDGET_ACNT_CODE
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X
+			         WHERE X.YEAR 				= A.BUDGET_YEAR
+			           AND X.BSNS_SE 			= A.BSNS_SE
+			           AND X.BALC_SE 			= '1'
+			           AND X.BUDGET_ACNT_CODE 	= A.BUDGET_ACNT_CODE) AS BUDGET_ACNT_NM /* 예산계정코드명 */
+			      ,TO_CHAR(BLCK) || '-' || TO_CHAR(LOT) || '-' || TO_CHAR(LOT_TY) AS F_BLOCK
+			      ,BLCK
+			      ,LOT
+			      ,LOT_TY
+			      ,CASE
+			         WHEN PAY_CODE IN ('PA', 'PP', 'HG', 'HC', 'GB') THEN
+			          DECSN_DE
+			         ELSE
+			          PAY_TMLMT
+			       END AS PAY_TMLMT
+			      ,DECSN_AMOUNT
+			      ,1 AS F_CNT
+			      ,CNTRCTR_NO
+			      ,(SELECT CC.CSTMR_NM
+			          FROM TBSLS_LCNTRCTR C /* 토지계약자 */, TBSLS_LAD_CSTMR CC /* 토지고객 */
+			         WHERE C.LAD_CSTMR_NO 	= CC.LAD_CSTMR_NO
+			           AND C.LAD_CODE 		= A.LAD_CODE
+			           AND C.CNTRCTR_NO 	= A.CNTRCTR_NO
+			           AND C.BLCK 			= A.BLCK
+			           AND C.LOT 			= A.LOT
+			           AND C.LOT_TY 		= A.LOT_TY) AS CSTMR_NM
+			      ,SUMRY
+			      ,RM
+			  FROM TBSLS_LAD_DECSN A /* 토지결의 */
+			 WHERE DECSN_DE 		= #DECSN_DE#
+			   AND DECSN_SE 		= #DECSN_SE#
+			   AND BSNS_SE 			= #BSNS_SE#
+			   AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+			   AND (CASE
+			         WHEN PAY_CODE IN ('PA', 'PP', 'HG', 'HC', 'GB') THEN
+			          DECSN_DE
+			         ELSE
+			          PAY_TMLMT
+			       END) 			= #PAY_TMLMT#
+			 ORDER BY A.LAD_CODE, A.CNTRCTR_NO
+	  </select>
+	  
+</sqlMap>

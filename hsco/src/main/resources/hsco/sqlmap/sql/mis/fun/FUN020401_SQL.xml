@@ -1,0 +1,723 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN020401_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+    
+	<!-- 등록전환 현황 조회 -->
+	<select id="FUN020401DAO.selectPbncdList01" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*FUN020401DAO.selectPbncdList01*/ ]]>
+		<![CDATA[
+			SELECT   A.CPTAL_KND                            AS CPTAL_KND
+                   , C.CODE_NM                              AS CPTAL_KND_NM
+			       , A.PBNCD_NO                             AS PBNCD_NO
+			       , A.FNNC_INSTT_SPOT_CODE                 AS FNNC_INSTT_CODE
+                   , D.FNNC_INSTT_SPOT_CODE_NM              AS FNNC_INSTT_NM
+                   , B.BSNS_CODE                            AS BSNS_CODE
+			       , B.BSNS_NM                              AS BSNS_NM
+			       , A.BRRW_AMOUNT                          AS BRRW_AMOUNT
+			       , A.BRRW_DE                              AS BRRW_DE
+			       , A.BRRW_ACNUT_NM                        AS BRRW_ACNUT_NM
+			       , CEIL(MONTHS_BETWEEN(TO_DATE(A.EXPRTN_DE, 'YYYYMMDD'), TO_DATE(A.BRRW_DE, 'YYYYMMDD'))) AS RPAY_PD
+			       , A.INTRT                                AS INTRT
+			       , A.INTR_CYCLE                           AS INTR_CYCLE
+			       , A.EXPRTN_AT                            AS EXPRTN_AT
+			       , A.RM                                   AS RM
+			       , F.ACPTR             /* 인수자 */
+			       , F.UNDTAKE_AMOUNT    /* 인수금액 */
+			       , F.LSFT_NO           /* 실명번호 */
+			       , F.SCRCMPN_NO        /* 증권회사번호 */
+			       , F.SCRCMPN_NM        /* 증권사명 */
+			       , F.CNSGN_ACNUTNO     /* 위탁계좌번호 */
+			FROM    TBFUN_PBNCD A
+			LEFT OUTER JOIN TBPRJ_BSNS_CODE B
+		            ON A.BSNS_CODE = B.BSNS_CODE
+			LEFT OUTER JOIN 
+				    (SELECT DETAIL_CODE    AS CODE
+					       ,DETAIL_CODE_NM AS CODE_NM
+				       FROM TBFUN_CPTAL_DETAIL_CODE
+				      WHERE CODE_SE = '000') C
+				    ON A.CPTAL_KND = C.CODE
+			LEFT OUTER JOIN 
+			        (SELECT FNNC_INSTT_CODE AS FNNC_INSTT_SPOT_CODE
+			               ,FNNC_INSTT_CODE_NM AS FNNC_INSTT_SPOT_CODE_NM
+		               FROM TBACC_FNNC_INSTT_CODE
+			        ) D
+                    ON A.FNNC_INSTT_SPOT_CODE = D.FNNC_INSTT_SPOT_CODE
+			LEFT OUTER JOIN TBFUN_CDIT_SCRCMPN_WRHOUSNG F     /* 채권증권회사입고 */
+			        ON A.KR_NO = F.ITEM_CODE
+			WHERE  1 = 1
+			  AND A.REGIST_CNVRS_AT = '1'
+			  AND A.BRRW_DE BETWEEN #BRRW_BGNDE# AND #BRRW_ENDDE#
+		]]>
+		<isNotEmpty property="CPTAL_KND">
+		      AND A.CPTAL_KND = #CPTAL_KND#
+		</isNotEmpty>
+        <isNotEmpty property="FNNC_INSTT_CODE">
+              AND A.FNNC_INSTT_SPOT_CODE = #FNNC_INSTT_CODE#
+        </isNotEmpty>
+         <isNotEmpty property="BSNS_CODE">
+              AND A.BSNS_CODE = #BSNS_CODE#
+        </isNotEmpty>
+        <![CDATA[
+             ORDER BY A.BRRW_DE ASC, NVL(F.SEQ,0) ASC
+        ]]>
+    </select>
+    
+	<!-- 상환완료현황 조회 -->
+	<select id="FUN020401DAO.selectPbncdList02" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*FUN020401DAO.selectPbncdList02*/ ]]>
+		<![CDATA[
+			WITH TM_FUN_PBNCD_T AS (
+			    SELECT B.CPTAL_KND                                                   AS CPTAL_KND
+			           ,B.PBNCD_NO                                                   AS PBNCD_NO
+			           ,C.BSNS_CODE                                                  AS BSNS_CODE
+			           ,C.BSNS_NM                                                    AS BSNS_NM
+			           ,B.BRRW_AMOUNT                                                AS BRRW_AMOUNT
+			           ,F.TOT_RPAY_AMOUNT                                            AS RPAYMNT
+			           ,B.BRRW_AMOUNT - F.TOT_RPAY_AMOUNT                            AS REPY_BLCE
+			           ,G.TOT_INTR_AMOUNT                                            AS TOT_INTR_AMT_PLAN
+			           ,H.TOT_INTR_AMOUNT                                            AS TOT_INTR_AMT_DTLS
+			           ,G.TOT_INTR_AMOUNT - H.TOT_INTR_AMOUNT                        AS INTR_BLCE
+			    FROM   TBFUN_PBNCD_CONFM A
+			           ,TBFUN_PBNCD B
+			           LEFT OUTER JOIN TBPRJ_BSNS_CODE C
+			                        ON B.BSNS_CODE = C.BSNS_CODE
+			           LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                   ,SUM(RPAY_AMOUNT) AS TOT_RPAY_AMOUNT
+			                            FROM   TBFUN_PBNCD_PRNCPAL_RPAY_DTLS
+			                            GROUP BY PBNCD_NO) F
+			                        ON B.PBNCD_NO = F.PBNCD_NO
+			           LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                   ,SUM(RPAY_AMOUNT) AS TOT_INTR_AMOUNT
+			                            FROM   TBFUN_PBNCD_INTR_RPAY_PLAN
+			                            GROUP BY PBNCD_NO) G
+			                        ON B.PBNCD_NO = G.PBNCD_NO              
+			           LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                   ,SUM(RPAY_AMOUNT) AS TOT_INTR_AMOUNT
+			                            FROM   TBFUN_PBNCD_INTR_RPAY_DTLS
+			                            GROUP BY PBNCD_NO) H
+			                        ON B.PBNCD_NO = H.PBNCD_NO
+			    WHERE  1 = 1
+			      AND  A.CONFM_NO = B.CONFM_NO
+			      AND  B.EXPRTN_AT = '1'
+			      AND  B.BRRW_DE BETWEEN #BRRW_BGNDE# AND #BRRW_ENDDE#
+			]]>
+			<isNotEmpty property="CPTAL_KND">
+			      AND  B.CPTAL_KND = #CPTAL_KND#
+			</isNotEmpty>
+	        <isNotEmpty property="FNNC_INSTT_CODE">
+	              AND  B.FNNC_INSTT_SPOT_CODE = #FNNC_INSTT_CODE#
+	        </isNotEmpty>
+	        <isNotEmpty property="BSNS_CODE">
+	              AND  B.BSNS_CODE = #BSNS_CODE#
+	        </isNotEmpty>       
+			<![CDATA[   
+			)
+            ,TM_FUN_PBNCD_T2 AS (
+            SELECT MIN(T2.BRRW_DE) OVER (PARTITION BY SUBSTR(T1.CPTAL_KND,1,3),T1.CPTAL_LEVEL, T1.BSNS_CODE)  AS MIN_BRRW_DE
+                   ,T1.*
+                   ,T3.BOD_CONFM_DE                                               AS BOD_CONFM_DE
+                   ,T3.GVRN_CONFM_DE                                              AS GVRN_CONFM_DE
+                   ,T3.CITY_CONFM_DE                                              AS CITY_CONFM_DE
+                   ,T3.CONFM_AMOUNT                                               AS CONFM_AMOUNT
+                   ,T3.BRRWLN                                                     AS BRRWLN
+                   ,T2.BRRW_ACNUT_NM                                              AS BRRW_ACNUT_NM
+                   ,T2.BRRW_DE                                                    AS BRRW_DE
+                   ,T2.EXPRTN_DE                                                  AS EXPRTN_DE
+                   ,T2.BRWOFC                                                     AS BRWOFC
+                   ,DECODE(T2.INTRT, NULL, NULL, T2.INTRT||'%')                   AS INTRT
+                   ,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'FUN013' AND CODE = T2.CMPNINT_SE)
+                    || (SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'FUN015' AND CODE = T2.RPAY_SE)                                AS PNINT_RPAY
+                   ,DECODE(T1.CPTAL_LEVEL, 3, (SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'FUN014' AND CODE = T2.INRST_SE), NULL) AS INRST_SE
+                   ,DECODE(T2.INTR_CYCLE, NULL, NULL, T2.INTR_CYCLE||'개월')      AS INTR_CYCLE
+                   ,DECODE(T2.DFR_MT, NULL, NULL
+                                    , DECODE(T2.RPAY_MT,NULL,NULL
+                                                       ,'('||T2.DFR_MT || '-' || T2.RPAY_MT||')'
+                                      ))                                          AS DFR_RPAY_MT
+                   ,DECODE(T4.FNNC_INSTT_CODE_NM, NULL, NULL
+                                                ,'('||T4.FNNC_INSTT_CODE_NM||')') AS PNINT_RCPMNY_INSTT
+                   ,T2.ISU_FOM                                                    AS ISU_FOM
+                   ,DECODE(T2.KR_NO, NULL, NULL, '('||T2.KR_NO||')')              AS KR_NO
+            FROM   (
+            SELECT '3' AS CPTAL_LEVEL
+                           ,T1.* 
+                    FROM TM_FUN_PBNCD_T T1
+                    UNION ALL
+                    SELECT '1' AS CPTAL_LEVEL
+			               ,S1.CODE                      AS CPTAL_KND
+			               ,NULL                         AS PBNCD_NO
+			               ,NULL                         AS BSNS_CODE
+			               ,S1.CODE ||'. '||S1.CODE_NM||' '||'합계'      AS BSNS_NM
+			               ,NVL(S2.BRRW_AMOUNT,0)        AS BRRW_AMOUNT
+			               ,NVL(S2.RPAYMNT,0)            AS RPAYMNT
+			               ,NVL(S2.REPY_BLCE,0)          AS REPY_BLCE
+			               ,NVL(S2.TOT_INTR_AMT_PLAN,0)  AS TOT_INTR_AMT_PLAN
+			               ,NVL(S2.TOT_INTR_AMT_DTLS,0)  AS TOT_INTR_AMT_DTLS
+			               ,NVL(S2.INTR_BLCE,0)          AS INTR_BLCE
+			        FROM  (SELECT CODE, CODE_NM
+			               FROM TBFUN_CPTAL_CODE
+			               WHERE CODE_SE = '000'
+			              ) S1
+			              LEFT OUTER JOIN (SELECT   SUBSTR(S1.CPTAL_KND,1,1)                                                   AS CPTAL_KND
+			                                      , MAX(S1.PBNCD_NO)                                                           AS PBNCD_NO
+			                                      , MAX(S1.BSNS_CODE)                                                          AS BSNS_CODE
+			                                      , NVL(SUM(S1.BRRW_AMOUNT),0)                                                 AS BRRW_AMOUNT
+			                                      , NVL(SUM(S1.RPAYMNT),0)                                                     AS RPAYMNT
+			                                      , NVL(SUM(S1.BRRW_AMOUNT),0) - NVL(SUM(S1.RPAYMNT),0)                        AS REPY_BLCE
+			                                      , NVL(SUM(S1.TOT_INTR_AMT_PLAN),0)                                           AS TOT_INTR_AMT_PLAN
+			                                      , NVL(SUM(S1.TOT_INTR_AMT_DTLS),0)                                           AS TOT_INTR_AMT_DTLS
+			                                      , NVL(SUM(S1.TOT_INTR_AMT_PLAN),0) - NVL(SUM(S1.TOT_INTR_AMT_DTLS),0)        AS INTR_BLCE
+			                               FROM TM_FUN_PBNCD_T S1
+			                               GROUP BY SUBSTR(S1.CPTAL_KND,1,1)
+			                              ) S2
+			                           ON S1.CODE = S2.CPTAL_KND
+                    UNION ALL
+                    SELECT '2'                                   AS CPTAL_LEVEL
+			               ,S1.CODE                              AS CPTAL_KND
+			               ,NULL                                 AS PBNCD_NO
+			               ,NULL                                 AS BSNS_CODE
+			               ,S1.CODE || '. ' || S1.CODE_NM || ' '||'합계'              AS BSNS_NM
+			               ,NVL(S2.BRRW_AMOUNT,0)                AS BRRW_AMOUNT
+			               ,NVL(S2.RPAYMNT,0)                    AS RPAYMNT
+			               ,NVL(S2.REPY_BLCE,0)                  AS REPY_BLCE
+			               ,NVL(S2.TOT_INTR_AMT_PLAN,0)          AS TOT_INTR_AMT_PLAN
+			               ,NVL(S2.TOT_INTR_AMT_DTLS,0)          AS TOT_INTR_AMT_DTLS
+			               ,NVL(S2.INTR_BLCE,0)                  AS INTR_BLCE
+			        FROM  (SELECT DETAIL_CODE    AS CODE
+			                    , DETAIL_CODE_NM AS CODE_NM
+			               FROM TBFUN_CPTAL_DETAIL_CODE
+			               WHERE CODE_SE = '000'
+			              ) S1
+			              LEFT OUTER JOIN (SELECT   S1.CPTAL_KND                                                              AS CPTAL_KND
+			                                      , MAX(S1.PBNCD_NO)                                                           AS PBNCD_NO
+			                                      , MAX(S1.BSNS_CODE)                                                          AS BSNS_CODE
+			                                      , NVL(SUM(S1.BRRW_AMOUNT),0)                                                 AS BRRW_AMOUNT
+			                                      , NVL(SUM(S1.RPAYMNT),0)                                                     AS RPAYMNT
+			                                      , NVL(SUM(S1.BRRW_AMOUNT),0) - NVL(SUM(S1.RPAYMNT),0)                        AS REPY_BLCE
+			                                      , NVL(SUM(S1.TOT_INTR_AMT_PLAN),0)                                           AS TOT_INTR_AMT_PLAN
+			                                      , NVL(SUM(S1.TOT_INTR_AMT_DTLS),0)                                           AS TOT_INTR_AMT_DTLS
+			                                      , NVL(SUM(S1.TOT_INTR_AMT_PLAN),0) - NVL(SUM(S1.TOT_INTR_AMT_DTLS),0)        AS INTR_BLCE
+			                               FROM TM_FUN_PBNCD_T S1
+			                               GROUP BY S1.CPTAL_KND
+			                              ) S2
+			                           ON S1.CODE = S2.CPTAL_KND
+                    UNION ALL                   
+                    SELECT '0'                                   AS CPTAL_LEVEL
+                           ,'00000'                              AS CPTAL_KND
+                           ,NULL                                 AS PBNCD_NO
+                           ,NULL                                 AS BSNS_CODE
+                           ,'차입금 총계'              AS BSNS_NM
+                           , NVL(SUM(S1.BRRW_AMOUNT),0)                                                 AS BRRW_AMOUNT
+                           , NVL(SUM(S1.RPAYMNT),0)                                                     AS RPAYMNT
+                           , NVL(SUM(S1.BRRW_AMOUNT),0) - NVL(SUM(S1.RPAYMNT),0)                        AS REPY_BLCE
+                           , NVL(SUM(S1.TOT_INTR_AMT_PLAN),0)                                           AS TOT_INTR_AMT_PLAN
+                           , NVL(SUM(S1.TOT_INTR_AMT_DTLS),0)                                           AS TOT_INTR_AMT_DTLS
+                           , NVL(SUM(S1.TOT_INTR_AMT_PLAN),0) - NVL(SUM(S1.TOT_INTR_AMT_DTLS),0)        AS INTR_BLCE
+                    FROM   TM_FUN_PBNCD_T S1 			                           
+                    ) T1
+                    LEFT OUTER JOIN TBFUN_PBNCD T2
+                                 ON T1.PBNCD_NO = T2.PBNCD_NO        
+                    LEFT OUTER JOIN TBFUN_PBNCD_CONFM T3
+                                 ON T2.CONFM_NO = T3.CONFM_NO
+                    LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE T4
+                                 ON T2.FNNC_INSTT_SPOT_CODE = T4.FNNC_INSTT_CODE
+            ) 
+            SELECT *
+            FROM TM_FUN_PBNCD_T2 T1
+            ORDER BY SUBSTR(T1.CPTAL_KND,1,3), T1.CPTAL_LEVEL, T1.MIN_BRRW_DE, T1.BRRW_DE, T1.PBNCD_NO			
+	    ]]>
+    </select>    
+    
+	<!-- 원리금상환일정 조회 -->
+	<select id="FUN020401DAO.selectPbncdList03" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*FUN020401DAO.selectPbncdList03*/ ]]>
+		<![CDATA[
+			WITH TM_FUN_PBNCD_T AS (
+			        SELECT B.PBNCD_NO                                       AS PBNCD_NO
+			               ,C.BSNS_CODE                                     AS BSNS_CODE
+			               ,C.BSNS_NM                                       AS BSNS_NM
+			               ,B.CPTAL_KND                                     AS CPTAL_KND
+			               ,NULL                                            AS CPTAL_KND1
+			               ,B.BRRW_AMOUNT                                   AS PRNCPAL_AMOUNT
+			               ,NVL(I.PRNCPAL_AMOUNT_NOW,0)                     AS PRNCPAL_AMOUNT_NOW
+			               ,B.BRRW_AMOUNT - NVL(I.PRNCPAL_AMOUNT_NOW,0)     AS PRNCPAL_BLCE
+			               ,NVL(G.INTR_AMOUNT,0)                            AS INTR_AMOUNT
+			               ,NVL(J.INTR_AMOUNT_NOW,0)                        AS INTR_AMOUNT_NOW
+			               ,NVL(G.INTR_AMOUNT,0) - NVL(J.INTR_AMOUNT_NOW,0) AS INTR_BLCE
+			               ,NVL(I.PRNCPAL_AMOUNT_AGO_YR1,0)                 AS PRNCPAL_AMOUNT_AGO_YR1
+			               ,NVL(J.INTR_AMOUNT_AGO_YR1,0)                    AS INTR_AMOUNT_AGO_YR1
+			               ,NVL(E.RPAY_AMOUNT_NOW1,0)                       AS INTR_AMT_NOW1
+			               ,NVL(E.RPAY_AMOUNT_NOW2,0)                       AS INTR_AMT_NOW2
+			               ,NVL(E.RPAY_AMOUNT_NOW3,0)                       AS INTR_AMT_NOW3
+			               ,NVL(E.RPAY_AMOUNT_NOW4,0)                       AS INTR_AMT_NOW4
+			               ,NVL(E.RPAY_AMOUNT_NOW5,0)                       AS INTR_AMT_NOW5
+			               ,NVL(E.RPAY_AMOUNT_NOW6,0)                       AS INTR_AMT_NOW6
+			               ,NVL(E.RPAY_AMOUNT_NOW7,0)                       AS INTR_AMT_NOW7
+			               ,NVL(E.RPAY_AMOUNT_NOW8,0)                       AS INTR_AMT_NOW8
+			               ,NVL(E.RPAY_AMOUNT_NOW9,0)                       AS INTR_AMT_NOW9
+			               ,NVL(E.RPAY_AMOUNT_NOW10,0)                      AS INTR_AMT_NOW10
+			               ,NVL(E.RPAY_AMOUNT_NOW11,0)                      AS INTR_AMT_NOW11
+			               ,NVL(E.RPAY_AMOUNT_NOW12,0)                      AS INTR_AMT_NOW12
+			               ,NVL(D.RPAY_AMOUNT_NOW1,0)                       AS PRNCPAL_AMT_NOW1
+			               ,NVL(D.RPAY_AMOUNT_NOW2,0)                       AS PRNCPAL_AMT_NOW2
+			               ,NVL(D.RPAY_AMOUNT_NOW3,0)                       AS PRNCPAL_AMT_NOW3
+			               ,NVL(D.RPAY_AMOUNT_NOW4,0)                       AS PRNCPAL_AMT_NOW4
+			               ,NVL(D.RPAY_AMOUNT_NOW5,0)                       AS PRNCPAL_AMT_NOW5
+			               ,NVL(D.RPAY_AMOUNT_NOW6,0)                       AS PRNCPAL_AMT_NOW6
+			               ,NVL(D.RPAY_AMOUNT_NOW7,0)                       AS PRNCPAL_AMT_NOW7
+			               ,NVL(D.RPAY_AMOUNT_NOW8,0)                       AS PRNCPAL_AMT_NOW8
+			               ,NVL(D.RPAY_AMOUNT_NOW9,0)                       AS PRNCPAL_AMT_NOW9
+			               ,NVL(D.RPAY_AMOUNT_NOW10,0)                      AS PRNCPAL_AMT_NOW10
+			               ,NVL(D.RPAY_AMOUNT_NOW11,0)                      AS PRNCPAL_AMT_NOW11
+			               ,NVL(D.RPAY_AMOUNT_NOW12,0)                      AS PRNCPAL_AMT_NOW12
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR1_MT1,0)            AS PRNCPAL_AMOUNT_BACK_YR1_MT1
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR1_MT2,0)            AS PRNCPAL_AMOUNT_BACK_YR1_MT2
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR1_MT3,0)            AS PRNCPAL_AMOUNT_BACK_YR1_MT3
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR1_MT4,0)            AS PRNCPAL_AMOUNT_BACK_YR1_MT4
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR2,0)                AS PRNCPAL_AMOUNT_BACK_YR2
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR3,0)                AS PRNCPAL_AMOUNT_BACK_YR3
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR4,0)                AS PRNCPAL_AMOUNT_BACK_YR4
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR5,0)                AS PRNCPAL_AMOUNT_BACK_YR5
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR6,0)                AS PRNCPAL_AMOUNT_BACK_YR6
+			               ,NVL(F.PRNCPAL_AMOUNT_BACK_YR7,0)                AS PRNCPAL_AMOUNT_BACK_YR7
+			               ,NVL(G.INTR_AMOUNT_BACK_YR1_MT1,0)               AS INTR_AMOUNT_BACK_YR1_MT1
+			               ,NVL(G.INTR_AMOUNT_BACK_YR1_MT2,0)               AS INTR_AMOUNT_BACK_YR1_MT2
+			               ,NVL(G.INTR_AMOUNT_BACK_YR1_MT3,0)               AS INTR_AMOUNT_BACK_YR1_MT3
+			               ,NVL(G.INTR_AMOUNT_BACK_YR1_MT4,0)               AS INTR_AMOUNT_BACK_YR1_MT4
+			               ,NVL(G.INTR_AMOUNT_BACK_YR2,0)                   AS INTR_AMOUNT_BACK_YR2
+			               ,NVL(G.INTR_AMOUNT_BACK_YR3,0)                   AS INTR_AMOUNT_BACK_YR3
+			               ,NVL(G.INTR_AMOUNT_BACK_YR4,0)                   AS INTR_AMOUNT_BACK_YR4
+			               ,NVL(G.INTR_AMOUNT_BACK_YR5,0)                   AS INTR_AMOUNT_BACK_YR5
+			               ,NVL(G.INTR_AMOUNT_BACK_YR6,0)                   AS INTR_AMOUNT_BACK_YR6
+			               ,NVL(G.INTR_AMOUNT_BACK_YR7,0)                   AS INTR_AMOUNT_BACK_YR7
+			        FROM   TBFUN_PBNCD_CONFM A
+			               ,(SELECT *
+			                 FROM TBFUN_PBNCD
+			                 WHERE EXPRTN_AT = '0'
+			                ) B
+			               LEFT OUTER JOIN TBPRJ_BSNS_CODE C
+			                            ON B.BSNS_CODE = C.BSNS_CODE
+			               LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '01' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW1
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '02' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW2
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '03' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW3
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '04' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW4
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '05' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW5
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '06' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW6
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '07' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW7
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '08' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW8
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '09' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW9
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '10' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW10
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '11' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW11
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '12' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW12                             
+			                                FROM   TBFUN_PBNCD_PRNCPAL_RPAY_PLAN
+			                                WHERE  SUBSTR(RPAY_DE,1,4) = #NOW_YEAR#
+			                                GROUP BY PBNCD_NO) D
+			                            ON B.PBNCD_NO = D.PBNCD_NO
+			               LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '01' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW1
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '02' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW2
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '03' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW3
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '04' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW4
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '05' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW5
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '06' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW6
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '07' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW7
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '08' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW8
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '09' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW9
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '10' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW10
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '11' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW11
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,5,2) = '12' THEN RPAY_AMOUNT ELSE 0 END),0)        AS RPAY_AMOUNT_NOW12                             
+			                                FROM   TBFUN_PBNCD_INTR_RPAY_PLAN
+			                                WHERE  SUBSTR(RPAY_DE,1,4) = #NOW_YEAR#
+			                                GROUP BY PBNCD_NO) E
+			                            ON B.PBNCD_NO = E.PBNCD_NO
+			               LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                       ,NVL(SUM(RPAY_AMOUNT),0)                                                                AS PRNCPAL_AMOUNT
+			                                       ,NVL(SUM(CASE WHEN RPAY_DE <= #NOW_DATE# THEN RPAY_AMOUNT ELSE 0 END),0)                AS PRNCPAL_AMOUNT_NOW       
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) <= #AGO_YEAR# THEN RPAY_AMOUNT ELSE 0 END),0)        AS PRNCPAL_AMOUNT_AGO_YR1
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR1# 
+			                                                     THEN CASE WHEN TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'q') = '1' 
+			                                                               THEN RPAY_AMOUNT 
+			                                                               ELSE 0 END
+			                                                ELSE 0 END),0)                                                                AS PRNCPAL_AMOUNT_BACK_YR1_MT1
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR1# 
+			                                                     THEN CASE WHEN TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'q') = '2' 
+			                                                               THEN RPAY_AMOUNT 
+			                                                               ELSE 0 END
+			                                                ELSE 0 END),0)                                                                AS PRNCPAL_AMOUNT_BACK_YR1_MT2
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR1# 
+			                                                     THEN CASE WHEN TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'q') = '3' 
+			                                                               THEN RPAY_AMOUNT 
+			                                                               ELSE 0 END
+			                                                ELSE 0 END),0)                                                                AS PRNCPAL_AMOUNT_BACK_YR1_MT3
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR1# 
+			                                                     THEN CASE WHEN TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'q') = '4' 
+			                                                               THEN RPAY_AMOUNT 
+			                                                               ELSE 0 END
+			                                                ELSE 0 END),0)                                                                AS PRNCPAL_AMOUNT_BACK_YR1_MT4
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR2# THEN RPAY_AMOUNT ELSE 0 END),0)        AS PRNCPAL_AMOUNT_BACK_YR2
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR3# THEN RPAY_AMOUNT ELSE 0 END),0)        AS PRNCPAL_AMOUNT_BACK_YR3
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR4# THEN RPAY_AMOUNT ELSE 0 END),0)        AS PRNCPAL_AMOUNT_BACK_YR4
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR5# THEN RPAY_AMOUNT ELSE 0 END),0)        AS PRNCPAL_AMOUNT_BACK_YR5
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR6# THEN RPAY_AMOUNT ELSE 0 END),0)        AS PRNCPAL_AMOUNT_BACK_YR6
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR7# THEN RPAY_AMOUNT ELSE 0 END),0)        AS PRNCPAL_AMOUNT_BACK_YR7
+			                                FROM   TBFUN_PBNCD_PRNCPAL_RPAY_PLAN
+			                                GROUP BY PBNCD_NO) F
+			                            ON B.PBNCD_NO = F.PBNCD_NO                        
+			               LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                       ,NVL(SUM(RPAY_AMOUNT),0)                                                                AS INTR_AMOUNT
+			                                       ,NVL(SUM(CASE WHEN RPAY_DE <= #NOW_DATE# THEN RPAY_AMOUNT ELSE 0 END),0)                AS INTR_AMOUNT_NOW
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) <= #AGO_YEAR# THEN RPAY_AMOUNT ELSE 0 END),0)        AS INTR_AMOUNT_AGO_YR1
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR1# 
+			                                                     THEN CASE WHEN TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'q') = '1' 
+			                                                               THEN RPAY_AMOUNT 
+			                                                               ELSE 0 END
+			                                                ELSE 0 END),0)                                                                AS INTR_AMOUNT_BACK_YR1_MT1
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR1# 
+			                                                     THEN CASE WHEN TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'q') = '2' 
+			                                                               THEN RPAY_AMOUNT 
+			                                                               ELSE 0 END
+			                                                ELSE 0 END),0)                                                                AS INTR_AMOUNT_BACK_YR1_MT2
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR1# 
+			                                                     THEN CASE WHEN TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'q') = '3' 
+			                                                               THEN RPAY_AMOUNT 
+			                                                               ELSE 0 END
+			                                                ELSE 0 END),0)                                                                AS INTR_AMOUNT_BACK_YR1_MT3
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR1# 
+			                                                     THEN CASE WHEN TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'q') = '4' 
+			                                                               THEN RPAY_AMOUNT 
+			                                                               ELSE 0 END
+			                                                ELSE 0 END),0)                                                                AS INTR_AMOUNT_BACK_YR1_MT4
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR2# THEN RPAY_AMOUNT ELSE 0 END),0)        AS INTR_AMOUNT_BACK_YR2
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR3# THEN RPAY_AMOUNT ELSE 0 END),0)        AS INTR_AMOUNT_BACK_YR3
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR4# THEN RPAY_AMOUNT ELSE 0 END),0)        AS INTR_AMOUNT_BACK_YR4
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR5# THEN RPAY_AMOUNT ELSE 0 END),0)        AS INTR_AMOUNT_BACK_YR5
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR6# THEN RPAY_AMOUNT ELSE 0 END),0)        AS INTR_AMOUNT_BACK_YR6
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) = #BACK_YEAR7# THEN RPAY_AMOUNT ELSE 0 END),0)        AS INTR_AMOUNT_BACK_YR7
+			                                FROM   TBFUN_PBNCD_INTR_RPAY_PLAN
+			                                GROUP BY PBNCD_NO) G
+			                            ON B.PBNCD_NO = G.PBNCD_NO
+			               LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                FROM   TBFUN_PBNCD_INTR_RPAY_PLAN
+			                                GROUP BY PBNCD_NO) H
+			                            ON B.PBNCD_NO = H.PBNCD_NO
+			               LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                       ,NVL(SUM(CASE WHEN RPAY_DE <= #NOW_DATE# THEN RPAY_AMOUNT ELSE 0 END),0)                AS PRNCPAL_AMOUNT_NOW       
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) <= #AGO_YEAR# THEN RPAY_AMOUNT ELSE 0 END),0)    AS PRNCPAL_AMOUNT_AGO_YR1
+			                                FROM   TBFUN_PBNCD_PRNCPAL_RPAY_DTLS
+			                                GROUP BY PBNCD_NO) I
+			                            ON B.PBNCD_NO = I.PBNCD_NO                        
+			               LEFT OUTER JOIN (SELECT PBNCD_NO
+			                                       ,NVL(SUM(CASE WHEN RPAY_DE <= #NOW_DATE# THEN RPAY_AMOUNT ELSE 0 END),0)                AS INTR_AMOUNT_NOW
+			                                       ,NVL(SUM(CASE WHEN SUBSTR(RPAY_DE,1,4) <= #AGO_YEAR# THEN RPAY_AMOUNT ELSE 0 END),0)    AS INTR_AMOUNT_AGO_YR1
+			                                FROM   TBFUN_PBNCD_INTR_RPAY_DTLS
+			                                GROUP BY PBNCD_NO) J
+			                            ON B.PBNCD_NO = J.PBNCD_NO
+			        WHERE  1 = 1
+			          AND  A.CONFM_NO = B.CONFM_NO
+			          AND  B.BRRW_DE BETWEEN #BRRW_BGNDE# AND #BRRW_ENDDE#
+			]]>
+			<isNotEmpty property="CPTAL_KND">
+			          AND  B.CPTAL_KND = #CPTAL_KND#
+			</isNotEmpty>
+		    <isNotEmpty property="FNNC_INSTT_CODE">
+		              AND  B.FNNC_INSTT_SPOT_CODE = #FNNC_INSTT_CODE#
+		    </isNotEmpty>
+		     <isNotEmpty property="BSNS_CODE">
+		              AND  B.BSNS_CODE = #BSNS_CODE#
+		    </isNotEmpty>       
+			<![CDATA[          
+			)
+			,TM_FUN_PBNCD_T2 AS (
+			SELECT MIN(T2.BRRW_DE) OVER (PARTITION BY SUBSTR(T1.CPTAL_KND,1,3),T1.CPTAL_LEVEL, T1.BSNS_CODE)  AS MIN_BRRW_DE
+			       , T1.CPTAL_LEVEL                                               AS CPTAL_LEVEL
+			       , T1.CPTAL_KND                                                 AS CPTAL_KND
+			       , T1.PBNCD_NO                                                  AS PBNCD_NO
+			       , T1.BSNS_CODE                                                 AS BSNS_CODE
+			       , T1.BSNS_NM                                                   AS BSNS_NM
+			       , T2.BRRW_ACNUT_NM                                             AS BRRW_ACNUT_NM
+			       , NVL(T1.PRNCPAL_AMOUNT,0)                                     AS PRNCPAL_AMOUNT
+			       , NVL(T1.PRNCPAL_AMOUNT_NOW,0)                                 AS PRNCPAL_AMOUNT_NOW
+			       , NVL(T1.PRNCPAL_BLCE,0)                                       AS PRNCPAL_BLCE
+			       , NVL(T1.INTR_AMOUNT,0)                                        AS INTR_AMOUNT
+			       , NVL(T1.INTR_AMOUNT_NOW,0)                                    AS INTR_AMOUNT_NOW
+			       , NVL(T1.INTR_BLCE,0)                                          AS INTR_BLCE
+			       , NVL(T1.PRNCPAL_AMOUNT_AGO_YR1,0)                             AS PRNCPAL_AMOUNT_AGO_YR1
+			       , NVL(T1.INTR_AMOUNT_AGO_YR1,0)                                AS INTR_AMOUNT_AGO_YR1
+			       , NVL(T1.INTR_AMT_NOW1,0)                                      AS INTR_AMT_NOW1
+			       , NVL(T1.INTR_AMT_NOW2,0)                                      AS INTR_AMT_NOW2
+			       , NVL(T1.INTR_AMT_NOW3,0)                                      AS INTR_AMT_NOW3
+			       , NVL(T1.INTR_AMT_NOW4,0)                                      AS INTR_AMT_NOW4
+			       , NVL(T1.INTR_AMT_NOW5,0)                                      AS INTR_AMT_NOW5
+			       , NVL(T1.INTR_AMT_NOW6,0)                                      AS INTR_AMT_NOW6
+			       , NVL(T1.INTR_AMT_NOW7,0)                                      AS INTR_AMT_NOW7
+			       , NVL(T1.INTR_AMT_NOW8,0)                                      AS INTR_AMT_NOW8
+			       , NVL(T1.INTR_AMT_NOW9,0)                                      AS INTR_AMT_NOW9
+			       , NVL(T1.INTR_AMT_NOW10,0)                                     AS INTR_AMT_NOW10
+			       , NVL(T1.INTR_AMT_NOW11,0)                                     AS INTR_AMT_NOW11
+			       , NVL(T1.INTR_AMT_NOW12,0)                                     AS INTR_AMT_NOW12
+			       , NVL(T1.PRNCPAL_AMT_NOW1,0)                                   AS PRNCPAL_AMT_NOW1
+			       , NVL(T1.PRNCPAL_AMT_NOW2,0)                                   AS PRNCPAL_AMT_NOW2
+			       , NVL(T1.PRNCPAL_AMT_NOW3,0)                                   AS PRNCPAL_AMT_NOW3
+			       , NVL(T1.PRNCPAL_AMT_NOW4,0)                                   AS PRNCPAL_AMT_NOW4
+			       , NVL(T1.PRNCPAL_AMT_NOW5,0)                                   AS PRNCPAL_AMT_NOW5
+			       , NVL(T1.PRNCPAL_AMT_NOW6,0)                                   AS PRNCPAL_AMT_NOW6
+			       , NVL(T1.PRNCPAL_AMT_NOW7,0)                                   AS PRNCPAL_AMT_NOW7
+			       , NVL(T1.PRNCPAL_AMT_NOW8,0)                                   AS PRNCPAL_AMT_NOW8
+			       , NVL(T1.PRNCPAL_AMT_NOW9,0)                                   AS PRNCPAL_AMT_NOW9
+			       , NVL(T1.PRNCPAL_AMT_NOW10,0)                                  AS PRNCPAL_AMT_NOW10
+			       , NVL(T1.PRNCPAL_AMT_NOW11,0)                                  AS PRNCPAL_AMT_NOW11
+			       , NVL(T1.PRNCPAL_AMT_NOW12,0)                                  AS PRNCPAL_AMT_NOW12
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR1_MT1,0)                        AS PRNCPAL_AMOUNT_BACK_YR1_MT1
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR1_MT2,0)                        AS PRNCPAL_AMOUNT_BACK_YR1_MT2
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR1_MT3,0)                        AS PRNCPAL_AMOUNT_BACK_YR1_MT3
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR1_MT4,0)                        AS PRNCPAL_AMOUNT_BACK_YR1_MT4
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR2,0)                            AS PRNCPAL_AMOUNT_BACK_YR2
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR3,0)                            AS PRNCPAL_AMOUNT_BACK_YR3
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR4,0)                            AS PRNCPAL_AMOUNT_BACK_YR4
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR5,0)                            AS PRNCPAL_AMOUNT_BACK_YR5
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR6,0)                            AS PRNCPAL_AMOUNT_BACK_YR6
+			       , NVL(T1.PRNCPAL_AMOUNT_BACK_YR7,0)                            AS PRNCPAL_AMOUNT_BACK_YR7
+			       , NVL(T1.INTR_AMOUNT_BACK_YR1_MT1,0)                           AS INTR_AMOUNT_BACK_YR1_MT1
+			       , NVL(T1.INTR_AMOUNT_BACK_YR1_MT2,0)                           AS INTR_AMOUNT_BACK_YR1_MT2
+			       , NVL(T1.INTR_AMOUNT_BACK_YR1_MT3,0)                           AS INTR_AMOUNT_BACK_YR1_MT3
+			       , NVL(T1.INTR_AMOUNT_BACK_YR1_MT4,0)                           AS INTR_AMOUNT_BACK_YR1_MT4
+			       , NVL(T1.INTR_AMOUNT_BACK_YR2,0)                               AS INTR_AMOUNT_BACK_YR2
+			       , NVL(T1.INTR_AMOUNT_BACK_YR3,0)                               AS INTR_AMOUNT_BACK_YR3
+			       , NVL(T1.INTR_AMOUNT_BACK_YR4,0)                               AS INTR_AMOUNT_BACK_YR4
+			       , NVL(T1.INTR_AMOUNT_BACK_YR5,0)                               AS INTR_AMOUNT_BACK_YR5
+			       , NVL(T1.INTR_AMOUNT_BACK_YR6,0)                               AS INTR_AMOUNT_BACK_YR6
+			       , NVL(T1.INTR_AMOUNT_BACK_YR7,0)                               AS INTR_AMOUNT_BACK_YR7			       
+			       , T3.BOD_CONFM_DE                                              AS BOD_CONFM_DE
+			       , T3.GVRN_CONFM_DE                                             AS GVRN_CONFM_DE
+			       , T3.CITY_CONFM_DE                                             AS CITY_CONFM_DE
+			       , T3.CONFM_AMOUNT                                              AS CONFM_AMOUNT
+			       , T3.BRRWLN                                                    AS BRRWLN
+			       , T2.BRRW_DE                                                   AS BRRW_DE
+			       , T2.EXPRTN_DE                                                 AS EXPRTN_DE
+			       , T2.BRWOFC                                                    AS BRWOFC
+			       , DECODE(T2.INTRT, NULL, NULL, T2.INTRT||'%')                  AS INTRT
+			       , (SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'FUN013' AND CODE = T2.CMPNINT_SE)
+			         || (SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'FUN015' AND CODE = T2.RPAY_SE)                                AS PNINT_RPAY
+			       , DECODE(T1.CPTAL_LEVEL, 3, (SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'FUN014' AND CODE = T2.INRST_SE), NULL) AS INRST_SE
+			       , DECODE(T1.CPTAL_LEVEL, 3, T2.INTR_CYCLE||'개월', NULL)       AS INTR_CYCLE
+			       , DECODE(T1.CPTAL_LEVEL, 3, '('||T2.DFR_MT || '-' || T2.RPAY_MT||')', NULL) AS DFR_RPAY_MT
+			       , DECODE(T4.FNNC_INSTT_CODE_NM, NULL, NULL
+			                                   ,'('||T4.FNNC_INSTT_CODE_NM||')') AS PNINT_RCPMNY_INSTT
+			       ,T2.ISU_FOM                                                   AS ISU_FOM
+			       ,DECODE(T2.KR_NO, NULL, NULL, '('||T2.KR_NO||')')             AS KR_NO
+			FROM   (SELECT '3' AS CPTAL_LEVEL
+			               ,T1.* 
+			        FROM TM_FUN_PBNCD_T T1
+			        UNION ALL
+			        SELECT '1'                           AS CPTAL_LEVEL
+			               ,NULL                         AS PBNCD_NO
+			               ,NULL                         AS BSNS_CODE
+			               ,S1.CODE||'. '||S1.CODE_NM||' '||'합계' AS BSNS_NM
+			               ,S1.CODE			             AS CPTAL_KND
+			               ,S2.*
+			        FROM  (SELECT CODE, CODE_NM
+                           FROM TBFUN_CPTAL_CODE
+                           WHERE CODE_SE = '000'
+			              ) S1
+			              LEFT OUTER JOIN (SELECT   SUBSTR(S1.CPTAL_KND,1,1)		                                         AS CPTAL_KND1
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT),0)                                            AS PRNCPAL_AMOUNT
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_NOW),0)                                        AS PRNCPAL_AMOUNT_NOW
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT),0) - NVL(SUM(S1.PRNCPAL_AMOUNT_NOW),0)        AS PRNCPAL_BLCE
+			                                      , NVL(SUM(S1.INTR_AMOUNT),0)                                               AS INTR_AMOUNT
+			                                      , NVL(SUM(S1.INTR_AMOUNT_NOW),0)                                           AS INTR_AMOUNT_NOW
+			                                      , NVL(SUM(S1.INTR_AMOUNT),0) - NVL(SUM(S1.INTR_AMOUNT_NOW),0)              AS INTR_BLCE
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_AGO_YR1),0)                                    AS PRNCPAL_AMOUNT_AGO_YR1
+			                                      , NVL(SUM(S1.INTR_AMOUNT_AGO_YR1),0)                                       AS INTR_AMOUNT_AGO_YR1
+			                                      , NVL(SUM(S1.INTR_AMT_NOW1),0)                                             AS INTR_AMT_NOW1
+			                                      , NVL(SUM(S1.INTR_AMT_NOW2),0)                                             AS INTR_AMT_NOW2
+			                                      , NVL(SUM(S1.INTR_AMT_NOW3),0)                                             AS INTR_AMT_NOW3
+			                                      , NVL(SUM(S1.INTR_AMT_NOW4),0)                                             AS INTR_AMT_NOW4
+			                                      , NVL(SUM(S1.INTR_AMT_NOW5),0)                                             AS INTR_AMT_NOW5
+			                                      , NVL(SUM(S1.INTR_AMT_NOW6),0)                                             AS INTR_AMT_NOW6
+			                                      , NVL(SUM(S1.INTR_AMT_NOW7),0)                                             AS INTR_AMT_NOW7
+			                                      , NVL(SUM(S1.INTR_AMT_NOW8),0)                                             AS INTR_AMT_NOW8
+			                                      , NVL(SUM(S1.INTR_AMT_NOW9),0)                                             AS INTR_AMT_NOW9
+			                                      , NVL(SUM(S1.INTR_AMT_NOW10),0)                                            AS INTR_AMT_NOW10
+			                                      , NVL(SUM(S1.INTR_AMT_NOW11),0)                                            AS INTR_AMT_NOW11
+			                                      , NVL(SUM(S1.INTR_AMT_NOW12),0)                                            AS INTR_AMT_NOW12
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW1),0)                                          AS PRNCPAL_AMT_NOW1
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW2),0)                                          AS PRNCPAL_AMT_NOW2
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW3),0)                                          AS PRNCPAL_AMT_NOW3
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW4),0)                                          AS PRNCPAL_AMT_NOW4
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW5),0)                                          AS PRNCPAL_AMT_NOW5
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW6),0)                                          AS PRNCPAL_AMT_NOW6
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW7),0)                                          AS PRNCPAL_AMT_NOW7
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW8),0)                                          AS PRNCPAL_AMT_NOW8
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW9),0)                                          AS PRNCPAL_AMT_NOW9
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW10),0)                                         AS PRNCPAL_AMT_NOW10
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW11),0)                                         AS PRNCPAL_AMT_NOW11
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW12),0)                                         AS PRNCPAL_AMT_NOW12
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT1),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT1
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT2),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT2
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT3),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT3
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT4),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT4
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR2),0)                                   AS PRNCPAL_AMOUNT_BACK_YR2
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR3),0)                                   AS PRNCPAL_AMOUNT_BACK_YR3
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR4),0)                                   AS PRNCPAL_AMOUNT_BACK_YR4
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR5),0)                                   AS PRNCPAL_AMOUNT_BACK_YR5
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR6),0)                                   AS PRNCPAL_AMOUNT_BACK_YR6
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR7),0)                                   AS PRNCPAL_AMOUNT_BACK_YR7
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT1),0)                                  AS INTR_AMOUNT_BACK_YR1_MT1
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT2),0)                                  AS INTR_AMOUNT_BACK_YR1_MT2
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT3),0)                                  AS INTR_AMOUNT_BACK_YR1_MT3
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT4),0)                                  AS INTR_AMOUNT_BACK_YR1_MT4
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR2),0)                                      AS INTR_AMOUNT_BACK_YR2
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR3),0)                                      AS INTR_AMOUNT_BACK_YR3
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR4),0)                                      AS INTR_AMOUNT_BACK_YR4
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR5),0)                                      AS INTR_AMOUNT_BACK_YR5
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR6),0)                                      AS INTR_AMOUNT_BACK_YR6
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR7),0)                                      AS INTR_AMOUNT_BACK_YR7			                                      
+			                               FROM   TM_FUN_PBNCD_T S1
+			                               GROUP BY SUBSTR(S1.CPTAL_KND,1,1)
+			                              ) S2
+			                           ON S1.CODE = S2.CPTAL_KND1
+			        UNION ALL
+			        SELECT '2'                                   AS CPTAL_LEVEL
+			               ,NULL                                 AS PBNCD_NO
+			               ,NULL                                 AS BSNS_CODE
+			               ,S1.CODE||'. '|| S1.CODE_NM||' '||'합계' AS BSNS_NM
+			               ,S1.CODE AS CPTAL_KND
+			               ,S2.*
+			        FROM  (SELECT DETAIL_CODE    AS CODE
+						        , DETAIL_CODE_NM AS CODE_NM
+						   FROM TBFUN_CPTAL_DETAIL_CODE
+						   WHERE CODE_SE = '000'
+			              ) S1
+			              LEFT OUTER JOIN (SELECT   S1.CPTAL_KND					                                         AS CPTAL_KND1
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT),0)                                            AS PRNCPAL_AMOUNT
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_NOW),0)                                        AS PRNCPAL_AMOUNT_NOW
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT),0) - NVL(SUM(S1.PRNCPAL_AMOUNT_NOW),0)        AS PRNCPAL_BLCE
+			                                      , NVL(SUM(S1.INTR_AMOUNT),0)                                               AS INTR_AMOUNT
+			                                      , NVL(SUM(S1.INTR_AMOUNT_NOW),0)                                           AS INTR_AMOUNT_NOW
+			                                      , NVL(SUM(S1.INTR_AMOUNT),0) - NVL(SUM(S1.INTR_AMOUNT_NOW),0)              AS INTR_BLCE
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_AGO_YR1),0)                                    AS PRNCPAL_AMOUNT_AGO_YR1
+			                                      , NVL(SUM(S1.INTR_AMOUNT_AGO_YR1),0)                                       AS INTR_AMOUNT_AGO_YR1
+			                                      , NVL(SUM(S1.INTR_AMT_NOW1),0)                                             AS INTR_AMT_NOW1
+			                                      , NVL(SUM(S1.INTR_AMT_NOW2),0)                                             AS INTR_AMT_NOW2
+			                                      , NVL(SUM(S1.INTR_AMT_NOW3),0)                                             AS INTR_AMT_NOW3
+			                                      , NVL(SUM(S1.INTR_AMT_NOW4),0)                                             AS INTR_AMT_NOW4
+			                                      , NVL(SUM(S1.INTR_AMT_NOW5),0)                                             AS INTR_AMT_NOW5
+			                                      , NVL(SUM(S1.INTR_AMT_NOW6),0)                                             AS INTR_AMT_NOW6
+			                                      , NVL(SUM(S1.INTR_AMT_NOW7),0)                                             AS INTR_AMT_NOW7
+			                                      , NVL(SUM(S1.INTR_AMT_NOW8),0)                                             AS INTR_AMT_NOW8
+			                                      , NVL(SUM(S1.INTR_AMT_NOW9),0)                                             AS INTR_AMT_NOW9
+			                                      , NVL(SUM(S1.INTR_AMT_NOW10),0)                                            AS INTR_AMT_NOW10
+			                                      , NVL(SUM(S1.INTR_AMT_NOW11),0)                                            AS INTR_AMT_NOW11
+			                                      , NVL(SUM(S1.INTR_AMT_NOW12),0)                                            AS INTR_AMT_NOW12
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW1),0)                                          AS PRNCPAL_AMT_NOW1
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW2),0)                                          AS PRNCPAL_AMT_NOW2
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW3),0)                                          AS PRNCPAL_AMT_NOW3
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW4),0)                                          AS PRNCPAL_AMT_NOW4
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW5),0)                                          AS PRNCPAL_AMT_NOW5
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW6),0)                                          AS PRNCPAL_AMT_NOW6
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW7),0)                                          AS PRNCPAL_AMT_NOW7
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW8),0)                                          AS PRNCPAL_AMT_NOW8
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW9),0)                                          AS PRNCPAL_AMT_NOW9
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW10),0)                                         AS PRNCPAL_AMT_NOW10
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW11),0)                                         AS PRNCPAL_AMT_NOW11
+			                                      , NVL(SUM(S1.PRNCPAL_AMT_NOW12),0)                                         AS PRNCPAL_AMT_NOW12
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT1),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT1
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT2),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT2
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT3),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT3
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT4),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT4
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR2),0)                                   AS PRNCPAL_AMOUNT_BACK_YR2
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR3),0)                                   AS PRNCPAL_AMOUNT_BACK_YR3
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR4),0)                                   AS PRNCPAL_AMOUNT_BACK_YR4
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR5),0)                                   AS PRNCPAL_AMOUNT_BACK_YR5
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR6),0)                                   AS PRNCPAL_AMOUNT_BACK_YR6
+			                                      , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR7),0)                                   AS PRNCPAL_AMOUNT_BACK_YR7
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT1),0)                                  AS INTR_AMOUNT_BACK_YR1_MT1
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT2),0)                                  AS INTR_AMOUNT_BACK_YR1_MT2
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT3),0)                                  AS INTR_AMOUNT_BACK_YR1_MT3
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT4),0)                                  AS INTR_AMOUNT_BACK_YR1_MT4
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR2),0)                                      AS INTR_AMOUNT_BACK_YR2
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR3),0)                                      AS INTR_AMOUNT_BACK_YR3
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR4),0)                                      AS INTR_AMOUNT_BACK_YR4
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR5),0)                                      AS INTR_AMOUNT_BACK_YR5
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR6),0)                                      AS INTR_AMOUNT_BACK_YR6
+			                                      , NVL(SUM(S1.INTR_AMOUNT_BACK_YR7),0)                                      AS INTR_AMOUNT_BACK_YR7			                                      
+			                               FROM TM_FUN_PBNCD_T S1
+			                               GROUP BY S1.CPTAL_KND
+			                              ) S2
+			                           ON S1.CODE = S2.CPTAL_KND1
+			        UNION ALL
+			        SELECT '0'                                   AS CPTAL_LEVEL
+			               ,NULL                                 AS PBNCD_NO
+			               ,NULL                                 AS BSNS_CODE
+			               ,'차입금 총계'                        AS BSNS_NM
+			               ,'00000'                              AS CPTAL_KND
+			               ,NULL                                 AS CPTAL_KND1
+			               , NVL(SUM(S1.PRNCPAL_AMOUNT),0)                                            AS PRNCPAL_AMOUNT
+			               , NVL(SUM(S1.PRNCPAL_AMOUNT_NOW),0)                                        AS PRNCPAL_AMOUNT_NOW
+			               , NVL(SUM(S1.PRNCPAL_AMOUNT),0) - NVL(SUM(S1.PRNCPAL_AMOUNT_NOW),0)        AS PRNCPAL_BLCE
+			               , NVL(SUM(S1.INTR_AMOUNT),0)                                               AS INTR_AMOUNT
+			               , NVL(SUM(S1.INTR_AMOUNT_NOW),0)                                           AS INTR_AMOUNT_NOW
+			               , NVL(SUM(S1.INTR_AMOUNT),0) - NVL(SUM(S1.INTR_AMOUNT_NOW),0)              AS INTR_BLCE
+			               , NVL(SUM(S1.PRNCPAL_AMOUNT_AGO_YR1),0)                                    AS PRNCPAL_AMOUNT_AGO_YR1
+			               , NVL(SUM(S1.INTR_AMOUNT_AGO_YR1),0)                                       AS INTR_AMOUNT_AGO_YR1
+			               , NVL(SUM(S1.INTR_AMT_NOW1),0)                                             AS INTR_AMT_NOW1
+			               , NVL(SUM(S1.INTR_AMT_NOW2),0)                                             AS INTR_AMT_NOW2
+			               , NVL(SUM(S1.INTR_AMT_NOW3),0)                                             AS INTR_AMT_NOW3
+			               , NVL(SUM(S1.INTR_AMT_NOW4),0)                                             AS INTR_AMT_NOW4
+			               , NVL(SUM(S1.INTR_AMT_NOW5),0)                                             AS INTR_AMT_NOW5
+			               , NVL(SUM(S1.INTR_AMT_NOW6),0)                                             AS INTR_AMT_NOW6
+			               , NVL(SUM(S1.INTR_AMT_NOW7),0)                                             AS INTR_AMT_NOW7
+			               , NVL(SUM(S1.INTR_AMT_NOW8),0)                                             AS INTR_AMT_NOW8
+			               , NVL(SUM(S1.INTR_AMT_NOW9),0)                                             AS INTR_AMT_NOW9
+			               , NVL(SUM(S1.INTR_AMT_NOW10),0)                                            AS INTR_AMT_NOW10
+			               , NVL(SUM(S1.INTR_AMT_NOW11),0)                                            AS INTR_AMT_NOW11
+			               , NVL(SUM(S1.INTR_AMT_NOW12),0)                                            AS INTR_AMT_NOW12
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW1),0)                                          AS PRNCPAL_AMT_NOW1
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW2),0)                                          AS PRNCPAL_AMT_NOW2
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW3),0)                                          AS PRNCPAL_AMT_NOW3
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW4),0)                                          AS PRNCPAL_AMT_NOW4
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW5),0)                                          AS PRNCPAL_AMT_NOW5
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW6),0)                                          AS PRNCPAL_AMT_NOW6
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW7),0)                                          AS PRNCPAL_AMT_NOW7
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW8),0)                                          AS PRNCPAL_AMT_NOW8
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW9),0)                                          AS PRNCPAL_AMT_NOW9
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW10),0)                                         AS PRNCPAL_AMT_NOW10
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW11),0)                                         AS PRNCPAL_AMT_NOW11
+			               , NVL(SUM(S1.PRNCPAL_AMT_NOW12),0)                                         AS PRNCPAL_AMT_NOW12
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT1),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT1
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT2),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT2
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT3),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT3
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR1_MT4),0)                               AS PRNCPAL_AMOUNT_BACK_YR1_MT4
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR2),0)                                   AS PRNCPAL_AMOUNT_BACK_YR2
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR3),0)                                   AS PRNCPAL_AMOUNT_BACK_YR3
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR4),0)                                   AS PRNCPAL_AMOUNT_BACK_YR4
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR5),0)                                   AS PRNCPAL_AMOUNT_BACK_YR5
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR6),0)                                   AS PRNCPAL_AMOUNT_BACK_YR6
+                           , NVL(SUM(S1.PRNCPAL_AMOUNT_BACK_YR7),0)                                   AS PRNCPAL_AMOUNT_BACK_YR7
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT1),0)                                  AS INTR_AMOUNT_BACK_YR1_MT1
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT2),0)                                  AS INTR_AMOUNT_BACK_YR1_MT2
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT3),0)                                  AS INTR_AMOUNT_BACK_YR1_MT3
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR1_MT4),0)                                  AS INTR_AMOUNT_BACK_YR1_MT4
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR2),0)                                      AS INTR_AMOUNT_BACK_YR2
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR3),0)                                      AS INTR_AMOUNT_BACK_YR3
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR4),0)                                      AS INTR_AMOUNT_BACK_YR4
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR5),0)                                      AS INTR_AMOUNT_BACK_YR5
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR6),0)                                      AS INTR_AMOUNT_BACK_YR6
+                           , NVL(SUM(S1.INTR_AMOUNT_BACK_YR7),0)                                      AS INTR_AMOUNT_BACK_YR7			               
+			        FROM   TM_FUN_PBNCD_T S1                        
+			        ) T1
+			        LEFT OUTER JOIN TBFUN_PBNCD T2
+			                     ON T1.PBNCD_NO = T2.PBNCD_NO        
+			        LEFT OUTER JOIN TBFUN_PBNCD_CONFM T3
+			                     ON T2.CONFM_NO = T3.CONFM_NO
+			        LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE T4
+                                 ON T2.FNNC_INSTT_SPOT_CODE = T4.FNNC_INSTT_CODE
+			) 
+            SELECT *
+            FROM TM_FUN_PBNCD_T2 T1                           
+			ORDER BY SUBSTR(T1.CPTAL_KND,1,3), T1.CPTAL_LEVEL, T1.MIN_BRRW_DE, T1.BRRW_DE, T1.PBNCD_NO
+	    ]]>
+    </select>     
+
+</sqlMap>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL010204_SQL">	
+	
+	<!-- 통상임금 급여항목 조회 -->
+	<select id="SAL010204DAO.selectPymntDdcCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT PYMNT_DDC_CODE
+			  ,PYMNT_DDC_CODE_NM
+			  ,'CODE'||PYMNT_DDC_CODE AS CODE
+		FROM TBSAL_PYMNT_DDC_STDR_CODE
+		WHERE USE_ENNC = '1'
+		<isEqual property="JSSFC_SE" compareValue="05">
+		  AND ODYGS_FCLTY_AT = '1'
+		</isEqual>
+		<isEqual property="JSSFC_SE" compareValue="06">
+		  AND ODYGS_INSTR_AT = '1'
+		</isEqual>
+		ORDER BY OUTPT_ORDR
+    </select>
+    
+    <!-- 통상임금(업무직) 조회 -->
+    <select id="SAL010204DAO.selectOdygsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+    	SELECT tb1.*,
+	  		<iterate property="pymntDdcCodeList" >
+	  		   CODE$pymntDdcCodeList[].PYMNT_DDC_CODE$ + 
+	  		</iterate>
+	  		   0 AS TOTAMT
+    	FROM (
+		    	SELECT
+				     t2.DEPT_NM
+				    ,t1.EMPNM
+				    ,t3.CODE_NM     AS CLSF_NM
+				    ,t4.CODE_NM     AS CHRG_JOB_NM
+				    ,DECODE(t1.SALARY_SE,'002',t1.SRCLS,NULL) AS SRCLS
+		   		<iterate property="pymntDdcCodeList">
+				    ,PKG_SAL_지급공제.FNSA_지급공제금액조회(#pymntDdcCodeList[].PYMNT_DDC_CODE# ,t1.EMPNO, TO_CHAR(SYSDATE,'YYYYMM')) AS CODE$pymntDdcCodeList[].PYMNT_DDC_CODE$ 
+			    </iterate>
+				FROM TBHRM_HR_MASTR t1
+				     LEFT OUTER JOIN VWHRM_DEPT t2
+				     ON  t1.DEPT_CODE = t2.DEPT_CODE
+				     LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+				     ON  t1.HR_CLSF_SE = t3.CODE
+				     AND t3.GRP_CODE = 'HRM002'
+				     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+				     ON  t1.CHRG_JOB_SE = t4.CODE
+				     AND t4.GRP_CODE = 'HRM079'
+				WHERE t1.JSSFC_SE = #JSSFC_SE#
+				<isNotEmpty property="EMPNO">
+		  		  AND t1.EMPNO = #EMPNO#
+				</isNotEmpty>
+				<isNotEmpty property="DEPT_CODE">
+					<isNotEqual property="DEPT_CODE" compareValue="000000">
+		  		  AND t1.DEPT_CODE = #DEPT_CODE#
+				</isNotEqual>
+		</isNotEmpty>
+				ORDER BY t2.OUTPT_ORDR, t1.HR_CLSF_SE, DECODE(t1.SALARY_SE,'002',t1.SRCLS,0) DESC, t1.ECNY_DE
+    		 ) tb1
+    </select>
+
+</sqlMap>

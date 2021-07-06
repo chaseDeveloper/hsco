@@ -1,0 +1,539 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM020303_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 쿼리명 : 서류전형관리
+	설명 :서류전형관리
+	수정일  수정자  수정내용
+	
+	작성자 : 이혜선
+	최초작성일 : 2015.08.03
+	-->
+	<!-- 서류전형관리 조회 -->
+	<select id="HRM020303DAO.tbhrmPapersScrproList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+				SELECT  B.EMPMN_YEAR
+						,B.ODR_SE
+						,B.APYEXM_NO
+						,B.NM_KOREAN
+						,(SELECT DECODE(COUNT(C.EVL_SCORE),0,0,1)
+						    FROM TBHRM_PAPERS_SCRPRO_DETAIL C
+						    WHERE C.EMPMN_YEAR   = #EMPMN_YEAR#
+						      AND C.ODR_SE       = #ODR_SE#
+						      AND C.APYEXM_NO    = B.APYEXM_NO
+						      AND C.EVL_MFCMM_NO = (
+									SELECT IA.MFCMM_NO        
+									FROM TBHRM_SCRPRO_EVL_MFCMM IA
+									WHERE   IA.EMPMN_YEAR  = #EMPMN_YEAR#
+									AND     IA.ODR_SE      = #ODR_SE#
+									AND     IA.SCRPRO_SE   = '002'
+									AND     IA.USER_ID     = #USER_ID#)
+						 )AS CNT
+						,'0' AS CHK
+				FROM  TBHRM_ECNY_SPORT_GNRL B
+				  LEFT OUTER JOIN TBHRM_PAPERS_SCRPRO A
+				  ON B.EMPMN_YEAR    = A.EMPMN_YEAR
+				  AND B.ODR_SE       = A.ODR_SE
+				  AND B.APYEXM_NO    = A.APYEXM_NO
+				  AND EXISTS (
+						       SELECT USER_ID
+						        FROM TBHRM_SCRPRO_EVL_MFCMM
+						       WHERE USER_ID   = #USER_ID#
+						         AND SCRPRO_SE ='002'
+						     )
+				WHERE 1=1
+				  AND B.EMPMN_YEAR = #EMPMN_YEAR#
+				  AND B.ODR_SE     = #ODR_SE#
+				  AND EXISTS (
+						       SELECT C.SCRPRO_SE
+						         FROM TBHRM_SCRPRO_STEP C
+						        WHERE C.EMPMN_YEAR   = #EMPMN_YEAR#
+						          AND C.ODR_SE       = #ODR_SE#
+						          AND C.SCRPRO_SE    = '002'
+						          AND C.CHOISE_AT    = '1'
+						      )
+			]]>
+				<isNotEmpty property="APYEXM_SE"> 
+		         AND 	B.APYEXM_SE 	= #APYEXM_SE#
+	             </isNotEmpty>	
+				<isNotEmpty property="APYEXM_REALM_SE"> 
+		         AND 	B.APYEXM_REALM_SE 	= #APYEXM_REALM_SE#
+	             </isNotEmpty>				
+	            <isNotEmpty property="NM_KOREAN"> 
+		         AND 	B.NM_KOREAN  LIKE '%' || #NM_KOREAN# || '%'
+	             </isNotEmpty>				
+		<![CDATA[		
+				ORDER BY B.APYEXM_NO
+		]]>
+			
+	</select> 
+	
+ 	<!-- 서류전형관리 상세조회 -->
+	<select id="HRM020303DAO.tbhrmPapersScrproR" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+  SELECT   A.EMPMN_YEAR AS EMPMN_YEAR,
+           A.ODR_SE AS ODR_SE,
+           A.SEQ AS SEQ,
+           A.SCRPRO_SE AS SCRPRO_SE,
+           A.EVL_SE AS EVL_SE,
+           A.EVL_IEM AS EVL_IEM,
+           A.ALLOT AS ALLOT,
+           DECODE (B.EVL_SEQ, 1, 1, 0) AS A_AT,
+           DECODE (B.EVL_SEQ, 2, 1, 0) AS B_AT,
+           DECODE (B.EVL_SEQ, 3, 1, 0) AS C_AT,
+           DECODE (B.EVL_SEQ, 4, 1, 0) AS D_AT,
+           DECODE (B.EVL_SEQ, 5, 1, 0) AS E_AT,
+           B.APYEXM_NO AS APYEXM_NO,
+           A.SCORE1,
+		   A.SCORE2,
+		   A.SCORE3,
+		   A.SCORE4,
+		   A.SCORE5,
+           (
+				SELECT   
+				   iA.MFCMM_NO        
+				FROM
+				    TBHRM_SCRPRO_EVL_MFCMM iA
+				WHERE   iA.EMPMN_YEAR  =  #EMPMN_YEAR#
+				AND     iA.ODR_SE      =  #ODR_SE#
+				AND     iA.SCRPRO_SE   = '002'
+				And     iA.USER_ID = #USER_ID#
+           ) EVL_MFCMM_NO,
+           (
+				SELECT   
+				   iA.NM        
+				FROM
+				    TBHRM_SCRPRO_EVL_MFCMM iA
+				WHERE   iA.EMPMN_YEAR  =  #EMPMN_YEAR#
+				AND     iA.ODR_SE      =  #ODR_SE#
+				AND     iA.SCRPRO_SE   = '002'
+				And     iA.USER_ID = #USER_ID#
+           ) EVL_MFCMM_NM,
+           NVL (B.EVL_SCORE, 0) AS EVL_SCORE,
+           '0' AS CHK,
+           B.NM_KOREAN AS NM_KOREAN,
+           B.EVL_IEM_SE AS EVL_IEM_SE
+    FROM      
+        TBHRM_SCRPRO_STDR_DETAIL A,
+          (
+          SELECT   PA.EMPMN_YEAR,
+                    PA.ODR_SE,
+                    PA.EVL_IEM_SE,
+                    PA.EVL_SEQ,
+                    PA.EVL_SCORE,
+                    PA.SEQ,
+                    PA.APYEXM_NO,
+                    SFSAL_GETEMPNO_01 (PA.EVL_MFCMM_NO) AS EVL_MFCMM_NO,
+                    EC.NM_KOREAN AS NM_KOREAN
+             FROM      TBHRM_PAPERS_SCRPRO_DETAIL PA,
+                       TBHRM_ECNY_SPORT_GNRL EC
+            WHERE   
+            PA.EMPMN_YEAR = EC.EMPMN_YEAR
+            AND   PA.ODR_SE = EC.ODR_SE
+            AND   PA.APYEXM_NO = EC.APYEXM_NO
+            AND   PA.APYEXM_NO = #APYEXM_NO#
+            And   (PA.EVL_MFCMM_NO) = (
+				SELECT   
+				   iA.MFCMM_NO        
+				FROM
+				    TBHRM_SCRPRO_EVL_MFCMM iA
+				WHERE   iA.EMPMN_YEAR  =  #EMPMN_YEAR#
+				AND     iA.ODR_SE      =  #ODR_SE#
+				AND     iA.SCRPRO_SE   = '002'
+				And     iA.USER_ID = #USER_ID#
+           )
+            ) B
+   WHERE   1 = 1
+           AND A.EMPMN_YEAR = B.EMPMN_YEAR(+)
+           AND A.ODR_SE = B.ODR_SE(+)
+           AND A.EVL_SE = B.EVL_IEM_SE(+)
+           AND A.SEQ = B.SEQ(+)
+			  AND A.EMPMN_YEAR = #EMPMN_YEAR#
+			  AND A.ODR_SE = #ODR_SE#
+			  AND A.SCRPRO_SE   = '002'
+			]]>	
+		<![CDATA[		
+				ORDER BY A.EVL_SE, A.SEQ
+		]]>
+			
+	</select>    	
+	<!-- 서류전형관리 채용년도 콤보데이터 조회 -->
+	<select id="HRM020303DAO.empmnYearComboList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+			SELECT	DISTINCT(A.EMPMN_YEAR)
+			FROM	TBHRM_EMPMN_BSIS A, TBHRM_SCRPRO_EVL_MFCMM B
+			WHERE	A.EMPMN_YEAR = B.EMPMN_YEAR
+			AND		A.ODR_SE = B.ODR_SE
+			AND		B.NM = #RATER_EMPNM#
+			AND		B.USER_ID = #USER_ID#
+			AND		B.SCRPRO_SE = '002'
+			ORDER BY  A.EMPMN_YEAR DESC
+       		]]>
+       		  
+	</select> 	
+	
+	<!-- 서류전형관리 차수 콤보데이터 조회 -->
+	<select id="HRM020303DAO.odrSeComboList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[
+			SELECT	DISTINCT A.EMPMN_YEAR, A.ODR_SE
+			FROM	TBHRM_EMPMN_BSIS A, TBHRM_SCRPRO_EVL_MFCMM B
+			WHERE	A.EMPMN_YEAR = B.EMPMN_YEAR
+			AND		A.ODR_SE = B.ODR_SE
+			AND		B.NM = #RATER_EMPNM#
+			AND		B.USER_ID = #USER_ID#
+			AND		B.SCRPRO_SE = '002'
+			ORDER BY  A.EMPMN_YEAR, A.ODR_SE DESC
+			]]>
+       		  
+	</select> 	
+	
+	<!-- 서류전형관리 채용공고명 조회 -->
+	<select id="HRM020303DAO.pblancNmComboList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+				SELECT 	A.EMPMN_YEAR
+						,A.ODR_SE 
+						,B.EMPMN_PBLANC_NM
+						,A.EMPMN_TY_SE
+						,(
+							SELECT Decode(Max(iA.SCRPRO_SE), Null, '0', '1')
+							FROM TBHRM_SCRPRO_STEP iA 
+							WHERE
+							    iA.CHOISE_AT = '1'
+							    AND iA.EMPMN_YEAR = A.EMPMN_YEAR 
+							    AND iA.ODR_SE = A.ODR_SE
+							    AND iA.SCRPRO_SE = '001' 
+						) SCRPRO_SE_001
+						,(
+							SELECT Decode(Max(iA.SCRPRO_SE), Null, '0', '1')
+							FROM TBHRM_SCRPRO_STEP iA 
+							WHERE
+							    iA.CHOISE_AT = '1'
+							    AND iA.EMPMN_YEAR = A.EMPMN_YEAR 
+							    AND iA.ODR_SE = A.ODR_SE
+							    AND iA.SCRPRO_SE = '002' 
+						) SCRPRO_SE_002
+						,(
+							SELECT Decode(Max(iA.SCRPRO_SE), Null, '0', '1')
+							FROM TBHRM_SCRPRO_STEP iA 
+							WHERE
+							    iA.CHOISE_AT = '1'
+							    AND iA.EMPMN_YEAR = A.EMPMN_YEAR 
+							    AND iA.ODR_SE = A.ODR_SE
+							    AND iA.SCRPRO_SE = '003' 
+						) SCRPRO_SE_003
+						,(
+							SELECT Decode(Max(iA.SCRPRO_SE), Null, '0', '1')
+							FROM TBHRM_SCRPRO_STEP iA 
+							WHERE
+							    iA.CHOISE_AT = '1'
+							    AND iA.EMPMN_YEAR = A.EMPMN_YEAR 
+							    AND iA.ODR_SE = A.ODR_SE
+							    AND iA.SCRPRO_SE = '004' 
+						) SCRPRO_SE_004
+				FROM	 TBHRM_EMPMN_BSIS A,
+				    	 TBHRM_EMPMN_PBLANC B
+				    	 
+				WHERE A.EMPMN_YEAR = B.EMPMN_YEAR
+				AND   A.ODR_SE     = B.ODR_SE
+				AND   A.EMPMN_YEAR = #EMPMN_YEAR#
+				AND   A.ODR_SE     = #ODR_SE#
+       		  ]]>
+	</select> 	
+	
+	<!-- 평가항목 콤보 불러오기 -->
+<!-- 	<select id="HRM020303DAO.selectEvlIemCombo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+				SELECT  B.EVL_SE       AS CODE
+				        ,B.ALLOT       AS ALLOT
+				        ,C.CODE_NM     AS CODE_NM
+				        ,A.STDR_SCORE  AS STDR_SCORE
+				  FROM  TBHRM_SCRPRO_STDR A
+				        ,TBHRM_SCRPRO_STDR_DETAIL B
+				        ,TBCOM_CMMN_CODE C
+				 WHERE A.EMPMN_YEAR = B.EMPMN_YEAR
+				   AND A.ODR_SE       = B.ODR_SE
+				   AND A.SCRPRO_SE    = B.SCRPRO_SE
+				   AND B.EVL_SE = C.CODE
+				   AND C.GRP_CODE = 'HRM318'
+				   AND A.EMPMN_YEAR   = #EMPMN_YEAR#
+				   AND A.ODR_SE       = #ODR_SE#
+				   AND A.SCRPRO_SE    = '002'
+				ORDER BY EVL_SE
+       		  ]]>
+       		  
+	</select> 	 -->
+	
+	<!--  서류전형관리 상세 추가 -->
+<!-- 	<insert id="HRM020303DAO.tbhrmPapersScrproC" parameterClass="java.util.HashMap">
+		INSERT INTO TBHRM_PAPERS_SCRPRO_DETAIL(
+		  							 EMPMN_YEAR
+		  							 ,ODR_SE
+		  							 ,APYEXM_NO
+		  							 ,SEQ
+		  							 ,EVL_IEM_SE
+		  							 ,EVL_SCORE
+									 ,REGISTER_ID
+							         ,REGIST_DT
+							         ,UPDUSR_ID
+							         ,UPDT_DT
+									
+		)
+		VALUES (
+						  #EMPMN_YEAR#
+						 ,#ODR_SE#
+						 ,#APYEXM_NO#
+						 ,(SELECT NVL(MAX(SEQ),0)+1 FROM TBHRM_PAPERS_SCRPRO_DETAIL WHERE EMPMN_YEAR = #EMPMN_YEAR# AND ODR_SE = #ODR_SE# AND APYEXM_NO = #APYEXM_NO#)
+						 ,#EVL_IEM_SE#
+		  				 ,#EVL_SCORE#
+				         ,#S_USER_ID#
+				         ,SYSDATE
+				         ,#S_USER_ID#
+				         ,SYSDATE
+		)
+	</insert> -->
+	
+	<!--  서류전형 대상자 수정-->
+ 	<update id="HRM020303DAO.tbhrmPapersScrproI" parameterClass="java.util.HashMap">
+			MERGE INTO TBHRM_PAPERS_SCRPRO 
+			USING DUAL
+			ON (EMPMN_YEAR = #EMPMN_YEAR# AND ODR_SE = #ODR_SE# AND APYEXM_NO = #APYEXM_NO#)
+			WHEN MATCHED THEN
+			  UPDATE
+			  SET
+			      UPDUSR_ID  =  #S_USER_ID#
+			      ,UPDT_DT   =  SYSDATE
+			  WHEN NOT MATCHED THEN
+			  INSERT
+			    (
+			      EMPMN_YEAR
+			      ,ODR_SE
+			      ,APYEXM_NO
+			      ,REGISTER_ID
+			      ,REGIST_DT
+			      ,UPDUSR_ID
+			      ,UPDT_DT
+			    )
+			    VALUES
+			    (
+			       #EMPMN_YEAR#
+			      ,#ODR_SE#
+			      ,#APYEXM_NO#
+			      ,#S_USER_ID#
+			      ,SYSDATE
+			      ,#S_USER_ID#
+			      ,SYSDATE
+			    )
+	</update>
+
+	<!--  서류전형관리 상세 수정 -->
+	<insert id="HRM020303DAO.tbhrmPapersScrproU" parameterClass="java.util.HashMap">
+		<![CDATA[
+		MERGE INTO TBHRM_PAPERS_SCRPRO_DETAIL
+		USING DUAL
+		ON (
+			EMPMN_YEAR = #EMPMN_YEAR# 
+			AND ODR_SE = #ODR_SE# 
+			AND APYEXM_NO =	#APYEXM_NO# 
+			AND EVL_MFCMM_NO = #EVL_MFCMM_NO# 
+			AND SEQ =	#SEQ# 
+			AND EVL_IEM_SE = #EVL_SE#
+		)
+  	  	WHEN MATCHED THEN 
+  	  	UPDATE SET			
+				EVL_SCORE       =    #EVL_SCORE#
+		]]>
+		<isEqual property="A_AT" compareValue="1">
+				,EVL_SEQ         =   '1'
+		</isEqual>
+		<isEqual property="B_AT" compareValue="1">
+				,EVL_SEQ         =   '2'
+		</isEqual>
+		<isEqual property="C_AT" compareValue="1">
+				,EVL_SEQ         =   '3'
+		</isEqual>
+		<isEqual property="D_AT" compareValue="1">
+				,EVL_SEQ         =   '4'
+		</isEqual>
+		<isEqual property="E_AT" compareValue="1">
+				,EVL_SEQ         =   '5'
+		</isEqual>
+		<![CDATA[
+                 ,UPDUSR_ID		=	#S_USER_ID#
+		         ,UPDT_DT		=	SYSDATE
+		         
+		WHEN NOT MATCHED THEN 
+		 INSERT (
+		 		EMPMN_YEAR
+		 		,ODR_SE
+		 		,APYEXM_NO
+		 		,EVL_MFCMM_NO
+		 		,SEQ
+		 		,EVL_IEM_SE
+		 		,EVL_SCORE
+		 		,EVL_SEQ
+		 		,REGISTER_ID
+				,REGIST_DT
+		 		,UPDUSR_ID
+				,UPDT_DT
+		 ]]>	
+		 <![CDATA[	
+		 )VALUES (
+		 		#EMPMN_YEAR#
+		 		,#ODR_SE#
+		 		,#APYEXM_NO#
+		 		,#EVL_MFCMM_NO#
+		 		,#SEQ#
+				,#EVL_SE#
+		 		,#EVL_SCORE#
+		 ]]>
+		<isEqual property="A_AT" compareValue="1">
+				,'1'
+		</isEqual>
+		<isEqual property="B_AT" compareValue="1">
+				,'2'
+		</isEqual>
+		<isEqual property="C_AT" compareValue="1">
+				,'3'
+		</isEqual>
+		<isEqual property="D_AT" compareValue="1">
+				,'4'
+		</isEqual>
+		<isEqual property="E_AT" compareValue="1">
+				,'5'
+		</isEqual>
+		 <![CDATA[
+                ,#S_USER_ID#
+                ,SYSDATE
+                ,#S_USER_ID#
+                ,SYSDATE
+		 )
+		]]>
+	</insert>
+
+	<!--  점수,순위 업데이트-->
+ 	<insert id="HRM020303DAO.tbhrmPapersScrproRankU" parameterClass="java.util.HashMap">
+ 		<![CDATA[
+			MERGE INTO TBHRM_PAPERS_SCRPRO T1 USING 
+			(
+                SELECT  RANK () OVER (PARTITION BY EMPMN_YEAR, ODR_SE ORDER BY EMPMN_YEAR, ODR_SE , TOT_SCORE DESC) AS EVL_RANK
+                       ,A.TOT_SCORE  AS TOT_SCORE
+                       ,A.EMPMN_YEAR AS EMPMN_YEAR
+                       ,A.ODR_SE     AS ODR_SE
+                       ,A.APYEXM_NO  AS APYEXM_NO
+                       ,CASE
+                            WHEN TOT_SCORE >= A.STDR_SCORE
+                            THEN '001'
+                            ELSE '002'
+                        END AS EVL_RESULT_SE
+                        ,A.CNT EVL_MAN_CO
+                FROM  (SELECT EMPMN_YEAR
+                              ,ODR_SE
+                              ,APYEXM_NO
+                              ,
+                                Case
+                                    When Max(B.SM_OPT1) = '001' And Count(*) > 2 Then SUM(EVL_SCORE) - Max(EVL_SCORE) - Min(EVL_SCORE)
+                                    Else 
+                                        SUM(EVL_SCORE)
+                                End AS TOT_SCORE
+                              ,
+                                Case
+                                    When Max(B.SM_OPT1) = '001' And Count(*) > 2 Then Count(*) - 2
+                                    Else 
+                                        Count(*)
+                                End CNT
+                              ,Max(B.STDR_SCORE) STDR_SCORE
+                       FROM (
+                            SELECT
+                                 EMPMN_YEAR
+                                ,ODR_SE
+                                ,APYEXM_NO
+                                ,EVL_MFCMM_NO
+                                ,SUM(EVL_SCORE) EVL_SCORE
+                            FROM TBHRM_PAPERS_SCRPRO_DETAIL
+                            WHERE 1=1
+                            AND   EMPMN_YEAR = #EMPMN_YEAR#
+                            AND   ODR_SE     = #ODR_SE#
+                            GROUP BY EMPMN_YEAR, ODR_SE, APYEXM_NO, EVL_MFCMM_NO
+                       ) A
+                       ,(SELECT
+                            A.WGHTVAL,
+                            A.STDR_SCORE,
+                            A.SM_OPT1,
+                            A.SM_OPT2
+                           FROM  TBHRM_SCRPRO_STDR A
+                           WHERE 1=1
+                           AND   A.EMPMN_YEAR = #EMPMN_YEAR#
+                           AND   A.ODR_SE     = #ODR_SE#
+                           AND   A.SCRPRO_SE  = '002'
+                          ) B
+                       GROUP BY EMPMN_YEAR, ODR_SE, APYEXM_NO
+                       )A
+                WHERE 1=1
+                  AND A.EMPMN_YEAR  = #EMPMN_YEAR#
+                  AND A.ODR_SE      = #ODR_SE#
+			) T2
+			ON (T1.EMPMN_YEAR = T2.EMPMN_YEAR AND T1.ODR_SE = T2.ODR_SE AND T1.APYEXM_NO = T2.APYEXM_NO)
+			WHEN MATCHED THEN
+			  UPDATE
+			  SET
+			      TOT_SCORE =  T2.TOT_SCORE
+			     ,EVL_RANK  =  T2.EVL_RANK
+			     ,EVL_MAN_CO  =  T2.EVL_MAN_CO
+			     ,EVL_RESULT_SE = T2.EVL_RESULT_SE
+			  WHEN NOT MATCHED THEN
+			  INSERT
+			    (
+			      EMPMN_YEAR
+			      ,ODR_SE
+			      ,APYEXM_NO
+			      ,TOT_SCORE
+			      ,EVL_RANK
+			      ,EVL_MAN_CO
+			      ,EVL_RESULT_SE
+			      ,REGISTER_ID
+			      ,REGIST_DT
+			      ,UPDUSR_ID
+			      ,UPDT_DT
+			    )
+			    VALUES
+			    (
+			       #EMPMN_YEAR#
+			      ,#ODR_SE#
+			      ,#APYEXM_NO#
+			      ,T2.TOT_SCORE
+			      ,T2.EVL_RANK 
+			      ,T2.EVL_MAN_CO
+			      ,T2.EVL_RESULT_SE
+			      ,#S_USER_ID#
+			      ,SYSDATE
+			      ,#S_USER_ID#
+			      ,SYSDATE
+			    )
+		]]>
+	</insert>
+	
+	<!--  서류전형관리 기본사항 수정 (결과,점수)-->
+<!-- 	<update id="HRM020303DAO.tbhrmPapersScrproDetailTotU" parameterClass="java.util.HashMap">
+		UPDATE TBHRM_PAPERS_SCRPRO
+  	  	SET			
+				  TOT_SCORE		=	#TOT_SCORE#
+				 ,EVL_RESULT_SE =   #EVL_RESULT_SE#
+		WHERE    EMPMN_YEAR     = 	#EMPMN_YEAR#
+		AND      ODR_SE         = 	#ODR_SE#
+		AND		 APYEXM_NO		=	#APYEXM_NO#
+	</update>	 -->
+	
+	<!--   서류전형관리 상세 삭제-->
+<!--     <delete id="HRM020303DAO.tbhrmPapersScrproD" parameterClass="java.util.HashMap">
+        <![CDATA[
+			DELETE FROM TBHRM_PAPERS_SCRPRO_DETAIL
+			WHERE   EMPMN_YEAR  	=   #EMPMN_YEAR#
+			  AND   ODR_SE		    =   #ODR_SE#
+			  AND   APYEXM_NO    	= 	#APYEXM_NO# 
+			  AND   SEQ    			= 	#SEQ# 
+		]]>        
+    </delete> -->
+   
+	     
+  </sqlMap>

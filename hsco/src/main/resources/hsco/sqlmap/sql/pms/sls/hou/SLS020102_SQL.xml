@@ -1,0 +1,1636 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS020102_SQL">	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   	  
+      
+	  <!-- 쿼리명     : 주택계약자 해약리스트
+           설명       : 주택계약자 해약리스트 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.10.26
+
+	       수정일  수정자  수정내용
+	   -->        
+      <select id="SLS020102DAO.selectHouseCancelList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+/*  공통정보  */
+            SELECT      
+                 '1' AS CHK
+			    ,T1.CNTRCTR_NO                                  /* 계약자번호 */
+                ,T1.HOUSE_CODE                                  /* 주택코드 */
+                ,SFSLS_HOUSE_NM(T1.HOUSE_CODE, 'HOUSE_NM') AS HOUSE_NM  /* 주택명 */
+                ,T1.DONG                                        /* 동 */
+                ,T1.HO                                          /* 호 */
+                ,T1.RCEPT_DE                                    /* 접수일자 */
+                ,T1.CANCL_DE                                    /* 해약일자 */
+                ,T1.RESCI_RESN_CODE                             /* 해약사유코드 */
+                ,T1.RESCI_RESN_DETAIL                           /* 해약사유상세 */
+                ,T1.BANK_CODE                                   /* 은행코드 */
+                ,SFCOM_CODE_NM('COM021', T1.BANK_CODE, 'CODE_NM') AS BANK_CODE_NM                
+                ,T1.DPSTR                                       /* 예금주 */
+                ,T1.ACNUTNO                                     /* 계좌번호 */
+                ,T1.LVHS_DE                                     /* 퇴거일자 */
+                ,T1.LVHS_ADRES                                  /* 퇴거주소 */
+                ,T1.LVHS_TELNO                                  /* 퇴거전화번호 */
+                ,T1.LVHS_MOBLPHON                               /* 퇴거휴대폰 */
+                ,NVL(T1.PENLTY_APPLC_AT,0) AS PENLTY_APPLC_AT   /* 위약금적용여부 */
+                ,T1.PENLTY                                      /* 위약금 */
+                ,T1.PENLTY_INTRT                                /* 위약금이율 */      
+                ,T1.ELCTRN_SANCTN_NO                            /* 전자결재번호 */
+                ,T1.CANCL_EXPNDTR_DECSN_NO                      /* 해약지출결의번호 */
+                ,T1.RM                                          /* 비고-참고사항 */
+                ,T1.REGISTER_ID                                 /* 등록자ID */
+                ,TO_CHAR(T1.REGIST_DT,'YYYYMMDD') AS REGIST_DT  /* 등록일시 */
+                ,TO_CHAR(T1.REGIST_DT,'YYYYMMDDHH24MISS') AS REGIST_DT2  /* 등록일시 */
+                ,T1.UPDUSR_ID                                   /* 수정자ID */                        
+                ,TO_CHAR(T1.UPDT_DT, 'YYYYMMDD') AS UPDT_DT     /* 수정일시 */    
+                ,'' AS RENT_BGNDE                               /* 임대시자일 */
+                ,'' AS RENT_ENDDE                               /* 임대종료일 */
+                ,'' AS LTTOT_RENT_SE                            /* 주택 분양(01), 임대(02) 구분  */
+                ,'' AS PAY_CODE_SE                              /* 납부코드 구분 분양(R), 임대(S) */
+/* 압류정보 */
+                ,T2.SEIZR_TOT_AMOUNT                            /* 압류금액 */
+                ,T2.CRDTR_NM                                    /* 채권자명 */                
+                ,T1.ELCTRN_SANCTN_NO
+                ,SFCOM_GET_DRFTSTS(T1.ELCTRN_SANCTN_NO, T1.REGIST_DT) AS APPRSTS
+                ,SFCOM_GET_APPRDOC(T1.ELCTRN_SANCTN_NO, T1.REGIST_DT) AS APPRDOC
+		        ,T1.EXPNDTR_DECSN_DE
+		  	    ,T1.DECSN_YEAR
+		  	    ,T1.EXPNDTR_DECSN_NO
+		  	    ,T1.SANCTN_AT
+                ,'[' || SFCOM_CODE_NM ('COM021', T3.BANK_CD, 'CODE_NM') || '] ' || VACCT_NO AS VACCT_NM
+                , T3.BANK_CD AS VBANK_CD
+                , T3.VACCT_NO AS VACCT_NO
+            FROM TBSLS_HCNTRCTR_CANCL    T1                     /* 주택계약 해약 */
+                , ( SELECT MAX(CNTRCTR_NO) AS CNTRCTR_NO
+                          ,NVL(SUM(DET_AMOUNT),0) AS SEIZR_TOT_AMOUNT /* 압류금액 */
+                          ,MAX(CRDTR_NM) AS CRDTR_NM                  /* 채권자명 */
+                     FROM TBSLS_HCNTRCTR_SEIZR
+                    WHERE 1=1
+                      AND CNTRCTR_NO = #CNTRCTR_NO#
+                      AND RELIS_DE IS NULL
+                  ) T2
+                , ( SELECT CUST_CD, BANK_CD, VACCT_NO FROM VA_MAST
+                    WHERE CUST_CD = #CNTRCTR_NO#
+                      AND BANK_CD = '031'
+                      AND OPT1 = 1
+                      AND ROWNUM = 1) T3                   
+           WHERE 1 = 1
+             AND T1.CNTRCTR_NO     = #CNTRCTR_NO#
+             AND T1.CNTRCTR_NO     = T2.CNTRCTR_NO(+)
+             AND T1.CNTRCTR_NO     = T3.CUST_CD(+)                 
+	  </select>	  
+
+      <!-- 쿼리명     : 주택 분양 해약 리스트
+           설명       : 주택 분양 해약 리스트 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.12.23
+
+	       수정일  수정자  수정내용
+	   -->  	  
+
+      <select id="SLS020102DAO.selectHouseLttotCancelList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+            SELECT      
+/* 주택분양해약 */
+                 T1.CNTRCTR_NO                                           /* 계약번호 */
+                ,T1.TOT_ENGG_AMOUNT                                      /* 총약정금액 */
+                ,T1.TOT_PAYAMT                                           /* 총납부금액 */
+                ,T1.RETURN_PAYAMT                                        /* 반환납부금액 */   
+                ,T1.RETURN_ARRRG_AMOUNT                                  /* 반환연체금액 */
+                ,T1.RETURN_PAY_INTR                                      /* 반환납부이자 */
+                ,T1.INCMTAX                                              /* 소득세 */
+                ,T1.IHNTS                                                /* 주민세 */
+                ,NVL(T1.RETURN_INTRT,0)          AS RETURN_INTRT         /* 반환이자이율 */
+                ,NVL(T1.ESTN_INTRT,0)            AS ESTN_INTRT           /* 확장이율 */
+                ,NVL(T1.RETURN_INTR_PYMNT_AT,0)  AS RETURN_INTR_PYMNT_AT /* 반환이자지급여부 */
+                ,T1.REGISTER_ID                                          /* 등록자ID */
+                ,TO_CHAR(T1.REGIST_DT,'YYYYMMDD') AS REGIST_DT           /* 등록일시 */
+                ,T1.UPDUSR_ID                                            /* 수정자ID */
+                ,TO_CHAR(T1.UPDT_DT,'YYYYMMDD')   AS UPDT_DT             /* 수정일시 */
+/* 주택계약해약 */                
+                ,NVL(T2.PENLTY_INTRT,0)           AS PENLTY_INTRT        /* 위약금이율 */
+                ,NVL(T2.PENLTY_APPLC_AT,0)        AS PENLTY_APPLC_AT     /* 위약금적용여부 */
+            FROM TBSLS_HOUSE_LTTOT_CANCL  T1                             /* 주택분양 해약 */
+                ,TBSLS_HCNTRCTR_CANCL     T2                             /* 주택계약해약  */ 
+            
+           WHERE 1 = 1
+             AND T1.CNTRCTR_NO     = #CNTRCTR_NO#
+             AND T1.CNTRCTR_NO     = T2.CNTRCTR_NO
+                 
+	  </select>	  
+
+       
+      
+       
+
+       <!-- 쿼리명    : 주택계약 압류정보 
+           설명       : 주택계약 압류정보 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.10.27
+
+	       수정일  수정자  수정내용
+	   -->        
+      <select id="SLS020102DAO.selectHcntrctrSeizrInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+         SELECT  MAX(CNTRCTR_NO) AS CNTRCTR_NO 
+                ,TO_CHAR(SUM(DET_AMOUNT),'999,999,999') TOT_AMOUNT  /* 압류금액 */
+                ,MAX(CRDTR_NM)                          CRDTR_NM    /* 채권자명 */
+           FROM TBSLS_HCNTRCTR_SEIZR
+          WHERE 1=1
+            AND CNTRCTR_NO = #CNTRCTR_NO#
+            AND RELIS_DE IS NULL
+      
+      </select>
+      
+      
+       <!-- 쿼리명    : 주택분양 이율정보 조회(신규시) 
+           설명       : 주택분양 이율정보 조회(신규시)
+	       작성자     : 정윤원
+	       최초작성일 : 2015.12.15
+
+	       수정일  수정자  수정내용
+	   -->        
+      <select id="SLS020102DAO.selectLttotRatioInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+         SELECT 
+              SFPMS_GET_INTRT_RATE('HOU', #HOUSE_CODE# ,'S2', #CANCL_DE#, 0) RAT2   /*  반환이자 이율  */
+             ,SFPMS_GET_INTRT_RATE('HOU', #HOUSE_CODE# ,'S3', #CANCL_DE#, 0) RAT3   /*  기본,분양위약금 이율 */
+             ,SFPMS_GET_INTRT_RATE('HOU', #HOUSE_CODE# ,'S4', #CANCL_DE#, 0) RAT4   /*  발코니 확장 이율  */
+         FROM DUAL
+      
+      </select> 
+      
+      
+       <!-- 쿼리명    : 주택임대 이율정보 조회(신규시) 
+           설명       : 주택임대 이율정보 조회(신규시)
+	       작성자     : 정윤원
+	       최초작성일 : 2015.12.15
+
+	       수정일  수정자  수정내용
+	   -->        
+      <select id="SLS020102DAO.selectRentRatioInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+         SELECT 
+              SFPMS_GET_INTRT_RATE('HOU', #HOUSE_CODE# ,'R1', #CANCL_DE#, 0) RAT1   /*  임대해약- 위약금이율  */
+             ,SFPMS_GET_INTRT_RATE('HOU', #HOUSE_CODE# ,'R0', #CANCL_DE#, 0) RAT2   /*  임대해약- 이자지율 */
+         FROM DUAL
+      
+      </select> 
+      
+      
+      
+      
+      <!-- 쿼리명     : 주택계약(분양) 해약 반환 금액 목록 
+           설명       : 주택계약(분양) 해약 반환 금액 목록 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.10.27
+
+	       수정일  수정자  수정내용
+	   -->        
+      <select id="SLS020102DAO.selectHouseLttotCancelReturnAmtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		    SELECT '1'              AS ORD
+			      ,( SELECT T2.CSTMR_NM
+			           FROM TBSLS_HCNTRCTR T1 
+			               ,TBSLS_HOUSE_CSTMR T2
+			           WHERE 1 = 1
+			             AND T1.CNTRCTR_NO     = #CNTRCTR_NO#
+			             AND T1.HOUSE_CSTMR_NO = T2.HOUSE_CSTMR_NO(+)
+			       ) AS CNAME                         /* 계약자명  */
+
+			     ,NULL              AS PAY_CODE      /* 납부코드                      */
+			     ,T2.TOT_AMT        AS TOT_AMT       /* 분양금액:총납부금액(청구금액) */
+			     ,'계 '              AS PAY_CODE_NM   /* 납부코드명                    */
+			     ,SUM(PAYAMT)       AS PAYAMT        /* 납부금액:실납부금액           */
+			     ,SUM(ARRRG_AMOUNT) AS ARRRG_AMOUNT  /* 연체(-할인)금액               */
+			     ,NULL              AS RCIV_DE       /* 수납일자                      */
+			     ,NULL              AS BET_DAY       /* 기산일                        */
+			     ,SUM(RAMT1)        AS INT_AMT       /* 지급이자                      */
+			     ,TRUNC(SUM(RAMT1) * 0.2,-1) + TRUNC((SUM(RAMT1) * 0.2) * 0.1,-1) + MAX(P_AMT) AS RT_AMT  /* 공제금액 합계: (납부금액 이자의 소득세/주민세합)+위약금=공제금액   */
+			     ,TRUNC(SUM(RAMT1) * 0.2,-1)                                                   AS SO_AMT  /*  소득세        */
+			     ,TRUNC((SUM(RAMT1) * 0.2) * 0.1,-1)                                           AS JU_AMT  /*  주민세        */
+			     ,MAX(P_AMT)                                                                   AS P_AMT   /*  위약금        */
+			     ,( SUM(PAYAMT) + SUM(ARRRG_AMOUNT) + SUM(RAMT1) )                                        /* 반환금액 : 실납부금액합 + 연체금액합 + 실납부금액이자합  */
+			          /* 차감금액:  실납부금액이자의 소득세+주민세+위약금 */
+			        - ( TRUNC(SUM(RAMT1) * 0.2,-1) + TRUNC((SUM(RAMT1) * 0.2) * 0.1,-1) + MAX(P_AMT) ) AS PAY_AMT  /*  실지급액  */
+			  FROM
+			       (
+			         SELECT CNTRCTR_NO   /*  계약번호          */
+			            , PAY_CODE_NM    /*  납부코드명        */
+			            , PAY_CODE       /*  납부코드          */
+			            , PAYAMT         /*  납부금액          */
+			            , ARRRG_AMOUNT   /*  연체(-할인)금액   */
+			            , RCIV_DE        /*  수납일자          */
+			            , BET_DAY        /*  기산일            */
+			
+			          /* (1) 계약금이자 지급여부에 따른 쿼리조건 (S0:계약금)  */
+			           
+			            <isNotEmpty property="CNTRCTAMOUNT_RETURN_INTR_YN">
+			                <isEqual property="CNTRCTAMOUNT_RETURN_INTR_YN" compareValue="0">
+			                    ,( CASE
+			                      WHEN PAY_CODE != 'S0'
+			                        THEN  TRUNC((PAYAMT * #RETURN_AMT_INTRT# * BET_DAY ) / 365,-1)  /* 실납부금액 이자 , 반환이자지급율  */
+			                        ELSE 0
+			                   END
+			                  )   AS RAMT1
+			                </isEqual>
+			                <isEqual property="CNTRCTAMOUNT_RETURN_INTR_YN" compareValue="1">
+			                , TRUNC((PAYAMT * #RETURN_AMT_INTRT# * BET_DAY ) / 365,-1)  /* 실납부금액 이자   */
+			                  AS RAMT1
+			                </isEqual>
+			            </isNotEmpty>
+			            
+ 
+			          /* 지급이자 소득세:반환이자율 적용  */
+			            ,TRUNC(TRUNC((PAYAMT * #RETURN_AMT_INTRT# * BET_DAY ) / 365,-1) * 0.2,-1)         AS RAMT2  /* 실납부금액 소득세, 반환이자지급율:3.5% ,소득세:20%              */
+			          /* 지급이자 주민세:반환이자율 적용   */
+			            ,TRUNC((TRUNC((PAYAMT * #RETURN_AMT_INTRT# * BET_DAY) / 365,-1) * 0.2) * 0.1,-1)  AS RAMT3  /* 실납부금액 주민세, 반환이자지급율:3.5% ,소득세:20%, 주민세:10%  */
+			            
+			            ,/* (2) 위약금:적용시, 위약금 적용 이율및 계산방식 협의 필요:계약금, 확장 이율 0%적용   */
+			             <isNotEmpty property="PENLTY_APPLC_YN">
+			             
+			               <isEqual property="PENLTY_APPLC_YN" compareValue="0">
+			                 0 AS P_AMT
+			               </isEqual>
+			               <isEqual property="PENLTY_APPLC_YN" compareValue="1">
+			                (
+			                   
+			                  SELECT  ( SELECT NVL(SUM(PAYAMT),0) FROM TBSLS_HOUSE_LTTOT_PAY WHERE  CNTRCTR_NO = #CNTRCTR_NO# AND PAY_CODE ='S0' )  /* 계약금:기본이율 */
+			                        + ( SELECT NVL(SUM(PAYAMT),0) FROM TBSLS_HOUSE_LTTOT_PAY WHERE  CNTRCTR_NO = #CNTRCTR_NO# AND PAY_CODE ='SB' ) * #ESTN_AMT_INTRT#    /* 확장  :확장이율 */
+			                    FROM DUAL
+			              )  AS P_AMT
+			              
+			               </isEqual>
+			               
+			              </isNotEmpty>
+			     	              
+			              
+			         FROM
+			              (
+			                SELECT CNTRCTR_NO                                           /*  계약번호               */
+			                      ,PAY_CODE                                             /*  납부코드               */
+			                      , SFCMP_GET_CODENM('HOU0A1',PAY_CODE) AS PAY_CODE_NM  /*  주택납부코드명:HOU0A1  */
+			                     ,(
+			                         CASE
+			                             <![CDATA[ WHEN ARRRG_AMOUNT >= 0 ]]>           /*  연체(-할인)금액         */
+			                             THEN PAYAMT                                    /*  납부금액                */
+			                             ELSE RCIV_AMOUNT                               /*  수납금액 (할인금액)     */
+			                         END
+			                     ) AS PAYAMT                                            /*  AS 납부금액             */
+			                   ,(
+			                         CASE
+			                             <![CDATA[ WHEN ARRRG_AMOUNT >= 0   ]]>         /* 연체(-할인)금액          */
+			                             THEN ARRRG_AMOUNT                              /*  연체(-할인)금액         */
+			                             ELSE 0
+			                         END
+			                     ) AS ARRRG_AMOUNT                                       /*  연체(-할인)금액        */
+			                   ,  RCIV_DE                                                /*  수납일자               */
+			                   
+			                   
+			                   <isNotEmpty property="CANCL_DE">
+		                       , ( TO_DATE(#CANCL_DE#,'YYYY-MM-DD') - TO_DATE(RCIV_DE,'YYYY-MM-DD') ) AS BET_DAY  /*  기산일 : 해약일 - 수납일  */
+			                   </isNotEmpty>
+			                   <isEmpty property="CANCL_DE">
+			                   , ( TO_DATE(TO_CHAR(SYSDATE,'YYYY-MM-DD'),'YYYY-MM-DD') - TO_DATE(RCIV_DE,'YYYY-MM-DD') ) AS BET_DAY  /*  기산일 : 현재날짜 - 수납일  */
+			                   </isEmpty>
+			                   
+			                FROM TBSLS_HOUSE_LTTOT_PAY            /*  계약납부정보(분양보증금)  */
+			               WHERE CNTRCTR_NO = #CNTRCTR_NO#
+			                     AND RCIV_DE IS NOT NULL          /* 수납일자                   */
+			              )
+			
+			       ) T1
+			
+			     , /*  총납부금액: 분양금액  */
+			       (  SELECT CNTRCTR_NO                           /* 계약번호           */
+			            , SUM(PAYAMT) AS TOT_AMT                  /*  총 납부금액       */
+			         FROM TBSLS_HOUSE_LTTOT_PAY                   /* 주택분양납부       */
+			        WHERE PAY_CODE LIKE 'S%'                      /*  분양(S), 임대(R)  */
+			              AND CNTRCTR_NO = #CNTRCTR_NO#           /* 계약번호           */
+			        GROUP BY CNTRCTR_NO
+			       ) T2
+			 WHERE T1.CNTRCTR_NO = T2.CNTRCTR_NO
+			 GROUP BY T2.TOT_AMT
+			
+			   UNION ALL
+			
+			/* ** 세부항목 합계 **** */
+			
+			SELECT '2' AS ORD
+			     , '' AS CNAME            /* 주택고객명:총합계에서 구함        */
+			     , PAY_CODE               /* 납부코드                          */
+			     , NULL AS TOT_AMT        /* 분양금액:총납부금액(청구금액)     */
+			     , PAY_CODE_NM            /* 납부코드명                        */
+			     , PAYAMT                 /* 납부금액:실납부금액               */
+			     , ARRRG_AMOUNT           /* 연체(-할인)금액                   */
+			     , RCIV_DE                /* 수납일자                          */
+			     , BET_DAY                /* 기산일                            */
+			     , RAMT1                  /* 지급이자                          */
+			     , NULL AS RAMT4
+			     , 0    AS RAMT2          /* 공제금액: 소득세, 총합계에서 구함 */
+			     , 0    AS RAMT3          /* 공제금액: 주민세, 총합계에서 구함 */
+			     , NULL AS RAMT5          /*  위약금 , 총합계에서 구함         */
+			     , NULL AS RAMT6          /* 실 반환금액 , 총합계에서 구함     */
+			
+			  FROM
+			       (SELECT PAY_CODE       /*  납부코드          */
+			              ,PAY_CODE_NM    /*  납부코드명        */
+			              ,PAYAMT         /*  납부금액          */
+			              ,ARRRG_AMOUNT   /* 연체(-할인)금액    */
+			              ,RCIV_DE        /* 수납일자           */
+			              ,BET_DAY
+			              
+			               /* (1) 계약금이자 지급여부에 따른 쿼리조건  */
+			              <isNotEmpty property="CNTRCTAMOUNT_RETURN_INTR_YN">
+			              <isEqual property="CNTRCTAMOUNT_RETURN_INTR_YN" compareValue="0">
+			              	,( CASE
+                            	  <![CDATA[ WHEN PAY_CODE != 'S0' ]]> /* 계약금 이자  제외 */
+			                    	THEN  TRUNC((PAYAMT * #RETURN_AMT_INTRT# * BET_DAY ) / 365,-1)  /* 실납부금액 이자 , 반환이자지급율  */
+			                    	ELSE 0
+			               	END
+			             	)   AS RAMT1
+			              
+			              </isEqual>
+			              <isEqual property="CNTRCTAMOUNT_RETURN_INTR_YN" compareValue="1">
+			              	,	TRUNC((PAYAMT * #RETURN_AMT_INTRT# * BET_DAY ) / 365,-1)  /* 실납부금액 이자 , 반환이자지급율:3.5%  */
+			              		AS RAMT1
+			              </isEqual>
+			              
+			              </isNotEmpty>
+			            
+			              
+			
+			              ,TRUNC(TRUNC((PAYAMT * #RETURN_AMT_INTRT#  * BET_DAY ) / 365,-1) * 0.2,-1)        AS RAMT2 /* 실납부금액 소득세, 반환이자지급율 ,소득세:20%              */
+			              ,TRUNC((TRUNC((PAYAMT * #RETURN_AMT_INTRT# * BET_DAY ) / 365,-1) * 0.2) * 0.1,-1) AS RAMT3 /* 실납부금액 주민세, 반환이자지급율 ,소득세:20%, 주민세:10%  */
+			
+			         FROM
+			             ( SELECT PAY_CODE /* 납부코드 */
+			                   , SFCMP_GET_CODENM('HOU0A1',PAY_CODE) AS PAY_CODE_NM  /*  주택납부코드명:HOU0A1  */
+			                   , (
+			                         CASE
+			                            <![CDATA[  WHEN ARRRG_AMOUNT >= 0 ]]>     /*  연체(-할인)금액        */
+			                             THEN PAYAMT                              /*  납부금액               */
+			                             ELSE RCIV_AMOUNT                         /*  수납금액 (할인금액)    */
+			                         END
+			                     ) AS PAYAMT                                      /*  실 납부금액            */
+			                   ,(
+			                         CASE
+			                             <![CDATA[ WHEN ARRRG_AMOUNT >= 0  ]]>   /* 연체(-할인)금액         */
+			                             THEN ARRRG_AMOUNT                       /*  연체(-할인)금액        */
+			                             ELSE 0
+			                         END
+			                     ) AS ARRRG_AMOUNT                               /*  연체금액               */
+			                   , RCIV_DE                                         /*  수납일자               */
+			                   
+			                   <isNotEmpty property="CANCL_DE">
+		                       , ( TO_DATE(#CANCL_DE#,'YYYY-MM-DD') - TO_DATE(RCIV_DE,'YYYY-MM-DD') ) AS BET_DAY  /*  기산일 : 현재날짜 - 수납일  */
+			                   </isNotEmpty>
+			                   <isEmpty property="CANCL_DE">
+			                   , ( TO_DATE(TO_CHAR(SYSDATE,'YYYY-MM-DD'),'YYYY-MM-DD') - TO_DATE(RCIV_DE,'YYYY-MM-DD') ) AS BET_DAY  /*  기산일 : 현재날짜 - 수납일  */
+			                   </isEmpty>
+			                   
+			                FROM TBSLS_HOUSE_LTTOT_PAY
+			               WHERE CNTRCTR_NO = #CNTRCTR_NO#                       /* 계약번호                */
+			                     AND RCIV_DE IS NOT NULL                         /* 수납일자                */
+			                     AND PAY_CODE LIKE 'S%'                          /*  분양                   */
+			              ) T1
+			       )
+			ORDER BY 1
+			     ,2
+			     ,3
+		  
+	  </select>	  	  
+	  
+ 
+
+ <!-- 쿼리명          : 주택 임대 해약 리스트
+           설명       : 주택 임대 해약 리스트 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.12.23
+
+	       수정일  수정자  수정내용
+	   -->  	  
+
+      <select id="SLS020102DAO.selectHouseRentCancelList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+            SELECT      
+/* 주택임대해약 상세  */                 
+                '0' AS CHK
+                ,T1.CNTRCTR_NO                                  /* 계약자번호 */
+                ,NVL(T1.RNTCHRG_APPLC_AT,0) AS RNTCHRG_APPLC_AT /* 임대료적용여부 */
+                ,NVL(T1.RNTCHRG ,0)         AS RNTCHRG          /* 임대료계 */
+                ,NVL(T1.RESRVE_AMOUNT,0)    AS RESRVE_AMOUNT    /* 유보금액 */
+                ,NVL(T1.INDMNTY_APPLC_AT,0) AS INDMNTY_APPLC_AT /* 배상금적용여부 */
+                ,NVL(T1.INDMNTY ,0)         AS INDMNTY          /* 배상금 */
+                ,T1.BANK_CODE_FCLTS                             /* 은행코드시설물 */
+                ,SFCOM_CODE_NM ('COM021', T1.BANK_CODE_FCLTS, 'CODE_NM' ) AS BANK_NAME_FCLTS
+                ,T1.DPSTR_FCLTS                                 /* 예금주시설물 */
+                ,T1.ACNUT_NO_FCLTS                              /* 계좌번호시설물 */
+                ,T1.RESRVE_AMOUNT_TREDE                         /* 유보금액처리일 */
+                ,T1.RESRVE_AMOUNT_EXPNDTR_DECSN_NO              /* 유보금액지출결의번호 */
+                ,T1.RESRVE_AMOUNT_BANK_CODE                     /* 유보금액은행코드 */                
+                ,T1.RESRVE_AMOUNT_DPSTR                         /* 유보금액예금주 */
+                ,T1.RESRVE_AMOUNT_ACNUTNO                       /* 유보금액계좌번호 */
+                ,T1.FCLTS_ELCTRN_SANCTN_NO                      /* 시설물전자결재번호 */
+                ,SFCOM_GET_DRFTSTS(T1.FCLTS_ELCTRN_SANCTN_NO, T1.REGIST_DT) AS APPRSTS
+                ,NVL(T1.FCLTS_ABNRML_AT,0) AS FCLTS_ABNRML_AT   /* 시설물이상여부 */
+                ,NVL(T1.INTR_INTRT,0)      AS INTR_INTRT        /* 이자이율 */
+                ,T1.PAY_GTN                                     /* 납부보증금 */
+                ,T1.PAY_TMLMT                                   /* 납부기한 */
+                ,T1.OVDINTR                                     /* 연체이자 */
+                ,T1.ARRRG_AMOUNT                                /* 연체금액 */
+                ,T1.IDRK_CO                                     /* 기산일수 */
+                ,T1.RNTCHRG_THSMON                              /* 임대료_당월 */
+                ,T1.REGISTER_ID                                 /* 등록자ID */
+                ,TO_CHAR(T1.REGIST_DT,'YYYYMMDD')  AS REGIST_DT /* 등록일시 */
+                ,TO_CHAR(T1.REGIST_DT,'YYYYMMDDHH24MISS')  AS REGIST_DT2 /* 등록일시 */
+                ,T1.UPDUSR_ID                                   /* 수정자ID */
+                ,TO_CHAR(T1.UPDT_DT,'YYYYMMDD')    AS UPDT_DT   /* 수정일시 */
+/* 주택해약정보 */
+                ,NVL(T2.PENLTY_APPLC_AT,0) AS PENLTY_APPLC_AT   /* 위약금적용여부 */      
+                ,T2.PENLTY                                      /* 위약금 */
+                ,NVL(T2.PENLTY_INTRT,0) AS PENLTY_INTRT         /* 위약금이율 */
+                ,NVL(T1.MANAGECT, 0) AS MANAGECT                /* 관리비체납금액 */
+                ,NVL(T1.SEIZR_AMOUNT, 0) AS  SEIZR_AMOUNT       /* 압류금액 */
+                ,T1.MANAGECT_BANK_CODE
+                ,T1.MANAGECT_DPSTR
+                ,T1.MANAGECT_ACNUTNO
+                ,T1.ETC_DDC_IEM
+                ,T1.ETC_DDC_AMOUNT
+                ,T1.ETC_DDC_BANK_CODE
+                ,T1.ETC_DDC_DPSTR
+                ,T1.ETC_DDC_ACNUTNO           
+            FROM TBSLS_HOUSE_RENT_CANCL   T1                    /* 주택임대해약 */
+                ,TBSLS_HCNTRCTR_CANCL     T2                    /* 주택해약정보 */ 
+           WHERE 1 = 1
+             AND T1.CNTRCTR_NO     = #CNTRCTR_NO#
+             AND T1.CNTRCTR_NO     = T2.CNTRCTR_NO    
+	  </select>	  	  
+	  
+	  
+	  
+      <!-- 쿼리명    : 주택계약 해약(임대) 반환 금액 목록 
+           설명       : 주택계약 해약(임대) 반환 금액 목록 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.10.27
+
+	       수정일  수정자  수정내용
+	   -->        
+      <select id="SLS020102DAO.selectHouseCancelRentReturnAmtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		    
+	      SELECT
+		       BASS_LTTOT_AMOUNT AS S_BASS_LTTOT_AMOUNT  /*  (0)월임대료  */ 
+        	  ,BASS_RNTCHRG AS S_BASS_RNTCHRG            /*  (0)임대보증금  */
+        	  ,S_PENLTY_AMT2	                         /*  (0)위약금액  */	
+			  ,NVL(S_BASS_GTN, 0) AS S_BASS_GTN             		/* (1)주택 기본 임대보증금 */
+			  ,S_CONT_AMT                                           /* (2)주택 기본 계약금 */
+			  ,S_RNTCHRG                                            /* (3)주택 기본 월임대료 */
+			  ,NVL(SUM_PAYAMT, 0) AS SUM_PAYAMT                     /* (6)주택임대 납부보증금 합계(실 납부 보증금합계금액) (Bind:납부보증금(a)) */
+			  ,S_PAY_TMLMT                                          /* (7)주택임대 납부기한일: 해약일 기준 당월 납부기한일 (Bind:납부기한일) */
+			  
+			  /* (10-4) 임대료계(임대료계산결과,공제금액,임대적용시대입):미납임대료 + 연체이자 + 당월임대료  */
+			  <isNotEmpty property="RNTCHRG_APPLC_AT">
+			      <isEqual property="RNTCHRG_APPLC_AT" compareValue="0">
+	                ,0 S_RENT_AMT                                           /* (10-1) 미납임대료                                   (Bind:미납금액(b)) */
+				    ,0 S_APPAY_AMT                                          /* (10-2) 연체이자 금액                                (Bind:연체이자) */
+				    ,0 S_THSMON_RENT_AMT                                    /* (10-3) 당월임대료                                   (Bind:납부금액) */
+	                ,0 AS S_RENT_SUM_AMT                                 /*  임대료계  */
+			      </isEqual>
+			      
+			      <isEqual property="RNTCHRG_APPLC_AT" compareValue="1">
+		               ,S_RENT_AMT                                           /* (10-1) 미납임대료                                   (Bind:미납금액(b)) */
+				       ,S_APPAY_AMT                                          /* (10-2) 연체이자 금액                                (Bind:연체이자) */
+				       ,S_THSMON_RENT_AMT                                    /* (10-3) 당월임대료                                   (Bind:납부금액) */				  
+		                ,NVL(S_RENT_AMT + S_APPAY_AMT + S_THSMON_RENT_AMT,0) 
+				           AS S_RENT_SUM_AMT                                 
+			      </isEqual>
+			      
+			  </isNotEmpty>  
+			 
+			  /* (11) 위약금: */
+			  /* 위약금 적용여부 0,1  */
+			  /* 위약금 : 월간총임대료 * 24 * 위약금이율*0.01 */
+		      /* 월간총임대료 : (임대보증금 * 이자이율*0.01 /12) + 월임대료 */ 
+			  <isNotEmpty property="PENLTY_APPLC_AT">
+			      <isEqual property="PENLTY_APPLC_AT" compareValue="0">
+	                 , 0 AS S_PENLTY_AMT                                         /* 위약금  */
+			      </isEqual>
+			      <isEqual property="PENLTY_APPLC_AT" compareValue="1">
+	                 <!-- , TRUNC( ( ( S_BASS_GTN * #INTR_INTRT# * 0.01 / 12) + S_RNTCHRG ) * 24 * #PENLTY_INTRT# * 0.01 ,-1) AS S_PENLTY_AMT -->  
+	                 ,S_PENLTY_AMT2 AS S_PENLTY_AMT 
+	                 
+			      </isEqual>
+			  </isNotEmpty>  
+			 
+			  ,S_IDRK                                               /* (12) 기산일  */
+			  ,DECODE(S_RNTCHRG,0,0
+			          ,TRUNC( (S_RNTCHRG / S_MONTH_DD) * S_IDRK ,-1) 
+			         ) AS S_RENT_AMT_C                              /* 임대료(C), (월임대료/월 총일수) * 기산일  */
+			  ,S_INDMNTY                                            /* (13) 배상금: 임대종료일이 있는 경우만 해당  */
+			  ,FCLTY_AMOUNT AS S_FCLTS_AMT                          /* (15)시설물  */
+		      ,BND_AMOUNT  AS S_BND_AMOUNT                          /* (16)부담금액  */
+		      ,DSPTH_DE   
+			  ,'0' AS S_PYMNTAMT                                    /* (20)실지급액 */
+			  ,'0' AS DDCAMOUNT                                     /* (21)공제금액 계 */
+			  , S_MONTH_DD                                          /* (18)해약월 총일수 */			
+		  FROM (
+			       SELECT
+			            b.BASS_RNTCHRG         /*  (0)월임대료  */                                       
+			            ,b.BASS_LTTOT_AMOUNT    /*  (0)임대보증금  */
+			             ,TRUNC (( (b.BASS_LTTOT_AMOUNT * #PENLTY_INTRT# * 0.01 / 12) + b.BASS_RNTCHRG) * 24 * #INTR_INTRT# * 0.01,-1) AS S_PENLTY_AMT2	 /*  (0)위약금액  */		       		       
+			        /*  (1)임대보증금  */
+			            ,NVL( b.BASS_GTN
+			                  ,(
+			                       SELECT NVL(SUM(PAYAMT),0)
+			                         FROM TBSLS_HOUSE_TYBY_PAY
+			                        WHERE HOUSE_CODE   = b.HOUSE_CODE
+			                          AND PAY_CODE LIKE 'R%'
+			                          AND HOUSE_TY_CODE = b.HOUSE_TY_CODE
+			                    )
+			                ) AS S_BASS_GTN
+			                
+			
+	                /*  (2)계약금  */
+			                  ,(
+			                       SELECT PAYAMT
+			                         FROM  TBSLS_HOUSE_TYBY_PAY t1
+			                        WHERE t1.HOUSE_CODE    = b.HOUSE_CODE
+			                          AND t1.HOUSE_TY_CODE = b.HOUSE_TY_CODE
+			                          AND t1.PAY_CODE IN('R0','S0')
+			                   ) AS S_CONT_AMT
+			
+	                /*  (3)월임대료  */
+			                ,NVL( b.BASS_RNTCHRG
+			                       ,(
+			                          SELECT NVL(RNTCHRG,0)
+			                            FROM TBSLS_HOUSE_RNTCHRG t1
+			                            WHERE CNTRCTR_NO   = a.CNTRCTR_NO
+			                              AND t1.APPLC_DE  = ( SELECT MAX(APPLC_DE) FROM TBSLS_HOUSE_RNTCHRG WHERE CNTRCTR_NO = t1.CNTRCTR_NO)
+			                        )
+			                    ) AS S_RNTCHRG
+			
+			       /*  (6) 납부보증금 합계(실 납부 보증금합계금액)  */
+			               ,(
+			                    SELECT SUM( CASE
+			                                <![CDATA[ WHEN ARRRG_AMOUNT >= 0  ]]>   /* 연체할인금액이 - 인경우 수납금액 */
+			                                    THEN PAYAMT             /* 납부금액 */
+			                                 ELSE RCIV_AMOUNT           /* 수납금액 */
+			                            END )
+			                      FROM TBSLS_HOUSE_LTTOT_PAY
+			                     WHERE CNTRCTR_NO    = a.CNTRCTR_NO     /* 계약번호 */
+			                       AND LTTOT_RENT_SE = 'R'              /* 분양,임화성분 */
+			                       AND RCIV_DE IS NOT NULL              /* 수납일자 */
+			                ) AS SUM_PAYAMT
+			
+	               /*  (7) 납부기한일: 해약일 기준 당월 납부기한일  */
+			               ,(
+			                    SELECT TO_CHAR(TO_DATE(PAY_TMLMT),'YYYYMMDD')
+			                      FROM TBSLS_HOUSE_RENT_PAY       /* TBL:주택임대납부 */
+			                     WHERE 1=1
+			                       AND CNTRCTR_NO = a.CNTRCTR_NO
+			                       AND TO_CHAR(TO_DATE(PAY_TMLMT),'YYYYMM') = TO_CHAR(TO_DATE(#CANCL_DE#),'YYYYMM')
+			                 ) AS S_PAY_TMLMT
+			
+			
+			       /*  (10-1) 미납임대료  */
+			              ,NVL(
+			                    ( SELECT NVL(SUM(MT_RNTCHRG + DFNNT_AMOUNT),0)  /* 월임대료 + 차액금액  */
+			                       /*  삭제:         , NVL (SFSLS_HOUSE_APAY_CALC('A', a.HOUSE_CODE, 임대종료일,  PAY_TMLMT, MT_RNTCHRG + DFNNT_AMOUNT, 0, 'L' ), 0  ) AS APPAY_AMT  */
+			                        FROM TBSLS_HOUSE_RENT_PAY
+			                       WHERE CNTRCTR_NO = a.CNTRCTR_NO
+			                         AND RCIV_DE IS NULL
+			                        <![CDATA[ AND TO_CHAR(TO_DATE(PAY_TMLMT),'YYYYMM') < TO_CHAR(TO_DATE(#CANCL_DE#),'YYYYMM') ]]>
+			                     )
+			                 ,0) AS S_RENT_AMT
+			
+			       /*  (10-2) 연체이자 금액 : SUM   추가  */
+			              ,NVL(
+			                    ( SELECT SUM(
+								             NVL(SFSLS_HOUSE_APAY_CALC('A', a.HOUSE_CODE, #CANCL_DE#,  PAY_TMLMT, MT_RNTCHRG + DFNNT_AMOUNT, 0, 'L' ), 0  ) 
+											 ) AS APPAY_AMT
+			                        FROM TBSLS_HOUSE_RENT_PAY
+			                       WHERE CNTRCTR_NO = a.CNTRCTR_NO
+			                         AND RCIV_DE IS NULL
+			                        <![CDATA[ AND TO_CHAR(TO_DATE(PAY_TMLMT),'YYYYMM') < TO_CHAR(TO_DATE(#CANCL_DE#),'YYYYMM') ]]>
+			                     )
+			                 ,0) AS S_APPAY_AMT
+			
+			       /*  (10-3) 당월임대료  */
+			              ,NVL( 
+			                     (
+			                       SELECT NVL(SFSLS_HOUSE_THSMON_RENT_CAL(a.CNTRCTR_NO, #CANCL_DE#),0) FROM DUAL
+			                     )
+			                  ,0)  AS S_THSMON_RENT_AMT
+			
+			        /*  (10-4) 임대료계:미납임대료 + 연체이자 + 당월임대료  */
+			              /* , (S_RENT_AMT + S_APPAY_AMT + S_THSMON_RENT_AMT ) AS S_RENT_SUM_AMT  */
+			
+			        /*  (11) 위약금액  */
+			              ,'0' AS S_PENLTY_AMT
+			       
+			        /*  (12) 기산일  */
+			              ,(
+			                 TO_CHAR(  TO_DATE(#CANCL_DE#) - TO_DATE( TO_CHAR( TO_DATE(#CANCL_DE#)  ,'YYYYMM'  )||'01') + 1 )
+			                ) AS S_IDRK
+			
+			        /* (13) 배상금: 임대종료일이 있는 경우만 해당  */
+		               <isNotEmpty property="INDMNTY_APPLC_AT">
+		                   <isEqual property="INDMNTY_APPLC_AT" compareValue="0">
+		                   , 0 AS S_INDMNTY
+		                   </isEqual>
+		                   <isEqual property="INDMNTY_APPLC_AT" compareValue="1">
+		                   , NVL( (
+			                        CASE WHEN #RENT_ENDDE# IS NOT NULL
+			                            THEN DECODE(a.HOUSE_CODE,'123'
+			                                         ,SFSLS_270_DAMAGE_123(#CNTRCTR_NO#, #RENT_ENDDE#, #RENT_LTTOT_CNVRS_DE#)
+			                                         ,SFSLS_270_DAMAGE(#CNTRCTR_NO#, #RENT_ENDDE#, #RENT_LTTOT_CNVRS_DE#)
+			                                        )
+			                         END
+			                   ) ,0) AS S_INDMNTY
+			                   
+		                   </isEqual>
+		               </isNotEmpty>
+			       			      
+			        /*  (15) 시설물 본인 부담금액 */
+			           
+                               ,NVL(
+                                       ( 
+                                         SELECT NVL(FCLTY_RPAIRS_AMOUNT,0) /* 본인부담금 */ 
+                                           FROM TBSLS_CHCK_DSPTH
+                                          WHERE HOUSE_CODE = a.HOUSE_CODE
+                                            AND DONG       = a.DONG
+                                            AND HO         = a.HO
+                                            AND CNTRCTR_NO = a.CNTRCTR_NO    
+                                        )
+                                  ,0 ) AS FCLTY_AMOUNT  
+                   /*  (16) 부담금액 */  
+                     
+				               ,NVL (
+				                  (SELECT NVL (BND_AMOUNT, 0) 
+				                     FROM TBSLS_CHCK_DSPTH
+				                    WHERE     HOUSE_CODE = a.HOUSE_CODE
+				                          AND DONG = a.DONG
+				                          AND HO = a.HO
+				                          AND CNTRCTR_NO = a.CNTRCTR_NO),
+				                  0)
+				                  AS BND_AMOUNT                           
+			        /*  (17) 점검통지일자 */
+			           
+                               ,NVL(
+                                       ( 
+                                         SELECT TO_CHAR(REGIST_DT, 'YYYYMMDD') 
+                                           FROM TBSLS_CHCK_DSPTH
+                                          WHERE HOUSE_CODE = a.HOUSE_CODE
+                                            AND DONG       = a.DONG
+                                            AND HO         = a.HO
+                                            AND CNTRCTR_NO = a.CNTRCTR_NO    
+                                        )
+                                  , '' ) AS DSPTH_DE     
+                                                                   
+			       /*  (19) 해약월 총일수 */
+			                   , TO_CHAR(LAST_DAY(#CANCL_DE#),'DD') AS S_MONTH_DD
+			       
+			            FROM
+			                 TBSLS_HCNTRCTR      a         /* TBL:주택계약자 */
+			               , TBSLS_HOUSE_DONG_HO b         /* TBL:주택동호  */
+			
+			           WHERE 1 = 1
+			             AND a.CNTRCTR_NO  = #CNTRCTR_NO#  /* 계약번호 */
+			             AND a.HOUSE_CODE  = b.HOUSE_CODE  /* 주택코드 */
+			             AND a.DONG        = b.DONG        /* 동 */
+			             AND a.HO          = b.HO          /* 호 */
+			
+			      )
+			           
+	  </select>
+	  
+	  
+	  
+	  <!-- 쿼리명     : 주택계약 해약정보(임대) -시설점검의뢰 조회
+           설명       : 주택계약 해약정보(임대) -시설점검의뢰 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.12.30
+
+	       수정일  수정자  수정내용
+	   -->  	  
+
+      <select id="SLS020102DAO.selectRentCancelChckReqestInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+            SELECT 
+                HOUSE_CODE                  /* 주택코드 */
+               ,DONG                        /* 동 */
+               ,HO                          /* 호 */
+               ,CANCL_DE                    /* 해약일자 */
+               ,CHCK_EMPNO                  /* 점검사번 */
+               ,CNTRCTR_NO                  /* 계약자번호 */
+               ,HOUSE_NM                    /* 주택명 */
+               ,CNTRCTR_NM                  /* 계약자명 */
+               ,HOUSE_SUPLY_SE              /* 주택공급구분 */
+               ,CNTRCTR_CTTPC               /* 계약자연락처 */
+               ,LVHS_PREARNGE_DE            /* 퇴거예정일자 */
+               ,CHCK_BGNDE                  /* 점검시작일자 */
+               ,CHCK_ENDDE                  /* 점검종료일자 */
+               ,DLIV_MATTER                 /* 전달사항 */
+               ,REFER_MATTER                /* 참고사항 */
+               ,REGISTER_ID                 /* 등록자ID */
+               ,REGIST_DT                   /* 등록일시 */
+               ,TO_CHAR(REGIST_DT, 'YYYYMMDDHH24MISS') AS REGIST_DT2 /* 등록일시 */
+               ,UPDUSR_ID                   /* 수정자ID */
+               ,UPDT_DT                     /* 수정일시 */
+               ,ELCTRN_SANCTN_NO
+               ,SFCOM_GET_DRFTSTS(ELCTRN_SANCTN_NO, REGIST_DT) AS APPRSTS
+		  	   ,SANCTN_AT 
+          FROM TBSLS_CHCK_REQEST            /* 검검의뢰 */
+         WHERE CNTRCTR_NO = #CNTRCTR_NO#    /* 계약번호 */      
+         <isEqual property="SANCTN_AT" compareValue="1">
+           AND ELCTRN_SANCTN_NO IS NOT NULL
+         </isEqual>
+
+	  </select>	  	  
+	  
+      <!-- 쿼리명      : 주택계약 해약정보(임대) -시설점검의뢰 저장
+	        설명       : 주택계약 해약정보(임대) -시설점검의뢰 저장 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.12.24
+
+	        수정일  수정자  수정내용
+	   -->
+	  <insert id="SLS020102DAO.insertRentCancelReqestInfo" parameterClass="java.util.Map">
+          /* 시설점검의뢰  */
+	      INSERT INTO TBSLS_CHCK_REQEST
+		  (    
+		     HOUSE_CODE          /* 주택코드       */
+            ,DONG                /* 동             */
+            ,HO                  /* 호             */
+            ,CANCL_DE            /* 해약일자       */
+            ,CHCK_EMPNO          /* 점검사번       */
+            ,CNTRCTR_NO          /* 계약자번호     */
+            ,HOUSE_NM            /* 주택명         */
+            ,CNTRCTR_NM          /* 계약자명       */
+            ,HOUSE_SUPLY_SE      /* 주택공급구분   */
+            ,CNTRCTR_CTTPC       /* 계약자연락처   */
+            ,LVHS_PREARNGE_DE    /* 퇴거예정일자   */
+            ,CHCK_BGNDE          /* 점검시작일자   */
+            ,CHCK_ENDDE          /* 점검종료일자   */
+            ,DLIV_MATTER         /* 전달사항       */
+            ,REFER_MATTER        /* 참고사항       */
+            ,REGISTER_ID         /* 등록자ID       */
+            ,REGIST_DT           /* 등록일시       */
+            ,UPDUSR_ID           /* 수정자ID       */
+            ,UPDT_DT             /* 수정일시       */
+            
+		  ) VALUES (
+		     #HOUSE_CODE#          /* 주택코드       */
+            ,#DONG#                /* 동             */
+            ,#HO#                  /* 호             */     
+            ,#CANCL_DE#            /* 해약일자       */
+            ,#S_USER_ID#          /* 점검사번       */
+            ,#CNTRCTR_NO#          /* 계약자번호     */
+            ,#HOUSE_NM#            /* 주택명         */
+            ,#CNTRCTR_NM#          /* 계약자명       */
+            ,#HOUSE_SUPLY_SE#      /* 주택공급구분   */
+            ,#CNTRCTR_CTTPC#       /* 계약자연락처   */
+            ,#LVHS_PREARNGE_DE#    /* 퇴거예정일자   */
+            ,#CHCK_BGNDE#          /* 점검시작일자   */
+            ,#CHCK_ENDDE#          /* 점검종료일자   */
+            ,#DLIV_MATTER#         /* 전달사항       */
+            ,#REFER_MATTER#        /* 참고사항       */
+            ,#S_USER_ID#           /* 등록자ID       */
+            ,SYSDATE               /* 등록일시       */
+            ,#S_USER_ID#           /* 수정자ID       */
+            ,SYSDATE               /* 수정일시       */
+		  )
+	  </insert>
+	  
+	  <!-- 시설점검의뢰 수정 -->
+	  <update id="SLS020102DAO.updateRentCancelReqestInfo" parameterClass="java.util.Map" >	     
+	     UPDATE TBSLS_CHCK_REQEST
+            SET LVHS_PREARNGE_DE = #LVHS_PREARNGE_DE#   /* 퇴거예정일자   */
+	           ,CHCK_BGNDE       = #CHCK_BGNDE#   /* 점검시작일자   */
+	           ,CHCK_ENDDE       = #CHCK_ENDDE#   /* 점검종료일자   */
+	           ,DLIV_MATTER      = #DLIV_MATTER#   /* 전달사항       */
+	           ,REFER_MATTER     = #REFER_MATTER#   /* 참고사항       */
+               ,UPDUSR_ID   	 = #S_USER_ID#     /* 최종수정자    */
+               ,UPDT_DT     	 = SYSDATE         /* 최종수정일자  */
+         WHERE CNTRCTR_NO        = #CNTRCTR_NO#   /* 주택코드 */
+	  </update>
+	  
+	  <!-- 시설점검의뢰 삭제 -->
+	  <delete id="SLS020102DAO.deleteRentCancelReqestInfo" parameterClass="java.util.Map" >
+	      DELETE FROM TBSLS_CHCK_REQEST      
+           WHERE CNTRCTR_NO = #CNTRCTR_NO# 
+	  </delete>  
+	  
+       <!-- 쿼리명    : 주택계약 해약정보(임대) -시설점검 통보 조회
+           설명       : 주택계약 해약정보(임대) -시설점검 통보 조회
+	       작성자     : 정윤원
+	       최초작성일 : 2015.12.30
+
+	       수정일  수정자  수정내용
+	   -->  	  
+
+      <select id="SLS020102DAO.selectRentCancelChckDspthInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+            SELECT 
+                HOUSE_CODE                        /* 주택코드  */
+               ,DONG                              /* 동 */
+               ,HO                                /* 호 */
+               ,RCEPT_DE                          /* 접수일자 */
+               ,CHCK_EMPNO                        /* 점검사번 */
+               ,CNTRCTR_NO                        /* 계약자번호 */
+               ,HOUSE_NM                          /* 주택명 */
+               ,CNTRCTR_NM                        /* 계약자명 */
+               ,HOUSE_SUPLY_SE                    /* 주택공급구분 */
+               ,CNTRCTR_CTTPC                     /* 계약자연락처 */
+               ,LVHS_DE                           /* 퇴거일자 */
+               ,CHCK_DE                           /* 점검일자 */
+               ,BND_AMOUNT                        /* 부담금액 */
+               ,CHCK_DTLS                         /* 점검내역 */
+               ,RPAIRS_DTLS                       /* 보수내역 */
+               ,FCLTY_RPAIRS_AMOUNT               /* 시설수선금액 */
+               ,REGISTER_ID                       /* 등록자ID */
+               ,REGIST_DT                         /* 등록일시 */
+               ,UPDUSR_ID                         /* 수정자ID */
+               ,UPDT_DT                           /* 수정일시 */	
+               ,FILE_SN 	  	     
+               ,ELCTRN_SANCTN_NO                  /* 전자결재 번호 */
+               ,SFCOM_GET_DRFTSTS(ELCTRN_SANCTN_NO, REGIST_DT) AS  SANCTN_KND /* 전자결재 상태 */
+            FROM TBSLS_CHCK_DSPTH                 /* 점검통보 */
+           WHERE CNTRCTR_NO       = #CNTRCTR_NO#  /* 계약번호 */         
+	  </select>	 
+
+       <!-- 쿼리명    : 주택계약 해약정보(임대) -시설점검 통보 첨부파일 조회
+           설명       : 주택계약 해약정보(임대) -시설점검 통보 첨부파일 조회
+	       작성자     : 박태혁
+	       최초작성일 : 2016.08.15
+	       수정일  수정자  수정내용
+	   -->  	  
+
+      <select id="SLS020102DAO.selectDspthFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT '0' AS CHK,
+			       B.FILE_SN,
+			       B.FILE_ORDR,
+			       B.FILE_STRE_COURS,
+			       B.STRE_FILE_NM,
+			       B.ORGINL_FILE_NM,
+			       B.FILE_EXTSN,
+			       B.FILE_TY
+			  FROM TBCOM_CMMN_ATCHMNFL_MASTR A, TBCOM_CMMN_ATCHMNFL B
+			 WHERE A.FILE_SN = B.FILE_SN
+			   AND A.FILE_SN = #FILE_SN# 
+			 ORDER BY FILE_ORDR
+	  </select>	 
+      
+	<!-- 쿼리명      : 주택계약 해약정보(임대) -시설점검 통보 저장
+	        설명       : 주택계약 해약정보(임대) -시설점검 통보 저장 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.12.24
+
+	        수정일  수정자  수정내용
+	   -->
+	  <insert id="SLS020102DAO.insertRentCancelChckDspthInfo" parameterClass="java.util.Map">
+		    /* 시설점검 통보  */
+			INSERT INTO TBSLS_CHCK_DSPTH 
+			(
+	     	       HOUSE_CODE,			/* 주택코드*/
+	               DONG,				/* 동*/
+	               HO,			    	/* 호*/
+	               HOUSE_NM,			/* 주택명*/
+	               CNTRCTR_NO,			/* 계약자번호 */
+	               CHCK_EMPNO,			/* 점검사번 */
+	               RCEPT_DE, 			/* 접수일자*/
+	               CNTRCTR_NM,			/* 계약자명 */
+	               HOUSE_SUPLY_SE,		/* 주택공급구분 */
+	               CNTRCTR_CTTPC,		/* 계약자연락처 */
+	               LVHS_DE, 			/* 퇴거일자 */
+	               CHCK_DE, 			/* 점검일자 */
+	               BND_AMOUNT, 			/* 부담금액 */
+	               CHCK_DTLS,			/* 점검내역 */
+	               RPAIRS_DTLS, 		/* 보수내역 */
+	               FCLTY_RPAIRS_AMOUNT,	/* 시설수선금액 */
+	               REGISTER_ID,			/* 등록자ID */
+	               REGIST_DT,			/*  등록일시 */
+	               UPDUSR_ID,			/* 수정자ID */
+	               UPDT_DT)				/*  수정일시 */	               
+	     VALUES (#HOUSE_CODE#,
+	             #DONG#,
+	             #HO#,
+	             #HOUSE_NM#,
+	             #CNTRCTR_NO#,
+	             #CHCK_EMPNO#,
+	             #RCEPT_DE#,
+	             #CNTRCTR_NM#,
+	             #HOUSE_SUPLY_SE#,
+	             #CNTRCTR_CTTPC#,
+	             #LVHS_DE#,
+	             #CHCK_DE#,
+	             #BND_AMOUNT#,
+	             #CHCK_DTLS#,
+	             #RPAIRS_DTLS#,
+	             #FCLTY_RPAIRS_AMOUNT#,
+	             #S_USER_ID#,
+	             SYSDATE,
+	             #S_USER_ID#,
+	             SYSDATE   
+	             )	
+	  </insert>	  
+      
+      <!--  계약해약처리      -->	 
+   
+	  <!-- 쿼리명      : 주택계약자 해약정보 저장
+	        설명       : 주택계약자 해약정보 저장 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.10.29
+
+	        수정일  수정자  수정내용
+	   -->
+	  
+	  <insert id="SLS020102DAO.insertHouseCancelInfo" parameterClass="java.util.Map">
+	  /*  (1) 주택계약 해약정보 등록  */
+	      INSERT INTO TBSLS_HCNTRCTR_CANCL
+		  (    
+		     CNTRCTR_NO                              /* 계약자번호        */   
+            ,HOUSE_CODE                              /* 주택코드          */   
+            ,DONG                                    /* 동                */   
+            ,HO                                      /* 호                */   
+           , RCEPT_DE                           /* 접수일자     */  
+            ,CANCL_DE                                /* 해약일자          */   
+            ,RESCI_RESN_CODE                         /* 해약사유코드 */
+            ,RESCI_RESN_DETAIL                       /* 해약사유상세 */
+            ,BANK_CODE                               /* 은행코드          */  
+            ,DPSTR                                   /* 예금주            */
+            ,ACNUTNO                                 /* 계좌번호          */   
+            ,LVHS_DE                                 /* 퇴거일자          */  
+            ,LVHS_ADRES                              /* 퇴거주소          */  
+            ,LVHS_TELNO                              /* 퇴거전화번호      */   
+            ,LVHS_MOBLPHON                           /* 퇴거휴대폰        */  
+            ,PENLTY_APPLC_AT                         /* 위약금적용여부 */
+            ,PENLTY                                  /* 위약금            */  
+            ,PENLTY_INTRT                            /* 위약금이율        */
+            ,ELCTRN_SANCTN_NO                        /* 전자결재번호      */ 
+            ,CANCL_EXPNDTR_DECSN_NO                  /* 해약지출결의번호  */  
+            ,RM                                      /* 비고              */
+            ,REGISTER_ID                             /* 등록자ID          */
+            ,REGIST_DT                               /* 등록일시          */
+            ,UPDUSR_ID                               /* 수정자ID          */
+            ,UPDT_DT                                 /* 수정일시          */
+		  ) VALUES (
+		     #CNTRCTR_NO#                              /* 계약자번호        */          
+			,#HOUSE_CODE#                              /* 주택코드          */   
+			,#DONG#                                    /* 동                */   
+			,#HO#                                      /* 호                */   
+			,#RCEPT_DE#                                /* 접수일자          */
+			,#CANCL_DE#                                /* 해약일자          */   
+			,#RESCI_RESN_CODE#                         /* 해약사유코드      */   
+			,#RESCI_RESN_DETAIL#                       /* 해약사유상세      */
+			,#BANK_CODE#                               /* 은행코드          */   
+			,#DPSTR#                                   /* 예금주            */   
+			,#ACNUTNO#                                 /* 계좌번호          */   
+			,#LVHS_DE#                                 /* 퇴거일자          */   
+			,#LVHS_ADRES#                              /* 퇴거주소          */   
+			,#LVHS_TELNO#                              /* 퇴거전화번호      */   
+			,#LVHS_MOBLPHON#                           /* 퇴거휴대폰        */   
+		    ,#PENLTY_APPLC_AT#                         /* 위약금적용여부    */
+		    ,#PENLTY#                                  /* 위약금            */
+		    ,#PENLTY_INTRT#                            /* 위약금이율        */   
+		    ,#ELCTRN_SANCTN_NO#                        /* 전자결재번호      */  
+		    ,#CANCL_EXPNDTR_DECSN_NO#                  /* 해약지출결의번호  */   
+			,#RM#                                      /* 비고              */   
+			,#S_USER_ID#                               /* 등록자ID          */   
+			,SYSDATE                                   /* 등록일시          */   
+			,#S_USER_ID#                               /* 수정자ID          */   
+			,SYSDATE                                   /* 수정일시          */
+		  )
+	  </insert>   
+	  
+	   <!-- 쿼리명     : 주택 분양 해약정보 저장
+	        설명       : 주택 분양 해약정보 저장 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.12.24
+
+	        수정일  수정자  수정내용
+	   -->
+	  
+	  <insert id="SLS020102DAO.insertHouseLttotCancelInfo" parameterClass="java.util.Map">
+	  /*  (1-1) 주택분양 해약정보 등록  */
+	      INSERT INTO TBSLS_HOUSE_LTTOT_CANCL
+		  (    
+		     CNTRCTR_NO               /* 계약자번호 */   
+            ,TOT_ENGG_AMOUNT          /* 총약정금액 */
+            ,TOT_PAYAMT               /* 총납부금액 */
+            ,RETURN_PAYAMT            /* 반환납부금액 */
+            ,RETURN_ARRRG_AMOUNT      /* 반환연체금액 */
+            ,RETURN_PAY_INTR          /* 반환납부이자 */
+            ,INCMTAX                  /* 소득세 */
+            ,IHNTS                    /* 주민세 */
+            ,RETURN_INTRT             /* 반환이자이율 */
+            ,ESTN_INTRT               /* 확장이율 */
+            ,RETURN_INTR_PYMNT_AT     /* 반환이자지급여부 */
+            ,REGISTER_ID              /* 등록자ID */
+            ,REGIST_DT                /* 등록일시 */
+            ,UPDUSR_ID                /* 수정자ID */
+            ,UPDT_DT                  /* 수정일시 */
+		  ) VALUES (
+		     #CNTRCTR_NO#             /* 계약자번호 */   
+            ,#TOT_ENGG_AMOUNT#        /* 총약정금액 */
+            ,#TOT_PAYAMT#             /* 총납부금액 */
+            ,#RETURN_PAYAMT#          /* 반환납부금액 */
+            ,#RETURN_ARRRG_AMOUNT#    /* 반환연체금액 */
+            ,#RETURN_PAY_INTR#        /* 반환납부이자 */
+            ,#INCMTAX#                /* 소득세 */
+            ,#IHNTS#                  /* 주민세 */
+            ,#RETURN_INTRT#           /* 반환이자이율 */
+            ,#ESTN_INTRT#             /* 확장이율 */
+            ,#RETURN_INTR_PYMNT_AT#   /* 반환이자지급여부 */
+			,#S_USER_ID#              /* 등록자ID */   
+			,SYSDATE                  /* 등록일시 */   
+			,#S_USER_ID#              /* 수정자ID */   
+			,SYSDATE                  /* 수정일시 */
+		  )
+	  </insert>   
+	  
+	  
+	  <!-- 쿼리명      : 주택 임대 해약정보 저장
+	        설명       : 주택 분양 해약정보 저장 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.12.29
+
+	        수정일  수정자  수정내용
+	   -->
+	  <insert id="SLS020102DAO.insertHouseRentCancelInfo" parameterClass="java.util.Map">
+	  /*  (1-2) 주택임대 해약정보 등록  */
+	    INSERT INTO TBSLS_HOUSE_RENT_CANCL
+		(
+		    CNTRCTR_NO         /* 계약자번호 */          
+		   ,RNTCHRG_APPLC_AT   /* 임대료적용여부 */
+		   ,RNTCHRG            /* 임대료 */
+		   ,RESRVE_AMOUNT      /* 유보금액 */
+		   ,INDMNTY_APPLC_AT   /* 배상금적용여부 */
+		   ,INDMNTY            /* 배상금 */
+		   ,INTR_INTRT         /* 이자이율 */
+		   ,PAY_GTN            /* 납부보증금 */
+		   ,PAY_TMLMT          /* 납부기한 */
+		   ,OVDINTR            /* 연체이자 */
+		   ,ARRRG_AMOUNT       /* 연체금액 */
+		   ,IDRK_CO            /* 기산일수 */
+		   ,RNTCHRG_THSMON     /* 임대료_당월 */
+		   ,BANK_CODE_FCLTS
+		   ,DPSTR_FCLTS
+		   ,ACNUT_NO_FCLTS
+		   ,SEIZR_AMOUNT
+		   ,RESRVE_AMOUNT_ACNUTNO
+		   ,RESRVE_AMOUNT_BANK_CODE
+		   ,RESRVE_AMOUNT_DPSTR
+		   ,ETC_DDC_IEM
+		   ,ETC_DDC_AMOUNT
+		   ,ETC_DDC_BANK_CODE
+		   ,ETC_DDC_DPSTR
+		   ,ETC_DDC_ACNUTNO
+		   ,REGISTER_ID        /* 등록자ID */
+		   ,REGIST_DT          /* 등록일시 */
+		   ,UPDUSR_ID          /* 수정자ID */
+		   ,UPDT_DT            /* 수정일시 */		   
+		) VALUES(
+		   #CNTRCTR_NO#        /* 계약자번호 */          
+		  ,#RNTCHRG_APPLC_AT#  /* 임대료적용여부 */
+		  ,#RNTCHRG#           /* 임대료 */
+		  ,#RESRVE_AMOUNT#     /* 유보금액 */
+		  ,#INDMNTY_APPLC_AT#  /* 배상금적용여부 */
+		  ,#INDMNTY#           /* 배상금 */
+		  ,#INTR_INTRT#        /* 이자이율 */
+		  ,#PAY_GTN#           /* 납부보증금 */
+		  ,#PAY_TMLMT#         /* 납부기한 */
+		  ,#OVDINTR#           /* 연체이자 */
+		  ,#ARRRG_AMOUNT#      /* 연체금액 */
+		  ,#IDRK_CO#           /* 기산일수 */
+		  ,#RNTCHRG_THSMON#    /* 임대료_당월 */
+		  ,#BANK_CODE_FCLTS#
+		  ,#DPSTR_FCLTS#
+		  ,#ACNUT_NO_FCLTS#
+		  ,#SEIZR_AMOUNT#
+		  ,#RESRVE_AMOUNT_ACNUTNO#    /* 계좌 */
+		  ,#RESRVE_AMOUNT_BANK_CODE#    /* 은행코드 */
+		  ,#RESRVE_AMOUNT_DPSTR#    /* 예금주 */
+		  ,#ETC_DDC_IEM#
+		  ,#ETC_DDC_AMOUNT#
+		  ,#ETC_DDC_BANK_CODE#
+		  ,#ETC_DDC_DPSTR#
+		  ,#ETC_DDC_ACNUTNO#		  		  		  		  
+		  ,#S_USER_ID#         /* 등록자ID */
+		  ,SYSDATE             /* 등록일시 */
+		  ,#S_USER_ID#         /* 수정자ID */
+		  ,SYSDATE             /* 수정일시 */
+		)
+	  </insert>   
+	  
+	  
+	    <!-- 쿼리명    : 주택계약 해약 납부정보 해약처리
+	        설명       : 주택계약 해약 납부정보 해약처리 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.11.02
+
+	        수정일  수정자  수정내용
+	   -->
+	   
+	  <update id="SLS020102DAO.updateCancelLttotPayList" parameterClass="java.util.Map" >
+	    /*  (2) 해지가 발생하며 입금되지 않은 납부정보에 대해서는 조회되지 않게 처리한다.   */
+	    UPDATE TBSLS_HOUSE_LTTOT_PAY
+           SET TRMNAT_UNUSED_AT = '1'                                                   /*  해지미사용여부   */
+         WHERE CNTRCTR_NO = #CNTRCTR_NO#                                            /*  계약번호         */
+           AND PAY_CODE LIKE 'R%'                                                    /*  납부코드 : 분양  */
+           AND NOT EXISTS( SELECT RCPT_NO FROM TBSLS_HOUSE_RCIV T1
+                            WHERE T1.CNTRCTR_NO    = #CNTRCTR_NO#  
+                              AND T1.LTTOT_RENT_SE = #LTTOT_RENT_SE#                 /* 분양:01, 임대:02   */
+                              AND T1.RCPT_NO       = TBSLS_HOUSE_LTTOT_PAY.PAY_NO )  /*  영수번호          */
+	  </update>
+	  
+	  
+	   <!-- 쿼리명    : 주택계약 해약 - 주택계약자 정보 해약처리
+	        설명       : 주택계약 해약- 주택계약자 정보 해약처리 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.11.02
+
+	        수정일  수정자  수정내용
+	   --> 
+	  
+	  <update id="SLS020102DAO.updateCancelHcntrctrInfo" parameterClass="java.util.Map" >
+	     /*  (3) 주택계약정보 해약처리   */
+	     UPDATE TBSLS_HCNTRCTR
+            SET CNTRCTR_STTUS_CODE = '02'    /* 계약상태코드:01(계약), 02(해약)  */
+               ,UPDUSR_ID   = #S_USER_ID#     /* 최종수정자    */
+               ,CANCL_DE   = #CANCL_DE#       /* 해약일자    */
+               ,UPDT_DT     = SYSDATE         /* 최종수정일자  */
+          WHERE CNTRCTR_NO = #CNTRCTR_NO#    /* 계약번호      */     
+	  </update>
+	  
+	  
+	    <!-- 쿼리명     : 주택계약 해약 주택결제정보 해지(자동이체)
+	        설명       : 주택계약 해약 주택결제정보 해지(자동이체) 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.11.02
+
+	        수정일  수정자  수정내용
+	     -->   
+	   		
+		<!--
+		/*  (4-1) 자동이체 주택결제정보 해지 등록:기존 히스토리 테이블이 없으므로 마지막에 이체 정보(미사용)를 한건 추가함, (4-2)번 항목과 같이 실행함   */
+		<insert id="SLS020102DAO.insertHouseCancelSetleInfo" parameterClass="java.util.Map"> 
+		   INSERT INTO TBSLS_HOUSE_SETLE_INFO
+			 (
+				 CNTRCTR_NO          /* 계약자번호      */
+				,SETLE_SN            /* 결제일련번호    */
+				,SETLE_SE            /* 결제구분        */
+				,REQST_DE            /* 신청일자        */
+				,RELIS_DE            /* 해제일자        */
+				,BANK_CODE           /* 은행코드        */
+				,ACNUTNO             /* 계좌번호        */
+				,DPSTR               /* 예금주          */
+				,CHANGE_DE           /* 변경일자        */
+				,SETLE_STTUS         /* 결제상태        */
+				,PAY_SE              /* 납부구분        */
+				,USE_AT              /* 사용여부        */
+				,REGISTER_ID         /* 등록자ID        */
+				,REGIST_DT           /* 등록일시        */
+				,UPDUSR_ID           /* 수정자ID        */
+				,UPDT_DT             /* 수정일시        */
+				) 
+				
+				SELECT 
+				     CNTRCTR_NO          /* 계약자번호      */
+				    ,SETLE_SN +1         /* 결제일련번호    */
+				    ,SETLE_SE            /* 결제구분        */
+				    ,REQST_DE            /* 신청일자        */
+				    ,#CANCL_DE#          /* 해제일자        */
+				    ,BANK_CODE           /* 은행코드        */
+				    ,ACNUTNO             /* 계좌번호        */
+				    ,DPSTR               /* 예금주          */
+				    ,CHANGE_DE           /* 변경일자        */
+				    ,SETLE_STTUS         /* 결제상태        */
+				    ,PAY_SE              /* 납부구분        */
+				    ,'0'                 /* 사용여부        */
+				    ,#S_USER_ID#         /* 등록자ID        */
+				    ,SYSDATE             /* 등록일시        */
+				    ,#S_USER_ID#         /* 수정자ID        */
+				    ,SYSDATE             /* 수정일시        */
+				 FROM TBSLS_HOUSE_SETLE_INFO        
+				WHERE SETLE_SN =  ( SELECT MAX(SETLE_SN) FROM TBSLS_HOUSE_SETLE_INFO WHERE CNTRCTR_NO = #CNTRCTR_NO#)
+			      AND CNTRCTR_NO = #CNTRCTR_NO#       /*    */
+	   </insert>
+				   --> 
+	   	   
+	    
+	   <!-- 쿼리명     : 주택계약 해약 주택결제정보 해지(자동이체)사용중지
+	        설명       : 주택계약 해약 주택결제정보 해지(자동이체) 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.11.02
+
+	        수정일  수정자  수정내용
+	    -->
+	  
+	  <update id="SLS020102DAO.updateCancelSetleInfo" parameterClass="java.util.Map" >
+	   /* (4-2)  자동이체 - 자동이체 취소일자를 해약일자로 업데이트*/
+        UPDATE TBPMS_ATCNG 
+             SET ATCNG_CANCL_DE  = #CANCL_DE#          /* 자동이체취소일자           */
+                ,UPDUSR_ID  = #S_USER_ID#    /* 최종수정자         */
+                ,UPDT_DT    = SYSDATE        /* 최종수정일         */
+           WHERE JOB_SE = 'HOU'
+                AND CNTRCTR_NO = #CNTRCTR_NO#   /* 계약번호           */
+              
+	  
+	  </update>
+	  
+	 
+	 <!-- (5) 기타수입납부 등록 위약금 2016.03.29 -->
+	 <insert id="SLS020102DAO.insertEtcIncmePay" parameterClass="java.util.Map">
+	     	     
+	     <selectKey keyProperty="SL_CLASS" resultClass="string">
+			SELECT R.CHRCTR_PREPAR_VALUE_0 AS SL_CLASS
+              FROM TBCOM_CMMN_CODE R
+             WHERE R.GRP_CODE = 'HOU0A1'
+               AND R.CODE = 'HC'
+    	</selectKey>
+    	
+	     /*  (5) 기타수입납부 등록  */
+		INSERT INTO TBSLS_ETC_INCME_PAY /* 기타수입납부 */ 
+		         (
+				  JOB_SE		         
+		         ,CNTRCTR_NO
+		         ,PAY_NO
+		         ,PAY_CODE
+		         ,MDAT_DE
+		         ,RQEST_YM
+		         ,PAY_TMLMT
+		         ,PAYAMT
+		         ,PROCESS_CN
+		         ,REGISTER_ID         /* 등록자ID        */
+				 ,REGIST_DT           /* 등록일시        */
+				 ,UPDUSR_ID           /* 수정자ID        */
+				 ,UPDT_DT             /* 수정일시        */
+				 )
+		       VALUES
+		         (
+		          'HOU'
+		         ,#CNTRCTR_NO#
+		         ,( SELECT #SL_CLASS# || LPAD(TO_CHAR(NVL(MAX(SUBSTR(PAY_NO, 2, 3)), 0) + 1), 3, '0') || '0'
+					  FROM TBSLS_ETC_INCME_PAY  /* 기타수입납부 */					      
+					 WHERE CNTRCTR_NO = #CNTRCTR_NO#
+					   AND PAY_NO LIKE #SL_CLASS# || '%'
+				  )
+		         ,'T1'
+		         ,#CANCL_DE#
+		         ,SUBSTR(#CANCL_DE#, 0,6)
+		         ,#CANCL_DE#
+		         ,#PENLTY# /* 위약금 */
+		         ,#RM#
+		         ,#S_USER_ID#         /* 등록자ID        */
+				 ,SYSDATE             /* 등록일시        */
+				 ,#S_USER_ID#         /* 수정자ID        */
+				 ,SYSDATE             /* 수정일시        */
+				 )
+	   
+	   </insert>
+	   
+	   
+	   	<!-- (6)해약처리/해약취소 시 월 임대료 조정 -->
+		<procedure id="SLS020102DAO.SPSLS_HOUSE_RENT_PAY_CANCEL_UI" parameterClass="java.util.Map">
+			{ call SPSLS_HOUSE_RENT_PAY_CANCEL_UI(#IN_FLAG#, #IN_FLAG1#, #IN_CNTRCTR_NO#, #IN_APPLY_DATE#, #IN_MDAT_DE#, #S_USER_ID#, #IN_HOUSE_CODE#, #IN_CAL_DATE# , #OUT_RESULT_CD#, #OUT_RESULT_MSG#) }		</procedure>
+	  
+	    
+<!--  계약해약      -->	    
+
+
+	  
+<!-- 주택 계약 해약 정보 삭제  -->	  
+	  
+	   <!-- 쿼리명    : 주택계약 해약 - 주택계약자 정보 해약처리 삭제
+	        설명       : 주택계약 해약- 주택계약자 정보 해약처리 삭제 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.11.02
+
+	        수정일  수정자  수정내용
+	   --> 
+	  
+	  <update id="SLS020102DAO.updateHcntrctrInfo" parameterClass="java.util.Map" >
+	     /*  (1) 주택계약정보 해약처리   */
+	     UPDATE TBSLS_HCNTRCTR
+            SET CNTRCTR_STTUS_CODE = '01'    /* 계약상태코드  */
+               ,CANCL_DE    = null
+               ,UPDUSR_ID   = #S_USER_ID#     /* 최종수정자    */
+               ,UPDT_DT     = SYSDATE         /* 최종수정일자  */
+           WHERE CNTRCTR_NO = #CNTRCTR_NO#    /* 계약번호      */     
+	  </update>
+	  
+	  
+	   <!-- 쿼리명    : 주택계약 해약 납부정보 해약처리 취소
+	        설명       : 주택계약 해약 납부정보 해약처리 취소 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.11.02
+
+	        수정일  수정자  수정내용
+	   -->
+	   
+	  <update id="SLS020102DAO.updateLttotPayList" parameterClass="java.util.Map" >
+	    /*  (2) 해지가 발생하며 입금되지 않은 납부정보에 대해서는 조회되게 처리한다.   */
+	    UPDATE TBSLS_HOUSE_LTTOT_PAY
+          SET TRMNAT_UNUSED_AT = NULL                                                  /*  해지미사용여부   */
+            WHERE CNTRCTR_NO = #CNTRCTR_NO#                                            /*  계약번호         */
+             AND PAY_CODE LIKE #PAY_CODE_SE#||'%'                                      /*  납부코드 : 분양(S), 임대(R)  */
+             AND NOT EXISTS( SELECT RCPT_NO FROM TBSLS_HOUSE_RCIV T1
+                              WHERE T1.CNTRCTR_NO    = #CNTRCTR_NO#  
+                                AND T1.LTTOT_RENT_SE = #LTTOT_RENT_SE#                 /* 분양:01, 임대:02   */
+                                AND T1.RCPT_NO       = TBSLS_HOUSE_LTTOT_PAY.PAY_NO )  /*  영수번호          */
+	  </update>
+	  
+	  
+	  
+	  <!-- 쿼리명      : 주택분양 해약정보 삭제
+	        설명       : 주택분양 해약정보 삭제 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.12.24
+
+	        수정일  수정자  수정내용
+	   -->
+	   
+	  <delete id="SLS020102DAO.deleteHouseLttotCancelInfo" parameterClass="java.util.Map" >
+	    /*  (3)주택 분양 해약정보 삭제 */
+	    
+	     DELETE FROM TBSLS_HOUSE_LTTOT_CANCL 
+	      WHERE CNTRCTR_NO  = #CNTRCTR_NO# 
+	     
+	  </delete>
+	  
+	  
+	  <!-- (4)기타수입납부 삭제 2016.03.30  -->
+	  <delete id="SLS020102DAO.deleteEtcIncmePay" parameterClass="java.util.Map" >
+	    
+	    /*  (5)기타수입납부 삭제   */	    
+	     DELETE FROM TBSLS_ETC_INCME_PAY 
+	      WHERE CNTRCTR_NO  = #CNTRCTR_NO#
+	      	AND PAY_TMLMT 	=  #CANCL_DE#
+	       	AND JOB_SE 		= 'HOU'
+	       	AND PAY_CODE 	= 'T1'	       	
+	     
+	  </delete>
+	 
+ 
+	   <!-- 쿼리명     : 주택 임대 점검의뢰 내용삭제
+	        설명       : 주택 임대 점검의뢰 내용삭제
+	        작성자     : 정윤원
+	        최초작성일 : 2015.12.29
+
+	        수정일  수정자  수정내용
+	   -->
+	  <delete id="SLS020102DAO.deleteHouseCheckReqest" parameterClass="java.util.Map" >
+	    /*  (3-A)주택 임대 점검의뢰 삭제 */
+	      DELETE FROM TBSLS_CHCK_REQEST       /* 점검통보  */
+           WHERE HOUSE_CODE = #HOUSE_CODE#   /* 주택코드 */
+             AND DONG       = #DONG#         /* 동 */
+             AND HO         = #HO#           /* 호 */
+           
+             AND CNTRCTR_NO = #CNTRCTR_NO#    /* 계약번호 */
+           
+	  </delete>
+	  
+	  
+	   <!-- 쿼리명     : 주택 임대 점검통보 내용삭제
+	        설명       : 주택 임대 점검통보 내용삭제
+	        작성자     : 정윤원
+	        최초작성일 : 2015.12.29
+
+	        수정일  수정자  수정내용
+	   -->
+	  <delete id="SLS020102DAO.deleteHouseCheckDspth" parameterClass="java.util.Map" >
+	    /*  (3-B)주택 임대 점검통보 삭제 */
+	      DELETE FROM TBSLS_CHCK_DSPTH       /* 점검통보  */
+           WHERE HOUSE_CODE = #HOUSE_CODE#   /* 주택코드 */
+             AND DONG       = #DONG#         /* 동 */
+             AND HO         = #HO#           /* 호 */
+             AND CNTRCTR_NO = #CNTRCTR_NO#   /* 계약번호 */
+	  </delete>
+	  
+	   <!-- 쿼리명     : 주택 임대 해약 정보 삭제
+	        설명       : 주택 분양 해약 정보 삭제 삭제 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.11.02
+
+	        수정일  수정자  수정내용
+	   -->
+	   
+	  <delete id="SLS020102DAO.deleteHouseRentCancelInfo" parameterClass="java.util.Map" >
+	    /*  (3-C)주택 임대 해약정보 삭제 */
+	    
+	     DELETE FROM TBSLS_HOUSE_RENT_CANCL 
+	      WHERE CNTRCTR_NO  = #CNTRCTR_NO# 
+	     
+	  </delete>
+	  
+	   <!-- 쿼리명     : 주택계약 해약 삭제
+	        설명       : 주택계약 해약 삭제 쿼리문
+	        작성자     : 정윤원
+	        최초작성일 : 2015.11.02
+
+	        수정일  수정자  수정내용
+	   -->
+	   
+	  <delete id="SLS020102DAO.deleteHcntrctrCancelInfo" parameterClass="java.util.Map" >
+	    /*  (5)주택 해약정보 삭제 */
+	    
+	     DELETE FROM TBSLS_HCNTRCTR_CANCL 
+	      WHERE CNTRCTR_NO  = #CNTRCTR_NO# 
+	     
+	  </delete>
+	  
+	  
+	  
+	<!--(7) 차액금액 가져오기 2016.04.01  -->
+	<select id="SLS020102DAO.selectDfnntAmount" parameterClass="java.util.Map" resultClass="String">
+		 SELECT NVL(DFNNT_AMOUNT, 0) AS DFNNT_AMOUNT
+		   FROM TBSLS_HOUSE_RENT_PAY
+		  WHERE CNTRCTR_NO 	= #CNTRCTR_NO#
+		    AND RQEST_YM 	= SUBSTR(#CANCL_DE#, 0,6)
+		    AND RCIV_DE IS NULL
+	</select>
+	  
+	<!-- 차액금액 수정 -->
+	<update id="SLS020102DAO.updateDfnntAmount" parameterClass="java.util.Map" >
+	     /*  (7) 차액금액 수정   */
+		UPDATE TBSLS_HOUSE_RENT_PAY
+		   SET DFNNT_AMOUNT = 0
+		 WHERE CNTRCTR_NO 	= #CNTRCTR_NO#
+		   AND RQEST_YM 	= SUBSTR(#CANCL_DE#, 0,6)
+		   AND RCIV_DE IS NULL
+	</update>
+	  
+	<!-- 주택결의 삭제 -->
+	<delete id="SLS020102DAO.deleteHouseDecsn" parameterClass="java.util.Map" >
+	     /*  (7) 주택결의 삭제   */
+		DELETE TBSLS_HOUSE_DECSN
+         WHERE DECSN_SE = #DECSN_SE#
+           AND DECSN_DE = #CANCL_DE#
+           AND PAY_SE   = '2'
+           AND CNTRCTR_NO = #CNTRCTR_NO#
+	</delete>	  
+	  
+	<!-- 당월임대료 삭제 -->
+	<delete id="SLS020102DAO.deleteHouseRentPay" parameterClass="java.util.Map" >
+	     /*  (7) 당월임대료 삭제   */
+		DELETE TBSLS_HOUSE_RENT_PAY
+         WHERE CNTRCTR_NO	= #CNTRCTR_NO#
+           AND RQEST_YM  	= SUBSTR(#CANCL_DE#, 0,6)
+           AND RCIV_DE IS NULL
+	</delete>
+	  
+	  
+	  
+<!-- 계약해약 취소  -->	  	  
+	  
+	  
+<!-- 임대해약  -->
+
+   
+	  
+	  		           
+			           
+   <!-- 쿼리명    : 주택계약 임대 보증금 조회
+       설명       : 주택계약 임대 보증금 조회
+	   작성자     : 정윤원
+	       최초작성일 : 2015.10.27
+
+	       수정일  수정자  수정내용
+	   -->        
+      <select id="SLS020102DAO.selectRenLttotPayList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+         SELECT  
+              CNTRCTR_NO                                           /* 계약번호 */
+             ,SFCMP_GET_CODENM('HOU0A1',PAY_CODE) AS PAY_CODE_NM   /* 납부코드 */
+             ,PAY_TMLMT                                            /* 납부기한일 */
+            , <![CDATA[ 
+               ( CASE WHEN ARRRG_AMOUNT >= 0    
+               ]]>                                                 /* 연체할인금액이 - 인경우 수납금액 */
+                    THEN PAYAMT                                    /* 납부금액 */
+               ELSE RCIV_AMOUNT                                    /* 수납금액 */
+                END ) AS PAYAMT
+           FROM TBSLS_HOUSE_LTTOT_PAY WHERE CNTRCTR_NO = #CNTRCTR_NO#
+            AND LTTOT_RENT_SE = 'R'                                /* 분양,임화성분 */
+            AND RCIV_DE IS NOT NULL                                /* 수납일자      */
+          ORDER BY PAY_TMLMT,PAY_CODE,RCIV_DE                      /* 납부기한일, 납부코드,수납일자 */
+      
+      </select>
+
+	  
+<!-- 임대해약  -->
+
+
+	<!-- 지출결의 결의번호 업데이트  -->
+	<update id="SLS020102DAO.updateExpndtrDecsnNo" parameterClass="java.util.Map">
+		UPDATE TBSLS_HCNTRCTR_CANCL 
+		   SET
+			   EXPNDTR_DECSN_DE  	= #EXPNDTR_DECSN_DE#
+			  ,DECSN_YEAR 			= #DSNMASTR.DECSN_YEAR#
+			  ,EXPNDTR_DECSN_NO  	= #DSNMASTR.DECSN_NO#
+			  ,UPDUSR_ID            = #S_USER_ID#
+		      ,UPDT_DT              = SYSDATE
+	  	 WHERE 1 = 1
+	       AND CNTRCTR_NO  = #CNTRCTR_NO#
+		  
+	</update>
+	
+	<!-- 전자결재 결재번호 업데이트  -->
+	<update id="SLS020102DAO.approveU" parameterClass="java.util.HashMap">
+		UPDATE TBSLS_HCNTRCTR_CANCL A
+		   SET ELCTRN_SANCTN_NO  = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+			  ,UPDUSR_ID  	=  #S_USER_ID#
+			  ,UPDT_DT		=  SYSDATE			  
+		 WHERE CNTRCTR_NO   = #CNTRCTR_NO#
+	</update>
+	
+	<!-- 전자결재 결재번호 업데이트  -->
+	<update id="SLS020102DAO.approveU2" parameterClass="java.util.HashMap">
+		UPDATE TBSLS_CHCK_REQEST A
+		   SET ELCTRN_SANCTN_NO  = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+			  ,UPDUSR_ID  	=  #S_USER_ID#
+			  ,UPDT_DT		=  SYSDATE			  
+		 WHERE CNTRCTR_NO   = #CNTRCTR_NO#    /* 주택코드 */
+          
+	</update>	  
+
+	<!-- 시설물전자결재 결재번호 업데이트  -->
+	<update id="SLS020102DAO.approveFclts" parameterClass="java.util.HashMap">
+		UPDATE TBSLS_HOUSE_RENT_CANCL A
+		   SET FCLTS_ELCTRN_SANCTN_NO  = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+			  ,UPDUSR_ID  	=  #S_USER_ID#
+			  ,UPDT_DT		=  SYSDATE			  
+		 WHERE CNTRCTR_NO   = #CNTRCTR_NO#    /* 주택코드 */
+          
+	</update>	  
+	
+	  <!-- 쿼리명      : 주택 임대 해약정보 업데이트 (시설보수부담액 납부정보)
+	        설명       : 주택 분양 해약정보 저장 쿼리문
+	        작성자     : 박태혁
+	        최초작성일 : 2016.8.13
+
+	        수정일  수정자  수정내용
+	   -->
+	  <update id="SLS020102DAO.updateHouseRentCancelInfo" parameterClass="java.util.Map">
+		  UPDATE  TBSLS_HOUSE_RENT_CANCL
+		     SET  
+				    RNTCHRG_APPLC_AT  = #RNTCHRG_APPLC_AT# /* 임대료적용여부 */
+				 ,  RNTCHRG                   = #RNTCHRG#  /* 임대료 */
+				 ,  RESRVE_AMOUNT       = #RESRVE_AMOUNT# /* 유보금액 */
+				 ,  INDMNTY_APPLC_AT    = #INDMNTY_APPLC_AT#/* 배상금적용여부 */
+				 ,  INDMNTY                     = #INDMNTY# /* 배상금 */
+				 ,  INTR_INTRT                  = #INTR_INTRT# /* 이자이율 */
+				 ,  PAY_GTN                     = #PAY_GTN#/* 납부보증금 */
+				 ,  PAY_TMLMT                = #PAY_TMLMT#    /* 납부기한 */
+				 ,  OVDINTR                      = #OVDINTR#/* 연체이자 */
+				 ,  ARRRG_AMOUNT          = #ARRRG_AMOUNT#       /* 연체금액 */
+				 ,  IDRK_CO                      = #IDRK_CO#/* 기산일수 */
+				 ,  RNTCHRG_THSMON      = #RNTCHRG_THSMON#  /* 임대료_당월 */
+				 ,  BANK_CODE_FCLTS      = #BANK_CODE_FCLTS#
+				 ,  DPSTR_FCLTS              = #DPSTR_FCLTS#
+				 ,  ACNUT_NO_FCLTS        = #ACNUT_NO_FCLTS#
+				 ,  SEIZR_AMOUNT            = #SEIZR_AMOUNT#				 
+				 ,  ETC_DDC_IEM              = #ETC_DDC_IEM#
+				 ,  ETC_DDC_AMOUNT       = #ETC_DDC_AMOUNT#
+				 ,  ETC_DDC_BANK_CODE  = #ETC_DDC_BANK_CODE#
+				 ,  ETC_DDC_DPSTR          = #ETC_DDC_DPSTR#
+				 ,  ETC_DDC_ACNUTNO      = #ETC_DDC_ACNUTNO#     				  
+		         ,  RESRVE_AMOUNT_BANK_CODE = #RESRVE_AMOUNT_BANK_CODE#
+		         ,  RESRVE_AMOUNT_DPSTR     = #RESRVE_AMOUNT_DPSTR#
+		         ,  RESRVE_AMOUNT_ACNUTNO   = #RESRVE_AMOUNT_ACNUTNO#
+		         ,  MANAGECT                = #MANAGECT#
+		         ,  MANAGECT_BANK_CODE      = #MANAGECT_BANK_CODE#
+		         ,  MANAGECT_DPSTR          = #MANAGECT_DPSTR#
+		         ,  MANAGECT_ACNUTNO        = #MANAGECT_ACNUTNO#
+		         ,  UPDUSR_ID               = #S_USER_ID#       
+		         ,  UPDT_DT                 = SYSDATE
+	       WHERE  CNTRCTR_NO              = #CNTRCTR_NO#        /* 계약자번호 */          
+	  </update>
+	
+		 <!-- 쿼리명      : 주택해약정보 업데이트
+	        설명       : 주택해약정보 저장 쿼리문
+	        작성자     : 손연옥
+	        최초작성일 : 2016.11.9
+
+	        수정일  수정자  수정내용
+	   -->
+	   <update id="SLS020102DAO.updateHouseCancelInfo" parameterClass="java.util.Map">		
+			UPDATE TBSLS_HCNTRCTR_CANCL 
+			   SET
+				   RCEPT_DE     = #RCEPT_DE#                      /* 접수일자     */  
+		          ,CANCL_DE     = #CANCL_DE#                            /* 해약일자          */   
+		          ,RESCI_RESN_CODE   = #RESCI_RESN_CODE#                      /* 해약사유코드 */
+		          ,RESCI_RESN_DETAIL  = #RESCI_RESN_DETAIL#                     /* 해약사유상세 */
+		          ,BANK_CODE = #BANK_CODE#                               /* 은행코드          */  
+		          ,DPSTR   = #DPSTR#                                /* 예금주            */
+		          ,ACNUTNO  = #ACNUTNO#                               /* 계좌번호          */   
+		          ,LVHS_DE   = #LVHS_DE#                               /* 퇴거일자          */  
+		          ,LVHS_ADRES = #LVHS_ADRES#                             /* 퇴거주소          */  
+		          ,LVHS_TELNO   = #LVHS_TELNO#                           /* 퇴거전화번호      */   
+		          ,LVHS_MOBLPHON  = #LVHS_MOBLPHON#                         /* 퇴거휴대폰        */  
+		          ,PENLTY_APPLC_AT  = #PENLTY_APPLC_AT#                       /* 위약금적용여부 */
+		          ,PENLTY   = #PENLTY#                               /* 위약금            */  
+		          ,PENLTY_INTRT = #PENLTY_INTRT#                          /* 위약금이율        */		           
+		          ,RM                        = #RM#              /* 비고              */
+				  ,UPDUSR_ID            = #S_USER_ID#
+			      ,UPDT_DT              = SYSDATE
+		  	 WHERE 1 = 1
+		       AND CNTRCTR_NO  = #CNTRCTR_NO#			  
+		</update>
+		     	
+</sqlMap>

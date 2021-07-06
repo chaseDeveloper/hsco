@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070123_SQL">	
+
+    <!-- 시간외근무확인 근무일자 목록조회 -->
+	<select id="HRM070123DAO.selectOvtmworkYmList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT TO_CHAR(TO_DATE(OVTMWRK_DE, 'YYYYMMDD'), 'YYYY-MM-DD')
+		    || ' '
+		    || DECODE(TO_CHAR(TO_DATE(OVTMWRK_DE, 'YYYYMMDD'), 'D'), 1, '일', 2, '월', 3, '화', 4, '수', 5, '목', 6, '금', 7, '토') AS SHOW_OVTMWRK_DE
+		  ,OVTMWRK_DE
+		FROM TBHRM_OVTMWRK t1
+		WHERE OVTMWRK_DE LIKE #OVTMWRK_YM# || '%'
+		<isNotEmpty prepend="AND" property="DEPT_CODE">
+			DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		GROUP BY TO_CHAR(TO_DATE(OVTMWRK_DE, 'YYYYMMDD'), 'YYYY-MM-DD')
+		    || ' '
+		    || DECODE(TO_CHAR(TO_DATE(OVTMWRK_DE, 'YYYYMMDD'), 'D'), 1, '일', 2, '월', 3, '화', 4, '수', 5, '목', 6, '금', 7, '토')
+		  ,OVTMWRK_DE
+		ORDER BY OVTMWRK_DE
+    </select>
+
+    <!-- 시간외근무내역조회 -->
+    <select id="HRM070123DAO.selectOvtmworkDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 t1.OVTMWRK_DE
+			,t1.SEQ
+			,DECODE(v1.HOLY_AT, 0, '평일', 1, '휴일')	  AS  		HOLY_AT 
+		    ,DECODE(TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D'), '1', '일'
+		                                                         , '2', '월'
+		                                                         , '3', '화'
+		                                                         , '4', '수'
+		                                                         , '5', '목'
+		                                                         , '6', '금'
+		                                                         , '7', '토'
+		     ) AS OVTMWRK_DAY
+		    ,t1.DEPT_CODE
+		    ,t2.DEPT_NM
+		    ,t5.CODE_NM                         AS HR_CLSF_NM
+		    ,t1.EMPNO
+		    ,t3.EMPNM
+		    ,CASE WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '2' THEN NVL(t6.FLXWK_SE_MON, '99')
+		          WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '3' THEN NVL(t6.FLXWK_SE_TUE, '99')
+		          WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '4' THEN NVL(t6.FLXWK_SE_WED, '99')
+		          WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '5' THEN NVL(t6.FLXWK_SE_THU, '99')
+		          WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '6' THEN NVL(t6.FLXWK_SE_FRI, '99')
+		          ELSE '99'
+		     END  AS FLXWK_SE_DAY									/*기준근무시간대역*/
+		    ,t1.REQST_BEGIN_TM										/*신청시작시각*/
+		    ,t1.REQST_END_TM										/*신청종료시각*/
+		    ,t1.REQST_TIME											/*신청시간*/
+		    ,t10.BEGIN_TM AS WORK_BEGIN_TM							/*근무시작시각*/
+		    ,t10.END_TM   AS WORK_END_TM								/*근무종료시각*/
+		    ,t1.RCOGN_BEGIN_TM										/*인정시작시각*/
+		    ,t1.RCOGN_END_TM										/*인정종료시각*/
+		    ,t1.RCOGN_TIME				 						     /*인정시간*/
+		    ,TO_NUMBER(NVL(SUBSTR(t1.OVTIME_WORK_TIME, 1, 2), 0))	AS OVTIME_WORK_TIME	 /*시간외근무시간*/
+		    ,TO_NUMBER(NVL(SUBSTR(t1.RESTDE_WORK_TIME, 1, 2), 0))	AS RESTDE_WORK_TIME	 /*휴일근무시간*/
+		    ,TO_NUMBER(NVL(SUBSTR(t1.NIGHT_WORK_TIME, 1, 2), 0))	AS NIGHT_WORK_TIME	 /*야간근무시간*/
+		    ,t1.WORK_DRCTR											/*근무지시자*/
+		    ,t1.WORK_PURPS											/*근무목적*/
+		    ,t1.RM					 	 	 	 	 	 	 	 	/*비고*/
+		    ,t1.SANCTN_NO
+		    ,t1.SANCTN_NO2
+		    ,NVL(t7.SANCTN_KND,'0') AS SANCTN_KND
+		    ,NVL(t8.SANCTN_KND,'0') AS SANCTN_KND2
+		    ,TO_NUMBER(SUBSTR(NVL(t1.REQST_TIME,'0000'),1,2)) 		AS RQTM	/*신청*/
+    		,TO_NUMBER(SUBSTR(NVL(t1.RCOGN_TIME,'0000'),1,2)) 		AS RCTM /*결과*/
+    		,TO_NUMBER(SUBSTR(NVL(t1.REQST_TIME,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t1.RCOGN_TIME,'0000'),1,2)) AS SOTM /*과부족*/
+		    ,NVL(t9.TOT_RCOGN_TIME,0) 								AS TOTM	/*월누계*/
+		 FROM TBHRM_OVTMWRK t1
+		    LEFT OUTER JOIN VWHRM_DEPT t2
+		      ON  t1.DEPT_CODE = t2.DEPT_CODE
+		    LEFT OUTER JOIN TBHRM_HR_MASTR t3
+		      ON  t1.EMPNO = t3.EMPNO
+		    LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		      ON  t5.GRP_CODE      = 'HRM002'
+		     AND t3.HR_CLSF_SE    = t5.CODE
+		    LEFT OUTER JOIN TBHRM_FLXWK t6
+		      ON  t1.EMPNO = t6.EMPNO
+		     AND t1.OVTMWRK_DE BETWEEN t6.BGNDE AND t6.ENDDE
+		     AND ROWNUM = 1
+		    LEFT OUTER JOIN VWHRM_SYS_DAY v1
+		      ON TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'yyyymmdd')) = v1.DAY
+		    LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR t7
+		      ON t1.SANCTN_NO  = t7.SANCTN_NO
+		    LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR t8
+		      ON t1.SANCTN_NO2 = t8.SANCTN_NO
+		    LEFT OUTER JOIN (
+		                     SELECT EMPNO, SUM(TO_NUMBER(SUBSTR(NVL(a.RCOGN_TIME,'0000'),1,2))) TOT_RCOGN_TIME
+		                     FROM TBHRM_OVTMWRK a
+		                     WHERE a.OVTMWRK_DE LIKE SUBSTR(#OVTMWRK_DE#,1,6)||'%'
+		                       AND a.OVTMWRK_DE <![CDATA[<]]> #OVTMWRK_DE#
+		                       AND EXISTS (SELECT 1
+		                                   FROM TBCOM_ELCTRN_SANCTN_MASTR b
+		                                   WHERE a.SANCTN_NO2  = b.SANCTN_NO
+		                                     AND b.SANCTN_KND = '5'
+		                                  )
+		                     GROUP BY EMPNO
+		                    ) t9
+		      ON t1.EMPNO = t9.EMPNO
+		    LEFT OUTER JOIN (
+		                     SELECT T1.EMPNO, T2.WORK_DE, T2.BEGIN_TM, T2.END_TM
+		                     FROM TBHRM_DCLZ_MAPPING_MANAGE T1
+		                        , TBHRM_DCLZ_DTLS_MANAGE T2
+		                     WHERE T1.DCLZ_ID = T2.DCLZ_ID
+		                    ) t10
+		      ON t1.OVTMWRK_DE = t10.WORK_DE
+		     AND t1.EMPNO = t10.EMPNO
+		WHERE t1.OVTMWRK_DE = #OVTMWRK_DE#
+		<isNotEmpty prepend="AND" property="DEPT_CODE">
+			t1.DEPT_CODE  = #DEPT_CODE#
+		</isNotEmpty>
+		ORDER BY t3.JSSFC_SE, t3.HR_CLSF_SE, t3.EMPNO
+    </select>
+    <!-- 시간외근무내역수정(인정시간) -->
+	
+	<update id="HRM070123DAO.ovtmworkDtlsU" parameterClass="java.util.HashMap">
+    	UPDATE TBHRM_OVTMWRK
+    	SET	RCOGN_TIME			= #RCOGN_TIME#
+    	   ,OVTIME_WORK_TIME	= CONCAT(LPAD(#OVTIME_WORK_TIME#, 2, 0),'00')
+    	   ,RESTDE_WORK_TIME	= CONCAT(LPAD(#RESTDE_WORK_TIME#, 2, 0),'00')
+    	   ,NIGHT_WORK_TIME		= CONCAT(LPAD(#NIGHT_WORK_TIME#	, 2, 0),'00')
+    	WHERE OVTMWRK_DE = #OVTMWRK_DE#
+    	  AND	   EMPNO = #EMPNO#
+		  AND		 SEQ = #SEQ# 
+	</update>
+</sqlMap>

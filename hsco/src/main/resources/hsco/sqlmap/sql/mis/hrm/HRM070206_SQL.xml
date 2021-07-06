@@ -1,0 +1,568 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070206_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 출장목록 조회 -->
+	<select id="HRM070206DAO.selectBsrpList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM070206DAO.selectBsrpList*/]]>
+		SELECT T1.EMPNO
+		     , T2.EMPNM
+		     , SFHRM_GET_EMPL_INFO(T1.EMPNO, 'JSSFC_SE', T1.BSRP_BGNDE)    AS JSSFC_SE
+		     , SFHRM_GET_EMPL_INFO(T1.EMPNO, 'JSSFC_NM', T1.BSRP_BGNDE)    AS JSSFC_NM
+		     , SFHRM_GET_EMPL_INFO(T1.EMPNO, 'CLSF_SE', T1.BSRP_BGNDE)     AS CLSF_SE
+		     , SFHRM_GET_EMPL_INFO(T1.EMPNO, 'CLSF_NM', T1.BSRP_BGNDE)     AS CLSF_NM
+		     , SFHRM_GET_EMPL_INFO(T1.EMPNO, 'JSSFC_NM', T1.BSRP_BGNDE) || '(' || SFHRM_GET_EMPL_INFO(T1.EMPNO, 'CLSF_NM', T1.BSRP_BGNDE) || ')'    AS JSSFC_CLSF_NM
+		     , T1.BSRP_SEQ
+		     , T1.DEPT_CODE
+		     , T3.DEPT_NM
+		     , T1.WHTHRC_AT
+		     , T1.BSRP_PURPS
+		     , T1.DSTN_NM
+		     , T1.BSRP_BGNDE
+		     , T1.BSRP_BEGIN_TM
+		     , TO_CHAR(TO_DATE(T1.BSRP_BGNDE || T1.BSRP_BEGIN_TM, 'YYYY-MM-DD HH24:MI'), 'YYYY-MM-DD HH24:MI')    AS BSRP_BEGIN_DT
+		     , T1.BSRP_ENDDE
+		     , T1.BSRP_END_TM
+		     , TO_CHAR(TO_DATE(T1.BSRP_ENDDE || T1.BSRP_END_TM, 'YYYY-MM-DD HH24:MI'), 'YYYY-MM-DD HH24:MI')      AS BSRP_END_DT
+		     , NVL(T1.TRVCT_TOTAMT, 0)                                     AS TRVCT_TOTAMT
+		     , NVL(T5.EXCCLC_AMOUNT, 0)                                    AS EXCCLC_AMOUNT
+		     , NVL(T1.TRVCT_TOTAMT, 0) - NVL(T5.EXCCLC_AMOUNT, 0)          AS BLCE
+		     , T1.CONFM_AT
+		     , T1.SANCTN_NO
+		     , CASE WHEN T1.SANCTN_NO IS NULL THEN '0'
+		            WHEN t1.SANCTN_NO = '0' THEN '5' 
+		            ELSE NVL(t7.SANCTN_KND, '0') END  AS SANCTN_STS
+		     , T1.DECSN_YEAR
+		     , T1.DECSN_NO
+		     , DECODE(t1.DECSN_NO, NULL, NULL, t1.DECSN_YEAR || '-' || t1.DECSN_NO)   AS DECSN_NO_VIEW
+		     , DECODE(T1.DECSN_NO, NULL, '1', '0')                         AS ENABLE_AT
+		     , DECODE(T1.DECSN_NO, NULL, '0', '1')                         AS EXCCLC_AT
+		     , NVL(T6.CNT_001, 0) ||' / '|| NVL(T6.CNT_002, 0) || ' / '|| NVL(T6.CNT_003, 0)	AS EXCCLC_SE_CNT  /*카드/영수증/정액(건수)*/
+		     , CASE WHEN TFCMN_SE = '001' THEN '1'  
+		            ELSE '0'
+		        END TFCMN_001
+		  FROM TBHRM_BSRP_INDVDL t1
+		       LEFT OUTER JOIN TBHRM_HR_MASTR T2
+		            ON T1.EMPNO = T2.EMPNO
+		       LEFT OUTER JOIN TBHRM_DEPT T3
+		            ON T1.DEPT_CODE = T3.DEPT_CODE
+		       LEFT OUTER JOIN TBHRM_BSRP_CTY T4
+		            ON T1.CTY_SEQ = T4.CTY_SEQ
+		       LEFT OUTER JOIN (
+		                        SELECT EMPNO
+		                             , BSRP_SEQ
+		                             , SUM(NVL(USE_AM, 0))    AS EXCCLC_AMOUNT
+		                          FROM TBHRM_BTRPS_EXCCLC_MANAGE
+		                        GROUP BY EMPNO
+		                               , BSRP_SEQ
+		       ) T5
+		            ON T1.EMPNO    = T5.EMPNO
+		           AND T1.BSRP_SEQ = T5.BSRP_SEQ
+		        LEFT OUTER JOIN (
+		                           SELECT 
+		                                EMPNO          AS EMPNO
+		                               ,BSRP_SEQ       AS BSRP_SEQ
+		                               ,SUM(CASE EXCCLC_SE WHEN '001' THEN 1 ELSE 0 END)      AS CNT_001
+		                               ,SUM(CASE EXCCLC_SE WHEN '002' THEN 1 ELSE 0 END)      AS CNT_002
+		                               ,SUM(CASE EXCCLC_SE WHEN '003' THEN 1 ELSE 0 END)      AS CNT_003
+		                           FROM TBHRM_BTRPS_EXCCLC_MANAGE T1
+		                           WHERE 1=1
+		                           GROUP BY EMPNO, BSRP_SEQ
+		                           ) T6
+		             ON  T1.EMPNO    = T6.EMPNO
+		             AND T1.BSRP_SEQ = t6.BSRP_SEQ
+		       LEFT OUTER JOIN INTRAWARE.VIEW_MIS_SANCTN_KND@DL_INTRACITY t7
+        	   ON t1.SANCTN_NO = t7.SANCTN_NO
+		 WHERE 1=1
+		   AND NVL(T1.OVSEA_AT, '0') != '1'	/*해외여부*/
+		<isNotEmpty property="DECSN_NO">
+			   AND t1.DECSN_YEAR = #DECSN_YEAR#
+			   AND t1.DECSN_NO   = #DECSN_NO#
+		</isNotEmpty>
+		<isEmpty property="DECSN_NO">
+			   AND (t7.SANCTN_KND = '5' OR t1.SANCTN_NO = '0')
+			   AND SUBSTR(T1.BSRP_BGNDE, 1, 6) = #BSRP_YM#
+			<isNotEmpty property="BSRP_PURPS">
+			   AND T1.BSRP_PURPS LIKE '%' || #BSRP_PURPS# || '%'
+			</isNotEmpty>
+			<isNotEmpty property="DSTN_NM">
+			   AND T1.DSTN_NM LIKE '%' || #DSTN_NM# || '%'
+			</isNotEmpty>
+			<isNotEmpty property="EMPNO">
+			   AND T1.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE">
+			    <isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">
+			        (T2.DEPT_CODE='000000' OR T2.DEPT_CODE = #DEPT_CODE#)
+			    </isNotEqual>
+			</isNotEmpty>
+			<isEqual property="AUTH_GRP" compareValue="GRFRS">
+			   AND t2.DEPT_CODE IN (SELECT DEPT_CODE FROM TABLE(SFHRM_DEPT_TREE(SFCOM_USER_DEPT_CODE(#S_USER_ID#, 'U'))))
+			</isEqual>
+			<isEqual property="AUTH_GRP" compareValue="USER">
+			   AND t2.DEPT_CODE IN (SELECT DEPT_CODE FROM TABLE(SFHRM_DEPT_TREE(SFCOM_USER_DEPT_CODE(#S_USER_ID#, 'N'))))
+			</isEqual>
+			<isNotEmpty property="BIZPLC_CODE">
+				<isNotEqual property="BIZPLC_CODE" compareValue="9999">
+					<isNotEqual property="BIZPLC_CODE" compareValue="NULL">
+			   AND t2.BIZPLC_CODE = #BIZPLC_CODE#
+					</isNotEqual>
+					<isEqual property="BIZPLC_CODE" compareValue="NULL">
+			   AND t2.BIZPLC_CODE IS NULL
+					</isEqual>
+				</isNotEqual>
+			</isNotEmpty>
+			<isNotEmpty property="UNSNCT_AT">
+				<isEqual property="UNSNCT_AT" compareValue="1">
+			   AND t1.DECSN_NO IS NULL
+				</isEqual>
+			</isNotEmpty>
+		</isEmpty>
+		ORDER BY T1.DEPT_CODE
+		       , T1.EMPNO
+		       , T1.BSRP_SEQ
+	</select>
+
+	<!-- 개인별 출장비 집계(여비지출결의서 세부내용 목적) -->
+	<select id="HRM070206DAO.selectExpDsnDetailTrvct" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT TO_CHAR(SYSDATE, 'YYYYMMDD')     AS RCPT_DE
+		      ,t1.EMPNO                         AS RCPT_MAN_EMPNO
+		      ,t2.EMPNM                         AS RCPT_MAN
+		      ,t3.SALARY_BANK_CODE              AS FNNC_INSTT_CODE
+		      ,t3.SALARY_BANK_ACNUT             AS ACNUTNO
+		      ,NVL(t1.SUM_ACPLC_ACT,   0)       AS SUM_ACPLC_ACT
+		      ,NVL(t1.SUM_ETC_EXPENS,  0)       AS SUM_ETC_EXPENS
+		      ,NVL(t1.SUM_DAIL,        0)       AS SUM_DAIL
+		      ,NVL(t1.SUM_MAEL,        0)       AS SUM_MAEL
+		      ,NVL(t1.SUM_TRNSPORT,    0)       AS SUM_TRNSPORT
+		      ,NVL(t1.SUM_STAYNG,      0)       AS SUM_STAYNG
+		      ,NVL(t1.TOT_AMOUNT,      0)       AS TOT_AMOUNT
+		      ,NVL(t1.CPR_CARD_AMOUNT, 0)       AS CPR_CARD_AMOUNT
+		      ,NVL(t1.DECSN_AMOUNT,    0)       AS DECSN_AMOUNT   
+		FROM   (
+		        SELECT SUBSTR(b1.BSRP_BGNDE, 1, 6)                      AS BSRP_YM
+		              ,b1.EMPNO
+		              ,SUM(DECODE(b2.BTRPS_SE, '001', b2.USE_AM, 0))    AS SUM_ACPLC_ACT
+		              ,SUM(DECODE(b2.BTRPS_SE, '002', b2.USE_AM, 0))    AS SUM_ETC_EXPENS
+		              ,SUM(DECODE(b2.BTRPS_SE, '003', b2.USE_AM, 0))    AS SUM_DAIL
+		              ,SUM(DECODE(b2.BTRPS_SE, '004', b2.USE_AM, 0))    AS SUM_MAEL
+		              ,SUM(DECODE(b2.BTRPS_SE, '005', b2.USE_AM, 0))    AS SUM_TRNSPORT
+		              ,SUM(DECODE(b2.BTRPS_SE, '006', b2.USE_AM, 0))    AS SUM_STAYNG
+		              ,SUM(b2.USE_AM)                                   AS TOT_AMOUNT
+		              ,SUM(DECODE(b2.EXCCLC_SE, '001', b2.USE_AM, 0))   AS CPR_CARD_AMOUNT
+		              ,SUM(DECODE(b2.EXCCLC_SE, '001', 0, b2.USE_AM))   AS DECSN_AMOUNT
+		        FROM   TBHRM_BSRP_INDVDL b1
+		               LEFT OUTER JOIN TBHRM_BTRPS_EXCCLC_MANAGE b2
+		                    ON b1.EMPNO = b2.EMPNO
+		                   AND b1.BSRP_SEQ = b2.BSRP_SEQ
+		               LEFT OUTER JOIN INTRAWARE.VIEW_MIS_SANCTN_KND@DL_INTRACITY b3
+		               		ON  b1.SANCTN_NO = b3.SANCTN_NO
+		               		AND b3.SANCTN_KND = '5'
+		        WHERE  (b1.SANCTN_NO = '0' OR b3.SANCTN_KND = '5')
+		<isNotEmpty property="UNSNCT_AT">
+			<isEqual property="UNSNCT_AT" compareValue="1">
+		        AND    b1.DECSN_NO IS NULL
+			</isEqual>
+		</isNotEmpty>
+		        GROUP BY SUBSTR(b1.BSRP_BGNDE, 1, 6)
+		                ,b1.EMPNO
+		       ) t1
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t2
+		            ON t1.EMPNO = t2.EMPNO
+		       LEFT OUTER JOIN TBSAL_EMPL_BANK_ACNUT t3
+		            ON t2.EMPNO = t3.EMPNO
+		WHERE  t1.BSRP_YM   = #BSRP_YM#
+		AND    t2.DEPT_CODE = #DEPT_CODE#
+		<isNotEmpty property="BIZPLC_CODE">
+			<isNotEqual property="BIZPLC_CODE" compareValue="9999">
+				<isNotEqual property="BIZPLC_CODE" compareValue="NULL">
+			   AND t2.BIZPLC_CODE = #BIZPLC_CODE#
+				</isNotEqual>
+				<isEqual property="BIZPLC_CODE" compareValue="NULL">
+			   AND t2.BIZPLC_CODE IS NULL
+				</isEqual>
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="EMPNO">
+			   AND t1.EMPNO = #EMPNO#
+		</isNotEmpty>
+		ORDER BY t1.EMPNO
+	</select>
+
+	<!-- 출장비정산금액 수정 -->
+	<update id="HRM070206DAO.updateBtrpsExcclcAmount" parameterClass="java.util.Map">
+		<![CDATA[/*HRM070206DAO.updateBtrpsExcclcAmount*/]]>
+		UPDATE TBHRM_BSRP_INDVDL
+		   SET EXCCLC_AMOUNT = (
+		                        SELECT SUM(NVL(USE_AM, 0))    AS EXCCLC_AMOUNT
+		                          FROM TBHRM_BTRPS_EXCCLC_MANAGE
+		                         WHERE EMPNO = #EMPNO#
+		                           AND BSRP_SEQ  = #BSRP_SEQ#
+		                       )
+		     , UPDUSR_ID     = #S_USER_ID#
+		     , UPDT_DT       = SYSDATE
+		 WHERE 1=1
+		   AND EMPNO     = #EMPNO#
+		   AND BSRP_SEQ  = #BSRP_SEQ#
+	</update>
+	
+	<!-- 출장비 정산 조회 -->
+	<select id="HRM070206DAO.selectBtrpsExcclc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*HRM070206DAO.selectBtrpsExcclc*/]]>
+		SELECT T1.EMPNO
+		     , T1.BSRP_SEQ
+		     , NVL(T1.TRVCT_TOTAMT, 0)      AS TRVCT_TOTAMT
+		     , NVL(T2.EXCCLC_AMOUNT, 0)     AS EXCCLC_AMOUNT
+		     , NVL(T1.ACPLC_ACT_CT, 0)      AS ACPLC_ACT_CT
+		     , NVL(T1.ETC_EXPENS, 0)        AS ETC_EXPENS
+		     , NVL(T1.DAIL_CT, 0)           AS DAIL_CT
+		     , NVL(T1.MEAL_CT, 0)           AS MEAL_CT
+		     , NVL(T1.TRNSPORT_CT, 0)       AS TRNSPORT_CT
+		     , NVL(T1.STAYNG_CT, 0)         AS STAYNG_CT
+		     , NVL(T2.SUM_ACPLC_ACT, 0)     AS SUM_ACPLC_ACT
+		     , NVL(T2.SUM_ETC_EXPENS, 0)    AS SUM_ETC_EXPENS
+		     , NVL(T2.SUM_DAIL, 0)          AS SUM_DAIL
+		     , NVL(T2.SUM_MAEL, 0)          AS SUM_MAEL
+		     , NVL(T2.SUM_TRNSPORT, 0)      AS SUM_TRNSPORT
+		     , NVL(T2.SUM_STAYNG, 0)        AS SUM_STAYNG
+		  FROM TBHRM_BSRP_INDVDL T1
+		       LEFT OUTER JOIN (
+		                        SELECT EMPNO
+		                             , BSRP_SEQ
+		                             , SUM(NVL(USE_AM, 0))                                AS EXCCLC_AMOUNT
+		                             , SUM(DECODE(BTRPS_SE, '001', NVL(USE_AM, 0), 0))    AS SUM_ACPLC_ACT
+		                             , SUM(DECODE(BTRPS_SE, '002', NVL(USE_AM, 0), 0))    AS SUM_ETC_EXPENS
+		                             , SUM(DECODE(BTRPS_SE, '003', NVL(USE_AM, 0), 0))    AS SUM_DAIL
+		                             , SUM(DECODE(BTRPS_SE, '004', NVL(USE_AM, 0), 0))    AS SUM_MAEL
+		                             , SUM(DECODE(BTRPS_SE, '005', NVL(USE_AM, 0), 0))    AS SUM_TRNSPORT
+		                             , SUM(DECODE(BTRPS_SE, '006', NVL(USE_AM, 0), 0))    AS SUM_STAYNG
+		                          FROM TBHRM_BTRPS_EXCCLC_MANAGE
+		                        GROUP BY EMPNO
+		                               , BSRP_SEQ
+		       ) T2
+		            ON T1.EMPNO    = T2.EMPNO
+		           AND T1.BSRP_SEQ = T2.BSRP_SEQ
+		 WHERE 1=1
+		   AND T1.EMPNO    = #EMPNO#
+		   AND T1.BSRP_SEQ = #BSRP_SEQ#
+		ORDER BY T1.EMPNO
+		        ,T1.BSRP_SEQ
+	</select>
+	
+	<!-- 출장비 정산 내역 조회 -->
+	<select id="HRM070206DAO.selectBtrpsExcclcTab" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*HRM070206DAO.selectBtrpsExcclcTab*/]]>
+		SELECT T1.EMPNO
+		     , T2.EMPNM
+		     , T1.BSRP_SEQ
+		     , T1.EXCCLC_SN
+		     , T1.EXCCLC_SE
+		     , T1.BTRPS_SE
+		     , T1.USE_DE
+		     , NVL(T1.USE_AM, 0)                                                        AS USE_AM
+		     , T1.FILE_SN
+		     , (SELECT COUNT(*) FROM TBCOM_CMMN_ATCHMNFL WHERE FILE_SN = T1.FILE_SN)    AS FILE_CNT
+		     , T1.RM
+		     , T1.BANK_CD
+		     , T1.CARD_NO
+		     , T4.CARD_NM
+		     , T1.APPR_TIME
+		     , T1.APPR_NO
+		     , T1.CANCEL_YN
+		     , T3.CHAIN_NM
+		     , T3.BRANCHTYPE
+		  FROM TBHRM_BTRPS_EXCCLC_MANAGE T1
+		       LEFT OUTER JOIN TBHRM_HR_MASTR T2
+		            ON T1.EMPNO = T2.EMPNO
+		       LEFT OUTER JOIN NH_APPR T3
+		            ON T1.BANK_CD   = T3.BANK_CD
+		           AND T1.CARD_NO   = T3.CARD_NO
+		           AND T1.USE_DE    = T3.APPR_DATE
+		           AND T1.APPR_TIME = T3.APPR_TIME
+		           AND T1.APPR_NO   = T3.APPR_NO
+		           AND T1.USE_AM    = T3.APPR_AMT
+		           AND T1.CANCEL_YN = T3.CANCEL_YN
+		       LEFT OUTER JOIN TBACC_CPR_CARD_MANAGE T4
+		            ON T1.CARD_NO = T4.CARD_NO
+		       LEFT OUTER JOIN TBHRM_BSRP_INDVDL t5
+		            ON t1.EMPNO = t5.EMPNO
+		           AND t1.BSRP_SEQ = t5.BSRP_SEQ
+		 WHERE 1=1
+		   AND T1.EXCCLC_SE = #EXCCLC_SE#
+		<isNotEmpty property="DECSN_NO">
+			   AND t5.DECSN_YEAR = #DECSN_YEAR#
+			   AND t5.DECSN_NO   = #DECSN_NO#
+		</isNotEmpty>
+		<isEmpty property="DECSN_NO">
+			<isNotEmpty property="BSRP_YM">
+				   AND SUBSTR(t5.BSRP_BGNDE,1,6) = #BSRP_YM#
+				   AND t2.DEPT_CODE = #DEPT_CODE#
+				<isNotEmpty property="BIZPLC_CODE">
+					<isNotEqual property="BIZPLC_CODE" compareValue="9999">
+						<isNotEqual property="BIZPLC_CODE" compareValue="NULL">
+					   AND t2.BIZPLC_CODE = #BIZPLC_CODE#
+						</isNotEqual>
+						<isEqual property="BIZPLC_CODE" compareValue="NULL">
+					   AND t2.BIZPLC_CODE IS NULL
+						</isEqual>
+					</isNotEqual>
+				</isNotEmpty>
+			</isNotEmpty>
+			<isEmpty property="BSRP_YM">
+				   AND t1.EMPNO     = #EMPNO#
+				   AND t1.BSRP_SEQ  = #BSRP_SEQ#
+			</isEmpty>
+			<isNotEmpty property="UNSNCT_AT">
+				<isEqual property="UNSNCT_AT" compareValue="1">
+				   AND t5.DECSN_NO IS NULL
+				</isEqual>
+			</isNotEmpty>
+		</isEmpty>
+		ORDER BY T2.EMPNM, T1.EXCCLC_SN
+	</select>
+	
+	<!-- 출장비정산 생성 -->
+	<insert id="HRM070206DAO.insertBtrpsExcclc" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM070206DAO.insertBtrpsExcclc*/]]>
+		INSERT INTO TBHRM_BTRPS_EXCCLC_MANAGE (
+		       EMPNO
+		     , BSRP_SEQ
+		     , EXCCLC_SN
+		     , EXCCLC_SE
+		     , BTRPS_SE
+		     , USE_DE
+		     , USE_AM
+		     , FILE_SN
+		     , RM
+		     , BANK_CD
+		     , CARD_NO
+		     , APPR_TIME
+		     , APPR_NO
+		     , CANCEL_YN
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		)
+		VALUES (
+		       #EMPNO#
+		     , #BSRP_SEQ#
+		     , (SELECT NVL(MAX(EXCCLC_SN), 0) + 1 FROM TBHRM_BTRPS_EXCCLC_MANAGE WHERE EMPNO = #EMPNO# AND BSRP_SEQ = #BSRP_SEQ#)
+		     , #EXCCLC_SE#
+		     , #BTRPS_SE#
+		     , #USE_DE#
+		     , #USE_AM#
+		     , #FILE_SN#
+		     , #RM#
+		     , #BANK_CD#
+		     , #CARD_NO#
+		     , #APPR_TIME#
+		     , #APPR_NO#
+		     , DECODE(#CANCEL_YN#, '1', 'Y', 'N')
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+	
+	<!-- 출장비정산 내역 수정 -->
+	<update id="HRM070206DAO.updateBtrpsExcclc" parameterClass="java.util.Map">
+		<![CDATA[/*HRM070206DAO.updateBtrpsExcclc*/]]>
+		UPDATE TBHRM_BTRPS_EXCCLC_MANAGE
+		   SET BTRPS_SE  = #BTRPS_SE#
+		     , USE_DE    = #USE_DE#
+		     , USE_AM    = #USE_AM#
+		     , RM        = #RM#
+		     , BANK_CD   = #BANK_CD#
+		     , CARD_NO   = #CARD_NO#
+		     , APPR_TIME = #APPR_TIME#
+		     , APPR_NO   = #APPR_NO#
+		     , CANCEL_YN = DECODE(#CANCEL_YN#, '1', 'Y', 'N')
+		     , UPDUSR_ID = #S_USER_ID#
+		     , UPDT_DT   = SYSDATE
+		 WHERE 1=1
+		   AND EMPNO     = #EMPNO#
+		   AND BSRP_SEQ  = #BSRP_SEQ#
+		   AND EXCCLC_SN = #EXCCLC_SN#
+	</update>
+	
+	<!-- 출장비정산 내역 삭제 -->
+	<delete id="HRM070206DAO.deleteBtrpsExcclc" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM070206DAO.deleteBtrpsExcclc*/]]>
+		DELETE
+		  FROM TBHRM_BTRPS_EXCCLC_MANAGE
+		 WHERE 1=1
+		   AND EMPNO     = #EMPNO#
+		   AND BSRP_SEQ  = #BSRP_SEQ#
+		   AND EXCCLC_SN = #EXCCLC_SN#
+	</delete>
+	
+	<!--지출결의 번호 저장-->
+	<update id="HRM070206DAO.updateBsrpDecsnNo" parameterClass="java.util.HashMap" >
+	<![CDATA[
+		DECLARE
+		BEGIN
+		    /* 출장 */
+		    UPDATE TBHRM_BSRP_INDVDL
+		    SET    DECSN_YEAR   = #DSNMASTR.DECSN_YEAR#
+		          ,DECSN_NO     = #DSNMASTR.DECSN_NO#
+		          ,UPDUSR_ID    = #S_USER_ID#
+		          ,UPDT_DT      = SYSDATE
+		    WHERE  EMPNO        = #EMPNO#
+		    AND    BSRP_SEQ     = #BSRP_SEQ#;
+		    
+		    /* 법인카드 */
+		    UPDATE NH_APPR t1
+		    SET    t1.DECSN_YEAR   = #DSNMASTR.DECSN_YEAR#
+		          ,t1.DECSN_NO     = #DSNMASTR.DECSN_NO#
+		    WHERE  EXISTS (
+		        SELECT *
+		        FROM   TBHRM_BTRPS_EXCCLC_MANAGE s1
+		               INNER JOIN TBHRM_BSRP_INDVDL s2
+		                    ON s1.EMPNO = s2.EMPNO
+		                   AND s1.BSRP_SEQ = s2.BSRP_SEQ
+		        WHERE  s1.BANK_CD       = t1.BANK_CD
+		        AND    s1.CARD_NO       = t1.CARD_NO 
+		        AND    s1.USE_DE        = t1.APPR_DATE 
+		        AND    s1.APPR_TIME     = t1.APPR_TIME 
+		        AND    s1.APPR_NO       = t1.APPR_NO 
+		        AND    s1.USE_AM        = t1.APPR_AMT 
+		        AND    s1.CANCEL_YN     = t1.CANCEL_YN
+		        AND    s1.EXCCLC_SE     = '001'
+		        AND    s2.EMPNO         = #EMPNO#
+		        AND    s2.BSRP_SEQ      = #BSRP_SEQ#
+		    );
+		END;
+	]]>
+	</update>
+	
+	<!--지출결의 번호 저장-->
+	<update id="HRM070206DAO.updateBsrpDecsnNoToNull" parameterClass="java.util.HashMap" >
+	<![CDATA[
+		DECLARE
+		BEGIN
+		    /* 출장 */
+		    UPDATE TBHRM_BSRP_INDVDL
+		    SET    DECSN_YEAR   = NULL
+		          ,DECSN_NO     = NULL
+		          ,UPDUSR_ID    = #S_USER_ID#
+		          ,UPDT_DT      = SYSDATE
+		    WHERE  DECSN_YEAR   = #DECSN_YEAR#
+		    AND    DECSN_NO     = #DECSN_NO#;
+		    
+		    /* 법인카드 */
+		    UPDATE NH_APPR t1
+		    SET    t1.DECSN_YEAR   = NULL
+		          ,t1.DECSN_NO     = NULL
+		    WHERE  t1.DECSN_YEAR   = #DECSN_YEAR#
+		    AND    t1.DECSN_NO     = #DECSN_NO#;
+		END;
+	]]>
+	</update>
+
+
+
+	<!-- 첨부파일 목록 조회 조회 -->
+	<select id="HRM070206DAO.selectFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.FILE_SN                     /*  파일일련번호 */
+		     , A.FILE_ORDR                    /*  파일순차 */
+		     , A.FILE_STRE_COURS              /*  파일저장경로 */
+		     , A.STRE_FILE_NM                 /*  저장파일명 */
+		     , A.ORGINL_FILE_NM               /*  원본파일명 */
+		     , A.FILE_EXTSN                   /*  파일확장자 */
+		     , A.FILE_CN                      /*  파일내용   */
+		     , A.FILE_MG                      /*  파일크기   */
+		     , A.USE_AT                       /*  사용여부   */
+		     , A.FILE_ID                      /*       */
+		     , B.SYS_SE_CODE                  /*  시스템구분코드 */
+		     , B.JOB_SE_CODE     AS JOB_SE    /*  업무구분코드 */
+		     , ROW_NUMBER() OVER (PARTITION BY A.FILE_SN ORDER BY A.FILE_ORDR ASC) AS SN
+		     , A.FILE_TY
+		     , 'theme://images/fileUpDownload/file_icon_' || DECODE(LOWER(A.FILE_EXTSN), 'zip', 'ZIP','rar', 'ZIP','7z', 'ZIP', 'jpg', 'IMG', 'jpeg', 'IMG', 'gif', 'IMG', 'png', 'IMG', 'bmp', 'IMG', 'txt', 'TXT', 'xml', 'TXT', 'doc', 'DOC', 'docx', 'DOC', 'xls', 'XLS', 'xlsx', 'XLS', 'ppt', 'PPT', 'pptx', 'PPT', 'pdf', 'PDF', 'hwp', 'HWP', 'hwt', 'HWP', 'ETC' ) || '.png' AS FILE_IMAGE
+		     , 100 AS PROGRS
+		     , NULL AS TRNSMIS_FILE_SIZE
+		     , 'theme://images/img_WF_ConfirmE.png' AS DELETE_IMAGE
+		     , NULL AS STTUS
+		     , '0' AS CHK
+		FROM   TBCOM_CMMN_ATCHMNFL A           /* 공통첨부파일 */
+		     , TBCOM_CMMN_ATCHMNFL_MASTR B     /* 공통첨부파일마스터 */
+		WHERE  1=1
+		AND    A.FILE_SN = B.FILE_SN
+		AND    B.FILE_SN IN (
+		                    SELECT t1.FILE_SN
+		                    FROM   TBHRM_BTRPS_EXCCLC_MANAGE t1
+		                           LEFT OUTER JOIN TBHRM_BSRP_INDVDL t5
+		                                ON t1.EMPNO = t5.EMPNO
+		                               AND t1.BSRP_SEQ = t5.BSRP_SEQ
+		                           LEFT OUTER JOIN TBHRM_HR_MASTR t6
+		                                ON t5.EMPNO = t6.EMPNO
+		                    WHERE  t1.EXCCLC_SE = #EXCCLC_SE#
+						<isNotEmpty property="DECSN_NO">
+			                  AND t5.DECSN_YEAR = #DECSN_YEAR#
+			                  AND t5.DECSN_NO   = #DECSN_NO#
+						</isNotEmpty>
+						<isEmpty property="DECSN_NO">
+							<isNotEmpty property="BSRP_YM">
+								AND SUBSTR(t5.BSRP_BGNDE,1,6) = #BSRP_YM#
+								AND t6.DEPT_CODE = #DEPT_CODE#
+								<isNotEmpty property="BIZPLC_CODE">
+									<isNotEqual property="BIZPLC_CODE" compareValue="9999">
+										<isNotEqual property="BIZPLC_CODE" compareValue="NULL">
+									   AND t6.BIZPLC_CODE = #BIZPLC_CODE#
+										</isNotEqual>
+										<isEqual property="BIZPLC_CODE" compareValue="NULL">
+									   AND t6.BIZPLC_CODE IS NULL
+										</isEqual>
+									</isNotEqual>
+								</isNotEmpty>
+							</isNotEmpty>
+							<isEmpty property="BSRP_YM">
+							  AND t1.EMPNO     = #EMPNO#
+							  AND t1.BSRP_SEQ  = #BSRP_SEQ#
+							</isEmpty>
+						</isEmpty>
+		                   )
+		ORDER BY 1,2,3
+	</select>
+	
+	<!-- 관내/상시 일 때 상한액을 초과하는지 체크 -->
+	<select id="HRM070206DAO.selectUseAmTotOverAt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH BSRP_INDVDL AS (
+		        SELECT CASE WHEN WHTHRC_AT = '1' OR ORDTM_SE = '1' THEN '1'
+		                ELSE '0'
+		             END CHK_AT
+		            ,EMPNO
+		            ,BSRP_SEQ
+		        FROM TBHRM_BSRP_INDVDL
+		        WHERE 1=1
+		        AND EMPNO = #EMPNO#
+		        AND BSRP_SEQ = #BSRP_SEQ#
+		)
+		
+		SELECT CASE WHEN MAX(t1.CHK_AT) = '1' AND NVL(SUM(t3.EXCCLC_AMOUNT), 0) + NVL(#USE_AM#, 0) > 200000 THEN '1'
+		            ELSE '0'
+		       END AS OVER_AT	/*초과여부*/
+		     , TO_CHAR((NVL(SUM(t3.EXCCLC_AMOUNT), 0) + NVL(#USE_AM#, 0)) - 200000, 'FM999,999,999,999,990') AS OVER_AM	/*초과금액*/
+		     , NVL(SUM(t3.EXCCLC_AMOUNT), 0) AS SUM_AM
+		FROM BSRP_INDVDL  t1
+		LEFT OUTER JOIN TBHRM_BSRP_INDVDL t2
+		  ON t1.EMPNO = t2.EMPNO
+		LEFT OUTER JOIN (SELECT EMPNO
+		                       ,BSRP_SEQ
+		                       ,MAX(USE_DE)         AS USE_DE
+		                       ,SUM(NVL(USE_AM, 0)) AS EXCCLC_AMOUNT
+		                 FROM TBHRM_BTRPS_EXCCLC_MANAGE
+		                 WHERE SUBSTR(USE_DE, 0, 6) = #USE_YM#
+			                 AND EMPNO = #EMPNO#
+			                 AND BSRP_SEQ != #BSRP_SEQ#
+		                 GROUP BY EMPNO , BSRP_SEQ ) t3
+		ON  t2.EMPNO     = t3.EMPNO
+		AND t2.BSRP_SEQ  = t3.BSRP_SEQ
+		WHERE 1 =1
+		  AND (t2.WHTHRC_AT = '1'
+		   OR t2.ORDTM_SE   = '1')
+	</select>
+</sqlMap>

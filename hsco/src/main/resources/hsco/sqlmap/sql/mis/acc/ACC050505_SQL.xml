@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050505_SQL">	
+	
+	<!-- 선수금명세서조회-->
+	<select id="ACC050505DAO.advanceRecList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[	
+		WITH T_STACNT AS (	/*전기이월*/
+    		SELECT t1.ACCNUT_YEAR
+          		  ,t1.ACCNUT_ACNT_CODE
+          		  ,t1.BCNC_CODE
+          		  ,t1.ACCNUT_MT
+          		  ,'전기이월'      AS SUMRY
+          		  ,CASE WHEN t2.DBRT_SE = 'D' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0)
+                		WHEN t2.DBRT_SE = 'D' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0)
+                		WHEN t2.DBRT_SE = 'C' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0)
+                		WHEN t2.DBRT_SE = 'C' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0)
+                   		ELSE 0
+           		   END AS PRE_AMT
+          		  ,0 AS DR_AMT
+          		  ,0 AS CR_AMT
+          		  ,CASE WHEN t2.DBRT_SE = 'D' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0)
+               			WHEN t2.DBRT_SE = 'D' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0)
+                		WHEN t2.DBRT_SE = 'C' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0)
+                		WHEN t2.DBRT_SE = 'C' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0)
+                		ELSE 0
+           		   END AS JAN_AMT
+    		FROM TBACC_ACCNUT_STACNT t1
+        		LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+            	ON  t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+            	AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+    		WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+            AND t1.ACCNUT_MT = '00'
+            AND t1.ACCNUT_ACNT_CODE LIKE '21003%'
+            
+    		UNION ALL
+    		
+    		/* 수입,지출전표 */
+    		SELECT t1.ACCNUT_YEAR
+          		  ,t2.ACCNUT_ACNT_CODE
+          		  ,t2.BCNC_CODE
+          		  ,MAX(SUBSTR(t1.CHIT_DE,5,2)) AS ACCNUT_MT
+          		  ,MAX(t1.SUMRY_1)        AS SUMRY
+          		  ,0                      AS PRE_AMT
+          		  ,SUM(t2.DEBTOR_AMOUNT)  AS DR_AMT
+          		  ,SUM(t2.CRDIT_AMOUNT)   AS CR_AMT
+          		  ,NVL(SUM(CASE WHEN t3.DBRT_SE = 'D' AND NVL(t3.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t2.DEBTOR_AMOUNT,0) - NVL(t2.CRDIT_AMOUNT,0)
+                        WHEN t3.DBRT_SE = 'D' AND NVL(t3.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t2.CRDIT_AMOUNT,0) - NVL(t2.DEBTOR_AMOUNT,0)
+                        WHEN t3.DBRT_SE = 'C' AND NVL(t3.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t2.CRDIT_AMOUNT,0) - NVL(t2.DEBTOR_AMOUNT,0)
+                        WHEN t3.DBRT_SE = 'C' AND NVL(t3.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t2.DEBTOR_AMOUNT,0) - NVL(t2.CRDIT_AMOUNT,0)
+                        ELSE 0
+           		   END),0) AS JAN_AMT
+    		FROM TBACC_CHIT_MASTR t1
+        		INNER JOIN TBACC_CHIT_DETAIL t2
+            	ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+            	AND t1.CHIT_NO     = t2.CHIT_NO
+        		LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+            	ON  t2.ACCNUT_YEAR      = t3.ACCNUT_YEAR
+            	AND t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+    		WHERE SUBSTR(t1.CHIT_DE,1,6) BETWEEN SUBSTR(#YYYYMM#,1,4)||'01' AND #YYYYMM#
+    		AND t1.CHIT_SE IN ('1','2') /* 수입,지출전표 */
+    		AND t1.CHIT_CONFM_AT = '1'
+    		AND t2.ACCNUT_ACNT_CODE LIKE '21003%'
+    		GROUP BY t1.ACCNUT_YEAR, t2.ACCNUT_ACNT_CODE, t1.DECSN_NO, t2.BCNC_CODE
+    		
+    		UNION ALL
+    		
+    		/* 대체전표 */
+    		SELECT t2.ACCNUT_YEAR
+          		  ,t2.ACCNUT_ACNT_CODE
+          		  ,NVL(t2.BCNC_CODE,'-') AS BCNC_CODE
+          		  ,MAX(SUBSTR(t1.CHIT_DE,5,2)) AS ACCNUT_MT
+          		  ,MAX(t1.SUMRY_1)        AS SUMRY
+          		  ,0 AS PRE_AMT
+          		  ,NVL(SUM(t2.DEBTOR_AMOUNT),0)  AS DR_AMT
+          		  ,NVL(SUM(t2.CRDIT_AMOUNT),0)   AS CR_AMT
+          		  ,NVL(SUM(CASE WHEN t3.DBRT_SE = 'D' AND NVL(t3.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t2.DEBTOR_AMOUNT,0) - NVL(t2.CRDIT_AMOUNT,0)
+                        WHEN t3.DBRT_SE = 'D' AND NVL(t3.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t2.CRDIT_AMOUNT,0) - NVL(t2.DEBTOR_AMOUNT,0)
+                        WHEN t3.DBRT_SE = 'C' AND NVL(t3.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t2.CRDIT_AMOUNT,0) - NVL(t2.DEBTOR_AMOUNT,0)
+                        WHEN t3.DBRT_SE = 'C' AND NVL(t3.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t2.DEBTOR_AMOUNT,0) - NVL(t2.CRDIT_AMOUNT,0)
+                        ELSE 0
+           		   END),0) AS JAN_AMT
+    		FROM TBACC_CHIT_MASTR t1
+        		INNER JOIN TBACC_CHIT_DETAIL t2
+            	ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+           		AND t1.CHIT_NO     = t2.CHIT_NO
+        		LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+            	ON  t2.ACCNUT_YEAR      = t3.ACCNUT_YEAR
+            	AND t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+    		WHERE SUBSTR(t1.CHIT_DE,1,6) BETWEEN SUBSTR(#YYYYMM#,1,4)||'01' AND #YYYYMM#
+   		 	AND t2.ACCNUT_ACNT_CODE LIKE '21003%'
+    		AND t1.CHIT_SE = '3' /* 대체전표 */
+    		AND t1.CHIT_CONFM_AT = '1' /* 승인전표 */
+    		GROUP BY t1.CHIT_NO, t2.ACCNUT_YEAR, t2.ACCNUT_ACNT_CODE, t2.BCNC_CODE
+		)
+		SELECT t2.ACCNUT_ACNT_NM
+      		  ,t3.BCNC_NM
+      		  ,t1.SUMRY
+      		  ,t1.PRE_AMT
+      		  ,t1.DR_AMT
+      		  ,t1.CR_AMT
+      		  ,t1.JAN_AMT
+		FROM T_STACNT t1
+    		LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+        	ON  t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+        	AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+    		LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+        	ON  t1.BCNC_CODE = t3.BCNC_CODE
+		ORDER BY t1.ACCNUT_ACNT_CODE, t3.BCNC_NM ASC NULLS LAST, t1.ACCNUT_MT
+		]]>	 
+	</select>
+</sqlMap>

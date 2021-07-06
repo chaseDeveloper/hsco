@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FRM02020500SQL">	
+
+	<!-- 쿼리명 : 과오납결의 현황
+	설명 : 과오납결의 조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.02.01
+	-->
+	<select id="FRM02020500DAO.selectOverPayDecsn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		      SELECT
+                   a.ACCNUT_YEAR,	          /* 회계년도 */
+                   a.ENDW_INCME_DECSN_NO,	  /* 기금수입결의번호 */
+                   (SELECT INCME_SE
+                      FROM TBFRM_ENDW_INCME_DECSN
+                      WHERE ACCNUT_YEAR   = a.ACCNUT_YEAR
+                        AND ENDW_INCME_DECSN_NO  = a.ENDW_INCME_DECSN_NO)  INCME_SE,    /* 과오납구분 */
+                   a.OVERRPAY_DECSN_NO,	  /* 과오납결의번호 */
+                   a.DELNG_TY_CODE,	      /* 거래유형코드 */
+                  (SELECT DELNG_TY_NM
+                     FROM TBFRM_DELNG_TY_CODE z
+                     WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                       AND DELNG_TY_CODE = a.DELNG_TY_CODE) DELNG_TY_NM,
+                   a.DECSN_DE,	              /* 결의일자 */
+                   a.ITNC_DE,	              /* 발의일자 */
+                   a.ITNC_MAN_ID,	          /* 발의자ID */
+                   a.OVERRPAY_AMOUNT,	      /* 과오납금액 */
+                   a.ACNUTNO,	              /* 지출계좌번호 */
+                   '[ ' || a.ACNUTNO || ' / ' || b.DPSTR || ' ]' PAY_INFO,
+                   a.PRVONSH,                /* 사유 */
+                   a.INNER_SANCTN_NO,	      /* 내부결재번호 */
+                   nvl(a.SANCTN_STTUS,'00')  SANCTN_STTUS,  /* 결재상태(1:결재완료, 2:결재진행, 3:결재반려) */
+                   a.RETURN_BANK_CODE,	      /* 반환은행코드 */
+                   a.RETURN_ACNUTNO,	      /* 반환계좌번호 */
+                   a.RETURN_DPSTR,	          /* 반환예금주 */
+                   '[ ' || a.RETURN_ACNUTNO || ' / ' || a.RETURN_DPSTR || ' / ' ||
+                   (SELECT CODE_NM
+                      FROM TBFRM_ENDW_CMMN_CODE z
+                      WHERE GRP_CODE = 'COM021'
+                        AND CODE     = a.RETURN_BANK_CODE) || ' ]'  RETURN_INFO
+              FROM TBFRM_OVERRPAY_DECSN a,
+                   TBFRM_ENDW_ACNUT     b
+             WHERE a.ACCNUT_YEAR = #accuntYear#
+            <isNotEmpty property="ovrPayDecsnFrNo">
+               AND a.OVERRPAY_DECSN_NO between #ovrPayDecsnFrNo# and #ovrPayDecsnToNo#
+            </isNotEmpty>
+            <isNotEmpty property="ovrPayDecsnFrDE">
+               AND a.DECSN_DE between #ovrPayDecsnFrDE# and #ovrPayDecsnToDe#
+            </isNotEmpty>
+            <isNotEmpty property="inCmeSe">
+               AND EXISTS (SELECT 'X'
+                             FROM TBFRM_ENDW_INCME_DECSN z
+                             WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                               AND ENDW_INCME_DECSN_NO = a.ENDW_INCME_DECSN_NO
+                               AND INCME_SE = #inCmeSe#)
+            </isNotEmpty>
+            <isNotEmpty property="sancSe">
+               AND nvl(a.SANCTN_STTUS,'0') = #sancSe#
+            </isNotEmpty>
+               AND a.ACNUTNO = b.ACNUTNO(+)
+             ORDER BY a.ACCNUT_YEAR,
+                      a.ENDW_INCME_DECSN_NO,
+                      a.OVERRPAY_DECSN_NO
+             
+	</select>
+	
+	
+	<!--   전표기본조회 	-->
+    
+	<select id="FRM02020500DAO.selectFrmEndwChit" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT ACCNUT_YEAR,
+                 CHIT_NO,
+                 CHIT_DE,
+                 DSCN_AT,
+                 RM,
+                 ENDW_INCME_DECSN_NO,
+                 OVERRPAY_DECSN_NO
+            FROM TBFRM_ENDW_CHIT
+             WHERE ACCNUT_YEAR = #accuntYear#
+               AND ENDW_INCME_DECSN_NO = #endwInDecsnNo#
+               AND OVERRPAY_DECSN_NO   = #overrpayDecsnNo#
+	</select>
+	
+	<!--   전표기본상세 	-->
+	
+	<select id="FRM02020500DAO.selectFrmEndwChitDetail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		     SELECT ROWNUM SN,
+		            CHIT_NO,
+                    CHIT_SN,
+                    ACCNUT_YEAR,
+                    TRIM(DBRT_SE) DBRT_SE ,
+                    ACNT_CODE,
+                    (SELECT ACNTCTGR_NM
+                       FROM TBFRM_ENDW_ACNTCTGR z
+                       WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                         AND ACNT_CODE = a.ACNT_CODE ) ACNTCTGR_NM,
+                    DEBTOR_AMOUNT,
+                    CRDIT_AMOUNT,
+                    SUMRY
+               FROM TBFRM_ENDW_CHIT_DETAIL a
+               WHERE ACCNUT_YEAR = #accuntYear# 
+                 AND CHIT_NO = #chitNo#
+                order by CHIT_SN
+	</select>
+	
+</sqlMap>

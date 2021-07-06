@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="LAW010300_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!--사건목록조회 -->
+	<select id="LAW010300DAO.selectIncdntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+				SELECT
+				     A.LWST_MANAGE_NO    AS LWST_MANAGE_NO
+				    ,A.RCEPT_DE          AS RCEPT_DE
+				    ,A.ED_AT             AS ED_AT
+				    ,A.INCDNT_SE         AS INCDNT_SE
+				    ,D.LWST_TY           AS LWST_TY
+				    ,A.BSNS_CODE         AS BSNS_CODE
+				    ,(SELECT BSNS_NM 
+						FROM TBPRJ_BSNS_CODE Z 
+					   WHERE Z.BSNS_CODE=A.BSNS_CODE) AS BSNS_NM
+				    ,A.CHRG_DEPT         AS CHRG_DEPT
+				    ,SFSAL_GETDEPTNM_01(A.CHRG_DEPT) AS CHRG_DEPT_NM
+				    ,A.CHARGER           AS CHARGER
+				    ,SFSAL_GETEMPNO_01(A.CHARGER) AS CHARGER_NM
+				    ,D.PARTN             AS PARTN
+				    ,A.INCDNT_NM         AS INCDNT_NM
+				    ,A.INCDNT_SUMRY      AS INCDNT_SUMRY
+				    ,A.END_DE            AS END_DE /* 사건종결일 */
+				    ,A.REGISTER_ID       AS REGISTER_ID
+				    ,A.REGIST_DT         AS REGIST_DT
+				    ,A.UPDUSR_ID         AS UPDUSR_ID
+				    ,A.UPDT_DT           AS UPDT_DT
+				FROM TBLAW_INCDNT A
+				     LEFT OUTER JOIN
+				     (SELECT 
+				           LWST_MANAGE_NO
+				          ,INCDNT_NO
+				          ,LWST_TY
+				          ,PARTN
+				          ,ROW_NUMBER() OVER(PARTITION BY LWST_MANAGE_NO ORDER BY DELVY_DE DESC) AS RN
+				      FROM TBLAW_HDCH_REGIST
+				     ) D
+				     ON  A.LWST_MANAGE_NO = D.LWST_MANAGE_NO
+				     AND D.RN = 1
+				WHERE 1=1
+			 ]]>
+			<isNotEmpty property="BGN_DE">
+				<![CDATA[
+				   AND A.RCEPT_DE >= #BGN_DE#
+				   AND A.RCEPT_DE <= #END_DE#
+				]]>
+			</isNotEmpty>
+				<isNotEmpty property="ED_AT">
+				   AND A.ED_AT = #ED_AT#
+				</isNotEmpty>
+				<isNotEmpty property="INCDNT_SE">
+				   AND A.INCDNT_SE = #INCDNT_SE#
+				</isNotEmpty>
+				<isNotEmpty property="LWST_TY">
+				   AND D.LWST_TY = #LWST_TY#
+				</isNotEmpty>
+				<isNotEmpty property="LAND_CODE">
+				   AND A.BSNS_CODE = #LAND_CODE#
+				</isNotEmpty>
+				<isNotEmpty property="DEPT_CODE">
+					<isNotEqual property="DEPT_CODE" compareValue="000000">
+					AND A.CHRG_DEPT = #DEPT_CODE#
+					</isNotEqual>
+				</isNotEmpty>
+				<isNotEmpty property="INCDNT_NM">
+				   AND A.INCDNT_NM LIKE '%' || #INCDNT_NM# || '%'
+				</isNotEmpty>
+				<isNotEmpty property="PARTN">
+				   AND D.PARTN LIKE '%' || #PARTN# || '%'
+				</isNotEmpty>
+				<isNotEmpty property="ED_AT">
+				   AND A.ED_AT = #ED_AT#
+				</isNotEmpty>
+				<isNotEmpty property="INCDNT_NO">
+				   AND D.INCDNT_NO LIKE '%' || #INCDNT_NO# || '%'
+				</isNotEmpty>
+		 <![CDATA[
+		   ORDER BY A.RCEPT_DE DESC 
+			 ]]>
+	</select>
+
+	<!--사건목록 등록 -->
+	<insert id="LAW010300DAO.incdntListC" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			INSERT INTO TBLAW_INCDNT (
+					 LWST_MANAGE_NO
+					,RCEPT_DE
+					,ED_AT
+					,INCDNT_SE
+					,LWST_TY
+					,BSNS_CODE
+					,CHRG_DEPT
+					,CHARGER
+					,PARTN
+					,INCDNT_NM
+					,INCDNT_SUMRY
+					,END_DE
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+				)VALUES(
+					(SELECT NVL(MAX(LWST_MANAGE_NO), TO_CHAR(SUBSTR(#RCEPT_DE#,0,4))||#INCDNT_SE#||'000') +1
+					 FROM   TBLAW_INCDNT
+					 WHERE  SUBSTR(LWST_MANAGE_NO,0,6) = SUBSTR(#RCEPT_DE#,0,4)||#INCDNT_SE#
+					)
+					,#RCEPT_DE#
+					,NULL
+					,#INCDNT_SE#
+					,#LWST_TY#
+					,#BSNS_CODE#
+					,#CHRG_DEPT#
+					,#CHARGER#
+					,#PARTN#
+					,#INCDNT_NM#
+					,#INCDNT_SUMRY#
+					,#END_DE#
+					,#S_USER_ID#
+					,SYSDATE
+					,#S_USER_ID#
+					,SYSDATE
+				)
+		]]>
+	</insert>
+
+	<!--사무실목록 수정-->
+	<update id="LAW010300DAO.incdntListU" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			UPDATE TBLAW_INCDNT SET 
+					 INCDNT_SE       = #INCDNT_SE#
+					,LWST_TY         = #LWST_TY#
+					,BSNS_CODE       = #BSNS_CODE#
+					,CHRG_DEPT       = #CHRG_DEPT#
+					,CHARGER         = #CHARGER#
+					,PARTN           = #PARTN#
+					,INCDNT_NM       = #INCDNT_NM#
+					,INCDNT_SUMRY    = #INCDNT_SUMRY#
+					,END_DE          = #END_DE#
+					,UPDUSR_ID       = #S_USER_ID#
+					,UPDT_DT         = SYSDATE
+		 WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+		]]>
+	</update>
+
+	<!--사건 목록 삭제-->
+	<delete id="LAW010300DAO.incdntListD" parameterClass="java.util.HashMap" >
+	<![CDATA[
+		DECLARE
+		BEGIN
+		
+			/* 공탁금 */
+			DELETE FROM TBLAW_LWST_JUDMN_AMOUNT
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+			
+			/* 소송비용 */
+			DELETE FROM TBLAW_LWST_FX
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+			
+			/* 소송일정 */
+			DELETE FROM TBLAW_LWST_CT
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+			
+			/* 판결금 */
+			DELETE FROM TBLAW_LWST_LDGMNT_AMOUNT
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+			
+			/* 소송대리인 */
+			DELETE FROM TBLAW_LWST_AGENT
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+			
+			/* 소송자료 */
+			DELETE FROM TBLAW_LWST_DTA
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+
+			/* 변호사비용 */
+			DELETE FROM TBLAW_LAWYER_CT
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+
+			/* 소제기 */
+			DELETE FROM TBLAW_SMALL_LDGG_REQEST
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+			
+			/* 소장 */
+			DELETE FROM TBLAW_HDCH_REGIST
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+			
+			/* 소송 */
+			DELETE FROM TBLAW_LWST
+			WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			;
+			
+			/* 사건 */
+			DELETE FROM TBLAW_INCDNT
+		 	WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO#
+		 	;
+		END;
+	]]>
+	</delete>
+</sqlMap>

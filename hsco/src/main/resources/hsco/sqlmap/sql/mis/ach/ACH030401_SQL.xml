@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH030401_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+    <!-- 현재 평가차수정보 조회 -->
+	<select id="ACH030401DAO.selectCurOdr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  A.CUR_EVL_YEAR 	AS CUR_EVL_YEAR
+		       ,A.CUR_ODR_SE 	AS CUR_ODR_SE
+		       ,SFACH_GET_EVLODRNM(B.EVL_CYCLE, A.CUR_ODR_SE) AS CUR_ODR_SE_NM
+		       ,C.CLOS_AT 		AS CLOS_AT
+		       ,B.EVL_CYCLE 	AS EVL_CYCLE
+		  FROM TBACH_SETUP A, TBACH_EVL_CYCLE B, TBACH_CLOS C
+		  WHERE 1=1
+		    AND A.CUR_EVL_YEAR = B.EVL_YEAR
+	        AND A.CUR_EVL_YEAR = C.EVL_YEAR(+)
+	        AND A.CUR_ODR_SE = C.ODR_SE(+)
+    </select>     
+    
+    <!-- 마감목록 조회 -->
+	<select id="ACH030401DAO.selectOdrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  A.EVL_YEAR 			AS EVL_YEAR
+		       ,A.ODR_SE 			AS ODR_SE
+		       ,SFACH_GET_EVLODRNM(B.EVL_CYCLE, A.ODR_SE) AS ODR_SE_NM
+		       ,B.EVL_CYCLE 		AS EVL_CYCLE
+		       ,DECODE(NVL(C.CUR_EVL_YEAR,'0'), '0', '0', '1') AS CURRENT_AT
+		       ,D.CLOS_AT
+		       ,D.CLOS_DE                 
+		  FROM TBACH_EVL_ODR A,  TBACH_EVL_CYCLE B, TBACH_SETUP C, TBACH_CLOS D
+		 WHERE 1=1 
+		   AND A.EVL_YEAR = B.EVL_YEAR
+		   AND A.EVL_YEAR = C.CUR_EVL_YEAR(+)  
+		   AND A.ODR_SE = C.CUR_ODR_SE(+)
+		   AND A.EVL_YEAR = D.EVL_YEAR(+)
+		   AND A.ODR_SE = D.ODR_SE(+)
+		ORDER BY A.EVL_YEAR DESC, TO_NUMBER(A.ODR_SE)
+    </select>      
+    
+     <!-- 마감여부 변경 -->
+    <update id="ACH030401DAO.mainCU" parameterClass="java.util.HashMap" >    
+		MERGE INTO TBACH_CLOS
+		USING DUAL ON (  
+		                  EVL_YEAR 	= #EVL_YEAR#
+		              AND ODR_SE 	= #ODR_SE#
+		              )
+		WHEN MATCHED THEN
+		    UPDATE SET 
+		               CLOS_AT 	 = #CLOS_AT#
+		              ,CLOS_DE   = #CLOS_DE#
+		              ,UPDUSR_ID = #S_USER_ID#
+		              ,UPDT_DT 	 = SYSDATE
+		WHEN NOT MATCHED THEN
+		    INSERT (
+		          EVL_YEAR
+		        , ODR_SE
+		        , CLOS_AT
+		        , CLOS_DE
+		        , REGISTER_ID
+		        , REGIST_DT
+		        , UPDUSR_ID
+		        , UPDT_DT	
+		        )
+		    VALUES	(
+		          #EVL_YEAR#
+		        , #ODR_SE#
+		        , #CLOS_AT#
+		        , #CLOS_DE#
+		        , #S_USER_ID#
+		        , SYSDATE
+		        , #S_USER_ID#
+		        , SYSDATE
+		    )					
+    </update>
+    
+     <!-- 마감여부 삭제 -->
+    <delete id="ACH030401DAO.mainD" parameterClass="java.util.HashMap" >    
+		DELETE 
+		  FROM TBACH_CLOS
+		 WHERE 1=1
+           AND EVL_YEAR = #EVL_YEAR#
+           AND ODR_SE 	= #ODR_SE#
+    </delete>
+
+    <!-- 집계목록 조회 -->
+	<select id="ACH030401DAO.selectSmScoreList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		       EVL_YEAR
+		      ,ODR_SE
+		      ,SEQ
+		      ,APPLC_AT
+		      ,REGIST_DT
+		 FROM TBACH_EVL_SM_STDR
+		WHERE 1=1
+		  AND EVL_YEAR = #EVL_YEAR#
+		  AND ODR_SE = #ODR_SE#
+		ORDER BY SEQ
+    </select>    
+    
+    <!-- 집계처리 순번조회 -->
+	<select id="ACH030401DAO.selectSmSeq" parameterClass="java.util.HashMap" resultClass="java.lang.Integer">
+		 SELECT NVL(MAX(SEQ),0) + 1 AS SEQ
+	       FROM TBACH_EVL_SM_STDR
+	      WHERE 1=1
+	        AND EVL_YEAR = #EVL_YEAR#
+	        AND ODR_SE = #ODR_SE#
+    </select>      
+    
+    <!-- 집계목록 생성 -->
+    <insert id="ACH030401DAO.insertOrgnztLastRankSm" parameterClass="java.util.HashMap" >    
+		INSERT INTO TBACH_EVL_SM_STDR
+		(
+		     EVL_YEAR
+		    ,ODR_SE
+		    ,SEQ
+		    ,APPLC_AT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES
+		(
+		     #EVL_YEAR#
+		    ,#ODR_SE#
+		    ,#SEQ#
+		    ,'0'
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE 
+		)
+    </insert>
+    
+    <!-- 적용여부 변경 -->
+    <update id="ACH030401DAO.dtlU" parameterClass="java.util.HashMap" >    
+		UPDATE TBACH_EVL_SM_STDR
+		   SET APPLC_AT  = #APPLC_AT#
+              ,UPDUSR_ID = #S_USER_ID#
+              ,UPDT_DT 	 = SYSDATE
+		 WHERE 1=1
+           AND EVL_YEAR = #EVL_YEAR#
+           AND ODR_SE 	= #ODR_SE#
+           AND SEQ      = #SEQ#
+    </update>
+    
+    <!-- 집계목록 삭제 -->
+    <delete id="ACH030401DAO.deleteOrgnztLastRankSm" parameterClass="java.util.HashMap" >    
+		DELETE 
+		  FROM TBACH_EVL_SM_STDR
+		 WHERE EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE   = #ODR_SE#
+		   AND SEQ = #SEQ#
+    </delete>
+    
+    <!-- 집계상세내역 조회 -->
+	<select id="ACH030401DAO.selectSmScoreDtlList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT * 
+		  FROM 
+		       (
+		       SELECT A.EVL_YEAR
+		              ,A.ODR_SE
+		              ,A.MT
+		              ,A.ORGNZT_CODE
+		              ,SFACH_GET_ORGNZTNM(A.EVL_YEAR, A.ODR_SE, A.ORGNZT_CODE) AS ORGNZT_NM
+		              ,NVL(B.EVL_SCORE,0)                                      AS M_ACMSLTVAL_RT
+		         FROM (SELECT A.EVL_YEAR
+		                    , A.ODR_SE
+		                    , B.MT
+		                    , A.ORGNZT_CODE
+		                    , SFACH_GET_ORGNZTNM(A.EVL_YEAR, A.ODR_SE, A.ORGNZT_CODE) AS ORGNZT_NM
+		               FROM TBACH_EVL_TRGET_ORGNZT A
+		                 , (SELECT TO_CHAR(LEVEL) AS MT FROM DUAL CONNECT BY LEVEL <![CDATA[<=]]> 12) B
+		              ) A
+		         LEFT OUTER JOIN 
+		                         (SELECT A.EVL_YEAR       AS EVL_YEAR ,
+		                                 A.ODR_SE         AS ODR_SE ,
+		                                 A.MT_SE          AS MT ,
+		                                 A.ORGNZT_CODE    AS ORGNZT_CODE ,
+		                                 SUM(A.EVL_SCORE) AS EVL_SCORE
+		                          FROM TBACH_EVL_SM_DETAIL A
+		                          WHERE 1=1 
+		                            AND A.EVL_YEAR = #EVL_YEAR#
+		                            AND A.ODR_SE = #ODR_SE#
+		                            AND A.SEQ = #SEQ#
+		                            AND A.MT_SE IS NOT NULL
+		                          GROUP BY A.EVL_YEAR , A.ODR_SE , A.MT_SE , A.ORGNZT_CODE
+		                          HAVING A.ORGNZT_CODE <![CDATA[<>]]> '000000'
+		                         ) B
+		                  ON A.EVL_YEAR = B.EVL_YEAR
+		                  AND A.ODR_SE = B.ODR_SE
+		                  AND A.MT = B.MT
+		                  AND A.ORGNZT_CODE = B.ORGNZT_CODE
+		         WHERE 1=1
+		         AND A.EVL_YEAR = #EVL_YEAR#
+		         AND A.ODR_SE = #ODR_SE#
+		       ) PIVOT ( MAX(M_ACMSLTVAL_RT) AS RT FOR MT IN (1 AS M1,2 AS M2,3 AS M3,4 AS M4,5 AS M5,6 AS M6,7 AS M7,8 AS M8,9 AS M9,10 AS M10,11 AS M11,12 AS M12) ) 
+		ORDER BY TO_NUMBER(ORGNZT_CODE)
+    </select>
+    
+    <!-- 집계상세내역 생성 -->
+    <insert id="ACH030401DAO.insertOrgnztLastRankDtls" parameterClass="java.util.HashMap" >    
+		INSERT INTO TBACH_EVL_SM_DETAIL
+		(
+		        EVL_YEAR
+		      , ODR_SE
+		      , SEQ
+		      , V_IX_CODE
+		      , S_IX_CODE
+		      , C_IX_CODE
+		      , IX_CODE
+		      , ACMSLT_VALUE_MANAGE_MTHD
+		      , IX_CHARCT
+		      , ORGNZT_CODE
+		      , MT_SE
+		      , MT_GOALVAL
+		      , MT_ACMSLTVAL
+		      , MT_ACMSLTVAL_RT
+		      , EVL_WGHTVAL
+		      , EVL_SCORE
+		      , ACMTL_GOAL
+		      , ACMTL_ACMSLT
+		      , ACMTL_ACMSLTVAL_RT
+		      , ACMTL_SCORE
+		      , EVL_GROUP_SE
+		      , REGISTER_ID
+		      , REGIST_DT
+		      , UPDUSR_ID
+		      , UPDT_DT
+		)
+		SELECT  EVL_YEAR
+		      , ODR_SE
+		      , #SEQ#
+		      , V_IX_CODE
+		      , S_IX_CODE
+		      , C_IX_CODE
+		      , IX_CODE
+		      , ACMSLT_VALUE_MANAGE_MTHD
+		      , IX_CHARCT
+		      , ORGNZT_CODE
+		      , MT_SE
+		      , MT_GOALVAL
+		      , MT_ACMSLTVAL
+		      , MT_ACMSLTVAL_RT
+		      , EVL_WGHTVAL
+		      , EVL_SCORE
+		      , ACMTL_GOAL
+		      , ACMTL_ACMSLT
+		      , ACMTL_ACMSLTVAL_RT
+		      , ACMTL_SCORE
+		      , EVL_GROUP_SE
+		      , #S_USER_ID#
+		      , SYSDATE
+		      , #S_USER_ID#
+		      , SYSDATE              
+		 FROM VIACH_EVL_SCORE_KPI_ORG_MT
+		 WHERE EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE   = #ODR_SE#
+    </insert>
+    
+    <!-- 집계상세내역 삭제 -->
+    <delete id="ACH030401DAO.deleteOrgnztLastRankDtls" parameterClass="java.util.HashMap" >    
+		DELETE 
+		  FROM TBACH_EVL_SM_DETAIL
+		 WHERE EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE   = #ODR_SE#
+		   AND SEQ = #SEQ#
+    </delete>
+
+</sqlMap>

@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02020300_SQL">	
+   <!--  설명  : 소유물건등록(대기자)
+		작성자 : 지효정 -->
+
+	<!-- 입주대기자목록 -->
+	<select id="RNT02020300DAO.puchasWaitrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02020300DAO.puchasWaitrList[입주대기자목록] */
+		WITH TMP AS (
+			SELECT /*+ MATERIALIZE */
+				   FA.AREA_CODE, FA.RCEPT_DE, FA.WAIT_RCEPT_SN
+			  FROM TBRNT_PUCHAS_FAMILY_MATTER FA
+			 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR FB
+				ON FA.PUCHAS_CSTMR_NO = FB.PUCHAS_CSTMR_NO
+			 WHERE 1 = 1
+		<isNotEmpty property="nm">
+			   AND FB.NM LIKE '%' || #nm# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="ihidnum">
+			   AND FB.IHIDNUM = SFCOM_ENC_ALL(#ihidnum#)
+		</isNotEmpty>
+		)
+		SELECT A.AREA_CODE,												/* 지역코드 */
+			   (
+				SELECT CODE_NM
+				 FROM TBCOM_CMMN_CODE  
+				WHERE GRP_CODE = 'RNT004' 
+				  AND CHRCTR_PREPAR_VALUE_0 = A.AREA_CODE 
+			   ) AS AREA_NM,											/* 지역명 */
+			   A.RCEPT_DE,												/* 접수일자 */
+			   A.WAIT_RCEPT_SN,											/* 접수일련번호 */
+			   A.PUCHAS_CSTMR_NO,										/* 영구고객번호 */
+			   A.FAMILY_CO,												/* 가족수 */
+			   A.QUALF_SE,												/* 자격구분 */
+			   A.ROOM_STRUCTURE,										/* 방구조 */
+			   A.GDCC_SNDNG_DE,											/* 안내문발송일자 */
+			   A.CNTRCTR_NO,											/* 계약자번호 */
+			   A.RM,													/* 비고 */
+			   A.WAIT_NO,												/* 대기번호 */
+			   A.EXAMIN_ID,												/* 조사ID */
+			   A.ALLOT,													/* 배점 */
+			   NVL(A.HOUSE_POSESN_AT, '0') AS HOUSE_POSESN_AT,			/* 주택소유여부 */
+			   DECODE(A.HOUSE_POSESN_AT, '1', '유', '무') AS HOUSE_POSESN_AT_NM,		/* 주택소유여부명 */
+			   B.NM,													/* 고객명 */
+			   SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM,						/* 고객주민번호 */
+			   B.ZIP,													/* 고객우편번호 */
+			   B.ADRES,													/* 고객주소 */
+			   B.ADRES_DETAIL,											/* 고객상세주소 */
+			   B.TELNO,													/* 고객전화번호 */
+			   B.MBTLNO,												/* 고객휴대전화번호 */
+			   B.EMAIL,													/* 고객이메일 */
+			   A.RCEPT_SEQ												/* 접수순번 */
+		  FROM TBRNT_PUCHAS_WAITR A
+		 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR B
+			ON B.PUCHAS_CSTMR_NO = A.PUCHAS_CSTMR_NO
+		 WHERE A.CNTRCTR_NO IS NULL
+		   AND SUBSTR(A.RCEPT_DE, 0, 4) BETWEEN #stRceptYr# AND #edRceptYr#		/* 조건 : 접수년도 */
+		<isNotEmpty property="areaCode">
+		   AND A.AREA_CODE = #areaCode#											/* 조건 : 지역코드 */
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+		   AND (   B.NM LIKE '%' || #nm# || '%'									/* 조건 : 대기자명, 세대원명 */
+				OR (A.AREA_CODE, A.RCEPT_DE, A.WAIT_RCEPT_SN) IN (SELECT * FROM TMP)
+			   )
+		</isNotEmpty>
+		<isNotEmpty property="ihidnum">
+		   AND (   B.IHIDNUM = SFCOM_ENC_ALL(#ihidnum#)							/* 조건 : 대기자, 세대원 주민번호 */
+				OR (A.AREA_CODE, A.RCEPT_DE, A.WAIT_RCEPT_SN) IN (SELECT * FROM TMP)
+			   )
+		</isNotEmpty>
+		<isEqual property="sndngSe" compareValue="0">
+		   AND A.GDCC_SNDNG_DE IS NULL											/* 조건 : 발송구분 */
+		</isEqual>
+		<isEqual property="sndngSe" compareValue="1">
+		   AND A.GDCC_SNDNG_DE IS NOT NULL										/* 조건 : 발송구분 */
+		</isEqual>
+		<isEqual property="anact1" compareValue="1">
+		   AND EXISTS(
+					SELECT 1
+					  FROM TBRNT_PUCHAS_POSESN_THING P
+					 WHERE P.AREA_CODE = A.AREA_CODE
+					   AND P.RCEPT_DE  = A.RCEPT_DE
+					   AND P.WAIT_RCEPT_SN = A.WAIT_RCEPT_SN
+					   AND P.CNTRCTR_NO IS NULL
+			   )
+		</isEqual>
+		 ORDER BY A.AREA_CODE, A.ROOM_STRUCTURE, A.WAIT_NO
+	</select>
+
+
+	<!-- 소유물건정보목록 -->
+	<select id="RNT02020300DAO.puchasPosesnThingList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02020300DAO.puchasPosesnThingList[소유물건정보목록] */
+		SELECT A.WAITR_CNTRCTR_SE,						/* 대기자계약자구분 : 01:대기자, 02:계약자 */
+			   A.SN,									/* 일련번호 */
+			   A.INQIRE_DE,								/* 조회일자 */
+			   A.PUCHAS_CSTMR_NO,						/* 매입임대고객 */
+			   A.FAMILY_RELATE,							/* 가족관계 */
+			   A.AR,									/* 면적 */
+			   A.ACQS_DE,								/* 취득일자 */
+			   A.TRNSFR_DE,								/* 양도일자 */
+			   A.PRPOS,									/* 용도 */
+			   A.EXPLN_SE,								/* 소명구분 */
+			   A.PRESENTN_DE,							/* 제출일자 */
+			   A.EXPLN_DTLS,							/* 소명내역 */
+			   A.RM,									/* 비고 */
+			   A.REFER,									/* 참고 */
+			   A.CNTRCTR_NO,							/* 계약자번호 */
+			   A.ADRES,									/* 주소 */
+			   A.FILE_SN,								/* 파일순번 */
+			   A.AREA_CODE,								/* 지역코드 */
+			   A.RCEPT_DE,								/* 접수일자 */
+			   A.WAIT_RCEPT_SN,							/* 대기접수순번 */
+			   B.NM,									/* 이름 */
+			   SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM		/* 주민번호 */
+		  FROM TBRNT_PUCHAS_POSESN_THING A
+		 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR B
+			ON B.PUCHAS_CSTMR_NO = A.PUCHAS_CSTMR_NO
+		 WHERE A.CNTRCTR_NO IS NULL
+		   AND A.AREA_CODE = #AREA_CODE#
+		   AND A.RCEPT_DE  = #RCEPT_DE#
+		   AND A.WAIT_RCEPT_SN = #WAIT_RCEPT_SN#
+	</select>
+
+
+	<!-- 소유물건정보 생성 -->
+	<insert id="RNT02020300DAO.puchasPosesnThingC" parameterClass="java.util.HashMap">
+		/* RNT02020300DAO.puchasPosesnThingC[소유물건정보 생성] */
+		INSERT INTO TBRNT_PUCHAS_POSESN_THING (
+			   WAITR_CNTRCTR_SE,					/* 대기자계약자구분 : 01:대기자, 02:계약자 */
+			   SN,									/* 일련번호 */
+			   INQIRE_DE,							/* 조회일자 */
+			   PUCHAS_CSTMR_NO,						/* 매입고객번호 */
+			   FAMILY_RELATE,						/* 가족관계 */
+			   AR,									/* 면적 */
+			   ACQS_DE,								/* 취득일자 */
+			   TRNSFR_DE,							/* 양도일자 */
+			   PRPOS,								/* 용도 */
+			   EXPLN_SE,							/* 소명구분 */
+			   PRESENTN_DE,							/* 제출일자 */
+			   EXPLN_DTLS,							/* 소명내역 */
+			   RM,									/* 비고 */
+			   REFER,								/* 참고 */
+			   CNTRCTR_NO,							/* 계약자번호 */
+			   AREA_CODE,							/* 지역코드 */
+			   RCEPT_DE,							/* 접수일자 */
+			   WAIT_RCEPT_SN,						/* 대기접수일련번호 */
+			   ADRES,								/* 주소 */
+			   FILE_SN,								/* 파일순번 */
+			   REGISTER_ID,							/* 등록자ID */
+			   REGIST_DT,							/* 등록일시 */
+			   UPDUSR_ID,							/* 수정자ID */
+			   UPDT_DT								/* 수정일시 */
+		)
+		VALUES(
+			   '01',								/* 대기자계약자구분 : 01:대기자, 02:계약자 */
+			   (SELECT NVL(MAX(SN), 0) + 1
+				  FROM TBRNT_PUCHAS_POSESN_THING
+				 WHERE WAITR_CNTRCTR_SE = '01'),	/* 일련번호 */
+			   #INQIRE_DE#,							/* 조회일자 */
+			   #PUCHAS_CSTMR_NO#,					/* 매입고객번호 */
+			   #FAMILY_RELATE#,						/* 가족관계 */
+			   #AR#,								/* 면적 */
+			   #ACQS_DE#,							/* 취득일자 */
+			   #TRNSFR_DE#,							/* 양도일자 */
+			   #PRPOS#,								/* 용도 */
+			   #EXPLN_SE#,							/* 소명구분 */
+			   #PRESENTN_DE#,						/* 제출일자 */
+			   #EXPLN_DTLS#,						/* 소명내역 */
+			   #RM#,								/* 비고 */
+			   #REFER#,								/* 참고 */
+			   #CNTRCTR_NO#,						/* 계약자번호 */
+			   #AREA_CODE#,							/* 지역코드 */
+			   #RCEPT_DE#,							/* 접수일자 */
+			   #WAIT_RCEPT_SN#,						/* 대기접수일련번호 */
+			   #ADRES#,								/* 주소 */
+			   #FILE_SN#,							/* 파일순번 */
+			   #S_USER_ID#,							/* 등록자ID */
+			   SYSDATE,								/* 등록일시 */
+			   #S_USER_ID#,							/* 수정자ID */
+			   SYSDATE								/* 수정일시 */
+		)
+	</insert>
+
+
+	<!-- 소유물건정보 수정 -->
+	<update id="RNT02020300DAO.puchasPosesnThingU" parameterClass="java.util.HashMap">
+		/* RNT02020300DAO.puchasPosesnThingU[소유물건정보 수정] */
+		UPDATE TBRNT_PUCHAS_POSESN_THING SET
+			   INQIRE_DE		= #INQIRE_DE#,			/* 조회일자 */
+			   PUCHAS_CSTMR_NO	= #PUCHAS_CSTMR_NO#,	/* 매입고객번호 */
+			   FAMILY_RELATE	= #FAMILY_RELATE#,		/* 가족관계 */
+			   AR				= #AR#,					/* 면적 */
+			   ACQS_DE			= #ACQS_DE#,			/* 취득일자 */
+			   TRNSFR_DE		= #TRNSFR_DE#,			/* 양도일자 */
+			   PRPOS			= #PRPOS#,				/* 용도 */
+			   EXPLN_SE			= #EXPLN_SE#,			/* 소명구분 */
+			   PRESENTN_DE		= #PRESENTN_DE#,		/* 제출일자 */
+			   EXPLN_DTLS		= #EXPLN_DTLS#,			/* 소명내역 */
+			   RM				= #RM#,					/* 비고 */
+			   REFER			= #REFER#,				/* 참고 */
+			   CNTRCTR_NO		= #CNTRCTR_NO#,			/* 계약자번호 */
+			   AREA_CODE		= #AREA_CODE#,			/* 지역코드 */
+			   RCEPT_DE			= #RCEPT_DE#,			/* 접수일자 */
+			   WAIT_RCEPT_SN	= #WAIT_RCEPT_SN#,		/* 대기접수일련번호 */
+			   ADRES			= #ADRES#,				/* 소유물건주소 */
+			   UPDUSR_ID		= #S_USER_ID#,
+			   UPDT_DT			= SYSDATE
+		  WHERE WAITR_CNTRCTR_SE= #WAITR_CNTRCTR_SE#
+		    AND SN				= #SN#
+	</update>
+
+
+	<!-- 소유물건정보 삭제 -->
+	<delete id="RNT02020300DAO.puchasPosesnThingD" parameterClass="java.util.HashMap">
+		/* RNT02020300DAO.puchasPosesnThingD[소유물건정보 삭제] */
+		DELETE FROM TBRNT_PUCHAS_POSESN_THING
+		 WHERE WAITR_CNTRCTR_SE	= #WAITR_CNTRCTR_SE#
+		   AND SN 				= #SN#
+	</delete>
+
+
+	<!-- 소유물건정보 수정(주태소유 유무) 0:무, 1:유 -->
+	<update id="RNT02020300DAO.housePosesnAtU" parameterClass="java.util.HashMap">
+		/* RNT02020300DAO.housePosesnAtU[소유물건정보 수정(주태소유 유무) 0:무, 1:유] */
+		UPDATE TBRNT_PUCHAS_WAITR A 
+		   SET HOUSE_POSESN_AT	= (
+								SELECT NVL(MAX(CHRCTR_PREPAR_VALUE_0), '0')
+								  FROM TBRNT_PUCHAS_POSESN_THING V1
+								 INNER JOIN TBCOM_CMMN_CODE V2
+									ON V2.CODE			= NVL(V1.EXPLN_SE, '02') 
+								   AND V2.GRP_CODE		= 'RNT013'
+								 WHERE V1.AREA_CODE		= A.AREA_CODE
+								   AND V1.RCEPT_DE		= A.RCEPT_DE
+								   AND V1.WAIT_RCEPT_SN	= A.WAIT_RCEPT_SN
+								 ),
+			   UPDT_DT			= SYSDATE,
+			   UPDUSR_ID		= #S_USER_ID#
+		 WHERE A.AREA_CODE		= #AREA_CODE#
+		   AND A.RCEPT_DE		= #RCEPT_DE#
+		   AND A.WAIT_RCEPT_SN	= #WAIT_RCEPT_SN#
+	</update>
+
+
+	<!-- 소유물건정보 등록 대상자 체크 -->
+	<select id="RNT02020300DAO.puchasPosesnThingChk" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		/* RNT02020300DAO.puchasPosesnThingChk[소유물건정보 등록 대상자 체크 : 대기자 및 대기자 세대원] */
+		SELECT DECODE(COUNT(0), 0, '소유자미등록', 1, '정상', '소유자중복') AS CHKVAL
+		  FROM (
+				SELECT B.PUCHAS_CSTMR_NO
+				  FROM TBRNT_PUCHAS_WAITR A
+				 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR B
+					ON B.PUCHAS_CSTMR_NO = A.PUCHAS_CSTMR_NO
+				 WHERE A.CNTRCTR_NO IS NULL					/* 계약자제외 */
+				   AND TRIM(B.NM) = TRIM(#NM#)
+				   AND SUBSTR(SFCOM_DEC_ALL(B.IHIDNUM) , 1 , 6) = SUBSTR(#IHIDNUM# , 1, 6)
+				 UNION ALL
+				SELECT C.PUCHAS_CSTMR_NO
+				  FROM TBRNT_PUCHAS_WAITR A
+				 INNER JOIN TBRNT_PUCHAS_FAMILY_MATTER B
+					ON B.AREA_CODE = A.AREA_CODE
+				   AND B.RCEPT_DE = A.RCEPT_DE
+				   AND B.WAIT_RCEPT_SN = A.WAIT_RCEPT_SN
+				 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR C
+					ON C.PUCHAS_CSTMR_NO = B.PUCHAS_CSTMR_NO
+				 WHERE A.CNTRCTR_NO IS NULL					/* 계약자제외 */
+				   AND TRIM(C.NM) = TRIM(#NM#)
+				   AND SUBSTR(SFCOM_DEC_ALL(C.IHIDNUM) , 1 , 6) = SUBSTR(#IHIDNUM# , 1, 6)
+		   )
+	</select>
+
+
+	<!-- 설명  : 소유물건 일괄등록 프로시저 -->
+	<parameterMap id="sp_rn_puchas_posesn_thing_param" class="java.util.HashMap">
+		<parameter property="NM"     			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IHIDNUM"  			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="PRPOS"  			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="AR"  				jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="ADRES" 			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="ACQS_DE" 			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="TRNSFR_DE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="INQIRE_DE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="S_USER_ID"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="OUT_RESULT_CD"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"	jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+	</parameterMap>
+	<procedure id="RNT02020300DAO.SPRNT_PUCHAS_POSESN_I" parameterMap="sp_rn_puchas_posesn_thing_param">
+		<!-- CNTRCTR_SE : 대기자/계약자구분( 대기자 : 01 / 계약자 : 02) -->
+		{ call SPRNT_PUCHAS_POSESN_I('01', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+	</procedure>
+
+
+	<!-- 소유물건 정보 첨부파일 등록시 파일일련번호 업데이트 -->
+	<insert id="RNT02020300DAO.atchCUD" parameterClass="java.util.Map">
+		/* RNT02020300DAO.atchCUD[소유물건 정보 첨부파일 등록시 파일일련번호 업데이트] */
+		UPDATE TBRNT_PUCHAS_POSESN_THING
+		   SET FILE_SN 			= #FILE_SN#
+		 WHERE WAITR_CNTRCTR_SE = '01'
+		   AND SN				= #P_SN#
+	</insert>
+
+
+	<!-- 첨부파일 상세 건수 조회 -->
+	<select id="RNT02020300DAO.FILECNT" parameterClass="java.util.Map" resultClass="java.lang.Integer">
+		/* RNT02020300DAO.FILECNT[첨부파일 상세 건수 조회] */
+		SELECT COUNT(*) AS CNT
+		  FROM TBCOM_CMMN_ATCHMNFL
+		 WHERE FILE_SN = #FILE_SN#
+	</select>
+
+
+	<!-- 첨부파일 목록조회(팝업) -->
+	<select id="RNT02020300DAO.ATCH_DOWN_LIST" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		/* RNT02020300DAO.ATCH_DOWN_LIST[첨부파일 목록조회(팝업)] */
+		SELECT FILE_SN,
+			   FILE_ORDR,
+			   ORGINL_FILE_NM AS FILE_NM,
+			   FILE_EXTSN
+		  FROM TBCOM_CMMN_ATCHMNFL
+		 WHERE FILE_SN = #FILE_SN#
+	</select>
+
+
+	<!-- 소유물건 정보 첨부파일 삭제 -->
+	<delete id="RNT02020300DAO.ATCH_FILE_DEL" parameterClass="java.util.Map">
+		/* RNT02020300DAO.ATCH_FILE_DEL[소유물건 정보 첨부파일 삭제] */
+		UPDATE TBRNT_PUCHAS_POSESN_THING
+		   SET FILE_SN 			= null
+		 WHERE WAITR_CNTRCTR_SE = '01'
+		   AND SN				= #P_SN#
+	</delete>
+</sqlMap>

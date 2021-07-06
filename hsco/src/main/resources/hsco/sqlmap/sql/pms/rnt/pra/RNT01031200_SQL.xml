@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01032100_SQL">	
+   <!--  설명  : 소유물건조회
+		작성자 : 송호원 -->
+	
+	<!-- 소유물건조회 (계약자, 해약자) -->
+	<select id="RNT01031200DAO.rentPosesnThingPopList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT *
+		  FROM 
+		       (SELECT A.CNTRCTR_NO, 									/* 계약자번호 */
+		              A.RENT_HOUSE_CODE, 								/* 임대주택코드 */
+		              D.RENT_HOUSE_NM, 									/* 임대주택명 */
+		              A.DONG, 											/* 동 */
+		              A.HO, 											/* 호 */ 
+		              F.NM AS CONT_NM, 									/* 계약자 */
+		              SFCOM_DEC_ALL(F.IHIDNUM) AS CONT_PRN, 			/* 계약자 주민번호 */
+		              E.ZIP AS CONT_ZIP, 								/* 계약자 우편번호 */
+                      E.ADRES || ' ' || E.ADRES_DETAIL AS CONT_ADRES, 	/* 계약자 주소 */
+		              D.RENT_HOUSE_NM ||' '||TO_NUMBER(A.DONG)||'동'||TO_NUMBER(A.HO)||'호' AS CONT_ADRES1,	/* 계약자 주소2 */	 
+		              G.NM AS OWN_NM, 									/* 소유자 */
+		              SFCOM_DEC_ALL(G.IHIDNUM) 	AS OWN_PRN, 			/* 소유자 주민번호 */
+		              C.FAMILY_RELATE, 									/* 관계 */
+		              SFCOM_CODE_NM('HRM013', C.FAMILY_RELATE) AS FAMILY_RELATE_NM, /* 관계명 */
+		              C.ADRES, 											/* 물건지 주소 */
+		              C.AR, 											/* 면적 */
+		              C.ACQS_DE, 										/* 취득일자*/
+		              A.FRST_CNTRCT_DE, 								/* 최초계약일자 */
+		              A.QUALF_SE,										/* 자격구분 */
+		              A.CNTRCT_DE, 										/* 계약일자 */
+		              A.CANCL_DE, 										/* 해약일자 */
+		              C.INQIRE_DE,										/* 조사일자 */
+		              C.TRNSFR_DE, 										/* 양도일자 */
+		              C.PRPOS,											/* 용도 */
+		              SFCOM_CODE_NM('RNT012', C.PRPOS) AS PRPOS_NM,    	/* 용도명 */
+		              C.EXPLN_SE, 										/* 소명여부 */
+		              C.EXPLN_DTLS, 									/* 소명내역 */
+		              C.PRESENTN_DE, 									/* 제출일자 */
+		              C.RM, 											/* 비고 */
+		              C.REFER 											/* 참고 */
+		         FROM TBRNT_RENT_CNTRCT A, 
+		              TBRNT_RENT_HOUSE_BILD B, 
+		              TBRNT_RENT_POSESN_THING C, 
+		              TBRNT_RENT_HOUSE D, 
+		              TBRNT_RENT_HOUSE_DONG E, 
+		              TBRNT_PRMANENT_RENT_CSTMR F, 
+		              TBRNT_PRMANENT_RENT_CSTMR G 
+		        WHERE     A.RENT_HOUSE_CODE 	= B.RENT_HOUSE_CODE(+) 
+		              AND A.DONG 				= B.DONG(+) 
+		              AND A.HO 					= B.HO(+) 
+		              AND A.CNTRCTR_NO 			= C.CNTRCTR_NO
+		              AND A.RENT_HOUSE_CODE 	= D.RENT_HOUSE_CODE 
+		              AND A.RENT_HOUSE_CODE 	= E.RENT_HOUSE_CODE 
+		              AND A.DONG 				= E.DONG 
+		              AND A.PRMANENT_CSTMR_NO 	= F.PRMANENT_CSTMR_NO 
+		              AND C.PRMANENT_CSTMR_NO 	= G.PRMANENT_CSTMR_NO
+<!-- 		              AND C.WAITR_CNTRCTR_SE	= '02'			/* 대기자계약자구분: 01-대기자, 02-계약자 */ -->
+		              AND C.CNTRCTR_NO IS NOT NULL
+		     	<isEqual property="gubun" compareValue="1">
+		              AND A.CANCL_DE IS NULL
+		        </isEqual>
+		     	<isEqual property="gubun" compareValue="2">
+		              AND A.CANCL_DE IS NOT NULL
+		        </isEqual>
+				<isNotEmpty property="houseSe">
+					  AND #houseSe# LIKE '%' || D.HOUSE_SE || '%'
+				</isNotEmpty>
+				<isNotEmpty property="rentHouseCode">
+					  AND A.RENT_HOUSE_CODE = #rentHouseCode#
+				</isNotEmpty>
+				<isNotEmpty property="dong">
+					  AND A.DONG = LPAD(#dong#, 4, '0')
+				</isNotEmpty>
+				<isNotEmpty property="ho">
+					  AND A.HO = LPAD(#ho#, 4, '0')
+				</isNotEmpty>
+		              AND NVL(C.INQIRE_DE,'19000101') BETWEEN #stInqireDe# AND #edInqireDe#
+		        <isNotEmpty property="explnSe">
+		              <isEqual property="explnSe" compareValue="0">
+		              AND NVL(C.EXPLN_SE, '02') IN ('01', '03', '04')
+		              </isEqual>
+		              <isEqual property="explnSe" compareValue="1">
+		              AND NVL(C.EXPLN_SE, '02') IN ('02', '05')
+		              </isEqual>
+		        </isNotEmpty>
+		
+		     ORDER BY A.RENT_HOUSE_CODE, 
+		              A.DONG, 
+		              A.HO, 
+		              C.SN 
+		       )
+	</select>
+
+	<!-- 소유물건조회 (대기자) -->
+	<select id="RNT01031200DAO.rentPosesnThingPopList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT * 
+		  FROM 
+		       (SELECT A.RENT_HOUSE_CODE || '/' || A.RCEPT_DE || '/' || A.RCEPT_SN AS WAITR_KEY,	/* 대기자 KEY */
+		              A.RCEPT_DE, 									/* 접수일자 */
+		              A.RCEPT_SN, 									/* 접수순번 */
+		              A.RENT_HOUSE_CODE, 							/* 임대주택코드 */
+		              D.RENT_HOUSE_NM, 								/* 임대주택명 */
+		              A.HOPE_AEA, 									/* 평형 */
+		              E.NM 			AS CONT_NM, 					/* 대기자 */
+		              SFCOM_DEC_ALL(E.IHIDNUM) AS CONT_PRN, 		/* 대기자 주민번호 */
+		              E.ZIP, 										/* 대기자 우편번호 */
+		              E.ADRES || ' ' || E.ADRES_DETAIL AS ADDR,		/* 대기자 주소 */
+		              D.RENT_HOUSE_NM ||' '||TO_NUMBER(A.DONG)||'동'||TO_NUMBER(A.HO)||'호' AS ADDR1, /* 대기자 주소2 */
+		              F.NM 			AS OWN_NM,						/* 소유자 */
+		              SFCOM_DEC_ALL(F.IHIDNUM) 	AS OWN_PRN, 		/* 소유자 주민번호 */
+		              C.FAMILY_RELATE, 								/* 관계 */
+		              SFCOM_CODE_NM('HRM013', C.FAMILY_RELATE) AS FAMILY_RELATE_NM, /* 관계명 */
+		              C.ADRES, 										/* 물건지 주소 */
+		              C.AR, 										/* 면적 */
+		              C.ACQS_DE, 									/* 취득일자 */
+		              C.PRPOS, 										/* 용도 */
+		              SFCOM_CODE_NM('RNT012', C.PRPOS) AS PRPOS_NM,	/* 용도명 */
+		              C.TRNSFR_DE, 									/* 양도일자 */
+		              C.EXPLN_SE, 									/* 소명여부 */
+		              C.EXPLN_DTLS, 								/* 소명내역 */
+		              C.PRESENTN_DE, 								/* 제출일자 */
+		              C.RM, 										/* 비고 */
+		              C.REFER, 										/* 참고 */
+		              C.INQIRE_DE 									/* 조사일자 */
+		         FROM TBRNT_MVN_WAITR A, 
+		              TBRNT_RENT_POSESN_THING C, 
+		              TBRNT_RENT_HOUSE D, 
+		              TBRNT_PRMANENT_RENT_CSTMR E, 
+		              TBRNT_PRMANENT_RENT_CSTMR F
+		        WHERE 	  A.RENT_HOUSE_CODE 	= C.RENT_HOUSE_CODE
+		              AND A.RCEPT_DE 			= C.RCEPT_DE
+		              AND A.RCEPT_SN 			= C.RCEPT_SN
+		              AND A.RENT_HOUSE_CODE 	= D.RENT_HOUSE_CODE
+		              AND A.PRMANENT_CSTMR_NO 	= E.PRMANENT_CSTMR_NO
+		              AND C.PRMANENT_CSTMR_NO 	= F.PRMANENT_CSTMR_NO
+<!-- 		              AND C.WAITR_CNTRCTR_SE 	= '01' 					/* 대기자계약자구분: 01-대기자, 02-계약자 */ -->
+		              AND C.CNTRCTR_NO IS NULL
+		              AND NVL(C.INQIRE_DE,'19000101') BETWEEN #stInqireDe# AND #edInqireDe#
+						<isNotEmpty property="houseSe">
+							  AND #houseSe# LIKE '%' || D.HOUSE_SE || '%'
+						</isNotEmpty>
+						<isNotEmpty property="rentHouseCode">
+							  AND A.RENT_HOUSE_CODE = #rentHouseCode#
+						</isNotEmpty>
+				        <isNotEmpty property="explnSe">
+				              <isEqual property="explnSe" compareValue="0">
+				              AND NVL(C.EXPLN_SE, '02') IN ('01', '03', '04')
+				              </isEqual>
+				              <isEqual property="explnSe" compareValue="1">
+				              AND NVL(C.EXPLN_SE, '02') IN ('02', '05')
+				              </isEqual>
+				        </isNotEmpty>
+		     ORDER BY A.RENT_HOUSE_CODE, 
+		              A.RCEPT_DE, 
+		              A.RCEPT_SN 
+		       ) 
+	</select>
+
+</sqlMap>

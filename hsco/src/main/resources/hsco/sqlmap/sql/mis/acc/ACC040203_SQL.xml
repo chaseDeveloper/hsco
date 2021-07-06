@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC040203_SQL">	
+	
+    <!-- 법인카드승인내역 목록 -->
+    <select id="ACC040203DAO.confmDtlsList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*ACC040203DAO.confmDtlsList*/ ]]>
+        SELECT  CARD_NO
+		      , CARD_NM
+		      , DEPT_CODE
+		      , DEPT_NM
+		      , MAX(YEAR_AMT)    AS YEAR_AMT
+		      , MAX(AMT_01)      AS AMT_01
+		      , MAX(AMT_02)      AS AMT_02
+		      , MAX(AMT_03)      AS AMT_03
+		      , MAX(AMT_04)      AS AMT_04
+		      , MAX(AMT_05)      AS AMT_05
+		      , MAX(AMT_06)      AS AMT_06
+		      , MAX(AMT_07)      AS AMT_07
+		      , MAX(AMT_08)      AS AMT_08
+		      , MAX(AMT_09)      AS AMT_09
+		      , MAX(AMT_10)      AS AMT_10
+		      , MAX(AMT_11)      AS AMT_11
+		      , MAX(AMT_12)      AS AMT_12
+          FROM(
+			SELECT  CARD_NO
+			      , CARD_NM
+			      , DEPT_CODE
+			      , DEPT_NM
+			      , YEAR_AMT
+			      , DECODE(APPR_MONTH, '01' , APPR_AMT, NULL) AS AMT_01
+			      , DECODE(APPR_MONTH, '02' , APPR_AMT, NULL) AS AMT_02
+			      , DECODE(APPR_MONTH, '03' , APPR_AMT, NULL) AS AMT_03
+			      , DECODE(APPR_MONTH, '04' , APPR_AMT, NULL) AS AMT_04
+			      , DECODE(APPR_MONTH, '05' , APPR_AMT, NULL) AS AMT_05
+			      , DECODE(APPR_MONTH, '06' , APPR_AMT, NULL) AS AMT_06
+			      , DECODE(APPR_MONTH, '07' , APPR_AMT, NULL) AS AMT_07
+			      , DECODE(APPR_MONTH, '08' , APPR_AMT, NULL) AS AMT_08
+			      , DECODE(APPR_MONTH, '09' , APPR_AMT, NULL) AS AMT_09
+			      , DECODE(APPR_MONTH, '10' , APPR_AMT, NULL) AS AMT_10
+			      , DECODE(APPR_MONTH, '11' , APPR_AMT, NULL) AS AMT_11
+			      , DECODE(APPR_MONTH, '12' , APPR_AMT, NULL) AS AMT_12
+			FROM(
+					SELECT t1.CARD_NO                              /*카드번호*/
+					     , SUBSTR(t1.APPR_DATE,5,2) AS APPR_MONTH  /*승인일자*/
+					     , t3.DEPT_CODE                            /*부서코드*/
+					     , t3.DEPT_NM                              /*부서명*/
+					     , t2.CARD_NM                              /*카드명*/
+			         , t4.YEAR_AMT
+					     , SUM(t1.APPR_AMT)        AS APPR_AMT     /*승인금액*/
+					FROM NH_APPR t1
+					  
+					  LEFT OUTER JOIN TBACC_CPR_CARD_MANAGE t2
+					  ON t1.CARD_NO = t2.CARD_NO
+					  
+					  LEFT OUTER JOIN TBHRM_DEPT t3
+					  ON t2.DEPT_CODE = t3.DEPT_CODE 
+			      
+			      LEFT OUTER JOIN (
+			        SELECT CARD_NO                              /*카드번호*/
+			           , SUBSTR(APPR_DATE,0,4) AS APPR_DATE   /*승인일자*/
+			           , SUM(APPR_AMT)         AS YEAR_AMT
+			        FROM NH_APPR 
+			        GROUP BY CARD_NO, SUBSTR(APPR_DATE,0,4)
+			      ) t4
+			        ON t1.CARD_NO = t4.CARD_NO
+			    WHERE SUBSTR(t1.APPR_DATE,0,4) = #YEAR#
+				<isNotEmpty property="DEPT_CODE">
+				  AND t3.DEPT_CODE = #DEPT_CODE#
+				</isNotEmpty>
+				<isNotEmpty property="CARD_NO">
+				  AND t1.CARD_NO = #CARD_NO#
+				</isNotEmpty>
+			      group by t1.CARD_NO, SUBSTR(t1.APPR_DATE,5,2), t3.DEPT_CODE, t3.DEPT_NM, t2.CARD_NM, t4.YEAR_AMT
+			      ORDER BY SUBSTR(t1.APPR_DATE,5,2), t1.CARD_NO
+			)
+		)
+		GROUP BY CARD_NO, CARD_NM, DEPT_CODE, DEPT_NM
+		ORDER BY DEPT_CODE, CARD_NO
+    </select>
+    
+
+    <!-- 카드정보 -->
+    <select id="ACC040203DAO.cardList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT 
+	        ''     AS CARD_NO
+	       ,'전체' AS CARD_NM
+	      FROM DUAL
+        UNION ALL
+        SELECT *
+        FROM (
+			SELECT
+				CARD_NO
+			   ,'['||SUBSTR(CARD_NO,1,4)||'-'||SUBSTR(CARD_NO,5,4)||'-'||SUBSTR(CARD_NO,9,4)||'-'||SUBSTR(CARD_NO,13,4)||'] '||CARD_NM AS CARD_NM
+			FROM TBACC_CPR_CARD_MANAGE
+			<isNotEmpty property="DEPT_CODE">
+			WHERE DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			ORDER BY DEPT_CODE, CARD_NO
+		)
+    </select>
+</sqlMap>

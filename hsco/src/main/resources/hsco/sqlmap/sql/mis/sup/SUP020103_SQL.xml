@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SUP020103_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 사원 목록 조회 -->
+	<select id="SUP020103DAO.selectHrMastrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*SUP020103DAO.selectHrMastrList*/ ]]>
+		<![CDATA[	
+			SELECT A.EMPNO      AS EMPNO 
+			       ,A.EMPNM     AS EMPNM 
+			       ,A.DEPT_CODE AS DEPT_CODE 
+			       ,B.DEPT_NM   AS DEPT_NM 
+			       ,D.OFCPS     AS OFCPS 
+			       ,E.CODE_NM   AS OFCPS_NM
+			FROM   TBHRM_HR_MASTR A 
+			       ,VWHRM_DEPT B
+			       ,(SELECT EMPNO 
+			                ,SFHRM_GET_OFCPSCD(EMPNO, JSSFC_SE, HR_CLSF_SE, ECNY_DE) AS 
+			                 OFCPS 
+			         FROM   TBHRM_HR_MASTR)D 
+			       ,(SELECT CODE 
+			                ,CODE_NM 
+			         FROM   TBCOM_CMMN_CODE 
+			         WHERE  GRP_CODE = 'HRM021' 
+			            AND USE_AT = '1')E 
+			WHERE  A.RETIRE_DE IS NULL 
+			   AND A.DEPT_CODE = B.DEPT_CODE 
+			   AND B.DEPT_LEVEL_SE IN ( '1', '2' )
+			   AND A.EMPNO = D.EMPNO 
+			   AND D.OFCPS = E.CODE 
+			   AND A.STTUS_SE = '000'                        /*상태구분(사용여부)*/ 
+			 /*AND A.JSSFC_SE IN ('000','001','002','003')*/ /*직종구분*/
+		]]>
+        <isNotEmpty property="DEPT_CODE">
+        	<isNotEqual property="DEPT_CODE" compareValue="000000">      
+               AND A.DEPT_CODE          = #DEPT_CODE#
+            </isNotEqual>
+        </isNotEmpty>
+        <isNotEmpty property="EMPNO">
+        	   AND A.EMPNO          = #EMPNO#
+        </isNotEmpty>              
+		<![CDATA[			
+			ORDER  BY B.DEPT_LEVEL_SE 
+			          ,B.DEPT_CODE 
+			          ,A.RSPOFC_SE 
+			          ,SFHRM_GET_OFCPSCD(A.EMPNO, A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE) 
+			          ,A.PAY_CLSF_SE 
+			          ,A.EMPNO 
+			          ,A.JSSFC_SE   
+		]]> 		        	     
+    </select>
+    
+	<!-- 심사위원 목록 조회 -->
+	<select id="SUP020103DAO.selectJudgeMastrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*SUP020103DAO.selectJudgeMastrList*/ ]]>
+		
+			SELECT A.JUDGE_SN   AS JUDGE_SN
+			       ,A.STDR_YEAR AS YEAR
+			       ,A.ODR_SE    AS ODR_SE
+			       ,A.EMPNO     AS EMPNO
+			       ,DECODE(A.EXTRL_HNF, '1', A.JUDGE_NM, B.EMPNM)     AS EMPNM
+			       ,C.DEPT_CODE AS DEPT_CODE
+			       ,C.DEPT_NM   AS DEPT_NM
+			       ,D.OFCPS     AS OFCPS
+			       ,E.CODE_NM   AS OFCPS_NM
+			       ,A.EXTRL_HNF AS EXTRL_HNF
+			FROM   TBSUP_JUDGE_MASTR A
+			       LEFT OUTER JOIN TBHRM_HR_MASTR B
+			                    ON A.EMPNO = B.EMPNO
+			       LEFT OUTER JOIN VWHRM_DEPT C
+			                    ON B.DEPT_CODE = C.DEPT_CODE
+			       LEFT OUTER JOIN (SELECT EMPNO
+							                ,SFHRM_GET_OFCPSCD(EMPNO,JSSFC_SE,HR_CLSF_SE,ECNY_DE) AS OFCPS
+							         FROM   TBHRM_HR_MASTR
+							        )D
+							    ON A.EMPNO = D.EMPNO
+			       LEFT OUTER JOIN (SELECT CODE, CODE_NM
+							         FROM   TBCOM_CMMN_CODE
+							         WHERE  GRP_CODE = 'HRM021'
+							           AND  USE_AT = '1'
+							        )E
+							     ON D.OFCPS = E.CODE
+			WHERE 1=1
+			  AND A.STDR_YEAR = #YEAR#
+			  AND A.ODR_SE = #ODR_SE#
+			ORDER BY D.OFCPS, C.DEPT_CODE
+		
+			<!--
+		SELECT A.JUDGE_SN AS JUDGE_SN
+		      ,A.STDR_YEAR AS YEAR
+		      ,A.ODR_SE AS ODR_SE
+		      ,A.EMPNO AS EMPNO
+		      ,DECODE(A.EXTRL_HNF, '1', A.JUDGE_NM, B.EMPNM) AS EMPNM
+		      ,C.DEPT_CODE AS DEPT_CODE
+		      ,C.DEPT_NM AS DEPT_NM
+		      ,SFHRM_GET_OFCPSCD(B.EMPNO, B.JSSFC_SE, B.HR_CLSF_SE, B.ECNY_DE) AS OFCPS
+		      ,SFCOM_CODE_NM('HRM021', SFHRM_GET_OFCPSCD(B.EMPNO, B.JSSFC_SE, B.HR_CLSF_SE, B.ECNY_DE), 'CODE_NM') AS OFCPS_NM
+		      ,B.JSSFC_SE
+		      ,A.EXTRL_HNF AS EXTRL_HNF
+		  FROM TBSUP_JUDGE_MASTR A
+		      ,TBHRM_HR_MASTR B
+		      ,VWHRM_DEPT C
+		 WHERE 1 = 1
+		   AND A.EMPNO = B.EMPNO
+		   AND B.DEPT_CODE = C.DEPT_CODE      
+		   AND A.STDR_YEAR = #YEAR#
+		   AND A.ODR_SE = #ODR_SE#
+		 ORDER BY SFHRM_GET_OFCPSCD(B.EMPNO, B.JSSFC_SE, B.HR_CLSF_SE, B.ECNY_DE), C.DEPT_CODE
+		-->
+    </select>    
+    
+    <!-- 심사위원 등록 -->
+    <insert id="SUP020103DAO.saveJudgeMastrC" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*SUP020103DAO.saveJudgeMastrC*/ ]]>
+        <![CDATA[
+			INSERT INTO TBSUP_JUDGE_MASTR (  
+			          STDR_YEAR ,
+			          ODR_SE,
+			          JUDGE_SN,
+		              EMPNO ,
+		              EXTRL_HNF ,
+		              JUDGE_NM ,
+		              REGISTER_ID , 
+		              REGIST_DT , 
+		              UPDUSR_ID , 
+		              UPDT_DT 
+			       ) VALUES (  
+			          #YEAR# ,
+			          #ODR_SE# ,
+			          (SELECT #YEAR#||#ODR_SE#||LPAD(NVL(SUBSTR(MAX(JUDGE_SN),6,3),0)+1, 3, '0')
+			           FROM   TBSUP_JUDGE_MASTR
+			           WHERE  STDR_YEAR = #YEAR#
+			             AND  ODR_SE = #ODR_SE#
+			          ) ,
+		              #EMPNO# ,
+		              #EXTRL_HNF# ,
+		              DECODE(#EXTRL_HNF#, 1, #EMPNM#, NULL) ,
+		              #S_USER_ID# , 
+		              SYSDATE , 
+		              #S_USER_ID# , 
+		              SYSDATE 
+			       )  
+        ]]>
+    </insert>
+
+    <!-- 심사결과 테이블 삭제 -->
+    <delete id="SUP020103DAO.savePropseJdgmnResultD" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*SUP020103DAO.savePropseJdgmnResultD*/ ]]>
+        <![CDATA[
+            DELETE FROM TBSUP_PROPSE_JDGMN_RESULT A
+			 WHERE EXISTS
+			 (
+			 SELECT 1 
+			 FROM (SELECT PROPSE_NO, SN FROM TBSUP_PROPSE_JDGMN_MFCMM WHERE JUDGE_SN = #JUDGE_SN#) B
+			 WHERE A.PROPSE_NO = B.PROPSE_NO
+			   AND A.SN = B.SN
+			 )
+        ]]>
+    </delete>    
+    
+    <!-- 제안심사위원 테이블 삭제 -->
+    <delete id="SUP020103DAO.savePropseJdgmnMfcmmD" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*SUP020103DAO.savePropseJdgmnMfcmmD*/ ]]>
+        <![CDATA[
+            DELETE FROM TBSUP_PROPSE_JDGMN_MFCMM 
+             WHERE JUDGE_SN = #JUDGE_SN#
+        ]]>
+    </delete>    
+        
+    <!-- 심사위원 테이블 삭제 -->
+    <delete id="SUP020103DAO.saveJudgeMastrD" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*SUP020103DAO.saveJudgeMastrD*/ ]]>
+        <![CDATA[
+            DELETE FROM TBSUP_JUDGE_MASTR 
+             WHERE JUDGE_SN = #JUDGE_SN#
+        ]]>
+    </delete>
+    
+    <!-- 심사위원 테이블 수정 -->
+    <delete id="SUP020103DAO.saveJudgeMastrU" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*SUP020103DAO.saveJudgeMastrU*/ ]]>
+        <![CDATA[
+            UPDATE TBSUP_JUDGE_MASTR
+               SET JUDGE_NM = #EMPNM#
+             WHERE JUDGE_SN = #JUDGE_SN#
+        ]]>
+    </delete>   
+    
+	<!-- 제안자 부서 목록 조회 -->
+	<select id="SUP020103DAO.selectPropseDeptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*SUP020103DAO.selectPropseDeptList*/ ]]>
+		<![CDATA[	
+			SELECT C.DEPT_CODE
+			FROM   TBSUP_PROPSE_PROPSR A
+			       LEFT OUTER JOIN TBHRM_HR_MASTR B
+			                    ON A.EMPNO = B.EMPNO
+			       LEFT OUTER JOIN VWHRM_DEPT C
+			                    ON B.DEPT_CODE = C.DEPT_CODE
+			WHERE 1=1
+			  AND PROPSE_NO = #PROPSE_NO#
+			GROUP BY C.DEPT_CODE
+		]]> 		        	     
+    </select>        
+
+</sqlMap>

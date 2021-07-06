@@ -1,0 +1,602 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj">
+
+	<!-- 사업코드 ================================================== -->
+	<select id="PRJ.bsnsCdList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 BC.BSNS_CODE			/* 사업코드 */
+			,BC.BSNS_NM				/* 사업명 */
+			,'[' || BC.BSNS_CODE || '] ' || BC.BSNS_NM AS BSNS_ALL_NM	/* 사업명 */
+			,BC.BSNS_TY				/* 사업유형 */
+			,BC.RM					/* 비고 */
+			,BS.STRWRK_DE			/* 착공일자 */
+			,BS.COMPET_DE			/* 준공일자 */
+			,BS.BSNS_CONFM_DE		/* 사업승인일자 */
+			,BS.MVN_DE				/* 입주일자 */
+			,BC.SUPLY_TY            /* 공급유형 */
+			,BC.BSNS_DISTRICT       /* 사업지구코드 */
+			,ROW_NUMBER() OVER (ORDER BY BC.BSNS_CODE) AS RN
+		FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+		LEFT JOIN TBPRJ_BSNS_SUMRY BS ON BS.BSNS_CODE = BC.BSNS_CODE
+		WHERE 1=1
+		<isNotEmpty property="BSNS_TY" >
+		  AND BC.BSNS_TY = #BSNS_TY#				/* 사업유형 */
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_NM" >
+		  AND BC.BSNS_NM LIKE '%'||#BSNS_NM#||'%'	/* 사업명 */
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE" >
+		  AND BC.BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_KIND" >
+			<isEqual property="BSNS_KIND" compareValue="1">		/* 간접사업 */
+		  AND BC.BSNS_TY = 'Z'
+			</isEqual>
+			<isEqual property="BSNS_KIND" compareValue="2">		/* 간접사업 제외 */
+		  AND BC.BSNS_TY != 'Z'
+			</isEqual>
+		</isNotEmpty>
+		<isNotEmpty property="GB" >
+		  AND NVL2(BC.BSNS_END_YM, 2, 1) = #GB#	/* 진행구분 */
+		</isNotEmpty>
+		<isNotEmpty property="SLE_SE" >
+		  AND BC.SLE_SE = #SLE_SE#				/* 판매구분 */
+		</isNotEmpty>
+		ORDER BY 1
+	</select>
+	
+	<!-- 개인별사업코드 ================================================== -->
+	<select id="PRJ.userBsnsCdList" parameterClass="map" resultClass="hashmap">
+		SELECT 
+			t1.BSNS_CODE 				/* 사업코드 */
+		  , t2.BSNS_NM	/* 사업지역명 */
+		  , t1.SORT_ORDR				/* 정렬순서 */
+		  , t1.EMPNO					/* 사번 */
+		  ,'[' || t1.BSNS_CODE || '] ' || t2.BSNS_NM AS BSNS_ALL_NM	/* 사업명 */
+		FROM TBPRJ_USER_BSNS t1
+			INNER JOIN TBPRJ_BSNS_CODE t2
+			   ON t1.BSNS_CODE = t2.BSNS_CODE
+		WHERE 1=1
+		AND t1.EMPNO = #EMPNO#
+		ORDER BY t1.SORT_ORDR, t1.BSNS_CODE
+	</select>
+
+
+	<select id="PRJ.accnutCdList" parameterClass="map" resultClass="hashmap">
+		<!-- 사업관리 : 테스트하기 위해 주석처리함. -->
+		<!-- SELECT ACCNUT_YEAR
+		     , SE_ACCNUT_ACNT_CODE AS BSNS_CODE
+		     , SE_ACCNUT_ACNT_NM   AS BSNS_NM
+		     , ROW_NUMBER() OVER (ORDER BY SE_ACCNUT_ACNT_NM) AS RN 
+		FROM TBACC_SE_ACCNUT_ACNT_CODE
+		WHERE 1=1
+		<isNotEmpty property="GB" prepend="AND">
+			DECODE(USE_AT, 1, 1, 2) = #GB#	/* 진행구분 (1:진행 2:완료) */
+		</isNotEmpty>
+		<isNotEmpty property="ACCNUT_YEAR" prepend="AND">
+			ACCNUT_YEAR = #ACCNUT_YEAR#
+		</isNotEmpty>
+		ORDER BY SE_ACCNUT_ACNT_NM -->
+		
+		
+			SELECT BSNS_CODE, BSNS_NM
+			  FROM TBPRJ_BSNS_CODE A
+			 ORDER BY BSNS_NM
+	</select>
+
+	<!-- 토지코드 ================================================== -->
+	<select id="PRJ.ladCdList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 BC.BSNS_CODE			/* 사업코드 */
+			,BC.BSNS_NM				/* 사업명 */
+			,NVL2(BC.BSNS_END_YM, 2, 1) AS GB			/* 진행구분 */
+			,LC.LAD_CODE			/* 토지코드 */
+			,LC.LAD_CODE_NM			/* 토지코드명 */
+			,LP.PRPOS_CODE			/* 용도코드 */
+			,LP.SUPLY_CODE			/* 공급코드 */
+			,SFPRJ_GET_PMSCODENM('1', LP.PRPOS_CODE) AS PRPOS_CODE_NM
+			,SFPRJ_GET_PMSCODENM('1', LP.SUPLY_CODE) AS SUPLY_CODE_NM
+			,ROW_NUMBER() OVER (ORDER BY BC.BSNS_CODE, LC.LAD_CODE, LP.PRPOS_CODE, LP.SUPLY_CODE) AS RN
+		FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+		JOIN TBPRJ_LAD_CODE LC ON BC.BSNS_CODE = LC.BSNS_CODE
+		LEFT JOIN TBPRJ_LAD_PRPOS LP ON LP.BSNS_CODE = LC.BSNS_CODE AND LP.LAD_CODE = LC.LAD_CODE
+		WHERE 1=1
+		<isNotEmpty property="BSNS_CODE" >
+		  AND BC.BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+		</isNotEmpty>
+		<isNotEmpty property="GB" >
+		  AND NVL2(BC.BSNS_END_YM, 2, 1) = #GB#	/* 진행구분 */
+		</isNotEmpty>
+		<isNotEmpty property="LAD_CODE" >
+		  AND LC.LAD_CODE = #LAD_CODE#					/* 토지코드 */
+		</isNotEmpty>
+		ORDER BY BSNS_CODE, LAD_CODE, PRPOS_CODE, SUPLY_CODE
+	</select>
+
+	<!-- 주택코드 ================================================== -->
+	<select id="PRJ.houCdList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 BC.BSNS_CODE			/* 사업코드 */
+			,BC.BSNS_NM				/* 사업명 */
+			,NVL2(BC.BSNS_END_YM, 2, 1) AS GB			/* 진행구분 */
+			,HC.HOUSE_CODE			/* 주택코드 */
+			,HC.HOUSE_CODE_NM		/* 주택코드명 */
+			,HS.SUPLY_TY_CODE		/* 공급유형코드 */
+			,SFPRJ_GET_PMSCODENM('2', HS.SUPLY_TY_CODE) AS SUPLY_TY_CODE_NM
+			,ROW_NUMBER() OVER (ORDER BY BC.BSNS_CODE, HC.HOUSE_CODE, HS.SUPLY_TY_CODE) AS RN
+			,BS.BSNS_AR			/* 사업면적 */
+			,BS.TOTAR			/* 연면적 */
+			,BS.BILDNG_AR		/* 건축면적 */
+			,BS.OPERTN_AR		/* 시행면적 */
+			,BS.CMPNS_AR		/* 유상면적 */
+			,BS.BDTLDR			/* 건폐율 */
+			,BS.MEASRMT_RT		/* 용적율 */
+			,BS.GREENS_RT		/* 녹지율 */
+		FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+		LEFT JOIN TBPRJ_BSNS_SUMRY BS ON BC.BSNS_CODE = BS.BSNS_CODE
+		JOIN TBPRJ_HOUSE_CODE HC ON BC.BSNS_CODE = HC.BSNS_CODE
+		LEFT JOIN TBPRJ_HOUSE_SUPLY_TY HS ON HS.BSNS_CODE = HC.BSNS_CODE AND HS.HOUSE_CODE = HC.HOUSE_CODE
+		WHERE 1=1
+		<isNotEmpty property="BSNS_CODE" >
+		  AND BC.BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+		</isNotEmpty>
+		<isNotEmpty property="GB" >
+		  AND NVL2(BC.BSNS_END_YM, 2, 1) = #GB#	/* 진행구분 */
+		</isNotEmpty>
+		<isNotEmpty property="HOUSE_CODE" >
+		  AND HC.HOUSE_CODE = #HOUSE_CODE#				/* 주택코드 */
+		</isNotEmpty>
+		ORDER BY BSNS_CODE, HOUSE_CODE, SUPLY_TY_CODE
+	</select>
+
+
+	<!-- 계정코드 목록 -->
+	<select id="PRJ.acntList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.*
+			,ROWNUM AS RN
+		FROM (
+			SELECT
+				 A.ACCNUT_YEAR
+				,A.ACCNUT_ACNT_CODE AS CODE
+				,A.ACNT_SE
+				,A.ACCNUT_ACNT_NM AS CODE_NM
+		/*		,A.OUTPT_ACNT_NM AS CODE_NM2 */
+				,A.OUTPT_SEQ
+				,A.ACNT_LEVEL
+				,A.CHIT_PROCESS_AT AS RET_YN
+				,'' AS YEAR
+			FROM TBACC_ACCNUT_ACNT_SBJECT A
+			LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT B ON A.ACCNUT_YEAR = B.ACCNUT_YEAR AND A.UPPER_ACNT_CODE = B.ACCNUT_ACNT_CODE
+			WHERE 1=1
+			<isNotEmpty property="ACNT_SE">
+			  AND A.ACNT_SE = #ACNT_SE#
+			</isNotEmpty>
+			  AND A.USE_AT = '1'
+		/*    AND A.CHIT_PROCESS_AT = 1		 전표처리 여부 (2016-01-08) */
+			START WITH A.UPPER_ACNT_CODE IS NULL AND A.ACCNUT_YEAR = NVL(#YEAR#, TO_CHAR(SYSDATE, 'YYYY')) 
+			CONNECT BY PRIOR A.ACCNUT_ACNT_CODE = A.UPPER_ACNT_CODE AND A.ACCNUT_YEAR = NVL(#YEAR#, TO_CHAR(SYSDATE, 'YYYY'))
+			ORDER SIBLINGS BY A.OUTPT_SEQ
+		) A
+	</select>
+	<!-- 
+		 A.ACCNUT_YEAR
+		,A.ACCNUT_ACNT_CODE AS CODE
+		,A.ACNT_SE
+		,A.ACCNUT_ACNT_NM AS CODE_NM
+		,LEVEL					AS ACNT_LEVEL
+		,A.UPPER_ACNT_CODE
+		,B.ACCNUT_ACNT_NM		AS UPPER_ACNT_NM
+		,A.OUTPT_ACNT_NM
+		,A.OUTPT_AT
+		,A.OUTPT_SEQ
+		,A.DBRT_SE
+		,A.LWPRT_ACNT
+		,A.LWPRT_ACNT_NM
+		,A.USE_AT
+		,A.PRMPC_AT
+		,A.DLRY_1
+		,A.DLRY_2
+		,A.DLRY_3
+		,A.DLRY_4
+		,A.DLRY_5
+	 -->
+
+	<!-- 사업공통코드 ================================================== -->
+	<select id="PRJ.cmmnCdList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CL
+			,A.BSNS_CMMN_CODE
+			,A.LCLAS_NM
+			,A.MLSFC_NM
+			,A.SCLAS_NM
+			,A.CD1
+			,A.CD2
+			,A.CD3
+			,A.CD23
+			,A.LVL
+			,C.CODE_NM AS LVL_NM		/* 분류구분:1-대,2-중,3-소 */
+			,DECODE(LVL
+			  ,1 ,A.LCLAS_NM
+			  ,2 ,A.MLSFC_NM
+			  ,A.SCLAS_NM
+			) AS NM
+			,DECODE(#CD_GB#
+					,2 ,A.CD2
+					,5 ,A.CD23
+					,A.BSNS_CMMN_CODE)
+			 || ' :' || 
+			 DECODE(LVL
+			  ,1 ,A.LCLAS_NM
+			  ,2 ,A.MLSFC_NM
+			  ,A.SCLAS_NM
+			) AS ALL_CODE_NM
+			,ROW_NUMBER() OVER (ORDER BY A.BSNS_CL, A.BSNS_CMMN_CODE) AS RN
+		FROM (
+			SELECT
+				 A.BSNS_CL
+				,A.BSNS_CMMN_CODE
+				,A.LCLAS_NM
+				,A.MLSFC_NM
+				,A.SCLAS_NM
+				,SUBSTR(A.BSNS_CMMN_CODE,1,2) AS CD1
+				,SUBSTR(A.BSNS_CMMN_CODE,3,2) AS CD2
+				,SUBSTR(A.BSNS_CMMN_CODE,5,2) AS CD3
+				,SUBSTR(A.BSNS_CMMN_CODE,3,4) AS CD23
+				,CASE WHEN '0000' = SUBSTR(A.BSNS_CMMN_CODE,3,4)
+					  THEN 1
+					  WHEN '00' = SUBSTR(A.BSNS_CMMN_CODE,5,2)
+					  THEN 2
+					  ELSE 3
+				 END AS LVL
+			FROM TBPRJ_BSNS_CMMN_CODE A
+		) A
+		LEFT JOIN TBCOM_CMMN_CODE C
+		  ON C.CODE = A.LVL
+		 AND C.GRP_CODE = 'PRJ010'
+		WHERE 1=1
+		<isNotEmpty property="BSNS_CL" >
+		  AND A.BSNS_CL = #BSNS_CL#			/* 사업분류 */
+		</isNotEmpty>
+		<isNotEmpty property="CD1" >
+		  AND A.CD1 = #CD1#
+		  AND A.CD2 != '00'
+		</isNotEmpty>
+		<isNotEmpty property="LVL" >
+		  AND A.LVL = 1
+		</isNotEmpty>
+		ORDER BY 1,2
+	</select>
+
+
+	<!-- 계약코드 ================================================== -->
+	<select id="PRJ.ctrList" parameterClass="map" resultClass="hashmap" remapResults="true">
+		SELECT
+			 A.BSNS_CODE			/* 사업코드 */
+			,A.CNTRCT_NO			/* 계약번호 */
+			,BC.BSNS_NM				/* 사업명 */
+			,BC.BSNS_TY				/* 사업유형 */
+			,A.CNTRCT_NM			/* 계약명 */
+			,A.CNTRCT_SE			/* 계약구분 : CTR001 */
+			,C.CHRCTR_PREPAR_VALUE_2 AS CTR_GB		/* 계약구분 : PRJ017 */
+			,A.CNTRCT_AMOUNT		/* 총계약금액 */
+			,A.CNTRCT_NO||':'||A.CNTRCT_NM AS NO_NM
+			,A.CNTRCT_DE			/* 계약일자 */
+			,A.STRWRK_DE			/* 착공일자 */
+			,A.COMPET_DE			/* 준공일자 */
+			,NVL2(BC.BSNS_END_YM, 2, 1) AS BSNS_GB	/* 진행구분 */
+			,ROW_NUMBER() OVER (ORDER BY A.BSNS_CODE,A.CNTRCT_NO,BC.BSNS_NM,BC.BSNS_TY) AS RN
+		<isNotEmpty property="IS_COMP" >
+			,P.COMP					/* 시공사 */
+		</isNotEmpty>
+		<isNotEmpty property="IS_FILE" >
+			,O.FILE_SN						/* 파일일련번호 */
+			,F.FILE_ORDR					/* 파일순차 */
+			,F.ORGINL_FILE_NM AS FILE_NM	/* 파일명 */
+			,F.CHRCTR_PREPAR_VALUE_0 AS VAL0	/* 문자예비값0 */
+		
+			,DECODE(F.CHRCTR_PREPAR_VALUE_0
+				,NULL,1											/* 즉시공개 */
+				,CASE WHEN F.UPDUSR_ID = #S_USER_ID# OR			/* 본인여부 확인 */
+						   TO_CHAR(SYSDATE,'YYYYMMDD') >= F.CHRCTR_PREPAR_VALUE_0	/* 공개일자 */
+					  THEN 1
+					  ELSE 0
+				 END
+			) AS OTHBC_YN		/* 공개여부 : 0-비공개,1-공개 */
+		</isNotEmpty>
+		FROM TBPRJ_BSNS_CODE BC		/* 사업코드 */
+		JOIN TBCTR_CNTRCT A			/* 계약 */
+		  ON A.BSNS_CODE = BC.BSNS_CODE
+		LEFT JOIN TBCOM_CMMN_CODE C
+		  ON C.GRP_CODE = 'CTR001'
+		 AND C.CODE = A.CNTRCT_SE
+		<isNotEmpty property="IS_COMP" >			/* 시공사 */
+		LEFT JOIN (
+			SELECT
+				 A.BSNS_CODE	/* 사업코드 */
+				,A.CNTRCT_NO	/* 계약번호 */
+				,LISTAGG(C.BCNC_NM || ' ' || C.RPRSNTV, ', ')
+				 WITHIN GROUP (ORDER BY A.BSNS_CODE,A.CNTRCT_NO,B.MNGT_AT,B.QOTA_RT) AS COMP	/* 시공사 */
+			FROM TBCTR_CNTRCT A			/* 계약 */
+			LEFT JOIN TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS B	/* 업체별계약내역 */
+				ON B.BSNS_CODE = A.BSNS_CODE
+				AND B.CNTRCT_NO = A.CNTRCT_NO
+			LEFT JOIN TBCTR_BCNC_MASTR C				/* 거래처마스타 */
+				ON C.BCNC_CODE = B.BCNC_CODE
+			GROUP BY A.BSNS_CODE, A.CNTRCT_NO
+		) P ON P.BSNS_CODE = A.BSNS_CODE
+		   AND P.CNTRCT_NO = A.CNTRCT_NO
+		</isNotEmpty>
+		<isNotEmpty property="IS_FILE" >			/* 발주계획서 */
+		LEFT JOIN TBPRJ_ORDER_ACTPLN O			/* 발주계획서 */
+		   ON O.BSNS_CODE = A.BSNS_CODE		/* 사업코드 */
+		  AND O.CNTRCT_NO = A.CNTRCT_NO		/* 계약번호 */
+		LEFT JOIN TBCOM_CMMN_ATCHMNFL F
+		   ON F.FILE_SN = O.FILE_SN
+		</isNotEmpty>
+		WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		<isNotEmpty property="BSNS_GB" >
+		  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+		</isNotEmpty>
+		<isNotEmpty property="CHK_STD_CNST_CODE" >
+		  AND A.CNTRCT_NO IN (SELECT DISTINCT CNTRCT_NO FROM TBPRJ_BSNS_CNST_CODE)
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_SE" >
+		  AND A.CNTRCT_SE = #CNTRCT_SE#				/* 계약구분(CTR001) : 100-(본사)공사, 200-(본사)설계용역... */
+		</isNotEmpty>
+		<isNotEmpty property="CTR_GB" >
+		 AND A.CNTRCT_SE = #CTR_GB#
+		</isNotEmpty>
+		ORDER BY 1,2,3,4
+		<isNotEmpty property="IS_FILE" >			/* 발주계획서 */
+		   ,O.FILE_SN,F.FILE_ORDR
+		</isNotEmpty>
+	</select>
+
+	<select id="PRJ.ctrDtlList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE			/* 사업코드 */
+			,A.CNTRCT_NO			/* 계약번호 */
+			,B.MNGT_AT				/* 주관여부 */
+			,B.QOTA_RT				/* 지분율 */
+			,C.BIZRNO				/* 사업자등록번호 */
+			,A.CNTRCT_NM			/* 계약명 */
+			,A.CNTRCT_SE			/* 계약구분 : CTR001 */
+			,D.CODE_NM AS CNTRCT_SE_NM
+			,A.STRWRK_DE			/* 착공일자 */
+			,A.COMPET_DE			/* 준공일자 */
+			,B.BCNC_CODE			/* 거래처코드 */
+			,B.CNTRCT_AMOUNT		/* 계약금액 */
+			,C.BCNC_NM				/* 거래처명 */
+			,C.RPRSNTV				/* 대표자 */
+			,ROW_NUMBER() OVER (ORDER BY A.BSNS_CODE,A.CNTRCT_NO,B.MNGT_AT,B.QOTA_RT) AS RN
+		FROM TBCTR_CNTRCT A			/* 계약 */
+		LEFT JOIN TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS B			/* 업체별계약내역 */
+			ON B.BSNS_CODE = A.BSNS_CODE
+			AND B.CNTRCT_NO = A.CNTRCT_NO
+		LEFT JOIN TBCTR_BCNC_MASTR C						/* 거래처마스타 */
+			ON C.BCNC_CODE = B.BCNC_CODE
+		LEFT JOIN TBCOM_CMMN_CODE D
+		  ON D.CODE = A.CNTRCT_SE
+		 AND D.GRP_CODE = 'CTR001'
+		WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		<isNotEmpty property="CNTRCT_NO" >
+		  AND A.CNTRCT_NO = #CNTRCT_NO#			/* 계약번호 */
+		</isNotEmpty>
+		<isNotEmpty property="CHK_STD_CNST" >
+		  AND A.CNTRCT_NO IN (SELECT DISTINCT CNTRCT_NO FROM TBPRJ_BSNS_CNST_CODE)
+		</isNotEmpty>
+		ORDER BY 1,2,3,B.CNTRCT_AMOUNT DESC
+	</select>
+
+
+	<!-- 업무코드 ================================================== -->
+	<select id="PRJ.jobList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE		/* 사업코드 */
+			,A.BSNS_STEP		/* 사업단계 */
+			,A.JOB_CODE			/* 업무코드 */
+			,A.CL_SE			/* 분류구분 */
+			,A.LCLAS_NM			/* 대분류명 */
+			,A.MLSFC_NM			/* 중분류명 */
+			,A.SCLAS_NM			/* 소분류명 */
+			,A.DEPT_CODE		/* 부서코드 */
+			,A.JOB_SE			/* 업무구분 */
+			,A.RM				/* 비고 */
+		FROM TBPRJ_STD_JOB_CL A			/* 표준업무분류 */
+		WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		<isNotEmpty property="BSNS_STEP" >
+		  AND A.BSNS_STEP = #BSNS_STEP#			/* 사업단계 */
+		</isNotEmpty>
+		<isNotEmpty property="JOB_SE" >
+		  AND A.JOB_SE = #JOB_SE#		/* JOB_SE */
+		</isNotEmpty>
+		<isNotEmpty property="JOB_1_2" >
+		  AND A.JOB_SE IN (1,2)			/* 인허가, 평가만 조회 */
+		</isNotEmpty>
+		ORDER BY 1,2,3
+	</select>
+
+
+	<!-- 표준공종코드 ================================================== -->
+	<select id="PRJ.cnstList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE			/* 사업코드 */
+			,A.CNTRCT_NO			/* 계약번호 */
+			,A.CNST_CODE			/* 공종코드 */
+			,A.CL_SE				/* 분류구분 */
+			,A.CNST_NM_LRGE			/* 공종명_대 */
+			,A.CNST_NM_MIDDL		/* 공종명_중 */
+			,A.STRWRK_DE			/* 착공일자 */
+			,A.COMPET_DE			/* 준공일자 */
+			,A.PLAN_FAIR_RT			/* 계획공정율 */
+			,A.DETAIL_FAIR_AT		/* 세부공정여부 */
+			,A.CNST_CODE AS CODE
+			,DECODE(A.CL_SE, '1', A.CNST_NM_LRGE, A.CNST_NM_MIDDL) AS CODE_NM
+			,ROW_NUMBER() OVER (ORDER BY A.BSNS_CODE,A.CNTRCT_NO,A.CNST_CODE,A.CL_SE) AS RN
+		FROM TBPRJ_BSNS_CNST_CODE A			/* 표준공종코드 */
+		WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		  AND A.CNTRCT_NO = #CNTRCT_NO#			/* 계약번호 */
+		ORDER BY 1,2,3
+	</select>
+
+	<!-- 추정원가 차수 ================================================== -->
+
+	<select id="PRJ.prcOdrList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 P.BSNS_CODE		/* 사업코드 */
+			,P.BSNS_STEP		/* 사업단계 */
+			,P.ODR				/* 차수 */
+			,P.ODR_DTLS			/* 차수내역 */
+			,A.STD_PRMPC_CODE	/* 표준원가코드 */
+			,A.QY				/* 수량 */
+			,A.UNTPC			/* 단가 */
+			,A.UNIT_NM			/* 단위 */
+			,ROUND(A.AMOUNT /1000, 2) AS AMT	/* 금액 */
+			,C.CL_SE			/* 분류구분 */
+			,DECODE(C.CL_SE, 1, C.LCLAS_NM, 2, C.MLSFC_NM, C.SCLAS_NM)
+			 AS CODE_NM			/* 원가항목명 */
+			,ROW_NUMBER() OVER (ORDER BY P.BSNS_CODE,P.BSNS_STEP,P.ODR,P.ODR_DTLS) AS RN
+		FROM TBPRJ_PRSMP_PRMPC P					/* 추정원가 */
+		LEFT JOIN TBPRJ_PRSMP_PRMPC_SBJECT A		/* 추정원가_과목별 */
+		  ON A.BSNS_CODE = P.BSNS_CODE
+		 AND A.BSNS_STEP = P.BSNS_STEP
+		 AND A.ODR = P.ODR
+		JOIN TBPRJ_PRMPC_CODE C						/* 원가코드 */
+		  ON C.STD_PRMPC_CODE = A.STD_PRMPC_CODE
+		WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+		  AND A.BSNS_STEP = #BSNS_STEP#			/* 사업단계 */
+		  AND A.ODR = #ODR#						/* 차수 */
+		<isNotEmpty property="CD1" >
+		</isNotEmpty>
+		ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 주택 세대수 조회 ================================================== -->
+<select id="PRJ.houseCountList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE				/* 사업코드 */
+			,A.HOUSE_CODE				/* 주택코드 */
+			,A.SUPLY_TY_CODE			/* 공급유형코드 */
+			,A.TY_CODE									/* 타입코드 */
+			,COUNT(A.HO) AS HSHLD_CO					/* 세대수 */
+			,ROUND(AVG(DVR_AR),2) AS DVR_AR_A			/* 전용면적 : 세대별 */
+			,ROUND(SUM(A.DVR_AR),2) AS DVR_AR_S			/* 전용면적 : 합계 */
+			,ROUND(AVG(CMNUSE_AR),2) AS CMNUSE_AR_A		/* 공용면적 : 세대별 */
+			,ROUND(SUM(A.CMNUSE_AR),2) AS CMNUSE_AR_S	/* 공용면적 : 합계 */
+			,ROUND(AVG(CNTRCT_AR),2) AS CNTRCT_AR_A		/* 계약면적 : 세대별 */
+			,ROUND(SUM(A.CNTRCT_AR),2) AS CNTRCT_AR_S	/* 계약면적 : 합계 */
+			,SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.TY_CODE) AS TY_CODE_NM	/* 타입(블럭) */
+		FROM TBPRJ_ISSNO_ADIT_INFO A			/* 호별추가정보 */
+		JOIN TBPRJ_BSNS_CODE BC ON A.BSNS_CODE = BC.BSNS_CODE
+		WHERE 1=1
+		<isNotEmpty property="BSNS_CODE" >
+		  AND A.BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+		</isNotEmpty>
+		<isNotEmpty property="HOUSE_CODE" >
+		  AND A.HOUSE_CODE = #HOUSE_CODE#	/* 주택코드 */
+		</isNotEmpty>
+		<isNotEmpty property="SUPLY_TY_CODE" >
+		  AND A.SUPLY_TY_CODE = #SUPLY_TY_CODE#	/* 공급유형코드 */
+		</isNotEmpty>
+		GROUP BY A.BSNS_CODE, A.HOUSE_CODE, A.SUPLY_TY_CODE, A.TY_CODE, SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.TY_CODE)
+		ORDER BY 1,2,3,4
+</select>
+
+	<!-- 첨부파일 ================================================== -->
+	<!-- 첨부파일 조회 -->
+	<select id="PRJ.fileList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.FILE_SN			/* 파일일련번호 */
+			,A.FILE_ORDR		/* 파일순차 */
+			,A.ORGINL_FILE_NM AS FILE_NM	/* 원본파일명 */
+			,A.FILE_EXTSN AS EXT			/* 파일확장자 */
+			,A.CHRCTR_PREPAR_VALUE_0 AS VAL0	/* 문자예비값0 */
+			,A.CHRCTR_PREPAR_VALUE_1 AS VAL1	/* 문자예비값1 */
+			,DECODE(A.CHRCTR_PREPAR_VALUE_0
+				,NULL,1											/* 즉시공개 */
+				,CASE WHEN A.UPDUSR_ID = #S_USER_ID# OR			/* 본인여부 확인 */
+						   TO_CHAR(SYSDATE,'YYYYMMDD') >= A.CHRCTR_PREPAR_VALUE_0	/* 공개일자 */
+					  THEN 1
+					  ELSE 0
+				 END
+			) AS OTHBC_YN		/* 공개여부 : 0-비공개,1-공개 */
+		FROM TBCOM_CMMN_ATCHMNFL A				/* 공통첨부파일 */
+		WHERE A.FILE_SN = #FILE_SN#			/* 파일일련번호 */
+		<isNotEmpty property="NOT_USED" >
+		  AND A.FILE_ORDR = #FILE_ORDR#		/* 파일순차 */
+		</isNotEmpty>
+		ORDER BY 1,2
+	</select>
+
+	<!-- 첨부파일 수정 -->
+	<update id="PRJ.fileSave" parameterClass="map">
+		UPDATE TBCOM_CMMN_ATCHMNFL			<!-- 공통첨부파일 -->
+		  SET
+			,CHRCTR_PREPAR_VALUE_0 = #VAL0#		<!-- 문자예비값0 -->
+			,CHRCTR_PREPAR_VALUE_1 = #VAL1#		<!-- 문자예비값1 -->
+		WHERE FILE_SN = #FILE_SN#			<!-- 파일일련번호 -->
+		  AND FILE_ORDR = #FILE_ORDR#		<!-- 파일순차 -->
+	</update>
+
+	<!--
+	 A.FILE_SN			/* 파일일련번호 */
+	,A.FILE_ORDR		/* 파일순차 */
+	,A.FILE_STRE_COURS		/* 파일저장경로 */
+	,A.STRE_FILE_NM			/* 저장파일명 */
+	,A.ORGINL_FILE_NM		/* 원본파일명 */
+	,A.FILE_EXTSN			/* 파일확장자 */
+	,A.FILE_MG			/* 파일크기 */
+	,A.USE_AT			/* 사용여부 */
+	,A.FILE_ID
+	,A.FILE_TY
+	,A.CHRCTR_PREPAR_VALUE_0 AS OTHBC_DE	/* 공개일자 */
+	,A.CHRCTR_PREPAR_VALUE_1 AS VAL1		/* 문자예비값1 */
+	-->
+
+	<!-- 주택 세대수 조회 ================================================== -->
+	<sql id="v_prj_house_count">
+		SELECT
+			 A.BSNS_CODE				/* 사업코드 */
+			,A.HOUSE_CODE				/* 주택코드 */
+			,A.SUPLY_TY_CODE			/* 공급유형코드 */
+			,A.TY_CODE					/* 타입코드 */
+			,COUNT(A.HO) AS HSHLD_CO	/* 세대수 */
+		FROM TBPRJ_ISSNO_ADIT_INFO A			/* 호별추가정보 */
+		GROUP BY A.BSNS_CODE, A.HOUSE_CODE, A.SUPLY_TY_CODE, A.TY_CODE
+	</sql>
+
+	<!-- 회계 실적자료 상세 조회 ================================================== -->
+	<sql id="v_prj_acc_detail">
+		SELECT
+			 CM.ACCNUT_YEAR					/* 회계년도 */
+			,CD.BSNS_CODE					/* 사업코드 */
+			,CD.ACCNUT_ACNT_CODE			/* 회계계정코드 */
+			,AM.STD_PRMPC_CODE				/* 표준원가코드 */
+			,DECODE(AC.DBRT_SE				/* 대차구분 : D-차변, C-대변 */
+					,'C',CD.CRDIT_AMOUNT  - CD.DEBTOR_AMOUNT		/* 대변 - 차변 */
+						,CD.DEBTOR_AMOUNT - CD.CRDIT_AMOUNT)		/* 차변 - 대변 */
+			 AS AMT
+			,CM.CPTAL_EXPNDTR_DE AS DT		/* 자금지출일자 */
+			,CM.SUMRY_1 AS SUMRY			/* 적요 */
+		FROM TBACC_CHIT_MASTR CM					/* 전표마스터 */
+		LEFT JOIN TBACC_CHIT_DETAIL CD				/* 전표상세 */
+		  ON CD.ACCNUT_YEAR = CM.ACCNUT_YEAR	/* 회계년도 */
+		 AND CD.CHIT_NO = CM.CHIT_NO			/* 전표번호 */
+		 AND CD.STACNT_SE = CM.STACNT_SE		/* 결산구분 */
+		LEFT JOIN TBACC_ACCNUT_ACNT_SBJECT AC		/* 회계계정과목 */
+		  ON AC.ACCNUT_YEAR = CD.ACCNUT_YEAR
+		 AND AC.ACCNUT_ACNT_CODE = CD.ACCNUT_ACNT_CODE
+		<!-- 
+		LEFT /* TODO 제거 : 맵핑체크 */
+		-->
+		JOIN TBPRJ_PRMPC_ACNT_MAPNG AM				/* 원가계정맵핑 */
+		  ON AM.ACCNUT_YEAR = CD.ACCNUT_YEAR
+		 AND AM.ACCNUT_ACNT_CODE = CD.ACCNUT_ACNT_CODE
+		WHERE CM.STACNT_SE = 'C1'				/* 결산구분 : C1-IFRS 일반회계, C2-구분회계 */
+		  AND CM.CPTAL_EXPNDTR_DE IS NOT NULL	/* 자금지출일자 */
+		  AND NVL(CD.BSNS_CODE, 'Y9999') != 'Y9999'		/* 사업코드 */
+		  AND AC.CHIT_PROCESS_AT = 1
+	</sql>
+</sqlMap>

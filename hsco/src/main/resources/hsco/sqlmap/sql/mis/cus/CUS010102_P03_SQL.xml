@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010102_P03_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!--고객 계약 목록조회 -->
+	<select id="CUS010102_P03DAO.selectCstmrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT 
+				 CSTMR_SE                                            AS CSTMR_SE        		/*고객구분*/
+				,PRMANENT_CSTMR_NO                                   AS PRMANENT_CSTMR_NO   	/*고객번호*/
+				,WAIT_AT                                             AS WAIT_AT              /*대기자여부*/
+				,CNTRCT_AT                                           AS CNTRCT_AT            /*계약자여부*/
+				,NM                                                  AS NM                   /*성명*/
+				,IHIDNUM                                             AS IHIDNUM              /*주민번호*/
+				,EMAIL                                               AS EMAIL                /*이메일*/
+				,TRANSLATE(TELNO,'1234567890'||TELNO,'1234567890')   AS TELNO                /*전화번호 원본 값*/
+				,TRANSLATE(MBTLNO,'1234567890'||MBTLNO,'1234567890') AS MBTLNO               /*핸드폰번호 원본 값*/
+				,ZIP                                                 AS ZIP                  /*고객기본 우편번호*/
+			    ,ADRES                                               AS ADRES                /*고객기본 주소*/
+			  FROM (
+					/*영구/상가 임대 고객 정보*/
+					SELECT 
+                           '02'                                         AS CSTMR_SE          /*고객구분*/
+                          , A.PRMANENT_CSTMR_NO                         AS PRMANENT_CSTMR_NO /*고객번호*/
+                          , '0'                                         AS WAIT_AT           /*대기자여부*/
+                          , DECODE(MAX(B.CNTRCTR_NO),NULL,'0','1')      AS CNTRCT_AT         /*계약자여부*/
+                          , REPLACE(MAX(A.NM),'　','')                  AS NM
+                          , MAX(A.IHIDNUM)                              AS IHIDNUM
+                          , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+                          , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+                          , MAX(A.EMAIL)                                AS EMAIL
+                          , MAX(A.ZIP)                                  AS ZIP               /*우편번호*/
+                          , MAX(A.ADRES) || ' ' || MAX(A.ADRES_DETAIL)  AS ADRES             /*주소*/
+					FROM TBRNT_PRMANENT_RENT_CSTMR A
+                         INNER JOIN TBRNT_RENT_CNTRCT B
+                        		 ON A.PRMANENT_CSTMR_NO = B.PRMANENT_CSTMR_NO
+					WHERE 1=1
+					<isNotEmpty property ="CSTMR_NM">
+					   AND REPLACE(A.NM,'　','') LIKE '%' || #CSTMR_NM# || '%'
+					</isNotEmpty>
+					<isNotEmpty property ="TELNO">
+					   AND (TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890') LIKE '%' || #TELNO# || '%' 
+					        OR 
+					        TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890') LIKE '%' || #TELNO# || '%'
+					       )
+					</isNotEmpty>
+					<isNotEmpty property ="DONG">
+					   AND (B.DONG = #DONG# OR C.DONG = #DONG#)
+					</isNotEmpty>
+					<isNotEmpty property ="HO">
+					   AND (B.HO = #HO# OR C.HO = #HO#)
+					</isNotEmpty>
+					GROUP BY A.PRMANENT_CSTMR_NO
+					
+					UNION ALL
+					
+					/*매입임대 고객 정보*/
+		            SELECT 
+		            	   '04'                                         AS CSTMR_SE          /*고객구분*/
+		            	  , A.PUCHAS_CSTMR_NO                           AS PRMANENT_CSTMR_NO /*고객번호*/
+		            	  , '0'                                         AS WAIT_AT           /*대기자여부*/
+		            	  , DECODE(MAX(B.CNTRCTR_NO),NULL,'0','1')      AS CNTRCT_AT         /*계약자여부*/
+		            	  , REPLACE(MAX(A.NM),'　','')                  AS NM
+		            	  , MAX(A.IHIDNUM)                              AS IHIDNUM
+		            	  , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+		            	  , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+		            	  , MAX(A.EMAIL)                                AS EMAIL
+		            	  , MAX(A.ZIP)                                  AS ZIP               /*우편번호*/
+		            	  , MAX(A.ADRES) || ' ' || MAX(A.ADRES_DETAIL)  AS ADRES             /*주소*/
+		            FROM  TBRNT_PUCHAS_RENT_CSTMR A                                /*매입임대고객*/
+		            	  INNER JOIN TBRNT_PUCHAS_CNTRCT B                    /*매입계약*/
+                                  ON A.PUCHAS_CSTMR_NO = B.PUCHAS_CSTMR_NO
+                          INNER JOIN TBRNT_PUCHAS_HOUSE C                          /*매입주택*/
+		            		      ON B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+                                 AND C.HOUSE_SE        =	'R2'
+		            WHERE 1=1
+		            <isNotEmpty property ="CSTMR_NM">
+		               AND REPLACE(A.NM,'　','') LIKE '%' || #CSTMR_NM# || '%'
+		            </isNotEmpty>
+		            <isNotEmpty property ="TELNO">
+		               AND (TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890') LIKE '%' || #TELNO# || '%' 
+		                    OR 
+		                    TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890') LIKE '%' || #TELNO# || '%'
+		                   )
+		            </isNotEmpty>
+		            <isNotEmpty property ="DONG">
+		               AND (B.DONG = #DONG# OR D.DONG = #DONG#)
+		            </isNotEmpty>
+		            <isNotEmpty property ="HO">
+		               AND (B.HO = #HO# OR D.HO = #HO#)
+		            </isNotEmpty>
+		            GROUP BY A.PUCHAS_CSTMR_NO
+
+					UNION ALL
+					
+					/*주택(분양) 고객 정보*/
+							            
+                    SELECT 
+                    	   '08'                                         AS CSTMR_SE          /*고객구분*/
+                    	  , A.HOUSE_CSTMR_NO                            AS PRMANENT_CSTMR_NO /*고객번호*/
+                    	  , '0'                                         AS WAIT_AT           /*대기자여부*/
+                    	  , DECODE(MAX(B.CNTRCTR_NO),NULL,'0','1')      AS CNTRCT_AT         /*계약자여부*/
+                    	  , REPLACE(MAX(A.CSTMR_NM),'　','')            AS NM
+                    	  , MAX(A.IHIDNUM)                              AS IHIDNUM
+                    	  , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+                    	  , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+                    	  , MAX(A.EMAIL)                                AS EMAIL
+                    	  , MAX(A.ZIP)                                  AS ZIP               /*우편번호*/
+                    	  , MAX(A.ADRES) || ' ' || MAX(A.ADRES_DETAIL)  AS ADRES             /*주소*/
+                    FROM  TBSLS_HOUSE_CSTMR  A								/* 주택고객 */
+                    	  INNER JOIN TBSLS_HCNTRCTR B					/* 주택계약자 */
+                    	          ON A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+                          INNER JOIN TBSLS_HOUSE_DONG_HO C
+                                  ON B.HOUSE_CODE = C.HOUSE_CODE
+                    	         AND B.DONG = C.DONG
+                    	 		 AND B.HO   = C.HO
+                    	  INNER JOIN TBSLS_HOUSE_INFO D
+                    	          ON C.HOUSE_CODE = D.HOUSE_CODE
+                    			 AND D.USE_AT = '1'
+                    WHERE 1=1
+                    <isNotEmpty property ="CSTMR_NM">
+                       AND REPLACE(A.CSTMR_NM,'　','') LIKE '%' || #CSTMR_NM# || '%'
+                    </isNotEmpty>
+                    <isNotEmpty property ="TELNO">
+                       AND (TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890') LIKE '%' || #TELNO# || '%' 
+                            OR 
+                            TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890') LIKE '%' || #TELNO# || '%'
+                           )
+                    </isNotEmpty>
+                    <isNotEmpty property ="DONG">
+                       AND (B.DONG = #DONG#)
+                    </isNotEmpty>
+                    <isNotEmpty property ="HO">
+                       AND (B.HO = #HO#)
+                    </isNotEmpty>
+                    GROUP BY A.HOUSE_CSTMR_NO
+
+					UNION ALL
+					
+					/*전세임대 고객 정보*/                    
+                    
+                    SELECT 
+                    	   '05'                                         AS CSTMR_SE          /*고객구분*/
+                    	  , A.LFSTS_CSTMR_NO                            AS PRMANENT_CSTMR_NO /*고객번호*/
+                    	  , '0'                                         AS WAIT_AT           /*대기자여부*/
+                    	  , DECODE(MAX(B.CNTRCTR_NO),NULL,'0','1')      AS CNTRCT_AT         /*계약자여부*/
+                    	  , REPLACE(MAX(A.NM),'　','')                  AS NM
+                    	  , MAX(A.IHIDNUM)                              AS IHIDNUM
+                    	  , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+                    	  , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+                    	  , ''                                          AS EMAIL
+                    	  , MAX(A.ZIP)                                  AS ZIP               /*우편번호*/
+                    	  , MAX(A.ADRES) || ' ' || MAX(A.ADRES_DETAIL)  AS ADRES             /*주소*/
+                    FROM TBRNT_LFSTS_CSTMR  A								/* 전세고객 */
+                    	 INNER JOIN TBRNT_LFSTS_CNTRCT B   			/* 전세계약자 */
+                    	         ON A.LFSTS_CSTMR_NO = B.LFSTS_CSTMR_NO
+                    	 INNER JOIN TBRNT_LFSTS_RENT_PSN D
+                    	         ON B.CNTRCTR_NO = D.CNTRCTR_NO
+                    			AND B.CNTRCT_CO = D.CNTRCTR_CO
+                    WHERE 1=1
+                      AND D.RNTAGNT_NO = (
+                                          SELECT NVL (MAX (RNTAGNT_NO), 1)
+                                            FROM TBRNT_LFSTS_RENT_PSN
+                                           WHERE CNTRCTR_NO = B.CNTRCTR_NO
+                                             AND CNTRCTR_CO = B.CNTRCT_CO
+                    					 )
+                    <isNotEmpty property ="CSTMR_NM">
+                       AND REPLACE(A.NM,'　','') LIKE '%' || #CSTMR_NM# || '%'
+                    </isNotEmpty>
+                    <isNotEmpty property ="TELNO">
+                       AND (TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890') LIKE '%' || #TELNO# || '%' 
+                            OR 
+                            TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890') LIKE '%' || #TELNO# || '%'
+                           )
+                    </isNotEmpty>
+                    <isNotEmpty property ="DONG">
+                       AND (B.DONG = #DONG#)
+                    </isNotEmpty>
+                    <isNotEmpty property ="HO">
+                       AND (B.HO = #HO#)
+                    </isNotEmpty>
+                    GROUP BY A.LFSTS_CSTMR_NO
+                    
+					UNION ALL
+					
+					/*토지 고객 정보*/        
+					
+                    SELECT 
+                    	   '07'                                         AS CSTMR_SE          /*고객구분*/
+                    	  , A.LAD_CSTMR_NO                              AS PRMANENT_CSTMR_NO /*고객번호*/
+                    	  , '0'                                         AS WAIT_AT           /*대기자여부*/
+                    	  , DECODE(MAX(B.CNTRCTR_NO),NULL,'0','1')       AS CNTRCT_AT         /*계약자여부*/
+                    	  , REPLACE(MAX(A.CSTMR_NM),'　','')            AS NM
+                    	  , MAX(A.IHIDNUM)                              AS IHIDNUM
+                    	  , MAX(A.TELNO)                                AS TELNO             /*전화번호*/
+                    	  , MAX(A.MBTLNO)                               AS MBTLNO            /*휴대폰번호*/
+                    	  , MAX(A.EMAIL)                                AS EMAIL
+                    	  , MAX(A.ZIP)                                  AS ZIP               /*우편번호*/
+                    	  , MAX(A.ADRES) || ' ' || MAX(A.ADRES_DETAIL)  AS ADRES             /*주소*/
+                    FROM TBSLS_LAD_CSTMR A								    /* 토지고객 */
+                    	 INNER JOIN TBSLS_LCNTRCTR B       			/* 토지계약자 */
+                    	         ON A.LAD_CSTMR_NO = B.LAD_CSTMR_NO
+                    WHERE 1=1
+                    <isNotEmpty property ="CSTMR_NM">
+                       AND REPLACE(A.CSTMR_NM,'　','') LIKE '%' || #CSTMR_NM# || '%'
+                    </isNotEmpty>
+                    <isNotEmpty property ="TELNO">
+                       AND (TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890') LIKE '%' || #TELNO# || '%' 
+                            OR 
+                            TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890') LIKE '%' || #TELNO# || '%'
+                           )
+                    </isNotEmpty>
+                    <isNotEmpty property ="DONG">
+                       AND A.LAD_CSTMR_NO IS NULL
+                    </isNotEmpty>
+                    <isNotEmpty property ="HO">
+                       AND A.LAD_CSTMR_NO IS NULL
+                    </isNotEmpty>
+                    GROUP BY A.LAD_CSTMR_NO    	            		            
+				)
+			 WHERE 1=1
+			ORDER BY CSTMR_SE, NM
+	</select>
+</sqlMap>

@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010101_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+    
+   <!--고객동향보고서-온라인민원목록 조회 -->
+	<select id="CUS010101DAO.selectOnlineCvplList" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH TBL AS (
+		  SELECT
+		       t2.CVPL_STTUS
+		      ,CASE WHEN t2.PROCESS_DT < (TO_DATE(TO_CHAR(t2.APPN_DT,'YYYYMMDD'),'YYYYMMDD')+TO_NUMBER(PROCESS_TMLMT)+1)
+		            THEN 1
+		            ELSE 0
+		       END AS INTIME
+		      ,CASE WHEN t2.PROCESS_DT < (TO_DATE(TO_CHAR(t2.APPN_DT,'YYYYMMDD'),'YYYYMMDD')+TO_NUMBER(PROCESS_TMLMT)+1)
+		            THEN 0
+		            ELSE 1
+		       END AS OVERTIME
+		      ,t2.STSFDG_EVL_1
+		      ,t2.STSFDG_EVL_2
+		      ,t2.STSFDG_EVL_3
+		      ,DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1) AS SC_CNT
+		      ,CASE WHEN DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1) > 0 
+		            THEN CEIL((NVL(t3.INTGR_PREPAR_VALUE,0)+NVL(t4.INTGR_PREPAR_VALUE,0)+NVL(t5.INTGR_PREPAR_VALUE,0))
+		                 / (DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1)))
+		            ELSE NULL
+		       END AS SCORE
+		  FROM TBCUS_HMPG_CSTMR_CVPL t1
+		       INNER JOIN TBCUS_HMPG_CVPL_DSTB t2
+		       ON  t1.RCEPT_NO      = t2.RCEPT_NO
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		       ON  t3.GRP_CODE      = 'CUS007'
+		       AND t2.STSFDG_EVL_1  = t3.CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		       ON  t4.GRP_CODE      = 'CUS007'
+		       AND t2.STSFDG_EVL_2  = t4.CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		       ON  t5.GRP_CODE      = 'CUS007'
+		       AND t2.STSFDG_EVL_3  = t5.CODE
+		  WHERE t1.RCEPT_DT IS NOT NULL
+		    AND t1.RCEPT_DT  >= #BASE_BGN_DT#
+		    AND t1.RCEPT_DT  <= #BASE_END_DT#
+		    AND t2.CVPL_STTUS IN ('5','6')  			/* 5:처리완료, 6:응답완료 */
+		    AND SUBSTR(t2.CVPL_NO,1,1) IN ('A')	/* A:온라인 */
+    ]]>
+    	<isNotEmpty property="DEPT_CODE" prepend="AND">
+    		(t2.CHRG_DEPT_CODE = #DEPT_CODE# OR t2.HELP_DEPT_CODE = #DEPT_CODE#)
+    	</isNotEmpty>
+    <![CDATA[
+		)
+		SELECT 
+		     SUM(NVL(t2.CNT,0))      AS CNT			/*처리건*/
+		    ,SUM(NVL(t2.INTIME,0))   AS INTIME		/*기간내*/
+		    ,SUM(NVL(t2.OVERTIME,0)) AS OVERTIME		/*지연*/
+		    ,SUM(NVL(t2.EVL_AVG,0))  AS EVL_AVG		/*평점*/
+		    ,SUM(NVL(t2.EVL1,0))     AS EVL1			/*매우만족*/
+		    ,SUM(NVL(t2.EVL2,0))     AS EVL2			/*만족*/
+		    ,SUM(NVL(t2.EVL3,0))     AS EVL3			/*보통*/
+		    ,SUM(NVL(t2.EVL4,0))     AS EVL4			/*불만족*/
+		    ,SUM(NVL(t2.EVL5,0))     AS EVL5			/*매우불만족*/
+		    ,SUM(NVL(t2.EVL0,0))     AS EVL0			/*무응답*/
+		FROM (SELECT
+		           COUNT(1)                                         AS CNT
+		          ,NVL(SUM(INTIME),0)                               AS INTIME
+		          ,NVL(SUM(OVERTIME),0)                             AS OVERTIME
+		          ,NVL(SUM(DECODE(SC_CNT,0,1,0)),0)                 AS EVL0
+		          ,SUM(CASE WHEN t2.CODE = '1' THEN 1 ELSE 0 END)   AS EVL1
+		          ,SUM(CASE WHEN t2.CODE = '2' THEN 1 ELSE 0 END)   AS EVL2
+		          ,SUM(CASE WHEN t2.CODE = '3' THEN 1 ELSE 0 END)   AS EVL3
+		          ,SUM(CASE WHEN t2.CODE = '4' THEN 1 ELSE 0 END)   AS EVL4
+		          ,SUM(CASE WHEN t2.CODE = '5' THEN 1 ELSE 0 END)   AS EVL5
+		          ,ROUND(AVG(t1.SCORE),2) AS EVL_AVG
+		      FROM TBL t1
+		           LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		           ON  t2.GRP_CODE = 'CUS007'
+		           AND t1.SCORE    = INTGR_PREPAR_VALUE
+		      ) t2
+	]]>
+	</select>
+
+	<!--고객동향보고서-고객방문평가카드 조회 -->
+	<select id="CUS010101DAO.selectCstmrVisitCard" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT COUNT(1) AS CNT
+		      ,NVL(ROUND(SUM(t3.INTGR_PREPAR_VALUE),2),0)				   AS EVL_AVG
+		      ,NVL(SUM(CASE WHEN t1.STSFDG_EVL = '1' THEN 1 ELSE 0 END),0) AS EVL1
+		      ,NVL(SUM(CASE WHEN t1.STSFDG_EVL = '2' THEN 1 ELSE 0 END),0) AS EVL2
+		      ,NVL(SUM(CASE WHEN t1.STSFDG_EVL = '3' THEN 1 ELSE 0 END),0) AS EVL3
+		      ,NVL(SUM(CASE WHEN t1.STSFDG_EVL = '4' THEN 1 ELSE 0 END),0) AS EVL4
+		      ,NVL(SUM(CASE WHEN t1.STSFDG_EVL = '5' THEN 1 ELSE 0 END),0) AS EVL5
+		FROM TBCUS_CSTMR_VISIT_EVL_CARD t1
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		     ON  t3.GRP_CODE    = 'CUS034'
+		     AND t1.STSFDG_EVL  = t3.CODE
+		WHERE  t1.VISIT_DE  >= #BASE_BGN_DT#
+		  AND  t1.VISIT_DE  <= #BASE_END_DT#
+	]]>
+	</select>
+
+	<!--고객동향보고서-오프라인민원목록 조회 -->
+	<select id="CUS010101DAO.selectOfflineCvplList" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH TBL AS (
+		  SELECT
+		       t2.CVPL_STTUS
+		      ,CASE WHEN t2.PROCESS_DT < (TO_DATE(TO_CHAR(t2.APPN_DT,'YYYYMMDD'),'YYYYMMDD')+TO_NUMBER(PROCESS_TMLMT)+1)
+		            THEN 1
+		            ELSE 0
+		       END AS INTIME
+		      ,CASE WHEN t2.PROCESS_DT < (TO_DATE(TO_CHAR(t2.APPN_DT,'YYYYMMDD'),'YYYYMMDD')+TO_NUMBER(PROCESS_TMLMT)+1)
+		            THEN 0
+		            ELSE 1
+		       END AS OVERTIME
+		      ,t2.STSFDG_EVL_1
+		      ,t2.STSFDG_EVL_2
+		      ,t2.STSFDG_EVL_3
+		      ,DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1) AS SC_CNT
+		      ,CASE WHEN DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1) > 0 
+		            THEN CEIL((NVL(t3.INTGR_PREPAR_VALUE,0)+NVL(t4.INTGR_PREPAR_VALUE,0)+NVL(t5.INTGR_PREPAR_VALUE,0))
+		                 / (DECODE(t2.STSFDG_EVL_1,NULL,0,1)+DECODE(t2.STSFDG_EVL_2,NULL,0,1)+DECODE(t2.STSFDG_EVL_3,NULL,0,1)))
+		            ELSE NULL
+		       END AS SCORE
+		  FROM TBCUS_HMPG_CSTMR_CVPL t1
+		       INNER JOIN TBCUS_HMPG_CVPL_DSTB t2
+		       ON  t1.RCEPT_NO      = t2.RCEPT_NO
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		       ON  t3.GRP_CODE      = 'CUS007'
+		       AND t2.STSFDG_EVL_1  = t3.CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		       ON  t4.GRP_CODE      = 'CUS007'
+		       AND t2.STSFDG_EVL_2  = t4.CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		       ON  t5.GRP_CODE      = 'CUS007'
+		       AND t2.STSFDG_EVL_3  = t5.CODE
+		  WHERE t1.RCEPT_DT IS NOT NULL
+		    AND t1.RCEPT_DT  >= #BASE_BGN_DT#
+		    AND t1.RCEPT_DT  <= #BASE_END_DT#
+		    AND t2.CVPL_STTUS IN ('5','6')  			/* 5:처리완료, 6:응답완료 */
+		    AND SUBSTR(t2.CVPL_NO,1,1) IN ('B')	/* B:오프라인 */
+	]]>
+    	<isNotEmpty property="DEPT_CODE" prepend="AND">
+    		(t2.CHRG_DEPT_CODE = #DEPT_CODE# OR t2.HELP_DEPT_CODE = #DEPT_CODE#)
+    	</isNotEmpty>
+    <![CDATA[
+		)
+		SELECT 
+		     NVL(t2.CNT,0)      AS CNT			/*처리건*/
+		    ,NVL(t2.INTIME,0)   AS INTIME		/*기간내*/
+		    ,NVL(t2.OVERTIME,0) AS OVERTIME		/*지연*/
+		    ,NVL(t2.EVL_AVG,0)  AS EVL_AVG		/*평점*/
+		    ,NVL(t2.EVL1,0)     AS EVL1			/*매우만족*/
+		    ,NVL(t2.EVL2,0)     AS EVL2			/*만족*/
+		    ,NVL(t2.EVL3,0)     AS EVL3			/*보통*/
+		    ,NVL(t2.EVL4,0)     AS EVL4			/*불만족*/
+		    ,NVL(t2.EVL5,0)     AS EVL5			/*매우불만족*/
+		    ,NVL(t2.EVL0,0)     AS EVL0			/*무응답*/
+		FROM (SELECT
+		           COUNT(1)                                         AS CNT
+		          ,NVL(SUM(INTIME),0)                               AS INTIME
+		          ,NVL(SUM(OVERTIME),0)                             AS OVERTIME
+		          ,NVL(SUM(DECODE(SC_CNT,0,1,0)),0)                 AS EVL0
+		          ,SUM(CASE WHEN t2.CODE = '1' THEN 1 ELSE 0 END)   AS EVL1
+		          ,SUM(CASE WHEN t2.CODE = '2' THEN 1 ELSE 0 END)   AS EVL2
+		          ,SUM(CASE WHEN t2.CODE = '3' THEN 1 ELSE 0 END)   AS EVL3
+		          ,SUM(CASE WHEN t2.CODE = '4' THEN 1 ELSE 0 END)   AS EVL4
+		          ,SUM(CASE WHEN t2.CODE = '5' THEN 1 ELSE 0 END)   AS EVL5
+		          ,ROUND(AVG(t1.SCORE),2) AS EVL_AVG
+		      FROM TBL t1
+		           LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		           ON  t2.GRP_CODE = 'CUS007'
+		           AND t1.SCORE    = INTGR_PREPAR_VALUE
+		      ) t2
+	]]>
+	</select>
+
+	<!--고객동향보고서-콜센터문의 조회 -->
+	<select id="CUS010101DAO.selectCllrInqryList" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT
+					 NVL(SUM(CNSLT_SE_1),0) + NVL(SUM(CNSLT_SE_2),0) + NVL(SUM(CNSLT_SE_3),0)
+					 + NVL(SUM(CNSLT_SE_4),0) + NVL(SUM(CNSLT_SE_5),0) + NVL(SUM(CNSLT_SE_6),0) 
+					                        AS SUM
+					,NVL(SUM(CNSLT_SE_1),0) AS CNSLT_SE_1
+					,NVL(SUM(CNSLT_SE_2),0) AS CNSLT_SE_2
+					,NVL(SUM(CNSLT_SE_3),0) AS CNSLT_SE_3
+					,NVL(SUM(CNSLT_SE_4),0) + NVL(SUM(CNSLT_SE_5),0) 
+					                        AS CNSLT_SE_4
+					,NVL(SUM(CNSLT_SE_6),0) AS CNSLT_SE_5
+			  FROM (
+					SELECT 
+						 DECODE(CNSLT_SE,'01',1,0) AS CNSLT_SE_1   /*주택분양/임대*/
+						,DECODE(CNSLT_SE,'02',1,0) AS CNSLT_SE_2   /*보상/택지분양*/
+						,DECODE(CNSLT_SE,'03',1,0) AS CNSLT_SE_3   /*영구임대/하자*/
+						,DECODE(CNSLT_SE,'04',1,0) AS CNSLT_SE_4   /*부서연결*/
+						,DECODE(CNSLT_SE,'05',1,0) AS CNSLT_SE_5   /*위치문의*/
+						,DECODE(CNSLT_SE,'06',1,0) AS CNSLT_SE_6   /*기타*/
+					  FROM TBCUS_CSTMR_CNSLT
+					 WHERE CNSLT_DE       >= TO_DATE(#BASE_BGN_DT#,'YYYYMMDD')
+					   AND CNSLT_DE       <= TO_DATE(#BASE_END_DT#,'YYYYMMDD')+1
+					)
+		]]>
+	</select>
+    
+</sqlMap>

@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HPM070103_SQL">
+
+	<!--  ==================== 탭01 : 실적현황 ====================  -->
+	<!-- 실적현황 목록 조회 -->
+	<select id="HPM070103DAO.selectAcmsltSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT s1.MBER_NM
+		  ,s1.GRP_NM
+		  ,s1.USE_DE
+		  ,s1.USE_TIME
+		  ,s1.USE_NMPR
+		  ,CASE
+		   WHEN TO_CHAR(TO_DATE(s1.USE_DE, 'yyyymmdd'), 'd') IN (1, 7)
+		   THEN '1'
+		   ELSE NVL2(s3.HVOF_AT, '1', '0') 
+		   END AS DAY  /* 0 : 평일, 1 : 주말*/
+		  ,CASE
+		        WHEN SUBSTR(s1.BEGIN_TM, 0, 4) < 1800
+		        THEN '0'
+		        ELSE '1'    /*주간 : 0, 야간 : 1*/
+		    END AS TM
+		  ,s1.RCPMNYER
+		  ,s1.SETLE_SE
+		  ,s1.SETLE_COMPT_DE
+		  ,s1.SETLE_AM
+		  ,s1.REFND_AM
+		  ,s1.SETLE_AM - NVL(REFND_AM, 0) AS AM
+		  ,s1.SETLE_STTUS
+		  ,NVL2(s1.REFND_BANK_CODE, s2.CODE_NM, s1.REFND_BANK_NM) AS REFND_BANK_NM
+		  ,s1.REFND_ACNUTNO
+		  ,s1.REFND_DPSTR
+		FROM (
+		    (SELECT 
+		       t1.DEPT_CODE    
+		      ,t1.FCLTS_SN
+		      ,t1.MBER_NM
+		      ,t1.GRP_NM
+		      ,t1.USE_DE
+		      ,SFHPM_GET_USE_TIME(t1.USE_TIME, t3.CODE_ETC_1) AS USE_TIME
+		      ,t1.USE_TIME                                    AS BEGIN_TM
+		      ,t1.USE_NMPR
+		      ,t1.RCPMNYER
+		      ,t1.SETLE_SE
+		      ,t1.SETLE_COMPT_DE
+		      ,t1.SETLE_AM
+		      ,t1.REFND_AM
+		      ,t1.SETLE_STTUS
+		      ,DECODE(t1.SETLE_STTUS, '005', NULL, t1.REFND_BANK_CODE) AS REFND_BANK_CODE
+		      ,DECODE(t1.SETLE_STTUS, '005', NULL, t1.REFND_BANK_NM)   AS REFND_BANK_NM
+		      ,DECODE(t1.SETLE_STTUS, '005', NULL, t1.REFND_ACNUTNO)   AS REFND_ACNUTNO
+		      ,DECODE(t1.SETLE_STTUS, '005', NULL, t1.REFND_DPSTR)     AS REFND_DPSTR
+		    FROM TBHPM_RENT_FCLTS_REQST_MANAGE t1
+		    LEFT OUTER JOIN TBHPM_RENT_FCLTS_MANAGE t2
+		    ON  t1.FCLTS_SN = t2.FCLTS_SN
+		    LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		    ON  t1.MUMM_RESVE_TIME_SE = t3.CODE
+		    AND t3.GRP_CODE           = 'HPM006'
+		    WHERE 1                   = 1
+		    AND t1.SETLE_STTUS       IN ('005', '006', '007')
+		        /*결제완료, 환불요청, 환불완료*/
+		    AND t1.SETLE_AM              <> 0
+		    AND NVL(t1.DELETE_AT, 0)     <> '1'
+		    AND NVL(t1.RENT_CANCL_AT, 0) <> '1'
+		    )
+		UNION ALL
+		    (SELECT 
+		       '040100'
+		      ,FCLTS_SN
+		      ,APPLCNT
+		      ,APPLCNT
+		      ,USE_DE
+		      ,TO_CHAR(TO_DATE(USE_BEGIN_TM, 'HH24MI'), 'HH24:MI')
+		        || '~'
+		        || TO_CHAR(TO_DATE(USE_END_TM, 'HH24MI'), 'HH24:MI') AS USE_TIME
+		      ,USE_BEGIN_TM                                                                                                                     
+		      ,USE_NMPR                                                                                                                     
+		      ,NULL                                                                                                                         
+		      ,NULL                                                                                                                         
+		      ,NULL                                                                                                                         
+		      ,NVL(FCLTY_RNTFEE, 0)+NVL(PBLDUS, 0)+NVL(CMRC_RNTFEE, 0)+NVL(RLAY_BRDCST_CHRGE, 0)+NVL(ATACH_RNTFEE, 0)+NVL(ADTM_TCKET_FEE, 0)
+		      ,NULL                                                                                                                         
+		      ,'005'                                                                                                                        
+		      ,NULL                                                                                                                         
+		      ,NULL                                                                                                                         
+		      ,NULL                                                                                                                         
+		      ,NULL                                                                                                                         
+		    FROM TBHPM_HSC_RENT_MANAGE t1
+		    WHERE 1         =1
+		    ) ) s1
+	    LEFT OUTER JOIN TBCOM_CMMN_CODE s2
+	      ON  s1.REFND_BANK_CODE = s2.CODE
+	     AND s2.GRP_CODE        = 'COM021'
+	    LEFT OUTER JOIN TBHPM_FCLTS_HVOF_INFO s3
+	      ON s1.DEPT_CODE = s3.DEPT_CODE
+	     AND s1.USE_DE = s3.HVOF_DE
+		
+		WHERE 1=1
+		  AND s1.USE_DE BETWEEN #BGNDE# AND #ENDDE#
+		  AND s1.FCLTS_SN = #FCLTS_SN#
+		ORDER BY s1.USE_DE ASC
+		]]>
+	</select>
+
+ 	<!--  ==================== 탭02 : 일일수입 현황 통계 ====================  -->
+	
+	
+
+
+	<!-- 검색조건 시설구분 조회-->
+	<select id="HPM070103DAO.selectFcltsSe" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT 
+		     t1.FCLTS_SE
+		    ,t2.CODE_NM AS FCLTS_SE_NM
+		FROM TBHPM_RENT_FCLTS_MANAGE t1
+		LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		ON  t1.FCLTS_SE = t2.CODE
+		AND t2.GRP_CODE = 'HPM007'
+		WHERE t1.DEPT_CODE = #DEPT_CODE#
+		GROUP BY t1.FCLTS_SE, t2.CODE_NM
+	</select>
+	
+	
+	<!-- 시설구분에 따른 시설번호 조회 -->
+	<select id="HPM070103DAO.selectFcltsSn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT 
+			 FCLTS_SN
+			,FCLTS_NM
+		FROM TBHPM_RENT_FCLTS_MANAGE
+		WHERE 1=1
+		  AND DEPT_CODE = #DEPT_CODE#
+		  AND BIZPLC_CODE = NVL(#BIZPLC_CODE#, '9999')
+		<isNotEmpty prepend="AND" property="FCLTS_SE">
+		 	FCLTS_SE = #FCLTS_SE#
+		</isNotEmpty>
+		ORDER BY FCLTS_SN
+		/*시설구분 001 : 축구장, 002 : 야구장, 003 : 테니스장, 006 : 실내연습실*/
+	</select>
+	
+	
+	<select id="HPM070103DAO.selectAcmsltSttusListT02" parameterClass="java.util.HashMap" resultClass="java.util.HashMap"  remapResults="true">
+		<![CDATA[
+		SELECT
+		     s1.USE_DE
+		    ,TO_CHAR(TO_DATE(s1.USE_DE, 'yyyymmdd'), 'yyyymm') AS MT_SUM
+		]]>
+		<iterate property="fcltsList">
+			,SUM(DECODE(s2.FCLTS_SN, #fcltsList[].FCLTS_SN#, s2.SETLE_AM, 0)) AS SETLE_AM_$fcltsList[].FCLTS_SN$ 
+			,SUM(DECODE(s2.FCLTS_SN, #fcltsList[].FCLTS_SN#, s2.USE_NMPR, 0)) AS USE_NMPR_$fcltsList[].FCLTS_SN$ 
+		</iterate>
+		<![CDATA[
+		FROM (SELECT TO_CHAR(LEVEL + TO_DATE((#BGNDE#), 'YYYYMMDD') - 1,'YYYYMMDD') AS USE_DE
+		      FROM DUAL
+		         CONNECT BY LEVEL + TO_DATE((#BGNDE#), 'YYYYMMDD') - 1 < TO_DATE(TO_DATE((#ENDDE#), 'YYYYMMDD') + 1)
+		     ) s1
+		  LEFT OUTER JOIN ( SELECT   DEPT_CODE
+									,USE_DE
+									,FCLTS_SN
+									,SETLE_AM
+									,USE_NMPR  
+							FROM (
+									(	SELECT   DEPT_CODE
+												,USE_DE
+												,FCLTS_SN
+												,DECODE(SETLE_STTUS, '007', SETLE_AM - NVL(REFND_AM, 0), SETLE_AM) AS SETLE_AM
+												,DECODE(SETLE_STTUS, '007', 0, USE_NMPR) AS USE_NMPR
+										FROM TBHPM_RENT_FCLTS_REQST_MANAGE 
+										WHERE 1 =1
+										AND SETLE_STTUS IN ('005', '006', '007')	/*결제완료, 환불요청*/
+										AND NVL(DELETE_AT, 0) <> '1'
+		   								AND NVL(RENT_CANCL_AT, 0) <> '1'
+										
+									)
+									UNION ALL
+									(	SELECT	'040100' AS DEPT_CODE
+												,USE_DE
+												,FCLTS_SN
+												,NVL(FCLTY_RNTFEE, 0)+NVL(PBLDUS, 0)+NVL(CMRC_RNTFEE, 0)+NVL(RLAY_BRDCST_CHRGE, 0)+NVL(ATACH_RNTFEE, 0)+NVL(ADTM_TCKET_FEE, 0) AS SETLE_AM
+												,USE_NMPR
+										FROM TBHPM_HSC_RENT_MANAGE
+									)
+								) 
+						    WHERE 1=1
+						      AND DEPT_CODE = #DEPT_CODE#
+						) s2 
+					 ON s1.USE_DE = s2.USE_DE
+		WHERE EXISTS (
+                SELECT 1
+                FROM TBHPM_RENT_FCLTS_MANAGE
+                WHERE DEPT_CODE = #DEPT_CODE#
+                  AND BIZPLC_CODE = NVL(#BIZPLC_CODE#, 9999)
+          ]]> 
+                  <isNotEmpty prepend="AND" property="FCLTS_SE">
+                 	FCLTS_SE = #FCLTS_SE#
+                  </isNotEmpty>
+             )
+		GROUP BY s1.USE_DE
+		ORDER BY s1.USE_DE ASC
+		
+	</select>	
+</sqlMap>

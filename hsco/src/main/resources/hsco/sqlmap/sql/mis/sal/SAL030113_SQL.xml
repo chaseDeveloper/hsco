@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL030113_SQL">	
+
+
+	<select id="SAL030113DAO.selectDeptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.SALARY_DEPT_CODE, MAX(t1.SALARY_DEPT_NM) AS SALARY_DEPT_NM
+		FROM TBSAL_MT_SALARY_PYMNT t1
+		     INNER JOIN TBSAL_SALARY_DEPT t2
+		     ON t1.SALARY_DEPT_CODE = t2.SALARY_DEPT_CODE
+		WHERE t1.PYMNT_YM 	= #PYMNT_YM#
+		  AND t1.SN 		= #SN#
+		  AND t2.BSNS_TY 	= #BSNS_TY#
+		GROUP BY t1.SALARY_DEPT_CODE
+		ORDER BY MAX(t2.OUTPT_SEQ)
+	</select>
+
+
+	<select id="SAL030113DAO.selectSalaryPymntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		WITH MT_SALARY_PYMNT_T AS (
+		    SELECT t1.PYMNT_YM
+		          ,t1.SALARY_DEPT_CODE
+		          ,t1.SALARY_DEPT_NM
+		          ,t1.EMPNO
+		          ,t1.EMPL_SE AS JSSFC_SE
+		          ,t1.SALARY_SE
+		          ,t1.PD_BUDGET_AT
+		          ,t3.PYMNT_DDC_CODE
+		          ,t3.PYMNT_DDC_CODE_NM
+		          ,t2.AMOUNT
+		    FROM TBSAL_MT_SALARY_PYMNT t1
+		         INNER JOIN TBSAL_MT_SALARY_DTLS t2
+		           ON  t1.PYMNT_YM = t2.PYMNT_YM
+		           AND t1.SN = t2.SN
+		           AND t1.EMPNO = t2.EMPNO
+		         INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE t3
+		           ON  t2.PYMNT_DDC_CODE = t3.PYMNT_DDC_CODE
+		         INNER JOIN TBSAL_SALARY_DEPT t4
+		           ON  t1.SALARY_DEPT_CODE = t4.SALARY_DEPT_CODE
+		    WHERE t1.PYMNT_YM 		= #PYMNT_YM#
+		      AND t1.SN 			= #SN#
+		      AND t3.PYMNT_DDC_SE 	= '0'  		/*0:지급,1:공제*/
+		      AND t4.BSNS_TY 		= #BSNS_TY# /* 대행사업 */
+		), SAL_TOTAL_T AS (
+		    SELECT 1                                    AS RNUM
+		          ,'기본연봉'||CHR(13)||'(기본급+제수당)'     AS PYMNT_NM
+		          ,s1.SALARY_DEPT_NM
+		          ,SUM(s1.AMOUNT)       AS AMOUNT
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.PYMNT_DDC_CODE NOT IN ('1140', '1150', '1160', '1170', '1190')
+		    AND    s1.JSSFC_SE IN ('01', '02', '03', '04', '08','103')
+		    GROUP BY s1.SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 2
+		          ,'초과근무수당'
+		          ,s1.SALARY_DEPT_NM
+		          ,SUM(s1.AMOUNT)       AS AMOUNT
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.PYMNT_DDC_CODE IN ('1140', '1150', '1160', '1170')
+		    AND    s1.JSSFC_SE IN ('01', '02', '03', '04', '08','103')
+		    GROUP BY s1.SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 3
+		          ,'보수합계'
+		          ,s1.SALARY_DEPT_NM
+		          ,SUM(s1.AMOUNT)       AS AMOUNT
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.PYMNT_DDC_CODE NOT IN ('1190')
+		    AND    s1.JSSFC_SE IN ('01', '02', '03', '04', '08','103')
+		    GROUP BY s1.SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 4
+		          ,'복리후생비'||CHR(13)||'(직책급업무추진)'
+		          ,s1.SALARY_DEPT_NM
+		          ,SUM(s1.AMOUNT)       AS AMOUNT
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.PYMNT_DDC_CODE = '1190'
+		    AND    s1.JSSFC_SE IN ('01', '02', '03', '04', '08','103')
+		    GROUP BY s1.SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 5
+		          ,'임직원 소계'
+		          ,s1.SALARY_DEPT_NM
+		          ,SUM(s1.AMOUNT)       AS AMOUNT
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE IN ('01', '02', '03', '04', '08','103')
+		    GROUP BY s1.SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 6
+		          ,'무기계약직 근로자'||CHR(13)||'(업무직)'
+		          ,s1.SALARY_DEPT_NM
+		          ,SUM(s1.AMOUNT)       AS AMOUNT
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE IN ('05')
+		      AND  NVL(s1.PD_BUDGET_AT,'0') = '0'
+		    GROUP BY s1.SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 7
+		          ,'기간제근로자'||CHR(13)||'(상용직)'
+		          ,s1.SALARY_DEPT_NM
+		          ,SUM(s1.AMOUNT)       AS AMOUNT
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  (s1.JSSFC_SE IN ('06', '09')  OR (s1.JSSFC_SE = '05' AND NVL(s1.PD_BUDGET_AT,'0') = '1'))
+		    GROUP BY s1.SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 8
+		          ,'자체평가급'
+		          ,NULL
+		          ,NULL
+		    FROM   DUAL
+		    UNION ALL
+		    SELECT 9
+		          ,'무기계약 및 기간제근로자 소계'
+		          ,s1.SALARY_DEPT_NM
+		          ,SUM(s1.AMOUNT)       AS AMOUNT
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE IN ('05', '06', '09')
+		    GROUP BY s1.SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 10
+		          ,'총 합계'
+		          ,s1.SALARY_DEPT_NM
+		          ,SUM(s1.AMOUNT)       AS AMOUNT
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE IN ('01', '02', '03', '04', '05', '06', '08', '09','103')
+		    GROUP BY s1.SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 11
+		    	  ,'임직원 인원수'
+		    	  ,SALARY_DEPT_NM
+		    	  ,COUNT(1)				AS AMOUNT
+		   	FROM (SELECT s1.SALARY_DEPT_NM, s1.EMPNO
+		   		  FROM MT_SALARY_PYMNT_T s1
+		   		  WHERE s1.JSSFC_SE IN ('01', '02', '03', '04', '08','103')
+		   		  GROUP BY s1.SALARY_DEPT_NM, s1.EMPNO
+		   		 )
+		    GROUP BY SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 12
+		    	  ,'무기계약직 인원수'
+		    	  ,SALARY_DEPT_NM
+		    	  ,COUNT(1)				AS AMOUNT
+		   	FROM (SELECT s1.SALARY_DEPT_NM, s1.EMPNO
+		   		  FROM MT_SALARY_PYMNT_T s1
+		   		  WHERE s1.JSSFC_SE IN ('05')
+		      	  AND  NVL(s1.PD_BUDGET_AT,'0') = '0'
+		   		  GROUP BY s1.SALARY_DEPT_NM, s1.EMPNO
+		   		 )
+		    GROUP BY SALARY_DEPT_NM
+		    UNION ALL
+		    SELECT 13
+		    	  ,'기간제 인원수'
+		    	  ,SALARY_DEPT_NM
+		    	  ,COUNT(1)				AS AMOUNT
+		   	FROM (SELECT s1.SALARY_DEPT_NM, s1.EMPNO
+		   		  FROM MT_SALARY_PYMNT_T s1
+		   		  WHERE (s1.JSSFC_SE IN ('06', '09')  OR (s1.JSSFC_SE = '05' AND NVL(s1.PD_BUDGET_AT,'0') = '1'))
+		   		  GROUP BY s1.SALARY_DEPT_NM, s1.EMPNO
+		   		 )
+		    GROUP BY SALARY_DEPT_NM
+		)
+		SELECT *
+		FROM SAL_TOTAL_T
+		PIVOT (
+		  SUM(AMOUNT)
+		  FOR SALARY_DEPT_NM
+		  IN (
+		<iterate conjunction="," property="deptList">
+			'$deptList[].SALARY_DEPT_NM$' AS "$deptList[].SALARY_DEPT_CODE$"
+		</iterate>
+		    )
+		)
+		ORDER BY RNUM
+	</select>
+
+	<select id="SAL030113DAO.selectDdcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.PYMNT_DDC_CODE
+			 , t1.PYMNT_DDC_CODE_NM
+		FROM TBSAL_PYMNT_DDC_STDR_CODE t1
+		WHERE t1.PYMNT_DDC_SE = '1'
+		  AND EXISTS (
+		    SELECT 1
+		    FROM TBSAL_MT_SALARY_IEM t2
+		    WHERE t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+		      AND t2.PYMNT_YM = #PYMNT_YM#
+		      AND t2.SN 	  = #SN#
+		  )
+		  AND EXISTS (
+		    SELECT 1
+		    FROM TBSAL_MT_SALARY_DTLS t3
+		    WHERE t1.PYMNT_DDC_CODE = t3.PYMNT_DDC_CODE
+		      AND t3.PYMNT_YM = #PYMNT_YM#
+		      AND t3.sn 	  = #SN#
+		  )
+		ORDER BY t1.OUTPT_ORDR
+	</select>
+
+	
+	<select id="SAL030113DAO.selectSalaryDdcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		WITH MT_SALARY_PYMNT_T AS (
+		    SELECT t1.PYMNT_YM
+	              ,t1.SALARY_DEPT_CODE
+	              ,t1.SALARY_DEPT_NM
+	              ,t1.EMPNO
+	              ,t1.EMPL_SE AS JSSFC_SE
+	              ,t3.PYMNT_DDC_CODE
+	              ,t3.PYMNT_DDC_CODE_NM
+	              ,t2.AMOUNT
+	              ,t4.OUTPT_SEQ
+	        FROM TBSAL_MT_SALARY_PYMNT t1
+	             INNER JOIN TBSAL_MT_SALARY_DTLS t2
+	               ON  t1.PYMNT_YM = t2.PYMNT_YM
+	               AND t1.SN = t2.SN
+	               AND t1.EMPNO = t2.EMPNO
+	             INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE t3
+	               ON  t2.PYMNT_DDC_CODE = t3.PYMNT_DDC_CODE
+	             INNER JOIN TBSAL_SALARY_DEPT t4
+	               ON  t1.SALARY_DEPT_CODE = t4.SALARY_DEPT_CODE
+	        WHERE t1.PYMNT_YM		= #PYMNT_YM#
+	          AND t1.SN 			= #SN#
+	          AND t3.PYMNT_DDC_SE 	= '1'  		/*0:지급,1:공제*/
+	          AND t4.BSNS_TY 		= #BSNS_TY# /* 대행사업 */
+		), SAL_TOTAL_T AS (
+		    SELECT 1                         		AS RNUM
+		          ,'1'                       		AS SALARY_DEPT_CODE
+		          ,'직원+무기계약+일시사역 합계' 	AS SALARY_DEPT_NM
+		          ,s1.PYMNT_DDC_CODE_NM       		AS PYMNT_DDC_CODE_NM
+		          ,SUM(s1.AMOUNT)             		AS AMOUNT
+             	  ,1                          		AS OUTPT_SEQ
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE IN ('01', '02', '03', '04', '05', '06', '08', '09','103')
+		    GROUP BY s1.PYMNT_DDC_CODE_NM
+		    UNION ALL
+		    SELECT 2
+		          ,s1.SALARY_DEPT_CODE
+		          ,s1.SALARY_DEPT_NM   
+		          ,s1.PYMNT_DDC_CODE_NM
+		          ,SUM(s1.AMOUNT)
+              	  ,MAX(s1.OUTPT_SEQ)
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE IN ('01', '02', '03', '04', '08','103')
+		    GROUP BY s1.SALARY_DEPT_CODE, s1.SALARY_DEPT_NM, s1.PYMNT_DDC_CODE_NM
+		    UNION ALL
+		    SELECT 3
+		          ,'999999'
+		          ,'[소     계]'
+		          ,s1.PYMNT_DDC_CODE_NM
+		          ,SUM(s1.AMOUNT)
+              	  ,999999
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE IN ('01', '02', '03', '04', '08','103')
+		    GROUP BY s1.PYMNT_DDC_CODE_NM
+		    UNION ALL
+		    SELECT 4
+		          ,s1.SALARY_DEPT_CODE
+		          ,s1.SALARY_DEPT_NM ||CHR(13)||'(업무직)'
+		          ,s1.PYMNT_DDC_CODE_NM
+		          ,SUM(s1.AMOUNT)
+              	  ,MAX(s1.OUTPT_SEQ)
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE IN ('05', '06')
+		    GROUP BY s1.SALARY_DEPT_CODE, s1.SALARY_DEPT_NM, s1.PYMNT_DDC_CODE_NM
+		    UNION ALL
+		    SELECT 5
+		          ,'999999'
+		          ,'[소     계]'
+		          ,s1.PYMNT_DDC_CODE_NM
+		          ,SUM(s1.AMOUNT)
+              	  ,999999
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE IN ('05', '06')
+		    GROUP BY s1.PYMNT_DDC_CODE_NM
+		    UNION ALL
+		    SELECT 6
+		          ,s1.SALARY_DEPT_CODE
+		          ,s1.SALARY_DEPT_NM ||CHR(13)||'(상용직)'
+		          ,s1.PYMNT_DDC_CODE_NM
+		          ,SUM(s1.AMOUNT)
+              	  ,MAX(s1.OUTPT_SEQ)
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE = '09'
+		    GROUP BY s1.SALARY_DEPT_CODE, s1.SALARY_DEPT_NM, s1.PYMNT_DDC_CODE_NM
+		    UNION ALL
+		    SELECT 7
+		          ,'999999'
+		          ,'[소     계]'
+		          ,s1.PYMNT_DDC_CODE_NM
+		          ,SUM(s1.AMOUNT)
+              	  ,999999
+		    FROM   MT_SALARY_PYMNT_T s1
+		    WHERE  s1.JSSFC_SE = '09'
+		    GROUP BY s1.PYMNT_DDC_CODE_NM
+		)
+		SELECT *
+		FROM SAL_TOTAL_T
+		PIVOT (
+		  SUM(AMOUNT)
+		  FOR PYMNT_DDC_CODE_NM
+		  IN (
+		<iterate conjunction="," property="ddcList">
+			'$ddcList[].PYMNT_DDC_CODE_NM$' AS "$ddcList[].PYMNT_DDC_CODE$"
+		</iterate>
+		    )
+		)
+		ORDER BY RNUM ASC, OUTPT_SEQ
+	</select>
+	
+</sqlMap>

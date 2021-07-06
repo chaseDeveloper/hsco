@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070116_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 시간외근무 조회 -->
+	<select id="HRM070116DAO.selectOvtmwrk" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT 
+		       t2.DEPT_NM
+		      ,t3.EMPNM
+		      ,t1.OVTMWRK_DE
+		      ,t1.SEQ
+		      ,t1.AFTFAT_SANCTN_AT
+		      ,t1.DEPT_CODE
+		      ,t1.EMPNO
+		      ,t1.REQST_BEGIN_TM
+		      ,t1.REQST_END_TM
+		      ,t1.REQST_TIME
+		      ,t1.WORK_BEGIN_TM
+		      ,t1.WORK_END_TM
+		      ,t1.OVTIME_WORK_TIME
+		      ,t1.RESTDE_WORK_TIME
+		      ,t1.NIGHT_WORK_TIME
+		      ,t1.CNFIRM_AT
+		      ,t1.CNFIRM_DT
+		      ,t1.CNFRMR_EMPNO
+		      ,t1.WORK_DRCTR
+		      ,t1.WORK_PURPS
+		      ,t1.RM
+		      ,t1.SANCTN_NO
+		      ,t1.REGISTER_ID
+		      ,t1.REGIST_DT
+		      ,t1.UPDUSR_ID
+		      ,t1.UPDT_DT
+		      ,SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) AS SANCTN_KND
+		      ,CASE
+		         WHEN NVL((SELECT NVL(HVOF_SE, '000') FROM TBHRM_HVOF_INFO WHERE HVOF_DE = t1.OVTMWRK_DE),'000') <> '000' THEN NULL
+		         ELSE NVL(DECODE(TO_CHAR(to_date(t1.OVTMWRK_DE, 'yyyymmdd'),'D'), 2, t4.FLXWK_SE_MON, 3, t4.FLXWK_SE_TUE, 4, t4.FLXWK_SE_WED, 5, t4.FLXWK_SE_THU, 6, t4.FLXWK_SE_FRI),'05')
+		       END                         AS WORK_STDR_DE
+		      ,t6.CODE_NM                  AS CLSF_NM
+		      ,t1.NGHT_WRK_AT              AS NGHT_WRK_AT
+		FROM   TBHRM_OVTMWRK t1
+		       LEFT OUTER JOIN TBHRM_DEPT t2
+		            ON t1.DEPT_CODE = t2.DEPT_CODE
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t3
+		            ON t1.EMPNO = t3.EMPNO
+		       LEFT OUTER JOIN TBHRM_FLXWK t4
+					ON 	t1.EMPNO = t4.EMPNO 
+					AND t1.OVTMWRK_DE BETWEEN t4.BGNDE AND t4.ENDDE
+					AND t4.CNFIRM_AT = '1' /*확인여부*/
+			   LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+			        ON  t3.HR_CLSF_SE = t6.CODE
+			        AND t6.GRP_CODE = 'HRM002'
+		WHERE  1=1
+	]]>
+		<isNotEmpty property="OVTMWRK_ST_DE">
+			<isNotEmpty property="OVTMWRK_ED_DE">
+				AND    t1.OVTMWRK_DE BETWEEN #OVTMWRK_ST_DE# AND #OVTMWRK_ED_DE#
+			</isNotEmpty>
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			AND    t1.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+	<![CDATA[
+		ORDER BY t1.OVTMWRK_DE DESC
+		        ,t1.SEQ ASC
+	]]>
+	</select>
+	
+	<!--재택근무 신청여부 체크-->
+	<select id="HRM070116DAO.chkTlcomputAt" parameterClass="java.util.HashMap" resultClass="java.lang.Integer">
+		SELECT COUNT(*) AS CNT
+		  FROM TBHRM_TLCOMPUT T1
+		       INNER JOIN INTRAWARE.VIEW_MIS_SANCTN_KND@DL_INTRACITY T2
+		          ON T1.SANCTN_NO = T2.SANCTN_NO
+		         AND T2.SANCTN_KND = '5' /*결재완료된 재택근무신청만 해당*/
+		 WHERE EMPNO = #EMPNO#
+		   AND #OVTMWRK_DE# BETWEEN T1.BGNDE AND T1.ENDDE
+	</select>
+
+
+	<!-- 시간외근무 추가 -->
+	<insert id="HRM070116DAO.insertOvtmwrk" parameterClass="java.util.Map">
+	<![CDATA[
+		INSERT INTO TBHRM_OVTMWRK(
+		     OVTMWRK_DE
+		    ,SEQ
+		    ,AFTFAT_SANCTN_AT
+		    ,DEPT_CODE
+		    ,EMPNO
+		    ,REQST_BEGIN_TM
+		    ,REQST_END_TM
+		    ,WORK_BEGIN_TM
+		    ,WORK_END_TM
+		    ,REQST_TIME
+		    ,CNFIRM_AT
+		    ,CNFIRM_DT
+		    ,CNFRMR_EMPNO
+		    ,WORK_DRCTR
+		    ,WORK_PURPS
+		    ,RM
+		    ,SANCTN_NO
+		    ,NGHT_WRK_AT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES (
+		     #OVTMWRK_DE#
+		    ,(
+		      SELECT NVL(MAX(SEQ),0)+1
+		      FROM   TBHRM_OVTMWRK
+		      WHERE  OVTMWRK_DE = #OVTMWRK_DE#
+		     )
+		    ,NVL(#AFTFAT_SANCTN_AT#,'0')
+		    ,#DEPT_CODE#
+		    ,#EMPNO#
+		    ,#REQST_BEGIN_TM#
+		    ,#REQST_END_TM#
+		    ,NULL /* REQST_BEGIN_TM */        /*신청시각을 초기값으로 제공(확인자 조정가능)*/
+		    ,NULL /* REQST_END_TM */           /*신청시각을 초기값으로 제공(확인자 조정가능)*/
+		    ,(
+			  SELECT MAX(
+			             CASE
+			                WHEN VAL > 0 THEN LPAD(VAL_ROUND, 2, '0') || LPAD(TRUNC(MOD(VAL, VAL_ROUND) * 60), 2, '0')
+			                WHEN VAL = 0 AND NEXTDAY_ROUND = '24' THEN '0000'
+			                ELSE LPAD(NEXTDAY_ROUND, 2, '0') || LPAD(TRUNC(MOD(NEXTDAY_VAL, NEXTDAY_ROUND) * 60), 2, '0')
+			             END
+			            )
+			  FROM   (
+			          SELECT ((TO_DATE(FLXWK_ED_TM, 'HH24MI') - TO_DATE(FLXWK_ST_TM, 'HH24MI')) * 24)  - CASE WHEN HOLY_AT = '1' AND FLXWK_ST_TM <= '1200' AND FLXWK_ED_TM >= '1300' THEN 1
+			                                                                                                  WHEN HOLY_AT = '0' AND (ETC_TIME1 BETWEEN FLXWK_ST_TM AND FLXWK_ED_TM) AND (ETC_TIME2 BETWEEN FLXWK_ST_TM AND FLXWK_ED_TM) THEN 9
+			                                                                                                  ELSE 0 
+			                                                                                                  END                 AS VAL
+			                ,TRUNC((TO_DATE(FLXWK_ED_TM, 'HH24MI') - TO_DATE(FLXWK_ST_TM, 'HH24MI')) * 24, 0)  - CASE WHEN HOLY_AT = '1' AND FLXWK_ST_TM <= '1200' AND FLXWK_ED_TM >= '1300' THEN 1 
+			                                                                                                          WHEN HOLY_AT = '0' AND (ETC_TIME1 BETWEEN FLXWK_ST_TM AND FLXWK_ED_TM) AND (ETC_TIME2 BETWEEN FLXWK_ST_TM AND FLXWK_ED_TM) THEN 9
+			                                                                                                          ELSE 0 
+			                                                                                                          END         AS VAL_ROUND
+			                ,((TO_DATE(FLXWK_ED_TM, 'HH24MI') + 1 - TO_DATE(FLXWK_ST_TM, 'HH24MI')) * 24)  - CASE WHEN HOLY_AT = '1' AND FLXWK_ST_TM <= '1200' AND FLXWK_ED_TM >= '1300' THEN 1 
+			                                                                                                      WHEN (HOLY_AT = '1' OR HOLY_AT = '0') AND FLXWK_ST_TM = '2100' AND FLXWK_ED_TM >= '0600' THEN 1
+			                                                                                                      ELSE 0 END             AS NEXTDAY_VAL
+			                ,TRUNC((TO_DATE(FLXWK_ED_TM, 'HH24MI') + 1 - TO_DATE(FLXWK_ST_TM, 'HH24MI')) * 24, 0)  - CASE WHEN HOLY_AT = '1' AND FLXWK_ST_TM <= '1200' AND FLXWK_ED_TM >= '1300' THEN 1
+			                                                                                                              WHEN (HOLY_AT = '1' OR HOLY_AT = '0') AND FLXWK_ST_TM = '2100' AND FLXWK_ED_TM >= '0600' THEN 1
+			                                                                                                              ELSE 0 END    AS NEXTDAY_ROUND
+			          FROM   (                                     
+			                  SELECT CASE WHEN HOLY_AT = '1' AND  INPUT_TIME1 > '1200' AND INPUT_TIME1 < '1300'  THEN '1200'
+			                              WHEN HOLY_AT = '1' AND (INPUT_TIME1 <= '1200' OR INPUT_TIME1 >= '1300') THEN INPUT_TIME1           
+			                              WHEN (INPUT_TIME1 >= ETC_TIME1 AND INPUT_TIME1 <= ETC_TIME2) THEN CASE WHEN (INPUT_TIME2 >= ETC_TIME1 AND INPUT_TIME2 <= ETC_TIME2 AND INPUT_TIME1 > INPUT_TIME2) THEN ETC_TIME2
+			                                                                                                     WHEN (INPUT_TIME2 >= ETC_TIME1 AND INPUT_TIME2 <= ETC_TIME2 AND INPUT_TIME1 < INPUT_TIME2) THEN '0000'
+			                                                                                                     WHEN (INPUT_TIME2 < ETC_TIME1 AND INPUT_TIME1 > INPUT_TIME2) THEN ETC_TIME2
+			                                                                                                     WHEN INPUT_TIME2 >= ETC_TIME2 THEN ETC_TIME2
+			                                                                                                     END
+			                              ELSE INPUT_TIME1 END AS FLXWK_ST_TM
+			                              
+			                        ,CASE WHEN HOLY_AT = '1' AND  INPUT_TIME2 > '1200' AND INPUT_TIME2 < '1300'  THEN '1300'
+			                              WHEN HOLY_AT = '1' AND (INPUT_TIME2 <= '1200' OR INPUT_TIME2 >= '1300') THEN INPUT_TIME2
+			                              WHEN (INPUT_TIME2 >= ETC_TIME1 AND INPUT_TIME2 <= ETC_TIME2) THEN CASE WHEN (INPUT_TIME1 >= ETC_TIME1 AND INPUT_TIME1 <= ETC_TIME2 AND INPUT_TIME1 < INPUT_TIME2) THEN '0000'
+			                                                                                                     WHEN (INPUT_TIME1 >= ETC_TIME1 AND INPUT_TIME1 <= ETC_TIME2 AND INPUT_TIME1 > INPUT_TIME2) THEN ETC_TIME1
+			                                                                                                     WHEN (INPUT_TIME1 > ETC_TIME2 AND INPUT_TIME1 > INPUT_TIME2) THEN ETC_TIME1
+			                                                                                                     WHEN INPUT_TIME1 <= ETC_TIME1 THEN ETC_TIME1
+			                                                                                                     END
+			                              ELSE INPUT_TIME2 END AS FLXWK_ED_TM
+			                        ,HOLY_AT
+			                        ,ETC_TIME1
+			                        ,ETC_TIME2
+			                  FROM  (   
+			                          SELECT #REQST_BEGIN_TM# AS INPUT_TIME1
+			                               , #REQST_END_TM# AS INPUT_TIME2
+			                               , HOLY_AT
+			                               , CASE WHEN LENGTH(s2.CODE_ETC_1) = 2 THEN s2.CODE_ETC_1 || '00'
+			                                      WHEN LENGTH(s2.CODE_ETC_1) = 4 THEN s2.CODE_ETC_1
+			                                 END ETC_TIME1
+			                               , CASE WHEN LENGTH(s2.CODE_ETC_2) = 2 THEN s2.CODE_ETC_2 || '00'
+			                                      WHEN LENGTH(s2.CODE_ETC_2) = 4 THEN s2.CODE_ETC_2
+			                                 END ETC_TIME2
+			                          FROM   (
+			                          			SELECT WORK_STDR_DE
+			                          			     , CASE WHEN (SELECT HOLY_AT FROM VWHRM_SYS_DAY WHERE SYS_DE = #OVTMWRK_DE#) = '1' THEN '1'
+			                                               ELSE HOLY_AT 
+			                                          END AS HOLY_AT
+			                          			FROM (
+			                                          SELECT NVL(MAX(DECODE(TO_CHAR(to_date(#OVTMWRK_DE#, 'yyyymmdd'),'D'), 2, FLXWK_SE_MON, 3, FLXWK_SE_TUE, 4, FLXWK_SE_WED, 5, FLXWK_SE_THU, 6, FLXWK_SE_FRI)),'05') AS WORK_STDR_DE
+			                                                ,DECODE(TO_CHAR(TO_DATE(#OVTMWRK_DE#,'YYYYMMDD'),'D'), '1', '1', '7', '1', '0') AS HOLY_AT
+			                                          FROM   TBHRM_FLXWK
+			                                          WHERE  EMPNO = #EMPNO#
+			                                          AND    #OVTMWRK_DE# BETWEEN BGNDE AND ENDDE
+			                                          AND    DECODE(SFCOM_GET_SANCTN_KND(SANCTN_NO),'5',1,'4',1,'1',1,0) = '1'
+			                                   )
+			                                 ) s1
+			                                 LEFT OUTER JOIN TBCOM_CMMN_CODE s2
+			                                      ON s1.WORK_STDR_DE = s2.CODE
+			                                     AND s2.GRP_CODE = 'HRM018'
+			                          WHERE  1=1
+			                        )
+			                 )
+			         )
+			  WHERE  1=1
+			 )
+		    ,NVL(#CNFIRM_AT#,'0')
+		    ,#CNFIRM_DT#
+		    ,#CNFRMR_EMPNO#
+		    ,#WORK_DRCTR#
+		    ,#WORK_PURPS#
+		    ,#RM#
+		    ,#SANCTN_NO#
+		    ,NVL(#NGHT_WRK_AT#,0)
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+
+
+	<!-- 시간외근무 수정 -->
+	<update id="HRM070116DAO.updateOvtmwrk" parameterClass="java.util.Map">
+	<![CDATA[
+		UPDATE TBHRM_OVTMWRK
+		SET    AFTFAT_SANCTN_AT = #AFTFAT_SANCTN_AT#
+		      ,DEPT_CODE        = #DEPT_CODE#
+		      ,EMPNO            = #EMPNO#
+		      ,REQST_BEGIN_TM   = #REQST_BEGIN_TM#
+		      ,REQST_END_TM     = #REQST_END_TM#
+		      ,WORK_BEGIN_TM    = #WORK_BEGIN_TM#
+		      ,WORK_END_TM      = #WORK_END_TM#
+		      ,REQST_TIME       = (
+					               SELECT MAX(
+					                          CASE
+					                             WHEN VAL > 0 THEN LPAD(VAL_ROUND, 2, '0') || LPAD(TRUNC(MOD(VAL, VAL_ROUND) * 60), 2, '0')
+					                             WHEN VAL = 0 AND NEXTDAY_ROUND = '24' THEN '0000'
+					                             ELSE LPAD(NEXTDAY_ROUND, 2, '0') || LPAD(TRUNC(MOD(NEXTDAY_VAL, NEXTDAY_ROUND) * 60), 2, '0')
+					                          END
+					                         )
+					               FROM   (
+					                       SELECT ((TO_DATE(FLXWK_ED_TM, 'HH24MI') - TO_DATE(FLXWK_ST_TM, 'HH24MI')) * 24)  - CASE WHEN HOLY_AT = '1' AND FLXWK_ST_TM <= '1200' AND FLXWK_ED_TM >= '1300' THEN 1
+					                                                                                                               WHEN HOLY_AT = '0' AND (ETC_TIME1 BETWEEN FLXWK_ST_TM AND FLXWK_ED_TM) AND (ETC_TIME2 BETWEEN FLXWK_ST_TM AND FLXWK_ED_TM) THEN 9
+					                                                                                                               ELSE 0 
+					                                                                                                               END                 AS VAL
+					                             ,TRUNC((TO_DATE(FLXWK_ED_TM, 'HH24MI') - TO_DATE(FLXWK_ST_TM, 'HH24MI')) * 24, 0)  - CASE WHEN HOLY_AT = '1' AND FLXWK_ST_TM <= '1200' AND FLXWK_ED_TM >= '1300' THEN 1 
+					                                                                                                                       WHEN HOLY_AT = '0' AND (ETC_TIME1 BETWEEN FLXWK_ST_TM AND FLXWK_ED_TM) AND (ETC_TIME2 BETWEEN FLXWK_ST_TM AND FLXWK_ED_TM) THEN 9
+					                                                                                                                       ELSE 0 
+					                                                                                                                       END         AS VAL_ROUND
+					                             ,((TO_DATE(FLXWK_ED_TM, 'HH24MI') + 1 - TO_DATE(FLXWK_ST_TM, 'HH24MI')) * 24)  - CASE WHEN HOLY_AT = '1' AND FLXWK_ST_TM <= '1200' AND FLXWK_ED_TM >= '1300' THEN 1 
+					                                                                                                                   WHEN (HOLY_AT = '1' OR HOLY_AT = '0') AND FLXWK_ST_TM = '2100' AND FLXWK_ED_TM >= '0600' THEN 1
+					                                                                                                                   ELSE 0 END             AS NEXTDAY_VAL
+					                             ,TRUNC((TO_DATE(FLXWK_ED_TM, 'HH24MI') + 1 - TO_DATE(FLXWK_ST_TM, 'HH24MI')) * 24, 0)  - CASE WHEN HOLY_AT = '1' AND FLXWK_ST_TM <= '1200' AND FLXWK_ED_TM >= '1300' THEN 1
+					                                                                                                                           WHEN (HOLY_AT = '1' OR HOLY_AT = '0') AND FLXWK_ST_TM = '2100' AND FLXWK_ED_TM >= '0600' THEN 1
+					                                                                                                                           ELSE 0 END    AS NEXTDAY_ROUND
+					                       FROM   (                                     
+					                               SELECT CASE WHEN HOLY_AT = '1' AND  INPUT_TIME1 > '1200' AND INPUT_TIME1 < '1300'  THEN '1200'
+					                                           WHEN HOLY_AT = '1' AND (INPUT_TIME1 <= '1200' OR INPUT_TIME1 >= '1300') THEN INPUT_TIME1           
+					                                           WHEN (INPUT_TIME1 >= ETC_TIME1 AND INPUT_TIME1 <= ETC_TIME2) THEN CASE WHEN (INPUT_TIME2 >= ETC_TIME1 AND INPUT_TIME2 <= ETC_TIME2 AND INPUT_TIME1 > INPUT_TIME2) THEN ETC_TIME2
+					                                                                                                                  WHEN (INPUT_TIME2 >= ETC_TIME1 AND INPUT_TIME2 <= ETC_TIME2 AND INPUT_TIME1 < INPUT_TIME2) THEN '0000'
+					                                                                                                                  WHEN (INPUT_TIME2 < ETC_TIME1 AND INPUT_TIME1 > INPUT_TIME2) THEN ETC_TIME2
+					                                                                                                                  WHEN INPUT_TIME2 >= ETC_TIME2 THEN ETC_TIME2
+					                                                                                                                  END
+					                                           ELSE INPUT_TIME1 END AS FLXWK_ST_TM
+					                                           
+					                                     ,CASE WHEN HOLY_AT = '1' AND  INPUT_TIME2 > '1200' AND INPUT_TIME2 < '1300'  THEN '1300'
+					                                           WHEN HOLY_AT = '1' AND (INPUT_TIME2 <= '1200' OR INPUT_TIME2 >= '1300') THEN INPUT_TIME2
+					                                           WHEN (INPUT_TIME2 >= ETC_TIME1 AND INPUT_TIME2 <= ETC_TIME2) THEN CASE WHEN (INPUT_TIME1 >= ETC_TIME1 AND INPUT_TIME1 <= ETC_TIME2 AND INPUT_TIME1 < INPUT_TIME2) THEN '0000'
+					                                                                                                                  WHEN (INPUT_TIME1 >= ETC_TIME1 AND INPUT_TIME1 <= ETC_TIME2 AND INPUT_TIME1 > INPUT_TIME2) THEN ETC_TIME1
+					                                                                                                                  WHEN (INPUT_TIME1 > ETC_TIME2 AND INPUT_TIME1 > INPUT_TIME2) THEN ETC_TIME1
+					                                                                                                                  WHEN INPUT_TIME1 <= ETC_TIME1 THEN ETC_TIME1
+					                                                                                                                  END
+					                                           ELSE INPUT_TIME2 END AS FLXWK_ED_TM
+					                                     ,HOLY_AT
+					                                     ,ETC_TIME1
+					                                     ,ETC_TIME2
+					                               FROM  (   
+					                                       SELECT #REQST_BEGIN_TM# AS INPUT_TIME1
+					                                            , #REQST_END_TM# AS INPUT_TIME2
+					                                            , HOLY_AT
+					                                            , CASE WHEN LENGTH(s2.CODE_ETC_1) = 2 THEN s2.CODE_ETC_1 || '00'
+					                                                   WHEN LENGTH(s2.CODE_ETC_1) = 4 THEN s2.CODE_ETC_1
+					                                              END AS ETC_TIME1
+					                                            , CASE WHEN LENGTH(s2.CODE_ETC_2) = 2 THEN s2.CODE_ETC_2 || '00'
+					                                                   WHEN LENGTH(s2.CODE_ETC_2) = 4 THEN s2.CODE_ETC_2
+					                                              END AS ETC_TIME2
+					                                       FROM   (
+					                                       			SELECT WORK_STDR_DE
+					                                       			     , CASE WHEN (SELECT HOLY_AT FROM VWHRM_SYS_DAY WHERE SYS_DE = #OVTMWRK_DE#) = '1' THEN '1'
+								                                                ELSE HOLY_AT 
+								                                           END AS HOLY_AT
+					                                       			FROM (
+							                                               SELECT NVL(MAX(DECODE(TO_CHAR(to_date(#OVTMWRK_DE#, 'yyyymmdd'),'D'), 2, FLXWK_SE_MON, 3, FLXWK_SE_TUE, 4, FLXWK_SE_WED, 5, FLXWK_SE_THU, 6, FLXWK_SE_FRI)),'05') AS WORK_STDR_DE
+							                                                     ,DECODE(TO_CHAR(TO_DATE(#OVTMWRK_DE#,'YYYYMMDD'),'D'), '1', '1', '7', '1', '0') AS HOLY_AT
+							                                               FROM   TBHRM_FLXWK
+							                                               WHERE  EMPNO = #EMPNO#
+							                                               AND    #OVTMWRK_DE# BETWEEN BGNDE AND ENDDE
+							                                               AND    DECODE(SFCOM_GET_SANCTN_KND(SANCTN_NO),'5',1,'4',1,'1',1,0) = '1'
+							                                        )
+					                                              ) s1
+					                                              LEFT OUTER JOIN TBCOM_CMMN_CODE s2
+					                                                   ON s1.WORK_STDR_DE = s2.CODE
+					                                                  AND s2.GRP_CODE = 'HRM018'
+					                                       WHERE  1=1
+					                                     )
+					                              )
+					                      )
+					               WHERE  1=1
+							     )
+		      ,WORK_DRCTR       = #WORK_DRCTR#
+		      ,WORK_PURPS       = #WORK_PURPS#
+		      ,RM               = #RM#
+		      ,SANCTN_NO        = #SANCTN_NO#
+		      ,NGHT_WRK_AT      = NVL(#NGHT_WRK_AT#,0)
+		      ,UPDUSR_ID        = #S_USER_ID#
+		      ,UPDT_DT          = SYSDATE
+		WHERE  OVTMWRK_DE       = #OVTMWRK_DE#
+		AND    SEQ              = #SEQ#
+	]]>
+	</update>
+
+
+	<!-- 시간외근무 삭제 -->
+	<delete id="HRM070116DAO.deleteOvtmwrk" parameterClass="java.util.Map">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_OVTMWRK
+		WHERE  OVTMWRK_DE       = #OVTMWRK_DE#
+		AND    SEQ              = #SEQ#
+	]]>
+	</delete>
+
+
+	<!-- 시간외근무 조회 -->
+	<select id="HRM070116DAO.selectWorkTm" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT NVL(MAX(HVOF),'000') AS HVOF
+		      ,DECODE(NVL(MAX(HVOF), '000'), '000', NVL(MAX(FLXWK), '05'), NULL) AS FLXWK
+		FROM(
+		  SELECT NVL(A.HVOF_SE, '000') AS HVOF ,
+		    ''                         AS FLXWK
+		  FROM TBHRM_HVOF_INFO A
+		  WHERE A.HVOF_DE = #OVTMWRK_DE#
+		  UNION ALL
+		  SELECT ''                                                                                                                                         AS HVOF ,
+		    DECODE(TO_CHAR(TO_DATE(#OVTMWRK_DE#,'YYYYMMDD'), 'd'), 2, B.FLXWK_SE_MON , 3, B.FLXWK_SE_TUE , 4, B.FLXWK_SE_WED , 5, B.FLXWK_SE_THU , 6, B.FLXWK_SE_FRI ) AS FLXWK
+		  FROM TBHRM_FLXWK B
+		  WHERE #OVTMWRK_DE# BETWEEN B.BGNDE AND B.ENDDE
+		    AND B.EMPNO = #EMPNO#
+		    AND DECODE(SFCOM_GET_SANCTN_KND(B.SANCTN_NO),'5',1,'4',1,'1',1,0)  = '1'
+		)
+	</select>
+</sqlMap>

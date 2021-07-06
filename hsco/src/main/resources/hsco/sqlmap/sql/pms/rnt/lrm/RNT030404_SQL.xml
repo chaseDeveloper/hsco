@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT030404">
+
+<!-- 쿼리명 : 월별 자동이체 신청해지 결과 합계 정보 보회
+설명 : 월별 자동이체 신청해지 결과 합계 정보 보회
+수정일  		수정자  	수정내용
+2015.09.14	이상준		최초생성
+작성자 : 이상준
+최초작성일 : 2015.09.14
+-->
+<select id="RNT030404DAO.selectAtcngReqstSumInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	SELECT /* SLS040201DAO.selectAtcngRqestSumInfo 월별 자동이체 신청해지 결과 합계 정보 보회 */
+		   NVL(SUM(a1.TOTAL_CNT), 0) AS TOTAL_CNT	/* 총건수 */
+	     , NVL(SUM(a1.NEW_CNT), 0) AS NEW_CNT		/* 신규건수 */
+		 , NVL(SUM(a1.CAN_CNT), 0)	AS CAN_CNT		/* 해지건수 */
+	     , NVL(SUM(a1.TOTAL_CNT) - SUM(a1.NEW_CNT) - SUM(a1.CAN_CNT), 0) AS ETC_CNT	/* 기타건수 */
+	  FROM (SELECT CASE WHEN REQST_SE = '1' THEN COUNT(1) ELSE 0 END NEW_CNT
+	  			 , CASE WHEN REQST_SE = '3' THEN COUNT(1) ELSE 0 END CAN_CNT
+	             , COUNT(1) AS TOTAL_CNT
+	          FROM TBRNT_LFSTS_ATCNG_REQST_TRMNAT a	/* 주택자동이체신청 */
+	  		 WHERE a.REQST_YM = #REQST_YM#		/* 신청년월 */
+	  		 GROUP BY REQST_SE					/* 신청구분 : 신규(1)/해지(3) */
+	  	   ) a1
+</select>
+	
+<!-- 쿼리명 : 월별 자동이체 신청해지 결과 조회
+설명 : 월별 자동이체 신청해지 결과 조회
+     - 결과조회 및 결과파일(공사>은행)생성 자료조회
+수정일          수정자      수정내용
+2015.10.27    이상준        최초생성
+작성자 : 이상준
+최초작성일 : 2015.10.27
+-->
+<select id="RNT030404DAO.selectAtcngReqstList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">    
+        SELECT
+                a.REQST_DE            /* 신청일자 */
+             , SUBSTR( a.REQST_DE , 3, 6) AS  REQST_DE2            /* 신청일자  바디용*/
+             , a.REQST_SN            /* 신청일련번호 */
+             , a.REQST_YM            /* 신청년월 */
+             , a.DTA_SE                /* 자료구분 */
+             , a.BANK_CODE            /* 은행코드 */
+             , a.ACNUTNO            /* 계좌번호 */
+             , a.FBS_MANAGE_NO        /* FBS관리번호 */
+             , a.PAYER_NO            /* 납부자번호 */
+             , a.REQST_SE            /* 신청구분 : 1신청, 3해지 */
+             , CASE REQST_SE
+                     WHEN '1' THEN '신규'
+                    WHEN '3' THEN '해지' ELSE REQST_SE
+               END AS REQST_SE_NM    /* 신청구분명 */
+             , a.TRANSFR_HOPE_DE    /* 이체희망일자 */
+             , a.REQST_SPOT_CODE    /* 신청지점코드 */
+             , a.DPSTR                /* 혜금주 */
+             , a.REQST_RESULT_CODE    /* 신청결과코드 */
+             , a.REQST_RESULT          /* 신청결과 */
+             , a.PROCESS_DE            /* 처리일자 */
+             , SUBSTR(a.BANK_CODE,2,2) AS BANK_CODE2            /* 은행코드 */
+          FROM TBRNT_LFSTS_ATCNG_REQST_TRMNAT a    /* 주택자동이체신청 */
+         WHERE 1 = 1
+           AND a.REQST_YM = #REQST_YM#    /* 신청년월 */
+         ORDER BY a.REQST_SN
+</select>   	
+	
+  	<!-- 쿼리명 : 월별 자동이체 신청해지 일자정보 조회
+설명 : 월별 자동이체 신청해지 일자정보 조회
+     - 결과파일(공사>은행)생성 자료조회
+수정일  		수정자  	수정내용
+2015.10.27	이상준		최초생성
+작성자 : 이상준
+최초작성일 : 2015.10.27
+-->
+   	<select id="RNT030404DAO.selectAtcngReqstDeInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+   		SELECT /* SLS040201DAO.selectAtcngReqstDeInfo 자동이체 신청일자 생성/최소/최대 일자 조회 */
+			   (SELECT TO_CHAR(SYSDATE, 'YYMMDD') FROM DUAL) AS TRAN_DE
+			 , a1.MIN_REQST_DE
+		     , a1.MAX_REQST_DE
+		  FROM (SELECT MIN(a.REQST_DE) as MIN_REQST_DE
+		             , MAX(a.REQST_DE) as MAX_REQST_DE
+		          FROM TBRNT_LFSTS_ATCNG_REQST_TRMNAT a	/* 주택자동이체신청 */
+		         WHERE a.REQST_DE LIKE #REQST_YM#||'%'	/* 신청년월 */
+		  	   ) a1
+   	</select>	
+	
+<!-- 쿼리명 : 월별 자동이체 신청해지 처리 건수 조회
+설명 : 월별 자동이체 신청해지 처리건수 조회
+     - 신청파일(은행>공사)등록 자료조회
+수정일          수정자      수정내용
+2015.10.27    이상준        최초생성
+작성자 : 이상준
+최초작성일 : 2015.10.27
+-->    
+       <select id="RNT030404DAO.selectAtcngProcessCnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+           SELECT /* SLS040201DAO.selectAtcngProcessCnt 조회월 처리 자료 확인 */
+               COUNT(*) as PROCESS_CNT
+          FROM TBRNT_LFSTS_ATCNG_REQST_TRMNAT a    /* 주택자동이체신청 */
+         WHERE a.REQST_YM = #REQST_YM#        /* 접수년월 */       
+       </select>	
+
+<!-- 쿼리명 : 월별 자동이체 신청해지 내역 삭제
+설명 : 월별 자동이체 신청해지 내역(저장/처리결과) 삭제
+     - 신청파일(은행>공사)등록
+수정일  		수정자  	수정내용
+2015.10.27	이상준		최초생성
+작성자 : 이상준
+최초작성일 : 2015.10.27
+-->	
+	<delete id="RNT030404DAO.deleteAtcngInfo" parameterClass="java.util.HashMap">
+		DELETE /* SLS040201DAO.deleteAtcngInfo 월별 자동이체 신청해지 내역 삭제 */
+			   TBRNT_LFSTS_ATCNG_REQST_TRMNAT		/* 주택자동이체신청 */   
+ 		 WHERE REQST_YM = #REQST_YM#
+	</delete>
+
+
+   <!-- 쿼리명 : 월별 자동이체 신청해지 건별 정보 저장
+   설명 : 월별 자동이체 신청해지 건별 신청 정보 저장
+        - 신청파일(은행>공사)등록
+   수정일          수정자      수정내용
+   2015.10.27    이상준        최초생성
+   작성자 : 이상준
+   최초작성일 : 2015.10.27
+   -->
+    <insert id="RNT030404DAO.insertAtcngReqstInfo" parameterClass="java.util.HashMap">
+    
+        INSERT /* SLS040201DAO.insertAtcngReqstInfo 월별 자동이체 신청/해지 정보 저장 */
+          INTO TBRNT_LFSTS_ATCNG_REQST_TRMNAT        /* 주택자동이체신청 */
+             ( REQST_DE
+             , REQST_SN
+             , REQST_YM
+             , DTA_SE
+             , BANK_CODE
+             , ACNUTNO
+             , FBS_MANAGE_NO
+             , PAYER_NO
+             , REQST_SE
+             , TRANSFR_HOPE_DE
+             , REQST_SPOT_CODE
+             , DPSTR
+             , REQST_RESULT_CODE
+             , REQST_RESULT
+             , PROCESS_DE
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT)
+        VALUES
+              ( #REQST_DE#
+             , NVL((SELECT MAX(REQST_SN) FROM TBRNT_LFSTS_ATCNG_REQST_TRMNAT WHERE REQST_YM = #REQST_YM#), 0) + 1
+             , #REQST_YM#
+             , #DTA_SE#
+             , '0'||#BANK_CODE#
+             , #ACNUTNO#
+             , #FBS_MANAGE_NO#
+             , #PAYER_NO#
+             , #REQST_SE#
+             , #TRANSFR_HOPE_DE#
+             , #REQST_SPOT_CODE#
+             , #DPSTR#
+             , #REQST_RESULT_CODE#
+             , #REQST_RESULT#
+             , #PROCESS_DE#
+             , #S_USER_ID#
+             , SYSDATE
+             , #S_USER_ID#
+             , SYSDATE)
+    </insert>
+<!-- 
+ 쿼리명 : 월 별자동이체 신청해지 건별 신청정보 저장
+   설명 : 월별 자동이체 신청해지 건별 신청 정보 저장
+        - 신청파일(은행>공사)등록
+   작성자 : 이광원
+   최초작성일 : 2015.12.09
+-->
+<insert id="RNT030404DAO.insertAtcngInfo" parameterClass="java.util.HashMap">  
+  MERGE INTO TBRNT_LFSTS_ATCNG_INFO
+     USING DUAL
+     ON (
+      CNTRCTR_NO = SUBSTR(#PAYER_NO#,1,7)||SUBSTR(#PAYER_NO#,8,3)     
+     )
+ WHEN MATCHED THEN
+UPDATE SET
+      REQST_TRMNAT_SE = #REQST_SE#        
+    , ATCNG_TRMNAT_DE = #REQST_DE#
+    , UPDUSR_ID = #S_USER_ID#
+    , UPDT_DT = SYSDATE            
+WHERE CNTRCTR_NO = SUBSTR(#PAYER_NO#,1,7)||SUBSTR(#PAYER_NO#,8,3)              
+ WHEN NOT MATCHED THEN
+INSERT(
+      ACNUTNO
+    , ATCNG_REQST_DE
+    , CPTAL_SE
+    , BANK_CODE
+    , DPSTR
+    , REQST_TRMNAT_SE
+    , REGISTER_ID
+    , REGIST_DT
+    , UPDUSR_ID
+    , UPDT_DT
+    , CNTRCTR_NO           
+) VALUES (
+      #ACNUTNO#
+    , #REQST_DE#
+    , '2'
+    , '0'||#BANK_CODE#
+    , #DPSTR#
+    , '1'
+    , #S_USER_ID#
+    , SYSDATE            
+    , #S_USER_ID#
+    , SYSDATE    
+    , SUBSTR(#PAYER_NO#,1,7)||SUBSTR(#PAYER_NO#,8,3)        
+)        
+</insert>    
+    	
+
+<!-- 쿼리명 : 자동이체정보 입력 및 신청결과생성  프로시저
+설명 : 자동이체정보 입력 및 신청결과생성  프로시저
+수정일  수정자  수정내용
+
+작성자 : 이광원
+최초작성일 : 2015.11.06
+-->	
+<parameterMap id="sp_rn_rent_autopay_desc_iu" class="java.util.HashMap">
+	<parameter property="IN_REC_YYYYMM" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+</parameterMap>	
+	
+<procedure id="RNT030404DAO.SP_RN_RENT_AUTOPAY_DESC_IU" parameterMap="sp_rn_rent_autopay_desc_iu">
+{ CALL SP_RN_RENT_AUTOPAY_DESC_IU( ? , ? )}
+</procedure>
+
+</sqlMap>

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM110103_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+
+	<!-- 일용직 근로소득지급 조회 -->
+	<select id="HRM110103DAO.selectWhtaxDtstmn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM110103DAO.selectWhtaxDtstmn*/]]>
+			WITH TBHRM_DYLRR AS (
+			    SELECT BCNC_CODE          AS DYLRR_NO
+			         , BCNC_NM
+			         , RPRSNTV            AS LABRR_NM
+			         , H_DECRYPT(RPRSNTV_IHIDNUM)    AS IHIDNUM
+			         , TAXT_SE
+			         , TELNO              AS TELNO_1
+			         , H_DECRYPT(MBTLNUM)            AS TELNO_2
+			         , EMAIL
+			         , ZIP
+			         , RN
+			         , DETAIL_RDNMADR
+			         , ADRES
+			         , DETAIL_ADRES       AS ADRES_DETAIL
+			         , USE_AT
+			         , SUMRY              AS RM
+			         , REGISTER_ID
+			         , REGIST_DT
+			         , UPDUSR_ID
+			         , UPDT_DT
+			      FROM TBCTR_BCNC_MASTR
+			     WHERE 1=1
+			)
+			SELECT T1.MANAGE_YM
+			     , SUBSTR(T1.MANAGE_YM, 1, 4) || '-' || SUBSTR(T1.MANAGE_YM, 5)    AS MANAGE_YM2
+			     , T1.MANAGE_SEQ
+			     , T1.DETAIL_SEQ
+			     , T1.DYLRR_NO
+			     , NULL                   AS DECSN_YM /*추후 회계 연계되면 지급일자 OR 결의일자*/
+			     , T2.BCNC_NM
+			     , T2.LABRR_NM
+			     , T2.IHIDNUM
+			     , T1.ADRES_1
+			     , T1.ADRES_2
+			     , T2.TELNO_1
+			     , T2.TELNO_2
+			     , T3.INCOME_SE
+			     , T3.MNGR_DEPT_CODE
+			     , T4.DEPT_NM             AS MNGR_DEPT_NM
+			     , T3.MNGR_EMPNO
+			     , T5.EMPNM               AS MNGR_EMPNM
+			     , T1.WORK_BGNDE
+			     , T1.WORK_ENDDE
+			     , T1.WORK_DAYCNT
+			     , T1.WORK_TIME
+			     , NVL(T1.WORK_UNTPC, 0)                 AS WORK_UNTPC
+			     , NVL(T1.ADIT_PYMNTAMT, 0)              AS ADIT_PYMNTAMT
+			     , NVL(T1.NEET_EXPENS_RATE, 0)           AS NEET_EXPENS_RATE
+			     , NVL(T1.NEET_EXPENS_AMOUNT, 0)         AS NEET_EXPENS_AMOUNT
+			     , NVL(T1.INCOME_AMOUNT, 0)              AS INCOME_AMOUNT
+			     , NVL(T1.PYMNT_TOT_AMOUNT, 0)           AS PYMNT_TOT_AMOUNT
+			     , NVL(T1.INCMTAX_TAXRT, 0)              AS INCMTAX_TAXRT
+			     , NVL(T1.INCMTAX_AMOUNT, 0)             AS INCMTAX_AMOUNT
+			     , NVL(T1.IHNTS_AMOUNT, 0)               AS IHNTS_AMOUNT
+			     , NVL(T1.WHTAX_AMOUNT, 0)               AS WHTAX_AMOUNT
+			     , T1.INSRNC_APPLC_AT
+			     , NVL(T1.IACI_AMOUNT, 0)                AS IACI_AMOUNT
+			     , NVL(T1.CMPNY_BND_EMPLYMINSRNC, 0)     AS CMPNY_BND_EMPLYMINSRNC
+			     , NVL(T1.INDVDL_BND_EMPLYMINSRNC, 0)    AS INDVDL_BND_EMPLYMINSRNC
+			     , NVL(T1.REAL_PYMNT_AMOUNT, 0)          AS REAL_PYMNT_AMOUNT
+			     , DECODE(T3.INCOME_SE, '01', T3.PYMNT_SJ || ' 일용직 ' || T6.DETAIL_CNT || '건', NULL)    AS SUMRY
+			     , NULL    AS CHIP_NO /*추후 회계 연계시 추가되어야 함*/
+			     , NULL    AS PYMNT_DE /*추후 회계 연계시 추가되어야 함*/
+			     , NVL(T1.INCMTAX_AMOUNT, 0) + NVL(T1.IHNTS_AMOUNT, 0)                                     AS TAXAMT_SUM
+			  FROM TBHRM_DELBR_DETAIL T1
+			       LEFT OUTER JOIN TBHRM_DYLRR T2
+			            ON T1.DYLRR_NO = T2.DYLRR_NO
+			       LEFT OUTER JOIN TBHRM_DELBR T3
+			            ON T1.MANAGE_YM   = T3.MANAGE_YM
+			           AND T1.MANAGE_SEQ  = T3.MANAGE_SEQ
+			       LEFT OUTER JOIN TBHRM_DEPT T4
+			            ON T3.MNGR_DEPT_CODE = T4.DEPT_CODE
+			       LEFT OUTER JOIN TBHRM_HR_MASTR T5
+			            ON T3.MNGR_EMPNO = T5.EMPNO
+			       LEFT OUTER JOIN (
+			                        SELECT MANAGE_YM
+			                             , MANAGE_SEQ
+			                             , COUNT(*)      AS DETAIL_CNT
+			                          FROM TBHRM_DELBR_DETAIL
+			                        GROUP BY MANAGE_YM
+			                               , MANAGE_SEQ
+			                       ) T6
+			            ON T1.MANAGE_YM  = T6.MANAGE_YM
+			           AND T1.MANAGE_SEQ = T6.MANAGE_SEQ
+			 WHERE 1=1
+			   AND T3.INCOME_SE = #INCOME_SE#
+		<isEqual property="STDR_YM" compareValue="01">
+			<isNotEmpty property="YM">
+			   AND T1.MANAGE_YM = #YM#
+			</isNotEmpty>
+		</isEqual>
+		<isEqual property="STDR_YM" compareValue="02">
+			<isNotEmpty property="YM">
+			   /*추후 지급년월 들어가야함*/
+			   AND T1.MANAGE_YM = '1'
+			</isNotEmpty>
+		</isEqual>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+			   AND (T3.MNGR_DEPT_CODE='000000' OR T3.MNGR_DEPT_CODE = #DEPT_CODE#)
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="EMPNO">
+			   AND T3.MNGR_EMPNO = #EMPNO#
+		</isNotEmpty>
+			ORDER BY T3.MNGR_DEPT_CODE
+			       , T2.LABRR_NM
+			       , T1.MANAGE_SEQ
+			       , T1.DETAIL_SEQ
+	</select>
+
+</sqlMap>

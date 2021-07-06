@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_LAD_SLE_PLAN_ACMSLT	토지판매계획및실적 ^
+		 R   : TBPRJ_LAD_BLCK_INFO		토지블럭정보
+		 R   : TBHRM_HR_MASTR			인사마스터
+		CRUD : TBPRJ_LAD_LTTOT_AMOUNT	토지분양가산정
+		CRUD : TBPRJ_LAD_LTTOT_CHANGE	토지분양가변경
+		CRUD : TBPRJ_LAD_LTTOT_ATCH		토지분양가첨부
+	-->
+
+	<!-- 분양수입산정 ================================================== -->
+
+	<!-- 분양수입산정 조회 -->
+	<select id="PRJ020401.mList" parameterClass="map" resultClass="hashmap">
+		SELECT AA.SAL_SE
+		     , AA.BSNS_CODE
+		     , AA.PRPOS_CODE 
+		     , AA.PRPOS_CODE || '.' || AA.PRPOS_CODE_NM AS PRPOS_CODE_NM
+		     , AA.SUPLY_CODE
+		     , AA.SUPLY_CODE || '.' || AA.SUPLY_CODE_NM AS SUPLY_CODE_NM
+		     , AA.AR
+		     , AA.RTRVL_PLAN_AMOUNT AS RTRVL_PLAN_AMOUNT_1
+		     , ROUND(AA.RTRVL_PLAN_AMOUNT / 1000, 2) AS RTRVL_PLAN_AMOUNT_2
+		     , ROUND(AA.RTRVL_PLAN_AMOUNT / 100000, 2) AS RTRVL_PLAN_AMOUNT_3		     
+		FROM 
+		(
+		SELECT '1' AS SAL_SE						/* 판매구분 */
+		     , A.BSNS_CODE							/* 사업코드 */
+		     , A.PRPOS_CODE							/* 용도코드 */
+		     , (SELECT CODE_NM FROM TBPRJ_CMMN_CODE WHERE SAL_SE = '1' AND USE_AT = '1' AND CODE = A.PRPOS_CODE) AS PRPOS_CODE_NM
+				 , A.SUPLY_CODE							/* 공급코드 */
+				 , (SELECT CODE_NM FROM TBPRJ_CMMN_CODE WHERE SAL_SE = '1' AND USE_AT = '1' AND CODE = A.SUPLY_CODE) AS SUPLY_CODE_NM
+		     , NVL(SUM(A.AR), 0) AS AR /* 면적 */
+		     , NVL(MAX(B.RTRVL_PLAN_AMOUNT), 0) AS RTRVL_PLAN_AMOUNT
+		FROM   TBPRJ_LAD_PRPOS A
+		     , (
+		            SELECT PRPOS_CODE
+		                 , SUPLY_CODE
+		                 , SUM(RTRVL_PLAN_AMOUNT) AS RTRVL_PLAN_AMOUNT
+		            FROM   TBPRJ_RTRVL_PLAN
+		            WHERE  STDR_YEAR = #ACCNUT_YEAR# 
+		            AND    BSNS_CODE = #BSNS_CODE#
+		            AND    STDR_MT <![CDATA[>]]> #STDR_MT#
+		            AND    SAL_SE = '1'
+		            GROUP BY PRPOS_CODE, SUPLY_CODE
+		       ) B
+		WHERE  A.BSNS_CODE = #BSNS_CODE#
+		AND    A.PRPOS_CODE = B.PRPOS_CODE(+)
+		AND    A.SUPLY_CODE = B.SUPLY_CODE(+)
+		GROUP BY A.BSNS_CODE, A.PRPOS_CODE, A.SUPLY_CODE
+		       
+		UNION ALL
+		
+		SELECT '2' AS SAL_SE
+		     , A.BSNS_CODE							/* 사업코드 */
+		     , A.PRPOS_CODE							/* 용도코드 */
+		     , (SELECT CODE_NM FROM TBPRJ_CMMN_CODE WHERE SAL_SE = '2' AND USE_AT = '1' AND CODE = A.PRPOS_CODE) AS PRPOS_CODE_NM
+				 , A.SUPLY_CODE							/* 공급코드 */
+				 , (SELECT CODE_NM FROM TBPRJ_CMMN_CODE WHERE SAL_SE = '2' AND USE_AT = '1' AND CODE = A.SUPLY_CODE) AS SUPLY_CODE_NM
+		     , NVL(SUM(A.DVR_AR + A.CMNUSE_AR), 0) AS AR
+		     , NVL(MAX(B.RTRVL_PLAN_AMOUNT), 0) AS RTRVL_PLAN_AMOUNT
+		FROM   TBPRJ_HOUSE_CNSTRC_PLAN A
+		     , (
+		            SELECT PRPOS_CODE
+		                 , SUPLY_CODE
+		                 , SUM(RTRVL_PLAN_AMOUNT) AS RTRVL_PLAN_AMOUNT
+		            FROM   TBPRJ_RTRVL_PLAN
+		            WHERE  STDR_YEAR = #ACCNUT_YEAR# 
+		            AND    BSNS_CODE = #BSNS_CODE#
+		            AND    STDR_MT <![CDATA[>]]> #STDR_MT#
+		            AND    SAL_SE = '2'
+		            GROUP BY PRPOS_CODE, SUPLY_CODE
+		       ) B
+		WHERE  A.BSNS_CODE = #BSNS_CODE#
+		AND    A.PRPOS_CODE = B.PRPOS_CODE(+)
+		AND    A.SUPLY_CODE = B.SUPLY_CODE(+)
+		GROUP BY A.BSNS_CODE, A.PRPOS_CODE, A.SUPLY_CODE
+		) AA
+		ORDER BY AA.SAL_SE, AA.BSNS_CODE, AA.PRPOS_CODE, AA.SUPLY_CODE
+	</select>
+</sqlMap>

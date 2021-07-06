@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010203_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!--설문조사 목록 조회 -->
+	<select id="CUS010203DAO.selectExaminList" resultClass="java.util.HashMap">
+		<![CDATA[
+		SELECT  
+				 A.QUSTNR_EXAMIN_SN   AS    QUSTNR_EXAMIN_SN  /*설문조사일련번호*/
+				,A.SJ                 AS    SJ                /*제목*/
+				,A.DEPT_CODE          AS    DEPT_CODE         /*부서코드*/
+				,(SELECT SFSAL_GETDEPTNM_01(A.DEPT_CODE) FROM DUAL)
+									  AS    DEPT_NM
+				,A.WRITNG_DE          AS    WRITNG_DE         /*작성일자*/
+				,A.NTCE_AT            AS    NTCE_AT           /*게시여부*/
+				,A.BGNDE              AS    BGNDE             /*시작일*/
+				,A.ENDDE              AS    ENDDE             /*종료일*/
+				,A.RESULT_NTCE_AT     AS    RESULT_NTCE_AT    /*결과게시여부*/
+				,(CASE WHEN A.NTCE_AT = '2' THEN '1'
+					   WHEN A.NTCE_AT = '1' AND A.BGNDE <= TO_CHAR(SYSDATE,'YYYYMMDD') AND TO_CHAR(SYSDATE,'YYYYMMDD') <= A.ENDDE THEN '2'
+					   WHEN A.NTCE_AT = '1' AND A.ENDDE <= TO_CHAR(SYSDATE,'YYYYMMDD') THEN '3'
+				  ELSE NULL END)      AS    STTUS
+				,A.RM                 AS    RM
+				,A.INQIRE_CO          AS    INQIRE_CO
+				,A.REGISTER_ID        AS    REGISTER_ID
+				,TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS')          AS    REGIST_DT
+				,A.UPDUSR_ID          AS    UPDUSR_ID
+				,A.UPDT_DT            AS    UPDT_DT
+				,''                   AS    CHK               /*체크여부*/
+				,A.INNER_SANCTN_ID                            /*내부결재번호*/
+				,B.LAST_SANCTN_STTUS                          /*최종결재상태*/
+				,SFCOM_GET_IN_SANCTNSTS('MIS', 'CUS', A.QUSTNR_EXAMIN_SN||'^'||A.WRITNG_DE||'^'||TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS'), A.REGIST_DT) AS INNER_SANCTN_STTUS		/*내부결재 상태*/
+		        ,SFCOM_GET_IN_SANCTNSTS_IMG('MIS', 'CUS', A.QUSTNR_EXAMIN_SN||'^'||A.WRITNG_DE||'^'||TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS'), A.REGIST_DT) INNER_SANCTN_STTUS_IMG /*내부결재 상태 이미지*/
+		        ,A.INNER_SANCTN_ID
+		        ,TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS') AS INNER_SANCTN_KEY
+		  FROM TBCUS_QUSTNR_EXAMIN A
+		  LEFT OUTER JOIN TBCOM_INNER_SANCTN_MASTR B
+		  ON  A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+		 WHERE A.WRITNG_DE >= #WRITNG_BGN_DT#
+		   AND A.WRITNG_DE <= #WRITNG_END_DT#
+		]]>
+		
+		<isNotEmpty property="DEPT_CODE">
+		   AND A.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="SJ">
+		   AND A.SJ LIKE '%' || #SJ# || '%'
+		</isNotEmpty>
+		<![CDATA[
+	  ORDER BY A.WRITNG_DE DESC
+		]]>
+	</select>
+
+	<!--설문조사목록 등록 -->
+	<insert id="CUS010203DAO.examinListC" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			INSERT INTO TBCUS_QUSTNR_EXAMIN (
+					 QUSTNR_EXAMIN_SN
+					,SJ
+					,DEPT_CODE
+					,WRITNG_DE
+					,NTCE_AT
+					,BGNDE
+					,ENDDE
+					,RESULT_NTCE_AT
+					,RM
+					,INQIRE_CO
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+				)VALUES(
+				 ( SELECT CASE WHEN COUNT(QUSTNR_EXAMIN_SN) = 0 THEN 1
+						  WHEN COUNT(QUSTNR_EXAMIN_SN) > 0 THEN MAX(TO_NUMBER(QUSTNR_EXAMIN_SN))+1
+						  ELSE NULL END 
+					 FROM (SELECT NVL2(COUNT(QUSTNR_EXAMIN_SN),MAX(TO_NUMBER(QUSTNR_EXAMIN_SN)),1) AS QUSTNR_EXAMIN_SN
+							 FROM TBCUS_QUSTNR_EXAMIN)
+						 GROUP BY QUSTNR_EXAMIN_SN)
+				,#SJ#
+				,#DEPT_CODE#
+				,#WRITNG_DE#
+				,#NTCE_AT#
+				,#BGNDE#
+				,#ENDDE#
+				,#RESULT_NTCE_AT#
+				,#RM#
+				,#INQIRE_CO#
+				,#S_USER_ID#
+				,SYSDATE
+				,#S_USER_ID#
+				,SYSDATE
+				)
+		]]>
+	</insert>
+
+	<!--설문조사목록 수정 -->
+	<update id="CUS010203DAO.examinListU" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		UPDATE TBCUS_QUSTNR_EXAMIN SET 
+				 SJ              =    #SJ#
+				,DEPT_CODE       =    #DEPT_CODE#
+				,WRITNG_DE       =    #WRITNG_DE#
+				,NTCE_AT         =    #NTCE_AT#
+				,BGNDE           =    #BGNDE#
+				,ENDDE           =    #ENDDE#
+				,RESULT_NTCE_AT  =    #RESULT_NTCE_AT#
+				,RM              =    #RM#
+				,INQIRE_CO       =    #INQIRE_CO#
+				,UPDUSR_ID       =    #S_USER_ID#
+				,UPDT_DT         =    SYSDATE
+		 WHERE QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+		]]>
+	</update>
+
+	<!--설문조사문항 내용목록 삭제(설문조사목록 삭제시 우선 삭제) -->
+	<delete id="CUS010203DAO.examinQesitmCnListD3" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE FROM TBCUS_QUSTNR_EXAMIN_QESITM_CN		   
+		 WHERE QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+			]]>
+	</delete>
+
+	<!--설문조사문항목록 삭제(설문조사목록 삭제시 우선 삭제) -->
+	<delete id="CUS010203DAO.examinQesitmListD3" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE FROM TBCUS_QUSTNR_EXAMIN_QESITM		   
+		 WHERE QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+		]]>
+	</delete>
+
+	<!--설문조사목록 삭제 -->
+	<delete id="CUS010203DAO.examinListD" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE FROM TBCUS_QUSTNR_EXAMIN		   
+		 WHERE QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+		]]>
+	</delete>
+
+	<!--설문조사문항 목록 조회 -->
+	<select id="CUS010203DAO.selectExaminQesitmList" resultClass="java.util.HashMap">
+		<![CDATA[
+		 SELECT  
+				 A.QUSTNR_EXAMIN_SN   AS    QUSTNR_EXAMIN_SN
+				,A.QESITM_SN          AS    QESITM_SN
+				,A.QESITM_SE          AS    QESITM_SE
+				,A.QESITM_NM          AS    QESITM_NM
+				,A.RM                 AS    RM
+				,A.ATCH_FILE          AS    ATCH_FILE
+				,A.REGISTER_ID        AS    REGISTER_ID
+				,A.REGIST_DT          AS    REGIST_DT
+				,A.UPDUSR_ID          AS    UPDUSR_ID
+				,A.UPDT_DT            AS    UPDT_DT
+				,''                   AS    CHK               /*체크여부*/
+		  FROM TBCUS_QUSTNR_EXAMIN_QESITM A
+		  WHERE A.QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+	   ORDER BY A.QESITM_SN
+		]]>
+	</select>
+	
+	<!--설문조사문항목록 등록 -->
+	<insert id="CUS010203DAO.examinQesitmListC" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			INSERT INTO TBCUS_QUSTNR_EXAMIN_QESITM (
+					 QUSTNR_EXAMIN_SN
+					,QESITM_SN
+					,QESITM_SE
+					,QESITM_NM
+					,RM
+					,ATCH_FILE
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+				)VALUES(
+				 #QUSTNR_EXAMIN_SN#
+				,#QESITM_SN#
+				,#QESITM_SE#
+				,#QESITM_NM#
+				,#RM#
+				,#ATCH_FILE#
+				,#S_USER_ID#
+				,SYSDATE
+				,#S_USER_ID#
+				,SYSDATE
+				)
+		]]>
+	</insert>
+	
+	<!--설문조사문항목록 수정 -->
+	<update id="CUS010203DAO.examinQesitmListU" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		UPDATE TBCUS_QUSTNR_EXAMIN_QESITM SET 
+				 QESITM_SE      =  #QESITM_SE#
+				,QESITM_NM      = #QESITM_NM#
+				,RM             = #RM#
+				,ATCH_FILE      = #ATCH_FILE#
+				,UPDUSR_ID      = #S_USER_ID#
+				,UPDT_DT        = SYSDATE
+		 WHERE QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+		   AND QESITM_SN        = #QESITM_SN#
+		]]>
+	</update>
+
+	<!--설문조사문항 내용목록 삭제(설문조사문항목록삭제시 우선삭제) -->
+	<delete id="CUS010203DAO.examinQesitmCnListD2" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE FROM TBCUS_QUSTNR_EXAMIN_QESITM_CN		   
+		 WHERE QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+		   AND QESITM_SN        = #QESITM_SN#
+			]]>
+	</delete>
+
+	<!--설문조사문항목록 삭제 -->
+	<delete id="CUS010203DAO.examinQesitmListD" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE FROM TBCUS_QUSTNR_EXAMIN_QESITM		   
+		 WHERE QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+		   AND QESITM_SN        = #QESITM_SN#
+		]]>
+	</delete>
+
+	<!--설문조사문항 내용목록 조회 -->
+	<select id="CUS010203DAO.selectExaminQesitmCnList" resultClass="java.util.HashMap">
+		<![CDATA[
+		 SELECT  
+				 A.QESITM_SN          AS    QESITM_SN          /*문항일련번호*/
+				,A.QESITM_CN_SN       AS    QESITM_CN_SN       /*문항내용일련번호*/
+				,A.QUSTNR_EXAMIN_SN   AS    QUSTNR_EXAMIN_SN   /*설문조사일련번호*/ 
+				,A.ORDR               AS    ORDR
+				,A.CN_SE              AS    CN_SE
+				,A.CN                 AS    CN
+				,A.RM                 AS    RM
+				,A.ATCH_FILE          AS    ATCH_FILE
+				,A.REGISTER_ID        AS    REGISTER_ID
+				,A.REGIST_DT          AS    REGIST_DT
+				,A.UPDUSR_ID          AS    UPDUSR_ID
+				,A.UPDT_DT            AS    UPDT_DT
+				,''                   AS    CHK               /*체크여부*/
+		  FROM TBCUS_QUSTNR_EXAMIN_QESITM_CN A
+		 WHERE A.QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+		   AND A.QESITM_SN        = #QESITM_SN#
+	  ORDER BY A.QESITM_CN_SN
+		]]>
+	</select>
+	
+	<!--설문조사문항 내용목록 등록 -->
+	<insert id="CUS010203DAO.examinQesitmCnListC" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			INSERT INTO TBCUS_QUSTNR_EXAMIN_QESITM_CN (
+					 QESITM_SN
+					,QESITM_CN_SN
+					,QUSTNR_EXAMIN_SN
+					,ORDR
+					,CN_SE
+					,CN
+					,RM
+					,ATCH_FILE
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+				)VALUES(
+				#QESITM_SN#
+		,( SELECT CASE WHEN COUNT(QESITM_CN_SN) = 0 THEN 1
+					   WHEN COUNT(QESITM_CN_SN) > 0 THEN MAX(TO_NUMBER(QESITM_CN_SN))+1
+					   ELSE NULL END 
+			 FROM (SELECT NVL2(COUNT(QESITM_CN_SN),MAX(TO_NUMBER(QESITM_CN_SN)),1) AS QESITM_CN_SN
+					 FROM TBCUS_QUSTNR_EXAMIN_QESITM_CN)
+				 GROUP BY QESITM_CN_SN)   
+	            ,#QUSTNR_EXAMIN_SN# 
+				,#ORDR#
+				,#CN_SE#
+				,#CN#
+				,#RM#
+				,#ATCH_FILE#
+				,#S_USER_ID#
+				,SYSDATE
+				,#S_USER_ID#
+				,SYSDATE
+				)
+		]]>
+    </insert>
+    
+    <!--설문조사문항 내용목록 수정 -->
+    <update id="CUS010203DAO.examinQesitmCnListU" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+		UPDATE TBCUS_QUSTNR_EXAMIN_QESITM_CN SET 
+QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQATE
+		 WHERE QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+		   AND QESITM_SN        = #QESITM_SN#
+		   AND QESITM_CN_SN     = #QESITM_CN_SN# 
+		]]>
+    </update>
+    
+    <!--설문조사문항 내용목록 삭제 -->
+    <delete id="CUS010203DAO.examinQesitmCnListD" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+		DELETE FROM TBCUS_QUSTNR_EXAMIN_QESITM_CN		   
+		 WHERE QUSTNR_EXAMIN_SN = #QUSTNR_EXAMIN_SN#
+		   AND QESITM_SN        = #QESITM_SN#
+		   AND QESITM_CN_SN     = #QESITM_CN_SN#
+		]]>
+    </delete>
+    
+       <!--첨부파일 키저장-->
+    <update id="CUS010203DAO.updateFileSn1U" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+		UPDATE TBCUS_QUSTNR_EXAMIN_QESITM
+		   SET 
+			   ATCH_FILE          = #ATCH_FILE#    
+		 WHERE QUSTNR_EXAMIN_SN   = #KEY1#
+		   AND QESITM_SN          = #KEY2#
+		   
+		]]>
+    </update>
+    
+      <!--첨부파일 키저장-->
+    <update id="CUS010203DAO.updateFileSn2U" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+		UPDATE TBCUS_QUSTNR_EXAMIN_QESITM_CN
+		   SET 
+			   ATCH_FILE          = #ATCH_FILE#    
+		 WHERE QUSTNR_EXAMIN_SN   = #KEY1#
+		   AND QESITM_SN          = #KEY2#
+		   AND QESITM_CN_SN       = #KEY3#
+		   
+		]]>
+    </update>
+    
+</sqlMap>

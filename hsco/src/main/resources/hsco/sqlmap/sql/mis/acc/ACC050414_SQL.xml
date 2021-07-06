@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050414_SQL">	
+	
+	<!-- 감가상각비명세서 목록 -->
+	<select id="ACC050414DAO.dprcList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+		     t2.ASSETS_CL_CODE        /*자산분류코드*/
+		    ,t2.ASSETS_CL_NM          /*자산분류명*/
+		    ,t1.ASSETS_SE     				/*사업장구분*/
+		    ,t4.CODE_NM AS ASSETS_SE_NM		/*사업장구분명*/
+		    ,t1.ASSETS_NO     				/*자산번호*/
+		    ,t1.ASSETS_NM     				/*자산명*/
+		    ,t1.ACQS_DE
+		    ,t1.ACQS_AMOUNT   				/*취득원가*/
+		    ,0 AS FSTRM_DPRC_ACMTL_AMOUNT 	/*전기말상각누계금액*/
+		    ,0 AS MT_DPRC_AMOUNT  			/*월상각액*/
+		    ,0 AS THSTRM_DPRT_AM  			/*당기상각액*/
+		    ,0 AS DPRC_ACMTL_AMOUNT 			/*상각액누계*/
+		    ,t1.GOVSUBY_ACQS_AMOUNT 		/*국고보조금취득원가*/
+		    ,0 AS GOVSUBY_FSTRM_AMOUNT  		/*국고보조금 전기말*/
+		    ,0 AS GOVSUBY_MT_DPRC_AMOUNT 		/*국고보조금 월상각금액*/
+		    ,0 AS GOVSUBY_THSTRM_DPRT_AM  	/*국고보조금 당기상각액*/
+		    ,0 AS GOVSUBY_DPRC_ACMTL_AMOUNT 	/*국고보조금 상각누계금액*/
+		    ,NVL(t1.ACQS_AMOUNT,0) - NVL(t1.GOVSUBY_ACQS_AMOUNT,0) AS TRMEND_BLCE					/*기말잔액*/
+		    ,t8.DPRC_MTH					/*감가상각방법(코드)*/
+		    ,CASE WHEN t2.DPRC_TRGET_AT = '1'
+		        THEN t5.CODE_NM 
+		        ELSE NULL
+		     END AS DPRC_MTH_NM				/*감가상각방법*/
+		    ,CASE WHEN t2.CN_YYCNT IS NOT NULL THEN t2.CN_YYCNT|| '년 ' ELSE '' END 
+		       ||CASE WHEN t1.ACQS_DE IS NOT NULL THEN ''''||SUBSTR(t1.ACQS_DE,3,2) ||'.'|| SUBSTR(t1.ACQS_DE,5,2) ELSE '' END AS RM
+		FROM TBASS_ASSETS_MASTR t1
+		   	 INNER JOIN TBASS_ASSETS_CL t2
+		   	 ON SUBSTR(t1.ASSETS_CL_CODE,1,1)||'0000' = t2.ASSETS_CL_CODE
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		     ON t4.GRP_CODE = 'ACC001' AND t1.ASSETS_SE = t4.CODE
+		     INNER JOIN TBASS_ASSETS_CL t8
+		     ON t1.ASSETS_CL_CODE = t8.ASSETS_CL_CODE
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		     ON t5.GRP_CODE = 'ASS002' AND t8.DPRC_MTH = t5.CODE
+		WHERE t2.DPRC_TRGET_AT = '0' /* 감가상각대상 */
+		  AND (SUBSTR(t1.ACQS_DE,1,6) <![CDATA[<=]]> #YYYYMM# OR t1.ACQS_DE IS NULL)
+		  AND NOT EXISTS (
+		    SELECT 1  /* 불용품 제외 */
+		    FROM TBASS_ATLD_MANAGE T6
+		         ,TBASS_ATLD_MANAGE_DETAIL T7
+		    WHERE T6.DISUSE_PROCESS_AT = '1'
+		      AND SUBSTR(T6.DISUSE_PROCESS_DE,1,6) <![CDATA[<=]]> #YYYYMM#
+		      AND T6.REQST_YEAR = T7.REQST_YEAR
+		      AND T6.ODR = T7.ODR
+		      AND t1.ASSETS_NO = t7.ASSETS_NO
+		  )  
+		UNION ALL
+		SELECT
+		     t2.ASSETS_CL_CODE        /*자산분류코드*/
+		    ,t2.ASSETS_CL_NM          /*자산분류명*/
+		    ,t1.ASSETS_SE     				/*사업장구분*/
+		    ,t4.CODE_NM AS ASSETS_SE_NM		/*사업장구분명*/
+		    ,t1.ASSETS_NO     				/*자산번호*/
+		    ,t1.ASSETS_NM     				/*자산명*/
+		    ,t1.ACQS_DE
+		    ,t1.ACQS_AMOUNT   				/*취득원가*/
+		    ,t3.FSTRM_DPRC_ACMTL_AMOUNT 	/*전기말상각누계금액*/
+		    ,t3.MT_DPRC_AMOUNT  			/*월상각액*/
+		    ,t3.THSTRM_DPRT_AM  			/*당기상각액*/
+		    ,t3.DPRC_ACMTL_AMOUNT 			/*상각액누계*/
+		    ,NVL(t1.GOVSUBY_ACQS_AMOUNT,0) AS GOVSUBY_ACQS_AMOUNT 		/*국고보조금취득원가*/
+		    ,t3.GOVSUBY_FSTRM_AMOUNT  		/*국고보조금 전기말*/
+		    ,t3.GOVSUBY_MT_DPRC_AMOUNT 		/*국고보조금 월상각금액*/
+		    ,t3.GOVSUBY_THSTRM_DPRT_AM  	/*국고보조금 당기상각액*/
+		    ,t3.GOVSUBY_DPRC_ACMTL_AMOUNT 	/*국고보조금 상각누계금액*/
+		    ,t3.TRMEND_BLCE					/*기말잔액*/
+		    ,t8.DPRC_MTH					/*감가상각방법(코드)*/
+		    ,CASE WHEN t2.DPRC_TRGET_AT = '1'
+		        THEN t5.CODE_NM 
+		        ELSE NULL
+		     END AS DPRC_MTH_NM				/*감가상각방법*/
+		    ,CASE WHEN t2.CN_YYCNT IS NOT NULL THEN t2.CN_YYCNT|| '년 ' ELSE '' END 
+		       ||CASE WHEN t1.ACQS_DE IS NOT NULL THEN ''''||SUBSTR(t1.ACQS_DE,3,2) ||'.'|| SUBSTR(t1.ACQS_DE,5,2) ELSE '' END AS RM
+		FROM TBASS_ASSETS_MASTR t1
+		   	 INNER JOIN TBASS_ASSETS_CL t2
+		   	 ON t1.ASSETS_CL_CODE = t2.ASSETS_CL_CODE
+		     INNER JOIN TBASS_DPRC t3
+		     ON t1.ASSETS_NO = t3.ASSETS_NO
+		     AND t3.DPRC_YM = #YYYYMM#
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		     ON t4.GRP_CODE = 'ACC001' AND t1.ASSETS_SE = t4.CODE
+		     INNER JOIN TBASS_ASSETS_CL t8
+		     ON t1.ASSETS_CL_CODE = t8.ASSETS_CL_CODE
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		     ON t5.GRP_CODE = 'ASS002' AND t8.DPRC_MTH = t5.CODE
+		WHERE t2.DPRC_TRGET_AT = '1' /* 감가상각대상 */
+		ORDER BY ASSETS_CL_CODE, ASSETS_SE, ACQS_DE NULLS FIRST, ASSETS_NO
+	</select>
+	
+	
+</sqlMap>

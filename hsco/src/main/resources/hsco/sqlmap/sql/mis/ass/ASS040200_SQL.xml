@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ASS040200_SQL">	
+	
+	<select id="ASS040200DAO.select1" resultClass="java.util.HashMap">
+		SELECT  CFMT_DT AS STDR_DE
+		       ,ODR
+		       ,PPTY_INVG_NM
+		       ,SUBSTR(CFMT_DT, 0, 4) AS YEAR
+		       ,'재물조사 실시현황' || ' [' || TO_CHAR(TO_DATE(CFMT_DT), 'yyyy.mm.dd.') || '기준]' AS TEXT
+		FROM TBASS_PPTY_INVG_ADM
+		WHERE INVG_AT = '1'
+	</select>
+	
+	<!--  -->
+	<select id="ASS040200DAO.select2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ASS040200DAO.select*/]]>
+	<![CDATA[
+		SELECT
+		     t1.DEPT_CODE
+		    ,t1.DEPT_NM
+		    ,t1.LEAF_AT
+		    ,NVL(t2.QY, 0)           AS QY
+		    ,NVL(t2.ACINS_CO, 0)     AS ACINS_CO
+		    ,NVL(t2.MORE, 0)         AS MORE
+		    ,NVL(t2.LESS, 0)         AS LESS
+		    ,NVL(t3.QY, 0)           AS QY2
+		    ,NVL(t3.ACINS_CO, 0)     AS ACINS_CO2
+		    ,NVL(t3.MORE, 0)         AS MORE2
+		    ,NVL(t3.LESS, 0)         AS LESS2
+		    ,NVL(t4.CNT, 0)                 AS PRPTY_MDAT
+		    ,NVL(t5.DISUSE_CONFM_CNT, 0)    AS DISUSE_CONFM_CNT
+		    ,NVL(t5.DISUSE_PROCESS_CNT, 0)  AS DISUSE_PROCESS_CNT
+		    ,NVL(t6.CNT, 0)                 AS MANAGE_CNVRS_CNT
+		FROM VWHRM_DEPT t1
+		    LEFT OUTER JOIN (SELECT 
+		                         s1.DEPT_CODE
+		                        ,SUM(s1.QY)                      AS QY
+		                        ,SUM(s2.ACINS_CO)                AS ACINS_CO
+		                        ,SUM(NVL(s2.ACINS_CO, 0) - NVL(s1.QY, 0)) AS MORE
+		                        ,SUM(NVL(s1.QY, 0) - NVL(s2.ACINS_CO, 0)) AS LESS
+		                    FROM TBASS_ASSETS_MASTR s1
+		                        LEFT OUTER JOIN (SELECT *
+		                                        FROM TBASS_PPTY_INVG_THNG z1
+		                                            INNER JOIN ( SELECT MAX(ODR) KEEP(DENSE_RANK FIRST ORDER BY CFMT_DT DESC) AS ODR
+		                                                         FROM TBASS_PPTY_INVG_ADM
+		                                                         WHERE INVG_AT = '1'
+		                                                           AND SUBSTR(CFMT_DT, 0, 4) = TO_CHAR(SYSDATE, 'yyyy')-1 ) z2
+		                                               ON z1.ODR = z2.ODR) s2
+		                          ON s1.ASSETS_NO = s2.ASSETS_NO
+		                    WHERE 1=1
+		                      AND TO_CHAR(TO_DATE(s1.ACQS_DE, 'yyyymmdd'), 'yyyy') <= #YEAR# -1
+		                    GROUP BY s1.DEPT_CODE ) t2
+		      ON t1.DEPT_CODE = t2.DEPT_CODE
+		    LEFT OUTER JOIN (SELECT 
+		                         s1.DEPT_CODE
+		                        ,SUM(s1.QY)                      AS QY
+		                        ,SUM(s2.ACINS_CO)                AS ACINS_CO
+		                        ,SUM(NVL(s2.ACINS_CO, 0) - NVL(s1.QY, 0)) AS MORE
+		                        ,SUM(NVL(s1.QY, 0) - NVL(s2.ACINS_CO, 0)) AS LESS
+		                    FROM TBASS_ASSETS_MASTR s1
+		                        LEFT OUTER JOIN TBASS_PPTY_INVG_THNG s2
+		                          ON s2.ODR = #ODR#
+		                         AND s1.ASSETS_NO = s2.ASSETS_NO
+		                    WHERE 1=1
+		                      AND TO_CHAR(TO_DATE(s1.ACQS_DE, 'yyyymmdd'), 'yyyy') <= #YEAR#
+		                    GROUP BY s1.DEPT_CODE ) t3
+		      ON t1.DEPT_CODE = t3.DEPT_CODE
+		    LEFT OUTER JOIN ( SELECT s2.DEPT_CODE, SUM(CASE WHEN s1.CONFM_AT = '1'   THEN s2.QY ELSE 0 END)   AS CNT
+		                     FROM TBASS_PRPTY_MDAT_MANAGE s1
+		                         LEFT OUTER JOIN TBASS_ASSETS_MASTR s2
+		                          ON s1.ASSETS_NO = s2.ASSETS_NO
+		                     WHERE s1.CONFM_DE BETWEEN #YEAR# ||'0101' AND #STDR_DE#
+		                     GROUP BY s2.DEPT_CODE ) t4 /*재물조정*/
+		      ON t1.DEPT_CODE = t4.DEPT_CODE
+		    LEFT OUTER JOIN ( SELECT t2.DEPT_CODE
+		                            ,SUM(CASE WHEN (t1.DISUSE_CONFM_DE BETWEEN #YEAR#   || '0101' AND #STDR_DE#) AND t1.DISUSE_CONFM_AT   = '1' THEN t2.QY ELSE 0 END)  AS DISUSE_CONFM_CNT
+		                            ,SUM(CASE WHEN (t1.DISUSE_PROCESS_DE BETWEEN #YEAR# || '0101' AND #STDR_DE#) AND t1.DISUSE_PROCESS_AT = '1' THEN t2.QY ELSE 0 END)  AS DISUSE_PROCESS_CNT
+		                     FROM TBASS_ATLD_MANAGE_DETAIL t1
+		                        LEFT OUTER JOIN TBASS_ASSETS_MASTR t2
+		                          ON t1.ASSETS_NO = t2.ASSETS_NO
+		                     GROUP BY t2.DEPT_CODE) t5 /*불용*/
+		      ON t1.DEPT_CODE = t5.DEPT_CODE
+		    LEFT OUTER JOIN ( SELECT s2.DEPT_CODE, SUM(CASE WHEN s1.CONFM_AT = '1'   THEN s2.QY ELSE 0 END)   AS CNT
+		                     FROM TBASS_THNG_MANAGE_CNVRS s1
+		                         LEFT OUTER JOIN TBASS_ASSETS_MASTR s2
+		                          ON s1.ASSETS_NO = s2.ASSETS_NO
+		                     WHERE s1.CONFM_DE BETWEEN #YEAR# ||'0101' AND #STDR_DE#
+		                     GROUP BY s2.DEPT_CODE ) t6 /*관리전환*/
+		      ON t1.DEPT_CODE = t6.DEPT_CODE
+		WHERE 1=1
+		ORDER BY t1.DEPT_CODE
+		]]>
+	</select>
+</sqlMap>

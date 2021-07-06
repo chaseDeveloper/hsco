@@ -1,0 +1,480 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/*****************************************************************************
+ * 프로그램명 		: 	comDate.xjs
+ * 작  성  자  	: 	송금준
+ * 작  성  일   	: 	2015.07.
+ * 설      명  		:   Date 관련 공통 함수.
+ * 수  정  자  	: 	
+ * 수 정 이력  	: 	
+ * 사용방법	    :   
+*******************************************************************************/
+/**
+*@fileoverview nexacro service library 
+*>>>> 사용예 : this.dateUtils.today();
+*@today					: 오늘 날짜를 받아오는 함수(서버에서 가져옴)
+*@format				: 입력받은 날짜를 포맷형식에 맞춰서 반환해준다.
+*@getDate				: 날자 객체를 반환해준다.
+*@addYear				: 년도를 더하는 함수
+*@addMonth				: 월을 더하는 함수
+*@addDate				: 일을 더하는 함수
+*@between				: 입력받은 두 날짜의 일자 수를 계산하여 반환(20150103, 20150101 입력 시 3 반환)
+*@getLastDay			: 입력받은 날짜를 기준으로 해당 월의 마지막 날을 반환
+*@setValid				: 시작일 종료일로 되어있는 달력 컴포넌트에 유효성체크 이벤트를 설정
+*==============================================================================================================
+*>>>> 사용예 : this.gfn_today();
+*@gfn_today				: 현재 일자 가져오기, 임시 로컬 PC의 시간을 가져 옴
+*@gfn_lastDateNum		: 해당 월의 마지막 날짜를 반환
+*@gfn_addDate			: 입력된 날짜에 파라미터로 입력된 숫자만큼 더해
+						  yyyyMMdd 형태로 리턴한다.
+*@gfn_dateTime			: String 형태의 Date Time을 반환
+*==============================================================================================================
+* @memberof! comDate
+*/
+
+var dateFunc = function(){
+	var context = this, utils;
+	
+	function toStr(val){
+		return (val < 10) ? "0" + val : val;
+	}
+	
+	utils = {
+		weekName : ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"],
+		
+		/* 
+		 *  오늘 날짜를 받아오는 함수(서버에서 가져옴)
+		 *  param - format : 가져올 포맷 - 기본값 "s"
+		 *          type : 리턴받을 값의 타입
+		 *				"d" : date 객체 (date 객체일 경우 앞의 format값은 무시)
+		 *				"s" : 문자열
+		 *
+		 */
+		
+		today : function(format, type) {
+			return (type == "d") ? utils.getDate() : utils.getDate().format(format);
+		},
+		/*
+		 *	입력받은 날짜를 포맷형식에 맞춰서 반환해준다.
+		 *  param - d : 날짜 (string or date)
+		 *				string 형식은 숫자를 제외한 나머지를 지우고 날짜 8자리 + 시간 6자리만 인식함. (ex - 20150101, 2015.01.01 둘을 같은 값으로 처리)
+		 *		    f : 포맷 (기본값 : yyyymmdd)
+		 *				yyyy - 년도 4자리
+		 *				yy - 년도 2자리
+		 *				mm - 월
+		 *				dd - 일
+		 *				HH - 시간(24시)
+		 *				hh - 시간(12시)
+		 *				mi - 분
+		 *				ss - 초
+		 *				ap - 오전/오후
+		 *  return - 날짜 string
+		 */
+		format : function(d, f){
+			// 인자값이 date객체가 string이면 객체로 변환
+			d = (d instanceof Date) ? d : utils.getDate(d);
+			f = f || "yyyymmdd";
+			var h = "";
+			
+			return f.replace(/(yyyy|yy|mm|dd|E|hh|mi|ss|ap)/gi, function($1) {
+				switch ($1) {
+					case "yyyy": return d.getFullYear();
+					case "yy": return toStr(d.getFullYear() % 1000);
+					case "mm": return toStr(d.getMonth() + 1);
+					case "dd": return toStr(d.getDate());
+					case "E": return utils.weekName[d.getDay()];
+					case "HH": return toStr(d.getHours());
+					case "hh": return toStr((h = d.getHours() % 12) ? h : 12);
+					case "mi": return toStr(d.getMinutes());
+					case "ss": return toStr(d.getSeconds());
+					case "ap": return d.getHours() < 12 ? "오전" : "오후";
+					default: return $1;
+				}
+			});	
+		},
+		/*
+		 *	날짜객체를 반환해준다.
+		 *  param - strDate : 날짜 (string, 기본값 : 오늘날짜 * 서버시간 아님)
+		 *			string 형식은 숫자를 제외한 나머지를 지우고 날짜 8자리(필수) + 시간 6자리(옵션)까지만 인식함. (ex - 20150101, 2015.01.01 둘을 같은 값으로 처리)
+		 *  return - 날짜 date객체
+		 */
+		getDate : function(strDate){
+			var date = new Date();
+			if(strDate) {
+				if(strDate == "server"){
+					date = utils.today("", "d");
+				}else if(strDate instanceof Date){
+					date = new Date(strDate);
+				}else if(strDate instanceof nexacro.Date){
+					date = new Date(strDate.toString());
+				}else{
+					strDate = strDate.replace(/[^0-9]/gi, "");
+					
+					// 년 월만 넘어온 문자열인경우 (ex 201501) 01을 붙여준다.
+					if(strDate.length == 6) {
+						strDate += "01";
+					}
+					date = new Date(strDate.substr(0,4), strDate.substr(4,2) - 1, strDate.substr(6,2));
+					
+					(strDate.substr(8,2)) ? date.setHours(strDate.substr(8,2)) : date.setHours(0);
+					(strDate.substr(10,2)) ? date.setMinutes(strDate.substr(10,2)) : date.setMinutes(0);
+					(strDate.substr(12,2)) ? date.setSeconds(strDate.substr(12,2)) : date.setSeconds(0);
+				}				
+			}else{
+				date = new Date();
+			}
+			
+			// date객체에 함수 바인드
+			date.format = function(format){
+				return utils.format(date, format);
+			};
+			date.addYear = function(val, type){
+				return utils.addYear(date, val, type);
+			};
+			date.addMonth = function(val, type){
+				return utils.addMonth(date, val, type);
+			};
+			date.addDate = function(val, type){
+				return utils.addDate(date, val, type);
+			};
+			date.getLastDay = function(type){
+				return utils.getLastDay(date, type);
+			};
+			return date;
+		},
+		/*
+		 *	입력받은 날짜와 값을 입력받아서 해당 함수에 해당하는 만큼 더해준다.
+		 *  param - date : (string or date) 날짜  * 날짜 객체를 파라미터로 쓴 경우 해당 객체의 값은 바꾸지 않고 새 date 객체를 반환
+		 *          val  : 더할 값(숫자)
+		 *          type : return 받을 값의 타입.  기본값 "d"
+	     *					"d" : date객체
+	     *					"s" : 문자열
+		 *  return - date객체
+		 */
+		//년도를 더하는 함수
+		addYear : function(date, val, type){
+			var returnDate = utils.getDate(date);
+			returnDate.setFullYear(returnDate.getFullYear() + val);
+			return (type == "s") ? returnDate.format() : returnDate;
+		},
+		//월을 더하는 함수
+		addMonth : function(date, val, type){
+			var returnDate = utils.getDate(date);
+			
+			//월말인 경우 월을 더할 경우 해당월의 마지막날로 설정되도록 처리
+			//(oracle add_month 펑션과 같은 결과를 출력)
+			if(returnDate.format() == returnDate.getLastDay("s")){
+				returnDate.setDate(1);
+				returnDate.setMonth(returnDate.getMonth() + val + 1);
+				returnDate.setDate(0);
+			}else{
+				returnDate.setMonth(returnDate.getMonth() + val);
+			}
+			return (type == "s") ? returnDate.format() : returnDate;
+		},
+		//일을 더하는 함수
+		addDate : function(date, val, type){
+			var returnDate = utils.getDate(date);
+			returnDate.setDate(returnDate.getDate() + val);
+			return (type == "s") ? returnDate.format() : returnDate;
+		},
+		
+		/*
+		 *	입력받은 두 날짜의 일자 수를 계산하여 반환(20150103, 20150101 입력 시 3 반환)
+		 *  param - frDate : (string or date) 시작일
+		 *          toDate : (string or date) 종료일
+		 *  return - int 일자 수 : 시작일이 종료일보다 클 경우 -1 반환(시작일, 종료일이 같을 경우 1 반환)
+		 */
+		between : function(frDate, toDate){
+			frDate = (frDate instanceof Date) ? frDate : utils.getDate(frDate.toString());
+			toDate = (toDate instanceof Date) ? toDate : utils.getDate(toDate.toString());
+
+			return (toDate >= frDate) ? Math.floor((toDate - frDate) / (1000 * 60 * 60 * 24)) + 1 : -1;
+		},
+		
+		/*
+		 *	입력받은 날짜를 기준으로 해당 월의 마지막 날을 반환
+		 *  param - date : (string or date) 날짜
+		 *          type : 반환 타입 ( s : 문자열
+		 *							   d : date 개체 - 기본값)
+		 *  return - 해당 날짜 월의 마지막 날을 반환 (ex - 20150502  -> 20150531,  20120203 -> 20120229)
+		 */
+		getLastDay : function(date, type){
+			returnDate = utils.getDate(date);
+			returnDate.setDate(1);
+			returnDate.setMonth(returnDate.getMonth() + 1);
+			returnDate.setDate(0);
+			return (type == "s") ? returnDate.format() : returnDate;
+		},
+
+		/********************************************************************************
+		 * Function Name	: now         					       	    				*
+		 * Desc				: 서버 시스템의 현재 날짜 시각을 가져온다.				*
+		 * Parameter		: 없음      												*
+		 * Return 			: 일시 (YYYYMMDD HH:MI:SS)									*
+		 ********************************************************************************/
+		 now : function ()
+		 {
+		 /*
+			var sSvcID        	= "now";
+			var sController   	= "svcurl::hsco/cmm/cmmCode/cmmServerDate.do";
+			
+			var sInDatasets   	= "";
+			var sOutDatasets  	= "gds_now=output1";
+			
+			var sArgs = "";
+
+			application.transaction(sSvcID, sController, sInDatasets, sOutDatasets, sArgs, "", false);
+			
+			if(application.gds_now.rowcount < 0)
+			{
+				alert("서버의 현재 일시 정보를 얻지 못하였습니다.");
+				return;
+			}
+						
+			return application.gds_now.getColumn(0, "S_TODAY");
+			*/
+			var result = null;
+			var callSvc = utils._getSvcDateInfo();
+			if(callSvc){
+				result = application.gds_now.getColumn(0, "S_TODAY");
+			}
+			
+			return result;
+		 },
+		 
+		 nowDate : function(columnId)
+		 {
+			var result = null;
+			var gdsNowLeng = application.gds_now.rowcount;
+			if(gdsNowLeng < 1){
+				var callSvc = utils._getSvcDateInfo();
+				if(!callSvc){ return; }
+			}
+			
+			result = utils._getGdsDateInfo(columnId);
+
+			return result;
+		 },
+		 
+		 _getGdsDateInfo : function(columnId){
+		 
+			var result = null;
+			var targetIdArr = columnId.split(",");
+			var targetLeng = targetIdArr == null ? 0 : targetIdArr.length;
+			if(targetLeng == 1){
+				result = application.gds_now.getColumn(0, columnId);
+			}else{
+				result = [];
+				for(var i = 0; i < targetLeng; i++){
+					var dateItem = application.gds_now.getColumn(0, targetIdArr[i]);
+					result.push(dateItem);
+				}
+			}
+		 
+			return result;
+		 },
+		 
+		 _getSvcDateInfo : function(){
+		 
+			trace("_getSvcDateInfo!!!");
+		 
+			var sSvcID        	= "now";
+			var sController   	= "svcurl::hsco/cmm/cmmCode/cmmServerDate.do";
+			
+			var sInDatasets   	= "";
+			var sOutDatasets  	= "gds_now=output1";
+			
+			var sArgs = "";
+
+			application.transaction(sSvcID, sController, sInDatasets, sOutDatasets, sArgs, "", false);
+			
+			var resultDsLeng = application.gds_now.rowcount;
+			if(resultDsLeng < 0)
+			{
+				alert("서버의 현재 일시 정보를 얻지 못하였습니다.");
+				return false;
+			}else{
+				return true;
+			}
+		 },
+
+		/*
+		 *	시작일 종료일로 되어있는 달력 컴포넌트에 유효성체크 이벤트를 설정
+		 *  param - 
+		 *  return - void
+		 */
+		setValid : function(fr, to, context, text){
+			fr._onchanged = fr.getEventHandler("onchanged",0), to._onchanged = to.getEventHandler("onchanged",0);
+			text = (text) ? text + " " : "";
+			fr.setEventHandler("onchanged", function(){
+				if(fr.value && to.value && fr.text.replace(/[^0-9]/gi, "") > to.text.replace(/[^0-9]/gi, "")){
+					context.utils.alert(text + "은(는) 종료일보다 클 수 없습니다.");
+					fr.set_value(to.value);
+					fr.setFocus();
+				}
+			}, context);
+			
+			to.setEventHandler("onchanged", function(){
+				if(to.value != "" && fr.value != "" && fr.text.replace(/[^0-9]/gi, "") > to.text.replace(/[^0-9]/gi, "")){
+					context.utils.alert(text + "은(는) 시작일보다 작을 수 없습니다.");
+					to.set_value(fr.value);
+					to.setFocus();
+				}
+			}, context);
+		}
+	}
+	
+	return utils;
+};
+this.dateUtils = dateFunc();
+
+/******************************************************************************
+ * Function Name: gfn_dateInfo
+ * Description  : 현재 일자 정보 가져오기(서버기준)
+ * Arguments    : dateType  : 정보 유형
+ * Return     :   요청 일자정보
+ * dateType
+	현재 년월일 시분초(호환유지)		: S_TODAY
+	현재 년도							: NOW_YEAR
+	현재 월							: NOW_MONTH
+	현재 일							: NOW_DAY
+	현재 시간							: NOW_TIME
+	현재 년월							: NOW_YEAR_MONTH
+	현재 년월일						: NOW_DATE
+	현재 년월일시분					: NOW_DATE_TIME
+	현재 년월일시분초					: NOW_DATE_ALL_TIME
+	현재 월 마지막일(년월일)			: NOW_LAST_DATE
+	현재 월 마지막일					: NOW_LAST_DAY
+	현재 요일(순서)					: NOW_DAYOFWEEK
+	현재 요일(영문)					: NOW_DAYOFWEEK_ENM
+	현재 요일(한글)					: NOW_DAYOFWEEK_KNM
+	전월 년도							: BEFORE_YEAR
+	전월 월							: BEFORE_MONTH
+	전월 년월							: BEFORE_YEAR_MONTH
+	전월 년월일						: BEFORE_DATE
+	전월 마지막일(년월일)				: BEFORE_LAST_DATE
+	전월 마지막일						: BEFORE_LAST_DAY
+	12개월(1년)전 년도				: BEFORE_YEAR_AGO
+ * 
+ * 사용법 : 
+ * 단건 > this.gfn_dateInfo("NOW_DATE");
+		 > 반환값은 String : ex) 20151003
+ * 다건 > this.gfn_dateInfo("NOW_DATE,NOW_LAST_DAY,NOW_DAYOFWEEK_KNM");
+         > 반환값은 Array(요청순으로)  : ex) ["20151003","31","토"]
+ ******************************************************************************/
+this.gfn_dateInfo = function(dateType){
+
+	if(dateType == null || dateType.length < 1){
+		dateType = "NOW_DATE";
+	}
+	var result = this.dateUtils.nowDate(dateType);
+	
+	return result;
+}
+
+/******************************************************************************
+ * Function Name: gfn_today
+ * Description  : 현재 일자 가져오기
+ * Arguments    : sFormat  : 날자 포맷
+ * Return     :   요청 포맷의 일자
+ ******************************************************************************/
+ //임시 로컬 PC의 시간을 가져 옴 -> 서버시간으로 변경 필요
+this.gfn_today = function (sFormat)
+{
+	var dateType = null;
+	if(sFormat == null||sFormat.length < 1){
+		dateType = "NOW_DATE";
+	}else{
+		dateType = sFormat;
+	}
+	var result = this.dateUtils.nowDate(dateType);
+	
+	return result;
+	/*
+	var strToday = "";
+	var objDate = new Date();
+
+	var strToday = objDate.getFullYear().toString();
+	strToday += String(objDate.getMonth() + 1).padLeft(2,'0');
+	strToday += String(objDate.getDate()).padLeft(2,'0');
+
+	return strToday;
+	*/
+}
+
+/**************************************************************************************************
+ * Function Name	: gfn_lastDateNum															  *
+ * Description		: 해당 월의 마지막 날짜를 반환											  *
+ * Arguments		: sDate (yyyyMMdd 형태의 날짜 String)							  			  *
+ * Return 			: 1, 3, 5, 7, 8, 10, 12월 = 31												  *
+ *					  4, 6, 9, 11월 = 30														  *
+ *					  2월 = 28 or 29(윤년)														  *
+ **************************************************************************************************/ 
+this.gfn_lastDateNum = function(sDate)
+{
+    if(String(sDate).length == 6) {
+        sDate = String(sDate) + "01";
+    }
+    
+    if (!this.comUtils.isDate(sDate))
+        return -1;
+
+    var strAddMon = this.gfn_addDate(String(sDate), 1, "M");
+    var strFirstDt = strAddMon.substring(0, 6) + '01';
+    var strRetVal = this.gfn_addDate(String(strFirstDt), -1, "D");
+
+    return strRetVal;
+}
+
+/********************************************************************************
+ * Function Name	: gfn_addDate												*
+ * Desc				: 입력된 날짜에 파라미터로 입력된 숫자만큼 더해		*
+ *					  yyyyMMdd 형태로 리턴한다.								*
+ * Parameter		: date - 'yyyyMMdd' 형태의 날짜(String)					*
+ *					  nOffSet - 날짜로부터 증가,감소값						*
+  *					  sWorkGb - 작업구분 YEAR = 년, MONTH=월, DAY = 일		*
+ * Return 			: String(yyyyMMdd)											*
+ ********************************************************************************/
+this.gfn_addDate = function(sDate, nOffSet, sWorkGb)
+{    
+	sDate = sDate.toString(); 
+	
+	var nOffSetYear=0, nOffSetMonth=0, nOffSetDay=0;
+	
+	if (sWorkGb == 'Y') nOffSetYear = nOffSet;
+	else if (sWorkGb == 'M') nOffSetMonth = nOffSet;
+	else if (sWorkGb == 'D') nOffSetDay = nOffSet;
+	
+	sDate = this.comUtils.decode(sDate.length,6,sDate+'01',4,sDate+'0101',sDate);
+	
+    if (!this.comUtils.isDate(sDate))
+        return -1;
+
+    var nYear = parseInt(sDate.substr(0, 4)) + parseInt(nOffSetYear);    
+    var nMonth = parseInt(sDate.substr(4, 2)) + parseInt(nOffSetMonth);
+    var nDate = parseInt(sDate.substr(6, 2)) + parseInt(nOffSetDay);
+
+    return this.gfn_dateTime(nYear, nMonth, nDate);   
+}
+
+/********************************************************************************
+ * Function Name	: gfn_dateTime												*
+ * Desc				: String 형태의 Date Time을 반환							*
+ * Parameter		: nYear (년도)												*
+ *					  nMonth (월)												*
+ *					  nDate (일)												*
+ * Return 			: String													*
+ ********************************************************************************/
+this.gfn_dateTime = function(nYear, nMonth, nDate)
+{
+    if(this.comUtils.isNull(nYear) || this.comUtils.isNull(nMonth) || this.comUtils.isNull(nDate) )	
+        return -1;
+	
+    var objDate = new Date(nYear, nMonth-1, nDate);
+
+	var sYear   = objDate.getFullYear().toString();
+	var sMonth  = String(objDate.getMonth() + 1).padLeft(2,'0');;
+	var sDate   = String(objDate.getDate()).padLeft(2,'0');
+	
+	return sYear + sMonth + sDate;
+}]]></Script>

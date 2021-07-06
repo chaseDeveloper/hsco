@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050205_SQL">
+
+	<!-- 자금일보(일자별) 조회 -->
+	<select id="ACC050205DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*ACC050205DAO.select(자금일보(일자별) 조회)*/]]>
+		WITH STACNT_TM AS (
+		    SELECT T2.ACCNUT_ACNT_CODE
+		         , T2.ACNUTNO
+		         , MAX(T1.ACNUT_NM) AS ACNUT_NM
+		         , NVL(SUM(T2.DEBTOR_AMOUNT), 0) AS DEBTOR_AMOUNT
+		         , NVL(SUM(T2.CRDIT_AMOUNT), 0) AS CRDIT_AMOUNT
+		         , NVL(SUM(T2.DEBTOR_AMOUNT), 0) - NVL(SUM(T2.CRDIT_AMOUNT), 0) AS JAN_AMT
+		         , T1.PRPOS_CHANGE_CPTAL_AT
+		         , MAX(T1.EXPRTN_DE) AS EXPRTN_DE
+		         , MAX(T1.BSNS_SE) AS BSNS_SE /*사업구분*/
+		      FROM TBFUN_BRANCH_ACNUT T1
+		           LEFT OUTER JOIN TBACC_ACCNUT_STACNT T2
+		                ON TRIM(T1.ACNUTNO) = TRIM(T2.ACNUTNO)
+		     WHERE T2.ACCNUT_YEAR = #YEAR#
+		       AND T2.ACCNUT_MT = '00'
+		       AND ( T2.ACCNUT_ACNT_CODE LIKE '11101%'
+		             OR T2.ACCNUT_ACNT_CODE LIKE '11102%'
+		             OR T2.ACCNUT_ACNT_CODE LIKE '21011%'
+		             OR T2.ACCNUT_ACNT_CODE LIKE '21012%'
+		             OR T2.ACCNUT_ACNT_CODE LIKE '22001%' )
+		       AND T2.ACNUTNO <![CDATA[<>]]> '-'
+		       AND REPLACE(T2.ACNUTNO, '-', '') LIKE '%' || REPLACE(#ACNUTNO#, '-', '') || '%'
+		    GROUP BY T2.ACCNUT_ACNT_CODE
+		           , T2.ACNUTNO
+		           , T1.PRPOS_CHANGE_CPTAL_AT
+		)
+		, STACNT_TM2 AS (
+		    SELECT NVL(M1.ACCNUT_ACNT_CODE, M2.ACCNUT_ACNT_CODE) AS ACCNUT_ACNT_CODE
+		         , SFACC_GET_ACNT_CODENM('2020', NVL(M1.ACCNUT_ACNT_CODE, M2.ACCNUT_ACNT_CODE)) AS ACCNUT_ACNT_NM
+		         , CASE WHEN NVL(M1.ACCNUT_ACNT_CODE, M2.ACCNUT_ACNT_CODE) LIKE '1%' THEN 'TYPE_A' /*예적금(채권)*/
+		                WHEN NVL(M1.ACCNUT_ACNT_CODE, M2.ACCNUT_ACNT_CODE) LIKE '2%' THEN 'TYPE_B' /*차입금(채무)*/
+		                ELSE '-'
+		           END AS ACNT_TYPE
+		         , NVL(M1.ACNUTNO, M2.ACNUTNO) AS ACNUTNO
+		         , NVL(M1.ACNUT_NM, M2.ACNUT_NM) AS ACNUT_NM
+		         , M1.BSNS_CODE
+		         , M2.BSNS_SE
+		         , M3.BSNS_NM
+		         , M1.EXPRTN_DE
+		         , M1.CHIT_DE
+		         , NVL(M1.PRPOS_CHANGE_CPTAL_AT, M2.PRPOS_CHANGE_CPTAL_AT) AS PRPOS_CHANGE_CPTAL_AT
+		         , CASE WHEN M1.BSNS_CODE = 'A00010' THEN '04'
+		                WHEN NVL(M1.PRPOS_CHANGE_CPTAL_AT, M2.PRPOS_CHANGE_CPTAL_AT) = '1' THEN '05'
+		                WHEN M2.BSNS_SE IS NOT NULL THEN M2.BSNS_SE
+		                WHEN M3.BSNS_CODE LIKE 'A%' THEN '01'
+		                WHEN M3.BSNS_CODE LIKE 'B%' THEN '03'
+		                ELSE '06'
+		           END AS SE
+		         , CASE WHEN M1.BSNS_CODE = 'A00010' THEN '경영기획실'
+		                WHEN NVL(M1.PRPOS_CHANGE_CPTAL_AT, M2.PRPOS_CHANGE_CPTAL_AT) = '1' THEN '수입지출외현금'
+		                WHEN M2.BSNS_SE IS NOT NULL THEN SFCOM_CODE_NM('FUN036', M2.BSNS_SE, 'CODE_NM')
+		                WHEN M3.BSNS_CODE LIKE 'A%' THEN '대행사업'
+		                WHEN M3.BSNS_CODE LIKE 'B%' THEN '자체사업'
+		                ELSE '기타'
+		           END AS SE_NM
+		         , NVL(M1.JAN_AMT, 0) + NVL(M2.JAN_AMT, 0) - ( NVL(M1.DEBTOR_AMOUNT, 0) - NVL(M1.CRDIT_AMOUNT, 0) ) AS PRE_JAN_AMT
+		         , NVL(M1.DEBTOR_AMOUNT, 0) AS DEBTOR_AMOUNT
+		         , NVL(M1.CRDIT_AMOUNT, 0) AS CRDIT_AMOUNT
+		         , NVL(M1.JAN_AMT, 0) + NVL(M2.JAN_AMT, 0) AS JAN_AMT
+		         , ROW_NUMBER() OVER (ORDER BY M1.ACCNUT_ACNT_CODE ASC, M1.BSNS_CODE ASC, M1.ACNUTNO ASC, M1.CHIT_DE ASC) AS RANK
+		      FROM (
+		            SELECT T2.ACCNUT_ACNT_CODE   AS ACCNUT_ACNT_CODE
+		                 , T2.ACNUTNO            AS ACNUTNO
+		                 , MAX(T3.ACNUT_NM) AS ACNUT_NM
+		                 , T1.CHIT_DE
+		                 , MAX(T3.BSNS_CODE) AS BSNS_CODE
+		                 , MAX(T3.EXPRTN_DE) AS EXPRTN_DE
+		                 , MAX(T3.PRPOS_CHANGE_CPTAL_AT) AS PRPOS_CHANGE_CPTAL_AT
+		                 , NVL(SUM(T2.DEBTOR_AMOUNT), 0) AS DEBTOR_AMOUNT
+		                 , NVL(SUM(T2.CRDIT_AMOUNT), 0) AS CRDIT_AMOUNT
+		                 , NVL(SUM(T2.DEBTOR_AMOUNT), 0) - NVL(SUM(T2.CRDIT_AMOUNT), 0) AS JAN_AMT
+		              FROM TBACC_CHIT_MASTR     T1
+		                   LEFT OUTER JOIN TBACC_CHIT_DETAIL T2
+		                        ON T1.ACCNUT_YEAR = T2.ACCNUT_YEAR
+		                       AND T1.CHIT_NO     = T2.CHIT_NO
+		                   LEFT OUTER JOIN TBFUN_BRANCH_ACNUT T3
+		                        ON TRIM(T2.ACNUTNO) = TRIM(T3.ACNUTNO)
+		             WHERE T1.CHIT_DE BETWEEN #ST_DT# AND #ED_DT# /* 변수처리 : 기간 F ~ T*/
+		               AND ( T2.ACCNUT_ACNT_CODE LIKE '11101%'
+		                     OR T2.ACCNUT_ACNT_CODE LIKE '11102%'
+		                     OR T2.ACCNUT_ACNT_CODE LIKE '21011%'
+		                     OR T2.ACCNUT_ACNT_CODE LIKE '21012%'
+		                     OR T2.ACCNUT_ACNT_CODE LIKE '22001%' )
+		               AND REPLACE(T2.ACNUTNO, '-', '') LIKE '%' || REPLACE(#ACNUTNO#, '-', '') || '%'
+		            GROUP BY T2.ACCNUT_ACNT_CODE
+		                   , T2.ACNUTNO
+		                   , T1.CHIT_DE
+		           ) M1
+		           FULL OUTER JOIN STACNT_TM M2
+		                ON M1.ACCNUT_ACNT_CODE = M2.ACCNUT_ACNT_CODE
+		               AND TRIM(M1.ACNUTNO)    = TRIM(M2.ACNUTNO)
+		           LEFT OUTER JOIN TBPRJ_BSNS_CODE M3
+		                ON M1.BSNS_CODE = M3.BSNS_CODE
+		     WHERE ( NVL(M1.EXPRTN_DE, M2.EXPRTN_DE) >= #ED_DT#
+		            OR NVL(M1.EXPRTN_DE, M2.EXPRTN_DE) IS NULL )
+		    ORDER BY SE
+		           , ACCNUT_ACNT_CODE ASC
+		           , BSNS_CODE ASC
+		           , ACNUTNO ASC
+		           , CHIT_DE ASC
+		)
+		SELECT SE
+		     , SE_NM
+		     , ACCNUT_ACNT_CODE
+		     , ACCNUT_ACNT_NM
+		     , ACNT_TYPE
+		     , ACNUTNO
+		     , LAG_ACNUTNO
+		     , ACNUT_NM
+		     , ACNUTNO || CHR(10) || CHR(13) || ACNUT_NM AS ACNUT_NM2
+		     , BSNS_CODE
+		     , BSNS_NM
+		     , CHIT_DE
+		     , RANK
+		     , CASE WHEN ACNUTNO = LAG_ACNUTNO THEN 
+		                                            LAG(PRE_JAN_AMT) OVER (ORDER BY SE, ACCNUT_ACNT_CODE ASC, BSNS_CODE ASC, ACNUTNO, RANK) 
+		                                            + LAG(SUM_DEBTOR_AMOUNT) OVER (ORDER BY SE, ACCNUT_ACNT_CODE ASC, BSNS_CODE ASC, ACNUTNO, RANK) 
+		                                            - LAG(SUM_CRDIT_AMOUNT) OVER (ORDER BY SE, ACCNUT_ACNT_CODE ASC, BSNS_CODE ASC, ACNUTNO, RANK)
+		                                            + (
+		                                                CASE WHEN ACNUTNO != LEAD_ACNUTNO THEN (CRDIT_AMOUNT-DEBTOR_AMOUNT) ELSE 0 END
+		                                              )
+		            ELSE PRE_JAN_AMT
+		       END AS PRE_JAN_AMT
+		     , DEBTOR_AMOUNT
+		     , CRDIT_AMOUNT
+		     , (CASE WHEN ACNUTNO = LAG_ACNUTNO THEN 
+		                                            LAG(PRE_JAN_AMT) OVER (ORDER BY SE, ACCNUT_ACNT_CODE ASC, BSNS_CODE ASC, ACNUTNO, RANK) 
+		                                            + LAG(SUM_DEBTOR_AMOUNT) OVER (ORDER BY SE, ACCNUT_ACNT_CODE ASC, BSNS_CODE ASC, ACNUTNO, RANK) 
+		                                            - LAG(SUM_CRDIT_AMOUNT) OVER (ORDER BY SE, ACCNUT_ACNT_CODE ASC, BSNS_CODE ASC, ACNUTNO, RANK)
+		                                            + (
+		                                                CASE WHEN ACNUTNO != LEAD_ACNUTNO THEN (CRDIT_AMOUNT-DEBTOR_AMOUNT) ELSE 0 END
+		                                              )
+		            ELSE PRE_JAN_AMT
+		       END) + DEBTOR_AMOUNT - CRDIT_AMOUNT AS JAN_AMT
+		FROM (
+		      SELECT SE
+		           , RANK
+		           , SE_NM
+		           , ACCNUT_ACNT_CODE
+		           , ACCNUT_ACNT_NM
+		           , ACNT_TYPE
+		           , ACNUTNO
+		           , ACNUT_NM
+		           , CHIT_DE
+		           , BSNS_CODE
+		           , BSNS_SE
+		           , BSNS_NM
+		           , PRE_JAN_AMT
+		           , DEBTOR_AMOUNT
+		           , CRDIT_AMOUNT
+		           , SUM(DEBTOR_AMOUNT) OVER (ORDER BY SE, ACCNUT_ACNT_CODE, BSNS_CODE, ACNUTNO, RANK) AS SUM_DEBTOR_AMOUNT
+		           , SUM(CRDIT_AMOUNT) OVER (ORDER BY SE, ACCNUT_ACNT_CODE, BSNS_CODE, ACNUTNO, RANK) AS SUM_CRDIT_AMOUNT
+		           , LAG(ACNUTNO) OVER (ORDER BY SE, ACCNUT_ACNT_CODE ASC, BSNS_CODE ASC, ACNUTNO, RANK)  AS LAG_ACNUTNO
+		           , LEAD(ACNUTNO) OVER (ORDER BY SE, ACCNUT_ACNT_CODE ASC, BSNS_CODE ASC, ACNUTNO, RANK) AS LEAD_ACNUTNO
+		        FROM STACNT_TM2
+		     ) T1
+	</select>
+</sqlMap>

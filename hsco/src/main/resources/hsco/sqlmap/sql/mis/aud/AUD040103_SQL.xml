@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUD040103_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!--청렴마일리지부서별 목록조회 -->
+	<select id="AUD040103DAO.selectDeptMlgRegistList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT DEPT_CODE
+			 , DEPT_NM
+			 , SUM(ADD_POINT1) 															AS PERSON_ADD_SCORE
+			 , SUM(MINUS_POINT1) 														AS PERSON_SUB_SCORE
+			 , SUM(ADD_POINT1) + SUM(MINUS_POINT1)										AS PERSON_TOTAL 
+			 , DECODE(SUM(TOT_POINT1), 0, 0,  ROUND(SUM(TOT_POINT1) / SUM(TOT_CNT),2))	AS PERSON_AVG_SCORE
+			 , SUM(TOT_CNT) 															AS EMPLOYEE
+			 , SUM(AVG_POINT) 															AS PERSON_AVG_SCORE
+			 , SUM(ADD_POINT2) 															AS DEPT_ADD_SCORE
+			 , SUM(MINUS_POINT2) 														AS DEPT_SUB_SCORE
+			 , SUM(TOT_POINT2) 															AS DEPT_TOTAL_SCORE
+			 , SUM(AVG_POINT+TOT_POINT2) 												AS TOTAL_SCORE
+		  FROM (
+		        SELECT A.DEPT_CODE,
+                 	   A.DEPT_NM,
+		               SUM(CASE WHEN NVL(B.MLG_SCORE,0) >= 0 THEN NVL(B.MLG_SCORE,0) ELSE 0 END) AS ADD_POINT1,
+		               SUM(CASE WHEN NVL(B.MLG_SCORE,0) < 0 THEN NVL(B.MLG_SCORE,0) ELSE 0 END) AS MINUS_POINT1,
+		               SUM(NVL(B.MLG_SCORE,0)) AS TOT_POINT1,
+		               ECNT AS TOT_CNT, 
+		               ROUND(CASE WHEN SUM(NVL(B.MLG_SCORE,0)) = 0 OR COUNT(DISTINCT B.EMPNO) = 0 THEN 0
+		                     ELSE SUM(NVL(B.MLG_SCORE,0)) / ECNT END,2) AS AVG_POINT,
+		               0 AS ADD_POINT2,0 MINUS_POINT2,0 AS TOT_POINT2
+		          FROM VWHRM_DEPT A, 
+		               (SELECT  DEPT_CODE,
+                            SUM(ECNT) AS ECNT
+                        FROM    ( SELECT  DEPT_CODE, 
+                        		  COUNT(1) ECNT
+				                FROM TBHRM_HR_MASTR A
+				                 WHERE STTUS_SE = '000' AND RETIRE_DE IS NULL
+				                   AND NOT EXISTS(SELECT 1 FROM TBAUD_INTGTY_MLG_EXCL_TRGET B
+				                                   WHERE B.EMPNO = A.EMPNO
+				                                     AND B.APPLC_YEAR = #APPLC_YEAR#
+				                                  )
+				                 GROUP BY DEPT_CODE
+				       )
+				        GROUP BY DEPT_CODE
+				       ) E, 
+		               (SELECT DECODE(A.DEPT_CODE,'020900' ,'020300',A.DEPT_CODE) AS DEPT_CODE , 
+		               		   B.MLG_SCORE, A.EMPNO
+		                  FROM TBHRM_HR_MASTR A, TBAUD_INTGTY_MLG_REGIST B
+		                 WHERE A.EMPNO = B.EMPNO 
+		                AND  B.APPLC_YEAR = #APPLC_YEAR#
+		                 AND B.DEPT_INDVDL_SE = '1'
+		               ) B
+		         WHERE A.USE_AT = '1' 
+		           AND A.DEPT_CODE = E.DEPT_CODE
+		           AND A.DEPT_CODE = B.DEPT_CODE(+)    
+		           GROUP BY A.DEPT_CODE, A.DEPT_NM, E.ECNT 
+		         UNION ALL
+		        SELECT A.DEPT_CODE,
+                  	   A.DEPT_NM,
+		        	   0,0,0,0,0,
+		               CASE WHEN NVL(B.MLG_SCORE,0) >= 0 THEN NVL(B.MLG_SCORE,0) ELSE 0 END AS ADD_POINT2,
+		               CASE WHEN NVL(B.MLG_SCORE,0) < 0 THEN NVL(B.MLG_SCORE,0) ELSE 0 END AS MINUS_POINT2,
+		               NVL(B.MLG_SCORE,0) AS TOT_POINT2
+		          FROM VWHRM_DEPT A,
+		               (SELECT B.DEPT_CODE, B.MLG_SCORE
+		                  FROM TBAUD_INTGTY_MLG_REGIST B
+		                 WHERE B.APPLC_YEAR = #APPLC_YEAR#
+		                 AND B.DEPT_INDVDL_SE = '2'
+		               ) B
+		         WHERE A.USE_AT = '1'
+		           AND A.DEPT_CODE = B.DEPT_CODE(+)
+		   )
+		   WHERE 1=1
+	]]>
+		   <isNotEmpty property="DEPT_CODE" prepend="AND">
+	           DEPT_CODE = #DEPT_CODE#
+		   </isNotEmpty>
+		   GROUP BY DEPT_CODE, DEPT_NM
+		   ORDER BY TOTAL_SCORE DESC, DEPT_CODE
+	</select>
+		
+	<!--청렴마일리지개인별 목록조회 -->
+	<select id="AUD040103DAO.selectPersonMlgRegistList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	 	<![CDATA[
+			SELECT
+				 DEPT_CODE                                                           AS DEPT_CODE
+				,(SELECT SFSAL_GETDEPTNM_01(DEPT_CODE) FROM DUAL)                    AS DEPT_NM
+				,EMPNO                                                               AS EMPNO
+				,SUM(CASE WHEN SUBSTR(MLG_CODE,0,1) = 'A' THEN MLG_SCORE ELSE 0 END) AS PERSON_ADD_SCORE
+				,SUM(CASE WHEN SUBSTR(MLG_CODE,0,1) = 'B' THEN MLG_SCORE ELSE 0 END) AS PERSON_SUB_SCORE
+				,SUM(MLG_SCORE)                                                      AS PERSON_TOTAL
+				,(SELECT SFSAL_GETEMPNO_01(EMPNO) FROM DUAL)                         AS EMPNM
+			 FROM TBAUD_INTGTY_MLG_REGIST
+			WHERE APPLC_YEAR = #APPLC_YEAR#
+			  AND EMPNO IS NOT NULL
+		]]>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+		 GROUP BY DEPT_CODE, EMPNO
+		 ORDER BY DEPT_CODE, EMPNO
+	</select>
+
+	<!-- 부서조회 -->
+	<select id="AUD040103DAO.deptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*AUD040103DAO.deptList*/ ]]>
+			  SELECT DEPT_CODE
+					 ,DEPT_NM
+					 ,SUM(ECNT) AS ECNT
+					 FROM
+					 (
+					 SELECT A.DEPT_CODE
+                            ,B.DEPT_NM
+					        ,COUNT(1) ECNT
+					  FROM  TBHRM_HR_MASTR A
+					    LEFT OUTER JOIN VWHRM_DEPT B
+					      ON A.DEPT_CODE = B.DEPT_CODE
+					  WHERE A.STTUS_SE = '000'
+					    AND A.RETIRE_DE IS NULL
+					    AND B.USE_AT = '1'
+					    AND NOT EXISTS(
+						      SELECT 1 
+						      FROM TBAUD_INTGTY_MLG_EXCL_TRGET B
+						      WHERE B.EMPNO = A.EMPNO
+							    AND B.APPLC_YEAR = #APPLC_YEAR#
+					    )
+					    <isNotEmpty property="DEPT_CODE" prepend="AND">
+					    	B.DEPT_CODE = #DEPT_CODE#
+					    </isNotEmpty>
+				    GROUP BY A.DEPT_CODE, B.DEPT_NM 
+				    )
+			    GROUP BY DEPT_CODE, DEPT_NM
+			    ORDER BY DEPT_CODE
+    </select>
+    
+    <!--청렴마일리지항목별 목록조회 -->
+	<select id="AUD040103DAO.selectEstbsMlgRegistList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true" >
+		SELECT 
+		         DECODE(SUBSTR(t1.MLG_CODE,0,1),'A','가점','감점')          AS ADD_SUB_AT
+		        ,t1.MLG_CODE                                                AS MLG_CODE
+		        ,t1.MLG_KND                                                 AS MLG_DETAIL
+		        <iterate property="deptList" conjunction="," open =','>
+		         NVL(SUM(CASE WHEN t1.DEPT_CODE = #deptList[].DEPT_CODE# AND t3.DEPT_INDVDL_SE = '1'
+		                  THEN t3.MLG_SCORE END
+		            ), 0) DEPT_$deptList[].DEPT_CODE$
+		        ,NVL(ROUND(SUM((CASE WHEN t1.DEPT_CODE = #deptList[].DEPT_CODE# AND t3.DEPT_INDVDL_SE = '1'
+		              THEN t3.MLG_SCORE END
+		            )/t2.ECNT), 4),0) AS DEPT_$deptList[].DEPT_CODE$_AVG
+		        ,NVL(SUM(CASE WHEN t1.DEPT_CODE = #deptList[].DEPT_CODE# AND t3.DEPT_INDVDL_SE = '2'
+		              THEN t3.MLG_SCORE END
+		            ), 0) AS DEPT_$deptList[].DEPT_CODE$_SCORE2
+		        ,NVL(ROUND(SUM((CASE WHEN t1.DEPT_CODE = #deptList[].DEPT_CODE# AND t3.DEPT_INDVDL_SE = '1'
+		              THEN t3.MLG_SCORE END
+		            )/t2.ECNT), 4),0)
+		          + NVL(SUM(CASE WHEN t1.DEPT_CODE = #deptList[].DEPT_CODE# AND t3.DEPT_INDVDL_SE = '2'
+		              THEN t3.MLG_SCORE END
+		            ), 0) AS DEPT_$deptList[].DEPT_CODE$_TOT
+		        </iterate>    
+		FROM (
+		        SELECT 
+		             s1.DEPT_CODE
+		            ,s1.DEPT_NM
+		            ,SUBSTR(s2.MLG_CODE,1,4) AS MLG_CODE
+		            ,s2.MLG_SE
+		            ,s2.MLG_KND
+		        FROM VWHRM_DEPT s1
+		          , TBAUD_INTGTY_MLG_ESTBS s2
+		        WHERE s1.USE_AT   = '1'
+		        AND s2.ESTBS_YEAR = #APPLC_YEAR#
+		        AND s2.MLG_LEVEL  = '2'
+		    ) t1
+		    INNER JOIN (SELECT 
+		                     t1.DEPT_CODE
+		                    ,COUNT(*) ECNT
+		                FROM TBHRM_HR_MASTR t1
+		                WHERE t1.STTUS_SE = '000'
+		                AND t1.RETIRE_DE IS NULL
+		                AND NOT EXISTS
+		                    (SELECT 1
+		                    FROM TBAUD_INTGTY_MLG_EXCL_TRGET t2
+		                    WHERE t1.EMPNO    = t2.EMPNO
+		                    AND t2.APPLC_YEAR = #APPLC_YEAR#
+		                    )
+		                GROUP BY t1.DEPT_CODE
+		               ) t2
+		       ON t1.DEPT_CODE = t2.DEPT_CODE
+		    LEFT OUTER JOIN (  SELECT  APPLC_YEAR
+		                              ,DEPT_CODE
+		                              ,MLG_SE
+		                              ,MLG_SCORE
+		                              ,SUBSTR(MLG_CODE,1,4) AS MLG_CODE
+		                              ,DEPT_INDVDL_SE
+		                        FROM TBAUD_INTGTY_MLG_REGIST
+		                        WHERE APPLC_YEAR = #APPLC_YEAR#
+		                    ) t3
+		     ON t1.DEPT_CODE = t3.DEPT_CODE
+		    AND t1.MLG_CODE = SUBSTR(t3.MLG_CODE,1,4)
+		WHERE 1=1
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+		GROUP BY DECODE(SUBSTR(t1.MLG_CODE,0,1),'A','가점','감점'), t1.MLG_CODE, t1.MLG_KND
+		ORDER BY ADD_SUB_AT, t1.MLG_CODE
+	</select>	    
+    
+	
+</sqlMap>

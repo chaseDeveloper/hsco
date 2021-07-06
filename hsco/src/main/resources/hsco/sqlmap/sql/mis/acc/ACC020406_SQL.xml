@@ -1,0 +1,692 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020406_SQL">	
+	
+	<!-- 지출예산통제원장:일계표 -->
+	<select id="ACC020406DAO.smmprdyTableList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   <![CDATA[ /*ACC020406DAO.smmprdyTableList*/ ]]>
+		WITH TM_EXECUT_BUDGET AS (
+		  SELECT s1.YEAR
+		       , s1.BSNS_SE
+		       , s1.BALC_SE
+		       , s1.DETAIL_BSNS_CODE
+			   , s1.DEPT_CODE
+		       , s1.BUDGET_ACNT_CODE
+		       , NVL(SUM(s1.ORIBDGT),0)
+		         + NVL(SUM(s1.TRSF_AM),0)
+		         + NVL(SUM(s1.BUKIP_MVMN_AM),0)
+		         + NVL(SUM(s1.MVMN_AM),0)
+		         + NVL(SUM(s1.DVR_AM),0)
+		         + NVL(SUM(s1.RSVFND_REQST_AM),0) AS ORIBDGT
+		       , NVL(SUM(s1.CYFD_BUDGET),0)       AS CYFD_BUDGET
+		       , NVL(SUM(s1.RVSPBGT_1_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_2_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_3_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_4_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_5_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_6_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_7_ODR),0)   AS RVSPBGT
+		       , NVL(SUM(s1.ORIBDGT),0)
+		         + NVL(SUM(s1.RVSPBGT_1_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_2_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_3_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_4_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_5_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_6_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_7_ODR),0)
+		         + NVL(SUM(s1.TRSF_AM),0)
+		         + NVL(SUM(s1.BUKIP_MVMN_AM),0)
+		         + NVL(SUM(s1.MVMN_AM),0)
+		         + NVL(SUM(s1.DVR_AM),0)
+		         + NVL(SUM(s1.RSVFND_REQST_AM),0)
+		         AS TOT_BGT
+		  FROM TBBDG_EXECUT_BUDGET s1
+		  WHERE s1.YEAR = #YEAR#
+		  GROUP BY s1.YEAR
+		         , s1.BSNS_SE
+		         , s1.BALC_SE
+		         , s1.DETAIL_BSNS_CODE
+				 , s1.DEPT_CODE
+		         , s1.BUDGET_ACNT_CODE
+		)
+		SELECT 'A1' AS SUM_TYPE /*일자별*/
+		     , t2.BUDGET_ACNT_CODE
+		     , MAX(t2.SEHANG_NM) AS SEHANG_NM
+		     , t2.BUDGET_ACNT_CODE||'-'||MAX(t2.MOK_NM)          AS BUDGET_ACNT_NM
+		     , MAX(t1.CAUSE_ACTION_DE) AS CAUSE_ACTION_DE
+		     , MAX(t1.SUMRY)           AS SUMRY
+		     , MAX(t4.RCPT_MAN) AS RCPT_MAN
+		     , TO_CHAR(NVL(MAX(t3.CHECK_NO),'')) AS CHECK_NO
+		     , 0  AS ORIBDGT /*당초예산(변경분적용)*/
+		     , 0  AS RVSPBGT /*추경예산*/
+		     , 0  AS CYFD_BUDGET /*이월예산*/
+		     , 0  AS TOT_BGT
+		     , NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_AMOUNT
+		     , NVL(SUM(t1.DEBT_AMT),0) AS DEBT_AMT
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '004' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN040_AMOUNT /*국민은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '011' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN011_AMOUNT /*농협은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '020' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN020_AMOUNT /*우리은행*/
+		     , NVL(SUM(t1.DECSN_AMOUNT),0) AS DECSN_SUM_AMOUNT
+		     , 0 AS JANAMT01
+		     , 0 AS JANAMT02
+		FROM VHACC_EXP_DSN_MASTR t1
+		  INNER JOIN VHBDG_BUDGET_ACNT_CODE t2
+		  ON  t1.BUDGET_YEAR      = t2.YEAR
+		  AND t1.BSNS_SE          = t2.BSNS_SE
+		  AND t1.BALC_SE          = t2.BALC_SE
+		  AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		  LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t3
+		  ON  t1.BUDGET_YEAR = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t4
+		  ON  t1.BUDGET_YEAR = t4.DECSN_YEAR
+		  AND t1.DECSN_NO    = t4.DECSN_NO
+		  AND t4.SEQ         = '1'
+		WHERE t1.BUDGET_YEAR       = #YEAR#
+		AND   t1.BSNS_SE		   = #BSNS_SE#
+		AND   t1.BALC_SE		   = '2'
+		
+	    <isNotEmpty property="BUDGET_ACNT_CODE_ED">
+		AND t1.BUDGET_ACNT_CODE BETWEEN  #BUDGET_ACNT_CODE_ST# AND DECODE(SUBSTR(#BUDGET_ACNT_CODE_ED#,4,5),'00000',SUBSTR(#BUDGET_ACNT_CODE_ED#, 0, 3)|| '99999',DECODE(SUBSTR(#BUDGET_ACNT_CODE_ED#,8,1),'0',SUBSTR(#BUDGET_ACNT_CODE_ED#, 0, 7)|| '9', #BUDGET_ACNT_CODE_ED#) )  
+	    </isNotEmpty>
+		AND   t1.CAUSE_ACTION_DE BETWEEN SUBSTR(#SRCH_ED_DT#,1,6)||'01' AND #SRCH_ED_DT#
+		GROUP BY t2.BUDGET_ACNT_CODE
+		       , t1.SUMRY
+		       , t1.CAUSE_ACTION_DE
+		UNION ALL
+		SELECT 'A2' AS SUM_TYPE /*월별*/
+		     , t2.BUDGET_ACNT_CODE
+		     , MAX(t2.SEHANG_NM) AS SEHANG_NM
+		     , t2.BUDGET_ACNT_CODE||'-'||MAX(t2.MOK_NM)          AS BUDGET_ACNT_NM
+		     , ''				AS CAUSE_ACTION_DE
+		     , '월 계'          AS SUMRY
+		     , ''               AS RCPT_MAN
+		     , ''               AS CHECK_NO
+		     , MAX(t5.ORIBDGT)  AS ORIBDGT /*당초예산(변경분적용)*/
+		     , MAX(t5.RVSPBGT)  AS RVSPBGT /*추경예산*/
+		     , MAX(t5.CYFD_BUDGET) AS CYFD_BUDGET /*이월예산*/
+		     , MAX(t5.TOT_BGT)     AS TOT_BGT
+		     , NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_AMOUNT
+		     , NVL(SUM(t1.DEBT_AMT),0) AS DEBT_AMT
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '004' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN040_AMOUNT /*국민은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '011' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN011_AMOUNT /*농협은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '020' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN020_AMOUNT /*우리은행*/
+		     , NVL(SUM(t1.DECSN_AMOUNT),0) AS DECSN_SUM_AMOUNT
+		     , 0 AS JANAMT01
+		     , 0 AS JANAMT02
+		FROM VHACC_EXP_DSN_MASTR t1
+		  INNER JOIN VHBDG_BUDGET_ACNT_CODE t2
+		  ON  t1.BUDGET_YEAR      = t2.YEAR
+		  AND t1.BSNS_SE          = t2.BSNS_SE
+		  AND t1.BALC_SE          = t2.BALC_SE
+		  AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		  LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t3
+		  ON  t1.BUDGET_YEAR = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t4
+		  ON  t1.BUDGET_YEAR = t4.DECSN_YEAR
+		  AND t1.DECSN_NO    = t4.DECSN_NO
+		  AND t4.SEQ         = '1'
+		  LEFT OUTER JOIN TM_EXECUT_BUDGET t5
+		  ON  t1.BUDGET_YEAR      = t5.YEAR
+		  AND t1.BSNS_SE          = t5.BSNS_SE
+		  AND t1.BALC_SE          = t5.BALC_SE
+		  AND t1.BSNS_CODE		  = t5.DETAIL_BSNS_CODE
+		  AND t1.BUDGET_DEPT_CODE = t5.DEPT_CODE
+		  AND t1.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		WHERE t1.BUDGET_YEAR       = #YEAR#
+		AND   t1.BSNS_SE		   = #BSNS_SE#
+		AND   t1.BALC_SE		   = '2'
+		
+		<isNotEmpty property="BUDGET_ACNT_CODE_ED">
+		AND t1.BUDGET_ACNT_CODE BETWEEN #BUDGET_ACNT_CODE_ST# AND DECODE(SUBSTR(#BUDGET_ACNT_CODE_ED#,4,5),'00000',SUBSTR(#BUDGET_ACNT_CODE_ED#, 0, 3)|| '99999',DECODE(SUBSTR(#BUDGET_ACNT_CODE_ED#,8,1),'0',SUBSTR(#BUDGET_ACNT_CODE_ED#, 0, 7)|| '9', #BUDGET_ACNT_CODE_ED#) )
+		</isNotEmpty>
+		
+		AND   t1.CAUSE_ACTION_DE BETWEEN SUBSTR(#SRCH_ED_DT#,1,6)||'01' AND #SRCH_ED_DT# 
+		GROUP BY t2.BUDGET_ACNT_CODE
+		UNION ALL
+		SELECT 'A3' AS SUM_TYPE /*누계*/
+		     , t2.BUDGET_ACNT_CODE
+		     , MAX(t2.SEHANG_NM) AS SEHANG_NM
+		     , t2.BUDGET_ACNT_CODE||'-'||MAX(t2.MOK_NM)          AS BUDGET_ACNT_NM
+		     , ''			    AS CAUSE_ACTION_DE
+		     , '누 계'          AS SUMRY
+		     , ''               AS RCPT_MAN
+		     , ''               AS CHECK_NO
+		     , MAX(t5.ORIBDGT)  AS ORIBDGT /*당초예산(변경분적용)*/
+		     , MAX(t5.RVSPBGT)  AS RVSPBGT /*추경예산*/
+		     , MAX(t5.CYFD_BUDGET) AS CYFD_BUDGET /*이월예산*/
+		     , MAX(t5.TOT_BGT)     AS TOT_BGT
+		     , NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_AMOUNT
+		     , NVL(SUM(t1.DEBT_AMT),0) AS DEBT_AMT
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '004' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN040_AMOUNT /*국민은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '011' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN011_AMOUNT /*농협은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '020' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN020_AMOUNT /*우리은행*/
+		     , NVL(SUM(t1.DECSN_AMOUNT),0) AS DECSN_SUM_AMOUNT
+		     , MAX(t5.TOT_BGT) - NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS JANAMT01
+		     , MAX(t5.TOT_BGT) - NVL(SUM(t1.DEBT_AMT),0) AS JANAMT02
+		FROM VHACC_EXP_DSN_MASTR t1
+		  INNER JOIN VHBDG_BUDGET_ACNT_CODE t2
+		  ON  t1.BUDGET_YEAR      = t2.YEAR
+		  AND t1.BSNS_SE          = t2.BSNS_SE
+		  AND t1.BALC_SE          = t2.BALC_SE
+		  AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		  LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t3
+		  ON  t1.BUDGET_YEAR = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t4
+		  ON  t1.BUDGET_YEAR = t4.DECSN_YEAR
+		  AND t1.DECSN_NO    = t4.DECSN_NO
+		  AND t4.SEQ         = '1'
+		  LEFT OUTER JOIN TM_EXECUT_BUDGET t5
+		  ON  t1.BUDGET_YEAR      = t5.YEAR
+		  AND t1.BSNS_SE          = t5.BSNS_SE
+		  AND t1.BALC_SE          = t5.BALC_SE
+		  AND t1.BSNS_CODE		  = t5.DETAIL_BSNS_CODE
+		  AND t1.BUDGET_DEPT_CODE = t5.DEPT_CODE
+		  AND t1.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		WHERE t1.BUDGET_YEAR       = #YEAR#
+		AND   t1.BSNS_SE		   = #BSNS_SE#
+		AND   t1.BALC_SE		   = '2'
+		
+		<isNotEmpty property="BUDGET_ACNT_CODE_ED">	  
+		AND t1.BUDGET_ACNT_CODE BETWEEN #BUDGET_ACNT_CODE_ST# AND DECODE(SUBSTR(#BUDGET_ACNT_CODE_ED#,4,5),'00000',SUBSTR(#BUDGET_ACNT_CODE_ED#, 0, 3)|| '99999', DECODE(SUBSTR(#BUDGET_ACNT_CODE_ED#,8,1),'0',SUBSTR(#BUDGET_ACNT_CODE_ED#, 0, 7)|| '9', #BUDGET_ACNT_CODE_ED#)  )
+		</isNotEmpty>
+		AND   t1.CAUSE_ACTION_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		GROUP BY t2.BUDGET_ACNT_CODE
+		ORDER BY BUDGET_ACNT_CODE
+		       , SUM_TYPE
+		       , CAUSE_ACTION_DE
+	</select>
+	
+	
+	<!-- 지출예산통제원장:월계표 -->
+	<select id="ACC020406DAO.wolgTableList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC020406DAO.wolgTableList*/ ]]>
+		WITH TM_EXECUT_BUDGET AS (
+		  SELECT s1.YEAR
+		       , s1.BSNS_SE
+		       , s1.BALC_SE
+		       , s1.DETAIL_BSNS_CODE
+			   , s1.DEPT_CODE
+		       , s1.BUDGET_ACNT_CODE
+		       , NVL(SUM(s1.ORIBDGT),0)
+		         + NVL(SUM(s1.TRSF_AM),0)
+		         + NVL(SUM(s1.BUKIP_MVMN_AM),0)
+		         + NVL(SUM(s1.MVMN_AM),0)
+		         + NVL(SUM(s1.DVR_AM),0)
+		         + NVL(SUM(s1.RSVFND_REQST_AM),0) AS ORIBDGT
+		       , NVL(SUM(s1.CYFD_BUDGET),0)       AS CYFD_BUDGET
+		       , NVL(SUM(s1.RVSPBGT_1_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_2_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_3_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_4_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_5_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_6_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_7_ODR),0)   AS RVSPBGT
+		       , NVL(SUM(s1.ORIBDGT),0)
+		         + NVL(SUM(s1.RVSPBGT_1_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_2_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_3_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_4_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_5_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_6_ODR),0)
+		         + NVL(SUM(s1.RVSPBGT_7_ODR),0)
+		         + NVL(SUM(s1.TRSF_AM),0)
+		         + NVL(SUM(s1.BUKIP_MVMN_AM),0)
+		         + NVL(SUM(s1.MVMN_AM),0)
+		         + NVL(SUM(s1.DVR_AM),0)
+		         + NVL(SUM(s1.RSVFND_REQST_AM),0)
+		         AS TOT_BGT
+		  FROM TBBDG_EXECUT_BUDGET s1
+		  WHERE s1.YEAR = #STACNT_YEAR#
+		  GROUP BY s1.YEAR
+		         , s1.BSNS_SE
+		         , s1.BALC_SE
+		         , s1.DETAIL_BSNS_CODE
+				 , s1.DEPT_CODE
+		         , s1.BUDGET_ACNT_CODE
+		)
+		SELECT 'A1' AS SUM_TYPE /*계정과목별*/
+		     , '('||SUBSTR(T2.BUDGET_ACNT_CODE,1,3)||'-'||SUBSTR(T2.BUDGET_ACNT_CODE,4,5)||')' AS BUDGET_ACNT_CODE
+		     , t2.SEHANG_CD
+		     , MAX(t2.SEHANG_NM) AS SEHANG_NM
+		     , MAX(t2.MOK_NM)          AS BUDGET_ACNT_NM
+		     , SUBSTR(T1.CAUSE_ACTION_DE,1,6) AS CAUSE_ACTION_DE
+		     , 0  AS ORIBDGT /*당초예산(변경분적용)*/
+		     , 0  AS RVSPBGT /*추경예산*/
+		     , 0 AS CYFD_BUDGET /*이월예산*/
+		     , 0     AS TOT_BGT
+		     , NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_AMOUNT
+		     , NVL(SUM(t1.DEBT_AMT),0) AS DEBT_AMT
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '004' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN040_AMOUNT /*국민은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '011' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN011_AMOUNT /*농협은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '020' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN020_AMOUNT /*우리은행*/
+		     , NVL(SUM(t1.DECSN_AMOUNT),0) AS DECSN_SUM_AMOUNT
+		     , 0 AS JANAMT01
+		     , 0 AS JANAMT02
+		FROM VHACC_EXP_DSN_MASTR t1
+		  INNER JOIN VHBDG_BUDGET_ACNT_CODE t2
+		  ON  t1.BUDGET_YEAR      = t2.YEAR
+		  AND t1.BSNS_SE          = t2.BSNS_SE
+		  AND t1.BALC_SE          = t2.BALC_SE
+		  AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		  LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t3
+		  ON  t1.BUDGET_YEAR = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t4
+		  ON  t1.BUDGET_YEAR = t4.DECSN_YEAR
+		  AND t1.DECSN_NO    = t4.DECSN_NO
+		  AND T4.SEQ         = '1'
+		  LEFT OUTER JOIN TM_EXECUT_BUDGET t5
+		  ON  t1.BUDGET_YEAR      = t5.YEAR
+		  AND t1.BSNS_SE          = t5.BSNS_SE
+		  AND t1.BALC_SE          = t5.BALC_SE
+		  AND t1.BSNS_CODE        = t5.DETAIL_BSNS_CODE
+		  AND t1.BUDGET_DEPT_CODE = t5.DEPT_CODE
+		  AND t1.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		WHERE T1.BUDGET_YEAR       = #STACNT_YEAR#
+		AND T1.CAUSE_ACTION_DE BETWEEN #STACNT_YEAR# || #STACNT_MONTH_ST# || '01' AND #STACNT_YEAR# || #STACNT_MONTH_ED# || '31'
+		GROUP BY SUBSTR(T1.CAUSE_ACTION_DE,1,6)
+		        ,t2.SEHANG_CD
+		        ,T2.BUDGET_ACNT_CODE
+		UNION ALL
+		SELECT 'A2' AS SUM_TYPE /*월별*/
+		     , ''   AS BUDGET_ACNT_CODE
+		     , t2.SEHANG_CD
+		     , MAX(T2.SEHANG_NM) AS SEHANG_NM
+		     , '월    계'          AS BUDGET_ACNT_NM
+		     , SUBSTR(T1.CAUSE_ACTION_DE,1,6) AS CAUSE_ACTION_DE
+		     , 0  AS ORIBDGT /*당초예산(변경분적용)*/
+		     , 0  AS RVSPBGT /*추경예산*/
+		     , 0 AS CYFD_BUDGET /*이월예산*/
+		     , 0     AS TOT_BGT
+		     , NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_AMOUNT
+		     , NVL(SUM(t1.DEBT_AMT),0) AS DEBT_AMT
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '004' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN040_AMOUNT /*국민은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '011' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN011_AMOUNT /*농협은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '020' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN020_AMOUNT /*우리은행*/
+		     , NVL(SUM(t1.DECSN_AMOUNT),0) AS DECSN_SUM_AMOUNT
+		     , 0 AS JANAMT01
+		     , 0 AS JANAMT02
+		FROM VHACC_EXP_DSN_MASTR t1
+		  INNER JOIN VHBDG_BUDGET_ACNT_CODE t2
+		  ON  t1.BUDGET_YEAR      = t2.YEAR
+		  AND t1.BSNS_SE          = t2.BSNS_SE
+		  AND t1.BALC_SE          = t2.BALC_SE
+		  AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		  LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t3
+		  ON  t1.BUDGET_YEAR = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t4
+		  ON  t1.BUDGET_YEAR = t4.DECSN_YEAR
+		  AND t1.DECSN_NO    = t4.DECSN_NO
+		  AND T4.SEQ         = '1'
+		  LEFT OUTER JOIN TM_EXECUT_BUDGET t5
+		  ON  t1.BUDGET_YEAR      = t5.YEAR
+		  AND t1.BSNS_SE          = t5.BSNS_SE
+		  AND t1.BALC_SE          = t5.BALC_SE
+		  AND t1.BSNS_CODE		  = t5.DETAIL_BSNS_CODE
+		  AND t1.BUDGET_DEPT_CODE = t5.DEPT_CODE
+		  AND t1.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		WHERE T1.BUDGET_YEAR       = #STACNT_YEAR#
+		AND T1.CAUSE_ACTION_DE BETWEEN #STACNT_YEAR# || #STACNT_MONTH_ST# || '01' AND #STACNT_YEAR# || #STACNT_MONTH_ED# || '31'
+		GROUP BY SUBSTR(T1.CAUSE_ACTION_DE,1,6)
+		        ,T2.SEHANG_CD
+		UNION ALL
+		SELECT 'A3' AS SUM_TYPE /*누계*/
+		     , '('||SUBSTR(T2.BUDGET_ACNT_CODE,1,3)||'-'||SUBSTR(t2.BUDGET_ACNT_CODE,4,5)||')' AS BUDGET_ACNT_CODE
+		     , '' AS SEHANG_CD
+		     , MAX(t2.SEHANG_NM) AS SEHANG_NM
+		     , MAX(T2.MOK_NM)          AS BUDGET_ACNT_NM
+		     ,''  AS CAUSE_ACTION_DE
+		     , MAX(t5.ORIBDGT)  AS ORIBDGT /*당초예산(변경분적용)*/
+		     , MAX(t5.RVSPBGT)  AS RVSPBGT /*추경예산*/
+		     , MAX(t5.CYFD_BUDGET) AS CYFD_BUDGET /*이월예산*/
+		     , MAX(t5.TOT_BGT)     AS TOT_BGT
+		     , NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_AMOUNT
+		     , NVL(SUM(t1.DEBT_AMT),0) AS DEBT_AMT
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '004' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN040_AMOUNT /*국민은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '011' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN011_AMOUNT /*농협은행*/
+		     , NVL(SUM(CASE WHEN t3.FNNC_INSTT_CODE = '020' THEN t1.DECSN_AMOUNT ELSE 0 END),0) AS DECSN020_AMOUNT /*우리은행*/
+		     , NVL(SUM(t1.DECSN_AMOUNT),0) AS DECSN_SUM_AMOUNT
+		     , MAX(t5.TOT_BGT) - NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS JANAMT01
+		     , MAX(t5.TOT_BGT) - NVL(SUM(t1.DEBT_AMT),0) AS JANAMT02
+		FROM VHACC_EXP_DSN_MASTR t1
+		  INNER JOIN VHBDG_BUDGET_ACNT_CODE t2
+		  ON  t1.BUDGET_YEAR      = t2.YEAR
+		  AND t1.BSNS_SE          = t2.BSNS_SE
+		  AND t1.BALC_SE          = t2.BALC_SE
+		  AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		  LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t3
+		  ON  t1.BUDGET_YEAR = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t4
+		  ON  t1.BUDGET_YEAR = t4.DECSN_YEAR
+		  AND t1.DECSN_NO    = t4.DECSN_NO
+		  AND T4.SEQ         = '1'
+		  LEFT OUTER JOIN TM_EXECUT_BUDGET t5
+		  ON  t1.BUDGET_YEAR      = t5.YEAR
+		  AND t1.BSNS_SE          = t5.BSNS_SE
+		  AND t1.BALC_SE          = t5.BALC_SE
+		  AND t1.BSNS_CODE		  = t5.DETAIL_BSNS_CODE
+		  AND t1.BUDGET_DEPT_CODE = t5.DEPT_CODE
+		  AND t1.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		WHERE T1.BUDGET_YEAR       = #STACNT_YEAR#
+		GROUP BY T2.BUDGET_ACNT_CODE
+		ORDER BY CAUSE_ACTION_DE
+		       , SEHANG_CD
+		       , SUM_TYPE
+		       , BUDGET_ACNT_CODE
+	</select>
+	
+	<!-- 지출예산통제원장:집계표 -->
+	<select id="ACC020406DAO.smTableList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC020406DAO.smTableList*/ ]]>
+			 	 /*ACC020406DAO.smTableList*/
+				 WITH TM_EXECUT_BUDGET AS
+				 ( SELECT  s1.YEAR ,
+				          s1.BSNS_SE ,
+				          s1.BALC_SE ,
+				          SUBSTR(s1.BUDGET_ACNT_CODE,1,3)
+				                   ||'00000' AS SEHANG_CD ,
+				          s1.BUDGET_ACNT_CODE ,
+				          NVL(SUM(s1.ORIBDGT),0)
+				               + NVL(SUM(s1.TRSF_AM),0)
+				               + NVL(SUM(s1.BUKIP_MVMN_AM),0)
+				               + NVL(SUM(s1.MVMN_AM),0)
+				               + NVL(SUM(s1.DVR_AM),0)
+				               + NVL(SUM(s1.RSVFND_REQST_AM),0)    AS ORIBDGT ,
+				          NVL(SUM(s1.CYFD_BUDGET),0)               AS CYFD_BUDGET ,
+				          NVL(SUM(s1.RVSPBGT_1_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_2_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_3_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_4_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_5_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_6_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_7_ODR),0)      AS RVSPBGT ,
+				          NVL(SUM(s1.ORIBDGT),0)
+				               + NVL(SUM(s1.RVSPBGT_1_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_2_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_3_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_4_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_5_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_6_ODR),0)
+				               + NVL(SUM(s1.RVSPBGT_7_ODR),0)
+				               + NVL(SUM(s1.TRSF_AM),0)
+				               + NVL(SUM(s1.BUKIP_MVMN_AM),0)
+				               + NVL(SUM(s1.MVMN_AM),0)
+				               + NVL(SUM(s1.DVR_AM),0)
+				               + NVL(SUM(S1.RSVFND_REQST_AM),0)
+				               + NVL(SUM(s1.CYFD_BUDGET),0)        AS TOT_BGT
+				 FROM     TBBDG_EXECUT_BUDGET s1
+				 WHERE    s1.YEAR    = #YEAR#
+				 AND      s1.BALC_SE = '2'
+				 GROUP BY s1.YEAR ,
+				          s1.BSNS_SE ,
+				          s1.BALC_SE ,
+				          s1.BUDGET_ACNT_CODE
+				 )
+				 SELECT   A.*,
+				          SUM(DECODE(SUM_TYPE,'A2',ORIBDGT,0))     			AS TOT_ORIBDGT ,
+				          SUM(DECODE(SUM_TYPE,'A2',RVSPBGT,0))     			AS TOT_RVSPBGT ,
+				          SUM(DECODE(SUM_TYPE,'A2',CYFD_BUDGET,0)) 			AS TOT_CYFD_BUDGET ,
+				          SUM(DECODE(SUM_TYPE,'A2',TOT_BGT,0))     			AS TOT_TOT_BGT,
+				          SUM(DECODE(SUM_TYPE,'A2',CAUSE_ACTION_AMOUNT,0))  AS TOT_CAUSE_ACTION_AMOUNT,
+				          SUM(DECODE(SUM_TYPE,'A2',DEBT_AMT,0))     		AS TOT_DEBT_AMT,
+				          SUM(DECODE(SUM_TYPE,'A2',DECSN040_AMOUNT,0))     	AS TOT_DECSN040_AMOUNT,
+				          SUM(DECODE(SUM_TYPE,'A2',DECSN011_AMOUNT,0))     	AS TOT_DECSN011_AMOUNT,
+				          SUM(DECODE(SUM_TYPE,'A2',DECSN020_AMOUNT,0))     	AS TOT_DECSN020_AMOUNT,
+				          SUM(DECODE(SUM_TYPE,'A2',DECSN_SUM_AMOUNT,0))     AS TOT_DECSN_SUM_AMOUNT,
+				          SUM(DECODE(SUM_TYPE,'A2',JANAMT01,0))     		AS TOT_JANAMT01,
+				          SUM(DECODE(SUM_TYPE,'A2',JANAMT02,0))     		AS TOT_JANAMT02
+				 FROM     ( SELECT 'A1' AS SUM_TYPE
+				                  /*소계*/
+				                  ,
+				                  '('
+				                          ||SUBSTR(T1.BUDGET_ACNT_CODE,1,3)
+				                          ||'-'
+				                          ||SUBSTR(T1.BUDGET_ACNT_CODE,4,5)
+				                          ||')' AS BUDGET_ACNT_CODE ,
+				                  t1.SEHANG_CD ,
+				                  NVL(T2.SEHANG_NM,T1.SEHANG_NM)                                                                       AS SEHANG_NM ,
+				                  NVL(SFBDG_BUDGET_NAME(t2.YEAR, t2.BSNS_SE, t2.BALC_SE, t2.BUDGET_ACNT_CODE, NULL),T1.BUDGET_ACNT_NM) AS BUDGET_ACNT_NM ,
+				                  (t1.ORIBDGT)                                                                                         AS ORIBDGT
+				                  /*당초예산(변경분적용)*/
+				                  ,
+				                  (t1.RVSPBGT) AS RVSPBGT
+				                  /*추경예산*/
+				                  ,
+				                  (t1.CYFD_BUDGET) AS CYFD_BUDGET
+				                  /*이월예산*/
+				                  ,
+				                  (t1.TOT_BGT)                  AS TOT_BGT ,
+				                  NVL(t2.CAUSE_ACTION_AMOUNT,0) AS CAUSE_ACTION_AMOUNT ,
+				                  NVL(t2.DEBT_AMT,0)            AS DEBT_AMT ,
+				                  NVL(t2.DECSN040_AMOUNT,0)     AS DECSN040_AMOUNT
+				                  /*국민은행*/
+				                  ,
+				                  NVL(t2.DECSN011_AMOUNT,0) AS DECSN011_AMOUNT
+				                  /*농협은행*/
+				                  ,
+				                  NVL(t2.DECSN020_AMOUNT,0) AS DECSN020_AMOUNT
+				                  /*우리은행*/
+				                  ,
+				                  NVL(t2.DECSN_SUM_AMOUNT,0)      AS DECSN_SUM_AMOUNT,
+				                  t1.TOT_BGT - NVL(t2.JANAMT01,0) AS JANAMT01,
+				                  t1.TOT_BGT - NVL(t2.JANAMT02,0) AS JANAMT02
+				          FROM    ( SELECT  T1.BUDGET_ACNT_CODE ,
+				                           T1.SEHANG_CD,
+				                           T2.SEHANG_NM,
+				                           SFBDG_BUDGET_NAME(t1.YEAR, t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, NULL) AS BUDGET_ACNT_NM ,
+				                           SUM(T1.ORIBDGT)                                                               AS ORIBDGT
+				                           /*당초예산(변경분적용)*/
+				                           ,
+				                           SUM(t1.RVSPBGT) AS RVSPBGT
+				                           /*추경예산*/
+				                           ,
+				                           SUM(t1.CYFD_BUDGET) AS CYFD_BUDGET
+				                           /*이월예산*/
+				                           ,
+				                           SUM(t1.TOT_BGT) AS TOT_BGT
+				                  FROM     TM_EXECUT_BUDGET T1
+				                           LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE T2
+				                           ON       t1.YEAR             = t2.YEAR
+				                           AND      t1.BSNS_SE          = t2.BSNS_SE
+				                           AND      t1.BALC_SE          = t2.BALC_SE
+				                           AND      t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+				                  GROUP BY T1.BUDGET_ACNT_CODE,
+				                           T1.SEHANG_CD,
+				                           T2.SEHANG_NM,
+				                           SFBDG_BUDGET_NAME(t1.YEAR, t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, NULL)
+				                  )
+				                  T1
+				                  LEFT OUTER JOIN
+				                          ( SELECT  T1.BUDGET_YEAR AS YEAR,
+				                                   T1.BSNS_SE,
+				                                   T1.BALC_SE,
+				                                   T1.BUDGET_ACNT_CODE ,
+				                                   t2.SEHANG_CD ,
+				                                   MAX(t2.SEHANG_NM)                                                                        AS SEHANG_NM ,
+				                                   SFBDG_BUDGET_NAME(t1.BUDGET_YEAR, t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, NULL)     AS BUDGET_ACNT_NM ,
+				                                   NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_AMOUNT ,
+				                                   NVL(SUM(t1.DEBT_AMT),0)            AS DEBT_AMT ,
+				                                   NVL(SUM(
+				                                   CASE
+				                                            WHEN t3.FNNC_INSTT_CODE = '004'
+				                                            THEN t1.DECSN_AMOUNT
+				                                            ELSE 0
+				                                   END),0) AS DECSN040_AMOUNT
+				                                   /*국민은행*/
+				                                   ,
+				                                   NVL(SUM(
+				                                   CASE
+				                                            WHEN t3.FNNC_INSTT_CODE = '011'
+				                                            THEN t1.DECSN_AMOUNT
+				                                            ELSE 0
+				                                   END),0) AS DECSN011_AMOUNT
+				                                   /*농협은행*/
+				                                   ,
+				                                   NVL(SUM(
+				                                   CASE
+				                                            WHEN t3.FNNC_INSTT_CODE = '020'
+				                                            THEN t1.DECSN_AMOUNT
+				                                            ELSE 0
+				                                   END),0) AS DECSN020_AMOUNT
+				                                   /*우리은행*/
+				                                   ,
+				                                   NVL(SUM(t1.DECSN_AMOUNT),0)        AS DECSN_SUM_AMOUNT ,
+				                                   NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS JANAMT01 ,
+				                                   NVL(SUM(t1.DEBT_AMT),0)            AS JANAMT02
+				                          FROM     VHACC_EXP_DSN_MASTR T1
+				                                   LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t2
+				                                   ON       t1.BUDGET_YEAR      = t2.YEAR
+				                                   AND      t1.BSNS_SE          = t2.BSNS_SE
+				                                   AND      t1.BALC_SE          = t2.BALC_SE
+				                                   AND      t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+				                                   LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t3
+				                                   ON       t1.BUDGET_YEAR = t3.DECSN_YEAR
+				                                   AND      t1.DECSN_NO    = t3.DECSN_NO
+				                                   LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t4
+				                                   ON       t1.BUDGET_YEAR = t4.DECSN_YEAR
+				                                   AND      t1.DECSN_NO    = t4.DECSN_NO
+				                                   AND      T4.SEQ         = '1'
+				                          WHERE    T1.BUDGET_YEAR          = #YEAR#
+				                          AND      T1.CAUSE_ACTION_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+				                          GROUP BY T1.BUDGET_YEAR,
+				                                   T1.BSNS_SE,
+				                                   T1.BALC_SE,
+				                                   T2.SEHANG_CD,
+				                                   T1.BUDGET_ACNT_CODE,
+				                                   SFBDG_BUDGET_NAME(t1.BUDGET_YEAR, t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, NULL)
+				                          )
+				                          T2
+				                  ON      T1.BUDGET_ACNT_CODE = T2.BUDGET_ACNT_CODE
+				          
+				          UNION ALL
+				          
+				          SELECT 'A2' AS SUM_TYPE
+				                 /*소계*/
+				                 ,
+				                 '' AS BUDGET_ACNT_CODE ,
+				                 t1.SEHANG_CD ,
+				                 NVL(T2.SEHANG_NM,T1.SEHANG_NM) AS SEHANG_NM ,
+				                 '소    계'                       AS BUDGET_ACNT_NM ,
+				                 (t1.ORIBDGT)                   AS ORIBDGT
+				                 /*당초예산(변경분적용)*/
+				                 ,
+				                 (t1.RVSPBGT) AS RVSPBGT
+				                 /*추경예산*/
+				                 ,
+				                 (t1.CYFD_BUDGET) AS CYFD_BUDGET
+				                 /*이월예산*/
+				                 ,
+				                 (t1.TOT_BGT)                  AS TOT_BGT ,
+				                 NVL(t2.CAUSE_ACTION_AMOUNT,0) AS CAUSE_ACTION_AMOUNT ,
+				                 NVL(t2.DEBT_AMT,0)            AS DEBT_AMT ,
+				                 NVL(t2.DECSN040_AMOUNT,0)     AS DECSN040_AMOUNT
+				                 /*국민은행*/
+				                 ,
+				                 NVL(t2.DECSN011_AMOUNT,0) AS DECSN011_AMOUNT
+				                 /*농협은행*/
+				                 ,
+				                 NVL(t2.DECSN020_AMOUNT,0) AS DECSN020_AMOUNT
+				                 /*우리은행*/
+				                 ,
+				                 NVL(t2.DECSN_SUM_AMOUNT,0)      AS DECSN_SUM_AMOUNT,
+				                 t1.TOT_BGT - NVL(t2.JANAMT01,0) AS JANAMT01,
+				                 t1.TOT_BGT - NVL(t2.JANAMT02,0) AS JANAMT02
+				          FROM   ( SELECT  T1.YEAR ,
+				                          T1.BALC_SE ,
+				                          T1.SEHANG_CD ,
+				                          T2.SEHANG_NM,
+				                          SUM(ORIBDGT)     AS ORIBDGT ,
+				                          SUM(CYFD_BUDGET) AS CYFD_BUDGET ,
+				                          SUM(RVSPBGT)     AS RVSPBGT ,
+				                          SUM(TOT_BGT)     AS TOT_BGT
+				                 FROM     TM_EXECUT_BUDGET T1
+				                          LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t2
+				                          ON       t1.YEAR             = t2.YEAR
+				                          AND      t1.BSNS_SE          = t2.BSNS_SE
+				                          AND      t1.BALC_SE          = t2.BALC_SE
+				                          AND      t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+				                 GROUP BY T1.YEAR,
+				                          T1.BALC_SE ,
+				                          T1.SEHANG_CD,
+				                          T2.SEHANG_NM
+				                 )
+				                 t1
+				                 LEFT OUTER JOIN
+				                        ( SELECT  T2.SEHANG_CD,
+				                                 MAX(T2.SEHANG_NM)                                                                        AS SEHANG_NM,
+				                                 NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS CAUSE_ACTION_AMOUNT ,
+				                                 NVL(SUM(t1.DEBT_AMT),0)            AS DEBT_AMT ,
+				                                 NVL(SUM(
+				                                 CASE
+				                                          WHEN t3.FNNC_INSTT_CODE = '004'
+				                                          THEN t1.DECSN_AMOUNT
+				                                          ELSE 0
+				                                 END),0) AS DECSN040_AMOUNT
+				                                 /*국민은행*/
+				                                 ,
+				                                 NVL(SUM(
+				                                 CASE
+				                                          WHEN t3.FNNC_INSTT_CODE = '011'
+				                                          THEN t1.DECSN_AMOUNT
+				                                          ELSE 0
+				                                 END),0) AS DECSN011_AMOUNT
+				                                 /*농협은행*/
+				                                 ,
+				                                 NVL(SUM(
+				                                 CASE
+				                                          WHEN t3.FNNC_INSTT_CODE = '020'
+				                                          THEN t1.DECSN_AMOUNT
+				                                          ELSE 0
+				                                 END),0) AS DECSN020_AMOUNT
+				                                 /*우리은행*/
+				                                 ,
+				                                 NVL(SUM(t1.DECSN_AMOUNT),0)        AS DECSN_SUM_AMOUNT ,
+				                                 NVL(SUM(t1.CAUSE_ACTION_AMOUNT),0) AS JANAMT01 ,
+				                                 NVL(SUM(t1.DEBT_AMT),0)            AS JANAMT02
+				                        FROM     VHACC_EXP_DSN_MASTR t1
+				                                 LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t2
+				                                 ON       t1.BUDGET_YEAR      = t2.YEAR
+				                                 AND      t1.BSNS_SE          = t2.BSNS_SE
+				                                 AND      t1.BALC_SE          = t2.BALC_SE
+				                                 AND      t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+				                                 LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t3
+				                                 ON       t1.BUDGET_YEAR = t3.DECSN_YEAR
+				                                 AND      t1.DECSN_NO    = t3.DECSN_NO
+				                                 LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t4
+				                                 ON       t1.BUDGET_YEAR = t4.DECSN_YEAR
+				                                 AND      t1.DECSN_NO    = t4.DECSN_NO
+				                                 AND      T4.SEQ         = '1'
+				                        WHERE    T1.BUDGET_YEAR          = #YEAR#
+				                        AND      T1.CAUSE_ACTION_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+				                        GROUP BY T2.SEHANG_CD
+				                        )
+				                        t2
+				                 ON     t1.SEHANG_CD = t2.SEHANG_CD
+				          )
+				          A
+				 GROUP BY SUM_TYPE,
+				          BUDGET_ACNT_CODE,
+				          SEHANG_CD,
+				          SEHANG_NM,
+				          BUDGET_ACNT_NM,
+				          ORIBDGT,
+				          RVSPBGT,
+				          CYFD_BUDGET,
+				          TOT_BGT,
+				          CAUSE_ACTION_AMOUNT ,
+				          DEBT_AMT,
+				          DECSN040_AMOUNT,
+				          DECSN011_AMOUNT,
+				          DECSN020_AMOUNT,
+				          DECSN_SUM_AMOUNT,
+				          JANAMT01,
+				          JANAMT02
+				 ORDER BY SEHANG_CD,
+				          SUM_TYPE
+	</select>
+</sqlMap>

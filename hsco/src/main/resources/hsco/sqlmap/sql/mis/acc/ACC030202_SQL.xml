@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC030202_SQL">	
+	
+	<!-- 원천징수영수증(건별) -->
+	<select id="ACC030202DAO.wthtxRciptCsbyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC030202DAO.wthtxRciptCsbyList*/ ]]>
+		SELECT H_DECRYPT(t3.IHDNUM)   AS IHDNUM
+		     , t3.NM AS RCPT_MAN
+		     , CASE WHEN SFACC_GET_IHDNUM_CHK(TRIM(H_DECRYPT(t3.IHDNUM))) = 'Y' THEN '내국인' ELSE '외국인' END AS IHDNUM_TYPE /**** 주민번호 암호화처리필요  ****/
+		     , t1.CPTAL_EXPNDTR_ACNTBK_DE
+		     , t3.ADRES AS WHTAX_ADRES
+		     , t3.WHTAX_KND
+		     , t4.SBJECT_CODE_NM
+		     , t3.DECSN_YEAR
+		     , t1.DECSN_YEAR
+		     , 1 AS DECSN_CNT
+		     , NVL((t3.WHTAX_PYMNT_TOTAMT),0) 	AS VAT_DECSN_AMOUNT
+		     , t5.MSTK_PREPAR_VALUE AS TAX_RATE
+		     , NVL(t3.INCMTAX,0) 				AS INCMTAX /*소득세*/
+		     , NVL(t3.IHNTS,0) 					AS IHNTS /*지방소득세(주민세)*/
+		     , T1.DECSN_NO
+			 , T3.SEQ
+		FROM TBACC_EXP_DSN_MASTR t1
+		  INNER JOIN TBACC_EXP_DSN_DETAIL t3
+		  ON  t1.DECSN_YEAR  = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_SBJECT_CODE t4
+		  ON  t3.WHTAX_KND   = t4.SBJECT_CODE
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		  ON  t5.GRP_CODE	 = 'ACC027'
+		  AND t3.WHTAX_KND 	 = t5.CODE
+		WHERE t3.WHTAX_AT = '1' /*원천세여부*/
+		AND   t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		<isNotEmpty property="WHTAX_KND">
+		AND   t3.WHTAX_KND = #WHTAX_KND#
+		</isNotEmpty>
+		ORDER BY t3.WHTAX_KND, t1.CPTAL_EXPNDTR_ACNTBK_DE
+	</select>
+	
+	<!-- 원천징수영수증(개인별) -->
+	<select id="ACC030202DAO.wthtxRciptIndvdlList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC030202DAO.wthtxRciptIndvdlList*/ ]]>
+		SELECT MAX(H_DECRYPT(t3.IHDNUM))   AS IHDNUM
+		     , t3.NM			AS RCPT_MAN
+		     , CASE WHEN SFACC_GET_IHDNUM_CHK(H_DECRYPT(t3.IHDNUM)) = 'Y' THEN '내국인' ELSE '외국인' END AS IHDNUM_TYPE /**** 주민번호 암호화처리필요  ****/
+		     , MAX(t3.ADRES) AS WHTAX_ADRES
+		     , t3.WHTAX_KND
+		     , MAX(t4.SBJECT_CODE_NM) AS SBJECT_CODE_NM
+		     , t3.DECSN_YEAR
+		     , COUNT(t3.NM) AS DECSN_CNT
+		     , NVL(SUM(t3.WHTAX_PYMNT_TOTAMT),0) AS VAT_DECSN_AMOUNT
+		     , MAX(t5.MSTK_PREPAR_VALUE) AS TAX_RATE
+		     , NVL(SUM(t3.INCMTAX),0) 				AS INCMTAX /*소득세*/
+		     , NVL(SUM(t3.IHNTS),0) 					AS IHNTS /*지방소득세(주민세)*/
+		FROM TBACC_EXP_DSN_MASTR t1
+		  INNER JOIN TBACC_EXP_DSN_DETAIL t3
+		  ON  t1.DECSN_YEAR  = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_SBJECT_CODE t4
+		  ON  t3.WHTAX_KND   = t4.SBJECT_CODE
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		  ON  t5.GRP_CODE	 = 'ACC027'
+		  AND t3.WHTAX_KND 	 = t5.CODE
+		WHERE t3.WHTAX_AT = '1' /*원천세여부*/
+		AND   t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		<isNotEmpty property="WHTAX_KND">
+		AND   t3.WHTAX_KND = #WHTAX_KND#
+		</isNotEmpty>
+		GROUP BY t3.DECSN_YEAR, t3.WHTAX_KND, H_DECRYPT(t3.IHDNUM), t3.NM
+		ORDER BY t3.WHTAX_KND
+	</select>
+	
+	<!-- 거주자의 기타소득 원천징수영수증 -->
+	<select id="ACC030202DAO.etcIncomeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC030202DAO.etcIncomeList*/]]>
+		SELECT t2.THIS_YEAR
+		     , t1.BIZRNO
+		     , t1.MTLTY
+		     , t1.RPRSNTV
+		     , t1.JURIRNO
+		     , t1.ADRES_RN /*징수의무자 주소*/
+		     , H_DECRYPT(t1.RPRSNTV_IHIDNUM) AS RPRSNTV_IHIDNUM /*대표자 주민번호*/
+		     , t2.NM	AS RCPT_MAN
+		     , t2.IHDNUM
+		     , t2.BCNC_ADRES
+		     , t2.WHTAX_ADRES
+		     , t2.IHDNUM_TYPE
+		     , t2.WHTAX_INCOME_SE_CODE /*소득구분*/
+		FROM TBPMS_CPR_INFO t1
+		   FULL OUTER JOIN (
+		    SELECT SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,1,4) AS THIS_YEAR, H_DECRYPT(t2.IHDNUM) AS IHDNUM, t2.NM
+		         , MAX(CASE WHEN SFACC_GET_IHDNUM_CHK(H_DECRYPT(t2.IHDNUM)) = 'Y' THEN '내국인' ELSE '외국인' END) AS IHDNUM_TYPE /**** 주민번호 암호화처리필요  ****/
+		         , MAX(t2.WHTAX_INCOME_SE_CODE) KEEP(DENSE_RANK FIRST ORDER BY NVL2(t2.WHTAX_INCOME_SE_CODE,'0','1'), t1.DECSN_NO DESC) AS WHTAX_INCOME_SE_CODE
+				 , MAX(t2.WHTAX_ADRES) KEEP(DENSE_RANK FIRST ORDER BY NVL2(t2.WHTAX_ADRES,'0','1'), t1.DECSN_NO DESC) AS WHTAX_ADRES
+				 , MAX(t2.ADRES) KEEP(DENSE_RANK FIRST ORDER BY NVL2(t2.ADRES,'0','1'), t1.DECSN_NO DESC) AS BCNC_ADRES
+		    FROM TBACC_EXP_DSN_MASTR t1
+		      INNER JOIN TBACC_EXP_DSN_DETAIL t2
+		      ON  t1.DECSN_YEAR  = t2.DECSN_YEAR
+		      AND t1.DECSN_NO    = t2.DECSN_NO
+		    WHERE t1.DECSN_YEAR  BETWEEN SUBSTR(#SRCH_ST_DT#,1,4) AND SUBSTR(#SRCH_ED_DT#,1,4)
+		    AND   t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		    AND   t2.WHTAX_AT    = '1'
+		    AND   t2.WHTAX_KND   = '10' /*기타소득*/
+		    AND   t2.IHDNUM      = H_ENCRYPT(#IHDNUM#) /*원천징수 대상자*/
+		    <isEqual property="SRCH_SE" compareValue="2">
+		    AND   T1.DECSN_YEAR = #DECSN_YEAR#
+		    AND   T1.DECSN_NO = #DECSN_NO#
+		    AND   T2.SEQ = #SEQ#
+		    </isEqual>
+		    GROUP BY SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,1,4), H_DECRYPT(t2.IHDNUM), t2.NM
+		   ) t2
+		   ON ROWNUM = 1
+		WHERE BIZRNO = '5048206254' /*화성도시공사*/
+	</select>
+	
+	<!-- 거주자의 기타소득 원천징수영수증(상세) -->
+	<select id="ACC030202DAO.etcIncomeDtlsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,3,2) AS CPTAL_YY
+		     , SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,5,2) AS CPTAL_MM
+		     , SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,7,2) AS CPTAL_DD
+		     , NVL((t3.WHTAX_PYMNT_TOTAMT),0)           AS VAT_DECSN_AMOUNT
+		     , CASE WHEN t3.WHTAX_PYMNT_TOTAMT <![CDATA[>]]> 250000 THEN 
+		            CASE WHEN t3.WHTAX_INCOME_SE_CODE = '60' /*필요경비없음*/ THEN 0 ELSE NVL(t3.WHTAX_PYMNT_TOTAMT,0) - (NVL(t3.WHTAX_PYMNT_TOTAMT,0) *0.8) END
+		            ELSE 0
+		       END AS INCOME_AMOUNT
+		     , NVL((t3.WHTAX_PYMNT_TOTAMT),0)
+		      - (CASE WHEN t3.WHTAX_PYMNT_TOTAMT <![CDATA[>]]> 250000 THEN 
+		            CASE WHEN t3.WHTAX_INCOME_SE_CODE = '60' /*필요경비없음*/ THEN 0 ELSE NVL(t3.WHTAX_PYMNT_TOTAMT,0) - (NVL(t3.WHTAX_PYMNT_TOTAMT,0) *0.8) END
+		            ELSE 0
+		         END) AS EXPENS_AMOUNT
+		     , t5.MSTK_PREPAR_VALUE AS TAX_RATE
+		     , NVL(t3.INCMTAX,0) AS INCMTAX /*소득세*/
+		     , NVL(t3.IHNTS,0) AS IHNTS /*지방소득세(주민세)*/
+		     , '' AS FRHL_SPECL_TAXAMT   /*농어촌특별세*/
+		     , NVL(t3.INCMTAX,0) + NVL(t3.IHNTS,0) AS SUM_AMOUT /*지방소득세(주민세)*/
+		FROM TBACC_EXP_DSN_MASTR t1
+		  INNER JOIN TBACC_EXP_DSN_DETAIL t3
+		  ON  t1.DECSN_YEAR  = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_SBJECT_CODE t4
+		  ON  t3.WHTAX_KND   = t4.SBJECT_CODE
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		  ON  t5.GRP_CODE	 = 'ACC027'
+		  AND t3.WHTAX_KND 	 = t5.CODE
+		WHERE t3.WHTAX_AT    = '1' /*원천세여부*/
+		AND   t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		AND   t3.WHTAX_KND   = '10' /*기타소득*/
+		AND   t3.IHDNUM      = H_ENCRYPT(#IHDNUM#) /*원천징수 대상자*/
+		<isEqual property="SRCH_SE" compareValue="2">
+	    AND   T1.DECSN_YEAR = #DECSN_YEAR#
+	    AND   T1.DECSN_NO = #DECSN_NO#
+	    AND   T3.SEQ = #SEQ#
+	    </isEqual>
+		ORDER BY t1.CPTAL_EXPNDTR_ACNTBK_DE
+	</select>
+	
+	<!-- 거주자의 사업소득 원천징수영수증 -->
+	<select id="ACC030202DAO.bsnsIncomeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t2.THIS_YEAR
+		     , t1.BIZRNO
+		     , t1.MTLTY
+		     , t1.RPRSNTV
+		     , t1.JURIRNO
+		     , t1.ADRES_RN        /*징수의무자 주소*/
+		     , H_DECRYPT(t1.RPRSNTV_IHIDNUM)  AS RPRSNTV_IHIDNUM /*대표자 주민번호*/
+		     , t2.BCNC_NM
+		     , t2.BIZRNO AS RCPT_BIZRNO
+		     , t1.ADRES
+		     , t2.NM	AS RCPT_MAN
+		     , t2.IHDNUM
+		     , t2.BCNC_ADRES
+		     , t2.WHTAX_ADRES
+		     , t2.IHDNUM_TYPE
+		     , t2.WHTAX_INDUTY_CODE /*업종구분*/
+		FROM TBPMS_CPR_INFO t1
+		   FULL OUTER JOIN (
+		    SELECT SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,1,4) AS THIS_YEAR, H_DECRYPT(t2.IHDNUM) AS IHDNUM, t2.NM, MAX(t2.ADRES) AS BCNC_ADRES
+		         , MAX(CASE WHEN SFACC_GET_IHDNUM_CHK(H_DECRYPT(t2.IHDNUM)) = 'Y' THEN '내국인' ELSE '외국인' END) AS IHDNUM_TYPE /**** 주민번호 암호화처리필요  ****/
+		         , MAX(t3.BCNC_NM) AS BCNC_NM, MAX(H_DECRYPT(t3.BIZRNO)) AS BIZRNO, MAX(t2.ADRES) AS ADRES, MAX(t2.WHTAX_INDUTY_CODE) AS WHTAX_INDUTY_CODE
+		         , MAX(t2.WHTAX_ADRES) AS WHTAX_ADRES
+		    FROM TBACC_EXP_DSN_MASTR t1
+		      INNER JOIN TBACC_EXP_DSN_DETAIL t2
+		      ON  t1.DECSN_YEAR  = t2.DECSN_YEAR
+		      AND t1.DECSN_NO    = t2.DECSN_NO
+		    LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+		    ON  t2.BCNC_CODE = t3.BCNC_CODE
+		    WHERE t1.DECSN_YEAR  BETWEEN SUBSTR(#SRCH_ST_DT#,1,4) AND SUBSTR(#SRCH_ED_DT#,1,4)
+		    AND   t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		    AND   t2.WHTAX_AT    = '1'
+		    AND   t2.WHTAX_KND   = '15' /*사업소득*/
+		    AND   t2.IHDNUM      = H_ENCRYPT(#IHDNUM#) /*원천징수 대상자*/
+		    <isEqual property="SRCH_SE" compareValue="2">
+		    AND   T1.DECSN_YEAR = #DECSN_YEAR#
+		    AND   T1.DECSN_NO = #DECSN_NO#
+		    AND   T2.SEQ = #SEQ#
+		    </isEqual>
+		    GROUP BY SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,1,4), H_DECRYPT(t2.IHDNUM), t2.NM
+		   ) t2
+		   ON ROWNUM = 1
+		WHERE t1.BIZRNO = '5048206254' /*화성도시공사*/
+	</select>
+	
+	<!-- 거주자의 사업소득 원천징수영수증(상세) -->
+	<select id="ACC030202DAO.bsnsIncomeDtlsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,3,2) AS CPTAL_YY
+		     , SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,5,2) AS CPTAL_MM
+		     , SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE,7,2) AS CPTAL_DD
+		     , NVL((t3.WHTAX_PYMNT_TOTAMT),0)           AS VAT_DECSN_AMOUNT
+		     , t5.MSTK_PREPAR_VALUE AS TAX_RATE
+		     , NVL(INCMTAX,0) AS INCMTAX /*소득세*/
+		     , NVL(IHNTS,0) AS IHNTS /*지방소득세(주민세)*/
+		     , NVL(INCMTAX,0) + NVL(IHNTS,0) AS SUM_AMOUT /*지방소득세(주민세)*/
+		FROM TBACC_EXP_DSN_MASTR t1
+		  INNER JOIN TBACC_EXP_DSN_MTR_DET t2
+		  ON  t1.BUDGET_YEAR = t2.DECSN_YEAR
+		  AND t1.DECSN_NO    = t2.DECSN_NO
+		  INNER JOIN TBACC_EXP_DSN_DETAIL t3
+		  ON  t1.DECSN_YEAR  = t3.DECSN_YEAR
+		  AND t1.DECSN_NO    = t3.DECSN_NO
+		  LEFT OUTER JOIN TBACC_SBJECT_CODE t4
+		  ON  t3.WHTAX_KND   = t4.SBJECT_CODE
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		  ON  t5.GRP_CODE	 = 'ACC027'
+		  AND t3.WHTAX_KND 	 = t5.CODE
+		WHERE t3.WHTAX_AT    = '1' /*원천세여부*/
+		AND   t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		AND   t3.WHTAX_KND   = '15' /*사업소득*/
+		AND   t3.IHDNUM      = H_ENCRYPT(#IHDNUM#) /*원천징수 대상자*/
+		<isEqual property="SRCH_SE" compareValue="2">
+	    AND   T1.DECSN_YEAR = #DECSN_YEAR#
+	    AND   T1.DECSN_NO = #DECSN_NO#
+	    AND   T3.SEQ = #SEQ#
+	    </isEqual>
+		ORDER BY t1.CPTAL_EXPNDTR_ACNTBK_DE
+	</select>
+</sqlMap>

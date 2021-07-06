@@ -1,0 +1,449 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ASS010600_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 계획결재일련번호 생성 -->
+	<select id="ASS010600DAO.selectPymntSn" resultClass="java.lang.String">
+		<![CDATA[	
+			SELECT TO_CHAR(SYSDATE,'YYYY') || LPAD(NVL(MAX(SUBSTR(PLAN_SANCTN_SN, 5,7)),0)+1, 3, '0') AS PLAN_SANCTN_SN
+			FROM  TBASS_RECIPT_PLAN_SANCTN
+			WHERE SUBSTR(PLAN_SANCTN_SN,1,4) = TO_CHAR(SYSDATE,'YYYY')
+		]]>
+	</select>
+	
+	<!-- 물품수급계획결재 목록 조회  -->
+	<select id="ASS010600DAO.sanctnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /* ASS010600DAO.thngReciptPlanAcList */ ]]>
+		<![CDATA[
+			SELECT  T1.PLAN_SANCTN_SN
+			       , T1.SJ
+			       , T1.SANCTN_NO
+			       , NVL(T2.SANCTN_KND,'0') AS SANCTN_KND
+			       , T1.PLAN_SE
+			       , T1.FILE_SN
+			       , T1.REGISTER_ID
+			       , TO_CHAR(T1.REGIST_DT,'YYYYMMDD') AS REGIST_DT
+			       
+			      ,SFCOM_GET_DRFTSTS(t1.SANCTN_NO, T1.REGIST_DT)                        AS DRFT_STS            /* 기안상태        */
+	              ,'theme://images/sanctn/' || 'D' || SFCOM_GET_DRFTSTS(t1.SANCTN_NO, T1.REGIST_DT) || '.png'    AS DRFT_STS_IMG        /* 기안상태Img    */
+	              ,TO_CHAR(t2.DRFT_DT,'YYYY-MM-DD HH24:MI:SS')            AS DRFT_DT            /* 기안일시        */
+	              ,SFCOM_GET_APPRSTS(t1.SANCTN_NO, T1.REGIST_DT)                        AS SANCTN_STS        /* 결재상태        */
+	              ,'theme://images/sanctn/' || 'A' || SFCOM_GET_APPRSTS(t1.SANCTN_NO, T1.REGIST_DT) || '.png'    AS SANCTN_STS_IMG    /* 결재상태Img    */
+	              ,TO_CHAR(t2.LAST_SANCTN_DT,'YYYY-MM-DD HH24:MI:SS')    AS LAST_SANCTN_DT    /* 최종결재일시    */
+	              
+              
+			FROM   TBASS_RECIPT_PLAN_SANCTN T1
+			       LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR T2
+			                    ON T1.SANCTN_NO = T2.SANCTN_NO
+			WHERE  T1.PLAN_SE = #PLAN_SE#
+			  AND  TO_CHAR(T1.REGIST_DT,'YYYYMMDD') BETWEEN #FDATE# AND #TDATE#
+			ORDER BY T1.PLAN_SANCTN_SN
+       ]]>
+    </select>
+
+	<!-- 취득계획결재 상세 조회 -->
+	<select id="ASS010600DAO.thngReciptPlanDetail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /* ASS010600DAO.thngReciptPlanDetail */ ]]>
+			SELECT T1.RECIPT_YEAR         AS RECIPT_YEAR
+			       ,T1.ODR                AS ODR
+			       ,T1.SN                 AS SN
+			       ,T1.ASSETS_CL_CODE     AS ASSETS_CL_CODE
+			       ,T2.ASSETS_CL_NM       AS ASSETS_CL_NM
+			       ,T1.ASSETS_NM          AS ASSETS_NM
+			       ,T1.QY                 AS QY
+			       ,T1.STNDRD             AS STNDRD
+			       ,T1.AMOUNT             AS AMOUNT
+			       ,T1.PRVONSH            AS PRVONSH
+			       ,T1.RM                 AS RM
+			       ,T1.UNTPC              AS UNTPC
+			       ,T1.UNIT               AS UNIT
+			       ,T5.CODE_NM			  AS UNIT_NM
+			       ,NVL(T1.CONFM_AT, '0') AS CONFM_AT
+                   ,T1.PLAN_SANCTN_SN     AS PLAN_SANCTN_SN
+                   ,T3.REQUST_DE          AS REQUST_DE
+                   ,T3.REQUST_DEPT        AS REQUST_DEPT
+                   ,T4.DEPT_NM            AS DEPT_NM
+                   ,T1.DECSN_YEAR		  AS DECSN_YEAR
+                   ,T1.DECSN_NO			  AS DECSN_NO
+                   ,T1.ASSETS_SE		  AS ASSETS_SE
+				   ,NVL(T1.REGIST_AT,'0') AS REGIST_AT
+				   ,NVL(T1.REGIST_AT,'0') AS REG_CHK
+				   ,DECODE(T1.DECSN_NO,NULL,'0','1') AS CHK
+			FROM   TBASS_THNG_RECIPT_PLAN T3
+                   LEFT OUTER JOIN VWHRM_DEPT T4
+			                    ON T3.REQUST_DEPT = T4.DEPT_CODE
+			       ,TBASS_THNG_RECIPT_PLAN_DETAIL T1
+			       LEFT OUTER JOIN TBASS_ASSETS_CL T2
+			                    ON T1.ASSETS_CL_CODE = T2.ASSETS_CL_CODE
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE T5
+			       				ON T5.GRP_CODE = 'CMP002'
+			       				AND T1.UNIT	   = T5.CODE
+			WHERE  1=1
+			  AND T3.RECIPT_YEAR = T1.RECIPT_YEAR
+              AND T3.ODR         = T1.ODR						  
+			  AND T1.PLAN_SANCTN_SN = #PLAN_SANCTN_SN#
+			ORDER BY T3.REQUST_DEPT, T1.SN
+    </select>    
+    
+	<!-- 취득계획결재 상세 대상 조회 -->
+	<select id="ASS010600DAO.thngReciptPlanDetail2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /* ASS010600DAO.thngReciptPlanDetail2 */ ]]>
+		<![CDATA[
+			SELECT T1.RECIPT_YEAR         AS RECIPT_YEAR
+			       ,T1.ODR                AS ODR
+			       ,T1.SN                 AS SN
+			       ,T1.ASSETS_CL_CODE     AS ASSETS_CL_CODE
+			       ,T2.ASSETS_CL_NM       AS ASSETS_CL_NM
+			       ,T1.ASSETS_NM          AS ASSETS_NM
+			       ,T1.QY                 AS QY
+			       ,T1.STNDRD             AS STNDRD
+			       ,T1.AMOUNT             AS AMOUNT
+			       ,T1.PRVONSH            AS PRVONSH
+			       ,T1.RM                 AS RM
+			       ,T1.UNTPC              AS UNTPC
+			       ,T1.UNIT               AS UNIT
+			       ,NVL(T1.CONFM_AT, '0') AS CONFM_AT
+                   ,T1.PLAN_SANCTN_SN     AS PLAN_SANCTN_SN
+                   ,T3.REQUST_DE          AS REQUST_DE
+                   ,T3.REQUST_DEPT        AS REQUST_DEPT
+                   ,T4.DEPT_NM            AS DEPT_NM
+			FROM   TBASS_THNG_RECIPT_PLAN T3
+                   LEFT OUTER JOIN VWHRM_DEPT T4
+			                    ON T3.REQUST_DEPT = T4.DEPT_CODE
+			       ,TBASS_THNG_RECIPT_PLAN_DETAIL T1
+			       LEFT OUTER JOIN TBASS_ASSETS_CL T2
+			                    ON T1.ASSETS_CL_CODE = T2.ASSETS_CL_CODE
+			WHERE  1=1
+			  AND T3.RECIPT_YEAR = T1.RECIPT_YEAR
+              AND T3.ODR         = T1.ODR			  
+			  AND T3.REQUST_DE BETWEEN #FDATE# AND #TDATE#
+			  AND NVL(T1.CONFM_AT, '0') = '1'
+			  AND T1.PLAN_SANCTN_SN IS NULL
+			ORDER BY T3.REQUST_DEPT, T1.SN
+		]]>
+    </select>        
+    
+    <!-- 수급계획결재 등록/수정 -->
+    <insert id="ASS010600DAO.reciptPlanSanctnCU" parameterClass="java.util.HashMap">
+    	<![CDATA[ /* ASS010600DAO.reciptPlanSanctnCU */ ]]>
+        <![CDATA[
+			MERGE INTO TBASS_RECIPT_PLAN_SANCTN
+				  USING DUAL
+				  ON (PLAN_SANCTN_SN = #PLAN_SANCTN_SN#)
+				  WHEN MATCHED THEN
+				  UPDATE SET 
+							 SJ               = #SJ#
+							,UPDUSR_ID        = #S_USER_ID#
+							,UPDT_DT          = #SYSDATE#   
+				  WHEN NOT MATCHED THEN 
+				  INSERT(
+							 PLAN_SANCTN_SN
+							,SJ
+							,SANCTN_NO
+							,PLAN_SE
+							,FILE_SN
+							,REGISTER_ID
+							,REGIST_DT
+							,UPDUSR_ID
+							,UPDT_DT
+					)VALUES(
+							 #PLAN_SANCTN_SN#
+							,#SJ#
+							,#SANCTN_NO#
+							,#PLAN_SE#
+							,#FILE_SN#
+							,#S_USER_ID#
+							,SYSDATE
+							,#S_USER_ID#
+							,SYSDATE
+			)
+        ]]>
+    </insert>
+
+    <!-- 수급계획결재 삭제 -->
+    <delete id="ASS010600DAO.reciptPlanSanctnD" parameterClass="java.util.HashMap">
+    	<![CDATA[ /* ASS010600DAO.reciptPlanSanctnD */ ]]>
+        <![CDATA[
+            DELETE FROM TBASS_RECIPT_PLAN_SANCTN 
+   		    WHERE  PLAN_SANCTN_SN = #PLAN_SANCTN_SN#
+        ]]>
+    </delete>
+        
+	<!-- 물품수급계획상세 수정 -->
+    <update id="ASS010600DAO.thngReciptPlanDetailU" parameterClass="java.util.HashMap">
+    	<![CDATA[ /* ASS010600DAO.thngReciptPlanDetailU */ ]]>
+        <![CDATA[
+          UPDATE    TBASS_THNG_RECIPT_PLAN_DETAIL
+          SET       PLAN_SANCTN_SN    = #PLAN_SANCTN_SN#
+          		   ,ASSETS_SE		  = #ASSETS_SE#
+                   ,UPDUSR_ID		  =	#S_USER_ID#
+                   ,UPDT_DT		  	  =	SYSDATE
+          WHERE  	RECIPT_YEAR 	  = #RECIPT_YEAR#
+          	AND		ODR 			  = #ODR#
+          	AND     SN                = #SN#        
+        ]]>
+    </update>    
+
+	<!-- 물품수급계획상세 수정 -->
+    <update id="ASS010600DAO.thngReciptPlanDetailU2" parameterClass="java.util.HashMap">
+    	<![CDATA[ /* ASS010600DAO.thngReciptPlanDetailU */ ]]>
+        <![CDATA[
+          UPDATE    TBASS_THNG_RECIPT_PLAN_DETAIL
+          SET       PLAN_SANCTN_SN    = NULL
+                    ,UPDUSR_ID		  =	#S_USER_ID#
+                    ,UPDT_DT		  =	SYSDATE
+          WHERE  	PLAN_SANCTN_SN    = #PLAN_SANCTN_SN#      
+        ]]>
+    </update>
+    
+    
+	<!-- 불용품관리상세(디테일) 조회 -->
+	<select id="ASS010600DAO.atldManageDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT  T1.REQST_YEAR
+			       ,T1.ODR                                
+			       ,T1.ASSETS_NO                                                          /* 자산번호 */
+			       ,T5.DISUSE_PLAN_DE                                                     
+			       ,T5.REQUST_DEPT                                                        
+			       ,T6.DEPT_NM                                                            /* 요청부서 명 */
+			       ,T3.ASSETS_CL_CODE                                                     /* 자산분류코드 */
+			       ,T4.ASSETS_CL_NM                                                       /* 자산분류명 */
+			       ,T3.ASSETS_SE                                                          /* 자산구분 */
+			       ,T3.ASSETS_NM                                                          /* 자산명 */
+			       ,NVL(T1.DISUSE_AMOUNT,0) AS DISUSE_AMOUNT                              /* 불용금액 */
+			       ,T1.DISUSE_SE_CODE                                                     /* 불용구분코드 */
+			       ,T1.DISUSE_PRVONSH                                                     /* 불용사유 */
+			       ,T3.UNTPC                                                              /* 단가 */
+			       ,T3.QY                                                                 /* 수량 */
+			       ,T3.UNIT                                                               /* 단위 */
+			       ,T3.STNDRD                                                             /* 규격 */
+			       ,NVL(T3.ACQS_AMOUNT,0)                   AS ACQS_AMOUNT                /* 취득금액 */
+			       ,NVL(T2.DPRC_ACMTL_AMOUNT,0)             AS DPRC_ACMTL_AMOUNT          /* 상각누계금액 */
+			       ,NVL(T3.GOVSUBY_ACQS_AMOUNT,0)           AS GOVSUBY_ACQS_AMOUNT        /* 국고보조금취득가액 */
+			       ,NVL(T2.GOVSUBY_DPRC_ACMTL_AMOUNT,0)     AS GOVSUBY_DPRC_ACMTL_AMOUNT  /* 국고보조금_상각누계금액 */
+			       ,NVL(T2.TRMEND_BLCE,0)                   AS TRMEND_BLCE                /* 장부가액 */
+			       ,T1.PLAN_SANCTN_SN
+			       ,T1.DISUSE_CONFM_AT
+                   ,NVL(T1.DISUSE_PROCESS_AT,'0')           AS DISUSE_PROCESS_AT
+			FROM    TBASS_ATLD_MANAGE T5
+			       LEFT OUTER JOIN VWHRM_DEPT T6
+			                    ON T5.REQUST_DEPT = T6.DEPT_CODE
+			       ,TBASS_ATLD_MANAGE_DETAIL T1
+			       LEFT OUTER JOIN (SELECT ASSETS_NO
+			                               ,MIN(DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS DPRC_ACMTL_AMOUNT
+			                               ,MIN(GOVSUBY_DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS GOVSUBY_DPRC_ACMTL_AMOUNT
+			                               ,MIN(TRMEND_BLCE) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS TRMEND_BLCE
+			                        FROM TBASS_DPRC
+			                        GROUP BY ASSETS_NO
+			                       ) T2
+			                    ON T1.ASSETS_NO = T2.ASSETS_NO
+			       LEFT OUTER JOIN TBASS_RECIPT_PLAN_SANCTN T7
+			                    ON T1.PLAN_SANCTN_SN = T7.PLAN_SANCTN_SN 
+			       ,TBASS_ASSETS_MASTR T3
+			       ,TBASS_ASSETS_CL T4
+			WHERE 1=1
+			  AND T5.REQST_YEAR = T1.REQST_YEAR
+			  AND T5.ODR        = T1.ODR
+			  AND T1.ASSETS_NO = T3.ASSETS_NO
+			  AND T3.ASSETS_CL_CODE = T4.ASSETS_CL_CODE
+			  AND T1.PLAN_SANCTN_SN = #PLAN_SANCTN_SN#
+			ORDER BY T5.REQUST_DEPT, T1.ASSETS_NO
+			]]>	
+    </select>    
+
+	<!-- 불용품관리상세(디테일) 대상 조회 -->
+	<select id="ASS010600DAO.atldManageDetailList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT  T1.REQST_YEAR
+			       ,T1.ODR                                
+			       ,T1.ASSETS_NO                                                          /* 자산번호 */
+			       ,T5.DISUSE_PLAN_DE                                                     
+			       ,T5.REQUST_DEPT                                                        
+			       ,T6.DEPT_NM                                                            /* 요청부서 명 */
+			       ,T3.ASSETS_CL_CODE                                                     /* 자산분류코드 */
+			       ,T4.ASSETS_CL_NM                                                       /* 자산분류명 */
+			       ,T3.ASSETS_SE                                                          /* 자산구분 */
+			       ,T3.ASSETS_NM                                                          /* 자산명 */
+			       ,NVL(T1.DISUSE_AMOUNT,0) AS DISUSE_AMOUNT                              /* 불용금액 */
+			       ,T1.DISUSE_SE_CODE                                                     /* 불용구분코드 */
+			       ,T1.DISUSE_PRVONSH                                                     /* 불용사유 */
+			       ,T3.UNTPC                                                              /* 단가 */
+			       ,T3.QY                                                                 /* 수량 */
+			       ,T3.UNIT                                                               /* 단위 */
+			       ,T3.STNDRD                                                             /* 규격 */
+			       ,NVL(T3.ACQS_AMOUNT,0)                   AS ACQS_AMOUNT                /* 취득금액 */
+			       ,NVL(T2.DPRC_ACMTL_AMOUNT,0)             AS DPRC_ACMTL_AMOUNT          /* 상각누계금액 */
+			       ,NVL(T3.GOVSUBY_ACQS_AMOUNT,0)           AS GOVSUBY_ACQS_AMOUNT        /* 국고보조금취득가액 */
+			       ,NVL(T2.GOVSUBY_DPRC_ACMTL_AMOUNT,0)     AS GOVSUBY_DPRC_ACMTL_AMOUNT  /* 국고보조금_상각누계금액 */
+			       ,NVL(T2.TRMEND_BLCE,0)                   AS TRMEND_BLCE                /* 장부가액 */
+			       ,T1.PLAN_SANCTN_SN
+			       ,T1.DISUSE_CONFM_AT
+			       ,NVL(T1.DISUSE_PROCESS_AT,'0')           AS DISUSE_PROCESS_AT
+
+			FROM    TBASS_ATLD_MANAGE T5
+			       LEFT OUTER JOIN VWHRM_DEPT T6
+			                    ON T5.REQUST_DEPT = T6.DEPT_CODE
+			       ,TBASS_ATLD_MANAGE_DETAIL T1
+			       LEFT OUTER JOIN (SELECT ASSETS_NO
+			                               ,MIN(DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS DPRC_ACMTL_AMOUNT
+			                               ,MIN(GOVSUBY_DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS GOVSUBY_DPRC_ACMTL_AMOUNT
+			                               ,MIN(TRMEND_BLCE) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS TRMEND_BLCE
+			                        FROM TBASS_DPRC
+			                        GROUP BY ASSETS_NO
+			                       ) T2
+			                    ON T1.ASSETS_NO = T2.ASSETS_NO
+			       LEFT OUTER JOIN TBASS_RECIPT_PLAN_SANCTN T7
+			                    ON T1.PLAN_SANCTN_SN = T7.PLAN_SANCTN_SN
+			       ,TBASS_ASSETS_MASTR T3
+			       ,TBASS_ASSETS_CL T4
+			WHERE 1=1
+			  AND T5.REQST_YEAR = T1.REQST_YEAR
+			  AND T5.ODR        = T1.ODR
+			  AND T1.ASSETS_NO = T3.ASSETS_NO
+			  AND T3.ASSETS_CL_CODE = T4.ASSETS_CL_CODE
+			  AND NVL(T1.DISUSE_PROCESS_AT,'0') = '0'
+			  AND T1.DISUSE_CONFM_AT = '1'
+			  AND T1.PLAN_SANCTN_SN IS NULL
+			  AND T5.DISUSE_PLAN_DE BETWEEN #FDATE# AND #TDATE#
+			ORDER BY T5.REQUST_DEPT, T1.ASSETS_NO
+			]]>	
+    </select>      
+
+    
+    <!-- 불용품관리상세 수정-->
+	<update id="ASS010600DAO.atldManageDetailU" parameterClass="java.util.HashMap">
+        <![CDATA[
+          UPDATE    TBASS_ATLD_MANAGE_DETAIL
+          SET       PLAN_SANCTN_SN       = #PLAN_SANCTN_SN#
+                   ,UPDUSR_ID            = #S_USER_ID#
+                   ,UPDT_DT              = SYSDATE                  
+          WHERE  	REQST_YEAR 	  = #REQST_YEAR#
+          AND       ODR           = #ODR#
+          AND       ASSETS_NO     = #ASSETS_NO#      
+        ]]>
+    </update>
+
+    <!-- 불용품관리상세 수정-->
+	<update id="ASS010600DAO.atldManageDetailU2" parameterClass="java.util.HashMap">
+        <![CDATA[
+          UPDATE    TBASS_ATLD_MANAGE_DETAIL
+          SET       PLAN_SANCTN_SN       = NULL
+                   ,UPDUSR_ID            = #S_USER_ID#
+                   ,UPDT_DT              = SYSDATE                  
+          WHERE  	PLAN_SANCTN_SN = #PLAN_SANCTN_SN#    
+        ]]>
+    </update>
+    
+ 
+    
+    <!-- 전자결재번호 조회 -->
+	<select id="ASS010600DAO.selectSanctnNO" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		<![CDATA[ /* ASS010600DAO.selectSanctnNO */ ]]>
+			SELECT SANCTN_NO 
+			FROM   TBCOM_ELCTRN_SANCTN_MASTR 
+			WHERE  INTRLCK_IDNTFR = #KEY#
+    </select>      
+  
+    <!-- 물품수급계획결재 테이블 수정(결재번호) -->
+    <update id="ASS010600DAO.approveU01" parameterClass="java.util.HashMap">
+    	<![CDATA[ /* ASS010600DAO.approveU */ ]]>
+        <![CDATA[
+          UPDATE    TBASS_RECIPT_PLAN_SANCTN
+          SET       SANCTN_NO     = 	#SANCTN_NO#
+          WHERE  	PLAN_SANCTN_SN = #PLAN_SANCTN_SN#
+        ]]>
+    </update>    
+    
+    <!-- 지출 결의번호 업데이트 -->
+    <update id="ASS010600DAO.updateDecsnNo" parameterClass="java.util.HashMap">
+    	UPDATE TBASS_THNG_RECIPT_PLAN_DETAIL
+    	SET	   DECSN_YEAR 	= #DSNMASTR.DECSN_YEAR#
+    		  ,DECSN_NO		= #DSNMASTR.DECSN_NO#
+    	WHERE  RECIPT_YEAR	= #RECIPT_YEAR#
+		  AND  ODR			= #ODR#
+		  AND  SN			= #SN#
+    </update>
+    
+    <!-- 지출 결의번호 삭제 -->
+    <update id="ASS010600DAO.deleteDecsnNo" parameterClass="java.util.HashMap">
+    	UPDATE TBASS_THNG_RECIPT_PLAN_DETAIL
+    	SET	   DECSN_YEAR 	= NULL
+    		  ,DECSN_NO		= NULL
+    	WHERE  DECSN_YEAR 	= #DECSN_YEAR#
+    	  AND  DECSN_NO		= #DECSN_NO#
+    </update>
+    
+    <!-- 자산대장 등록 -->
+    <insert id="ASS010600DAO.insertAssetsMastr" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBASS_ASSETS_MASTR
+    	(
+			 ASSETS_NO
+			,ASSETS_CL_CODE
+			,ASSETS_SE
+			,ASSETS_NM
+			,UNTPC
+			,QY
+			,UNIT
+			,STNDRD
+			,ACQS_DE
+			,ACQS_AMOUNT
+			,ACQS_CHIT_NO
+			,DEPT_CODE
+			,RGSDE
+			,SRVIVE_AMOUNT
+			,DPRT_COMPT_AT
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+			
+			,RECIPT_YEAR
+			,ODR
+			,SN
+    	)
+    	SELECT
+		     (SELECT NVL(MAX(TO_NUMBER(ASSETS_NO)),TO_NUMBER(TO_CHAR(SYSDATE,'YYYY')||'000000'))
+		      FROM TBASS_ASSETS_MASTR
+		      WHERE SUBSTR(ASSETS_NO, 1,4) = TO_CHAR(SYSDATE,'YYYY')
+		     ) + LEVEL AS ASSETS_NO
+			,#ASSETS_CL_CODE#
+			,#ASSETS_SE#
+			,#ASSETS_NM#
+			,CASE LEVEL WHEN NVL(TO_NUMBER(#QY#),1) THEN NVL(TO_NUMBER(#AMOUNT#),0) - (NVL(TO_NUMBER(#UNTPC#),0) * (NVL(TO_NUMBER(#QY#),1) - 1)) ELSE NVL(TO_NUMBER(#UNTPC#),0) END AS UNTPC	/* 단가로 금액을 넣어주되 남는 금액이 있다면 마지막에 몰아준다 */
+			,'1'
+			,#UNIT#
+			,#STNDRD#
+			,TO_CHAR(SYSDATE,'YYYYMMDD')
+			,CASE LEVEL WHEN NVL(TO_NUMBER(#QY#),1) THEN NVL(TO_NUMBER(#AMOUNT#),0) - (NVL(TO_NUMBER(#UNTPC#),0) * (NVL(TO_NUMBER(#QY#),1) - 1)) ELSE NVL(TO_NUMBER(#UNTPC#),0) END AS UNTPC
+			,#DECSN_NO#
+			,#REQUST_DEPT#
+			,TO_CHAR(SYSDATE,'YYYYMMDD')
+			,CASE LEVEL WHEN NVL(TO_NUMBER(#QY#),1) THEN NVL(TO_NUMBER(#AMOUNT#),0) - (NVL(TO_NUMBER(#UNTPC#),0) * (NVL(TO_NUMBER(#QY#),1) - 1)) ELSE NVL(TO_NUMBER(#UNTPC#),0) END AS UNTPC
+			,'0'
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+			
+			,#RECIPT_YEAR#
+			,#ODR#
+			,#SN#
+			
+		FROM DUAL
+		CONNECT BY LEVEL <= NVL(TO_NUMBER(#QY#),1)	/* 수량만큼 등록한다 */
+	]]>
+    </insert>
+    
+    <!-- 자산등록여부 업데이트 -->
+    <update id="ASS010600DAO.registAtU" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	UPDATE TBASS_THNG_RECIPT_PLAN_DETAIL
+    	SET	   REGIST_AT	= '1'
+    	WHERE  RECIPT_YEAR	= #RECIPT_YEAR#
+		  AND  ODR			= #ODR#
+		  AND  SN			= #SN#
+    ]]>
+    </update>
+</sqlMap>

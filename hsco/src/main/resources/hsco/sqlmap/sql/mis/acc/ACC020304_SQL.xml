@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020304_SQL">	
+	
+	<!-- 지출내역조회 -->
+	<select id="ACC020304DAO.expndtrDtlsList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*ACC020204DAO.expDsnMastrList*/ ]]>
+		SELECT 
+		      t1.BSNS_SE || t1.BALC_SE AS BSNS_BALC_SE
+		     , t6.CODE_NM	AS BSNS_BALC_NM
+		     , t1.BUDGET_ACNT_CODE
+		     , t4.BUDGET_ACNT_NM
+		     , t1.EXPNDTR_UNIT_CODE
+		     , t5.EXPNDTR_UNIT_NM
+		     , t1.DECSN_YEAR
+		     , t1.DECSN_NO
+		     , t1.ITNC_DE       /* 발의일자(결의일자) */
+		     , t3.BCNC_CODE
+		     , CASE WHEN T1.ANACT_KND = '07' AND T1.REGIST_DT > (SELECT TO_DATE(OPEN_DT||'000000','YYYYMMDDHH24MISS') FROM TBPMS_CPR_INFO)
+							THEN (SELECT CREDTR FROM TBACC_SLARY_EXP_DSN_MTR_DET ST WHERE ST.DECSN_YEAR = T1.DECSN_YEAR AND ST.DECSN_NO = T1.DECSN_NO)
+						WHEN T1.ANACT_KND != '01' THEN T2.RCPT_MAN
+			            ELSE (  SELECT DECODE(ST.RCPT_MAN_CNT, 0, '', 1, ST.RCPT_MAN, ST.RCPT_MAN||'외 '||(ST.RCPT_MAN_CNT-1)||'명')
+		                        FROM (
+		                              SELECT DECSN_NO, RCPT_MAN, SEQ, COUNT(DISTINCT RCPT_MAN) OVER(PARTITION BY DECSN_YEAR, DECSN_NO) AS RCPT_MAN_CNT, MIN(SEQ) OVER(PARTITION BY DECSN_YEAR, DECSN_NO) AS MIN_SEQ
+		                              FROM TBACC_EXP_DSN_DETAIL_TRVCT ST
+		                              )ST
+		                        WHERE ST.DECSN_NO = T1.DECSN_NO
+		                        AND ST.SEQ = ST.MIN_SEQ)
+		           END AS RCPT_MAN      /*채주(영수자)*/
+		     , CASE WHEN H_DECRYPT(t3.BIZRNO) = 'Z000000000000' THEN NULL
+		     		WHEN LENGTH(H_DECRYPT(t3.BIZRNO)) = 13 THEN SUBSTR(H_DECRYPT(t3.BIZRNO),1,6) ||'-'||SUBSTR(H_DECRYPT(t3.BIZRNO),7)
+			        WHEN LENGTH(H_DECRYPT(t3.BIZRNO)) = 10 THEN SUBSTR(H_DECRYPT(t3.BIZRNO),1,3) ||'-'||SUBSTR(H_DECRYPT(t3.BIZRNO),4,2) ||'-'||SUBSTR(H_DECRYPT(t3.BIZRNO),6)
+			        ELSE H_DECRYPT(t3.BIZRNO)
+			   END AS BIZRNO	/*사업자등록번호*/
+		     , t3.BCNC_NM       /*상호*/
+		     , t1.DECSN_AMOUNT  /*결의금액*/
+		     , t1.SUMRY
+		     , t1.ANACT_KND
+		FROM TBACC_EXP_DSN_MASTR t1
+		    LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t2
+		    ON  t1.DECSN_YEAR = t2.DECSN_YEAR
+		    AND t1.DECSN_NO   = t2.DECSN_NO
+		    AND t2.SEQ = '1'
+		    LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+		    ON  t2.BCNC_CODE  = t3.BCNC_CODE
+		    LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t4
+		    ON  t1.BUDGET_YEAR = t4.YEAR
+		    AND t1.BSNS_SE     = t4.BSNS_SE
+		    AND t1.BALC_SE     = t4.BALC_SE
+		    AND t1.BUDGET_ACNT_CODE = t4.BUDGET_ACNT_CODE
+		    LEFT OUTER JOIN TBBDG_EXPNDTR_UNIT_CODE t5
+		    ON  t1.BUDGET_YEAR  = t5.YEAR
+		    AND t1.BSNS_SE      = t5.BSNS_SE
+		    AND t1.BALC_SE      = t5.BALC_SE
+		    AND t1.BUDGET_ACNT_CODE  = t5.BUDGET_ACNT_CODE
+		    AND t1.EXPNDTR_UNIT_CODE = t5.EXPNDTR_UNIT_CODE
+		    LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+		    ON  t6.GRP_CODE = 'BDG017'
+		    AND t6.USE_AT = '1' 
+		    AND t1.BSNS_SE = SUBSTR(t6.CODE,1,1)
+		    AND t1.BALC_SE = SUBSTR(t6.CODE,2,1)
+		WHERE t1.DECSN_YEAR = SUBSTR(#SRCH_ED_DT#,1,4)  /* 결의년도   	*/
+		<isNotEmpty property="DECSN_NO">				/* 결의번호		*/
+		  AND t1.DECSN_NO LIKE '%'|| #DECSN_NO# ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_BALC_SE">			/* 계정구분 	*/
+		  AND t1.BSNS_SE = SUBSTR(#BSNS_BALC_SE#,1,1)
+		  AND t1.BALC_SE = SUBSTR(#BSNS_BALC_SE#,2,1)
+		</isNotEmpty>
+		<isEqual property="STDR_DE" compareValue="1">	/* 지출결의일자 */
+		  AND t1.ITNC_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="2">	/* 채무확정일자 */
+		  AND t1.DET_DCSN_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		</isEqual>
+		<isEqual property="STDR_DE" compareValue="3">	/* 자금지출일자 */
+		  AND t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		</isEqual>
+		<isNotEmpty property="BCNC_CODE">				/* 거래처코드 	*/
+		  AND t2.BCNC_CODE = #BCNC_CODE#
+		</isNotEmpty>
+		ORDER BY t1.DECSN_YEAR ASC
+		       , t1.BSNS_SE || t1.BALC_SE ASC
+		       , t1.BUDGET_ACNT_CODE ASC
+		       , t1.EXPNDTR_UNIT_CODE ASC
+		       , t1.DECSN_NO ASC
+	</select>
+	
+</sqlMap>

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SUP020207_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	    
+	<!-- 년도별 심사위원 조회 -->
+	<select id="SUP020207DAO.selectJudgeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*SUP020207DAO.selectJudgeList*/ ]]>
+		<![CDATA[	
+			SELECT A.JUDGE_SN  AS EMPNO
+			       ,DECODE(A.EXTRL_HNF, '1', A.JUDGE_NM, B.EMPNM)     AS EMPNM
+			FROM   TBSUP_JUDGE_MASTR A
+			       LEFT OUTER JOIN TBHRM_HR_MASTR B  
+			                    ON A.EMPNO = B.EMPNO   
+			WHERE  1=1
+			  AND STDR_YEAR = #PROPSE_YEAR#
+			  AND ODR_SE = #PROPSE_ODR_SE#
+			ORDER BY A.JUDGE_SN
+		]]> 		        	     
+    </select>
+    
+    <!-- 제안 채점결과 조회 -->
+	<select id="SUP020207DAO.selectJdgmnResultList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">	    
+		<![CDATA[ /*SUP020207DAO.selectJdgmnResultList*/ ]]>
+		<![CDATA[	
+			WITH TMP_TABLE AS (
+			      SELECT A.PROPSE_NO
+			             ,A.PROPSE_YEAR
+			             ,A.PROPSE_ODR_SE
+			             ,A.PROPSE_SJ
+			             ,C.PROPSE_SCORE   AS PROPSE_SCORE
+			             ,RANK() OVER (PARTITION BY A.PROPSE_NO ORDER BY C.PROPSE_SCORE DESC ) as RK
+			             ,C.DCSN_AT AS DCSN_AT
+			             ,B.JUDGE_SN AS EMPNO
+			             ,A.PROPSE_SE
+			             ,A.EXCL_AT
+			      FROM   TBSUP_PROPSE_MASTR A
+			             LEFT OUTER JOIN TBSUP_PROPSE_JDGMN_MFCMM B
+			                          ON A.PROPSE_NO = B.PROPSE_NO
+			             LEFT OUTER JOIN (SELECT PROPSE_NO
+			                                     ,SN
+			                                     ,SUM(PROPSE_SCORE) AS PROPSE_SCORE
+			                                     ,MAX(DCSN_AT)      AS DCSN_AT
+			                                     ,MAX(PROPSE_SE)    AS PROPSE_SE
+			                              FROM   TBSUP_PROPSE_JDGMN_RESULT
+			                              WHERE  1=1
+			                              GROUP BY PROPSE_NO, SN
+			                             )C
+			                          ON B.PROPSE_NO = C.PROPSE_NO
+			                         AND B.SN = C.SN
+			             LEFT OUTER JOIN (SELECT PROPSE_NO
+                                                 ,SN
+                                          FROM   TBSUP_PROPSE_PROPSR
+	 	              				]]>
+	 	              					<isNotEmpty property="EMPNO">	         
+	 	              	                  WHERE  EMPNO = #EMPNO#
+	                   					</isNotEmpty>
+	 	              				<![CDATA[
+                                         ) D
+                                      ON A.PROPSE_NO = D.PROPSE_NO
+                                     AND B.SN = D.SN		                         
+			      WHERE 1=1
+			        AND A.PROPSE_YEAR = #PROPSE_YEAR#
+			        AND A.PROPSE_SE = #PROPSE_SE#
+			        AND A.PROPSE_ODR_SE = #PROPSE_ODR_SE# 
+			        AND A.CNFIRM_AT = '1'	
+			        AND NVL(A.EXCL_AT, '0') <> '1'		        
+			)
+			SELECT A.PROPSE_NO
+			       ,A.PROPSE_SE
+			       ,A.PROPSE_SJ      
+			       ,DECODE(A.EXCL_AT, '1', '제외 제안'
+			                        ,DECODE(A.PROPSE_SCORE, NULL, '심사 미완료'
+			                                              , A.PROPSE_SCORE)
+			                        ) AS PROPSE_SCORE
+			       ,DECODE(A.PROPSE_SCORE, NULL, '0' , '1') AS COMPT_AT
+			       ,B.STDR_GRAD
+			       ,C.CODE_NM
+			]]> 
+				<iterate property="list">
+				    ,DECODE(A.EXCL_AT, '1', NULL, DECODE(A.PROPSE_SCORE, NULL, DECODE(D.$list[].EMPNM$,NULL,'미대상',DECODE(D.$list[].EMPNM$,-1,'미완료', D.$list[].EMPNM$)), DECODE(D.$list[].EMPNM$,NULL,'미대상',D.$list[].EMPNM$))) AS $list[].EMPNM$
+				</iterate>
+			<![CDATA[
+			       ,(SELECT DECODE(A.EXTRL_HNF, '1', A.JUDGE_NM, B.EMPNM)     AS EMPNM
+					 FROM   TBSUP_JUDGE_MASTR A
+					        LEFT OUTER JOIN TBHRM_HR_MASTR B  
+					                     ON A.EMPNO = B.EMPNO   
+					 WHERE  1=1
+					   AND  A.JUDGE_SN = A.RK1) AS RK1
+		           ,(SELECT DECODE(A.EXTRL_HNF, '1', A.JUDGE_NM, B.EMPNM)     AS EMPNM
+					 FROM   TBSUP_JUDGE_MASTR A
+					        LEFT OUTER JOIN TBHRM_HR_MASTR B  
+					                     ON A.EMPNO = B.EMPNO   
+					 WHERE  1=1
+					   AND  A.JUDGE_SN = A.RK2) AS RK2
+			FROM   (
+			        SELECT A.PROPSE_NO
+			               ,MAX(A.PROPSE_YEAR)   AS PROPSE_YEAR
+			               ,MAX(A.PROPSE_ODR_SE) AS PROPSE_ODR_SE
+			               ,MAX(A.PROPSE_SJ) AS PROPSE_SJ
+			               ,MAX(A.PROPSE_SE) AS PROPSE_SE
+			               ,DECODE(MIN(NVL(A.DCSN_AT,'0')), '1', ROUND((SUM(A.PROPSE_SCORE) - MIN(A.PROPSE_SCORE) - MAX(A.PROPSE_SCORE)) / (COUNT(*)-2), 1)
+			                                              , NULL) AS PROPSE_SCORE
+			               ,MAX(A.EXCL_AT) AS EXCL_AT
+			               ,MIN(A.EMPNO) KEEP ( DENSE_RANK LAST  ORDER BY A.RK DESC ) AS RK1
+                           ,MIN(A.EMPNO) KEEP ( DENSE_RANK LAST  ORDER BY A.RK) AS RK2
+			        FROM   TMP_TABLE A
+			        GROUP BY A.PROPSE_NO
+			       ) A
+			       LEFT OUTER JOIN TBSUP_PROPSE_RWARD_GLD B
+			                    ON A.PROPSE_YEAR = B.STDR_YEAR
+			                   AND A.PROPSE_ODR_SE = B.ODR_SE
+			                   AND A.PROPSE_SE = B.PROPSE_SE
+			                   AND B.STDR_SCORE_BEGIN <= A.PROPSE_SCORE
+			                   AND B.STDR_SCORE_END > CASE WHEN A.PROPSE_SCORE > 99 THEN 99 ELSE A.PROPSE_SCORE END
+			       LEFT OUTER JOIN (SELECT CODE, CODE_NM
+			                        FROM   TBCOM_CMMN_CODE
+			                        WHERE  GRP_CODE = 'SUP007'
+			                       ) C
+			                    ON B.STDR_GRAD = C.CODE
+			       LEFT OUTER JOIN (SELECT PROPSE_NO
+			                        ]]> 
+			       						<iterate property="list">
+			       						   ,MAX(DECODE(EMPNO, #list[].EMPNO#, DECODE(DCSN_AT, '1', PROPSE_SCORE, -1), NULL)) AS $list[].EMPNM$
+			                            </iterate>
+			                        <![CDATA[
+			                        FROM   TMP_TABLE
+			                        GROUP BY PROPSE_NO
+			                       ) D
+			                    ON A.PROPSE_NO = D.PROPSE_NO
+		]]> 		        	     
+    </select>    
+</sqlMap>

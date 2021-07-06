@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE				사업코드
+		 R   : TBPRJ_ISSNO_ADIT_INFO		호별추가정보
+		 R   : TBHRM_HR_MASTR				인사마스터
+		CRUD : TBPRJ_LTTOT_PC_UPLMT			분양가상한
+		CRUD : TBPRJ_LTTOT_PC_CALC			분양가산정
+		CRUD : TBPRJ_LTTOT_PC_CHANGE		분양가변경
+		CRUD : TBPRJ_UPLMTPC_BILDNG			상한가_건축비
+		CRUD : TBPRJ_UPLMTPC_PLOT			상한가_대지비
+	-->
+
+<!-- 분양가상한 조회 : PRJ020103.totList -->
+
+<!-- 분양가상한 입력 : PRJ020103.tot_U -->
+
+<!-- 상한가_대지비 조회 : PRJ020103.landList -->
+
+<!-- 상한가_대지비 저장 : PRJ020103.land_U -->
+
+<!-- 상한가_건축비 조회 : PRJ020103.bldgList -->
+
+<!-- 상한가_건축비 저장 : PRJ020103.bldg_U -->
+
+<!-- 분양가산정 조회  -->
+<select id="PRJ020402.calcList" parameterClass="map" resultClass="hashmap">
+WITH V_PRJ_HOU_CNT AS		/* 주택 세대수 조회 : 호별추가정보 TBPRJ_ISSNO_ADIT_INFO */
+(
+<include refid="pms_prj.v_prj_house_count"/>
+)
+SELECT
+	 C.BSNS_CODE		/* 사업코드 */
+	,C.HOUSE_CODE		/* 주택코드 */
+	,C.SUPLY_TY_CODE	/* 공급유형코드 */
+	,C.TY_CODE			/* 타입코드 */
+	,C.HSHLD_CO			/* 세대수 */
+
+	,NVL(A.STDR_DE,#STDR_DE#) AS STDR_DE			/* 기준일자 */
+
+	,A.PLOT_CT			/* 대지비용 */
+	,A.BILDNG_CT		/* 건축비용 */
+	,A.HSHLD_AMOUNT		/* 세대금액 */
+	,A.AR_PPRTY_AMOUNT	/* 면적당금액 */
+	,A.CALC_STDR		/* 산정기준 */
+	,A.PLOT_CT + A.BILDNG_CT AS TOTAL_CT
+
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, C.TY_CODE) AS TY_CODE_NM	/* 타입(블럭) */
+	,SFSAL_GETEMPNO_01(A.UPDUSR_ID) AS EMPNM
+	,SFPRJ_GETDEPTNM(A.UPDUSR_ID) AS DEPT_NM
+FROM V_PRJ_HOU_CNT C
+JOIN TBPRJ_BSNS_CODE BC ON C.BSNS_CODE = BC.BSNS_CODE
+LEFT JOIN TBPRJ_LTTOT_PC_CALC A				/* 분양가산정 */
+  ON A.BSNS_CODE = C.BSNS_CODE
+ AND A.HOUSE_CODE = C.HOUSE_CODE
+ AND A.SUPLY_TY_CODE = C.SUPLY_TY_CODE
+ AND A.TY_CODE = C.TY_CODE
+WHERE C.BSNS_CODE = #BSNS_CODE# 
+  AND C.HOUSE_CODE = #HOUSE_CODE# 
+<isNotEmpty property="SUPLY_TY_CODE" >
+  AND C.SUPLY_TY_CODE = #SUPLY_TY_CODE#
+</isNotEmpty>
+ORDER BY 1,2,3,4
+ </select>
+
+<!-- 분양가산정 저장 -->
+<update id="PRJ020402.calc_U" parameterClass="map">
+MERGE INTO TBPRJ_LTTOT_PC_CALC		/* 분양가산정 */
+USING DUAL
+ON (  BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND HOUSE_CODE = #HOUSE_CODE#			/* 주택코드 */
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#	/* 공급유형코드 */
+  AND TY_CODE = #TY_CODE#				/* 타입코드 */
+)
+WHEN MATCHED THEN
+UPDATE SET
+	 STDR_DE = #STDR_DE#					/* 기준일자 */
+	,HSHLD_CO = #HSHLD_CO#					/* 세대수 */
+	,PLOT_CT = #PLOT_CT#					/* 대지비용 */
+	,BILDNG_CT = #BILDNG_CT#				/* 건축비용 */
+	,HSHLD_AMOUNT = #HSHLD_AMOUNT#			/* 세대금액 */
+	,AR_PPRTY_AMOUNT = #AR_PPRTY_AMOUNT#	/* 면적당금액 */
+	,CALC_STDR = #CALC_STDR#				/* 산정기준 */
+
+	,UPDUSR_ID = #S_USER_ID#		/* 수정자ID */
+	,UPDT_DT = SYSDATE				/* 수정일시 */
+WHEN NOT MATCHED THEN
+INSERT(
+	 BSNS_CODE			/* 사업코드 */
+	,HOUSE_CODE			/* 주택코드 */
+	,SUPLY_TY_CODE		/* 공급유형코드 */
+	,TY_CODE			/* 타입코드 */
+
+	,STDR_DE			/* 기준일자 */
+	,HSHLD_CO			/* 세대수 */
+	,PLOT_CT			/* 대지비용 */
+	,BILDNG_CT			/* 건축비용 */
+	,HSHLD_AMOUNT		/* 세대금액 */
+	,AR_PPRTY_AMOUNT	/* 면적당금액 */
+	,CALC_STDR			/* 산정기준 */
+
+	,REGISTER_ID		/* 등록자ID */
+	,REGIST_DT			/* 등록일시 */
+	,UPDUSR_ID			/* 수정자ID */
+	,UPDT_DT			/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#		/* 사업코드 */
+	,#HOUSE_CODE#		/* 주택코드 */
+	,#SUPLY_TY_CODE#	/* 공급유형코드 */
+	,#TY_CODE#			/* 타입코드 */
+
+	,#STDR_DE#			/* 기준일자 */
+	,#HSHLD_CO#			/* 세대수 */
+	,#PLOT_CT#			/* 대지비용 */
+	,#BILDNG_CT#		/* 건축비용 */
+	,#HSHLD_AMOUNT#		/* 세대금액 */
+	,#AR_PPRTY_AMOUNT#	/* 면적당금액 */
+	,#CALC_STDR#		/* 산정기준 */
+
+	,#S_USER_ID#		/* 등록자ID */
+	,SYSDATE			/* 등록일시 */
+	,#S_USER_ID#		/* 수정자ID */
+	,SYSDATE			/* 수정일시 */
+)
+</update>
+
+<!-- 분양가변경 조회 -->
+<select id="PRJ020402.chngList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE		/* 사업코드 */
+	,A.HOUSE_CODE		/* 주택코드 */
+	,A.SUPLY_TY_CODE	/* 공급유형코드 */
+	,A.TY_CODE			/* 타입코드 */
+	,A.CHANGE_ODR		/* 변경차수 */
+
+	,A.CHANGE_DE		/* 변경일자 */
+	,A.HSHLD_CO			/* 세대수 */
+	,A.PLOT_CT			/* 대지비용 */
+	,A.BILDNG_CT		/* 건축비용 */
+	,A.HSHLD_AMOUNT		/* 세대금액 */
+	,A.AR_PPRTY_AMOUNT	/* 면적당금액 */
+	,A.CALC_STDR		/* 산정기준 */
+	,A.PLOT_CT + A.BILDNG_CT AS TOTAL_CT
+
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.TY_CODE) AS TY_CODE_NM	/* 타입(블럭) */
+	,SFSAL_GETEMPNO_01(A.UPDUSR_ID) AS EMPNM
+	,SFPRJ_GETDEPTNM(A.UPDUSR_ID) AS DEPT_NM
+FROM TBPRJ_LTTOT_PC_CHANGE A					/* 분양가변경 */
+JOIN TBPRJ_BSNS_CODE BC ON A.BSNS_CODE = BC.BSNS_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#
+  AND A.HOUSE_CODE = #HOUSE_CODE#
+<isNotEmpty property="SUPLY_TY_CODE" >
+  AND A.SUPLY_TY_CODE = #SUPLY_TY_CODE#
+</isNotEmpty>
+<isNotEmpty property="TY_CODE" >
+  AND A.TY_CODE = #TY_CODE#
+</isNotEmpty>
+ORDER BY 1,2,3,4,5
+</select>
+
+<!-- 분양가변경 추가 -->
+<insert id="PRJ020402.chng_C" parameterClass="map">
+INSERT INTO TBPRJ_LTTOT_PC_CHANGE			/* 분양가변경 */
+(
+	 BSNS_CODE			/* 사업코드 */
+	,HOUSE_CODE			/* 주택코드 */
+	,SUPLY_TY_CODE		/* 공급유형코드 */
+	,TY_CODE			/* 타입코드 */
+	,CHANGE_ODR			/* 변경차수 */
+
+	,CHANGE_DE			/* 변경일자 */
+	,HSHLD_CO			/* 세대수 */
+	,PLOT_CT			/* 대지비용 */
+	,BILDNG_CT			/* 건축비용 */
+	,HSHLD_AMOUNT		/* 세대금액 */
+	,AR_PPRTY_AMOUNT	/* 면적당금액 */
+	,CALC_STDR			/* 산정기준 */
+
+	,REGISTER_ID		/* 등록자ID */
+	,REGIST_DT			/* 등록일시 */
+	,UPDUSR_ID			/* 수정자ID */
+	,UPDT_DT			/* 수정일시 */
+)VALUES(
+	 #BSNS_CODE#		/* 사업코드 */
+	,#HOUSE_CODE#		/* 주택코드 */
+	,#SUPLY_TY_CODE#	/* 공급유형코드 */
+	,#TY_CODE#			/* 타입코드 */
+	,(SELECT NVL(MAX(CHANGE_ODR)+1,1)
+		 FROM TBPRJ_LTTOT_PC_CHANGE
+		WHERE BSNS_CODE = #BSNS_CODE#
+		  AND HOUSE_CODE = #HOUSE_CODE#
+		  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#
+		  AND TY_CODE = #TY_CODE#
+	 )
+
+	,#CHANGE_DE#		/* 변경일자 */
+	,#HSHLD_CO#			/* 세대수 */
+	,#PLOT_CT#			/* 대지비용 */
+	,#BILDNG_CT#		/* 건축비용 */
+	,#HSHLD_AMOUNT#		/* 세대금액 */
+	,#AR_PPRTY_AMOUNT#	/* 면적당금액 */
+	,#CALC_STDR#		/* 산정기준 */
+
+	,#S_USER_ID#		/* 등록자ID */
+	,SYSDATE			/* 등록일시 */
+	,#S_USER_ID#		/* 수정자ID */
+	,SYSDATE			/* 수정일시 */
+)
+</insert>
+
+<!-- 분양가변경 수정 -->
+<update id="PRJ020402.chng_U" parameterClass="map">
+UPDATE TBPRJ_LTTOT_PC_CHANGE			/* 분양가변경 */
+SET 
+	 CHANGE_DE = #CHANGE_DE#		/* 변경일자 */
+	,HSHLD_CO = #HSHLD_CO#			/* 세대수 */
+	,PLOT_CT = #PLOT_CT#			/* 대지비용 */
+	,BILDNG_CT = #BILDNG_CT#				/* 건축비용 */
+	,HSHLD_AMOUNT = #HSHLD_AMOUNT#			/* 세대금액 */
+	,AR_PPRTY_AMOUNT = #AR_PPRTY_AMOUNT#	/* 면적당금액 */
+	,CALC_STDR = #CALC_STDR#				/* 산정기준 */
+
+	,UPDUSR_ID = #S_USER_ID#	/* 수정자ID */
+	,UPDT_DT = SYSDATE			/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#
+  AND HOUSE_CODE = #HOUSE_CODE#
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#
+  AND TY_CODE = #TY_CODE#
+  AND CHANGE_ODR = #CHANGE_ODR#
+</update>
+
+<!-- 분양가변경 삭제 -->
+<delete id="PRJ020402.chng_D" parameterClass="map">
+DELETE FROM TBPRJ_LTTOT_PC_CHANGE
+WHERE BSNS_CODE = #BSNS_CODE# 
+  AND HOUSE_CODE = #HOUSE_CODE# 
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#
+  AND TY_CODE = #TY_CODE#
+  AND CHANGE_ODR = #CHANGE_ODR#
+</delete>
+
+</sqlMap>

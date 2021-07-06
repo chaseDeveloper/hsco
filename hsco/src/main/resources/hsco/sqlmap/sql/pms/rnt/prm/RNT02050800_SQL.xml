@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02050800_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 개별 수납현화 조회
+			 설명 : 매입임대 개별 수납현황 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.10
+	-->
+	<select id="RNT02050800DAO.selectIndvdlzRcivList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+				c.RENT_HOUSE_NM														/*주택명*/
+				,b.DONG																/*동*/
+				,B.HO																/*호*/
+				,v.NM																/*성명*/
+				,(SELECT CODE_NM
+				   FROM TBCOM_CMMN_CODE
+				  WHERE GRP_CODE = 'RNT027'
+				    AND CODE = d.ROOM_STRUCTURE) AS ROOM_STRUCTURE					/*방구조*/
+				,b.RNTCHRG															/*월임대료*/
+				,(SELECT CODE_NM
+				    FROM TBCOM_CMMN_CODE
+				   WHERE GRP_CODE = 'RNT009'
+				  AND CODE = a.PAY_SE) PAY_SE										/*납부구분*/
+				,a.PAY_TMLMT														/*납부기한*/
+				,a.RCIV_DE															/*수납일자*/
+				,a.RCIV_AMOUNT														/*수납금액*/
+				,a.FALT_AMOUNT														/*과오금액*/
+				,decode(a.PAYMTHD,'A','자동이체','O','지로','V','가상계좌') as PAYMTHD		/*수납방법*/
+				,a.BANK_CODE														/* 은행명 */
+		FROM	TBRNT_PUCHAS_RCIV a													/*임대료 지원금 수납 테이블*/
+				,TBRNT_PUCHAS_CNTRCT b												/*계약정보 테이블*/
+				,TBRNT_PUCHAS_HOUSE c												/*매입주택 테이블*/
+				,TBRNT_PUCHAS_HOUSE_BILD d											/*매입주택 건축물 테이블*/
+				,TBRNT_PUCHAS_RENT_CSTMR v											/*매입임대고객 테이블*/
+		WHERE a.CNTRCTR_NO = b.CNTRCTR_NO
+		AND a.NTIC_SE = '1'
+		AND	b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+		AND	a.RCIV_DE BETWEEN #stRcivAmount# AND #edRcivAmount#
+		<isNotEmpty property="paySe">
+		AND	a.PAY_SE = #paySe#
+		</isNotEmpty>
+		<isNotEmpty property="houseCode">
+		AND	b.RENT_HOUSE_CODE = #houseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND	b.DONG = LPAD(#dong#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND	b.HO = LPAD(#ho#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="roomStructure">
+		AND	d.ROOM_STRUCTURE = #roomStructure#
+		</isNotEmpty>
+		AND	b.PUCHAS_CSTMR_NO = v.PUCHAS_CSTMR_NO(+)
+		AND	b.RENT_HOUSE_CODE = d.RENT_HOUSE_CODE(+)
+		AND	b.DONG = d.DONG(+)
+		AND	b.HO = d.HO(+)
+		AND	a.PROCESS_STTUS = 'C'   /* 처리상태 */
+		ORDER BY b.RENT_HOUSE_CODE
+				,DONG
+				,HO
+	</select>
+
+
+
+	<!-- 쿼리명 : 매입임대 개월별 수납현황 조회
+			 설명 : 매입임대 개월별 수납현황 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.10
+	-->
+	<select id="RNT02050800DAO.selectMonthRcivList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+				RENT_HOUSE_NM
+				,DONG
+				,HO
+				,NM
+				,CNT
+				,PAY_AMT
+				,OVDINTR
+				,PAY_AMT + OVDINTR AS RCIV_AMOUNT
+		FROM	TBRNT_PUCHAS_CNTRCT a
+				,TBRNT_PUCHAS_HOUSE  c
+				,TBRNT_PUCHAS_RENT_CSTMR d
+				,(SELECT
+						a.CNTRCTR_NO
+						,COUNT(1) AS CNT
+						,SUM(NVL(a.RNTCHRG,0) + NVL(a.RDCAMT_AMOUNT,0)) AS PAY_AMT		/*임대료*/
+						,SUM(NVL(OVDINTR,0)) AS OVDINTR									/*연체이자*/
+				  FROM	TBRNT_PUCHAS_MT_RNTCHRG a										/*임대월 임대료 테이블*/
+						,TBRNT_PUCHAS_CNTRCT b											/*계약정보 테이블*/
+				  WHERE	a.RCIV_DE BETWEEN #stRcivAmount# AND #edRcivAmount#
+				  AND a.CNTRCTR_NO = b.CNTRCTR_NO
+				  <isNotEmpty property="houseCode">
+				  AND b.RENT_HOUSE_CODE = #houseCode#
+				  </isNotEmpty>
+				<isNotEmpty property="dong">
+				  AND b.DONG = LPAD(#dong#, 4, '0')
+				  </isNotEmpty>
+				  <isNotEmpty property="ho">
+				  AND b.HO = LPAD(#ho#, 4, '0')
+				  </isNotEmpty>
+				  GROUP BY a.CNTRCTR_NO
+			    ) b
+		WHERE a.CNTRCTR_NO = b.CNTRCTR_NO
+		AND a.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+		AND a.PUCHAS_CSTMR_NO = d.PUCHAS_CSTMR_NO(+)
+		AND b.CNT <![CDATA[>=]]> #month#
+		ORDER BY a.RENT_HOUSE_CODE
+				,DONG
+				,HO
+	</select>
+</sqlMap>

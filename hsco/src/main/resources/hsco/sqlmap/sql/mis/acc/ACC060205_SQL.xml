@@ -1,0 +1,945 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC060205_SQL">	
+	
+	<!-- 배부기준칼럼 -->
+	<select id="ACC060205DAO.dlryStdrIem" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+	<![CDATA[/*ACC060205DAO.dlryStdrIem*/]]>
+	SELECT 
+	     DLRY_STDR_CODE
+	    ,DLRY_STDR_CODE||'_RT' AS COL_RT
+	    ,DLRY_STDR_CODE||'_AMT' AS COL_AMT
+	    ,DLRY_RATE_CALC_AT
+	FROM TBACC_SE_ACCNUT_DLRY_STDR_IEM
+	WHERE USE_AT = '1'
+	</select>
+	
+	<!-- 배부비율 -->
+	<select id="ACC060205DAO.dlryStdrRate" resultClass="java.util.HashMap" parameterClass="java.util.HashMap" remapResults="true">
+	<![CDATA[/*ACC060205DAO.dlryStdrRate*/]]>
+	SELECT 
+	     t1.ACCNUT_YEAR
+	    ,SUBSTR(#YYYYMM#,5,2) AS ACCNUT_MT
+	    ,t1.SE_ACCNUT_ACNT_CODE
+	    ,MAX(t1.SE_ACCNUT_ACNT_NM) AS SE_ACCNUT_ACNT_NM
+	    <!-- $ 제거 2016.08.11 -->
+		<iterate property="list" >
+		,NVL(MAX(ROUND(TO_NUMBER(DECODE(t2.DLRY_STDR_CODE, #list[].DLRY_STDR_CODE#, t3.DLRY_RATE, NULL))*100,2)),0)	AS $list[].COL_RT$
+	    ,NVL(MAX(DECODE(t2.DLRY_STDR_CODE, #list[].DLRY_STDR_CODE#, t3.DLRY_RATE_AMOUNT, NULL)),0)	AS $list[].COL_AMT$
+		</iterate>
+		
+	FROM TBACC_SE_ACCNUT_ACNT_CODE t1
+	     
+	     INNER JOIN TBACC_SE_ACCNUT_DLRY_STDR_IEM t2
+	     ON 1=1
+	     
+	     LEFT OUTER JOIN TBACC_SE_ACCNUT_DLRY_RATE t3
+	     ON  t1.ACCNUT_YEAR = t3.ACCNUT_YEAR
+	     AND t3.ACCNUT_MT	= SUBSTR(#YYYYMM#,5,2)
+	     AND t1.SE_ACCNUT_ACNT_CODE = t3.SE_ACCNUT
+	     AND t2.DLRY_STDR_CODE = t3.DLRY_STDR_CODE
+	
+	WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+	  AND t1.USE_AT = '1'
+	GROUP BY t1.ACCNUT_YEAR, t1.SE_ACCNUT_ACNT_CODE
+	ORDER BY t1.ACCNUT_YEAR, t1.SE_ACCNUT_ACNT_CODE
+	</select>
+	
+	<!-- $ 제거 2016.08.11 -->
+	<select id="ACC060205DAO.dlryStdrRate2" resultClass="java.util.HashMap" parameterClass="java.util.HashMap" remapResults="true">
+	<![CDATA[/*ACC060205DAO.dlryStdrRate2*/]]>
+	SELECT 
+	     t1.ACCNUT_YEAR
+	    ,SUBSTR(#YYYYMM#,5,6) AS ACCNUT_MT
+	    ,t1.SE_ACCNUT_ACNT_CODE
+	    ,MAX(t1.SE_ACCNUT_ACNT_NM) AS SE_ACCNUT_ACNT_NM
+		
+		,ROUND(TO_NUMBER(SUM(DECODE(t2.DLRY_STDR_CODE, #YYYYMM#, t3.DLRY_RATE,0)))*100,2) AS RT
+	    ,SUM(DECODE(t2.DLRY_STDR_CODE, #YYYYMM#, t3.DLRY_RATE_AMOUNT,0)) AS AMT
+	
+	FROM TBACC_SE_ACCNUT_ACNT_CODE t1
+	     
+	     INNER JOIN TBACC_SE_ACCNUT_DLRY_STDR_IEM t2
+	     ON 1=1
+	     
+	     LEFT OUTER JOIN TBACC_SE_ACCNUT_DLRY_RATE t3
+	     ON  t1.ACCNUT_YEAR = t3.ACCNUT_YEAR
+	     AND t3.ACCNUT_MT	= SUBSTR(#YYYYMM#,5,6)
+	     AND t1.SE_ACCNUT_ACNT_CODE = t3.SE_ACCNUT
+	     AND t2.DLRY_STDR_CODE = t3.DLRY_STDR_CODE
+	
+	WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+	  AND t1.USE_AT = '1'
+	  AND t1.SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+	  
+	GROUP BY t1.ACCNUT_YEAR, t1.SE_ACCNUT_ACNT_CODE
+	ORDER BY t1.ACCNUT_YEAR, t1.SE_ACCNUT_ACNT_CODE
+	</select>
+	
+	<!-- 배부계정 -->
+	<select id="ACC060205DAO.dlryStdrAccount" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+	<![CDATA[/*ACC060205DAO.dlryStdrAccount*/]]>
+	SELECT
+	     t1.ACCNUT_ACNT_CODE
+	    ,t1.ACCNUT_ACNT_NM
+	    ,t1.DLRY_STDR_CODE
+	FROM TBACC_ACCNUT_ACNT_SBJECT t1
+	     INNER JOIN TBACC_SE_ACCNUT_DLRY_STDR_IEM t2
+	     ON t1.DLRY_STDR_CODE = t2.DLRY_STDR_CODE
+	WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+	  AND t2.USE_AT = '1'
+	ORDER BY t1.ACCNUT_ACNT_CODE
+	</select>
+	
+	<!-- 배부결과 -->
+	<select id="ACC060205DAO.dlryStdrResult" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+	<![CDATA[/*ACC060205DAO.dlryStdrResult*/]]>
+	SELECT
+	     t1.ACCNUT_YEAR
+	    ,SUBSTR(#YYYYMM#,5,6) AS ACCNUT_MT
+	    ,t4.ACCNUT_ACNT_CODE
+	    ,t1.SE_ACCNUT_ACNT_CODE
+	    ,t1.SE_ACCNUT_ACNT_NM
+	    ,NVL(DECODE(NVL(t4.DBRT_SE, 'D'),'D', NVL(NVL(t2.DEBTOR_AMOUNT,t3.DEBTOR_AMOUNT),0) - NVL(NVL(t2.CRDIT_AMOUNT,t3.CRDIT_AMOUNT),0),NVL(NVL(t2.CRDIT_AMOUNT,t3.CRDIT_AMOUNT),0) - NVL(NVL(t2.DEBTOR_AMOUNT,t3.DEBTOR_AMOUNT),0)),0) AS JAN_AMT
+	FROM TBACC_SE_ACCNUT_ACNT_CODE t1
+	     LEFT OUTER JOIN TBACC_ACCNUT_STACNT_SE t2
+	     ON  t1.ACCNUT_YEAR 		= t2.ACCNUT_YEAR
+	     AND t2.ACCNUT_MT			= SUBSTR(#YYYYMM#,5,6)
+	     AND t2.ACCNUT_ACNT_CODE 	= #ACCNUT_ACNT_CODE#
+	     AND t1.SE_ACCNUT_ACNT_CODE = t2.SE_ACCNUT_ACNT_CODE
+	     LEFT OUTER JOIN TBACC_ACCNUT_STACNTSUM_SE t3
+	     ON  t1.ACCNUT_YEAR 		= t3.ACCNUT_YEAR
+	     AND t3.ACCNUT_MT			= SUBSTR(#YYYYMM#,5,6)
+	     AND t3.ACCNUT_ACNT_CODE 	= #ACCNUT_ACNT_CODE#
+	     AND t1.SE_ACCNUT_ACNT_CODE = t3.SE_ACCNUT_ACNT_CODE
+	     INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t4
+	     ON t1.ACCNUT_YEAR = t4.ACCNUT_YEAR
+	     AND t4.ACCNUT_ACNT_CODE = #ACCNUT_ACNT_CODE#
+	WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+	  AND t1.USE_AT = '1'
+	ORDER BY SE_ACCNUT_ACNT_CODE
+	</select>
+	
+	<!-- 배부비율 저장 -->
+	<update id="ACC060205DAO.dlryStdrSave" parameterClass="java.util.HashMap">
+		<![CDATA[ /*ACC060205DAO.dlryStdrSave*/ ]]>
+		MERGE INTO TBACC_SE_ACCNUT_DLRY_RATE
+		  USING DUAL
+		  ON (	  ACCNUT_YEAR 		= #MAP.ACCNUT_YEAR#
+		      AND ACCNUT_MT 		= #MAP.ACCNUT_MT#
+			  AND SE_ACCNUT   		= #MAP.SE_ACCNUT_ACNT_CODE#
+			  AND DLRY_STDR_CODE 	= #DLRY_STDR_CODE#)
+		  WHEN MATCHED THEN
+		    UPDATE SET
+				 DLRY_RATE_AMOUNT   = #DLRY_RATE_AMOUNT#
+				,UPDUSR_ID          = #S_USER_ID#
+				,UPDT_DT            = SYSDATE    
+		  WHEN NOT MATCHED THEN
+			INSERT (
+				 ACCNUT_YEAR
+				,ACCNUT_MT
+				,SE_ACCNUT
+				,DLRY_STDR_CODE
+				,DLRY_RATE
+				,DLRY_RATE_AMOUNT
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+			) VALUES (
+				 #MAP.ACCNUT_YEAR#
+				,#MAP.ACCNUT_MT#
+				,#MAP.SE_ACCNUT_ACNT_CODE#
+				,#DLRY_STDR_CODE#
+				,NULL
+				,#DLRY_RATE_AMOUNT#
+				,#S_USER_ID# 
+				,SYSDATE     
+				,#S_USER_ID# 
+				,SYSDATE     
+			)
+	</update>
+	
+	<parameterMap id="ACC060205DAO.dlryStdrChit" class="java.util.HashMap">
+		<parameter property="YEAR"				jdbcType="VARCHAR" javaType="java.lang.String"  mode="IN" />
+		<parameter property="MONTH"       		jdbcType="VARCHAR" javaType="java.lang.String"  mode="IN" />
+		<parameter property="S_USER_ID"         jdbcType="VARCHAR" javaType="java.lang.String"  mode="IN" />
+		<parameter property="OUT_SLIP_CNT"      jdbcType="VARCHAR" javaType="java.lang.Integer" mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"    jdbcType="VARCHAR" javaType="java.lang.String"  mode="OUT" />
+	</parameterMap>
+	
+	
+	<!-- 배부실행 -->
+    <procedure id="ACC060205DAO.dlryStdrProcedure" parameterClass="java.util.HashMap">
+    	CALL SPACC_STACNT_DLRY(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2), #S_USER_ID#)
+    </procedure>
+    
+    <!-- 배부전표생성 -->
+    <procedure id="ACC060205DAO.dlryStdrChitProcedure" parameterMap="ACC060205DAO.dlryStdrChit">
+    	{ CALL SPACC_DLRY_SE_SLIP_AI( ? , ? , ? , ? , ? ) }
+    </procedure>
+    <!--  배부율 삭제  -->
+    <delete id="ACC060205DAO.deleteDlryRate" parameterClass="java.util.HashMap">
+    	DELETE FROM
+			TBACC_SE_ACCNUT_DLRY_RATE
+			WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+			AND ACCNUT_MT = SUBSTR(#YYYYMM#,5,2)
+			
+    </delete>
+    
+    
+    
+    <!-- 배부기준 조회 -->
+	<select id="ACC060205DAO.selectDlryNo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT DLRY_STDR_CODE 					/*배부 코드*/
+         	   ,DLRY_RATE_CALC_AT  				/*배부비율계산여부 (0일경우는 배부비율 계산안함)*/
+	      FROM TBACC_SE_ACCNUT_DLRY_STDR_IEM 	/*구분회계배부기준항목*/
+	     WHERE USE_AT = '1'
+	     ORDER BY DLRY_RATE_CALC_ORDR
+    </select>
+    
+    <!-- DS13 -->
+    <select id="ACC060205DAO.selectDs13" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+	   WITH THIS_DLRY AS
+			(
+			 SELECT
+				  	 DLRY_STDR_CODE
+		                   ,SE_ACCNUT_ACNT_CODE
+		                   ,(SUM(SE_AMOUNT_SUM)) AS SE_AMOUNT_SUM
+		                   ,(DLRY_AMOUNT_SUM) AS DLRY_AMOUNT_SUM
+		                   ,(SUM(SE_AMOUNT_SUM)/2) / ((DLRY_AMOUNT_SUM)/2)  AS DLRY_RATE
+			   FROM (
+			
+					 SELECT DLRY_STDR_CODE
+						    ,SE_ACCNUT_ACNT_CODE
+						    ,ACCNUT_ACNT_CODE
+						    ,SUM(AMT) OVER (PARTITION BY  DLRY_STDR_CODE,ACCNUT_ACNT_CODE, SE_ACCNUT_ACNT_CODE) AS SE_AMOUNT_SUM
+						    ,SUM(AMT) OVER (PARTITION BY DLRY_STDR_CODE) AS DLRY_AMOUNT_SUM
+					   FROM (						
+							 SELECT B.DLRY_STDR_CODE
+						            ,A.SE_ACCNUT_ACNT_CODE
+						            ,A.ACCNUT_ACNT_CODE
+						            ,SUM(AMT) AS AMT 
+			                   FROM (
+			                      	 SELECT ACCNUT_ACNT_CODE
+			                             	,SE_ACCNUT AS SE_ACCNUT_ACNT_CODE
+			                             	,SUM(NVL(DLRY_AMOUNT,0) )AS AMT
+			                           FROM TBACC_SE_ACCNUT_DLRY_RATE /*회계결산_구분회계*/
+			                          WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+			                            AND ACCNUT_MT = SUBSTR(#YYYYMM#,5,2)
+			                            
+			                          GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE, SE_ACCNUT
+			
+			                  UNION ALL
+			
+			                 SELECT A.ACCNUT_ACNT_CODE
+			                        ,A.SE_ACCNUT_ACNT_CODE
+			                        ,NVL(SUM(DECODE(NVL(B.DBRT_SE, 'D'),'D', NVL(A.DR_AMT,0) - NVL(A.CR_AMT,0),
+				                        CASE WHEN SUBSTR(A.ACCNUT_ACNT_CODE,1,1) < 4 
+	                                   		 THEN (NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))*-1 
+	                                         ELSE (NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))*1 
+	                                         END
+	                                  		 )),0)
+			                   FROM (
+			                         SELECT ACCNUT_YEAR
+			                                ,ACCNUT_ACNT_CODE
+			                                ,SE_ACCNUT_ACNT_CODE
+			                                ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+			                                ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+			                           FROM TBACC_ACCNUT_STACNTSUM_SE  /*회계결산집계_구분회계*/
+			                          WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+			                            AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+			                            
+			                          GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE, SE_ACCNUT_ACNT_CODE
+			
+					                  UNION ALL
+					
+					                 SELECT ACCNUT_YEAR
+					                        ,ACCNUT_ACNT_CODE
+					                        ,SE_ACCNUT_ACNT_CODE
+					                        ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+					                        ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+					                   FROM TBACC_ACCNUT_STACNT_SE /*회계결산_구분회계*/
+					                  WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+					                    AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+					                    
+					                  GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE,SE_ACCNUT_ACNT_CODE
+					
+					                  UNION ALL
+					
+					                 SELECT ACCNUT_YEAR
+					                        ,ACCNUT_ACNT_CODE
+					                        ,SE_ACCNUT_ACNT_CODE
+					                        ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+					                        ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+					                   FROM TBACC_ACCNUT_STACNTSUM_SE  /*회계결산집계_구분회계*/
+					                  WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+					                    AND ACCNUT_MT = '00'
+					                    
+					                  GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE, SE_ACCNUT_ACNT_CODE
+					                  
+					                   UNION ALL
+					
+					                 SELECT ACCNUT_YEAR
+					                        ,ACCNUT_ACNT_CODE
+					                        ,SE_ACCNUT_ACNT_CODE
+					                        ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+					                        ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+					                   FROM TBACC_ACCNUT_STACNT_SE  /*회계결산집계_구분회계*/
+					                  WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+					                    AND ACCNUT_MT = '00'
+					                    
+					                  GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE, SE_ACCNUT_ACNT_CODE
+					                ) A,
+					                TBACC_ACCNUT_ACNT_SBJECT B  /*회계계정과목*/
+					          WHERE A.ACCNUT_YEAR         = B.ACCNUT_YEAR
+					            AND A.ACCNUT_ACNT_CODE    = B.ACCNUT_ACNT_CODE
+					          GROUP BY A.ACCNUT_ACNT_CODE,A.SE_ACCNUT_ACNT_CODE
+					        )A,
+					        (
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '11010010' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '11010020' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '11010030' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '11020010' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '11020020' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '10020030' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '11020040' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '11020050' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010010' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010021' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010022' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010023' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010024' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010031' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010032' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010033' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010034' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010040' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010050' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+			                 SELECT 'DS13' AS DLRY_STDR_CODE , '12010061' AS ACCNUT_ACNT_CODE FROM DUAL
+			                ) B
+					  WHERE A.ACCNUT_ACNT_CODE = B.ACCNUT_ACNT_CODE
+					    AND B.DLRY_STDR_CODE = 'DS13'
+					  GROUP BY B.DLRY_STDR_CODE
+					           ,A.SE_ACCNUT_ACNT_CODE
+					           ,A.ACCNUT_ACNT_CODE
+					 )
+		 
+		    		)
+			  GROUP BY DLRY_STDR_CODE
+			           ,SE_ACCNUT_ACNT_CODE
+			           ,DLRY_AMOUNT_SUM
+			  ORDER BY SE_ACCNUT_ACNT_CODE
+			)
+			, THIS_DLRY_AMOUNT AS 			/* DS13 계정과목별 본사공통 - 기타 - 기타 (1321723) 금액 합계 */
+			(
+			 SELECT A.ACCNUT_ACNT_CODE
+			        ,NVL(SUM(DECODE(NVL(B.DBRT_SE, 'D'),'D', NVL(A.DR_AMT,0) - NVL(A.CR_AMT,0),NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))),0) 
+			       		 
+			        AS DLRY_AMOUNT_SM
+			   FROM (
+			         SELECT ACCNUT_YEAR
+			                ,ACCNUT_ACNT_CODE
+			                ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+			                ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+			           FROM TBACC_ACCNUT_STACNTSUM_SE  /*회계결산집계_구분회계*/
+			          WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+			            AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+			            AND SE_ACCNUT_ACNT_CODE = '1321723'
+			          GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+			
+			          UNION ALL
+			
+			         SELECT ACCNUT_YEAR
+			                ,ACCNUT_ACNT_CODE
+			                ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+			                ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+			           FROM TBACC_ACCNUT_STACNT_SE /*회계결산_구분회계*/
+			          WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+			            AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+			            AND SE_ACCNUT_ACNT_CODE = '1321723'
+			          GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+			        ) A,
+			        TBACC_ACCNUT_ACNT_SBJECT B  /*회계계정과목*/
+			  WHERE A.ACCNUT_YEAR         = B.ACCNUT_YEAR
+			    AND A.ACCNUT_ACNT_CODE    = B.ACCNUT_ACNT_CODE
+			    AND B.DLRY_STDR_CODE 	  = 'DS13'
+			  GROUP BY A.ACCNUT_ACNT_CODE
+			)
+	 SELECT DLRY_STDR_CODE
+			,ACCNUT_ACNT_CODE
+			,SE_ACCNUT_ACNT_CODE
+			,TRUNC(SE_AMOUNT_SUM)		AS DLRY_RATE_AMOUNT
+			,DLRY_AMOUNT_SUM 	
+			,ROUND(DLRY_RATE,18) AS DLRY_RATE
+			,DLRY_AMOUNT_SM	 
+			,ROUND(DLRY_AMOUNT_SM * DLRY_RATE) AS DLRY_AMOUNT	
+	   FROM THIS_DLRY ,
+			THIS_DLRY_AMOUNT
+		]]>
+	 </select>
+	 <!-- DS01~DS17 -->
+	    <select id="ACC060205DAO.selectDs00" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+	   WITH THIS_DLRY AS
+			(
+			 SELECT DLRY_STDR_CODE
+					,SE_ACCNUT_ACNT_CODE
+					,SUM(SE_AMOUNT_SUM) AS SE_AMOUNT_SUM
+					,DLRY_AMOUNT_SUM
+					,SUM(SE_AMOUNT_SUM) / DLRY_AMOUNT_SUM AS DLRY_RATE
+			   FROM (
+					 SELECT DLRY_STDR_CODE
+							,SE_ACCNUT_ACNT_CODE
+							,ACCNUT_ACNT_CODE
+							,SUM(AMT) OVER (PARTITION BY  DLRY_STDR_CODE,ACCNUT_ACNT_CODE, SE_ACCNUT_ACNT_CODE) AS SE_AMOUNT_SUM
+							,SUM(AMT) OVER (PARTITION BY DLRY_STDR_CODE) AS DLRY_AMOUNT_SUM
+					   FROM (						
+							 SELECT B.DLRY_STDR_CODE
+									,A.SE_ACCNUT_ACNT_CODE
+									,A.ACCNUT_ACNT_CODE
+									,SUM(AMT) AS AMT 
+							   FROM (
+								     SELECT ACCNUT_ACNT_CODE
+								            ,SE_ACCNUT AS SE_ACCNUT_ACNT_CODE
+								            ,SUM(NVL(DLRY_AMOUNT,0) )AS AMT
+								       FROM TBACC_SE_ACCNUT_DLRY_RATE /*회계결산_구분회계*/
+								      WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+								        AND ACCNUT_MT = SUBSTR(#YYYYMM#,5,2)	
+								        AND (SE_ACCNUT<>'1321723' ]]>
+								        <isEqual property="DLRY_STDR_CODE" compareValue="DS02">
+								        	OR SE_ACCNUT = '1321723'
+								        </isEqual>
+								        <isEqual property="DLRY_STDR_CODE" compareValue="DS03">
+								        	OR SE_ACCNUT = '1321723'
+								        </isEqual>
+								        )
+							<![CDATA[	      GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE, SE_ACCNUT
+								
+								      UNION ALL
+								
+								     SELECT A.ACCNUT_ACNT_CODE
+								            ,A.SE_ACCNUT_ACNT_CODE
+								            ,NVL(SUM(DECODE(NVL(B.DBRT_SE, 'D'),'D', NVL(A.DR_AMT,0) - NVL(A.CR_AMT,0),
+								            CASE WHEN SUBSTR(A.ACCNUT_ACNT_CODE,1,1) < 4 
+                                   			THEN (NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))*-1 
+                                        ELSE (NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))*1 
+                                        END
+                                  		  )),0)
+								       FROM (
+								             SELECT ACCNUT_YEAR
+								             		,ACCNUT_ACNT_CODE
+								                    ,SE_ACCNUT_ACNT_CODE
+								                    ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+								                    ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+								               FROM TBACC_ACCNUT_STACNTSUM_SE  /*회계결산집계_구분회계*/
+								              WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+								                AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2) 
+										        AND (SE_ACCNUT_ACNT_CODE<>'1321723' ]]>
+										        <isEqual property="DLRY_STDR_CODE" compareValue="DS02">
+										        	OR SE_ACCNUT_ACNT_CODE = '1321723'
+										        </isEqual>
+										        <isEqual property="DLRY_STDR_CODE" compareValue="DS03">
+										        	OR SE_ACCNUT_ACNT_CODE = '1321723'
+										        </isEqual>
+										        )
+									<![CDATA[
+								        
+								              GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE, SE_ACCNUT_ACNT_CODE
+								
+								              UNION ALL
+								
+								             SELECT ACCNUT_YEAR
+								                    ,ACCNUT_ACNT_CODE
+								                    ,SE_ACCNUT_ACNT_CODE
+								                    ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+								                    ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+								               FROM TBACC_ACCNUT_STACNT_SE /*회계결산_구분회계*/
+								              WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+								                AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2) 
+										        AND (SE_ACCNUT_ACNT_CODE<>'1321723' ]]>
+										        <isEqual property="DLRY_STDR_CODE" compareValue="DS02">
+										        	OR SE_ACCNUT_ACNT_CODE = '1321723'
+										        </isEqual>
+										        <isEqual property="DLRY_STDR_CODE" compareValue="DS03">
+										        	OR SE_ACCNUT_ACNT_CODE = '1321723'
+										        </isEqual>
+										        )
+									<![CDATA[
+								        
+								              GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE,SE_ACCNUT_ACNT_CODE
+								            ) A,
+								            TBACC_ACCNUT_ACNT_SBJECT B  /*회계계정과목*/
+								      WHERE A.ACCNUT_YEAR         = B.ACCNUT_YEAR
+								        AND A.ACCNUT_ACNT_CODE    = B.ACCNUT_ACNT_CODE
+								      GROUP BY A.ACCNUT_ACNT_CODE,A.SE_ACCNUT_ACNT_CODE
+								    )A,
+								    (
+								     SELECT 'DS01' AS DLRY_STDR_CODE , '40510000' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS01' AS DLRY_STDR_CODE , '40520000' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS01' AS DLRY_STDR_CODE , '40530000' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS01' AS DLRY_STDR_CODE , '40540000' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS02' AS DLRY_STDR_CODE , '11010010' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS02' AS DLRY_STDR_CODE , '11010020' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS02' AS DLRY_STDR_CODE , '11010030' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS02' AS DLRY_STDR_CODE , '11020050' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS02' AS DLRY_STDR_CODE , '12010010' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS03' AS DLRY_STDR_CODE , '46000000' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS04' AS DLRY_STDR_CODE , '41020011' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS04' AS DLRY_STDR_CODE , '41020012' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS04' AS DLRY_STDR_CODE , '42005010' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+								     SELECT 'DS04' AS DLRY_STDR_CODE , '42005020' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS04' AS DLRY_STDR_CODE , '11040059' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS04' AS DLRY_STDR_CODE , '11040090' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS05' AS DLRY_STDR_CODE , '40510000' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS07' AS DLRY_STDR_CODE , '41020011' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS08' AS DLRY_STDR_CODE , '41020011' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS08' AS DLRY_STDR_CODE , '41020012' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS10' AS DLRY_STDR_CODE , '41020140' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS10' AS DLRY_STDR_CODE , '41020150' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS10' AS DLRY_STDR_CODE , '41020080' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS11' AS DLRY_STDR_CODE , '41020011' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS11' AS DLRY_STDR_CODE , '41020012' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS11' AS DLRY_STDR_CODE , '42005010' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS11' AS DLRY_STDR_CODE , '11040059' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS11' AS DLRY_STDR_CODE , '11040090' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS14' AS DLRY_STDR_CODE , '40520000' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS16' AS DLRY_STDR_CODE , '11040059' AS ACCNUT_ACNT_CODE FROM DUAL UNION ALL
+				                     SELECT 'DS17' AS DLRY_STDR_CODE , '11040090' AS ACCNUT_ACNT_CODE FROM DUAL
+								    ) B
+							  WHERE A.ACCNUT_ACNT_CODE = B.ACCNUT_ACNT_CODE
+								AND B.DLRY_STDR_CODE = #DLRY_STDR_CODE#
+							  GROUP BY B.DLRY_STDR_CODE
+								    ,A.SE_ACCNUT_ACNT_CODE
+								    ,A.ACCNUT_ACNT_CODE
+							) 
+	     			)
+		      GROUP BY DLRY_STDR_CODE
+					,SE_ACCNUT_ACNT_CODE
+					,DLRY_AMOUNT_SUM
+		      ORDER BY SE_ACCNUT_ACNT_CODE
+		    ), THIS_DLRY_AMOUNT AS
+		    (
+		     SELECT A.ACCNUT_ACNT_CODE
+			  	    , NVL(SUM(DECODE(NVL(B.DBRT_SE, 'D'),'D', DECODE( SUBSTR(A.ACCNUT_ACNT_CODE,1,1), '2', (NVL(A.DR_AMT,0) - NVL(A.CR_AMT,0))*-1,NVL(A.DR_AMT,0) - NVL(A.CR_AMT,0)),NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))),0) AS DLRY_AMOUNT_SM
+			  	  
+			   FROM (
+				     SELECT ACCNUT_YEAR
+						    ,ACCNUT_ACNT_CODE
+						 	,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+						 	,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+					   FROM TBACC_ACCNUT_STACNTSUM_SE  /*회계결산집계_구분회계*/
+				      WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+					    AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+					    AND SE_ACCNUT_ACNT_CODE = '1321723'
+				      GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+					
+				      UNION ALL
+								
+				     SELECT ACCNUT_YEAR
+						    ,ACCNUT_ACNT_CODE
+						 	,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+						 	,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+					   FROM TBACC_ACCNUT_STACNT_SE /*회계결산_구분회계*/
+				      WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+					    AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+					    AND SE_ACCNUT_ACNT_CODE = '1321723'
+				      GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+				    ) A,
+				    TBACC_ACCNUT_ACNT_SBJECT B  /*회계계정과목*/
+		      WHERE A.ACCNUT_YEAR         = B.ACCNUT_YEAR
+			    AND A.ACCNUT_ACNT_CODE    = B.ACCNUT_ACNT_CODE
+			    AND B.DLRY_STDR_CODE = #DLRY_STDR_CODE#
+		      GROUP BY A.ACCNUT_ACNT_CODE
+		    )
+	 SELECT DLRY_STDR_CODE
+			,ACCNUT_ACNT_CODE
+			,SE_ACCNUT_ACNT_CODE
+			,SE_AMOUNT_SUM		AS DLRY_RATE_AMOUNT
+			,DLRY_AMOUNT_SUM 	
+			,ROUND(DLRY_RATE,18) AS DLRY_RATE
+			,DLRY_AMOUNT_SM	
+			,ROUND(DLRY_AMOUNT_SM * DLRY_RATE) AS DLRY_AMOUNT
+	   FROM THIS_DLRY ,
+			THIS_DLRY_AMOUNT
+	]]>
+	</select>
+	 <!-- DS06, DS09, DS12 -->
+	    <select id="ACC060205DAO.selectDs06s" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+	   WITH THIS_DLRY AS
+			(
+			 SELECT SE_ACCNUT AS SE_ACCNUT_ACNT_CODE
+					,CASE WHEN SUM(B.DLRY_RATE_01_SUM) <> 0 AND   SUM(B.DLRY_RATE_02_SUM) <> 0  
+        				  THEN (SUM(DLRY_RATE_01)+SUM(DLRY_RATE_02) )/2 
+	        			  ELSE (SUM(DLRY_RATE_01)+SUM(DLRY_RATE_02) )/1 END AS DLRY_RATE
+			   FROM (
+					 SELECT SE_ACCNUT ]]>
+				    <isEqual property="DLRY_STDR_CODE" compareValue="DS06">
+						    ,DECODE(DLRY_STDR_CODE,'DS01', DLRY_RATE, 0) AS DLRY_RATE_01
+             				,DECODE(DLRY_STDR_CODE,'DS04', DLRY_RATE, 0) AS DLRY_RATE_02
+             		</isEqual>
+             		<isEqual property="DLRY_STDR_CODE" compareValue="DS09">
+						    ,DECODE(DLRY_STDR_CODE,'DS08', DLRY_RATE, 0) AS DLRY_RATE_01
+             				,DECODE(DLRY_STDR_CODE,'DS14', DLRY_RATE, 0) AS DLRY_RATE_02
+             		</isEqual>
+             		<isEqual property="DLRY_STDR_CODE" compareValue="DS12">
+						    ,DECODE(DLRY_STDR_CODE,'DS04', DLRY_RATE, 0) AS DLRY_RATE_01
+             				,DECODE(DLRY_STDR_CODE,'DS15', DLRY_RATE, 0) AS DLRY_RATE_02
+             		</isEqual>
+					   FROM TBACC_SE_ACCNUT_DLRY_RATE 
+					  WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+						AND ACCNUT_MT =SUBSTR(#YYYYMM#,5,2) 
+				   <isEqual property="DLRY_STDR_CODE" compareValue="DS06">
+						AND DLRY_STDR_CODE IN ('DS01', 'DS04')
+				   </isEqual>
+				   <isEqual property="DLRY_STDR_CODE" compareValue="DS09">
+						AND DLRY_STDR_CODE IN ('DS08', 'DS14')
+				   </isEqual>
+				   <isEqual property="DLRY_STDR_CODE" compareValue="DS12">
+						AND DLRY_STDR_CODE IN ('DS04', 'DS15')
+				   </isEqual>
+		  <![CDATA[ 
+				      GROUP BY SE_ACCNUT, DLRY_RATE, DLRY_STDR_CODE
+					) A,
+			          (
+			          SELECT NVL(SUM(DLRY_RATE_01),0) AS DLRY_RATE_01_SUM
+			            ,NVL(SUM(DLRY_RATE_02),0) AS DLRY_RATE_02_SUM
+			            FROM(
+			            SELECT 																]]>
+					<isEqual property="DLRY_STDR_CODE" compareValue="DS06">
+						    DECODE(DLRY_STDR_CODE,'DS01', DLRY_RATE, 0) AS DLRY_RATE_01
+             				,DECODE(DLRY_STDR_CODE,'DS04', DLRY_RATE, 0) AS DLRY_RATE_02
+             		</isEqual>
+             		<isEqual property="DLRY_STDR_CODE" compareValue="DS09">
+						    DECODE(DLRY_STDR_CODE,'DS08', DLRY_RATE, 0) AS DLRY_RATE_01
+             				,DECODE(DLRY_STDR_CODE,'DS14', DLRY_RATE, 0) AS DLRY_RATE_02
+             		</isEqual>
+             		<isEqual property="DLRY_STDR_CODE" compareValue="DS12">
+						    DECODE(DLRY_STDR_CODE,'DS04', DLRY_RATE, 0) AS DLRY_RATE_01
+             				,DECODE(DLRY_STDR_CODE,'DS15', DLRY_RATE, 0) AS DLRY_RATE_02
+             		</isEqual>
+			             FROM TBACC_SE_ACCNUT_DLRY_RATE 
+			            WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+			                AND ACCNUT_MT =SUBSTR(#YYYYMM#,5,2) 
+			    				  
+			       <isEqual property="DLRY_STDR_CODE" compareValue="DS06">
+						AND DLRY_STDR_CODE IN ('DS01', 'DS04')
+				   </isEqual>
+				   <isEqual property="DLRY_STDR_CODE" compareValue="DS09">
+						AND DLRY_STDR_CODE IN ('DS08', 'DS14')
+				   </isEqual>
+				   <isEqual property="DLRY_STDR_CODE" compareValue="DS12">
+						AND DLRY_STDR_CODE IN ('DS04', 'DS15')
+				   </isEqual>
+		<![CDATA[     GROUP BY ACCNUT_YEAR,ACCNUT_MT,DLRY_STDR_CODE,DLRY_RATE
+			                )
+			          )B
+			  GROUP BY A.SE_ACCNUT
+			), THIS_DLRY_AMOUNT AS
+			( SELECT A.ACCNUT_ACNT_CODE ,
+					 NVL(SUM(DECODE(NVL(B.DBRT_SE, 'D'),'D',
+					 NVL(A.DR_AMT,0) - NVL(A.CR_AMT,0),
+					 NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))),0) AS DLRY_AMOUNT_SM
+				FROM ( 
+					  SELECT ACCNUT_YEAR ,
+					         ACCNUT_ACNT_CODE ,
+						     SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT ,
+						     SUM(NVL(CRDIT_AMOUNT, 0))  AS CR_AMT
+						FROM TBACC_ACCNUT_STACNTSUM_SE
+					   WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+						 AND ACCNUT_MT BETWEEN '00' AND      SUBSTR(#YYYYMM#,5,2)
+						 AND SE_ACCNUT_ACNT_CODE = '1321723'
+					   GROUP BY ACCNUT_YEAR,
+						        ACCNUT_ACNT_CODE
+						
+					   UNION ALL
+					  	
+					  SELECT ACCNUT_YEAR ,
+						     ACCNUT_ACNT_CODE ,
+						     SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT ,
+						     SUM(NVL(CRDIT_AMOUNT, 0))  AS CR_AMT
+						FROM TBACC_ACCNUT_STACNT_SE
+					   WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+						 AND ACCNUT_MT BETWEEN '00' AND      SUBSTR(#YYYYMM#,5,2)
+						 AND SE_ACCNUT_ACNT_CODE = '1321723'
+					   GROUP BY ACCNUT_YEAR,
+						        ACCNUT_ACNT_CODE
+					 )A,
+					 TBACC_ACCNUT_ACNT_SBJECT B
+			   WHERE A.ACCNUT_YEAR      = B.ACCNUT_YEAR
+				 AND A.ACCNUT_ACNT_CODE = B.ACCNUT_ACNT_CODE
+				 AND B.DLRY_STDR_CODE   = #DLRY_STDR_CODE#
+			   GROUP BY A.ACCNUT_ACNT_CODE
+			 )
+	  SELECT #DLRY_STDR_CODE# ,
+			 ACCNUT_ACNT_CODE ,
+			 SE_ACCNUT_ACNT_CODE ,
+			 0 AS DLRY_RATE_AMOUNT,
+			 0 AS DLRY_AMOUNT_SUM  ,
+			 ROUND(DLRY_RATE,18) AS DLRY_RATE ,
+			 DLRY_AMOUNT_SM ,
+			 ROUND(DLRY_AMOUNT_SM * DLRY_RATE) AS DLRY_AMOUNT
+		FROM THIS_DLRY ,
+			 THIS_DLRY_AMOUNT		
+		]]>
+	</select>
+	<!-- DS14 -->
+	<select id="ACC060205DAO.selectDs14" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+	   WITH THIS_DLRY AS
+			(
+			 SELECT DLRY_STDR_CODE
+			 		,ACCNUT_ACNT_CODE
+					,SE_ACCNUT_ACNT_CODE
+					,SUM(SE_AMOUNT_SUM) AS SE_AMOUNT_SUM
+					,DLRY_AMOUNT_SUM
+					,SUM(SE_AMOUNT_SUM) / DLRY_AMOUNT_SUM AS DLRY_RATE
+			   FROM (
+					 SELECT DLRY_STDR_CODE
+							,SE_ACCNUT_ACNT_CODE
+							,ACCNUT_ACNT_CODE
+							,SUM(AMT) OVER (PARTITION BY  DLRY_STDR_CODE,ACCNUT_ACNT_CODE, SE_ACCNUT_ACNT_CODE) AS SE_AMOUNT_SUM
+							,SUM(AMT) OVER (PARTITION BY DLRY_STDR_CODE) AS DLRY_AMOUNT_SUM
+					   FROM (						
+							 SELECT 'DS14' AS DLRY_STDR_CODE
+									,A.SE_ACCNUT_ACNT_CODE
+									,A.ACCNUT_ACNT_CODE
+									,SUM(AMT) AS AMT 
+							   FROM (
+								     SELECT ACCNUT_ACNT_CODE
+								            ,SE_ACCNUT AS SE_ACCNUT_ACNT_CODE
+								            ,SUM(NVL(DLRY_AMOUNT,0) )AS AMT
+								       FROM TBACC_SE_ACCNUT_DLRY_RATE /*회계결산_구분회계*/
+								      WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+								        AND ACCNUT_MT = SUBSTR(#YYYYMM#,5,2)
+								        
+								      GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE, SE_ACCNUT
+								
+								      UNION ALL
+								
+								     SELECT A.ACCNUT_ACNT_CODE
+								            ,A.SE_ACCNUT_ACNT_CODE
+								            ,NVL(SUM(DECODE(NVL(B.DBRT_SE, 'D'),'D', NVL(A.DR_AMT,0) - NVL(A.CR_AMT,0),
+								            CASE WHEN SUBSTR(A.ACCNUT_ACNT_CODE,1,1) < 4 
+                                   			THEN (NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))*-1 
+                                        ELSE (NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))*1 
+                                        END
+                                    )),0)
+								       FROM (
+								             SELECT ACCNUT_YEAR
+								             		,ACCNUT_ACNT_CODE
+								                    ,SE_ACCNUT_ACNT_CODE
+								                    ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+								                    ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+								               FROM TBACC_ACCNUT_STACNTSUM_SE  /*회계결산집계_구분회계*/
+								              WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+								                AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+								        
+								              GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE, SE_ACCNUT_ACNT_CODE
+								
+								              UNION ALL
+								
+								             SELECT ACCNUT_YEAR
+								                    ,ACCNUT_ACNT_CODE
+								                    ,SE_ACCNUT_ACNT_CODE
+								                    ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+								                    ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+								               FROM TBACC_ACCNUT_STACNT_SE /*회계결산_구분회계*/
+								              WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+								                AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+								        
+								              GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE,SE_ACCNUT_ACNT_CODE
+								            ) A,
+								            TBACC_ACCNUT_ACNT_SBJECT B  /*회계계정과목*/
+								      WHERE A.ACCNUT_YEAR         = B.ACCNUT_YEAR
+								        AND A.ACCNUT_ACNT_CODE    = B.ACCNUT_ACNT_CODE
+								      GROUP BY A.ACCNUT_ACNT_CODE,A.SE_ACCNUT_ACNT_CODE
+								    )A
+							  WHERE A.ACCNUT_ACNT_CODE = '40520000'
+							  GROUP BY A.SE_ACCNUT_ACNT_CODE
+								       ,A.ACCNUT_ACNT_CODE
+							) 
+	     			)
+		      GROUP BY DLRY_STDR_CODE
+					,SE_ACCNUT_ACNT_CODE
+					,DLRY_AMOUNT_SUM
+					,ACCNUT_ACNT_CODE
+		      ORDER BY SE_ACCNUT_ACNT_CODE
+		    )
+	 SELECT DLRY_STDR_CODE
+			,ACCNUT_ACNT_CODE
+			,SE_ACCNUT_ACNT_CODE
+			,SE_AMOUNT_SUM		AS DLRY_RATE_AMOUNT
+			,DLRY_AMOUNT_SUM 	
+			,ROUND(DLRY_RATE,18) AS DLRY_RATE
+			, 0 AS DLRY_AMOUNT_SM	
+			,0 AS DLRY_AMOUNT
+	   FROM THIS_DLRY 
+	]]>
+	</select>
+	<!-- DS15 -->
+	    <select id="ACC060205DAO.selectDs15" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    <![CDATA[
+		WITH THIS_DLRY AS
+			 (
+			  SELECT A.DETAIL_BSNS_CODE AS SE_ACCNUT_ACNT_CODE
+			  		 ,A
+			  		 ,B
+					 ,CASE WHEN B = 0 OR B= NULL THEN 0 ELSE A/B END AS DLRY_RATE
+	            FROM (
+					  SELECT T.DETAIL_BSNS_CODE,NVL(SUM(EXCUT_AM),0) +NVL(SUM(CYFD_EXCUT_AM),0) AS A
+						FROM TBBDG_BUDGET_STACNT T
+					   WHERE T.YEAR = SUBSTR(#YYYYMM#,1,4)
+						 AND T.MTH =  SUBSTR(#YYYYMM#,5,2)
+						 AND T.BSNS_SE IN( '1','2')
+						 AND T.BALC_SE = '2'
+						 AND T.STACNT_LEVEL = 8
+						 AND T.DETAIL_BSNS_CODE <> '1321723'
+						 AND T.DETAIL_BSNS_CODE IS NOT NULL
+					   GROUP BY T.DETAIL_BSNS_CODE
+					  ) A,
+					  (
+					   SELECT NVL(SUM(EXCUT_AM),0) +NVL(SUM(CYFD_EXCUT_AM),0) AS B
+						 FROM TBBDG_BUDGET_STACNT T
+						WHERE T.YEAR = SUBSTR(#YYYYMM#,1,4)
+						  AND T.MTH = SUBSTR(#YYYYMM#,5,2)
+						  AND T.BSNS_SE IN ('1','2')
+						  AND T.STACNT_LEVEL = 8
+						  AND T.BALC_SE = '2'
+						  AND T.DETAIL_BSNS_CODE <> '1321723'
+						  AND T.DETAIL_BSNS_CODE IS NOT NULL
+					  ) B
+			 )
+	  SELECT 'DS15' ,
+			 '0000000' AS ACCNUT_ACNT_CODE ,
+			 SE_ACCNUT_ACNT_CODE ,
+			 A AS DLRY_RATE_AMOUNT,
+			 B AS DLRY_AMOUNT_SUM  ,
+			 ROUND(DLRY_RATE,18) AS DLRY_RATE ,
+			 0 AS DLRY_AMOUNT_SM ,
+			 0 AS DLRY_AMOUNT
+		FROM THIS_DLRY
+	    ]]>
+	    
+	    </select>
+	<!-- DS03 -->
+	    <select id="ACC060205DAO.selectDs03" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    <![CDATA[    
+	    WITH THIS_DLRY AS
+			 (
+			  SELECT SE_ACCNUT_ACNT_CODE
+				     ,SUM(AMT) OVER (PARTITION BY SE_ACCNUT_ACNT_CODE) AS SE_AMOUNT_SUM
+				     ,SUM(AMT) OVER () AS DLRY_AMOUNT_SUM
+				     ,SUM(AMT) OVER (PARTITION BY SE_ACCNUT_ACNT_CODE) / SUM(AMT) OVER () AS DLRY_RATE
+			   FROM(
+				     SELECT SE_ACCNUT_ACNT_CODE
+				   			,SUM(AMT) AS AMT
+					   FROM (
+							
+							 SELECT SE_ACCNUT_ACNT_CODE, SUM(CRDIT_AMOUNT) - SUM(DEBTOR_AMOUNT) AS AMT
+							   FROM TBACC_ACCNUT_STACNT_SE
+							  WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+								AND ACCNUT_MT  BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+								AND SUBSTR(ACCNUT_ACNT_CODE,1,1) = '4'
+								AND ACCNUT_ACNT_CODE <> '46500000'
+								
+							  GROUP BY SE_ACCNUT_ACNT_CODE
+						    )  
+					  GROUP BY SE_ACCNUT_ACNT_CODE
+				    )
+			 ), THIS_DLRY_AMOUNT AS
+			 (
+			  SELECT A.ACCNUT_ACNT_CODE
+				     , NVL(SUM(DECODE(NVL(B.DBRT_SE, 'D'),'D', DECODE( SUBSTR(A.ACCNUT_ACNT_CODE,1,1), '2', (NVL(A.DR_AMT,0) - NVL(A.CR_AMT,0))*-1,NVL(A.DR_AMT,0) - NVL(A.CR_AMT,0)),NVL(A.CR_AMT,0) - NVL(A.DR_AMT,0))),0) AS DLRY_AMOUNT_SM
+				    
+				FROM (
+				      SELECT ACCNUT_YEAR
+				             ,ACCNUT_ACNT_CODE
+				             ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+				             ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+				        FROM TBACC_ACCNUT_STACNTSUM_SE  /*회계결산집계_구분회계*/
+				       WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+				         AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+				         AND SE_ACCNUT_ACNT_CODE = '1321723'
+				       GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+				
+				       UNION ALL
+				
+				      SELECT ACCNUT_YEAR
+				             ,ACCNUT_ACNT_CODE
+				             ,SUM(NVL(DEBTOR_AMOUNT, 0)) AS DR_AMT
+				             ,SUM(NVL(CRDIT_AMOUNT, 0)) AS CR_AMT
+				        FROM TBACC_ACCNUT_STACNT_SE /*회계결산_구분회계*/
+				       WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+				         AND ACCNUT_MT BETWEEN '00' AND SUBSTR(#YYYYMM#,5,2)
+				         AND SE_ACCNUT_ACNT_CODE = '1321723'
+				       GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+				     ) A,
+				     TBACC_ACCNUT_ACNT_SBJECT B  /*회계계정과목*/
+			   WHERE A.ACCNUT_YEAR         = B.ACCNUT_YEAR
+				 AND A.ACCNUT_ACNT_CODE    = B.ACCNUT_ACNT_CODE
+				 AND B.DLRY_STDR_CODE = 'DS03'
+			   GROUP BY A.ACCNUT_ACNT_CODE
+			 )
+	  SELECT 'DS03'
+			 ,ACCNUT_ACNT_CODE
+			 ,SE_ACCNUT_ACNT_CODE
+			 ,SE_AMOUNT_SUM AS DLRY_RATE_AMOUNT
+			 ,DLRY_AMOUNT_SUM
+			 ,ROUND(DLRY_RATE,18) AS DLRY_RATE
+			 ,DLRY_AMOUNT_SM
+			 ,ROUND(DLRY_AMOUNT_SM * DLRY_RATE) AS DLRY_AMOUNT
+		FROM THIS_DLRY ,
+			 THIS_DLRY_AMOUNT   
+	   ]]>
+	    
+	    </select>  
+	<insert id="ACC060205DAO.insertDlryStdr" parameterClass="java.util.HashMap">
+			INSERT INTO TBACC_SE_ACCNUT_DLRY_RATE
+	                      (
+	                         ACCNUT_YEAR
+	                        ,ACCNUT_MT
+	                        ,ACCNUT_ACNT_CODE
+	                        ,SE_ACCNUT
+	                        ,DLRY_STDR_CODE
+	                        ,DLRY_RATE
+	                        ,DLRY_RATE_AMOUNT
+	                        ,DLRY_AMOUNT
+	                        ,REGISTER_ID
+	                        ,REGIST_DT
+	                        ,UPDUSR_ID
+	                        ,UPDT_DT
+	                      ) VALUES (
+	                         SUBSTR(#YYYYMM#,1,4)
+	                        ,SUBSTR(#YYYYMM#,5,2)
+	                        ,#ACCNUT_ACNT_CODE#
+	                        ,#SE_ACCNUT_ACNT_CODE#
+	                        ,#DLRY_STDR_CODE#
+	                        ,ROUND(#DLRY_RATE#,18)
+	                        ,#DLRY_RATE_AMOUNT#
+	                        ,#DLRY_AMOUNT#
+	                        ,#S_USER_ID#
+	                        ,SYSDATE
+	                        ,#S_USER_ID#
+	                        ,SYSDATE
+	                      )
+	
+	</insert>
+	<!-- 구분회계 결산처리 유무 -->
+	<select id="ACC060205DAO.stacntYn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ /*ACC060205DAO.stacntYn*/ ]]>
+	<![CDATA[
+		SELECT  SUBSTR(#YYYYMM#,1,4) AS YYYY,
+				SUBSTR(#YYYYMM#,5,2) AS MM,
+				CASE WHEN COUNT(*) > 0 
+					 THEN 'Y' 
+					 ELSE 'N' 
+				END AS STACNT_YN
+		FROM TBACC_ACCNUT_STACNT_SE 
+		WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+		AND ACCNUT_MT = SUBSTR(#YYYYMM#,5,2)
+		]]>
+	</select>
+</sqlMap>

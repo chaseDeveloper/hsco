@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT030407">
+
+	<!-- 쿼리명 : 수납조회
+	설명 : 수납조회 전체
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.21
+	-->
+<select id="RNT030407DAO.getList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+WITH VI_LFSTS_RCIV
+       AS (  SELECT  A.CNTRCTR_NO,
+                     A.DONG,
+                     A.HO,
+                     A.AREA_SE,
+                     Z.NM,
+                     A.DEDT_DE,
+                     A.RCIV_DE,
+                     A.RCIV_NO,                     
+                     A.RCIV_SE,
+                     A.RCIV_AMOUNT,
+                     A.FALT_AMOUNT,
+                     A.OPERT_SE,
+                     A.PROCESS_STTUS,
+                     A.PAYMTHD,
+                     A.RQEST_SE,
+                     A.RQEST_NO
+               FROM   TBRNT_LFSTS_RCIV A,
+                      TBRNT_LFSTS_CNTRCT F,
+                      TBRNT_LFSTS_CSTMR Z
+              WHERE   1 = 1
+                AND   A.RCIV_DE BETWEEN  #RCIV_DE1# AND #RCIV_DE2#
+                AND   A.PAYMTHD LIKE #PAYMTHD#
+                AND   A.AREA_SE LIKE #AREA_SE# || '%'
+                AND   A.CNTRCTR_NO = F.CNTRCTR_NO
+                AND   F.LFSTS_CSTMR_NO = Z.LFSTS_CSTMR_NO
+           ),
+ VI_LFSTS_MT_RNTCHRG
+       AS (  SELECT  A.CNTRCTR_NO, A.DEDT_DE, A.RCIV_DE,
+                     NVL (A.RNTCHRG_THSMON, 0)
+                     + NVL (A.RSVMNEY_THSMON, 0)
+                     + NVL (A.RNTCHRG_RDCAMT, 0)
+                     + NVL (A.RSVMNEY_RDCAMT,0) AS RNTCHRG,
+                     NVL (A.OVDINTR, 0) AS OVDINTR,
+                     NVL (A.RNTCHRG_THSMON, 0)
+                     + NVL (A.RSVMNEY_THSMON, 0)
+                     + NVL (A.RNTCHRG_RDCAMT, 0)
+                     + NVL (A.RSVMNEY_RDCAMT,0)
+                     + NVL (A.OVDINTR,0)                     AS TOTAL
+               FROM   TBRNT_LFSTS_MT_RNTCHRG A
+              WHERE   1 = 1
+           )  
+  SELECT   A.*    
+    FROM   (/* 가상계좌 - 임대료*/
+            SELECT   A.*,
+                     NVL (B.RNTCHRG, 0)AS RNTCHRG,
+                     0  AS RNTCHRG_2,
+                     NVL (B.OVDINTR, 0) AS OVDINTR,
+                     0 AS OVDINTR_2,
+                     NVL (B.TOTAL, 0) AS TOTAL_1,
+                     0 AS TOTAL_2,
+                     0 AS SPORT_RETURN_AMOUNT                                          
+               FROM  VI_LFSTS_RCIV A
+                  ,  VI_LFSTS_MT_RNTCHRG B
+              WHERE  A.PAYMTHD = 'V' 
+                AND  A.RCIV_SE = '2'
+                AND  A.CNTRCTR_NO = B.CNTRCTR_NO
+                AND  A.DEDT_DE = B.DEDT_DE
+                AND  (B.RCIV_DE = A.RCIV_DE OR B.RCIV_DE IS NULL)
+              UNION     
+              /* 자동이체 - 임대료*/
+              SELECT A.*
+                   , RNTCHRG, RNTCHRG_2, OVDINTR, OVDINTR_2
+                   , TOTAL_1, TOTAL_2, SPORT_RETURN_AMOUNT
+                FROM VI_LFSTS_RCIV A
+                   , (SELECT A.RCIV_DE, A.CNTRCTR_NO, A.RCIV_NO,
+                             0 AS RNTCHRG,
+                             SUM(NVL (B.RNTCHRG, 0))  AS RNTCHRG_2,
+                             0 AS OVDINTR,
+                             SUM(NVL (B.OVDINTR, 0)) AS OVDINTR_2,
+                             0 AS TOTAL_1,
+                             SUM(NVL (B.TOTAL, 0)) AS TOTAL_2,
+                             0 AS SPORT_RETURN_AMOUNT                                          
+                       FROM  VI_LFSTS_RCIV A
+                          ,  VI_LFSTS_MT_RNTCHRG B
+                      WHERE  A.PAYMTHD <![CDATA[ <> ]]> 'V' 
+                        AND  A.RCIV_SE = '2'
+                        AND  A.CNTRCTR_NO = B.CNTRCTR_NO
+                        AND  B.DEDT_DE <![CDATA[ <= ]]> A.DEDT_DE
+                        AND  (B.RCIV_DE = A.RCIV_DE OR B.RCIV_DE IS NULL)
+                      GROUP BY A.RCIV_DE, A.CNTRCTR_NO, A.RCIV_NO
+                     ) B 
+               WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+                 AND A.RCIV_DE = B.RCIV_DE
+                 AND A.RCIV_NO = B.RCIV_NO 
+               UNION 
+               /*  지원금 */
+              SELECT A.*,
+                     NVL(B.SPORT_RETURN_AMOUNT,0) AS RNTCHRG,
+                     0  AS RNTCHRG_2,
+                     NVL(B.OVDINTR,0) AS OVDINTR,
+                     0 AS OVDINTR_2,
+                     NVL(B.SPORT_RETURN_AMOUNT,0) + NVL(B.OVDINTR,0) AS TOTAL_1,
+                     0 AS TOTAL_2,
+                     NVL(B.SPORT_RETURN_AMOUNT,0) AS SPORT_RETURN_AMOUNT                                          
+               FROM  VI_LFSTS_RCIV A
+                  LEFT JOIN  TBRNT_LFSTS_SPRMNY_RETURN B
+                     ON  A.CNTRCTR_NO = B.CNTRCTR_NO
+                    AND  A.DEDT_DE = B.DEDT_DE
+                    AND  A.RQEST_NO = B.RETURN_NO 
+              WHERE  A.RCIV_SE = '1'                
+                AND  (B.RETURN_DE = A.RCIV_DE OR B.RETURN_DE IS NULL)                                         
+              ) A
+ORDER BY   A.RCIV_DE, A.AREA_SE, A.DONG, A.HO, A.DEDT_DE 
+</select>
+	
+	<!-- 쿼리명 : 수납조회
+	설명 : 수납조회 가상계좌
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.21
+	-->
+<select id="RNT030407DAO.getList1" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+SELECT A.*
+  FROM(SELECT A.CNTRCTR_NO
+         , A.DONG
+         , A.HO
+         , A.AREA_SE
+         , Z.NM
+         , A.DEDT_DE
+         , A.RCIV_DE
+         , A.RCIV_NO
+         , NVL(B.RNTCHRG_THSMON , 0) + NVL(B.RSVMNEY_THSMON , 0) + NVL(D.SPORT_RETURN_AMOUNT , 0) AS RNTCHRG
+         , NVL(C.RNTCHRG_2 , 0) + NVL(D.SPORT_RETURN_AMOUNT , 0) AS RNTCHRG_2
+         , NVL(B.OVDINTR , 0) AS OVDINTR
+         , NVL(C.OVDINTR_2 , 0) AS OVDINTR_2
+         , NVL(B.RNTCHRG_THSMON , 0) + NVL(B.RSVMNEY_THSMON , 0) + B.OVDINTR + NVL(D.SPORT_RETURN_AMOUNT , 0) AS TOTAL_1
+         , NVL(C.TOTAL_2 , 0) + NVL(D.SPORT_RETURN_AMOUNT , 0) AS TOTAL_2
+         , D.SPORT_RETURN_AMOUNT
+         , A.RCIV_SE     
+         , A.RCIV_AMOUNT
+         , A.FALT_AMOUNT
+         , A.OPERT_SE
+         , A.PROCESS_STTUS
+         , A.PAYMTHD
+         , A.RQEST_SE
+         , H.J_CNT
+         , G.TOTAL_J_AMOUNT + G.TOTAL_JO_AMOUNT AS TOTAL_J_AMOUNT
+         , H.O_CNT
+         , G.TOTAL_O_AMOUNT
+         , H.H_CNT
+         , G.TOTAL_H_AMOUNT  
+         , H.J_CNT +  H.O_CNT + H.H_CNT AS TOTAL_CNT
+         , G.TOTAL_J_AMOUNT + G.TOTAL_JO_AMOUNT + G.TOTAL_O_AMOUNT + G.TOTAL_H_AMOUNT AS TOTAL_AMOUNT               
+             FROM TBRNT_LFSTS_RCIV  A 
+             LEFT JOIN TBRNT_LFSTS_MT_RNTCHRG B ON A.CNTRCTR_NO = B.CNTRCTR_NO AND A.DEDT_DE = B.DEDT_DE
+             LEFT JOIN (SELECT CNTRCTR_NO , SUM(RNTCHRG_THSMON + RSVMNEY_THSMON + OVDINTR + NVL(RNTCHRG_NPYM,0) + NVL(RSVMNEY_NPYM,0)) AS TOTAL_2
+                             , SUM(RNTCHRG_THSMON + RSVMNEY_THSMON + NVL(RNTCHRG_NPYM,0) + NVL(RSVMNEY_NPYM,0)) AS RNTCHRG_2
+             				 , SUM(OVDINTR) AS OVDINTR_2
+             <![CDATA[  
+                          FROM TBRNT_LFSTS_MT_RNTCHRG 
+                         WHERE LEVY_YM <= #LEVY_YM#
+                         ]]>   
+                           AND RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+                         GROUP BY CNTRCTR_NO) C ON A.CNTRCTR_NO = C.CNTRCTR_NO               
+            LEFT JOIN TBRNT_LFSTS_SPRMNY_RETURN D ON A.CNTRCTR_NO = D.CNTRCTR_NO AND A.DEDT_DE = D.DEDT_DE AND A.RCIV_NO = D.RETURN_NO
+            JOIN TBRNT_LFSTS_CNTRCT F ON A.CNTRCTR_NO = F.CNTRCTR_NO
+            LEFT JOIN (SELECT SUM(CASE WHEN OPERT_SE = 'J' THEN RCIV_AMOUNT ELSE 0 END) AS TOTAL_J_AMOUNT
+                            , SUM(CASE WHEN OPERT_SE = 'O' THEN FALT_AMOUNT ELSE 0 END) AS TOTAL_O_AMOUNT 
+                            , SUM(CASE WHEN OPERT_SE = 'O' THEN RCIV_AMOUNT ELSE 0 END) AS TOTAL_JO_AMOUNT
+                            , SUM(CASE WHEN OPERT_SE = 'H' THEN FALT_AMOUNT ELSE 0 END) AS TOTAL_H_AMOUNT
+                         FROM TBRNT_LFSTS_RCIV 
+                        WHERE RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+                          AND PAYMTHD ='V') G ON 1=1
+            LEFT JOIN (SELECT SUM(CASE WHEN OPERT_SE = 'J' THEN 1 ELSE 0 END) AS J_CNT
+                            , SUM(CASE WHEN OPERT_SE = 'O' THEN 1 ELSE 0 END) AS O_CNT
+                            , SUM(CASE WHEN OPERT_SE = 'H' THEN 1 ELSE 0 END) AS H_CNT
+                         FROM TBRNT_LFSTS_RCIV 
+                        WHERE RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+                          AND PAYMTHD ='V') H ON 1=1          
+            JOIN TBRNT_LFSTS_CSTMR Z  ON F.LFSTS_CSTMR_NO = Z.LFSTS_CSTMR_NO                                         
+            WHERE A.RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+              AND A.PAYMTHD = 'V'
+              <isNotEmpty property="AREA_SE">
+              AND F.AREA_SE = #AREA_SE#
+              </isNotEmpty>
+      ) A   
+            ORDER BY A.CNTRCTR_NO  , A.RCIV_NO
+</select>
+
+	<!-- 쿼리명 : 수납조회
+	설명 : 수납조회 자동이체
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.21
+	-->
+<select id="RNT030407DAO.getList2" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+SELECT A.*
+  FROM(SELECT A.CNTRCTR_NO
+         , A.DONG
+         , A.HO
+         , A.AREA_SE
+         , Z.NM
+         , A.DEDT_DE
+         , A.RCIV_DE
+         , A.RCIV_NO
+         , NVL(B.RNTCHRG_THSMON,0) + NVL(B.RSVMNEY_THSMON,0) + NVL(D.SPORT_RETURN_AMOUNT , 0) AS RNTCHRG
+         , NVL(C.RNTCHRG_2,0) + NVL(D.SPORT_RETURN_AMOUNT , 0) AS RNTCHRG_2
+         , NVL(B.OVDINTR,0) AS OVDINTR
+         , NVL(C.OVDINTR_2,0) AS OVDINTR_2
+         , NVL(B.RNTCHRG_THSMON,0) + NVL(B.RSVMNEY_THSMON,0) + B.OVDINTR + NVL(D.SPORT_RETURN_AMOUNT , 0) AS TOTAL_1
+         , NVL(C.TOTAL_2,0) + NVL(D.SPORT_RETURN_AMOUNT , 0) AS TOTAL_2
+         , D.SPORT_RETURN_AMOUNT
+         , A.RCIV_SE     
+         , A.RCIV_AMOUNT
+         , A.FALT_AMOUNT
+         , A.OPERT_SE
+         , A.PROCESS_STTUS
+         , A.PAYMTHD
+         , A.RQEST_SE
+         , H.J_CNT
+         , G.TOTAL_J_AMOUNT + G.TOTAL_JO_AMOUNT AS TOTAL_J_AMOUNT
+         , H.O_CNT
+         , G.TOTAL_O_AMOUNT
+         , H.H_CNT
+         , G.TOTAL_H_AMOUNT  
+         , H.J_CNT +  H.O_CNT + H.H_CNT AS TOTAL_CNT
+         , G.TOTAL_J_AMOUNT + G.TOTAL_JO_AMOUNT + G.TOTAL_O_AMOUNT + G.TOTAL_H_AMOUNT AS TOTAL_AMOUNT                 
+             FROM TBRNT_LFSTS_RCIV  A 
+             LEFT JOIN TBRNT_LFSTS_MT_RNTCHRG B ON A.CNTRCTR_NO = B.CNTRCTR_NO AND A.DEDT_DE = B.DEDT_DE
+             LEFT JOIN (SELECT CNTRCTR_NO , SUM(RNTCHRG_THSMON + RSVMNEY_THSMON + OVDINTR + NVL(RNTCHRG_NPYM,0) + NVL(RSVMNEY_NPYM,0)) AS TOTAL_2
+                             , SUM(RNTCHRG_THSMON + RSVMNEY_THSMON + NVL(RNTCHRG_NPYM,0) + NVL(RSVMNEY_NPYM,0)) AS RNTCHRG_2
+             				 , SUM(OVDINTR) AS OVDINTR_2
+             <![CDATA[  
+                          FROM TBRNT_LFSTS_MT_RNTCHRG 
+                         WHERE LEVY_YM <= #LEVY_YM#
+                         ]]>   
+                           AND RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+                         GROUP BY CNTRCTR_NO) C ON A.CNTRCTR_NO = C.CNTRCTR_NO               
+            LEFT JOIN TBRNT_LFSTS_SPRMNY_RETURN D ON A.CNTRCTR_NO = D.CNTRCTR_NO AND A.DEDT_DE = D.DEDT_DE AND A.RCIV_NO = D.RETURN_NO
+			JOIN TBRNT_LFSTS_CNTRCT F ON A.CNTRCTR_NO = F.CNTRCTR_NO
+            LEFT JOIN (SELECT SUM(CASE WHEN OPERT_SE = 'J' THEN RCIV_AMOUNT ELSE 0 END) AS TOTAL_J_AMOUNT
+                            , SUM(CASE WHEN OPERT_SE = 'O' THEN FALT_AMOUNT ELSE 0 END) AS TOTAL_O_AMOUNT 
+                            , SUM(CASE WHEN OPERT_SE = 'O' THEN RCIV_AMOUNT ELSE 0 END) AS TOTAL_JO_AMOUNT
+                            , SUM(CASE WHEN OPERT_SE = 'H' THEN FALT_AMOUNT ELSE 0 END) AS TOTAL_H_AMOUNT
+                         FROM TBRNT_LFSTS_RCIV 
+                        WHERE RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+                          AND PAYMTHD ='A') G ON 1=1
+            LEFT JOIN (SELECT SUM(CASE WHEN OPERT_SE = 'J' THEN 1 ELSE 0 END) AS J_CNT
+                            , SUM(CASE WHEN OPERT_SE = 'O' THEN 1 ELSE 0 END) AS O_CNT
+                            , SUM(CASE WHEN OPERT_SE = 'H' THEN 1 ELSE 0 END) AS H_CNT
+                         FROM TBRNT_LFSTS_RCIV 
+                        WHERE RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+                          AND PAYMTHD ='A') H ON 1=1	
+            JOIN TBRNT_LFSTS_CSTMR Z  ON F.LFSTS_CSTMR_NO = Z.LFSTS_CSTMR_NO    
+            WHERE A.RCIV_DE BETWEEN #RCIV_DE1# AND #RCIV_DE2#
+              AND A.PAYMTHD = 'A'
+              <isNotEmpty property="AREA_SE">
+              AND F.AREA_SE = #AREA_SE#
+              </isNotEmpty>
+      ) A   
+  
+            ORDER BY A.CNTRCTR_NO , A.RCIV_NO
+</select>	
+
+<!-- 쿼리명 : 수납자료조회 1 
+	설명 : 수납자료조회 1
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.21
+-->	
+<parameterMap id="sp_rn_rent_rec_desc_i" class="java.util.HashMap">
+	<parameter property="IN_PAY_METHOD" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_REC_DATE1" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_REC_DATE2" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_GU_CODE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_DONG" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+	<parameter property="IN_HO" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+    <parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+</parameterMap>	
+	
+<procedure id="RNT030407DAO.SP_RN_RENT_REC_DESC_I" parameterMap="sp_rn_rent_rec_desc_i">
+<!--  { CALL SP_RN_MCOST_RENT_I(#AREA_SE# , #DEDT_DE# , #MDAT_DE# ,#S_USER_ID#)}-->
+{ CALL SP_RN_RENT_REC_DESC_I( ? , ? , ? , ? , ? , ? , ?)}
+</procedure>
+
+<!-- 쿼리명 : 수납자료조회 2 
+	설명 : 수납자료조회 1
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.010.21
+-->	
+<procedure id="RNT030407DAO.SP_RN_RENT_REC_DESC_U" parameterMap="sp_rn_rent_rec_desc_i">
+<!--  { CALL SP_RN_MCOST_RENT_I(#AREA_SE# , #DEDT_DE# , #MDAT_DE# ,#S_USER_ID#)}-->
+{ CALL SP_RN_RENT_REC_DESC_U( ? , ? , ? , ? , ? , ? , ?)}
+</procedure>
+
+<!-- 쿼리명 : 소인 
+	설명 : 소인
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.23
+-->	
+<parameterMap id="sp_rn_rent_rec_desc_receipt" class="java.util.HashMap">
+	<parameter property="IN_PAY_METHOD" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_REC_DATE1" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_REC_DATE2" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_CRT_ID" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_GU_CODE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_DONG" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+	<parameter property="IN_HO" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+    <parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+</parameterMap>	
+	
+<procedure id="RNT030407DAO.SP_RN_RENT_REC_DESC_RECEIPT" parameterMap="sp_rn_rent_rec_desc_receipt">
+<!--  { CALL SP_RN_MCOST_RENT_I(#AREA_SE# , #DEDT_DE# , #MDAT_DE# ,#S_USER_ID#)}-->
+{ CALL SP_RN_RENT_REC_DESC_RECEIPT( ? , ? , ? , ? , ? , ? , ? , ?)}
+</procedure>
+
+<!-- 쿼리명 : 소인취소 
+	설명 : 소인취소
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.10.23
+-->	
+<parameterMap id="sp_rn_rent_rec_desc_cancel" class="java.util.HashMap">
+	<parameter property="IN_PAY_METHOD" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_REC_DATE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_CRT_ID" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_GU_CODE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	<parameter property="IN_DONG" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+	<parameter property="IN_HO" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+    <parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+</parameterMap>	
+	
+<procedure id="RNT030407DAO.SP_RN_RENT_REC_DESC_CANCEL" parameterMap="sp_rn_rent_rec_desc_cancel">
+<!--  { CALL SP_RN_MCOST_RENT_I(#AREA_SE# , #DEDT_DE# , #MDAT_DE# ,#S_USER_ID#)}-->
+{ CALL SP_RN_RENT_REC_DESC_CANCEL( ? , ? , ? , ? , ? , ? , ?)}
+</procedure>
+
+</sqlMap>

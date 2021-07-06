@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050422_SQL">
+
+	 <!-- 기타유동자산명세서 조회 -->
+	<select id="ACC050422DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ /*ACC050422DAO.select*/ ]]>
+		WITH MAIN_T AS (
+		    SELECT t1.ACCNUT_YEAR
+		         , MAX(t4.BSNS_NM) AS BSNS_NM
+		         , t2.ACCNUT_ACNT_CODE
+		         , MAX(t1.SUMRY_1) AS SUMRY
+		         , NVL(SUM(t2.DEBTOR_AMOUNT),0)                                                                                                                          AS DR_AMT
+		         , NVL(SUM(t2.CRDIT_AMOUNT),0)                                                                                                                           AS CR_AMT
+		         , NVL(SUM(DECODE(t3.DBRT_SE, 'D', t2.DEBTOR_AMOUNT - t2.CRDIT_AMOUNT, 'C', t2.CRDIT_AMOUNT - t2.DEBTOR_AMOUNT ,t2.DEBTOR_AMOUNT - t2.CRDIT_AMOUNT)), 0) AS JAN_AMT
+		    FROM TBACC_CHIT_MASTR t1
+		    INNER JOIN TBACC_CHIT_DETAIL t2
+		    ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		    AND t1.CHIT_NO    = t2.CHIT_NO
+		    INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		    ON t2.ACCNUT_YEAR       = t3.ACCNUT_YEAR
+		    AND t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		    LEFT OUTER JOIN TBPRJ_BSNS_CODE t4
+		    ON t2.BSNS_CODE              = t4.BSNS_CODE
+		    WHERE SUBSTR(t1.CHIT_DE,1,6) BETWEEN SUBSTR(#YYYYMM#,1,4)||'01' AND #YYYYMM#
+	        AND t2.ACCNUT_ACNT_CODE IN (SELECT CASE WHEN SUBSTR(#YYYYMM#,1,4) <![CDATA[<]]> '2016' 
+	                                                THEN A.OLD_ACCNUT_CODE 
+	                                                ELSE A.NEW_ACCNUT_CODE END  
+	                                      FROM TBCOM_ACCNUT_CODE_MAPPING A
+	                                     WHERE A.NEW_ACCNUT_CODE IN ('11030051','11060030','11050010'))               
+		    AND t1.CHIT_CONFM_AT = '1'  /*승인*/
+		    GROUP BY t1.ACCNUT_YEAR
+		           , t2.ACCNUT_ACNT_CODE
+		),
+		PRE_T AS (
+		    SELECT t1.ACCNUT_YEAR
+		     , t1.ACCNUT_ACNT_CODE
+		     , t2.ACCNUT_ACNT_NM
+		     , NVL(SUM(t1.DEBTOR_AMOUNT),0) AS DR_AMT
+		     , NVL(SUM(t1.CRDIT_AMOUNT ),0) AS CR_AMT
+		     , NVL(SUM(DECODE(t2.DBRT_SE, 'D', t1.DEBTOR_AMOUNT - t1.CRDIT_AMOUNT, 'C', t1.CRDIT_AMOUNT - t1.DEBTOR_AMOUNT ,t1.DEBTOR_AMOUNT - t1.CRDIT_AMOUNT)), 0) AS JAN_AMT
+		    FROM TBACC_ACCNUT_STACNT t1
+		         INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+		         ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		         AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+		    WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+		    AND t1.ACCNUT_MT   BETWEEN '00'/*이월*/ AND '00' /*결산월*/
+	        AND t1.ACCNUT_ACNT_CODE IN (SELECT CASE WHEN SUBSTR(#YYYYMM#,1,4) <![CDATA[<]]> '2016' 
+	                                                THEN A.OLD_ACCNUT_CODE 
+	                                                ELSE A.NEW_ACCNUT_CODE END  
+	                                      FROM TBCOM_ACCNUT_CODE_MAPPING A
+	                                     WHERE A.NEW_ACCNUT_CODE IN ('11030051','11060030','11050010'))               
+		    GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE, t2.ACCNUT_ACNT_NM
+		),
+		DETAIL_T AS (
+		    SELECT t1.ACCNUT_YEAR
+		         , t1.CHIT_NO
+		         , t1.DECSN_NO
+		         , t4.BSNS_NM AS BSNS_NM
+		         , t2.ACCNUT_ACNT_CODE
+		         , t3.ACCNUT_ACNT_NM
+		         , t1.SUMRY_1 AS SUMRY
+		         , t2.DEBTOR_AMOUNT AS DR_AMT
+		         , t2.CRDIT_AMOUNT AS CR_AMT
+		         , DECODE(t3.DBRT_SE, 'D', t2.DEBTOR_AMOUNT - t2.CRDIT_AMOUNT, 'C', t2.CRDIT_AMOUNT - t2.DEBTOR_AMOUNT ,t2.DEBTOR_AMOUNT - t2.CRDIT_AMOUNT) AS JAN_AMT
+		    FROM TBACC_CHIT_MASTR t1
+		    INNER JOIN TBACC_CHIT_DETAIL t2
+		    ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		    AND t1.CHIT_NO    = t2.CHIT_NO
+		    INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		    ON t2.ACCNUT_YEAR       = t3.ACCNUT_YEAR
+		    AND t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		    LEFT OUTER JOIN TBPRJ_BSNS_CODE t4
+		    ON t2.BSNS_CODE              = t4.BSNS_CODE
+		    WHERE SUBSTR(t1.CHIT_DE,1,6) BETWEEN SUBSTR(#YYYYMM#,1,4)||'01' AND #YYYYMM#
+	        AND t2.ACCNUT_ACNT_CODE IN (SELECT CASE WHEN SUBSTR(#YYYYMM#,1,4) <![CDATA[<]]> '2016' 
+	                                                THEN A.OLD_ACCNUT_CODE 
+	                                                ELSE A.NEW_ACCNUT_CODE END  
+	                                      FROM TBCOM_ACCNUT_CODE_MAPPING A
+	                                     WHERE A.NEW_ACCNUT_CODE IN ('11030051','11060030','11050010'))               
+		    AND t1.CHIT_CONFM_AT = '1'  /*승인*/
+		    ORDER BY t2.CHIT_NO
+		)
+		SELECT
+		      1 AS LVL
+		    , t1.ACCNUT_ACNT_CODE
+		    , t1.ACCNUT_ACNT_NM
+		    , NULL AS BSNS_NM
+		    , NULL AS CHIT_NO
+		    , NULL AS SUMRY
+		    , NVL(t2.JAN_AMT,0) + NVL(t3.JAN_AMT,0) AS JAN_AMT
+		    , 1 AS ORD
+		FROM TBACC_ACCNUT_ACNT_SBJECT t1
+		     LEFT OUTER JOIN MAIN_T t2
+		     ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		     AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+		     LEFT OUTER JOIN PRE_T t3
+		     ON  t1.ACCNUT_YEAR = t3.ACCNUT_YEAR
+		     AND t1.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+	      AND t1.ACCNUT_ACNT_CODE IN (SELECT CASE WHEN SUBSTR(#YYYYMM#,1,4) <![CDATA[<]]> '2016' 
+	                                              THEN A.OLD_ACCNUT_CODE 
+	                                              ELSE A.NEW_ACCNUT_CODE END  
+	                                    FROM TBCOM_ACCNUT_CODE_MAPPING A
+	                                   WHERE A.NEW_ACCNUT_CODE IN ('11030051','11060030','11050010'))               
+		  
+		UNION ALL
+		SELECT
+		      2 AS LVL
+		    , ACCNUT_ACNT_CODE
+		    , ACCNUT_ACNT_NM
+		    , NULL AS BSNS_NM
+		    , NULL AS CHIT_NO
+		    , '이월' AS SUMRY
+		    , JAN_AMT
+		    , 2 AS ORD
+		FROM PRE_T
+		UNION ALL
+		SELECT 
+		      2 AS LVL
+		    , ACCNUT_ACNT_CODE
+		    , ACCNUT_ACNT_NM
+		    , BSNS_NM
+		    , CHIT_NO
+		    , replace(replace(SUMRY, Chr(13),' '), Chr(10),'') as SUMRY
+		    , JAN_AMT
+		    , 3 AS ORD
+		FROM DETAIL_T
+		ORDER BY ACCNUT_ACNT_CODE, ORD, CHIT_NO
+	</select>
+</sqlMap>

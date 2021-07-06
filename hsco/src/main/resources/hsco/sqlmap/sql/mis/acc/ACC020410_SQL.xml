@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020410_SQL">	
+
+	<!--지출결산보고서 리스트조회 -->
+	<select id="ACC020410DAO.selectCptalExpndtrRcord" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC020410DAO.selectCptalExpndtrRcord*/ ]]>
+		SELECT t1.ACCNUT_YEAR
+		     , t1.CHIT_NO
+		     , t1.DECSN_YEAR
+		     , t1.DECSN_NO
+		     , RANK() OVER (PARTITION BY t2.PYMNT_ITNC_DE ORDER BY t1.ACCNUT_YEAR, t1.CHIT_NO)              AS ITNC_RNK     /* 출금일자NO */
+		     , RANK() OVER (PARTITION BY t2.CPTAL_EXPNDTR_ACNTBK_DE ORDER BY t1.ACCNUT_YEAR, t1.CHIT_NO)    AS ACNTBK_RNK   /* 발의일자NO */
+		     , t1.SUMRY_1                                                                                                   /* 적요 */
+		     , t1.ISU_DEPT_CODE
+		     , t2.PYMNT_ITNC_DE                                                                                             /* 발의일자 : 발의일자 */
+		     , t2.CPTAL_EXPNDTR_ACNTBK_DE                                                                                   /* 출금일자 : 자금지출부 등기일 */
+		     , t1.DEPT_CODE
+		     , t4.DEPT_NM                                                                                   AS DEPT_NM      /* 지출부서 */
+		     , t1.BSNS_CODE
+		     , t5.BSNS_NM                                                                                                   /* 프로젝트 */
+		     , CASE WHEN t3.BCNC_CODE = '001370' THEN t9.BCNC_NM || DECODE(t9.BCNC_CNT, 0, '', 1, '', ' 외 ' || (t9.BCNC_CNT-1) )
+		            ELSE t3.BCNC_NM || DECODE(t3.BCNC_CNT, 0, '', 1, '', ' 외 ' || (t3.BCNC_CNT-1) )                        /*채주*/
+		            END AS BCNC_NM
+		     , t3.BCNC_CODE                                                                                                 /* 대표거래처코드 */
+		     , CASE WHEN t3.BCNC_CODE = '001370' THEN H_DECRYPT(t10.BIZRNO)
+		            ELSE H_DECRYPT(t8.BIZRNO)
+		            END AS BIZRNO
+		     , t6.BUDGET_ACNT_NM                                                                                            /* 계정과목명 */
+		     , t6.BUDGET_ACNT_NM2                                                                                           /* 예산과목명 */
+		     , t1.EXPNDTR_UNIT_CODE                                                                         AS BUKIP_CODE
+		     , t7.BUKIP_NM
+		     , t2.DECSN_AMOUNT                                                                                              /* 지출액 */
+		     , t2.ORIBDGT_DECSN_AMOUNT
+    		 , t2.CYFD_BUDGET_DECSN_AMOUNT
+		  FROM TBACC_CHIT_MASTR t1
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t2
+		            ON t1.DECSN_YEAR = t2.DECSN_YEAR
+		           AND t1.DECSN_NO = t2.DECSN_NO
+		       LEFT OUTER JOIN (
+		                        SELECT s1.DECSN_YEAR
+		                             , s1.DECSN_NO
+		                             , MAX(s2.BCNC_CODE) KEEP(DENSE_RANK FIRST ORDER BY DECSN_YEAR, DECSN_NO, SEQ)    AS BCNC_CODE
+		                             , MAX(s2.BCNC_NM) KEEP(DENSE_RANK FIRST ORDER BY DECSN_YEAR, DECSN_NO, SEQ)      AS BCNC_NM
+		                             , COUNT(1)             AS BCNC_CNT
+		                          FROM TBACC_EXP_DSN_DETAIL s1
+		                               LEFT OUTER JOIN TBCTR_BCNC_MASTR s2
+		                                    ON s1.BCNC_CODE = s2.BCNC_CODE 
+		                        GROUP BY s1.DECSN_YEAR, s1.DECSN_NO
+		                       ) t3
+		            ON t2.DECSN_YEAR = t3.DECSN_YEAR
+		           AND t2.DECSN_NO = t3.DECSN_NO
+		       LEFT OUTER JOIN TBHRM_DEPT t4
+		            ON t1.DEPT_CODE = t4.DEPT_CODE
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE t5
+		            ON t1.BSNS_CODE = t5.BSNS_CODE
+		       LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t6
+		            ON t1.BUDGET_YEAR = t6.YEAR
+		           AND t1.BSNS_SE = t6.BSNS_SE
+		           AND t1.BALC_SE = t6.BALC_SE
+		           AND t1.BUDGET_ACNT_CODE = t6.BUDGET_ACNT_CODE
+		       LEFT OUTER JOIN TBBDG_BUKIP_CODE t7
+		            ON t1.EXPNDTR_UNIT_CODE = t7.BUKIP_CODE
+		       LEFT OUTER JOIN TBCTR_BCNC_MASTR t8
+		            ON t3.BCNC_CODE = t8.BCNC_CODE
+		      LEFT OUTER JOIN ( SELECT 
+		                            t1.CNTRCT_NO
+		                           ,MAX(t1.BCNC_CODE) AS BCNC_CODE
+		                           ,MAX(t2.BCNC_NM)   AS BCNC_NM
+		                           ,COUNT(*)          AS BCNC_CNT
+		                       FROM TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS t1
+		                         LEFT OUTER JOIN TBCTR_BCNC_MASTR t2
+		                           ON t1.BCNC_CODE = t2.BCNC_CODE
+		                       GROUP BY t1.CNTRCT_NO
+		                      ) t9	
+		            ON t2.CNTRCT_NO = t9.CNTRCT_NO
+		       LEFT OUTER JOIN TBCTR_BCNC_MASTR t10
+		            ON t9.BCNC_CODE = t10.BCNC_CODE
+		 WHERE t1.BALC_SE = '2' /*지출고정*/
+		   AND t1.CHIT_TY = '2' /* 분개확정(지급) */
+		   AND t2.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #DEFRAY_BGNDE# AND #DEFRAY_ENDDE# /* 검색조건 : 출금일자 */
+		   AND t1.ACCNUT_YEAR       = #YEAR#
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		   AND t2.BUDGET_DEPT_CODE  = #DEPT_CODE#
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="BUDGET_ACNT_CODE">
+		   AND t1.BUDGET_ACNT_CODE  = #BUDGET_ACNT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="BUKIP_CODE">
+		   AND t1.EXPNDTR_UNIT_CODE = #BUKIP_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="BCNC_NM">
+	       AND EXISTS (
+				SELECT 1
+				FROM TBACC_EXP_DSN_DETAIL a1
+					 INNER JOIN TBCTR_BCNC_MASTR a2
+				     ON a1.BCNC_CODE = a2.BCNC_CODE
+				WHERE t2.DECSN_YEAR = a1.DECSN_YEAR
+				  AND t2.DECSN_NO   = a1.DECSN_NO
+				  AND a2.BCNC_NM LIKE '%'|| #BCNC_NM# ||'%'
+		   )
+		</isNotEmpty>
+		<isNotEmpty property="EXISTS_FLAG">
+			AND NOT EXISTS ( /*자금지출기록부 팝업용 조건(ACC020410_P01)*/
+				SELECT 1
+				  FROM TB_CNTRCT_EXPNDTR_DTLS c1
+				 WHERE c1.ACCNUT_YEAR = t1.ACCNUT_YEAR
+				   AND c1.CHIT_NO = t1.CHIT_NO
+			)
+		</isNotEmpty>
+		ORDER BY t2.PYMNT_ITNC_DE
+		       , t1.ACCNUT_YEAR
+		       , t1.CHIT_NO
+	</select>
+	
+	<!--계약지출내역 조회 -->
+	<select id="ACC020410DAO.selectCntrctExpndtrDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC020410DAO.selectCntrctExpndtrDtls*/ ]]>
+		SELECT T2.CNTRCT_NO
+		      ,T2.ACCNUT_YEAR
+		      ,T2.CHIT_NO
+		      ,T3.CPTAL_EXPNDTR_ACNTBK_DE AS OCCRRNC_DE /*자금지출장부일자*/
+		      ,'계약지출' || '(' || T6.BUDGET_ACNT_NM2 || ')' AS OCCRRNC_CN
+		      ,NVL(T3.DECSN_AMOUNT, 0) AS EXPNDTR_AM /*지출액*/
+		      ,T1.SUMRY_1 AS SUMRY
+		      ,(CASE WHEN T1.BUDGET_YEAR IS NOT NULL THEN T1.BUDGET_YEAR || '-' || T1.DECSN_NO ELSE NULL END) AS DECSN_NO		      
+		  FROM TBACC_CHIT_MASTR T1
+		       INNER JOIN TB_CNTRCT_EXPNDTR_DTLS T2
+		         ON T1.ACCNUT_YEAR = T2.ACCNUT_YEAR
+		        AND T1.CHIT_NO = T2.CHIT_NO
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR T3
+		         ON T1.DECSN_YEAR = T3.DECSN_YEAR
+		        AND T1.DECSN_NO = T3.DECSN_NO
+		       LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE T6
+		         ON T1.BUDGET_YEAR = T6.YEAR
+		        AND T1.BSNS_SE = T6.BSNS_SE
+		        AND T1.BALC_SE = T6.BALC_SE
+		        AND T1.BUDGET_ACNT_CODE = T6.BUDGET_ACNT_CODE
+		 WHERE T2.CNTRCT_NO = #CNTRCT_NO#
+	</select>
+	
+	<!-- 계약지출내역  등록 -->
+	<insert id="ACC020410DAO.insertCntrctExpndtrDtls" parameterClass="java.util.Map" >
+		<![CDATA[ /*ACC020410DAO.insertCntrctExpndtrDtls (계약지출내역  등록)*/ ]]>
+		INSERT INTO TB_CNTRCT_EXPNDTR_DTLS (
+		            ACCNUT_YEAR
+		           ,CHIT_NO
+		           ,CNTRCT_NO
+		           ,REGISTER_ID
+		           ,REGIST_DT
+		           ,UPDUSR_ID
+		           ,UPDT_DT
+		)VALUES (
+		            #ACCNUT_YEAR#
+		           ,#CHIT_NO#
+		           ,#CNTRCT_NO#
+		           ,#S_USER_ID#
+		           ,SYSDATE
+		           ,#S_USER_ID#
+		           ,SYSDATE
+		)
+	</insert>
+	
+	<!-- 계약지출내역  삭제 -->
+	<delete id="ACC020410DAO.deleteCntrctExpndtrDtls" parameterClass="java.util.Map" >
+		<![CDATA[ /*ACC020410DAO.insertCntrctExpndtrDtls (계약지출내역  삭제)*/ ]]>
+		DELETE 
+		  FROM TB_CNTRCT_EXPNDTR_DTLS
+		 WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+		   AND CHIT_NO = #CHIT_NO#
+		   AND CNTRCT_NO = #CNTRCT_NO#
+	</delete>
+</sqlMap>

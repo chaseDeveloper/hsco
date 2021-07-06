@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR040200_SQL">
+	
+	<!-- 용역계약 목록 -->
+	<select id="CTR040200DAO.servcCntrctList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 t1.CNTRCT_NO
+			,t1.CNTRCT_SE
+			,t1.SERVC_ORDER_DE
+			,t1.SERVC_BSNS_DISTRICT
+			,t1.DETAIL_DTLS
+			,t1.CNTRCT_CL
+			,t1.STDR_DE
+			,t1.INTURN
+			,t2.BSNS_NM
+		FROM TBCTR_SERVC_CNTRCT t1
+			 LEFT OUTER JOIN TBPRJ_BSNS_CODE t2
+			 ON t1.SERVC_BSNS_DISTRICT = t2.BSNS_CODE
+		WHERE t1.CNTRCT_SE = #CNTRCT_SE#
+		  AND t1.SERVC_ORDER_DE BETWEEN #SRCH_ST_DE# AND #SRCH_ED_DE#
+		ORDER BY t1.CNTRCT_NO DESC, t1.SERVC_ORDER_DE DESC
+	</select>
+	
+	<!-- 윤번제 업체 목록 -->
+	<select id="CTR040200DAO.inturnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 t1.ENTRPS_SE
+			,t1.SERVC_ENTRPS_CODE
+			,t1.ENTRPS_NM
+			,t1.WAIT_SEQ
+			,NVL(t2.CNT,0)+1 AS CNTRCT_CO
+		FROM TBCTR_SERVC_ENTRPS t1
+			 LEFT OUTER JOIN
+			 (SELECT ENTRPS_SE, SERVC_ENTRPS_CODE, COUNT(1) AS CNT
+			  FROM TBCTR_SERVC_CNTRCT_BCNC
+			  GROUP BY ENTRPS_SE, SERVC_ENTRPS_CODE
+			 ) t2
+			 ON  t1.ENTRPS_SE = t2.ENTRPS_SE
+			 AND t1.SERVC_ENTRPS_CODE = t2.SERVC_ENTRPS_CODE
+		WHERE t1.ENTRPS_SE = #CNTRCT_SE#
+		  AND t1.USE_AT = '1'
+		ORDER BY t1.WAIT_SEQ ASC, TO_NUMBER(REGEXP_REPLACE(t1.SERVC_ENTRPS_CODE,'[^0-9]'))
+	</select>
+	
+	<!-- 용역계약 키값 취득 -->
+	<select id="CTR040200DAO.servcCntrctNo" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT #CNTRCT_SE#||LPAD(NVL(MAX(TO_NUMBER(SUBSTR(CNTRCT_NO,3,5))),0)+1,5,'0') AS CNTRCT_NO
+		FROM TBCTR_SERVC_CNTRCT 
+		WHERE CNTRCT_SE = #CNTRCT_SE#
+	</select>
+	
+	<!-- 용역계약 등록 -->
+	<insert id="CTR040200DAO.servcCntrctC" parameterClass="java.util.HashMap">
+		INSERT INTO TBCTR_SERVC_CNTRCT
+		(
+			 CNTRCT_NO
+			,CNTRCT_SE
+			,SERVC_ORDER_DE
+			,SERVC_BSNS_DISTRICT
+			,DETAIL_DTLS
+			,CNTRCT_CL
+			,STDR_DE
+			,INTURN
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		) VALUES (
+			 #CNTRCT_NO#
+			,#CNTRCT_SE#
+			,#SERVC_ORDER_DE#
+			,#SERVC_BSNS_DISTRICT#
+			,#DETAIL_DTLS#
+			,#CNTRCT_CL#
+			,#STDR_DE#
+			,#INTURN#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+	
+	<!-- 용역계약 수정 -->
+	<update id="CTR040200DAO.servcCntrctU" parameterClass="java.util.HashMap">
+		UPDATE TBCTR_SERVC_CNTRCT
+		SET 
+			 CNTRCT_SE              = #CNTRCT_SE#          
+			,SERVC_ORDER_DE         = #SERVC_ORDER_DE#     
+			,SERVC_BSNS_DISTRICT    = #SERVC_BSNS_DISTRICT#
+			,DETAIL_DTLS            = #DETAIL_DTLS#        
+			,CNTRCT_CL              = #CNTRCT_CL#          
+			,STDR_DE                = #STDR_DE#            
+			,INTURN                 = #INTURN#             
+			,UPDUSR_ID              = #S_USER_ID#          
+			,UPDT_DT                = SYSDATE              
+		WHERE CNTRCT_NO				= #CNTRCT_NO#
+	</update>
+	
+	<!-- 용역계약 삭제 -->
+	<delete id="CTR040200DAO.servcCntrctD" parameterClass="java.util.HashMap">
+		DECLARE
+		BEGIN
+			DELETE FROM TBCTR_SERVC_CNTRCT_BCNC
+			WHERE CNTRCT_NO	= #CNTRCT_NO#
+			;
+			
+			DELETE FROM TBCTR_SERVC_CNTRCT
+			WHERE CNTRCT_NO	= #CNTRCT_NO#
+		   	;
+		END;
+	</delete>
+	
+	<!-- 용역계약거래처 목록 -->
+	<select id="CTR040200DAO.servcCntrctBcncList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 t1.CNTRCT_NO
+			,t1.SEQ
+			,t1.ENTRPS_SE
+			,t1.SERVC_ENTRPS_CODE
+			,t1.FEE
+			,t1.CNTRCT_CO
+			,t2.ENTRPS_NM
+		FROM TBCTR_SERVC_CNTRCT_BCNC t1
+			 LEFT OUTER JOIN TBCTR_SERVC_ENTRPS t2
+			 ON  t1.ENTRPS_SE 			= t2.ENTRPS_SE
+			 AND t1.SERVC_ENTRPS_CODE	= t2.SERVC_ENTRPS_CODE
+		WHERE t1.CNTRCT_NO	= #CNTRCT_NO#
+		ORDER BY t1.SEQ
+	</select>
+	
+	<!-- 용역계약거래처 등록 -->
+	<insert id="CTR040200DAO.servcCntrctBcncC" parameterClass="java.util.HashMap">
+		INSERT INTO TBCTR_SERVC_CNTRCT_BCNC
+		(
+			 CNTRCT_NO
+			,SEQ
+			,ENTRPS_SE
+			,SERVC_ENTRPS_CODE
+			,CNTRCT_CO
+			,FEE
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		) VALUES (
+			 #CNTRCT.CNTRCT_NO#
+			,(SELECT NVL(MAX(SEQ),0)+1 FROM TBCTR_SERVC_CNTRCT_BCNC WHERE CNTRCT_NO = #CNTRCT.CNTRCT_NO#)
+			,#ENTRPS_SE#
+			,#SERVC_ENTRPS_CODE#
+			,#CNTRCT_CO#
+			,#FEE#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+	
+	<!-- 대기순서 변경 -->
+	<update id="CTR040200DAO.waitSeqU" parameterClass="java.util.HashMap">
+		UPDATE TBCTR_SERVC_ENTRPS t1
+		SET  STDR_DE = #CNTRCT.STDR_DE#
+			,WAIT_SEQ = (
+						  SELECT t2.WAIT_SEQ
+						  FROM (
+						    SELECT 
+						    	 ENTRPS_SE
+						    	,SERVC_ENTRPS_CODE
+						    	,ROW_NUMBER() OVER(ORDER BY WAIT_SEQ, TO_NUMBER(REGEXP_REPLACE(SERVC_ENTRPS_CODE,'[^0-9]'))) AS WAIT_SEQ
+						    FROM TBCTR_SERVC_ENTRPS 
+						    WHERE ENTRPS_SE = #ENTRPS_SE#
+						      AND USE_AT = '1'
+						      AND SERVC_ENTRPS_CODE <![CDATA[<>]]> #SERVC_ENTRPS_CODE#
+						    UNION ALL
+						    SELECT 
+						    	 ENTRPS_SE
+						    	,#SERVC_ENTRPS_CODE# AS SERVC_ENTRPS_CODE
+						    	,COUNT(1) AS WAIT_SEQ
+						    FROM TBCTR_SERVC_ENTRPS
+						    WHERE ENTRPS_SE = #ENTRPS_SE#
+						      AND USE_AT = '1'
+						    GROUP BY ENTRPS_SE
+						  ) t2
+						  WHERE t1.ENTRPS_SE = t2.ENTRPS_SE 
+						      AND t1.SERVC_ENTRPS_CODE = t2.SERVC_ENTRPS_CODE
+						)
+		WHERE t1.ENTRPS_SE = #ENTRPS_SE#
+		  AND t1.USE_AT = '1'
+	</update>
+	
+	<!-- 용역계약거래처 수정 -->
+	<update id="CTR040200DAO.servcCntrctBcncU" parameterClass="java.util.HashMap">
+		UPDATE TBCTR_SERVC_CNTRCT_BCNC
+		SET
+			 CNTRCT_CO          = #CNTRCT_CO#
+			,ENTRPS_SE          = #ENTRPS_SE#        
+		  	,SERVC_ENTRPS_CODE  = #SERVC_ENTRPS_CODE#        
+			,FEE                = #FEE#              
+			,UPDUSR_ID          = #S_USER_ID#        
+			,UPDT_DT            = SYSDATE            
+		WHERE CNTRCT_NO 		= #CNTRCT_NO#
+		  AND SEQ				= #SEQ#
+		  
+	</update>
+	
+	<!-- 용역계약거래처 삭제 -->
+	<delete id="CTR040200DAO.servcCntrctBcncD" parameterClass="java.util.HashMap">
+		DELETE FROM TBCTR_SERVC_CNTRCT_BCNC
+		WHERE CNTRCT_NO 		= #CNTRCT_NO#
+		  AND SEQ				= #SEQ#
+	</delete>
+	
+</sqlMap>

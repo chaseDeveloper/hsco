@@ -1,0 +1,489 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/*****************************************************************************
+ * 프로그램명 	: 	comSms.xjs
+ * 작  성  자  	: 	이동석
+ * 작  성  일   : 	2016.03.18
+ * 설      명  	:   문자메시지, 메신저 알리미, 이메일 발송
+ * 수  정  자  	: 	정윤원(2016.06.08)
+ * 수 정 이력  	: 	UMS 메시지 발송 개정(EMMA --> LGU+ 변경에 따른 재개정)
+ *                  1. this.gfn_sendUms 신규 추가(SMS/SMS URL/ MMS/MMS파일첨부/ 동보메시징)
+ *                  2. sms_MultiMessage (EMMA --> LGU+ 변경에 따른 삭제 예정)
+******************************************************************************/
+/*******************************************************************************
+ * 함수명  	: gfn_sendUms  [LGUPLUS-개발 중 미테스트]
+ * 설명 		: UMS 메시지 발송
+ * argument  	: 1. objForm	   : 호출한 form 객체							(예 : this )
+				  2. sDeptcode     : 발송부서									(예 : '020100' )      필수
+				  3. sSenderTelNo  : 발송전화번호								(예 : '0533500350' )  필수
+				  4. sServiceType  : 전송구분									(예 : 'S' ) * SMS:S, MMS:M  필수
+				  5. sMessageType  : 메시지 타입 SMS(), MMS()
+				  6. sTitle        : MMS 메시지 제목                          (예: 제목 테스트)  MMS인 경우에는 필수 
+				  7. sSendingCn	   : 전송메시지								(예 : '전송할 메시지 내용' ) * SMS: 80 bytp, MMS: 2000 byte  필수
+				  8. dsReceiverInfo  : 수신자목록(Dataset Object)                필수
+									- RECPTN_TELNO/수신자전화번호/String/12
+									- RECPTN_NM/수신자명/String/30
+									- CHANGE_WORD1/2/3/4/5/동보대체단어1/2/3/4/5 String/20
+				  9. sReservationDt: 전송희망시간(YYYYMMDDHH24MISS)-옵션	   (예 : '20160318152200' ) * 미입력시 즉시전송
+				  10.sBroadMsgAt   : 동보메시지여부                          (예 : "1") 
+				  11.sAttachAt     : MMS 파일 첨부 여부                      (예 : '1' ) 
+				  12. dsMmsFileInfo : mms 첨부파일 정보 dataset                
+					사용예) 전송메시지에 '%CHANGEWORD%님이 %CHANGEWORD%에 문의하신 민원을 접수하였습니다. %CHANGEWORD%님 감사합니다.'	
+								    결과:  '홍길동님이 2016년3월20일에 문의하신 민원을 접수하였습니다. 홍길동님 감사합니다.'
+ * return Type 	: boolean(true/false)
+ * 사용법		: this.gfn_sendUms(this, "020100", "0533500350", "전송할 메시지 내용", dataset, "", "홍길동", "2016년3월20일", "홍길동","");
+ * 작성자 		: 정윤원
+ ******************************************************************************/
+this.gfn_sendUms = function(objForm, sDeptcode, sSenderTelNo, sServiceType, sMessageType, sTitle, sSendingCn, dsReceiverInfo, sReservationDt, sBroadMsgAt, sAttachAt, dsMmsFileInfo) 
+{
+    try {        
+        
+        // 예약구분
+        if(!sSndDt) {
+            var reserveSndngAt = "0"; 
+        } else {
+            var reserveSndngAt = "1"; 
+        }        
+	    if(sServiceType == null || sServiceType == undefined || sServiceType == "") {
+	        this.gfn_message("comm.입력.요청.을","발송서비스타입");
+	        return false;
+	    }
+	    
+	    if(sDeptcode == null || sDeptcode == undefined || sDeptcode == "") {
+	        this.gfn_message("comm.입력.요청.를","부서코드");
+	        return false;
+	    }
+	    
+	    if(sSenderTelNo == null || sSenderTelNo == undefined || sSenderTelNo == "") {
+	        this.gfn_message("comm.입력.요청.를","발신자전화번호");
+	        return false;
+	    }
+					
+		if(dsReceiverInfo.rowcount == 0) {
+	        this.gfn_message("comm.입력.요청.를","수신자 정보");
+	        return false;
+	    } 
+	    
+	    if(sSendingCn == null || sSendingCn == undefined || sSendingCn == "") {
+	        this.gfn_message("comm.입력.요청.를","발송메시지");
+	        return false;
+	    }
+	    
+	    if(sServiceType == "M") {
+	        if(sTitle == null || sTitle == undefined || sTitle == "") {
+	            this.gfn_message("comm.입력.요청.을","메시지 제목");
+	            return false;
+	        }
+	    }
+// 	    if(sBroadMsgAt == "1") {
+// 	            var cwCnt = 0;
+// 	            var sChangWord1 = dsReceiverInfo.getColumn()
+// 	            var sChangWord2 = 
+// 	            var sChangWord3 = 
+// 	            var sChangWord4 = 
+// 	            var sChangWord5
+// 	            if(sChangWord1 == null || sChangWord1 == undefined || sChangWord1 == "") cwCnt++;
+// 	            if(sChangWord2 == null || sChangWord2 == undefined || sChangWord2 == "") cwCnt++;
+// 	            if(sChangWord3 == null || sChangWord3 == undefined || sChangWord3 == "") cwCnt++;
+// 	            if(sChangWord4 == null || sChangWord4 == undefined || sChangWord4 == "") cwCnt++;
+// 	            if(sChangWord5 == null || sChangWord5 == undefined || sChangWord5 == "") cwCnt++;
+// 	            if(cwCnt == 0){
+// 	                this.gfn_message("comm.입력.요청.를","동보메시지 단어");
+// 	                return false;
+// 	            }
+// 	    }
+	    
+	    
+	    if(sAttachAt == "1"){
+	        if(dsMmsFileInfo == null || dsMmsFileInfo.getRowCount() == 0){
+	            this.gfn_message("info.UMS.첨부미지정");
+	            return false;
+	        }
+	    }
+
+		// UMS 발송 DATASET 생정
+		var dsUmsTran = new Dataset;
+	    dsUmsTran.set_id("ds_UmsTran");
+	    if(!this.ds_UmsTran){
+			this.insertChild(0, "ds_UmsTran", dsUmsTran);
+			//insertChild ds_UmsTran 형식설정
+			dsUmsTran.addColumn("SNDNG_ID",            "BIGDECIMAL", "11");    // 발송ID
+			dsUmsTran.addColumn("SNDNG_SVC_TY",        "string",      "1");    // 발송서비스타입  [필수]
+			dsUmsTran.addColumn("DEPT_CODE",           "string",      "6");    // 부서코드         [필수]
+			dsUmsTran.addColumn("RECPTN_TELNO",        "string",     "12");    // 수신전화번호     [필수]
+			dsUmsTran.addColumn("SNDNG_TELNO",         "string",     "12");    // 발송전화번호     [필수]
+			dsUmsTran.addColumn("SNDNG_RESVE_DT",      "string",     "16");    // 발송예약일시(YYYYMMDDHH24MISS)
+			dsUmsTran.addColumn("SNDNG_STTUS",         "string",      "2");    // 발송상태          [필수]
+			dsUmsTran.addColumn("MSSAGE_TY",           "string",      "2");    // 메시지타입        [필수]
+			dsUmsTran.addColumn("MMS_SJ",              "string",    "120");    // MMS제목 (40bytes String/120)
+			dsUmsTran.addColumn("SNDNG_CN",            "string",   "4000");    // SMS( 80bytes, String/160), MMS(2000Bytes, String/4000)       [필수]
+			dsUmsTran.addColumn("MMS_FILE_CNT",        "INT",         "1");    // MMS파일개수
+			dsUmsTran.addColumn("MMS_FILE_PATH1",      "string",    "128");    // MMS파일경로1
+			dsUmsTran.addColumn("MMS_FILE_PATH1_SIZE", "int",         "8");    // MMS파일경로1사이즈
+			dsUmsTran.addColumn("MMS_FILE_PATH2",      "string",    "128");    // MMS파일경로2
+			dsUmsTran.addColumn("MMS_FILE_PATH2_SIZE", "int",         "8");    // MMS파일경로2사이즈
+			dsUmsTran.addColumn("MMS_FILE_PATH3",      "string",    "128");    // MMS파일경로3
+			dsUmsTran.addColumn("MMS_FILE_PATH3_SIZE", "int",         "8");    // MMS파일경로3사이즈
+			dsUmsTran.addColumn("MMS_FILE_PATH4",      "string",    "128");    // MMS파일경로4
+			dsUmsTran.addColumn("MMS_FILE_PATH4_SIZE", "int",         "8");    // MMS파일경로4사이즈
+			dsUmsTran.addColumn("MMS_FILE_PATH5",      "string",    "128");    // MMS파일경로5
+			dsUmsTran.addColumn("MMS_FILE_PATH5_SIZE", "int",         "8");    // MMS파일경로5사이즈
+			dsUmsTran.addColumn("MMS_SENDER_ID",       "string",     "12");    // 발송자ID
+			dsUmsTran.addColumn("REGISTER_ID",         "string",     "12");    // 등록자ID
+			dsUmsTran.addColumn("UPDUSR_ID",           "string",     "12");    // 등록일시
+			//
+			dsUmsTran.addColumn("BROAD_MSG_AT",        "string",      "1");    // 동보메시지발송 여부      [필수]
+			dsUmsTran.addColumn("CHANGE_WORD1",        "string",     "20");    // 동보메시지 대체단어1
+			dsUmsTran.addColumn("CHANGE_WORD2",        "string",     "20");    // 동보메시지 대체단어2
+			dsUmsTran.addColumn("CHANGE_WORD3",        "string",     "20");    // 동보메시지 대체단어3
+			dsUmsTran.addColumn("CHANGE_WORD4",        "string",     "20");    // 동보메시지 대체단어4
+			dsUmsTran.addColumn("CHANGE_WORD5",        "string",     "20");    // 동보메시지 대체단어5
+			dsUmsTran.addColumn("RESERVE_SNDNG_YN",    "string",      "1");    // 예약발송 여부      [필수]
+			
+		}
+		
+	    this.ds_smsTran.clearData();
+	    
+	    var cnt = dsReceiverInfo.getRowCount();
+	    for(var i=0; i<cnt; i++){
+		    this.ds_smsTran.addRow();
+		    this.ds_smsTran.setColumn(0, "MT_REFKEY", sSndDeptcode);     // 부서코드
+
+            //dsUmsTran.setColumn(i, "SNDNG_ID", );                      // 발송ID
+		    dsUmsTran.setColumn(i, "SNDNG_SVC_TY", sServiceType);        // 발송서비스타입  [필수]
+		    dsUmsTran.setColumn(i, "DEPT_CODE",    sDeptcode);           // 부서코드         [필수]
+		    dsUmsTran.setColumn(i, "RECPTN_TELNO", dsReceiverInfo.getColumn(i, "RECPTN_TELNO"));    // 수신전화번호     [필수]
+		    dsUmsTran.setColumn(i, "SNDNG_TELNO", sSenderTelNo);         // 발송전화번호     [필수]
+		    dsUmsTran.setColumn(i, "RESERVE_SNDNG_YN", reserveSndngAt); // 예약발송여부
+		    if(reserveSndngAt == "1")
+		        dsUmsTran.setColumn(i, "SNDNG_RESVE_DT", sReservationDt);    // 발송예약일시(YYYYMMDDHH24MISS)
+		    dsUmsTran.setColumn(i, "SNDNG_STTUS", "0");                  // 발송상태          [필수]
+		    dsUmsTran.setColumn(i, "MSSAGE_TY", sMessageType);           // 메시지타입        [필수]	        
+		    dsUmsTran.setColumn(i, "SNDNG_CN",  sSendingCn);             // SMS( 80bytes, String/160), MMS(2000Bytes, String/4000)       [필수]
+		    // MMS 발송인 경우, 첨부파일정보 설정
+			if(sServiceType == "M"){
+			    dsUmsTran.setColumn(i, "MMS_SJ", sTitle);                // MMS제목 (40bytes String/120)
+		        var fileCnt = dsMmsFileInfo.getRowCount();
+		        dsUmsTran.setColumn(i, "MMS_FILE_CNT", fileCnt);         // MMS파일개수
+		        for(var j=0; j < fileCnt; j++){
+		            var k = j + 1;
+		            var pathColNm = "MMS_FILE_PATH" + k;
+		            var sizeColNm = "MMS_FILE_PATH" + k + "_SIZE";
+			        dsUmsTran.setColumn(i, pathColNm, dsMmsFileInfo.getColumn(j, pathColNm));    // MMS파일경로
+			        dsUmsTran.setColumn(i, sizeColNm, dsMmsFileInfo.getColumn(j, sizeColNm));    // MMS파일경로사이즈
+		        }
+			}
+
+		    dsUmsTran.setColumn(i, "MMS_SENDER_ID", this.gfn_getUserId());  // 발송자ID
+		    dsUmsTran.setColumn(i, "REGISTER_ID", this.gfn_getUserId());    // 등록자ID
+		    dsUmsTran.setColumn(i, "UPDUSR_ID", this.gfn_getUserId());      // 수정자ID
+
+		    dsUmsTran.setColumn(i, "BROAD_MSG_AT", sBroadMsgAt);             // 동보메시지발송 여부      [필수]
+		    var cwCnt = 0;
+	        var sChangWord1 = "";
+	        var sChangWord2 = "";
+	        var sChangWord3 = "";
+	        var sChangWord4 = "";
+	        var sChangWord5 = "";	    
+	        if(sBroadMsgAt == "1") {
+	            sChangWord1 = dsReceiverInfo.getColumn(i, "CHANGE_WORD1");    // 동보대체단어1
+	            sChangWord2 = dsReceiverInfo.getColumn(i, "CHANGE_WORD2");    // 동보대체단어2
+	            sChangWord3 = dsReceiverInfo.getColumn(i, "CHANGE_WORD3");    // 동보대체단어3
+	            sChangWord4 = dsReceiverInfo.getColumn(i, "CHANGE_WORD4");    // 동보대체단어4
+	            sChangWord5 = dsReceiverInfo.getColumn(i, "CHANGE_WORD5");    // 동보대체단어5
+	            if(sChangWord1 == null || sChangWord1 == undefined || sChangWord1 == "") cwCnt++;
+	            if(sChangWord2 == null || sChangWord2 == undefined || sChangWord2 == "") cwCnt++;
+	            if(sChangWord3 == null || sChangWord3 == undefined || sChangWord3 == "") cwCnt++;
+	            if(sChangWord4 == null || sChangWord4 == undefined || sChangWord4 == "") cwCnt++;
+	            if(sChangWord5 == null || sChangWord5 == undefined || sChangWord5 == "") cwCnt++;
+	            if(cwCnt == 0){
+	                this.gfn_message("comm.입력.요청.를","동보메시지 단어");
+	                return false;
+	            }
+	            dsUmsTran.setColumn(i, "CHANGE_WORD1", sChangWord1);    // 동보대체단어1
+		        dsUmsTran.setColumn(i, "CHANGE_WORD2", sChangWord2);    // 동보대체단어2
+		        dsUmsTran.setColumn(i, "CHANGE_WORD3", sChangWord3);    // 동보대체단어3
+		        dsUmsTran.setColumn(i, "CHANGE_WORD4", sChangWord4);    // 동보대체단어4
+		        dsUmsTran.setColumn(i, "CHANGE_WORD5", sChangWord5);    // 동보대체단어5
+	        }
+	        
+	    }
+		
+        Ex.core.tran(this, "sendUms", "hsco/cmm/ums/sendUms.do", "input1=ds_UmsTran", "","","_fn_callBack", true); 
+
+    } catch(e) {
+		//alert(e.message);
+	}
+
+}
+
+/*******************************************************************************
+ * 함수명  	: sms_MultiMessage [EMMA]  @deplecated 예정(향후 삭제 예정)
+ * 설명 		: sms를 전송한다.(Multi)
+ * argument  	: 1. objForm	   : 호출한 form 객체							(예 : this )
+				  2. sSndDeptcode  : 전송부서									(예 : '020100' )      필수
+				  3. sAnswTel	   : 회신번호									(예 : '0533500350' )  필수
+				  4. sServiceType  : 전송구분									(예 : '0' ) * SMS:0, MMS:2  필수
+				  5. sMsge		   : 전송메시지								(예 : '전송할 메시지 내용' ) * SMS: 80 bytp, MMS: 2000 byte  필수
+				  6. sDssmsClient  : 수신자목록(Dataset Object)                필수
+									- RECIPIENT_NUM/수신자전화번호/String/25
+									- NAME/수신자명/String/20
+				  7. sSndDt		   : 전송희망시간(YYYYMMDDHH24MI)-옵션	   (예 : '201603181522' ) * 미입력시 즉시전송
+				  8. sChangWord1   : 동보단어(첫번째)                        (예 : '홍길동')
+				  9. sChangWord2   : 동보단어(두번째)                        (예 : '2016년3월20일')
+				 10. sChangWord3   : 동보단어(세번째)                        (예 : '홍길동') 
+				 11. sChangWord4   : 동보단어(세번째)                        (예 : '기타') 
+					사용예) 전송메시지에 '%CHANGEWORD%님이 %CHANGEWORD%에 문의하신 민원을 접수하였습니다. %CHANGEWORD%님 감사합니다.'	
+								    결과:  '홍길동님이 2016년3월20일에 문의하신 민원을 접수하였습니다. 홍길동님 감사합니다.'
+ * return Type 	: boolean(true/false)
+ * 사용법		: sms_MultiMessage(this, "020100", "0533500350", "전송할 메시지 내용", dataset, "", "홍길동", "2016년3월20일", "홍길동","");
+ * 작성자 		: 이동석
+ ******************************************************************************/
+this.sms_MultiMessage = function(objForm, sSndDeptcode, sAnswTel, sServiceType, sMsge, sDssmsClient, sSndDt, sChangWord1, sChangWord2, sChangWord3, sChangWord4) 
+{
+    try {        
+        
+        // 예약구분
+        if(!sSndDt) {
+            var smsScdleType = "N"; 
+        } else {
+            var smsScdleType = "Y"; 
+        }        
+        // 문자길이
+//         var subject;        
+// 		if(sServiceType == 0){
+// 		    sMsge = sMsge.substr(0,80);
+// 		} else {		    
+// 			sMsge = sMsge.substr(0,4000);
+// 			subject = sMsge.substr(0,35);
+// 		}			
+					
+		if(sDssmsClient.rowcount == 0) {
+	        this.gfn_message("comm.입력.요청.를","수신자 정보");
+	        return false;
+	    }	
+		
+		// SMS기본정보 DATASET 설정
+		var dssmsTran = new Dataset;
+	    dssmsTran.set_id("ds_smsTran");
+	    if(!this.ds_smsTran){
+			this.insertChild(0, "ds_smsTran", dssmsTran);
+			//insertChild ds_smsTran 형식설정
+			dssmsTran.addColumn("MT_REFKEY",      "string", "40");
+			dssmsTran.addColumn("CALLBACK",       "string", "25");
+			dssmsTran.addColumn("SMS_SCDLE_TYPE", "string", "2");
+			dssmsTran.addColumn("DATE_CLIENT_REQ","string", "20");
+			dssmsTran.addColumn("CONTENT",        "string", "4000");
+			dssmsTran.addColumn("SERVICE_TYPE",   "string", "20");
+			dssmsTran.addColumn("SUBJECT",        "string", "40");
+			dssmsTran.addColumn("INPUT_TYPE",     "string", "2");
+			dssmsTran.addColumn("CHANGE_WORD1",   "string", "20");
+			dssmsTran.addColumn("CHANGE_WORD2",   "string", "20");
+			dssmsTran.addColumn("CHANGE_WORD3",   "string", "20");
+			dssmsTran.addColumn("CHANGE_WORD4",   "string", "20");
+		}
+	    this.ds_smsTran.clearData();
+		this.ds_smsTran.addRow();
+		this.ds_smsTran.setColumn(0, "MT_REFKEY",      sSndDeptcode);     // 부서코드
+		this.ds_smsTran.setColumn(0, "CALLBACK",       sAnswTel);         // 수신번호
+		this.ds_smsTran.setColumn(0, "SMS_SCDLE_TYPE", smsScdleType );    // 예약구분
+		this.ds_smsTran.setColumn(0, "DATE_CLIENT_REQ",sSndDt);	      	  // 예약시간
+		this.ds_smsTran.setColumn(0, "CONTENT",        sMsge);            // 내용
+		this.ds_smsTran.setColumn(0, "SERVICE_TYPE",   sServiceType);     // 메시지전송타입
+//		this.ds_smsTran.setColumn(0, "SUBJECT",        subject);          // 제목
+		this.ds_smsTran.setColumn(0, "INPUT_TYPE", "0");                  // INPUT_TYPE
+		this.ds_smsTran.setColumn(0, "CHANGE_WORD1",   sChangWord1);      // 동보메시지1
+		this.ds_smsTran.setColumn(0, "CHANGE_WORD2",   sChangWord2);      // 동보메시지2
+		this.ds_smsTran.setColumn(0, "CHANGE_WORD3",   sChangWord3);      // 동보메시지3
+		this.ds_smsTran.setColumn(0, "CHANGE_WORD4",   sChangWord4);      // 동보메시지4
+		
+		// SMS수신자 DATASET 설정
+		var dssmsClient = new Dataset;
+	    dssmsClient.set_id("ds_smsClient");
+	    if(!this.ds_smsClient){
+			this.insertChild(1, "ds_smsClient", dssmsClient);
+			//insertChild ds_smsClient 형식설정
+			dssmsClient.addColumn("RECIPIENT_NUM", "string", "25");
+			dssmsClient.addColumn("CHANGE_WORD5",  "string", "20");
+	    }
+	    
+	    this.ds_smsClient.clearData();
+		for(var i = 0; i < sDssmsClient.rowcount; i++) {
+			this.ds_smsClient.addRow();
+			this.ds_smsClient.setColumn(i, "RECIPIENT_NUM", sDssmsClient.getColumn(i, "RECIPIENT_NUM"));    // 수신전화번호
+			this.ds_smsClient.setColumn(i, "CHANGE_WORD5", sDssmsClient.getColumn(i, "CHANGE_WORD5") );     // 수신자
+		}
+		
+        Ex.core.tran(this, "saveSmstranList", "hsco/com/sym/cdm/SYM030700/SmstranCUD.do", "input1=ds_smsTran input2=ds_smsClient", "","","_fn_callBack", true); 
+
+        
+    } catch(e) {
+		//alert(e.message);
+	}
+
+}
+
+/*******************************************************************************
+ * 함수명  	: messenger_send
+ * 설명 		: 메신저 알리미를 전송한다.
+ * argument  	: 1. objForm	  : 호출한 form 객체							(예 : this )
+				  2. sEmpno	      : 수신자 사번			
+				  3. sEmpnm	      : 수신자 명				
+				  4. sSendempno	  : 발신자 사번						
+				  5. sSendempnm	  : 발신자 명						
+				  6. sMsge	      : 내용						
+				  7. sLinkaddr	  : 링크주소						
+				  8. sTitle	      : 제목					
+				  
+ * return Type 	: boolean(true/false)
+ * 사용법		: messenger_send(this, "20040169", "이동근", "20040172", "이지민","알리미내용","http://www.naver.com","알리미제목");
+		
+		var sEmpno     = "20040169";             //  수신자 사번			
+		var sEmpnm     = "이동근";	             //  수신자 명				
+		var sSendempno = this.gfn_getUserId();	 //  발신자 사번						
+		var sSendempnm = this.gfn_getUserName(); //  발신자 명						
+		var sMsge	   = "알리미내용";          //  내용						
+		var sLinkaddr  = "http://www.naver.com"; //  링크주소						
+		var sTitle     = "알리미제목";          //  제목	
+		
+		this.messenger_send(this, sEmpno, sEmpnm, sSendempno, sSendempnm, sMsge, sLinkaddr, sTitle);
+ 
+ * 작성자 		: 이동석
+ ******************************************************************************/
+this.messenger_send = function(objForm, sEmpno, sEmpnm, sSendempno, sSendempnm, sMsge, sLinkaddr, sTitle) 
+{
+    try {  
+        
+        if(!sEmpno) {
+	         this.gfn_message("comm.항목.입력.을","수신자사번"); return false;
+	    }
+	    	
+        if(!sTitle) {
+	         this.gfn_message("comm.항목.입력.을","알림제목"); return false;
+	    }
+	    
+        
+        // DATASET 설정
+		var dsntcnSndng = new Dataset;
+	    dsntcnSndng.set_id("ds_messngr");
+	    this.insertChild(0, "ds_messngr", dsntcnSndng);
+	    
+		dsntcnSndng.addColumn("RCVER_USER_ID",  "string", "256");
+		dsntcnSndng.addColumn("RCVER_USER_NM",  "string", "256");
+		dsntcnSndng.addColumn("SENDER_USER_ID", "string", "256");
+		dsntcnSndng.addColumn("SENDER_USER_NM", "string", "256");
+		dsntcnSndng.addColumn("NTCN_SJ",        "string", "256");
+		dsntcnSndng.addColumn("LINK_ADRES",     "string", "500");
+		dsntcnSndng.addColumn("NTCN_CN",        "string", "4000");
+		
+		dsntcnSndng.addRow();
+		dsntcnSndng.setColumn(0, "RCVER_USER_ID",  sEmpno);     // 수신자사번
+		dsntcnSndng.setColumn(0, "RCVER_USER_NM",  sEmpnm);     // 수신자명
+		dsntcnSndng.setColumn(0, "SENDER_USER_ID", sSendempno); // 발신자사번
+		dsntcnSndng.setColumn(0, "SENDER_USER_NM", sSendempnm); // 발신자명
+		dsntcnSndng.setColumn(0, "NTCN_SJ",        sTitle);     // 제목
+		dsntcnSndng.setColumn(0, "LINK_ADRES",     sLinkaddr);  // 링크주소
+		dsntcnSndng.setColumn(0, "NTCN_CN",        sMsge);      // 내용
+    
+        Ex.core.tran(this, "saveNtcnSndngList", "/hsco/com/sym/msm/SYM110100/NtcnSndngCUD.do", "input1=ds_messngr:U", "","","_fn_callBack", true); 
+
+        
+    } catch(e) {
+		return false;
+	}
+
+}
+    
+this._fn_callBack = function (strSvcId, nErrorCode, strErrorMsg){
+   
+   if (nErrorCode != 0){
+       this.gfn_callback_message(strSvcId, nErrorCode, strErrorMsg);
+   } else {
+       switch (strSvcId) {
+			case "saveSmstranList": //  
+			    this.gfn_message("success.SMS발송.성공");
+				break;
+			case "saveNtcnSndngList": //  
+			    
+			    this.gfn_message("success.알림발송.성공");
+				break;	
+		    case "saveEmailsendList": // 
+		        this.gfn_message("success.이메일발송.성공");
+				break;
+		}
+   }
+}
+
+/*******************************************************************************
+ * 함수명  	: email_send
+ * 설명 		: 이메일을 전송한다.
+ * argument  	: 1. objForm	  : 호출한 form 객체							(예 : this )
+				  2. sEmpno	      : 수신자ID			
+				  3. sEmpnm	      : 수신자 명				
+				  4. sSendempno	  : 발신자ID						
+				  5. sSendempnm	  : 발신자 명						
+				  6. sSenderemail : 발신자이메일주소						
+				  7. sRcveremail  : 수신자이메일주소
+				  8. sEmailcj	  : 이메일제목	
+				  9. sEmailcn	  : 이메일내용	
+				  
+ * return Type 	: boolean(true/false)
+ * 사용법		: email_send(this, "20040169", "이동근", "20040172", "이지민","****@**","****@**","이메일제목","이메일내용");
+		
+		var sEmpno       = "20040169";               //  수신자ID			
+		var sEmpnm       = "이동근";	             //  수신자 명				
+		var sSendempno   = this.gfn_getUserId();	 //  발신자ID						
+		var sSendempnm   = this.gfn_getUserName();   //  발신자 명						
+		var sSenderemail = "****@**";                //  발신자이메일주소						
+		var sRcveremail  = "****@**";                //  수신자이메일주소
+		var sEmailcj     = "이메일제목";            //  이메일제목							
+		var sEmailcn     = "이메일내용";            //  이메일내용	
+		
+		this.email_send(this, sEmpno, sEmpnm, sSendempno, sSendempnm, sSenderemail, sRcveremail, sEmailcj, sEmailcn);
+ 
+ * 작성자 		: 이동석
+ ******************************************************************************/
+this.email_send = function(objForm, sEmpno, sEmpnm, sSendempno, sSendempnm, sSenderemail, sRcveremail, sEmailcj, sEmailcn) 
+{
+    try {  
+        
+        if(!sSenderemail) {
+             this.gfn_message("comm.항목.입력.을","수신자이메일"); return false;
+	    }
+	    	
+        if(!sRcveremail) {
+	         this.gfn_message("comm.항목.입력.을","발신자이메일"); return false;
+	    }
+	    
+        
+        // DATASET 설정
+		var dsemail = new Dataset;
+	    dsemail.set_id("ds_email");
+	    this.insertChild(0, "ds_email", dsemail);
+	    
+		dsemail.addColumn("RCVER_ID",  "string", "256");
+		dsemail.addColumn("RCVER_NM",  "string", "256");
+		dsemail.addColumn("SENDER_ID", "string", "256");
+		dsemail.addColumn("SENDER_NM", "string", "256");
+		dsemail.addColumn("SENDER_EMAIL",   "string", "500");
+		dsemail.addColumn("RCVER_EMAIL",     "string", "500");
+		dsemail.addColumn("EMAIL_CJ",        "string", "500");
+		dsemail.addColumn("EMAIL_CN",        "string", "8000");
+		
+		dsemail.addRow();
+		dsemail.setColumn(0, "RCVER_ID",  sEmpno);       // 수신자ID
+		dsemail.setColumn(0, "RCVER_NM",  sEmpnm);       // 수신자명
+		dsemail.setColumn(0, "SENDER_ID", sSendempno);   // 발신자ID
+		dsemail.setColumn(0, "SENDER_NM", sSendempnm);   // 발신자명
+		dsemail.setColumn(0, "SENDER_EMAIL",   sSenderemail); // 발신자이메일
+		dsemail.setColumn(0, "RCVER_EMAIL",    sRcveremail);  // 수신자이메일
+		dsemail.setColumn(0, "EMAIL_CJ",       sEmailcj);     // 메일제목
+		dsemail.setColumn(0, "EMAIL_CN",       sEmailcn);     // 메일내용
+    
+        Ex.core.tran(this, "saveEmailsendList", "hsco/com/sym/cdm/SYM030700/EmailsendCUD.do", "input1=ds_email:U", "","","_fn_callBack", true); 
+        
+    } catch(e) {
+		return false;
+	}
+
+}    
+]]></Script>

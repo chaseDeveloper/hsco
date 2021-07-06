@@ -1,0 +1,696 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/********************************************************
+파일명 : gridUtil.xjs
+설 명 : 그리드 공통 유틸
+수정일 수정자 Version Function 명
+------- -------- ---------- --------------
+2015.09.23 지효정
+*********************************************************/
+/***********************************************************************************
+* 함수 : fn_init_grid
+* 설명 : Grid 기본 설정
+* 그리드 크기 변경
+* 헤더 클릭시 오름차순, 내림차순 정렬
+* 체크박스 있는경우 체크박스 체크 이벤트 처리
+
+* 함수 : fn_init_allGrid
+* 설명	: area(Form, div, Tab)안의 모든 Grid 기본 설정
+
+* 함수 : fn_checkAll
+* 설명	: 그리드의 바디부분의 체크박스 값을 전체 체크, 전체 해제
+
+* 함수 : fn_checkHead
+* 설명	: 그리드의 바디부분의 체크박스 값에 따라 헤더부분 체크박스 값 설정
+
+* 함수 : fn_checkValue
+* 설명	: 그리드의체크된 항목의 값에 대한 DS의 특정 컬럼의 값을 구한다.
+
+* 함수 : fn_checkCnt
+* 설명	: 리드의체크된 항목의 갯수를 구한다.
+
+* 함수 : fn_checkIdx
+* 설명	: 그리드의체크된 항목의 인덱스를 구한다.
+
+* 함수 : fn_checkItemDelete
+* 설명	: 그리드의체크된 항목 삭제한다.
+
+* 함수 : fn_importExcel
+* 설명	: Excel import
+
+
+***********************************************************************************/
+
+this.USE_GRID_MODIFY_MARK = true;
+this.INSERT_MARK_IMAGE = "theme://images/grd_WF_HeadEssential.png";
+this.UPDATE_MARK_IMAGE = "theme://images/grd_WF_HeadEssential.png";
+this.CUR_GRID_OBJECT = null;
+
+/***********************************************************************************
+* 설명	: Grid 기본 설정
+* 그리드 크기 변경
+* 헤더 클릭시 오름차순, 내림차순 정렬
+* 체크박스 있는경우 체크박스 체크 이벤트 처리
+***********************************************************************************/
+this.fn_init_grid = function(grid){
+	 
+	/***********************************************************************************
+	* 마우스로 컬럼 사이즈 조절 가능하도록 설정.
+	***********************************************************************************/
+	grid.set_cellsizingtype("col");
+	
+	/***********************************************************************************
+	* 마우스로 컬럼 이동 가능하도록 설정.
+	***********************************************************************************/
+	grid.set_cellmovingtype("col");
+	
+	/***********************************************************************************
+	* 그리드 헤더 클릭시에 정렬되도록 설정
+	***********************************************************************************/
+	grid.addEventHandler("onheadclick", this._fn_gidOnheadSortClickHandler, this);
+	
+	/***********************************************************************************
+	* 그리드 오른쪽 마우스버튼 클릭시 기능혹장팝업메뉴 구현 (kjh)
+	***********************************************************************************/
+	grid.addEventHandler("onrbuttondown",this._fn_gridOnRbttHandler,this);
+	
+	/***********************************************************************************
+	* 그리드 헤더,바디의 체크박스 클릭 기능 적용
+	***********************************************************************************/
+	var text = grid.getCellProperty("body", 0, "text");
+	if(this.comUtils.isNullEmpty(text) == false){
+		var columnId = text.split(":")[1];
+		if(columnId == 'CHK' || columnId == 'CHECK' || columnId == 'APPLC_AT' ){
+			grid.addEventHandler("onheadclick", this._fn_grdOnHeadChkClickHandler, this);
+			grid.addEventHandler("oncellclick", this._fn_grdOnCellChkClickHandler, this);
+		}
+	}
+	
+	//그리드의 로우 변경시 수정가능한 항목을 백그라운드로 표시
+	grid.addEventHandler("onselectchanged", this._fn_gidOnSelectChangedHandler, this);
+	
+	// 그리드 신규/수정 시 마크표기
+	if(this.USE_GRID_MODIFY_MARK)
+	{
+		var gridMarkProp = "EXPR(dataset.getRowType(currow)==Dataset.ROWTYPE_INSERT?'" + this.INSERT_MARK_IMAGE 
+							+ "':(dataset.getRowType(currow)==Dataset.ROWTYPE_UPDATE?'" + this.UPDATE_MARK_IMAGE 
+							+ "':''))";
+		grid.setCellProperty("body", 0, "backgroundimage", gridMarkProp);
+	}
+
+	grid.set_nodatatext('자료가 존재하지 않습니다');
+	
+	grid.set_autoenter("select");
+	
+}
+
+/***********************************************************************************
+* 설명	: area(Form, div, Tab)안의 모든 Grid 기본 설정
+* 그리드 크기 변경
+* 헤더 클릭시 오름차순, 내림차순 정렬
+* 체크박스 있는경우 체크박스 체크 이벤트 처리
+***********************************************************************************/
+this.fn_init_allGrid = function(area){
+	var len = area.components.length;
+	for(var i=0; i<len; i++){
+		var item = area.components.get_item(i);
+		if(item instanceof Grid){
+			this.fn_init_grid(item);
+		}else if(item instanceof Div || item instanceof Tab || item instanceof Tabpage){
+			this.fn_init_allGrid(item);
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: Grid의 헤더 클릭 이벤트 처리
+***********************************************************************************/
+this._fn_gidOnheadSortClickHandler = function(obj:Grid, e:nexacro.GridClickEventInfo){
+	
+	if(obj.getCellProperty( "Head", e.cell , "displaytype" ) == 'image') return;
+	
+	this.gfn_gridSort(obj, e);
+}
+
+/***********************************************************************************
+* 설명	: Grid의 onselectchange 이벤트 처리
+***********************************************************************************/
+this._fn_gidOnSelectChangedHandler = function(obj:Grid, e:nexacro.GridSelectEventInfo){
+	//그리드의 로우 변경시 수정가능한 항목을 백그라운드로 표시
+	var bodyCount = obj.getCellCount("Body");
+	for(var i=0; i<bodyCount; i++){
+		var edittype = obj.getCellProperty("body", i, "edittype");
+		if(edittype != "none"){
+			obj.setCellProperty("body", i, "style", "selectbackground:#f5f5dc5e");
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: Grid의 바디의 체크박스 클릭 이벤트 처리
+***********************************************************************************/
+this._fn_grdOnCellChkClickHandler = function(obj:Grid, e:nexacro.GridClickEventInfo)
+{
+	if(e.col == 0){
+		this.fn_checkHead(obj);
+		if(this.fn_grdOnCellChkCallback != null){
+			this.fn_grdOnCellChkCallback(obj, e);
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: Grid의 헤더의 체크박스 클릭 이벤트 처리
+***********************************************************************************/
+this._fn_grdOnHeadChkClickHandler = function(obj:Grid, e:nexacro.GridClickEventInfo)
+{
+	if(e.col == 0) {
+		this.fn_checkAll(obj);
+		if(this.fn_grdOnHeadChkCallback != null){
+			this.fn_grdOnHeadChkCallback(obj, e);
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: 그리드의 바디부분의 체크박스 값을 전체 체크, 전체 해제
+***********************************************************************************/
+this.fn_checkAll = function(grid){
+	var strVal = this._fn_toggleHeaderCheck(grid);
+	var ds     = this[grid.binddataset];
+	ds.set_enableevent(false);
+	var rowcount = ds.getRowCount();
+	for (var i=0; i<rowcount; i++) {
+		ds.setColumn(i, "CHK", strVal);
+		ds.setColumn(i, "CHECK", strVal); 
+		ds.setColumn(i, "APPLC_AT", strVal);
+	}
+	ds.set_enableevent(true);
+}
+
+/***********************************************************************************
+* 설명	: 그리드의 헤더부분의 체크박스 값을 토글
+***********************************************************************************/
+this._fn_toggleHeaderCheck = function(grid){
+	var strVal = grid.getCellProperty("head", 0, "text");
+	
+	if(this.comUtils.isNullEmpty(strVal) == true){
+		strVal = '0';
+	}
+	
+	var toggleVal = (strVal == '0' ? '1' : '0');
+	grid.setCellProperty("head", 0, "text", toggleVal);
+	return toggleVal;
+}
+
+/***********************************************************************************
+* 설명	: 그리드의 바디부분의 체크박스 값에 따라 헤더부분 체크박스 값 설정
+***********************************************************************************/
+this.fn_checkHead = function(grid){
+	var ds       = this[grid.binddataset];
+	var rowcount = ds.getRowCount();
+	
+	for(var i = 0; i<rowcount; i++) {
+		var value = ds.getColumn(i, "CHK");
+		if(this.comUtils.isNullEmpty(value) == true){
+			value = '0';
+		}
+		if(value == "0"){
+			grid.setCellProperty("head", 0, "text", "0");
+			return;
+		}
+	}
+	
+	grid.setCellProperty("head", 0, "text", "1");
+}
+
+/***********************************************************************************
+* 설명	: 그리드의체크된 항목의 값에 대한 DS의 특정 컬럼의 값을 구한다.
+***********************************************************************************/
+this.fn_checkValue = function(grid, column){
+	var ds       = this[grid.binddataset];
+	var rowcount = ds.getRowCount();
+	var valueArr = [];
+	
+	for(var i=0; i<rowcount; i++) {
+		var chk = ds.getColumn(i, "CHK");
+		if(chk == '1'){
+			var value = ds.getColumn(i, column);
+			var resValue = "'" + value + "'";
+			valueArr.push(resValue);
+		}
+	}
+	
+	return valueArr.toString();
+}
+
+/***********************************************************************************
+* 설명	: 그리드의체크된 항목의 갯수를 구한다.
+***********************************************************************************/
+this.fn_checkCnt = function(grid){
+	var ds       = this[grid.binddataset];
+	var rowcount = ds.getRowCount();
+	var cnt = 0;
+	
+	for(var i=0; i<rowcount; i++) {
+		var chk = ds.getColumn(i, "CHK");
+		if(chk == '1'){
+			cnt++;
+		}
+	}
+	
+	return cnt;
+}
+
+/***********************************************************************************
+* 설명	: 그리드의체크된 항목의 인덱스를 구한다.
+***********************************************************************************/
+this.fn_checkIdx = function(grid, column){
+	var ds       = this[grid.binddataset];
+	var rowcount = ds.getRowCount();
+	var idxArr = [];
+	
+	for(var i=0; i<rowcount; i++) {
+		var chk = ds.getColumn(i, "CHK");
+		if(chk == '1'){
+			idxArr.push(i);
+		}
+	}
+	
+	return idxArr;
+}
+/***********************************************************************************
+* 설명	: 그리드의체크된 항목 삭제한다.
+***********************************************************************************/
+this.fn_checkItemDelete = function(grid){
+	var ds       = this[grid.binddataset];
+	var rowcount = ds.getRowCount();
+	
+	for(var i = rowcount-1; i>=0; i--) {
+		var value = ds.getColumn(i, "CHK");
+		if(value == "1"){
+			ds.deleteRow(i);
+		}
+	}
+	
+	this.fn_checkHead(grid);
+}
+
+/***********************************************************************************
+* 설명	: 엑셀임포트.
+* excelDs : 콜백에서 넘겨받은 dataset
+* grid : 대상 그리드
+* headLen 파일의 헤더 라인 수, 생략가능
+* callback : 엑셀 업로드 완료후 호출될 콜백함수
+* strCopyColumn : 수동 바인딩 스트링('AREA_SE=Column0,RCEPT_DE=Column1,NM=Column2,...) 생략시 자동 바인딩
+* header를 엑셀의 문구 그대로 읽어올지 결정, 생략가능
+***********************************************************************************/
+this.fn_importExcel = function(excelDs, grid, headLen, headSet, strCopyColumn, callback){
+	var fn_cb = function() {
+		if(this.fn_start_importExcel != null){
+			this.fn_start_importExcel();
+		}
+		this._fn_copy_excelDsToGrid(excelDs, grid, headLen, strCopyColumn);
+		//그리드에 복사가 완료되었다는 콜백 호출
+		if(this.fn_finish_importExcel != null){
+			this.fn_finish_importExcel();
+		}else if(this.comUtils.isNullEmpty(callback) == false){
+			callback();
+		}
+	}
+	
+	var arg = {
+		targetDs : excelDs,
+		headSet : headSet == null? false : headSet,
+ 		callBack : fn_cb
+	};
+	
+	this.gfn_importExcel(arg);
+}
+
+/***********************************************************************************
+* 설명	: 엑셀파일에서 만들어진 dataset을 그리드에 바인딩되어 있는 dataset으로 복사.
+* excelDs : 콜백에서 넘겨받은 dataset
+* grid : 대상 그리드
+* headLen 파일의 헤더 라인 수, 생략가능
+***********************************************************************************/
+this.isCopyRow = false;
+this._fn_copy_excelDsToGrid = function(excelDs, grid, headLen, strCopyColumn){
+	var arrBindColumnId = [];
+	var bodyCount = grid.getCellCount("Body");
+	var copyDs = this[grid.binddataset];
+	var columnIdx = 0;
+	
+	//this.debug(excelDs, true);
+	
+	//헤더의 라인수 만큼 excelDs의 로우를 제거
+	//headLen이 없을경우 Column이 붙은 로우는 모두 HeadLen으로 분류
+	if(headLen == null){
+		headLen = 0;
+		for(var i=0; i<10; i++){
+			var tempValue = excelDs.getColumn(i, "Column0");
+			if(this.comUtils.isNullEmpty(tempValue) == false && tempValue.indexOf("Column") != -1){
+				break;
+			}
+			headLen++;
+		}
+	}
+
+	//헤더 제거하고 데이터만 남김
+	for(var i=0; i<headLen; i++){
+		excelDs.deleteRow(0);
+	}
+	
+	/***********************************************************************************
+	* 카피되어질 컬럼을 스트링으로 변환
+	* ex)'AREA_SE=Column0,RCEPT_DE=Column1,NM=Column2,...'
+	***********************************************************************************/
+	if(this.comUtils.isNullEmpty(strCopyColumn) == true){
+		for(var i=0; i<bodyCount; i++){
+			var text = grid.getCellProperty("body", i, "text");
+			
+			//바인딩 되어 있지 않은 셀일경우 continue
+			if(this.comUtils.isNullEmpty(text) == true) continue;
+			if(text.indexOf("bind:") != -1){
+				var columnId = text.split(":")[1];
+				//바인딩 되어 있지 않은 셀일경우 continue
+				if(this.comUtils.isNullEmpty(columnId) == true) continue;
+				arrBindColumnId.push(columnId + '=Column' + columnIdx++);
+			}
+		}
+		strCopyColumn = arrBindColumnId.toString();
+	}
+	
+	this.debug(strCopyColumn, true);
+	
+	//바인딩된 컬럼만 선정하여 데이터셋 카피한다.
+	var excelRowcount = excelDs.rowcount;
+	for(var i=0; i<excelRowcount; i++){
+		var nRow = copyDs.addRow();
+		this.isCopyRow = true;
+		copyDs.copyRow(nRow, excelDs, i, strCopyColumn);
+		this.isCopyRow = false;
+	}
+	
+	//this.debug(excelDs, true);
+	//this.debug(copyDs, true);
+}
+
+/***********************************************************************************
+* 설명	: 정렬할 그리드의 binddataset저장할 객체
+***********************************************************************************/
+this.arrayGridAlign = {};
+
+/***********************************************************************************
+* 설명	: 주어진 영역내의 그리드중에  binddataset 을 가진 그리드를 찾는다.
+***********************************************************************************/
+this.fn_find_grid = function(area, binddataset){
+	var len = area.components.length;
+	
+	for(var i=0; i<len; i++){
+		var item = area.components.get_item(i);
+		if(item instanceof Grid){
+			if(item.binddataset == binddataset){
+				return item;
+			}
+		}else if(item instanceof Div || item instanceof Tab || item instanceof Tabpage){
+			var result = this.fn_find_grid(item, binddataset);
+			if(result != null){
+				return result;
+			}
+		}
+	}
+	
+	return null;
+}
+
+/***********************************************************************************
+* 설명	: 조회전에 그리드 자동 정렬을 위한 dataset을 저장
+***********************************************************************************/
+this.fn_init_gridAlignInfo = function(strSvcId, sOutDatasets){
+	if(strSvcId.indexOf('List') > -1 || strSvcId.indexOf('list') > -1){
+		if(this.comUtils.isNullEmpty(sOutDatasets) == false){
+			var binddataset = sOutDatasets.split('=')[0];
+			this.arrayGridAlign[strSvcId] = binddataset;
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: 조회후 콜백에서 dataset을 가지고 있는 그리드를 찾아서 그리드 정렬 함수에 전달 한다.
+***********************************************************************************/
+this.fn_auto_gridAlign = function(strSvcId, nErrorCode){
+	var bSuccess = nErrorCode == 0 ? true : false;
+	if(bSuccess == true){
+		if(this.arrayGridAlign[strSvcId] != null){
+			this.fn_set_gridAlign(this.fn_find_grid(this, this.arrayGridAlign[strSvcId]), true);
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: 그리드의 설정과 데이터셋의 값을 이용해 정렬 설정한다.
+* bBind : 바인딩된 데이터셋의 값이 숫자인지 체크하기 위해 설정
+  날짜,체크박스,콤보 중앙 정렬
+  숫자표시일일경우 오른쪽 정렬
+  그 외의 경우 왼쪽 정렬
+***********************************************************************************/
+/*
+this.fn_set_gridAlign = function(grid, bBind){
+	if(grid == null){
+		return false;
+	}
+	
+	var isNum = false;
+	var bodyCount = grid.getCellCount("Body");
+	var ds = this[grid.binddataset];
+	
+	if(bBind){
+		if(ds.rowcount == 0){
+			return false;
+		}
+	}
+	
+	for(var i=0; i<bodyCount; i++){
+		var displaytype = grid.getCellProperty("body", i, "displaytype");
+		var edittype = grid.getCellProperty("body", i, "edittype");
+		
+		if(bBind == true){
+			var text = grid.getCellProperty("body", i, "text");
+			if(this.comUtils.isNullEmpty(text) == true) continue;
+			
+			if(text.indexOf("bind:") != -1){
+				var columnId = text.split(":")[1];
+
+				if(this.comUtils.isNullEmpty(columnId) == true) continue;
+				
+				var value = ds.getColumn(0, columnId);
+				
+				if(displaytype == "combo"){		//콤보인경우 콤보와 바인딩된 데이터셋에서 값을 가져온다.
+					var combodataset = grid.getCellProperty("body", i, "combodataset");
+					var combocodecol = grid.getCellProperty("body", i, "combocodecol");
+					var combodatacol = grid.getCellProperty("body", i, "combodatacol");
+					var comboDs = this[combodataset];
+					if(comboDs != null && comboDs.rowcount > 0){
+						comboDs.filter(combocodecol + "==" + value);
+						value = comboDs.getColumn(0, combodatacol);
+						comboDs.filter("");
+					}
+				}
+			}else{
+				value = grid.getCellValue(0, i);
+			}
+			
+			isNum = !isNaN(value);
+			
+			//this.debug(columnId + ":" + value, true);
+			
+			if(text.indexOf("checkbox") != -1 || edittype.indexOf("checkbox") != -1){
+				isNum = true;
+			}
+		}
+		
+		if(displaytype == "number" || edittype == "masknumber"){
+			grid.setCellProperty("body", i, "style", "align:right");
+		}else if(displaytype == "date" || displaytype == "checkbox" || displaytype == "combo" || isNum){
+			grid.setCellProperty("body", i, "style", "align:center");
+		}else{																
+			grid.setCellProperty("body", i, "style", "align:left");
+		}
+	}
+}
+*/
+/***********************************************************************************
+* 설명	: 그리드의 기능확장을 위한 팝업메뉴 및 데이터셋을 생성한다.
+
+***********************************************************************************/
+/*
+this.fn_initMakeObj = function(){
+   
+  
+    var ds = new Dataset;
+    var ds_rntSort = new Dataset;
+    var objPopupMenu = new PopupMenu("PopupMenu", "absolute","608px","83px","142px","211px",null,null);
+    var curRow = 0;
+   
+    var codeVal  = ["01","02","03","04"];
+    var dataVal  = ["다중정렬","필터","엑셀다운","출력"];
+    var levelVal = ["0","0","0","0"];
+    var idVal    = ["0","1","2","3"];
+ 	    
+    ds.addColumn("CODE", "string");
+	ds.addColumn("DATA", "string");
+	ds.addColumn("LEVEL", "string");
+	ds.addColumn("ID", "string");
+	
+    ds_rntSort.addColumn("IDX", "string");
+    ds_rntSort.addColumn("COL_NM", "string");
+    ds_rntSort.addColumn("COL_ID", "string");
+    ds_rntSort.addColumn("SORT_SE", "string");
+	
+	
+	ds.set_name("ds_popupMenu");
+    ds_rntSort.set_name("ds_rntSort");
+    
+    for(var i = 0 ; i < 4 ; i++)
+    {
+       if(i == 1) continue; // 필터추후구현
+       
+       curRow = ds.addRow();
+       ds.setColumn(curRow,"CODE",codeVal[i]);
+       ds.setColumn(curRow,"DATA",dataVal[i]);
+       ds.setColumn(curRow,"LEVEL",levelVal[i]);
+       ds.setColumn(curRow,"ID",idVal[i]);
+    }
+	
+	this.addChild("ds_popupMenu", ds);
+	this.addChild("ds_rntSort", ds_rntSort);
+	
+	objPopupMenu.set_innerdataset(ds);
+	objPopupMenu.set_captioncolumn("DATA");
+    objPopupMenu.set_idcolumn("ID");
+    objPopupMenu.set_levelcolumn("LEVEL");
+	objPopupMenu.set_userdatacolumn("CODE");
+	objPopupMenu.style.set_border("1 solid lightgrey"); 
+    objPopupMenu.style.set_itemborder("1 solid bisque,0 none #f7cc8cff,1 solid lightgrey,0 none #f7cc8cff"); 
+	objPopupMenu.style.set_itemheight("30");
+	objPopupMenu.style.set_itempadding("0 8 0 8");
+	objPopupMenu.style.set_background("bisque");
+	
+	objPopupMenu.setEventHandler("onmenuclick",this._fn_pmenuHandler,this);
+	this.addChild("PopupMenu", objPopupMenu);
+	objPopupMenu.show();	
+}
+*/
+/***********************************************************************************
+* 설명	: 그리드 기능확장 팝업메뉴 메뉴표시
+***********************************************************************************/
+/*
+this._fn_gridOnRbttHandler = function(obj:Grid, e:nexacro.GridMouseEventInfo)
+{
+    this.CUR_GRID_OBJECT = obj;
+    
+	var nX = system.screenToClientX(this, e.screenX);
+	var nY = system.screenToClientY(this, e.screenY);
+	
+	this.PopupMenu.trackPopup(nX + 225, nY + 115, "right bottom");
+}
+*/
+/***********************************************************************************
+* 설명	: 그리드 기능확장 팝업메뉴 메뉴클릭
+***********************************************************************************/
+/*
+this._fn_pmenuHandler = function(obj:PopupMenu, e:nexacro.MenuClickEventInfo)
+{
+  var menu = e.userdata;
+	
+	switch (menu) {		
+	  
+	   case "01":
+	      var parm = {
+				arg_0 : this,
+				arg_1 : this.CUR_GRID_OBJECT
+			};
+			
+		  this.gfn_popup("Popup_Sort", 300, 200, "", parm, "common::frmGridSort.xfdl", "fn_gridSort_callback",true);
+	
+	   break;
+	   
+	   case "02":
+	        /* 
+	          var dataVal = this.ds_popupMenu.getColumn(e.id,"DATA");
+	          var cnt =  this.div_work.grd_batchRstlList.getFormatRowCount();
+	          var band = "";
+	          var idx = 0;
+	          var colCnt = this.div_work.grd_batchRstlList.getFormatColCount();
+	          
+	          for(var i = 0 ; cnt > i ; i++)
+	          {
+	             
+	            band = this.div_work.grd_batchRstlList.getFormatRowProperty(i,"band");
+	           
+	            if(band == "head" ) idx++;
+	          }
+	         
+	          if(dataVal == "필터")
+	          {
+	              this.ds_popupMenu.setColumn(e.id,"DATA","필터제거");
+	              this.div_work.grd_batchRstlList.insertContentsRow("head",idx);
+	              
+                  this.div_work.grd_batchRstlList.set_cellmovingtype("col");									
+	             
+	              
+	          }else{
+	              this.ds_popupMenu.setColumn(e.id,"DATA","필터");
+	              this.div_work.grd_batchRstlList.deleteContentsRow("head",idx-1);
+	          }
+            */
+ /*           
+	   break;
+	   
+	   //엑셀다운
+	   case "03":	
+	          this.gfn_exportExcel(this.CUR_GRID_OBJECT, "Excel File Download");
+	   break; 
+	   
+	   //출력
+	   case "04":  
+	        var vOpts = new this.cf_Opts;
+			vOpts.setToolbar(false);
+			vOpts.setScale(100);
+			vOpts.setArgs("title",this.titletext);
+			vOpts.setSaveFilename(this.titletext);
+			vOpts.clearLocalDs();
+			vOpts.setGrid(this.CUR_GRID_OBJECT);
+			vOpts.setReportPath("/common/hscoLandscapeA4.jrf");
+			
+			var parm = {
+				arg_0 : this,  
+				opts : vOpts
+			};
+			
+			this.gfn_popup("Popup_Report", 884, 735, "", parm, "common::frmReportPopup.xfdl", "report_callback");
+	    break;
+	    
+	    }
+	    
+}	  
+*/	    
+// 그리드 정렬 콜백	    
+/*
+this.fn_gridSort_callback = function(id,rtn)
+{
+     this.ds_rntSort.loadXML(rtn);
+  
+     var ds = this[this.CUR_GRID_OBJECT.binddataset];
+     
+     var keySt = "S:";
+     
+     for(var i = 0 ; i < this.ds_rntSort.getRowCount() ; i++)
+     {
+        keySt = keySt + this.ds_rntSort.getColumn(i,"SORT_SE") + this.ds_rntSort.getColumn(i,"COL_ID");
+     }
+ 
+     ds.set_keystring(keySt);
+     
+}
+*/]]></Script>

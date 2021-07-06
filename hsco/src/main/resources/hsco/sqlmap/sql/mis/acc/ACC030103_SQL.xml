@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC030103_SQL">	
+	
+	<!-- 부가세현황 조회 -->
+	<select id="ACC030103DAO.vatSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH T_MIS AS (
+			SELECT
+			     t1.PUCHAS_SELNG_SE   				/* 매입매출구분 */
+			    ,t2.CODE_NM	AS PUCHAS_SELNG_NM 		/* 매입매출명	*/
+			    ,t1.BILL_KND          				/* 계산서종류 	*/
+			    ,t3.CODE_NM AS BILL_KND_NM			/* 계산서종류명	*/
+			    ,t1.PBLICTE_DE        				/* 발행일자 */
+			    ,DECODE(t1.BIZRNO,'Z000000000000','',REPLACE(t1.BIZRNO,'-','')) AS BIZRNO /* 사업자등록번호 */
+			    ,t1.BCNC_NM           				/* 상호(법인명) */
+			    ,t1.SUPLY_AMOUNT      				/* 공급가액 */
+			    ,t1.TAXAMT            				/* 부가세액 */
+			    ,t1.SM_AMOUNT         				/* 합계금액 */
+			FROM TBACC_TAXBIL_MASTER t1
+				 LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+				 ON t2.GRP_CODE = 'ACC029'
+				 AND t1.PUCHAS_SELNG_SE = t2.CODE
+				 LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+				 ON t3.GRP_CODE = 'ACC030'
+				 AND t1.BILL_KND = t3.CODE
+			WHERE t1.PBLICTE_DE BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+			  AND t1.PUCHAS_SELNG_SE = '2' /*매입*/
+		), 
+		T_PMS AS (
+		    		/*기타수입부가세*/
+		            SELECT '1'                  AS BILL_SE      /* 세금계산서1, 계산서2 */
+		                  ,t1.PBLICTE_DE        AS PBLICTE_DE   /* 발행일자 */
+		                  ,t1.PAY_SUPLY_AMOUNT  AS SUPLY_AMOUNT /* 공급가액 */
+		                  ,t1.PAY_VAT           AS VAT          /* 부가세 */
+		                  ,t3.CSTMR_NM          AS NM           /* 성명 */
+		                  ,SFCOM_DEC_ALL(t3.IHIDNUM)           AS IHIDNUM  	/* 주민번호 */
+		                  ,NULL					AS MTLTY		/* 상호 */
+		                  ,'기타'				AS SUPLY_DS
+		            FROM   TBSLS_ETC_INCME_VAT t1
+		                   LEFT OUTER JOIN TBSLS_HCNTRCTR t2
+		                        ON t1.CNTRCTR_NO = t2.CNTRCTR_NO
+		                   LEFT OUTER JOIN TBSLS_HOUSE_CSTMR t3
+		                        ON t2.HOUSE_CSTMR_NO = t3.HOUSE_CSTMR_NO
+		            WHERE  t1.PBLICTE_SE = '01' /* 발행구분 01:부가세 */
+		            AND    NVL(t1.PAY_SUPLY_AMOUNT,0) <![CDATA[<>]]> 0
+		            AND    NVL(t1.PAY_VAT,0) <![CDATA[<>]]> 0
+		            AND    t1.PBLICTE_DE BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+		            AND    t1.PAY_CODE NOT IN ('T9','TA','TB')
+		            UNION ALL 
+		    		/*기타수입부가세(임대료,전기세,도시가스)*/
+		            SELECT '1'                  AS BILL_SE      /* 세금계산서1, 계산서2 */
+		                  ,t1.PBLICTE_DE        AS PBLICTE_DE   /* 발행일자 */
+		                  ,TRUNC(DECODE(t1.PAY_CODE,'T9',t1.PAYAMT-2500,t1.PAYAMT)/1.1) AS SUPLY_AMOUNT
+      					  ,DECODE(t1.PAY_CODE,'T9',t1.PAYAMT-2500,t1.PAYAMT) - TRUNC(DECODE(t1.PAY_CODE,'T9',t1.PAYAMT-2500,t1.PAYAMT)/1.1) AS VAT
+		                  ,t3.CSTMR_NM          AS NM           /* 성명 */
+		                  ,SFCOM_DEC_ALL(t3.IHIDNUM)           AS IHIDNUM  	/* 주민번호 */
+		                  ,NULL					AS MTLTY		/* 상호 */
+		                  ,'기타'				AS SUPLY_DS
+		            FROM   TBSLS_ETC_INCME_VAT t1
+		                   LEFT OUTER JOIN TBSLS_HCNTRCTR t2
+		                        ON t1.CNTRCTR_NO = t2.CNTRCTR_NO
+		                   LEFT OUTER JOIN TBSLS_HOUSE_CSTMR t3
+		                        ON t2.HOUSE_CSTMR_NO = t3.HOUSE_CSTMR_NO
+		            WHERE  t1.PBLICTE_SE = '01' /* 발행구분 01:부가세 */
+		            AND    NVL(t1.PAY_SUPLY_AMOUNT,0) <![CDATA[<>]]> 0
+		            AND    NVL(t1.PAY_VAT,0) <![CDATA[<>]]> 0
+		            AND    t1.PBLICTE_DE BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+		            AND    t1.PAY_CODE IN ('T9','TA','TB')
+		            UNION ALL 
+		            /*토지부가세*/
+		            SELECT t1.BILL_SE           AS BILL_SE      /* 세금계산서1, 계산서2 */
+		                  ,t1.PBLICTE_DE        AS PBLICTE_DE   /* 발행일자 */
+		                  ,TRUNC(t1.PAYAMT/1.1) AS SUPLY_AMOUNT	/* 공급가액 */
+		                  ,t1.PAYAMT - TRUNC(t1.PAYAMT/1.1) AS VAT /* 부가세 */ 
+		                  ,t3.CSTMR_NM          AS NM           /* 성명 */
+      					  ,NVL(t4.BIZRNO,SFCOM_DEC_ALL(t3.IHIDNUM))           AS IHIDNUM  	/* 주민번호 */
+		                  ,t4.MTLTY_NM			AS MTLTY		/* 상호 */
+		                  ,'토지'				AS SUPLY_DS
+		            FROM   TBSLS_LAD_VAT t1
+		                   LEFT OUTER JOIN TBSLS_LCNTRCTR t2
+		                        ON t1.CNTRCTR_NO = t2.CNTRCTR_NO
+		                   LEFT OUTER JOIN TBSLS_LAD_CSTMR t3
+		                        ON t2.LAD_CSTMR_NO = t3.LAD_CSTMR_NO
+		                   LEFT OUTER JOIN TBSLS_LCNTRCTR_BSNM t4
+            					ON t1.CNTRCTR_NO = t4.CNTRCTR_NO
+		            WHERE  NVL(t1.PBLICTE_DE,0) <![CDATA[<>]]> 0
+		            AND    NVL(t1.PAYAMT,0) <![CDATA[<>]]> 0
+		            AND    t1.PBLICTE_DE BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+		            AND    t1.PAY_CODE NOT IN ('T9','TA','TB')
+		            UNION ALL
+		            /*토지부가세(기타수입-차세대에서는 데이터 안쌓임)*/
+		            SELECT t1.BILL_SE           AS BILL_SE      /* 세금계산서1, 계산서2 */
+		                  ,t1.PBLICTE_DE        AS PBLICTE_DE   /* 발행일자 */
+		                  ,TRUNC(DECODE(t1.PAY_CODE,'T9',t1.PAYAMT-2500,t1.PAYAMT)/1.1) AS SUPLY_AMOUNT
+      					  ,DECODE(t1.PAY_CODE,'T9',t1.PAYAMT-2500,t1.PAYAMT) - TRUNC(DECODE(t1.PAY_CODE,'T9',t1.PAYAMT-2500,t1.PAYAMT)/1.1) AS VAT
+		                  ,t3.CSTMR_NM          AS NM           /* 성명 */
+      					  ,NVL(t4.BIZRNO,SFCOM_DEC_ALL(t3.IHIDNUM))           AS IHIDNUM  	/* 주민번호 */
+		                  ,t4.MTLTY_NM			AS MTLTY		/* 상호 */
+		                  ,'기타'				AS SUPLY_DS
+		            FROM   TBSLS_LAD_VAT t1
+		                   LEFT OUTER JOIN TBSLS_LCNTRCTR t2
+		                        ON t1.CNTRCTR_NO = t2.CNTRCTR_NO
+		                   LEFT OUTER JOIN TBSLS_LAD_CSTMR t3
+		                        ON t2.LAD_CSTMR_NO = t3.LAD_CSTMR_NO
+		                   LEFT OUTER JOIN TBSLS_LCNTRCTR_BSNM t4
+            					ON t1.CNTRCTR_NO = t4.CNTRCTR_NO
+		            WHERE  NVL(t1.PBLICTE_DE,0) <![CDATA[<>]]> 0
+		            AND    NVL(t1.PAYAMT,0) <![CDATA[<>]]> 0
+		            AND    t1.PBLICTE_DE BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+		            AND    t1.PAY_CODE IN ('T9','TA','TB')
+		            UNION ALL
+		    		/*주택부가세*/
+		            SELECT '1'                  AS BILL_SE      /* 세금계산서1, 계산서2 */
+		                  ,t1.PBLICTE_DE        AS PBLICTE_DE   /* 발행일자 */
+		                  ,t1.PAY_SUPLY_AMOUNT  AS SUPLY_AMOUNT /* 공급가액 */
+		                  ,t1.PAY_VAT           AS VAT          /* 부가세 */
+		                  ,t3.CSTMR_NM          AS NM           /* 성명 */
+		                  ,NVL(t5.BIZRNO,REPLACE(SFCOM_DEC_ALL(t3.IHIDNUM),'-','')) AS IHIDNUM /* 주민번호 */
+		                  ,t5.MTLTY_NM			AS MTLTY		/* 상호 */
+		                  ,'주택'				AS SUPLY_DS
+		            FROM   TBSLS_HOUSE_VAT t1
+		                   INNER JOIN TBSLS_HCNTRCTR t2
+		                        ON t1.CNTRCTR_NO = t2.CNTRCTR_NO
+		                   LEFT OUTER JOIN TBSLS_HOUSE_CSTMR t3
+		                        ON t2.HOUSE_CSTMR_NO = t3.HOUSE_CSTMR_NO
+		                   INNER JOIN TBSLS_HOUSE_INFO t4
+		                   		ON t2.HOUSE_CODE = t4.HOUSE_CODE
+		                   LEFT OUTER JOIN TBSLS_HCNTRCTR_BSNM t5
+		                   		ON t1.CNTRCTR_NO = t5.CNTRCTR_NO
+		            WHERE  t1.PBLICTE_SE = '01'                 /* 발행구분 01:부가세 */
+		            AND    NVL(t1.PAY_SUPLY_AMOUNT,0) <![CDATA[<>]]> 0
+		            AND    NVL(t1.PAY_VAT,0) <![CDATA[<>]]> 0
+		            AND    t4.HOUSE_SE IN ('S3','S4') /* 상가만 */
+		            AND    t1.PBLICTE_DE BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+		            UNION ALL
+		            /*임대부가세1*/
+		            SELECT t1.BILL_SE           AS BILL_SE      /* 세금계산서1, 계산서2 */
+		                  ,t1.OCCRRNC_DE_1      AS PBLICTE_DE   /* 발행일자 */
+		                  ,t1.SUPLY_AMOUNT_1    AS SUPLY_AMOUNT /* 공급가액 */
+		                  ,t1.VAT_1             AS VAT          /* 부가세 */
+		                  ,t3.NM                AS NM           /* 성명 */
+		                  ,t1.BIZRNO            AS IHIDNUM  	/* 사업자(주민)번호 */
+		                  ,t4.MTLTY				AS MTLTY		/* 상호 */
+		                  ,'임대'				AS SUPLY_DS
+		            FROM   TBRNT_RENT_VAT t1  
+		                   LEFT OUTER JOIN TBRNT_RENT_CNTRCT t2
+		                        ON t1.CNTRCTR_NO = t2.CNTRCTR_NO
+		                   LEFT OUTER JOIN TBRNT_PRMANENT_RENT_CSTMR t3
+		                        ON t2.PRMANENT_CSTMR_NO = t3.PRMANENT_CSTMR_NO
+		                   LEFT OUTER JOIN TBRNT_SOPSRT_BSNM t4
+		                   		ON  t1.CNTRCTR_NO = t4.CNTRCTR_NO
+		                   		AND t4.BIZRNO IS NOT NULL
+		            WHERE  NVL(t1.SUPLY_AMOUNT_1,0) <![CDATA[<>]]>  0
+		            AND    NVL(t1.VAT_1,0) <![CDATA[<>]]> 0
+		            AND    t1.OCCRRNC_DE_3 BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+		            UNION ALL
+		            /*임대부가세2*/
+		            SELECT t1.BILL_SE           AS BILL_SE      /* 세금계산서1, 계산서2 */
+		                  ,t1.OCCRRNC_DE_2      AS PBLICTE_DE   /* 발행일자 */
+		                  ,t1.SUPLY_AMOUNT_2    AS SUPLY_AMOUNT /* 공급가액 */
+		                  ,t1.VAT_2             AS VAT          /* 부가세 */
+		                  ,t3.NM                AS NM           /* 성명 */
+		                  ,t1.BIZRNO            AS IHIDNUM  	/* 사업자(주민)번호 */
+		                  ,t4.MTLTY				AS MTLTY		/* 상호 */
+		                  ,'임대'				AS SUPLY_DS
+		            FROM   TBRNT_RENT_VAT t1  
+		                   LEFT OUTER JOIN TBRNT_RENT_CNTRCT t2
+		                        ON t1.CNTRCTR_NO = t2.CNTRCTR_NO
+		                   LEFT OUTER JOIN TBRNT_PRMANENT_RENT_CSTMR t3
+		                        ON t2.PRMANENT_CSTMR_NO = t3.PRMANENT_CSTMR_NO
+		                   LEFT OUTER JOIN TBRNT_SOPSRT_BSNM t4
+		                   		ON  t1.CNTRCTR_NO = t4.CNTRCTR_NO
+		                   		AND t4.BIZRNO IS NOT NULL
+		            WHERE  NVL(t1.SUPLY_AMOUNT_2,0) <![CDATA[<>]]>  0
+		            AND    NVL(t1.VAT_2,0) <![CDATA[<>]]> 0
+		            AND    t1.OCCRRNC_DE_3 BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+		            UNION ALL
+		            /*임대부가세3*/
+		            SELECT t1.BILL_SE           AS BILL_SE      /* 세금계산서1, 계산서2 */
+		                  ,t1.OCCRRNC_DE_3      AS PBLICTE_DE   /* 발행일자 */
+		                  ,t1.SUPLY_AMOUNT_3    AS SUPLY_AMOUNT /* 공급가액 */
+		                  ,t1.VAT_3             AS VAT          /* 부가세 */
+		                  ,t3.NM                AS NM           /* 성명 */
+		                  ,t1.BIZRNO            AS IHIDNUM  	/* 사업자(주민)번호 */
+		                  ,t4.MTLTY				AS MTLTY		/* 상호 */
+		                  ,'임대'				AS SUPLY_DS
+		            FROM   TBRNT_RENT_VAT t1  
+		                   LEFT OUTER JOIN TBRNT_RENT_CNTRCT t2
+		                        ON t1.CNTRCTR_NO = t2.CNTRCTR_NO
+		                   LEFT OUTER JOIN TBRNT_PRMANENT_RENT_CSTMR t3
+		                        ON t2.PRMANENT_CSTMR_NO = t3.PRMANENT_CSTMR_NO
+		                   LEFT OUTER JOIN TBRNT_SOPSRT_BSNM t4
+		                   		ON  t1.CNTRCTR_NO = t4.CNTRCTR_NO
+		                   		AND t4.BIZRNO IS NOT NULL
+		            WHERE  NVL(t1.SUPLY_AMOUNT_3,0) <![CDATA[<>]]>  0
+		            AND    NVL(t1.VAT_3,0) <![CDATA[<>]]> 0
+		            AND    t1.OCCRRNC_DE_3 BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+		)
+		SELECT
+			 '1' 									AS PUCHAS_SELNG_SE
+			,t2.CODE_NM								AS PUCHAS_SELNG_NM 
+			,t1.BILL_SE 							AS BILL_KND
+			,t3.CODE_NM								AS BILL_KND_NM
+			,t1.PBLICTE_DE 							AS PBLICTE_DE
+			,t1.IHIDNUM								AS BIZRNO
+			,t1.NM									AS BCNC_NM
+			,NVL(t1.SUPLY_AMOUNT,0)					AS SUPLY_AMOUNT
+			,NVL(t1.VAT,0)							AS TAXAMT
+			,NVL(t1.SUPLY_AMOUNT,0) + NVL(t1.VAT,0) AS SM_AMOUNT
+		FROM T_PMS t1
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		     ON  t2.GRP_CODE = 'ACC029'
+		     AND t2.CODE = '1'
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		     ON  t3.GRP_CODE = 'ACC030'
+		     AND t1.BILL_SE = t3.CODE
+		WHERE 1=1
+		<isEqual property="PUCHAS_SELNG_SE" compareValue="2">
+		  AND 1<![CDATA[<>]]>1
+		</isEqual>
+		<isNotEmpty property="BILL_KND">
+		  AND t1.BILL_SE = #BILL_KND#
+		</isNotEmpty>
+		<isNotEmpty property="BCNC_NM">
+		  AND t1.NM LIKE '%'|| #BCNC_NM# ||'%'
+		</isNotEmpty>
+		UNION ALL
+		SELECT
+			 t1.PUCHAS_SELNG_SE
+			,t1.PUCHAS_SELNG_NM
+			,t1.BILL_KND       
+			,t1.BILL_KND_NM    
+			,t1.PBLICTE_DE     
+			,t1.BIZRNO         
+			,t1.BCNC_NM        
+			,t1.SUPLY_AMOUNT   
+			,t1.TAXAMT         
+			,t1.SM_AMOUNT      
+		FROM T_MIS t1
+		WHERE 1=1
+		<isNotEmpty property="PUCHAS_SELNG_SE">
+		  AND t1.PUCHAS_SELNG_SE = #PUCHAS_SELNG_SE#
+		</isNotEmpty>
+		<isNotEmpty property="BILL_KND">
+		  AND t1.BILL_KND = #BILL_KND#
+		</isNotEmpty>
+		<isNotEmpty property="BCNC_NM">
+		  AND t1.BCNC_NM LIKE '%'|| #BCNC_NM# ||'%'
+		</isNotEmpty>
+		ORDER BY PBLICTE_DE 
+	</select>
+</sqlMap>

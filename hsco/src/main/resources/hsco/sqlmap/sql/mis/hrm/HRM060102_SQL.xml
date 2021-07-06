@@ -1,0 +1,762 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM060102_SQL">
+
+	<!-- 기간설정 조회 -->
+	<select id="HRM060102DAO.selectWorkEvlPd" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.EVL_YEAR
+		      ,t1.HT_SE
+		      ,t2.EVL_YEAR        AS ORI_EVL_YEAR
+		      ,t2.HT_SE           AS ORI_HT_SE
+		      ,t2.HT_BGNDE
+		      ,t2.HT_ENDDE
+		      ,t2.INDVDL_BGNDE
+		      ,t2.INDVDL_ENDDE
+		      ,t2.EVL_MAN_BGNDE
+		      ,t2.EVL_MAN_ENDDE
+		      ,t2.CNFRMR_BGNDE
+		      ,t2.CNFRMR_ENDDE
+		      ,t2.EXCL_MAN_DCSN_AT
+		      ,t2.TAGTER_MAN_DCSN_AT
+		      ,t2.DCSN_DE
+		FROM   (
+		        SELECT #EVL_YEAR# AS EVL_YEAR
+		              ,#HT_SE#    AS HT_SE
+		        FROM   DUAL
+		       ) t1
+		       LEFT OUTER JOIN TBHRM_WORK_EVL_PD t2
+		            ON  t1.EVL_YEAR = t2.EVL_YEAR
+		           AND t1.HT_SE    = t2.HT_SE
+	]]>
+	</select>
+
+
+	<!-- 제외자 조회 -->
+	<select id="HRM060102DAO.selectworkEvlExcl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH DEPT_GNFD_DTLS_TM AS ( /*현 보직일*/
+		    SELECT EMPNO, DEPT_CODE, MIN(GNFD_DE) AS DEPT_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, DEPT_CODE
+		)
+		, CLSF_GNFD_DTLS_TM AS ( /*현직급 임용일*/
+		    SELECT EMPNO, CLSF_SE, MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, CLSF_SE
+		)
+		, EXCLUSION_TGT_TM AS (
+		    SELECT EMPNO, GNFD_SE, DECODE(GNFD_SE, '015', '육아휴직', '027', '휴직', '030', '직위해제', '-') AS GNFD_SE_NM, '[발령]' || MAX(GNFD_MATTER) AS GNFD_MATTER
+		    FROM TBHRM_GNFD_DTLS
+		    WHERE GNFD_SE IN ('015', '027', '030')
+		    AND   (GNFD_ENDDE >= #HT_ENDDE# OR GNFD_BGNDE BETWEEN #HT_BGNDE# AND #HT_ENDDE# OR GNFD_ENDDE BETWEEN #HT_BGNDE# AND #HT_ENDDE#)
+		    GROUP BY EMPNO, GNFD_SE
+		)
+		SELECT #EVL_YEAR#                                        AS EVL_YEAR
+		     , #HT_SE#                                           AS HT_SE
+		     , t1.EMPNO
+		     , t1.EMPNM
+		     , t1.DEPT_CODE
+		     , t4.DEPT_NM
+		     , SFCOM_CODE_NM('HRM003', t1.OFCPS_SE, 'CODE_NM')   AS OFCPS_SE
+		     , SFCOM_CODE_NM('HRM002', t1.HR_CLSF_SE, 'CODE_NM') AS HR_CLSF_NM
+		     , t1.BRTHDY
+		     , t1.ECNY_DE      /* 입사일*/
+		      ,NVL(t1.APPNT_DE, t2.DEPT_GNFD_DE)           AS DEPT_GNFD_DE /* 현 보직일*/
+		      ,NVL(t1.NOW_CLSF_EMPLMN_DE, t3.CLSF_GNFD_DE) AS CLSF_GNFD_DE /* 현직급 임용일*/
+		     , t5.RM
+		     , ROUND(NVL(MONTHS_BETWEEN(TO_DATE(#HT_ENDDE#, 'YYYYMMDD'), TO_DATE(t1.ECNY_DE, 'YYYYMMDD')),0),0) AS WORK_MONTH
+		FROM TBHRM_HR_MASTR t1
+		    LEFT OUTER JOIN DEPT_GNFD_DTLS_TM t2
+		      ON  t1.EMPNO     = t2.EMPNO
+		      AND t1.DEPT_CODE = t2.DEPT_CODE
+		    LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+		      ON  t1.EMPNO     = t3.EMPNO
+		      AND t1.HR_CLSF_SE   = t3.CLSF_SE
+		    LEFT OUTER JOIN TBHRM_DEPT t4
+		      ON  t1.DEPT_CODE = t4.DEPT_CODE
+		    INNER JOIN TBHRM_WORK_EVL_EXCL_MAN t5
+		      ON  t1.EMPNO     = t5.EMPNO
+		      AND t5.EVL_YEAR  = #EVL_YEAR#
+		      AND t5.HT_SE     = #HT_SE#
+		WHERE t1.STTUS_SE <> '009' /*퇴직자 제외*/
+		AND   t1.JSSFC_SE <> '01'  /*임원은 평정대상에서 제외*/
+		ORDER BY t1.DEPT_CODE
+		       , t1.OFCPS_SE
+		       , t1.JSSFC_SE
+		       , t1.HR_CLSF_SE
+	]]>
+	</select>
+
+
+	<!-- 대상자 조회 -->
+	<select id="HRM060102DAO.selectWorkEvlTagter" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH DEPT_GNFD_DTLS_TM AS ( /*현 보직일*/
+		    SELECT EMPNO, DEPT_CODE, MIN(GNFD_DE) AS DEPT_GNFD_DE
+		    FROM   TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, DEPT_CODE
+		)
+		, CLSF_GNFD_DTLS_TM AS ( /*현직급 임용일*/
+		    SELECT EMPNO, CLSF_SE, MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM   TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, CLSF_SE
+		)
+		SELECT t1.EVL_YEAR
+		      ,t1.HT_SE
+		      ,t1.EMPNO
+		      ,t1.EMPNM
+		      ,t1.DEPT_CODE
+		      ,t1.DEPT_NM
+		      ,t1.JSSFC_SE
+		      ,t1.JSSFC_NM
+		      ,t1.OFCPS_SE
+		      ,t1.OFCPS_NM
+		      ,t1.CLSF_SE
+		      ,t1.CLSF_NM
+		      ,t1.BRTHDY
+		      ,t1.ECNY_DE
+		      ,NVL(t1.APPNT_DE, t2.DEPT_GNFD_DE)           AS DEPT_GNFD_DE
+		      ,NVL(t1.NOW_CLSF_EMPLMN_DE, t3.CLSF_GNFD_DE) AS CLSF_GNFD_DE
+		      ,t1.EVL_MAN_1_EMPNO
+		      ,t1.EVL_MAN_1_EMPNM
+		      ,t1.EVL_MAN_2_EMPNO
+		      ,t1.EVL_MAN_2_EMPNM
+		      ,t1.CNFRMR_EMPNO
+		      ,t1.CNFRMR_EMPNM
+		      ,t1.EVL_STEP_SE
+		FROM   (
+		        SELECT s1.EVL_YEAR
+		              ,s1.HT_SE
+		              ,s1.EMPNO
+		              ,s3.EMPNM
+		              ,s3.BRTHDY
+		              ,s3.ECNY_DE
+		              ,s1.DEPT_CODE
+		              ,SFSAL_GETDEPTNM_01(s1.DEPT_CODE)                 AS DEPT_NM
+		              ,s1.JSSFC_SE
+		              ,SFCOM_CODE_NM('HRM001', s1.JSSFC_SE, 'CODE_NM')  AS JSSFC_NM
+		              ,s1.OFCPS_SE
+		              ,SFCOM_CODE_NM('HRM003', s1.OFCPS_SE, 'CODE_NM')  AS OFCPS_NM
+		              ,s1.CLSF_SE
+		              ,SFCOM_CODE_NM('HRM002', s1.CLSF_SE,  'CODE_NM')  AS CLSF_NM
+		              ,s1.EVL_MAN_1_EMPNO
+		              ,s4.EMPNM                 AS EVL_MAN_1_EMPNM
+		              ,s1.EVL_MAN_2_EMPNO
+		              ,s5.EMPNM                 AS EVL_MAN_2_EMPNM
+		              ,s1.CNFRMR_EMPNO
+		              ,s6.EMPNM                 AS CNFRMR_EMPNM
+		              ,s1.EVL_STEP_SE
+	                  ,s3.NOW_CLSF_EMPLMN_DE
+	                  ,s3.APPNT_DE
+		        FROM   TBHRM_WORK_EVL_TRGTER s1
+		               LEFT OUTER JOIN TBHRM_WORK_EVL_PD s2
+		                    ON s1.EVL_YEAR = s2.EVL_YEAR
+		                   AND s1.HT_SE = s2.HT_SE
+		               LEFT OUTER JOIN TBHRM_HR_MASTR s3
+		                    ON s1.EMPNO = s3.EMPNO
+		               LEFT OUTER JOIN TBHRM_HR_MASTR s4
+		                    ON s1.EVL_MAN_1_EMPNO = s4.EMPNO
+		               LEFT OUTER JOIN TBHRM_HR_MASTR s5
+		                    ON s1.EVL_MAN_2_EMPNO = s5.EMPNO
+		               LEFT OUTER JOIN TBHRM_HR_MASTR s6
+		                    ON s1.CNFRMR_EMPNO = s6.EMPNO
+		        WHERE  s1.EVL_YEAR = #EVL_YEAR#
+		        AND    s1.HT_SE    = #HT_SE#
+	]]>
+	<isNotEmpty property="EVL_STEP_SE">
+		        AND    s1.EVL_STEP_SE = #EVL_STEP_SE#
+	</isNotEmpty>
+		       ) t1
+		       LEFT OUTER JOIN DEPT_GNFD_DTLS_TM t2
+		            ON t1.EMPNO     = t2.EMPNO
+		           AND t1.DEPT_CODE = t2.DEPT_CODE
+		       LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+		            ON t1.EMPNO     = t3.EMPNO
+		           AND t1.CLSF_SE   = t3.CLSF_SE
+		WHERE  1=1
+	<isNotEmpty property="JSSFC_SE">
+		AND t1.JSSFC_SE = #JSSFC_SE#
+	</isNotEmpty>
+	<isNotEmpty property="CLSF_SE">
+		AND t1.CLSF_SE = #CLSF_SE#
+	</isNotEmpty>
+	<isNotEmpty property="TRGET_COMBO">
+		<isEqual property="TRGET_COMBO" compareValue="ALL">
+			AND (
+			     t1.DEPT_NM LIKE '%' || #TRGET_NM# || '%'
+			     OR
+			     t1.EMPNM LIKE '%' || #TRGET_NM# || '%'
+			     OR
+			     t1.EVL_MAN_1_EMPNM LIKE '%' || #TRGET_NM# || '%'
+			     OR
+			     t1.EVL_MAN_2_EMPNM LIKE '%' || #TRGET_NM# || '%'
+			     OR
+			     t1.CNFRMR_EMPNM LIKE '%' || #TRGET_NM# || '%'
+			    )
+		</isEqual>
+		<isEqual property="TRGET_COMBO" compareValue="DEPT_NM">
+			AND t1.DEPT_NM LIKE '%' || #TRGET_NM# || '%'
+		</isEqual>
+		<isEqual property="TRGET_COMBO" compareValue="EMPNM">
+			AND t1.EMPNM LIKE '%' || #TRGET_NM# || '%'
+		</isEqual>
+		<isEqual property="TRGET_COMBO" compareValue="EVL_MAN_1_EMPNM">
+			AND t1.EVL_MAN_1_EMPNM LIKE '%' || #TRGET_NM# || '%'
+		</isEqual>
+		<isEqual property="TRGET_COMBO" compareValue="EVL_MAN_2_EMPNM">
+			AND t1.EVL_MAN_2_EMPNM LIKE '%' || #TRGET_NM# || '%'
+		</isEqual>
+		<isEqual property="TRGET_COMBO" compareValue="CNFRMR_EMPNM">
+			AND t1.CNFRMR_EMPNM LIKE '%' || #TRGET_NM# || '%'
+		</isEqual>
+	</isNotEmpty>
+		ORDER BY t1.DEPT_CODE
+		        ,t1.OFCPS_SE
+		        ,t1.JSSFC_SE
+		        ,t1.CLSF_SE
+	</select>
+
+
+	<!-- 기간설정 등록 -->
+	<insert id="HRM060102DAO.saveWorkEvlPd" parameterClass="java.util.HashMap">
+	<![CDATA[
+		MERGE INTO TBHRM_WORK_EVL_PD
+		USING DUAL
+		ON (  EVL_YEAR = #EVL_YEAR#
+		       AND HT_SE    = #HT_SE#
+		   ) WHEN MATCHED THEN
+		  UPDATE
+		     SET HT_BGNDE            = #HT_BGNDE#
+		        ,HT_ENDDE            = #HT_ENDDE#
+		        ,INDVDL_BGNDE        = #INDVDL_BGNDE#
+		        ,INDVDL_ENDDE        = #INDVDL_ENDDE#
+		        ,EVL_MAN_BGNDE       = #EVL_MAN_BGNDE#
+		        ,EVL_MAN_ENDDE       = #EVL_MAN_ENDDE#
+		        ,CNFRMR_BGNDE        = #CNFRMR_BGNDE#
+		        ,CNFRMR_ENDDE        = #CNFRMR_ENDDE#
+		        ,DCSN_DE             = #DCSN_DE#
+		        ,EXCL_MAN_DCSN_AT    = DECODE( (SELECT COUNT(1) FROM TBHRM_WORK_EVL_EXCL_MAN WHERE EVL_YEAR = #EVL_YEAR# AND HT_SE = #HT_SE#) ,0 , 0, 1)
+		        ,TAGTER_MAN_DCSN_AT  = DECODE( (SELECT COUNT(1) FROM TBHRM_WORK_EVL_TRGTER   WHERE EVL_YEAR = #EVL_YEAR# AND HT_SE = #HT_SE#) ,0 , 0, 1)
+		        ,UPDUSR_ID           = #S_USER_ID#
+		        ,UPDT_DT             = SYSDATE
+		   WHERE EVL_YEAR            = #EVL_YEAR#
+		     AND HT_SE               = #HT_SE#
+		WHEN NOT MATCHED THEN
+		  INSERT
+		    (
+			     EVL_YEAR
+			    ,HT_SE
+			    ,HT_BGNDE
+			    ,HT_ENDDE
+			    ,INDVDL_BGNDE
+			    ,INDVDL_ENDDE
+			    ,EVL_MAN_BGNDE
+			    ,EVL_MAN_ENDDE
+			    ,CNFRMR_BGNDE
+			    ,CNFRMR_ENDDE
+			    ,DCSN_DE
+			    ,EXCL_MAN_DCSN_AT 
+			    ,TAGTER_MAN_DCSN_AT 
+			    ,REGISTER_ID
+			    ,REGIST_DT
+			    ,UPDUSR_ID
+			    ,UPDT_DT
+		    )
+		  VALUES
+		    (
+			     #EVL_YEAR#
+			    ,#HT_SE#
+			    ,#HT_BGNDE#
+			    ,#HT_ENDDE#
+			    ,#INDVDL_BGNDE#
+			    ,#INDVDL_ENDDE#
+			    ,#EVL_MAN_BGNDE#
+			    ,#EVL_MAN_ENDDE#
+			    ,#CNFRMR_BGNDE#
+			    ,#CNFRMR_ENDDE#
+			    ,#DCSN_DE#
+			    ,DECODE( (SELECT COUNT(1) FROM TBHRM_WORK_EVL_EXCL_MAN WHERE EVL_YEAR = #EVL_YEAR# AND HT_SE = #HT_SE#) ,0 , 0, 1)
+		        ,DECODE( (SELECT COUNT(1) FROM TBHRM_WORK_EVL_TRGTER   WHERE EVL_YEAR = #EVL_YEAR# AND HT_SE = #HT_SE#) ,0 , 0, 1)
+			    ,#S_USER_ID#
+			    ,SYSDATE
+			    ,#S_USER_ID#
+			    ,SYSDATE
+		    )
+	]]>
+	</insert>
+
+
+	<!-- 제외자 수정 -->
+	<update id="HRM060102DAO.workEvlExclCU" parameterClass="java.util.HashMap">
+	<![CDATA[
+		MERGE INTO TBHRM_WORK_EVL_EXCL_MAN
+		USING DUAL
+		ON (  EVL_YEAR = #EVL_YEAR#
+		       AND HT_SE    = #HT_SE#
+		       AND EMPNO    = #EMPNO#
+		   )
+		WHEN MATCHED THEN
+		  UPDATE
+		     SET RM        = #RM#
+		        ,UPDUSR_ID = #S_USER_ID#
+		        ,UPDT_DT   = SYSDATE
+		   WHERE EVL_YEAR = #EVL_YEAR#
+		     AND HT_SE    = #HT_SE#
+		     AND EMPNO    = #EMPNO#
+		WHEN NOT MATCHED THEN
+		  INSERT
+		    (
+			     EVL_YEAR
+			    ,HT_SE
+			    ,EMPNO
+			    ,RM
+			    ,REGISTER_ID
+			    ,REGIST_DT
+			    ,UPDUSR_ID
+			    ,UPDT_DT
+		    )
+		  VALUES
+		    (
+			     #EVL_YEAR#
+			    ,#HT_SE#
+			    ,#EMPNO#
+			    ,#RM#
+			    ,#S_USER_ID#
+			    ,SYSDATE
+			    ,#S_USER_ID#
+			    ,SYSDATE
+		    )
+	]]>
+	</update>
+
+
+	<!-- 제외자 삭제 -->
+	<delete id="HRM060102DAO.workEvlExclD" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_WORK_EVL_EXCL_MAN 
+		WHERE  EVL_YEAR   = #EVL_YEAR#
+		AND    HT_SE      = #HT_SE#
+		AND    EMPNO      = #EMPNO#
+	]]>
+	</delete> 
+
+
+	<!-- 대상자 수정 -->
+	<update id="HRM060102DAO.workEvlTagterU" parameterClass="java.util.HashMap">
+	<![CDATA[
+		UPDATE TBHRM_WORK_EVL_TRGTER
+		SET    EVL_YEAR             = #EVL_YEAR#
+		      ,HT_SE                = #HT_SE#
+		      ,EMPNO                = #EMPNO#
+		      ,EVL_MAN_1_EMPNO      = #EVL_MAN_1_EMPNO#
+		      ,EVL_MAN_1_DEPT_CODE  = SFHRM_GET_EMPL_INFO(#EVL_MAN_1_EMPNO#, 'DEPT_CODE', NULL)
+		      ,EVL_MAN_1_CLSF_SE    = SFHRM_GET_EMPL_INFO(#EVL_MAN_1_EMPNO#, 'CLSF_SE',   NULL)
+		      ,EVL_MAN_1_OFCPS_SE   = SFHRM_GET_EMPL_INFO(#EVL_MAN_1_EMPNO#, 'OFCPS_SE',  NULL)
+		      ,EVL_MAN_2_EMPNO      = #EVL_MAN_2_EMPNO#
+		      ,EVL_MAN_2_DEPT_CODE  = SFHRM_GET_EMPL_INFO(#EVL_MAN_2_EMPNO#, 'DEPT_CODE', NULL)
+		      ,EVL_MAN_2_CLSF_SE    = SFHRM_GET_EMPL_INFO(#EVL_MAN_2_EMPNO#, 'CLSF_SE',   NULL)
+		      ,EVL_MAN_2_OFCPS_SE   = SFHRM_GET_EMPL_INFO(#EVL_MAN_2_EMPNO#, 'OFCPS_SE',  NULL)
+		      ,CNFRMR_EMPNO         = #CNFRMR_EMPNO#
+		      ,CNFRMR_DEPT_CODE     = SFHRM_GET_EMPL_INFO(#CNFRMR_EMPNO#, 'DEPT_CODE', NULL)
+		      ,CNFRMR_CLSF_SE       = SFHRM_GET_EMPL_INFO(#CNFRMR_EMPNO#, 'CLSF_SE',   NULL)
+		      ,CNFRMR_OFCPS_SE      = SFHRM_GET_EMPL_INFO(#CNFRMR_EMPNO#, 'OFCPS_SE',  NULL)
+		      ,EVL_STEP_SE          = #EVL_STEP_SE#
+		      ,UPDUSR_ID            = #S_USER_ID#
+		      ,UPDT_DT              = SYSDATE
+		WHERE  EVL_YEAR             = #EVL_YEAR#
+		AND    HT_SE                = #HT_SE#
+		AND    EMPNO                = #EMPNO#
+	]]>
+	</update>
+
+
+	<!-- 제외자 추가 팝업 선택 시, 입력하기 위한 부가정보 조회 -->
+	<select id="HRM060102DAO.addExclEmp" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH DEPT_GNFD_DTLS_TM AS ( /*현 보직일*/
+		    SELECT EMPNO, DEPT_CODE, MIN(GNFD_DE) AS DEPT_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, DEPT_CODE
+		)
+		, CLSF_GNFD_DTLS_TM AS ( /*현직급 임용일*/
+		    SELECT EMPNO, CLSF_SE, MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, CLSF_SE
+		)
+		SELECT 
+		       #EVL_YEAR#                                        AS EVL_YEAR
+		     , #HT_SE#                                           AS HT_SE
+		     , t1.EMPNO
+		     , t1.EMPNM
+		     , t1.DEPT_CODE
+		     , t4.DEPT_NM
+		     , SFCOM_CODE_NM('HRM003', t1.OFCPS_SE, 'CODE_NM')   AS OFCPS_SE
+		     , SFCOM_CODE_NM('HRM002', t1.HR_CLSF_SE, 'CODE_NM') AS HR_CLSF_NM
+		     , t1.BRTHDY
+		     , t1.ECNY_DE      /* 입사일*/
+		     , NVL(t1.APPNT_DE, t2.DEPT_GNFD_DE)           AS DEPT_GNFD_DE /* 현 보직일*/
+		     , NVL(t1.NOW_CLSF_EMPLMN_DE, t3.CLSF_GNFD_DE) AS CLSF_GNFD_DE /* 현직급 임용일*/
+		     , ROUND(NVL(MONTHS_BETWEEN(TO_DATE(#HT_BGNDE#, 'YYYYMMDD'), TO_DATE(t1.ECNY_DE, 'YYYYMMDD')),0),0) AS WORK_MONTH
+		FROM TBHRM_HR_MASTR t1
+		    LEFT OUTER JOIN DEPT_GNFD_DTLS_TM t2
+		      ON  t1.EMPNO     = t2.EMPNO
+		      AND t1.DEPT_CODE = t2.DEPT_CODE
+		    LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+		      ON  t1.EMPNO     = t3.EMPNO
+		      AND t1.HR_CLSF_SE   = t3.CLSF_SE
+		    LEFT OUTER JOIN TBHRM_DEPT t4
+		      ON  t1.DEPT_CODE = t4.DEPT_CODE
+		WHERE t1.EMPNO = #EMPNO#
+	]]>
+	</select>
+
+
+	<!-- 제외자 모두 삭제 -->
+	<delete id="HRM060102DAO.deleteAutoWorkEvlExcl" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_WORK_EVL_EXCL_MAN 
+		WHERE  EVL_YEAR   = #EVL_YEAR#
+		AND    HT_SE      = #HT_SE#
+	]]>
+	</delete> 
+
+
+	<!-- 제외자 자동 선정 -->
+	<insert id="HRM060102DAO.insertAutoWorkEvlExcl" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_WORK_EVL_EXCL_MAN(
+		     EVL_YEAR
+		    ,HT_SE
+		    ,EMPNO
+		    ,RM
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		WITH DEPT_GNFD_DTLS_TM AS ( /*현 보직일*/
+		    SELECT EMPNO, DEPT_CODE, MIN(GNFD_DE) AS DEPT_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, DEPT_CODE
+		)
+		, CLSF_GNFD_DTLS_TM AS ( /*현직급 임용일*/
+		    SELECT EMPNO, CLSF_SE, MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, CLSF_SE
+		)
+		, EXCLUSION_TGT_TM AS (
+		    SELECT EMPNO, GNFD_SE, DECODE(GNFD_SE, '015', '육아휴직', '027', '휴직', '030', '직위해제', '-') AS GNFD_SE_NM, '[발령]' || MAX(GNFD_MATTER) AS GNFD_MATTER
+		    FROM TBHRM_GNFD_DTLS
+		    WHERE GNFD_SE IN ('015', '027', '030')
+		    AND   (GNFD_ENDDE >= #HT_ENDDE# OR GNFD_BGNDE BETWEEN #HT_BGNDE# AND #HT_ENDDE# OR GNFD_ENDDE BETWEEN #HT_BGNDE# AND #HT_ENDDE#)
+		    GROUP BY EMPNO, GNFD_SE
+		)
+		SELECT #EVL_YEAR#                                        AS EVL_YEAR
+		     , #HT_SE#                                           AS HT_SE
+		     , t1.EMPNO
+		     , CASE WHEN ROUND(NVL(MONTHS_BETWEEN(TO_DATE(#HT_ENDDE# /*근무평정 시작일자*/, 'YYYYMMDD'), TO_DATE(t1.ECNY_DE, 'YYYYMMDD')),0),0) < 3 THEN '신규입사자(3개월 이내)'
+		            ELSE t5.GNFD_MATTER 
+		       END AS RM
+		     , #S_USER_ID#                                       AS REGISTER_ID
+		     , SYSDATE                                           AS REGIST_DT
+		     , #S_USER_ID#                                       AS UPDUSR_ID
+		     , SYSDATE                                           AS UPDT_DT
+		FROM TBHRM_HR_MASTR t1
+		    LEFT OUTER JOIN DEPT_GNFD_DTLS_TM t2
+		      ON  t1.EMPNO     = t2.EMPNO
+		      AND t1.DEPT_CODE = t2.DEPT_CODE
+		    LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+		      ON  t1.EMPNO     = t3.EMPNO
+		      AND t1.HR_CLSF_SE   = t3.CLSF_SE
+		    LEFT OUTER JOIN TBHRM_DEPT t4
+		      ON  t1.DEPT_CODE = t4.DEPT_CODE
+		    LEFT OUTER JOIN EXCLUSION_TGT_TM t5
+		      ON  t1.EMPNO = t5.EMPNO
+		WHERE t1.STTUS_SE <> '009' /*퇴직자 제외*/
+		AND   t1.JSSFC_SE <> '01'  /*임원은 평정대상에서 제외*/
+		AND   t1.ECNY_DE IS NOT NULL
+		AND   (ROUND(NVL(MONTHS_BETWEEN(TO_DATE(#HT_ENDDE# /*근무평정 시작일자*/, 'YYYYMMDD'), TO_DATE(t1.ECNY_DE, 'YYYYMMDD')),0),0) < 3 /*제외자 : 임용후 3개월 이내의 자*/
+		  OR t5.EMPNO IS NOT NULL
+		)
+		AND    t1.EMPNO NOT IN ('11711303', '11711301', '11777302') /* 개발자제외 */
+		ORDER BY t1.DEPT_CODE
+		       , t1.OFCPS_SE
+		       , t1.JSSFC_SE
+		       , t1.HR_CLSF_SE
+	]]>
+	</insert>
+
+
+	<!-- 대상자 모두 삭제 -->
+	<delete id="HRM060102DAO.deleteAutoWorkEvlTagter" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_WORK_EVL_TRGTER
+		WHERE  EVL_YEAR = #EVL_YEAR#
+		AND    HT_SE    = #HT_SE#
+	]]>
+	</delete>
+
+
+	<!-- 대상자 자동 선정 -->
+	<insert id="HRM060102DAO.insertAutoWorkEvlTagter" parameterClass="java.util.HashMap">
+		/*HRM060102DAO.insertAutoWorkEvlTagter(대상자 자동 선정)*/
+		INSERT INTO TBHRM_WORK_EVL_TRGTER(
+		     EVL_YEAR
+		    ,HT_SE
+		    ,EMPNO
+		    ,DEPT_CODE
+		    ,JSSFC_SE
+		    ,CLSF_SE
+		    ,OFCPS_SE
+		    ,JBLN_SE
+		    ,EVL_MAN_1_EMPNO
+		    ,EVL_MAN_1_DEPT_CODE
+		    ,EVL_MAN_1_CLSF_SE
+		    ,EVL_MAN_1_OFCPS_SE
+		    ,EVL_MAN_2_EMPNO
+		    ,EVL_MAN_2_DEPT_CODE
+		    ,EVL_MAN_2_CLSF_SE
+		    ,EVL_MAN_2_OFCPS_SE
+		    ,CNFRMR_EMPNO
+		    ,CNFRMR_DEPT_CODE
+		    ,CNFRMR_CLSF_SE
+		    ,CNFRMR_OFCPS_SE
+		    ,EVL_STEP_SE
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		WITH DEPT_GNFD_DTLS_TM AS ( /*현 보직일*/
+		    SELECT EMPNO, DEPT_CODE, MIN(GNFD_DE) AS DEPT_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, DEPT_CODE
+		)
+		, CLSF_GNFD_DTLS_TM AS ( /*현직급 임용일*/
+		    SELECT EMPNO, CLSF_SE, MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM TBHRM_GNFD_DTLS 
+		    GROUP BY EMPNO, CLSF_SE
+		)
+		, LAST_GNFD_DTLS_TM AS ( /*평정년도 분기에 따른 마지막 발령 정보*/
+		    SELECT EMPNO
+		         , DEPT_CODE
+		         , JSSFC_SE
+		         , CLSF_SE
+		         , OFCPS_SE
+		         , JBLN_SE
+		         , GNFD_DE
+		         , ROW_NUMBER() OVER(PARTITION BY EMPNO ORDER BY GNFD_DE DESC) AS RK
+		    FROM TBHRM_GNFD_DTLS
+		    WHERE 1=1
+		<isEqual property="HT_SE" compareValue="01">
+		    AND   GNFD_DE <![CDATA[<]]> #EVL_YEAR# || '0699' /*상반기*/
+		</isEqual>
+		<isEqual property="HT_SE" compareValue="02">
+		    AND   GNFD_DE <![CDATA[<]]> #EVL_YEAR# || '1299' /*하반기*/
+		</isEqual>
+		    AND   DCSN_AT = '1'
+		)
+		SELECT #EVL_YEAR#                                        AS EVL_YEAR
+		     , #HT_SE#                                           AS HT_SE
+		     , t1.EMPNO                                          AS EMPNO
+		     , NVL(t5.DEPT_CODE, t1.DEPT_CODE)    AS DEPT_CODE
+		     , NVL(t5.JSSFC_SE, t1.JSSFC_SE)      AS JSSFC_SE
+		     , NVL(t5.CLSF_SE, t1.HR_CLSF_SE)     AS CLSF_SE
+		     , NVL(t5.OFCPS_SE, t1.OFCPS_SE)      AS OFCPS_SE
+		     , NVL(t5.JBLN_SE, t1.JBLN_SE)        AS JBLN_SE
+		     , SFHRM_GET_EVL_MAN(t1.EMPNO, 'M10', #EVL_YEAR#, #HT_SE#)                                             AS EVL_MAN_1_EMPNO
+		     , SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(t1.EMPNO, 'M10', #EVL_YEAR#, #HT_SE#), 'DEPT_CODE', NULL)     AS EVL_MAN_1_DEPT_CODE
+		     , SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(t1.EMPNO, 'M10', #EVL_YEAR#, #HT_SE#), 'CLSF_SE',   NULL)     AS EVL_MAN_1_CLSF_SE
+		     , SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(t1.EMPNO, 'M10', #EVL_YEAR#, #HT_SE#), 'OFCPS_SE',  NULL)     AS EVL_MAN_1_OFCPS_SE
+		     , SFHRM_GET_EVL_MAN(t1.EMPNO, 'M20', #EVL_YEAR#, #HT_SE#)                                             AS EVL_MAN_2_EMPNO
+		     , SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(t1.EMPNO, 'M20', #EVL_YEAR#, #HT_SE#), 'DEPT_CODE', NULL)     AS EVL_MAN_2_DEPT_CODE
+		     , SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(t1.EMPNO, 'M20', #EVL_YEAR#, #HT_SE#), 'CLSF_SE',   NULL)     AS EVL_MAN_2_CLSF_SE
+		     , SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(t1.EMPNO, 'M20', #EVL_YEAR#, #HT_SE#), 'OFCPS_SE',  NULL)     AS EVL_MAN_2_OFCPS_SE
+		     , SFHRM_GET_EVL_MAN(t1.EMPNO, 'M30', #EVL_YEAR#, #HT_SE#)                                             AS CNFRMR_EMPNO
+		     , SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(t1.EMPNO, 'M30', #EVL_YEAR#, #HT_SE#), 'DEPT_CODE', NULL)     AS CNFRMR_DEPT_CODE
+		     , SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(t1.EMPNO, 'M30', #EVL_YEAR#, #HT_SE#), 'CLSF_SE',   NULL)     AS CNFRMR_CLSF_SE
+		     , SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(t1.EMPNO, 'M30', #EVL_YEAR#, #HT_SE#), 'OFCPS_SE',  NULL)     AS CNFRMR_OFCPS_SE
+		     , CASE WHEN NVL(t5.JSSFC_SE, t1.JSSFC_SE) IN ('03','05','06') THEN '02'
+		            WHEN NVL(t5.DEPT_CODE, t1.DEPT_CODE) = '010000'        THEN '02'
+		       ELSE '03' END                                                          AS EVL_STEP_SE  /*03 : 3단계평정*/
+		     , #S_USER_ID#                                                            AS REGISTER_ID
+		     , SYSDATE                                                                AS REGIST_DT
+		     , #S_USER_ID#                                                            AS UPDUSR_ID
+		     , SYSDATE                                                                AS UPDT_DT
+		FROM TBHRM_HR_MASTR t1
+		    LEFT OUTER JOIN DEPT_GNFD_DTLS_TM t2
+		      ON  t1.EMPNO     = t2.EMPNO
+		      AND t1.DEPT_CODE = t2.DEPT_CODE
+		    LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+		      ON  t1.EMPNO      = t3.EMPNO
+		      AND t1.HR_CLSF_SE = t3.CLSF_SE
+		    LEFT OUTER JOIN TBHRM_DEPT t4
+		      ON  t1.DEPT_CODE = t4.DEPT_CODE
+		    LEFT OUTER JOIN LAST_GNFD_DTLS_TM t5
+		      ON  t1.EMPNO = t5.EMPNO
+		      AND t5.RK    = '1'
+	<![CDATA[
+		WHERE t1.STTUS_SE <> '009' /*퇴직자 제외*/
+		AND   NVL(t5.JSSFC_SE, t1.JSSFC_SE) <> '01'  /*임원은 평정대상에서 제외*/
+		AND   NOT EXISTS (
+		    SELECT EMPNO
+		    FROM   TBHRM_WORK_EVL_EXCL_MAN s1 
+		    WHERE  s1.EVL_YEAR = #EVL_YEAR# 
+		    AND    s1.HT_SE    = #HT_SE#
+		    AND    s1.EMPNO    = t1.EMPNO
+		)
+		AND    t1.EMPNO NOT IN ('11711303', '11711301', '11777302') /* 개발자제외 */
+		ORDER BY t1.DEPT_CODE
+		       , t1.OFCPS_SE
+		       , t1.JSSFC_SE
+		       , t1.HR_CLSF_SE
+	]]>
+	</insert>
+
+	<!-- 임시테이블삭제 -->
+	<delete id="HRM060102DAO.deleteTmp" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_WORK_EVL_TRGTER_TMP
+		WHERE  EVL_YEAR = #EVL_YEAR#
+		AND    HT_SE    = #HT_SE#
+	]]>
+	</delete>
+
+	<!-- 임시테이블에 추가 -->
+	<insert id="HRM060102DAO.insertTagterToTmp" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_WORK_EVL_TRGTER_TMP (
+		     EVL_YEAR
+		    ,HT_SE
+		    ,EMPNO
+		    ,EVL_MAN_1_EMPNO
+		    ,EVL_MAN_1_DEPT_CODE
+		    ,EVL_MAN_1_CLSF_SE
+		    ,EVL_MAN_1_OFCPS_SE
+		    ,EVL_MAN_2_EMPNO
+		    ,EVL_MAN_2_DEPT_CODE
+		    ,EVL_MAN_2_CLSF_SE
+		    ,EVL_MAN_2_OFCPS_SE
+		    ,CNFRMR_EMPNO
+		    ,CNFRMR_DEPT_CODE
+		    ,CNFRMR_CLSF_SE
+		    ,CNFRMR_OFCPS_SE
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		    ,EVL_STEP_SE
+		    ,JSSFC_SE
+		    ,CLSF_SE
+		    ,DEPT_CODE
+		    ,OFCPS_SE
+		    ,JBLN_SE
+		)
+		SELECT EVL_YEAR
+		      ,HT_SE
+		      ,EMPNO
+		      ,SFHRM_GET_EVL_MAN(EMPNO, 'M10', EVL_YEAR, HT_SE)                                             AS EVL_MAN_1_EMPNO
+		      ,SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(EMPNO, 'M10', EVL_YEAR, HT_SE), 'DEPT_CODE', NULL)     AS EVL_MAN_1_DEPT_CODE
+		      ,SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(EMPNO, 'M10', EVL_YEAR, HT_SE), 'CLSF_SE',   NULL)     AS EVL_MAN_1_CLSF_SE
+		      ,SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(EMPNO, 'M10', EVL_YEAR, HT_SE), 'OFCPS_SE',  NULL)     AS EVL_MAN_1_OFCPS_SE
+		      ,SFHRM_GET_EVL_MAN(EMPNO, 'M20', EVL_YEAR, HT_SE)                                             AS EVL_MAN_2_EMPNO
+		      ,SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(EMPNO, 'M20', EVL_YEAR, HT_SE), 'DEPT_CODE', NULL)     AS EVL_MAN_2_DEPT_CODE
+		      ,SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(EMPNO, 'M20', EVL_YEAR, HT_SE), 'CLSF_SE',   NULL)     AS EVL_MAN_2_CLSF_SE
+		      ,SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(EMPNO, 'M20', EVL_YEAR, HT_SE), 'OFCPS_SE',  NULL)     AS EVL_MAN_2_OFCPS_SE
+		      ,SFHRM_GET_EVL_MAN(EMPNO, 'M30', EVL_YEAR, HT_SE)                                             AS CNFRMR_EMPNO
+		      ,SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(EMPNO, 'M30', EVL_YEAR, HT_SE), 'DEPT_CODE', NULL)     AS CNFRMR_DEPT_CODE
+		      ,SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(EMPNO, 'M30', EVL_YEAR, HT_SE), 'CLSF_SE',   NULL)     AS CNFRMR_CLSF_SE
+		      ,SFHRM_GET_EMPL_INFO(SFHRM_GET_EVL_MAN(EMPNO, 'M30', EVL_YEAR, HT_SE), 'OFCPS_SE',  NULL)     AS CNFRMR_OFCPS_SE
+		      ,REGISTER_ID
+		      ,REGIST_DT
+		      ,UPDUSR_ID
+		      ,UPDT_DT
+		      ,EVL_STEP_SE
+		      ,JSSFC_SE
+		      ,CLSF_SE
+		      ,DEPT_CODE
+		      ,OFCPS_SE
+		      ,JBLN_SE
+		FROM   TBHRM_WORK_EVL_TRGTER
+		WHERE  EVL_YEAR = #EVL_YEAR#
+		AND    HT_SE    = #HT_SE#
+	]]>
+	</insert>
+
+	<!-- 원본테이블삭제 -->
+	<delete id="HRM060102DAO.deleteTagter" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_WORK_EVL_TRGTER
+		WHERE  EVL_YEAR = #EVL_YEAR#
+		AND    HT_SE    = #HT_SE#
+	]]>
+	</delete>
+
+	<!-- 임시테이블로부터 반환 -->
+	<insert id="HRM060102DAO.insertTmpToTagter" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_WORK_EVL_TRGTER (
+		     EVL_YEAR
+		    ,HT_SE
+		    ,EMPNO
+		    ,EVL_MAN_1_EMPNO
+		    ,EVL_MAN_1_DEPT_CODE
+		    ,EVL_MAN_1_CLSF_SE
+		    ,EVL_MAN_1_OFCPS_SE
+		    ,EVL_MAN_2_EMPNO
+		    ,EVL_MAN_2_DEPT_CODE
+		    ,EVL_MAN_2_CLSF_SE
+		    ,EVL_MAN_2_OFCPS_SE
+		    ,CNFRMR_EMPNO
+		    ,CNFRMR_DEPT_CODE
+		    ,CNFRMR_CLSF_SE
+		    ,CNFRMR_OFCPS_SE
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		    ,EVL_STEP_SE
+		    ,JSSFC_SE
+		    ,CLSF_SE
+		    ,DEPT_CODE
+		    ,OFCPS_SE
+		    ,JBLN_SE
+		)
+		SELECT EVL_YEAR
+		      ,HT_SE
+		      ,EMPNO
+		      ,EVL_MAN_1_EMPNO
+		      ,EVL_MAN_1_DEPT_CODE
+		      ,EVL_MAN_1_CLSF_SE
+		      ,EVL_MAN_1_OFCPS_SE
+		      ,EVL_MAN_2_EMPNO
+		      ,EVL_MAN_2_DEPT_CODE
+		      ,EVL_MAN_2_CLSF_SE
+		      ,EVL_MAN_2_OFCPS_SE
+		      ,CNFRMR_EMPNO
+		      ,CNFRMR_DEPT_CODE
+		      ,CNFRMR_CLSF_SE
+		      ,CNFRMR_OFCPS_SE
+		      ,REGISTER_ID
+		      ,REGIST_DT
+		      ,UPDUSR_ID
+		      ,UPDT_DT
+		      ,EVL_STEP_SE
+		      ,JSSFC_SE
+		      ,CLSF_SE
+		      ,DEPT_CODE
+		      ,OFCPS_SE
+		      ,JBLN_SE
+		FROM   TBHRM_WORK_EVL_TRGTER_TMP
+		WHERE  EVL_YEAR = #EVL_YEAR#
+		AND    HT_SE    = #HT_SE#
+	]]>
+	</insert>
+
+</sqlMap>

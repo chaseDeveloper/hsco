@@ -1,0 +1,1844 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM020300_SQL">
+	
+	
+	
+    <!-- 그룹 대상 사용자 리스트 -->
+    <select id="SYM020300DAO.getListUser" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+            0 AS CHK, 
+            A.USER_ID, A.USER_NM,
+            B.EMPNO, C.DEPT_CODE, C.DEPT_NM,
+            CASE
+                WHEN B.HR_CLSF_SE IS NULL THEN ''
+                WHEN B.HR_CLSF_SE = '00' THEN '임원'
+                WHEN B.HR_CLSF_SE = '0A' THEN '계약'
+                ELSE SUBSTR(B.HR_CLSF_SE, 2,1) || '급'
+            END AS HR_CLSF_SE,
+            (
+                SELECT CODE_NM FROM TBCOM_CMMN_CODE
+                WHERE GRP_CODE = 'HRM214'
+                AND CODE = B.RSPOFC_SE
+            ) AS RSPOFC_NM
+        FROM
+            TBCOM_USER A, 
+            TBHRM_HR_MASTR B,
+            (SELECT DEPT_CODE, DEPT_NM FROM VWHRM_DEPT WHERE USE_AT = '1') C
+        WHERE
+            A.EMPNO = B.EMPNO(+)
+        AND B.DEPT_CODE = C.DEPT_CODE(+)
+        <isNotEmpty property="SEARCH_CONDITION">
+        
+        	<isEqual property="SEARCH_CONDITION" compareValue="1">
+        		<isNotEmpty property="SEARCH_KEYWORD"> 
+				AND A.USER_NM LIKE '%'|| #SEARCH_KEYWORD# || '%'
+				</isNotEmpty>
+        	</isEqual>
+        	
+        	<isEqual property="SEARCH_CONDITION" compareValue="2">
+        		<isNotEmpty property="SEARCH_KEYWORD"> 
+				AND A.USER_ID LIKE '%'|| #SEARCH_KEYWORD# || '%'
+				</isNotEmpty>
+        	</isEqual>
+        	
+        </isNotEmpty>
+    </select>
+    
+	<!-- 권한그룹 리스트 -->
+	<select id="SYM020300DAO.getListGrp" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+        SELECT
+            0 AS CHK, 
+            A.AUTH_GRP_ID, A.AUTH_GRP_NM,
+            A.SYS_SE_CODE, B.CODE_NM AS SYS_SE_NM,            
+            A.DFLT_AT, A.JOB_SE,
+            (SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'COM025' AND A.JOB_SE = CODE) AS JOB_SE_NM,
+            DECODE( A.DFLT_AT, '1', 'Y', 'N') AS DFLT_YN
+        FROM 
+            TBCOM_AUTH_GRP A,
+            (SELECT CODE, CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'COM024' ) B,
+            TBCOM_USER_GRP C
+        WHERE
+            A.SYS_SE_CODE = B.CODE(+)
+        AND A.AUTH_GRP_ID = C.AUTH_GRP_ID
+        AND C.USER_ID = #USER_ID#
+    </select>
+    
+    
+	<select id="SYM020300DAO.getListGrpByUser2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 0 AS CHK,
+			   A.AUTH_GRP_ID,
+		       C.AUTH_GRP_NM,
+		       B.USER_ID,
+		       B.USER_NM,
+		       B.DEPT_CODE,
+		       D.DEPT_NM
+		  FROM TBCOM_USER_GRP A,
+		       TBCOM_USER B,
+		       TBCOM_AUTH_GRP C,
+		       VWHRM_DEPT D
+		 WHERE     1 = 1
+		       AND A.USER_ID = B.USER_ID
+		       AND A.AUTH_GRP_ID = C.AUTH_GRP_ID
+		       AND B.DEPT_CODE = D.DEPT_CODE(+)
+		       AND INTRCP_AT = '0'
+		   <isNotEmpty property="USER_ID">
+		       AND A.USER_ID = #USER_ID#
+		   </isNotEmpty>
+		   ORDER BY A.AUTH_GRP_ID
+    </select>
+    
+	<select id="SYM020300DAO.getListGrpByUser" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+        SELECT 
+		        AUTH_GRP_ID, USER_ID,
+		        INTRCP_AT 
+		 FROM TBCOM_USER_GRP
+		WHERE USER_ID = #USER_ID#
+               	     
+    </select>
+    
+    
+ 	<!-- 그룹 사용자 추가 -->
+    <insert id="SYM020300DAO.SYM020300C" parameterClass="java.util.Map" >
+		INSERT INTO TBCOM_USER_GRP (
+		                AUTH_GRP_ID, USER_ID,
+		                REGISTER_ID, REGIST_DT,
+		                UPDUSR_ID, UPDT_DT
+		            )
+		     VALUES (
+		            #AUTH_GRP_ID#, #USER_ID#,
+		            #S_USER_ID#, SYSDATE,
+		            #S_USER_ID#, SYSDATE
+		        )
+
+	</insert>
+
+    <!--  그룹 사용자 삭제 -->
+    <delete id="SYM020300DAO.SYM020300D" parameterClass="java.util.Map" >
+
+	      	DELETE FROM TBCOM_USER_GRP
+			WHERE
+				USER_ID = #USER_ID#
+
+    </delete>
+    
+    <!--  그룹 메뉴 조회 2016.07.21 jjy 사용자 메뉴(TBCOM_USER_MENU) 권한체크 삭제  -->
+     <select id="SYM020300DAO.getAuthGrpMenu" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+              0 AS CHK
+		    , #USER_ID# AS USER_ID
+    	    , A.AUTH_GRP_ID
+            , A.MENU_ID
+            , B.MENU_NM
+            , B.PAGE_ID
+            , B.PAGE_NM
+	        , A.INTRCP_AT
+        FROM TBCOM_AUTH_GRP_MENU A
+        , (
+              SELECT 
+                  ROWNUM AS SEQ, A.* 
+              FROM (
+                  SELECT  B.MENU_ID
+                         , B.MENU_NM
+                  		, B.PAGE_ID
+                  		, (SELECT C.PAGE_NM FROM TBCOM_PAGE C WHERE C.PAGE_ID = B.PAGE_ID AND ROWNUM = 1) AS PAGE_NM
+                  FROM TBCOM_MENU B
+                  CONNECT BY PRIOR B.MENU_ID = B.UPPER_MENU 
+                  START WITH B.MENU_ID IN 0
+                  ORDER SIBLINGS BY B.MENU_ORDR 
+              ) A
+           ) B
+        WHERE A.MENU_ID = B.MENU_ID
+            AND A.AUTH_GRP_ID = #AUTH_GRP_ID#
+        ORDER BY B.SEQ 
+    </select>
+    
+     <!--  
+    <select id="SYM020300DAO.getAuthGrpMenu" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+              0 AS CHK
+		    , #USER_ID# AS USER_ID
+    	    , A.AUTH_GRP_ID
+            , A.MENU_ID
+            , B.MENU_NM
+            , B.PAGE_ID
+            , B.PAGE_NM
+	        , NVL(D.INTRCP_AT, A.INTRCP_AT) AS INTRCP_AT
+        FROM TBCOM_AUTH_GRP_MENU A
+        , (
+              SELECT 
+                  ROWNUM AS SEQ, A.* 
+              FROM (
+                  SELECT  B.MENU_ID
+                         , B.MENU_NM
+                  		, B.PAGE_ID
+                  		, (SELECT C.PAGE_NM FROM TBCOM_PAGE C WHERE C.PAGE_ID = B.PAGE_ID AND ROWNUM = 1) AS PAGE_NM
+                  FROM TBCOM_MENU B
+                  CONNECT BY PRIOR B.MENU_ID = B.UPPER_MENU 
+                  START WITH B.MENU_ID IN 0
+                  ORDER SIBLINGS BY B.MENU_ORDR 
+              ) A
+           ) B
+        , (SELECT * FROM TBCOM_USER_MENU WHERE USER_ID = #USER_ID#) D
+        WHERE A.MENU_ID = B.MENU_ID
+            AND B.MENU_ID = D.MENU_ID(+)
+            AND A.AUTH_GRP_ID = #AUTH_GRP_ID#
+        ORDER BY B.SEQ 
+    </select>
+-->
+    <!--  그룹 메뉴 조회 -->
+    <select id="SYM020300DAO.getAuthGrpChangeMenu" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT AA.AUTH_GRP_ID,
+		       AA.USER_ID,
+		       AA.MENU_ID,
+		       AA.INTRCP_AT,
+		       AA.INTRCP_AT_CNT,
+		       BB.INTRCP_AT AS ORG_INTRCP_AT,
+		       CASE
+		          WHEN BB.INTRCP_AT IS NULL THEN 'I'
+		          WHEN AA.INTRCP_AT = BB.INTRCP_AT THEN 'N'
+		          <![CDATA[ 		          
+		          WHEN AA.INTRCP_AT <> BB.INTRCP_AT THEN 'U'
+		          ]]>
+		          ELSE 'UNKNOWN'
+		       END FLAG
+		  FROM (SELECT AUTH_GRP_ID,
+		               #USER_ID# AS USER_ID,
+		               MENU_ID,
+		               INTRCP_AT_CNT,
+		               (CASE WHEN INTRCP_AT_CNT > 0 THEN '0' ELSE '1' END)
+		                  AS INTRCP_AT
+		          FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+		                         A.MENU_ID,
+		                         SUM (CASE WHEN A.INTRCP_AT = '0' THEN 1 ELSE 0 END)
+		                            AS INTRCP_AT_CNT
+		                    FROM TBCOM_AUTH_GRP_MENU A
+		                   WHERE 1 = 1
+		                         AND A.AUTH_GRP_ID IN (SELECT AUTH_GRP_ID
+		                                                 FROM TBCOM_USER_GRP
+		                                                WHERE USER_ID = #USER_ID#)
+		                GROUP BY MENU_ID
+		                ORDER BY MENU_ID)) AA,
+		       TBCOM_USER_MENU BB
+		 WHERE     AA.USER_ID = BB.USER_ID(+)
+		       AND AA.MENU_ID = BB.MENU_ID(+)
+		       
+    </select>
+        
+   
+            
+    <!--  그룹 서비스 조회 -->
+    <select id="SYM020300DAO.getAuthGrpOprtin" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 0 AS CHK,
+			   #USER_ID# AS USER_ID,
+		       A.AUTH_GRP_ID,
+		       A.SVC_ID,
+		       C.SVC_NM,
+		       A.OPRTIN_NM,
+		       B.OPRTIN_DC,
+		       NVL(D.INTRCP_AT, A.INTRCP_AT) AS INTRCP_AT
+		  FROM TBCOM_AUTH_GRP_OPRTIN A, TBCOM_OPRTIN B, TBCOM_SVC C, TBCOM_USER_OPRTIN D
+		 WHERE     1 = 1
+		       AND A.SVC_ID = B.SVC_ID
+		       AND A.OPRTIN_NM = B.OPRTIN_NM
+		       AND A.SVC_ID = C.SVC_ID(+)
+		       AND A.SVC_ID = D.SVC_ID(+)
+               AND A.OPRTIN_NM = D.OPRTIN_NM(+)
+               AND D.USER_ID(+) = #USER_ID#
+		       AND A.AUTH_GRP_ID =  #AUTH_GRP_ID#
+			ORDER BY A.SVC_ID, A.OPRTIN_NM		       
+    </select>
+    
+   <select id="SYM020300DAO.getAuthGrpChangeOprtin" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT AA.AUTH_GRP_ID,
+		       AA.USER_ID,
+		       AA.SVC_ID,
+		       AA.OPRTIN_NM,
+		       AA.INTRCP_AT,
+		       AA.INTRCP_AT_CNT,
+		       BB.INTRCP_AT AS ORG_INTRCP_AT,
+		       CASE
+		          WHEN BB.INTRCP_AT IS NULL THEN 'I'
+		          WHEN AA.INTRCP_AT = BB.INTRCP_AT THEN 'N'
+		          <![CDATA[ 		          
+		          WHEN AA.INTRCP_AT <> BB.INTRCP_AT THEN 'U'
+		          ]]>
+		       END FLAG
+		  FROM (SELECT AUTH_GRP_ID,
+		               #USER_ID# AS USER_ID,
+		               SVC_ID,
+		               OPRTIN_NM,
+		               INTRCP_AT_CNT,
+		               (CASE WHEN INTRCP_AT_CNT > 0 THEN '0' ELSE '1' END)
+		                  AS INTRCP_AT
+		          FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+		                         A.SVC_ID,
+		                         A.OPRTIN_NM,
+		                         SUM (CASE WHEN A.INTRCP_AT = '0' THEN 1 ELSE 0 END)
+		                            AS INTRCP_AT_CNT
+		                    FROM TBCOM_AUTH_GRP_OPRTIN A
+		                   WHERE 1 = 1
+		                         AND A.AUTH_GRP_ID IN (SELECT AUTH_GRP_ID
+		                                                 FROM TBCOM_USER_GRP
+		                                                WHERE USER_ID = #USER_ID#)
+		                GROUP BY SVC_ID, OPRTIN_NM
+		                ORDER BY SVC_ID, OPRTIN_NM)) AA,
+		       TBCOM_USER_OPRTIN BB
+		 WHERE     AA.USER_ID = BB.USER_ID(+)
+		       AND AA.SVC_ID = BB.SVC_ID(+)
+		       AND AA.OPRTIN_NM = BB.OPRTIN_NM(+)		       
+    </select>    
+
+   
+        
+    <!--  그룹 버튼 조회 -->
+    <select id="SYM020300DAO.getAuthGrpButton" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 0 AS CHK,
+			   #USER_ID# AS USER_ID,
+		       A.AUTH_GRP_ID,
+		       A.PAGE_ID,
+		       C.PAGE_NM,
+		       A.BUTTON_ID,
+		       B.BUTTON_NM,
+		       B.BUTTON_DC,
+		       NVL(D.INTRCP_AT, A.INTRCP_AT) AS INTRCP_AT
+		  FROM TBCOM_AUTH_GRP_SCRIN_BUTTON A, TBCOM_SCRIN_BUTTON B, TBCOM_PAGE C, TBCOM_USER_SCRIN_BUTTON D
+		 WHERE     1 = 1
+		       AND A.PAGE_ID = B.PAGE_ID
+		       AND A.BUTTON_ID = B.BUTTON_ID
+		       AND A.PAGE_ID = C.PAGE_ID(+)
+		       AND A.PAGE_ID = D.PAGE_ID(+)
+               AND A.BUTTON_ID = D.BUTTON_ID(+)
+               AND D.USER_ID(+) = #USER_ID#
+		       AND A.AUTH_GRP_ID = #AUTH_GRP_ID#
+		    ORDER BY A.PAGE_ID, A.BUTTON_ID	
+    </select>
+
+    <select id="SYM020300DAO.getAuthGrpChangeButton" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT AA.AUTH_GRP_ID,
+		       AA.USER_ID,
+		       AA.PAGE_ID,
+		       AA.BUTTON_ID,
+		       AA.BUTTON_NM,
+		       AA.INTRCP_AT,
+		       AA.INTRCP_AT_CNT,
+		       BB.INTRCP_AT AS ORG_INTRCP_AT,
+		       CASE
+		          WHEN BB.INTRCP_AT IS NULL THEN 'I'
+		          WHEN AA.INTRCP_AT = BB.INTRCP_AT THEN 'N'
+		          <![CDATA[ 
+		          WHEN AA.INTRCP_AT <> BB.INTRCP_AT THEN 'U'
+		          ]]>
+		       END FLAG
+		  FROM (SELECT AUTH_GRP_ID,
+		               #USER_ID# AS USER_ID,
+		               PAGE_ID,
+		               BUTTON_ID,
+		               BUTTON_NM,
+		               INTRCP_AT_CNT,
+		               (CASE WHEN INTRCP_AT_CNT > 0 THEN '0' ELSE '1' END)
+		                  AS INTRCP_AT
+		          FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+		                         A.PAGE_ID,
+		                         A.BUTTON_ID,
+		                         (SELECT Z.BUTTON_NM
+		                            FROM TBCOM_SCRIN_BUTTON Z
+		                           WHERE Z.PAGE_ID = A.PAGE_ID
+		                                 AND Z.BUTTON_ID = A.BUTTON_ID)
+		                            AS BUTTON_NM,
+		                         SUM (CASE WHEN A.INTRCP_AT = '0' THEN 1 ELSE 0 END)
+		                            AS INTRCP_AT_CNT
+		                    FROM TBCOM_AUTH_GRP_SCRIN_BUTTON A
+		                   WHERE 1 = 1
+		                         AND A.AUTH_GRP_ID IN (SELECT AUTH_GRP_ID
+		                                                 FROM TBCOM_USER_GRP
+		                                                WHERE USER_ID = #USER_ID#)
+		                GROUP BY PAGE_ID, BUTTON_ID
+		                ORDER BY PAGE_ID, BUTTON_ID)) AA,
+		       TBCOM_USER_SCRIN_BUTTON BB
+		 WHERE     AA.USER_ID = BB.USER_ID(+)
+		       AND AA.PAGE_ID = BB.PAGE_ID(+)
+		       AND AA.BUTTON_ID = BB.BUTTON_ID(+)	
+    </select>
+
+   
+            
+    <!--  그룹 사용자 권한 추가 -->
+    <update id="SYM020300DAO.mergeCopyAuth" parameterClass="java.util.Map" >
+		MERGE INTO TBCOM_USER_GRP A
+		     USING (SELECT #TARGET_USER_ID# AS USER_ID, AUTH_GRP_ID, INTRCP_AT
+		              FROM TBCOM_USER_GRP
+		             WHERE AUTH_GRP_ID = #SRC_AUTH_GRP_ID# AND USER_ID = #SRC_USER_ID#) B
+		        ON (A.USER_ID = B.USER_ID AND A.AUTH_GRP_ID = B.AUTH_GRP_ID)
+		WHEN NOT MATCHED
+		THEN
+		   INSERT     (AUTH_GRP_ID, USER_ID,
+		               INTRCP_AT,
+		               REGISTER_ID,
+		               REGIST_DT,
+		               UPDUSR_ID,
+		               UPDT_DT)
+		       VALUES (B.AUTH_GRP_ID,
+		               B.USER_ID,
+		               B.INTRCP_AT,
+		               #S_USER_ID#,
+		               SYSDATE,
+		               #S_USER_ID#,
+		               SYSDATE)
+	</update>
+
+	<!--  사용자 권한별 메뉴 추가(그룹분) -->
+    <update id="SYM020300DAO.mergeUserMenu" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+		MERGE INTO TBCOM_USER_MENU USER_MENU
+		     USING (SELECT AUTH_GRP_ID,
+		                   #TARGET_USER_ID# AS USER_ID,
+		                   MENU_ID,
+		                   (CASE WHEN INTRCP_AT_CNT > 0 THEN '0' ELSE '1' END)
+		                      AS INTRCP_AT
+		              FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+		                             A.MENU_ID,
+		                             SUM (
+		                                CASE WHEN A.INTRCP_AT = '0' THEN 1 ELSE 0 END)
+		                                AS INTRCP_AT_CNT
+		                        FROM TBCOM_AUTH_GRP_MENU A
+		                       WHERE 1 = 1
+		                             AND A.AUTH_GRP_ID IN (SELECT AUTH_GRP_ID
+		                                                     FROM TBCOM_USER_GRP
+		                                                    WHERE USER_ID = #TARGET_USER_ID#)
+		                    GROUP BY MENU_ID
+		                    ORDER BY MENU_ID)) ADD_MENU
+		        ON (USER_MENU.USER_ID = ADD_MENU.USER_ID
+		            AND USER_MENU.MENU_ID = ADD_MENU.MENU_ID)
+		WHEN MATCHED
+		THEN
+		   UPDATE SET
+		      USER_MENU.INTRCP_AT = ADD_MENU.INTRCP_AT,
+		      USER_MENU.UPDUSR_ID = #S_USER_ID#,
+		      UPDT_DT = SYSDATE
+		           WHERE     USER_MENU.USER_ID = ADD_MENU.USER_ID
+		                 AND USER_MENU.MENU_ID = ADD_MENU.MENU_ID
+		                 
+		                 AND USER_MENU.INTRCP_AT <> ADD_MENU.INTRCP_AT
+		                 
+		WHEN NOT MATCHED
+		THEN
+		   INSERT     (USER_ID,
+		               MENU_ID,
+		               AUTH_GRP_ID,
+		               INTRCP_AT,
+		               REGISTER_ID,
+		               REGIST_DT,
+		               UPDUSR_ID,
+		               UPDT_DT)
+		       VALUES (ADD_MENU.USER_ID,
+		               ADD_MENU.MENU_ID,
+		               ADD_MENU.AUTH_GRP_ID,
+		               ADD_MENU.INTRCP_AT,
+		               #S_USER_ID#,
+		               SYSDATE,
+		               #S_USER_ID#,
+		               SYSDATE)
+		]]>
+	</update>
+	
+	<!--  사용자 권한별 메뉴 추가(교체에서 사용 (그룹분+사용자분)) -->
+    <update id="SYM020300DAO.mergeUserMenu2" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			MERGE INTO TBCOM_USER_MENU USER_MENU
+			     USING (  SELECT AA.AUTH_GRP_ID,
+			                     #TARGET_USER_ID# AS USER_ID,
+			                     AA.MENU_ID,
+			                     NVL (D.INTRCP_AT, AA.INTRCP_AT) AS INTRCP_AT
+			                FROM (SELECT AUTH_GRP_ID,
+			                             MENU_ID,
+			                             (CASE WHEN INTRCP_AT_CNT > 0 THEN '0' ELSE '1' END)
+			                                AS INTRCP_AT
+			                        FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+			                                       A.MENU_ID,
+			                                       SUM (
+			                                          CASE
+			                                             WHEN A.INTRCP_AT = '0' THEN 1
+			                                             ELSE 0
+			                                          END)
+			                                          AS INTRCP_AT_CNT
+			                                  FROM TBCOM_AUTH_GRP_MENU A
+			                                 WHERE 1 = 1
+			                                       AND A.AUTH_GRP_ID IN
+			                                              (SELECT AUTH_GRP_ID
+			                                                 FROM TBCOM_USER_GRP
+			                                                WHERE USER_ID = #TARGET_USER_ID#)
+			                              GROUP BY MENU_ID
+			                              ORDER BY MENU_ID)) AA,
+			                     TBCOM_USER_MENU D
+			               WHERE     1 = 1
+			                     AND AA.MENU_ID = D.MENU_ID(+)
+			                     AND D.USER_ID(+) = #SRC_USER_ID#
+			                     AND D.AUTH_GRP_ID(+) = #SRC_AUTH_GRP_ID#
+			            ORDER BY AA.MENU_ID) ADD_MENU
+			        ON (USER_MENU.USER_ID = ADD_MENU.USER_ID
+			            AND USER_MENU.MENU_ID = ADD_MENU.MENU_ID)
+			WHEN MATCHED
+			THEN
+			   UPDATE SET
+			      USER_MENU.INTRCP_AT = ADD_MENU.INTRCP_AT,
+			      USER_MENU.UPDUSR_ID = #S_USER_ID#,
+			      UPDT_DT = SYSDATE
+			           WHERE     USER_MENU.USER_ID = ADD_MENU.USER_ID
+			                 AND USER_MENU.MENU_ID = ADD_MENU.MENU_ID
+			                 AND USER_MENU.INTRCP_AT <> ADD_MENU.INTRCP_AT
+			WHEN NOT MATCHED
+			THEN
+			   INSERT     (USER_ID,
+			               MENU_ID,
+			               AUTH_GRP_ID,
+			               INTRCP_AT,
+			               REGISTER_ID,
+			               REGIST_DT,
+			               UPDUSR_ID,
+			               UPDT_DT)
+			       VALUES (ADD_MENU.USER_ID,
+			               ADD_MENU.MENU_ID,
+			               ADD_MENU.AUTH_GRP_ID,
+			               ADD_MENU.INTRCP_AT,
+			               #S_USER_ID#,
+			               SYSDATE,
+			               #S_USER_ID#,
+			               SYSDATE)
+		]]>
+	</update>
+		
+	<!--  사용자 권한별 메뉴 상태 변경(삭제개념) -->
+	<update id="SYM020300DAO.deleteUserMenu" parameterClass="java.util.Map" >
+		UPDATE TBCOM_USER_MENU
+	   SET INTRCP_AT = '1', UPDUSR_ID = #S_USER_ID#, UPDT_DT = SYSDATE
+	 WHERE USER_ID = #TARGET_USER_ID#
+	       AND MENU_ID NOT IN (SELECT MENU_ID
+	                             FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+	                                            A.MENU_ID,
+	                                            SUM (
+	                                               CASE
+	                                                  WHEN A.INTRCP_AT = '0' THEN 1
+	                                                  ELSE 0
+	                                               END)
+	                                               AS INTRCP_AT_CNT
+	                                       FROM TBCOM_AUTH_GRP_MENU A
+	                                      WHERE 1 = 1
+	                                            AND A.AUTH_GRP_ID IN
+	                                                   (SELECT AUTH_GRP_ID
+	                                                      FROM TBCOM_USER_GRP
+	                                                     WHERE USER_ID =
+	                                                              #TARGET_USER_ID#)
+	                                   GROUP BY MENU_ID
+	                                   ORDER BY MENU_ID))
+	</update>
+	
+	<select id="SYM020300DAO.getDelUserMenu" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT USER_ID, MENU_ID, INTRCP_AT
+		  FROM TBCOM_USER_MENU
+		 WHERE USER_ID = #TARGET_USER_ID#
+		       AND MENU_ID NOT IN (SELECT MENU_ID
+		                             FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+		                                            A.MENU_ID,
+		                                             SUM ( CASE  WHEN A.INTRCP_AT = '0' THEN 1 ELSE  0  END)
+		                                                           AS INTRCP_AT_CNT
+		                                       FROM TBCOM_AUTH_GRP_MENU A
+		                                      WHERE 1 = 1
+		                                            AND A.AUTH_GRP_ID IN
+		                                                   (SELECT AUTH_GRP_ID
+		                                                      FROM TBCOM_USER_GRP
+		                                                    WHERE USER_ID = #TARGET_USER_ID#)
+		                                   GROUP BY MENU_ID
+		                                   ORDER BY MENU_ID))	
+	</select>
+	
+	<!--  사용자 권한별 버튼 추가(그룹분) -->
+	<update id="SYM020300DAO.mergeUserButton" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			MERGE INTO TBCOM_USER_SCRIN_BUTTON USER_BUTTON
+			     USING (SELECT AUTH_GRP_ID,
+			                   #TARGET_USER_ID# AS USER_ID,
+			                   PAGE_ID,
+			                   BUTTON_ID,
+			                   BUTTON_NM,
+			                   (CASE WHEN INTRCP_AT_CNT > 0 THEN '0' ELSE '1' END)
+			                      AS INTRCP_AT
+			              FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+			                             A.PAGE_ID,
+			                             A.BUTTON_ID,
+			                             (SELECT Z.BUTTON_NM
+			                                FROM TBCOM_SCRIN_BUTTON Z
+			                               WHERE Z.PAGE_ID = A.PAGE_ID
+			                                     AND Z.BUTTON_ID = A.BUTTON_ID) AS BUTTON_NM,
+			                             SUM (CASE WHEN A.INTRCP_AT = '0' THEN 1 ELSE 0 END) AS INTRCP_AT_CNT
+			                        FROM TBCOM_AUTH_GRP_SCRIN_BUTTON A 
+			                        WHERE 1 = 1
+			                             AND A.AUTH_GRP_ID IN
+			                                    (SELECT AUTH_GRP_ID
+			                                       FROM TBCOM_USER_GRP
+			                                      WHERE USER_ID = #TARGET_USER_ID#)
+			                    GROUP BY PAGE_ID, BUTTON_ID
+			                    ORDER BY PAGE_ID, BUTTON_ID)) ADD_BUTTON
+			        ON (    USER_BUTTON.USER_ID = ADD_BUTTON.USER_ID
+			            AND USER_BUTTON.PAGE_ID = ADD_BUTTON.PAGE_ID
+			            AND USER_BUTTON.BUTTON_ID = ADD_BUTTON.BUTTON_ID)
+			WHEN MATCHED
+			THEN
+			   UPDATE SET
+			      USER_BUTTON.INTRCP_AT = ADD_BUTTON.INTRCP_AT,
+			      USER_BUTTON.UPDUSR_ID = #S_USER_ID#,
+			      UPDT_DT = SYSDATE
+			           WHERE     USER_BUTTON.USER_ID = ADD_BUTTON.USER_ID
+			                 AND USER_BUTTON.PAGE_ID = ADD_BUTTON.PAGE_ID
+			                 AND USER_BUTTON.BUTTON_ID = ADD_BUTTON.BUTTON_ID
+			                 AND USER_BUTTON.INTRCP_AT <> ADD_BUTTON.INTRCP_AT
+			WHEN NOT MATCHED
+			THEN
+			   INSERT     (USER_ID,
+			               PAGE_ID,
+			               BUTTON_ID,
+			               AUTH_GRP_ID,
+			               INTRCP_AT,
+			               REGISTER_ID,
+			               REGIST_DT,
+			               UPDUSR_ID,
+			               UPDT_DT)
+			       VALUES (ADD_BUTTON.USER_ID,
+			               ADD_BUTTON.PAGE_ID,
+			               ADD_BUTTON.BUTTON_ID,
+			               ADD_BUTTON.AUTH_GRP_ID,
+			               ADD_BUTTON.INTRCP_AT,
+			               #S_USER_ID#,
+			               SYSDATE,
+			               #S_USER_ID#,
+			               SYSDATE)
+		]]>
+	</update>
+	
+	<!--  사용자 권한별 버튼 추가 교체에서 사용(그룹분 + 사용자분) -->
+	<update id="SYM020300DAO.mergeUserButton2" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			MERGE INTO TBCOM_USER_SCRIN_BUTTON USER_BUTTON
+			     USING (  SELECT AA.AUTH_GRP_ID,
+			                     #TARGET_USER_ID# AS USER_ID,
+			                     AA.PAGE_ID,
+			                     AA.BUTTON_ID,
+			                     NVL (D.INTRCP_AT, AA.INTRCP_AT) AS INTRCP_AT
+			                FROM (SELECT AUTH_GRP_ID,
+			                             PAGE_ID,
+			                             BUTTON_ID,
+			                             (CASE WHEN INTRCP_AT_CNT > 0 THEN '0' ELSE '1' END)
+			                                AS INTRCP_AT
+			                        FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+			                                       A.PAGE_ID,
+			                                       A.BUTTON_ID,
+			                                       (SELECT Z.BUTTON_NM
+			                                          FROM TBCOM_SCRIN_BUTTON Z
+			                                         WHERE Z.PAGE_ID = A.PAGE_ID
+			                                               AND Z.BUTTON_ID = A.BUTTON_ID)
+			                                          AS BUTTON_NM,
+			                                       SUM (
+			                                          CASE
+			                                             WHEN A.INTRCP_AT = '0' THEN 1
+			                                             ELSE 0
+			                                          END)
+			                                          AS INTRCP_AT_CNT
+			                                  FROM TBCOM_AUTH_GRP_SCRIN_BUTTON A
+			                                 WHERE 1 = 1
+			                                       AND A.AUTH_GRP_ID IN
+			                                              (SELECT AUTH_GRP_ID
+			                                                 FROM TBCOM_USER_GRP
+			                                                WHERE USER_ID = #TARGET_USER_ID#)
+			                              GROUP BY PAGE_ID, BUTTON_ID
+			                              ORDER BY PAGE_ID, BUTTON_ID)) AA,
+			                     TBCOM_USER_SCRIN_BUTTON D
+			               WHERE     1 = 1
+			                     AND AA.PAGE_ID = D.PAGE_ID(+)
+			                     AND AA.BUTTON_ID = D.BUTTON_ID(+)
+			                     AND D.USER_ID(+) = #SRC_USER_ID#
+			                     AND D.AUTH_GRP_ID(+) = #SRC_AUTH_GRP_ID#
+			            ORDER BY AA.PAGE_ID, AA.BUTTON_ID) ADD_BUTTON
+			        ON (    USER_BUTTON.USER_ID = ADD_BUTTON.USER_ID
+			            AND USER_BUTTON.PAGE_ID = ADD_BUTTON.PAGE_ID
+			            AND USER_BUTTON.BUTTON_ID = ADD_BUTTON.BUTTON_ID)
+			WHEN MATCHED
+			THEN
+			   UPDATE SET
+			      USER_BUTTON.INTRCP_AT = ADD_BUTTON.INTRCP_AT,
+			      USER_BUTTON.UPDUSR_ID = #S_USER_ID#,
+			      UPDT_DT = SYSDATE
+			           WHERE     USER_BUTTON.USER_ID = ADD_BUTTON.USER_ID
+			                 AND USER_BUTTON.PAGE_ID = ADD_BUTTON.PAGE_ID
+			                 AND USER_BUTTON.BUTTON_ID = ADD_BUTTON.BUTTON_ID
+			                 AND USER_BUTTON.INTRCP_AT <> ADD_BUTTON.INTRCP_AT
+			WHEN NOT MATCHED
+			THEN
+			   INSERT     (USER_ID,
+			               PAGE_ID,
+			               BUTTON_ID,
+			               AUTH_GRP_ID,
+			               INTRCP_AT,
+			               REGISTER_ID,
+			               REGIST_DT,
+			               UPDUSR_ID,
+			               UPDT_DT)
+			       VALUES (ADD_BUTTON.USER_ID,
+			               ADD_BUTTON.PAGE_ID,
+			               ADD_BUTTON.BUTTON_ID,
+			               ADD_BUTTON.AUTH_GRP_ID,
+			               ADD_BUTTON.INTRCP_AT,
+			               #S_USER_ID#,
+			               SYSDATE,
+			               #S_USER_ID#,
+			               SYSDATE)
+		]]>
+	</update>	
+	<!--  사용자 권한별 버튼 상태 변경(삭제개념) -->
+	<update id="SYM020300DAO.deleteUserButton" parameterClass="java.util.Map" >
+		UPDATE TBCOM_USER_SCRIN_BUTTON
+		   SET INTRCP_AT = '1', UPDUSR_ID = #S_USER_ID#, UPDT_DT = SYSDATE
+		 WHERE USER_ID = #TARGET_USER_ID#
+		       AND (PAGE_ID, BUTTON_ID) NOT IN (SELECT PAGE_ID, BUTTON_ID
+		                             FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+		                             A.PAGE_ID,
+		                             A.BUTTON_ID,
+		                             (SELECT Z.BUTTON_NM
+		                                FROM TBCOM_SCRIN_BUTTON Z
+		                               WHERE Z.PAGE_ID = A.PAGE_ID
+		                                     AND Z.BUTTON_ID = A.BUTTON_ID) AS BUTTON_NM,
+		                             SUM (CASE WHEN A.INTRCP_AT = '0' THEN 1 ELSE 0 END) AS INTRCP_AT_CNT
+		                        FROM TBCOM_AUTH_GRP_SCRIN_BUTTON A 
+		                        WHERE 1 = 1
+		                             AND A.AUTH_GRP_ID IN
+		                                    (SELECT AUTH_GRP_ID
+		                                       FROM TBCOM_USER_GRP
+		                                      WHERE USER_ID = #TARGET_USER_ID#)
+		                    GROUP BY PAGE_ID, BUTTON_ID
+		                    ORDER BY PAGE_ID, BUTTON_ID))
+	</update>
+	
+	<select id="SYM020300DAO.getDelUserButton" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT USER_ID,
+		       PAGE_ID,
+		       BUTTON_ID,
+		       INTRCP_AT
+		  FROM TBCOM_USER_SCRIN_BUTTON
+		 WHERE USER_ID = #TARGET_USER_ID#
+		       AND (PAGE_ID, BUTTON_ID) NOT IN (SELECT PAGE_ID, BUTTON_ID
+		                                          FROM (  SELECT MAX (A.AUTH_GRP_ID)
+		                                                            AS AUTH_GRP_ID,
+		                                                         A.PAGE_ID,
+		                                                         A.BUTTON_ID,
+		                                                         (SELECT Z.BUTTON_NM
+		                                                            FROM TBCOM_SCRIN_BUTTON Z
+		                                                           WHERE Z.PAGE_ID = A.PAGE_ID
+		                                                                 AND Z.BUTTON_ID = A.BUTTON_ID)
+		                                                            AS BUTTON_NM,
+		                                                         SUM ( CASE  WHEN A.INTRCP_AT = '0' THEN 1 ELSE  0  END)
+		                                                           AS INTRCP_AT_CNT
+		                                                    FROM TBCOM_AUTH_GRP_SCRIN_BUTTON A
+		                                                   WHERE 1 = 1
+		                                                         AND A.AUTH_GRP_ID IN
+		                                                                (SELECT AUTH_GRP_ID
+		                                                                   FROM TBCOM_USER_GRP
+		                                                                  WHERE USER_ID = #TARGET_USER_ID#)
+		                                                GROUP BY PAGE_ID, BUTTON_ID
+		                                                ORDER BY PAGE_ID, BUTTON_ID))                   	
+	</select>	
+	
+	<!--  사용자 권한별 서비스 추가(그룹분) -->
+    <update id="SYM020300DAO.mergeUserSvc" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			MERGE INTO TBCOM_USER_OPRTIN USER_OPRTIN
+			     USING (SELECT AUTH_GRP_ID,
+			                   #TARGET_USER_ID# AS USER_ID,
+			                   SVC_ID,
+			                   OPRTIN_NM,
+			                   (CASE WHEN INTRCP_AT_CNT > 0 THEN '0' ELSE '1' END)
+			                      AS INTRCP_AT
+			              FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+			                             A.SVC_ID,
+			                             A.OPRTIN_NM,
+			                            SUM (CASE WHEN A.INTRCP_AT = '0' THEN 1 ELSE 0 END) AS INTRCP_AT_CNT
+			                        FROM TBCOM_AUTH_GRP_OPRTIN A 
+			                        WHERE 1 = 1
+			                             AND A.AUTH_GRP_ID IN
+			                                    (SELECT AUTH_GRP_ID
+			                                       FROM TBCOM_USER_GRP
+			                                      WHERE USER_ID = #TARGET_USER_ID#)
+			                    GROUP BY SVC_ID, OPRTIN_NM
+			                    ORDER BY SVC_ID, OPRTIN_NM)) ADD_OPRTIN
+			        ON (    USER_OPRTIN.USER_ID = ADD_OPRTIN.USER_ID
+			            AND USER_OPRTIN.SVC_ID = ADD_OPRTIN.SVC_ID
+			            AND USER_OPRTIN.OPRTIN_NM = ADD_OPRTIN.OPRTIN_NM)
+			WHEN MATCHED
+			THEN
+			   UPDATE SET
+			      USER_OPRTIN.INTRCP_AT = ADD_OPRTIN.INTRCP_AT,
+			      USER_OPRTIN.UPDUSR_ID = #S_USER_ID#,
+			      UPDT_DT = SYSDATE
+			           WHERE     USER_OPRTIN.USER_ID = ADD_OPRTIN.USER_ID
+			                 AND USER_OPRTIN.SVC_ID = ADD_OPRTIN.SVC_ID
+			                 AND USER_OPRTIN.OPRTIN_NM = ADD_OPRTIN.OPRTIN_NM
+			                 AND USER_OPRTIN.INTRCP_AT <> ADD_OPRTIN.INTRCP_AT
+			WHEN NOT MATCHED
+			THEN
+			   INSERT     (USER_ID,
+			               SVC_ID,
+			               OPRTIN_NM,
+			               AUTH_GRP_ID,
+			               INTRCP_AT,
+			               REGISTER_ID,
+			               REGIST_DT,
+			               UPDUSR_ID,
+			               UPDT_DT)
+			       VALUES (ADD_OPRTIN.USER_ID,
+			               ADD_OPRTIN.SVC_ID,
+			               ADD_OPRTIN.OPRTIN_NM,
+			               ADD_OPRTIN.AUTH_GRP_ID,
+			               ADD_OPRTIN.INTRCP_AT,
+			               #S_USER_ID#,
+			               SYSDATE,
+			               #S_USER_ID#,
+			               SYSDATE)
+		]]>
+	</update>
+
+	<!--  사용자 권한별 서비스 추가 (교체에서 사용 (그룹분 + 사용자분) -->
+    <update id="SYM020300DAO.mergeUserSvc2" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			MERGE INTO TBCOM_USER_OPRTIN USER_OPRTIN
+			     USING (  SELECT AA.AUTH_GRP_ID,
+			                     #TARGET_USER_ID# AS USER_ID,
+			                     AA.SVC_ID,
+			                     AA.OPRTIN_NM,
+			                     NVL (D.INTRCP_AT, AA.INTRCP_AT) AS INTRCP_AT
+			                FROM (SELECT AUTH_GRP_ID,
+			                             SVC_ID,
+			                             OPRTIN_NM,
+			                             (CASE WHEN INTRCP_AT_CNT > 0 THEN '0' ELSE '1' END)
+			                                AS INTRCP_AT
+			                        FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+			                                       A.SVC_ID,
+			                                       A.OPRTIN_NM,
+			                                       SUM (
+			                                          CASE
+			                                             WHEN A.INTRCP_AT = '0' THEN 1
+			                                             ELSE 0
+			                                          END)
+			                                          AS INTRCP_AT_CNT
+			                                  FROM TBCOM_AUTH_GRP_OPRTIN A
+			                                 WHERE 1 = 1
+			                                       AND A.AUTH_GRP_ID IN
+			                                              (SELECT AUTH_GRP_ID
+			                                                 FROM TBCOM_USER_GRP
+			                                                WHERE USER_ID = #TARGET_USER_ID#)
+			                              GROUP BY SVC_ID, OPRTIN_NM
+			                              ORDER BY SVC_ID, OPRTIN_NM)) AA,
+			                     TBCOM_USER_OPRTIN D
+			               WHERE     1 = 1
+			                     AND AA.SVC_ID = D.SVC_ID(+)
+			                     AND AA.OPRTIN_NM = D.OPRTIN_NM(+)
+			                     AND D.USER_ID(+) = #SRC_USER_ID#
+			                     AND D.AUTH_GRP_ID(+) = #SRC_AUTH_GRP_ID#
+			            ORDER BY AA.SVC_ID, AA.OPRTIN_NM) ADD_OPRTIN
+			        ON (    USER_OPRTIN.USER_ID = ADD_OPRTIN.USER_ID
+			            AND USER_OPRTIN.SVC_ID = ADD_OPRTIN.SVC_ID
+			            AND USER_OPRTIN.OPRTIN_NM = ADD_OPRTIN.OPRTIN_NM)
+			WHEN MATCHED
+			THEN
+			   UPDATE SET
+			      USER_OPRTIN.INTRCP_AT = ADD_OPRTIN.INTRCP_AT,
+			      USER_OPRTIN.UPDUSR_ID = #S_USER_ID#,
+			      UPDT_DT = SYSDATE
+			           WHERE     USER_OPRTIN.USER_ID = ADD_OPRTIN.USER_ID
+			                 AND USER_OPRTIN.SVC_ID = ADD_OPRTIN.SVC_ID
+			                 AND USER_OPRTIN.OPRTIN_NM = ADD_OPRTIN.OPRTIN_NM
+			                 AND USER_OPRTIN.INTRCP_AT <> ADD_OPRTIN.INTRCP_AT
+			WHEN NOT MATCHED
+			THEN
+			   INSERT     (USER_ID,
+			               SVC_ID,
+			               OPRTIN_NM,
+			               AUTH_GRP_ID,
+			               INTRCP_AT,
+			               REGISTER_ID,
+			               REGIST_DT,
+			               UPDUSR_ID,
+			               UPDT_DT)
+			       VALUES (ADD_OPRTIN.USER_ID,
+			               ADD_OPRTIN.SVC_ID,
+			               ADD_OPRTIN.OPRTIN_NM,
+			               ADD_OPRTIN.AUTH_GRP_ID,
+			               ADD_OPRTIN.INTRCP_AT,
+			               #S_USER_ID#,
+			               SYSDATE,
+			               #S_USER_ID#,
+			               SYSDATE)
+		]]>
+	</update>
+		
+	<!--  사용자 권한별 서비스 상태 변경(삭제개념) -->
+	<update id="SYM020300DAO.deleteUserSvc" parameterClass="java.util.Map" >
+		UPDATE TBCOM_USER_OPRTIN
+		   SET INTRCP_AT = '1', UPDUSR_ID = #S_USER_ID#, UPDT_DT = SYSDATE
+		 WHERE USER_ID = #TARGET_USER_ID#
+		       AND (SVC_ID, OPRTIN_NM) NOT IN (SELECT SVC_ID, OPRTIN_NM
+		                             FROM (  SELECT MAX (A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+		                             A.SVC_ID,
+		                             A.OPRTIN_NM,
+		                             SUM (CASE WHEN A.INTRCP_AT = '0' THEN 1 ELSE 0 END) AS INTRCP_AT_CNT
+		                        FROM TBCOM_AUTH_GRP_OPRTIN A 
+		                        WHERE 1 = 1
+		                             AND A.AUTH_GRP_ID IN
+		                                    (SELECT AUTH_GRP_ID
+		                                       FROM TBCOM_USER_GRP
+		                                      WHERE USER_ID = #TARGET_USER_ID#)
+		                    GROUP BY SVC_ID, OPRTIN_NM
+		                    ORDER BY SVC_ID, OPRTIN_NM))
+	</update>
+	
+	<select id="SYM020300DAO.getDelUserSvc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT USER_ID,
+		       SVC_ID,
+		       OPRTIN_NM,
+		       INTRCP_AT
+		  FROM TBCOM_USER_OPRTIN
+		 WHERE USER_ID = #TARGET_USER_ID#
+		       AND (SVC_ID, OPRTIN_NM) NOT IN (SELECT SVC_ID, OPRTIN_NM
+		                                         FROM (  SELECT MAX (A.AUTH_GRP_ID)
+		                                                           AS AUTH_GRP_ID,
+		                                                        A.SVC_ID,
+		                                                        A.OPRTIN_NM,
+		                                                        SUM ( CASE  WHEN A.INTRCP_AT = '0' THEN 1 ELSE  0  END)
+		                                                           AS INTRCP_AT_CNT
+		                                                   FROM TBCOM_AUTH_GRP_OPRTIN A
+		                                                  WHERE 1 = 1
+		                                                        AND A.AUTH_GRP_ID IN
+		                                                               (SELECT AUTH_GRP_ID
+		                                                                  FROM TBCOM_USER_GRP
+		                                                                 WHERE USER_ID = #TARGET_USER_ID#)
+		                                               GROUP BY SVC_ID, OPRTIN_NM
+		                                               ORDER BY SVC_ID, OPRTIN_NM))        	
+	</select>
+	
+	<!--  사용자 권한 삭제 -->
+    <delete id="SYM020300DAO.deleteUserGrp" parameterClass="java.util.HashMap" >
+	    <![CDATA[
+	      	DELETE TBCOM_USER_GRP
+	      	 WHERE 1 = 1
+	      	   AND AUTH_GRP_ID = #SRC_AUTH_GRP_ID#
+	      	   AND USER_ID = #SRC_USER_ID#
+	    ]]>
+    </delete>
+    
+    <!--  사용자 메뉴 개별 저장(변경분) -->
+    <update id="SYM020300DAO.mergeIndiUserMenu" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+		    MERGE INTO TBCOM_USER_MENU A
+		     USING (SELECT #USER_ID# AS USER_ID,
+		                   #MENU_ID# AS MENU_ID,
+		                   #AUTH_GRP_ID# AS AUTH_GRP_ID,
+		                   #INTRCP_AT# AS INTRCP_AT
+		              FROM DUAL) B
+		        ON (A.USER_ID = B.USER_ID AND A.MENU_ID = B.MENU_ID)
+		WHEN NOT MATCHED
+		THEN
+		   INSERT     (USER_ID,
+		               MENU_ID,
+		               AUTH_GRP_ID,
+		               INTRCP_AT,
+		               REGISTER_ID,
+		               REGIST_DT,
+		               UPDUSR_ID,
+		               UPDT_DT)
+		       VALUES (B.USER_ID,
+		               B.MENU_ID,
+		               B.AUTH_GRP_ID,
+		               B.INTRCP_AT,
+		               #S_USER_ID#,
+		               SYSDATE,
+		               #S_USER_ID#,
+		               SYSDATE)
+		 WHEN MATCHED
+		 THEN
+		 	UPDATE SET INTRCP_AT = B.INTRCP_AT,
+		 	           UPDUSR_ID = #S_USER_ID#,
+		 	           UPDT_DT   = SYSDATE
+		]]>
+	</update>
+    
+
+    <!--  사용자 서비스 개별 저장(변경분) -->
+    <update id="SYM020300DAO.mergeUserOprtin" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+		    MERGE INTO TBCOM_USER_OPRTIN A
+		     USING (SELECT #USER_ID# AS USER_ID,
+		                   #SVC_ID# AS SVC_ID,
+		                   #OPRTIN_NM# AS OPRTIN_NM,
+		                   #AUTH_GRP_ID# AS AUTH_GRP_ID,
+		                   #INTRCP_AT# AS INTRCP_AT
+		              FROM DUAL) B
+		        ON (A.USER_ID = B.USER_ID AND A.SVC_ID = B.SVC_ID AND A.OPRTIN_NM = B.OPRTIN_NM)
+		WHEN NOT MATCHED
+		THEN
+		   INSERT     (USER_ID,
+		               SVC_ID,
+		               OPRTIN_NM,
+		               AUTH_GRP_ID,
+		               INTRCP_AT,
+		               REGISTER_ID,
+		               REGIST_DT,
+		               UPDUSR_ID,
+		               UPDT_DT)
+		       VALUES (B.USER_ID,
+		               B.SVC_ID,
+		               B.OPRTIN_NM,
+		               B.AUTH_GRP_ID,
+		               B.INTRCP_AT,
+		               #S_USER_ID#,
+		               SYSDATE,
+		               #S_USER_ID#,
+		               SYSDATE)
+		 WHEN MATCHED
+		 THEN
+		 	UPDATE SET INTRCP_AT = B.INTRCP_AT,
+		 	           UPDUSR_ID = #S_USER_ID#,
+		 	           UPDT_DT   = SYSDATE
+		]]>
+	</update>               
+
+    <!--  사용자 버튼 개별 저장(변경분) -->
+    <update id="SYM020300DAO.mergeUserBtn" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+		    MERGE INTO TBCOM_USER_SCRIN_BUTTON A
+		     USING (SELECT #USER_ID# AS USER_ID,
+		                   #PAGE_ID# AS PAGE_ID,
+		                   #BUTTON_ID# AS BUTTON_ID,
+		                   #AUTH_GRP_ID# AS AUTH_GRP_ID,
+		                   #INTRCP_AT# AS INTRCP_AT
+		              FROM DUAL) B
+		        ON (A.USER_ID = B.USER_ID AND A.PAGE_ID = B.PAGE_ID AND A.BUTTON_ID = B.BUTTON_ID)
+		WHEN NOT MATCHED
+		THEN
+		   INSERT     (USER_ID,
+		               PAGE_ID,
+		               BUTTON_ID,
+		               AUTH_GRP_ID,
+		               INTRCP_AT,
+		               REGISTER_ID,
+		               REGIST_DT,
+		               UPDUSR_ID,
+		               UPDT_DT)
+		       VALUES (B.USER_ID,
+		               B.PAGE_ID,
+		               B.BUTTON_ID,
+		               B.AUTH_GRP_ID,
+		               B.INTRCP_AT,
+		               #S_USER_ID#,
+		               SYSDATE,
+		               #S_USER_ID#,
+		               SYSDATE)
+		 WHEN MATCHED
+		 THEN
+		 	UPDATE SET INTRCP_AT = B.INTRCP_AT,
+		 	           UPDUSR_ID = #S_USER_ID#,
+		 	           UPDT_DT   = SYSDATE
+		]]>
+	</update> 
+	
+	<!--  사용자 메뉴 저장 -->
+    <insert id="SYM020300DAO.saveUserMenu" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			INSERT INTO TBCOM_USER_MENU (USER_ID,
+			                                     MENU_ID,
+			                                     AUTH_GRP_ID,
+			                                     INTRCP_AT,
+			                                     REGISTER_ID,
+			                                     REGIST_DT,
+			                                     UPDUSR_ID,
+			                                     UPDT_DT)
+			     VALUES (#USER_ID#,
+			             #MENU_ID#,
+			             #AUTH_GRP_ID#,
+			             #INTRCP_AT#,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #S_USER_ID#,
+			             SYSDATE)
+		]]>
+	</insert> 
+
+	<!--  사용자 메뉴 업데이트 -->
+	<update id="SYM020300DAO.updateUserMenu" parameterClass="java.util.Map" >
+		UPDATE TBCOM_USER_MENU
+		   SET INTRCP_AT = #INTRCP_AT#
+		 WHERE USER_ID = #USER_ID# AND MENU_ID = #MENU_ID# 
+
+	</update>
+		
+    <insert id="SYM020300DAO.saveUserButton" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			INSERT INTO TBCOM_USER_SCRIN_BUTTON (USER_ID,
+			                                     BUTTON_ID,
+			                                     PAGE_ID,
+			                                     AUTH_GRP_ID,
+			                                     BUTTON_NM,
+			                                     INTRCP_AT,
+			                                     REGISTER_ID,
+			                                     REGIST_DT,
+			                                     UPDUSR_ID,
+			                                     UPDT_DT)
+			     VALUES (#USER_ID#,
+			             #BUTTON_ID#,
+			             #PAGE_ID#,
+			             #AUTH_GRP_ID#,
+			             #BUTTON_NM#,
+			             #INTRCP_AT#,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #S_USER_ID#,
+			             SYSDATE)
+		]]>
+	</insert> 	 
+	
+	<update id="SYM020300DAO.updateUserButton" parameterClass="java.util.Map" >
+		UPDATE TBCOM_USER_SCRIN_BUTTON
+		   SET INTRCP_AT = #INTRCP_AT#
+		 WHERE USER_ID = #USER_ID# AND BUTTON_ID = #BUTTON_ID# AND PAGE_ID = #PAGE_ID#
+
+	</update>
+
+    <insert id="SYM020300DAO.saveUserOprtin" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			INSERT INTO TBCOM_USER_OPRTIN (USER_ID,
+			                                     SVC_ID,
+			                                     OPRTIN_NM,
+			                                     AUTH_GRP_ID,
+			                                     INTRCP_AT,
+			                                     REGISTER_ID,
+			                                     REGIST_DT,
+			                                     UPDUSR_ID,
+			                                     UPDT_DT)
+			     VALUES (#USER_ID#,
+			             #SVC_ID#,
+			             #OPRTIN_NM#,
+			             #AUTH_GRP_ID#,
+			             #INTRCP_AT#,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #S_USER_ID#,
+			             SYSDATE)
+		]]>
+	</insert> 	 
+	
+	<update id="SYM020300DAO.updateUserOprtin" parameterClass="java.util.Map" >
+		UPDATE TBCOM_USER_SCRIN_BUTTON
+		   SET INTRCP_AT = #INTRCP_AT#
+		 WHERE USER_ID = #USER_ID# AND BUTTON_ID = #BUTTON_ID# AND PAGE_ID = #PAGE_ID#
+
+	</update>
+
+	  
+	
+
+			
+	
+	
+	
+	
+	
+	
+
+	
+	
+	
+	
+						
+					
+	<!--  로그 저장 -->
+    <insert id="SYM020300DAO.saveLog" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			INSERT INTO TBCOM_USER_AUTH_CHGHST (AUTH_CHANGE_SN,
+			                                    USER_ID,
+			                                    CHANGE_AUTH_KND_CODE,
+			                                    CHANG_AUTH_TRGET_ID,
+			                                    AFTCH_AUTH_STTUS_CODE,
+			                                    REGISTER_ID,
+			                                    REGIST_DT,
+			                                    UPDUSR_ID,
+			                                    UPDT_DT,
+			                                    BFCHG_AUTH_STTUS_CODE,
+			                                    EVENT_FNCT)
+			     VALUES (SQ_COM_USER_AUTH_CHGHST_1.NEXTVAL,
+			             #USER_ID#,
+			             #CHANGE_AUTH_KND_CODE#,
+			             #CHANG_AUTH_TRGET_ID#,
+			             #AFTCH_AUTH_STTUS_CODE#,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #BFCHG_AUTH_STTUS_CODE#,
+			             #EVENT_FNCT#)   
+		]]>
+	</insert> 	
+	
+	
+	
+	<!-- ##################################################################################  -->
+	<!-- REVISION -->
+	<!--  권한복사(1.그룹 사용자 추가 대상 조회) -->
+	<select id="SYM020300DAO.selectUserAuthGrpCopy" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT 
+                    #GIVE_USER_ID# AS USER_ID
+                  , AUTH_GRP_ID
+                  , INTRCP_AT
+                  , #S_USER_ID# AS REGISTER_ID
+                  , SYSDATE AS REGIST_DT
+                  , #S_USER_ID# AS UPDUSR_ID
+                  , SYSDATE AS UPDT_DT
+                  , 'GA' AS CHANGE_AUTH_KND_CODE
+                  , AUTH_GRP_ID AS CHANG_AUTH_TRGET_ID
+                  , NVL((SELECT NVL(INTRCP_AT, '') FROM TBCOM_USER_GRP WHERE USER_ID = #GIVE_USER_ID# AND AUTH_GRP_ID = #CRIT_AUTH_GRP_ID# AND ROWNUM=1), '') AS BFCHG_AUTH_STTUS_CODE
+                  , '0' AS AFTCH_AUTH_STTUS_CODE
+                  , '[그룹권한복사]' || #CRIT_USER_ID# || '(' || (SELECT USER_NM FROM TBCOM_USER WHERE USER_ID = #Y_USER_ID# AND ROWNUM = 1) || ') ' || '권한 적용' AS EVENT_FNCT
+                  , NULL AS PAGE_ID
+                  , NULL AS SVC_ID
+                FROM TBCOM_USER_GRP
+                WHERE AUTH_GRP_ID = #CRIT_AUTH_GRP_ID#
+                  AND USER_ID = #CRIT_USER_ID#
+	</select>	
+	
+	<!--  권한복사(1.그룹 사용자 추가) -->
+    <insert id="SYM020300DAO.copyAuthGrpUser" parameterClass="java.util.HashMap" >
+   		<![CDATA[ 
+			MERGE INTO TBCOM_USER_GRP X
+            USING (
+                SELECT 
+                    #USER_ID# AS USER_ID
+                  , #AUTH_GRP_ID# AS AUTH_GRP_ID
+                  , #INTRCP_AT# AS INTRCP_AT
+                  , #REGISTER_ID# AS REGISTER_ID
+                  , SYSDATE AS REGIST_DT
+                  , #UPDUSR_ID# AS UPDUSR_ID
+                  , SYSDATE AS UPDT_DT
+                FROM DUAL
+            ) Y
+            ON (
+                  X.USER_ID     = Y.USER_ID
+              AND X.AUTH_GRP_ID = Y.AUTH_GRP_ID
+            )
+            WHEN NOT MATCHED THEN INSERT
+            (
+                  X.USER_ID
+                , X.AUTH_GRP_ID
+                , X.INTRCP_AT
+                , X.REGISTER_ID
+                , X.REGIST_DT
+                , X.UPDUSR_ID
+                , X.UPDT_DT
+            )
+            VALUES
+            (
+                  Y.USER_ID
+                , Y.AUTH_GRP_ID
+                , Y.INTRCP_AT
+                , Y.REGISTER_ID
+                , Y.REGIST_DT
+                , Y.UPDUSR_ID
+                , Y.UPDT_DT
+            )
+            WHEN MATCHED THEN UPDATE
+            SET X.INTRCP_AT = Y.INTRCP_AT
+              , X.UPDUSR_ID = Y.UPDUSR_ID
+              , X.UPDT_DT   = Y.UPDT_DT
+		]]>
+	</insert> 
+	<!--  권한복사(2.사용자 권한메뉴 복사대상 조회) -->
+	<select id="SYM020300DAO.selectUserAuthMenuCopy" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT 
+                   #GIVE_USER_ID# AS USER_ID
+                 , B.MENU_ID
+                 , B.AUTH_GRP_ID
+                 , NVL(A.INTRCP_AT , B.INTRCP_AT) AS INTRCP_AT
+                 , #S_USER_ID# AS REGISTER_ID
+                 , SYSDATE AS REGIST_DT
+                 , #S_USER_ID# AS UPDUSR_ID
+                 , SYSDATE AS UPDT_DT
+                 , 'MA' AS CHANGE_AUTH_KND_CODE
+                 , B.MENU_ID AS CHANG_AUTH_TRGET_ID
+                 , NVL((SELECT NVL(INTRCP_AT, '') FROM TBCOM_USER_MENU WHERE USER_ID = #GIVE_USER_ID# AND MENU_ID=B.MENU_ID AND ROWNUM=1), '') AS BFCHG_AUTH_STTUS_CODE
+                 , '0' AS AFTCH_AUTH_STTUS_CODE
+                 , '[메뉴권한복사]' || #CRIT_USER_ID# || '(' || (SELECT USER_NM FROM TBCOM_USER WHERE USER_ID = #Y_USER_ID# AND ROWNUM = 1) || ') ' || '권한 적용' AS EVENT_FNCT
+                 , NULL AS PAGE_ID
+                 , NULL AS SVC_ID
+               FROM TBCOM_AUTH_GRP_MENU B
+                  , (SELECT * FROM TBCOM_USER_MENU WHERE USER_ID = #CRIT_USER_ID#) A
+               WHERE B.MENU_ID = A.MENU_ID(+)
+                 AND B.AUTH_GRP_ID = #CRIT_AUTH_GRP_ID#
+	</select>
+	<!--  권한복사(2.사용자 권한메뉴 복사) -->
+    <insert id="SYM020300DAO.copyAuthUserMenu" parameterClass="java.util.HashMap" >
+	       MERGE INTO TBCOM_USER_MENU X
+           USING (
+               SELECT 
+                   #USER_ID# AS USER_ID
+                 , #MENU_ID# AS MENU_ID
+                 , #AUTH_GRP_ID# AS AUTH_GRP_ID
+                 , #INTRCP_AT# AS INTRCP_AT
+                 , #REGISTER_ID# AS REGISTER_ID
+                 , SYSDATE AS REGIST_DT
+                 , #UPDUSR_ID# AS UPDUSR_ID
+                 , SYSDATE AS UPDT_DT
+               FROM DUAL
+           ) Y
+           ON (
+                 X.USER_ID = Y.USER_ID
+             AND X.MENU_ID = Y.MENU_ID
+           )
+           WHEN NOT MATCHED THEN INSERT
+           (
+                 X.USER_ID
+               , X.MENU_ID
+               , X.AUTH_GRP_ID
+               , X.INTRCP_AT
+               , X.REGISTER_ID
+               , X.REGIST_DT
+               , X.UPDUSR_ID
+               , X.UPDT_DT
+           )
+           VALUES
+           (
+                 Y.USER_ID
+               , Y.MENU_ID
+               , Y.AUTH_GRP_ID
+               , Y.INTRCP_AT
+               , Y.REGISTER_ID
+               , Y.REGIST_DT
+               , Y.UPDUSR_ID
+               , Y.UPDT_DT
+           )
+           WHEN MATCHED THEN UPDATE
+            SET X.AUTH_GRP_ID = Y.AUTH_GRP_ID
+              , X.INTRCP_AT = Y.INTRCP_AT
+              , X.UPDUSR_ID = Y.UPDUSR_ID
+              , X.UPDT_DT   = Y.UPDT_DT
+	</insert>
+	
+	<!--  권한복사(3.사용자 버튼권한 복사대상 조회) -->
+	<select id="SYM020300DAO.selectUserAuthButtonCopy" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT 
+                   #GIVE_USER_ID# AS USER_ID
+                 , B.PAGE_ID
+                 , B.BUTTON_ID
+                 , B.AUTH_GRP_ID
+                 , C.BUTTON_NM
+                 , NVL(A.INTRCP_AT , B.INTRCP_AT) AS INTRCP_AT
+                 , #S_USER_ID# AS REGISTER_ID
+                 , SYSDATE AS REGIST_DT
+                 , #S_USER_ID# AS UPDUSR_ID
+                 , SYSDATE AS UPDT_DT
+                 , 'BA' AS CHANGE_AUTH_KND_CODE
+                 , B.BUTTON_ID AS CHANG_AUTH_TRGET_ID
+                 , NVL((SELECT NVL(INTRCP_AT, '') FROM TBCOM_USER_SCRIN_BUTTON WHERE USER_ID = #GIVE_USER_ID# AND PAGE_ID=B.PAGE_ID AND BUTTON_ID=B.BUTTON_ID AND ROWNUM=1), '') AS BFCHG_AUTH_STTUS_CODE
+                 , '0' AS AFTCH_AUTH_STTUS_CODE
+                 , '[메뉴권한복사]' || #CRIT_USER_ID# || '(' || (SELECT USER_NM FROM TBCOM_USER WHERE USER_ID = #Y_USER_ID# AND ROWNUM = 1) || ') ' || '권한 적용' AS EVENT_FNCT
+                 , NULL AS SVC_ID
+               FROM TBCOM_AUTH_GRP_SCRIN_BUTTON B, TBCOM_SCRIN_BUTTON C
+                  , (SELECT * FROM TBCOM_USER_SCRIN_BUTTON WHERE USER_ID = #CRIT_USER_ID#) A
+               WHERE B.PAGE_ID = C.PAGE_ID
+                 AND B.BUTTON_ID = C.BUTTON_ID
+                 AND B.PAGE_ID = A.PAGE_ID(+)
+                 AND B.BUTTON_ID = A.BUTTON_ID(+)
+                 AND B.AUTH_GRP_ID = #CRIT_AUTH_GRP_ID#
+	</select>
+	<!--  권한복사(3.사용자 버튼권한 복사) -->
+	<insert id="SYM020300DAO.copyAuthUserButton" parameterClass="java.util.HashMap" >
+	       MERGE INTO TBCOM_USER_SCRIN_BUTTON X
+           USING (
+               SELECT 
+                   #USER_ID# AS USER_ID
+                 , #PAGE_ID# AS PAGE_ID
+                 , #BUTTON_ID# AS BUTTON_ID
+                 , #AUTH_GRP_ID# AS AUTH_GRP_ID
+                 , #BUTTON_NM# AS BUTTON_NM
+                 , #INTRCP_AT# AS INTRCP_AT
+                 , #REGISTER_ID# AS REGISTER_ID
+                 , SYSDATE AS REGIST_DT
+                 , #UPDUSR_ID# AS UPDUSR_ID
+                 , SYSDATE AS UPDT_DT
+               FROM DUAL
+           ) Y
+           ON (
+                 X.USER_ID = Y.USER_ID
+             AND X.PAGE_ID = Y.PAGE_ID
+             AND X.BUTTON_ID = Y.BUTTON_ID
+           )
+           WHEN NOT MATCHED THEN INSERT
+           (
+                 X.USER_ID
+               , X.PAGE_ID
+               , X.BUTTON_ID
+               , X.AUTH_GRP_ID
+               , X.BUTTON_NM
+               , X.INTRCP_AT
+               , X.REGISTER_ID
+               , X.REGIST_DT
+               , X.UPDUSR_ID
+               , X.UPDT_DT
+           )
+           VALUES
+           (
+                 Y.USER_ID
+               , Y.PAGE_ID
+               , Y.BUTTON_ID
+               , Y.AUTH_GRP_ID
+               , Y.BUTTON_NM
+               , Y.INTRCP_AT
+               , Y.REGISTER_ID
+               , Y.REGIST_DT
+               , Y.UPDUSR_ID
+               , Y.UPDT_DT
+           )
+           WHEN MATCHED THEN UPDATE
+            SET X.AUTH_GRP_ID = Y.AUTH_GRP_ID
+              , X.BUTTON_NM = Y.BUTTON_NM
+              , X.INTRCP_AT = Y.INTRCP_AT
+              , X.UPDUSR_ID = Y.UPDUSR_ID
+              , X.UPDT_DT   = Y.UPDT_DT
+	</insert>
+	
+	<!--  권한복사(4.사용자 서비스오퍼레이션권한 복사대상 조회) -->
+	<select id="SYM020300DAO.selectUserAuthSvcCopy" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT 
+                   #GIVE_USER_ID# AS USER_ID
+                 , B.SVC_ID
+                 , B.OPRTIN_NM
+                 , B.AUTH_GRP_ID
+                 , NVL(A.INTRCP_AT , B.INTRCP_AT) AS INTRCP_AT
+                 , #S_USER_ID# AS REGISTER_ID
+                 , SYSDATE AS REGIST_DT
+                 , #S_USER_ID# AS UPDUSR_ID
+                 , SYSDATE AS UPDT_DT
+                 , 'SA' AS CHANGE_AUTH_KND_CODE
+                 , B.OPRTIN_NM AS CHANG_AUTH_TRGET_ID
+                 , NVL((SELECT NVL(INTRCP_AT, '') FROM TBCOM_USER_OPRTIN WHERE USER_ID = #GIVE_USER_ID# AND SVC_ID=B.SVC_ID AND OPRTIN_NM=B.OPRTIN_NM AND ROWNUM=1), '') AS BFCHG_AUTH_STTUS_CODE
+                 , '0' AS AFTCH_AUTH_STTUS_CODE
+                 , '[메뉴권한복사]' || #CRIT_USER_ID# || '(' || (SELECT USER_NM FROM TBCOM_USER WHERE USER_ID = #Y_USER_ID# AND ROWNUM = 1) || ') ' || '권한 적용' AS EVENT_FNCT
+                 , NULL AS PAGE_ID
+               FROM TBCOM_AUTH_GRP_OPRTIN B
+                  , (SELECT * FROM TBCOM_USER_OPRTIN WHERE USER_ID = #CRIT_USER_ID#) A
+               WHERE B.SVC_ID = A.SVC_ID(+)
+                 AND B.OPRTIN_NM = A.OPRTIN_NM(+)
+                 AND B.AUTH_GRP_ID = #CRIT_AUTH_GRP_ID#
+	</select>
+	<!--  권한복사(4.사용자 서비스오퍼레이션권한 복사) -->
+	<insert id="SYM020300DAO.copyAuthUserSvc" parameterClass="java.util.HashMap" >
+	       MERGE INTO TBCOM_USER_OPRTIN X
+           USING (
+               SELECT 
+                   #USER_ID# AS USER_ID
+                 , #SVC_ID# AS SVC_ID
+                 , #OPRTIN_NM# AS OPRTIN_NM
+                 , #AUTH_GRP_ID# AS AUTH_GRP_ID
+                 , #INTRCP_AT# AS INTRCP_AT
+                 , #REGISTER_ID# AS REGISTER_ID
+                 , SYSDATE AS REGIST_DT
+                 , #REGISTER_ID# AS REGISTER_ID
+                 , SYSDATE AS UPDT_DT
+               FROM DUAL
+           ) Y
+           ON (
+                 X.USER_ID = Y.USER_ID
+             AND X.SVC_ID = Y.SVC_ID
+              AND X.OPRTIN_NM = Y.OPRTIN_NM
+           )
+           WHEN NOT MATCHED THEN INSERT
+           (
+                 X.USER_ID
+               , X.SVC_ID
+               , X.OPRTIN_NM
+               , X.AUTH_GRP_ID
+               , X.INTRCP_AT
+               , X.REGISTER_ID
+               , X.REGIST_DT
+               , X.UPDUSR_ID
+               , X.UPDT_DT
+           )
+           VALUES
+           (
+                 Y.USER_ID
+               , Y.SVC_ID
+               , Y.OPRTIN_NM
+               , Y.AUTH_GRP_ID
+               , Y.INTRCP_AT
+               , Y.REGISTER_ID
+               , Y.REGIST_DT
+               , Y.UPDUSR_ID
+               , Y.UPDT_DT
+           )
+           WHEN MATCHED THEN UPDATE
+            SET X.AUTH_GRP_ID = Y.AUTH_GRP_ID
+              , X.INTRCP_AT = Y.INTRCP_AT
+              , X.UPDUSR_ID = Y.UPDUSR_ID
+              , X.UPDT_DT   = Y.UPDT_DT
+	</insert>
+	
+	<!-- 1.1 권한교환을 위한 사용자 권한그룹 조회 -->
+	<select id="SYM020300DAO.selectListUserGrpAuth" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT 
+	        #X_USER_ID# AS USER_ID
+           , AUTH_GRP_ID
+           , INTRCP_AT
+           , #S_USER_ID# AS REGISTER_ID
+           , SYSDATE AS REGIST_DT
+           , #S_USER_ID# AS UPDUSR_ID
+           , SYSDATE AS UPDT_DT
+           , 'GA' AS CHANGE_AUTH_KND_CODE
+           , AUTH_GRP_ID AS CHANG_AUTH_TRGET_ID
+           , '' AS BFCHG_AUTH_STTUS_CODE
+           , NVL(INTRCP_AT,'') AS AFTCH_AUTH_STTUS_CODE
+           , '[그룹권한교환]-' || #Y_USER_ID# || '(' || (SELECT USER_NM FROM TBCOM_USER WHERE USER_ID = #Y_USER_ID# AND ROWNUM = 1) || ') ' || '권한 적용' AS EVENT_FNCT
+           , NULL AS PAGE_ID
+           , NULL AS SVC_ID
+	    FROM TBCOM_USER_GRP
+	    WHERE USER_ID = #Y_USER_ID#
+	</select>
+	<!-- 1.2 권한교환을 위한 사용자 메뉴권한 조회 -->
+	<select id="SYM020300DAO.selectListUserMenuAuth" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT 
+	        #X_USER_ID# AS USER_ID
+	       , MENU_ID
+           , AUTH_GRP_ID
+           , INTRCP_AT
+           , #S_USER_ID# AS REGISTER_ID
+           , SYSDATE AS REGIST_DT
+           , #S_USER_ID# AS UPDUSR_ID
+           , SYSDATE AS UPDT_DT
+           , 'MA' AS CHANGE_AUTH_KND_CODE
+           , MENU_ID AS CHANG_AUTH_TRGET_ID
+           , '' AS BFCHG_AUTH_STTUS_CODE
+           , NVL(INTRCP_AT,'') AS  AFTCH_AUTH_STTUS_CODE
+           , '[메뉴권한교환]-' || #Y_USER_ID# || '(' || (SELECT USER_NM FROM TBCOM_USER WHERE USER_ID = #Y_USER_ID# AND ROWNUM = 1) || ') ' || '권한 적용' AS EVENT_FNCT
+           , NULL AS PAGE_ID
+           , NULL AS SVC_ID     
+	    FROM TBCOM_USER_MENU
+	    WHERE USER_ID = #Y_USER_ID#
+	</select>
+	<!-- 1.2 권한교환을 위한 사용자 버튼권한 조회 -->
+	<select id="SYM020300DAO.selectListUserButtonAuth" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT 
+	         #X_USER_ID# AS USER_ID
+	       , PAGE_ID
+	       , BUTTON_ID
+	       , AUTH_GRP_ID
+	       , BUTTON_NM
+           , INTRCP_AT
+           , #S_USER_ID# AS REGISTER_ID
+           , SYSDATE AS REGIST_DT
+           , #S_USER_ID# AS UPDUSR_ID
+           , SYSDATE AS UPDT_DT
+           , 'BA' AS CHANGE_AUTH_KND_CODE
+           , BUTTON_ID AS CHANG_AUTH_TRGET_ID
+           , '' AS BFCHG_AUTH_STTUS_CODE
+           , NVL(INTRCP_AT,'') AS AFTCH_AUTH_STTUS_CODE
+           , '[버튼권한교환]' || #Y_USER_ID# || '(' || (SELECT USER_NM FROM TBCOM_USER WHERE USER_ID = #Y_USER_ID# AND ROWNUM = 1) || ') ' || '권한 적용' AS EVENT_FNCT
+           , NULL AS SVC_ID
+	    FROM TBCOM_USER_SCRIN_BUTTON
+	    WHERE USER_ID = #Y_USER_ID#
+	</select>
+	
+	<!-- 1.3  권한교환을 위한 사용자 서비스권한 조회 -->
+	<select id="SYM020300DAO.selectListUserSvcAuth" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT 
+	         #X_USER_ID# AS USER_ID
+	       , SVC_ID
+           , OPRTIN_NM
+	       , AUTH_GRP_ID
+           , INTRCP_AT
+           , #S_USER_ID# AS REGISTER_ID
+           , SYSDATE AS REGIST_DT
+           , #S_USER_ID# AS UPDUSR_ID
+           , SYSDATE AS UPDT_DT  
+           , 'SA' AS CHANGE_AUTH_KND_CODE
+           , OPRTIN_NM AS CHANG_AUTH_TRGET_ID
+           , '' AS BFCHG_AUTH_STTUS_CODE
+           , NVL(INTRCP_AT,'') AS AFTCH_AUTH_STTUS_CODE
+           , '[서비스권한교환]-' || #Y_USER_ID# || '-' || '권한 적용' AS EVENT_FNCT
+           , NULL AS PAGE_ID         
+	    FROM TBCOM_USER_OPRTIN
+	    WHERE USER_ID = #Y_USER_ID#
+	</select>
+	
+	
+	
+	<!-- 2-1. 권한교환을 위한 사용자서비스 권한 삭제  -->
+	<delete id="SYM020300DAO.deleteUserSvcAuthExchg" parameterClass="java.util.HashMap" >
+	         DELETE FROM TBCOM_USER_OPRTIN
+             WHERE USER_ID in (#X_USER_ID# , #Y_USER_ID#)
+	</delete>
+	
+	<!-- 2-2. 권한교환을 위한 사용자 버튼 권한 삭제  -->
+	<delete id="SYM020300DAO.deleteUserButtonAuthExchg" parameterClass="java.util.HashMap" >
+	         DELETE FROM TBCOM_USER_SCRIN_BUTTON
+             WHERE USER_ID in (#X_USER_ID# , #Y_USER_ID#)
+	</delete>
+	
+	<!-- 2-3. 권한교환을 위한 사용자메뉴권한 삭제  -->
+	<delete id="SYM020300DAO.deleteUserMenuAuthExchg" parameterClass="java.util.HashMap" >
+	         DELETE FROM TBCOM_USER_MENU
+              WHERE USER_ID in (#X_USER_ID# , #Y_USER_ID#)
+	</delete>
+	
+	<!-- 2-4. 권한교환을 위한 사용자그룹권한 삭제  -->
+	<delete id="SYM020300DAO.deleteUserGrpAuthExchg" parameterClass="java.util.HashMap" >
+	         DELETE FROM TBCOM_USER_GRP
+             WHERE USER_ID in (#X_USER_ID# , #Y_USER_ID#)
+	</delete>
+	
+	<delete id="SYM020300DAO.deleteUserGrpAuthExchg2" parameterClass="java.util.HashMap" >
+	         DELETE FROM TBCOM_USER_GRP
+             WHERE USER_ID = #USER_ID#
+               AND AUTH_GRP_ID = #BATCH_OPERT_ID#
+	</delete>
+	
+	<!-- 3-1 권한교환을 위한 그룹 사용자 추가  -->
+	<insert id="SYM020300DAO.insertUserGrpAuthExchg" parameterClass="java.util.HashMap" >
+	    MERGE INTO TBCOM_USER_GRP X
+	    USING (
+	        SELECT 
+                 #USER_ID# AS USER_ID
+               , #AUTH_GRP_ID# AS AUTH_GRP_ID
+               , #INTRCP_AT# AS INTRCP_AT
+               , #REGISTER_ID# AS REGISTER_ID
+               , SYSDATE AS REGIST_DT
+               , #UPDUSR_ID# AS UPDUSR_ID
+               , SYSDATE AS UPDT_DT
+	        FROM DUAL
+	    ) Y
+	    ON (
+	            X.USER_ID     = Y.USER_ID
+	        AND X.AUTH_GRP_ID = Y.AUTH_GRP_ID
+	    )
+	    WHEN NOT MATCHED THEN INSERT 
+		( 
+            X.USER_ID
+          , X.AUTH_GRP_ID
+          , X.INTRCP_AT
+          , X.REGISTER_ID
+          , X.REGIST_DT
+          , X.UPDUSR_ID
+          , X.UPDT_DT
+        )
+		VALUES(
+            Y.USER_ID
+          , Y.AUTH_GRP_ID
+          , Y.INTRCP_AT
+          , Y.REGISTER_ID
+          , Y.REGIST_DT
+          , Y.UPDUSR_ID
+          , Y.UPDT_DT
+		)
+		WHEN MATCHED THEN UPDATE
+		SET 
+            X.INTRCP_AT   = Y.INTRCP_AT  
+          , X.UPDUSR_ID   = Y.UPDUSR_ID  
+          , X.UPDT_DT     = Y.UPDT_DT    
+	</insert>
+	
+	<!-- 3-2 권한교환을 위한 사용자 메뉴권한 추가  -->
+	<insert id="SYM020300DAO.insertUserMenuAuthExchg" parameterClass="java.util.HashMap" >
+	    MERGE INTO TBCOM_USER_MENU X
+	    USING (
+	        SELECT 
+                 #USER_ID# AS USER_ID
+               , #MENU_ID# AS MENU_ID
+               , #AUTH_GRP_ID# AS AUTH_GRP_ID
+               , #INTRCP_AT# AS INTRCP_AT
+               , #REGISTER_ID# AS REGISTER_ID
+               , SYSDATE AS REGIST_DT
+               , #UPDUSR_ID# AS UPDUSR_ID
+               , SYSDATE AS UPDT_DT
+	        FROM DUAL
+	    ) Y
+	    ON (
+	            X.USER_ID     = Y.USER_ID
+	        AND X.MENU_ID     = Y.MENU_ID
+	    )
+	    WHEN NOT MATCHED THEN INSERT 
+		( 
+            X.USER_ID
+          , X.MENU_ID
+          , X.AUTH_GRP_ID
+          , X.INTRCP_AT
+          , X.REGISTER_ID
+          , X.REGIST_DT
+          , X.UPDUSR_ID
+          , X.UPDT_DT
+        )
+		VALUES(
+            Y.USER_ID
+          , Y.MENU_ID
+          , Y.AUTH_GRP_ID
+          , Y.INTRCP_AT
+          , Y.REGISTER_ID
+          , Y.REGIST_DT
+          , Y.UPDUSR_ID
+          , Y.UPDT_DT
+		)
+		WHEN MATCHED THEN UPDATE
+		SET 
+             X.AUTH_GRP_ID = Y.AUTH_GRP_ID
+          ,  X.INTRCP_AT   = Y.INTRCP_AT  
+          ,  X.UPDUSR_ID   = Y.UPDUSR_ID  
+          ,  X.UPDT_DT     = Y.UPDT_DT    
+	</insert>
+	
+	<!-- 3-3 권한교환을 위한 사용자 버튼권한 추가  -->
+	<insert id="SYM020300DAO.insertUserButtonAuthExchg" parameterClass="java.util.HashMap" >
+	    MERGE INTO TBCOM_USER_SCRIN_BUTTON X
+	    USING (
+	        SELECT 
+                 #USER_ID# AS USER_ID
+               , #PAGE_ID# AS PAGE_ID
+               , #BUTTON_ID# AS BUTTON_ID
+               , #AUTH_GRP_ID# AS AUTH_GRP_ID
+               , #BUTTON_NM# AS BUTTON_NM
+               , #INTRCP_AT# AS INTRCP_AT
+               , #REGISTER_ID# AS REGISTER_ID
+               , SYSDATE AS REGIST_DT
+               , #UPDUSR_ID# AS UPDUSR_ID
+               , SYSDATE AS UPDT_DT
+	        FROM DUAL
+	    ) Y
+	    ON (
+	            X.USER_ID     = Y.USER_ID
+	        AND X.PAGE_ID     = Y.PAGE_ID
+	        AND X.BUTTON_ID   = Y.BUTTON_ID
+	    )
+	    WHEN NOT MATCHED THEN INSERT 
+		( 
+            X.USER_ID
+          , X.PAGE_ID
+          , X.BUTTON_ID
+          , X.AUTH_GRP_ID
+          , X.BUTTON_NM
+          , X.INTRCP_AT
+          , X.REGISTER_ID
+          , X.REGIST_DT
+          , X.UPDUSR_ID
+          , X.UPDT_DT
+        )
+		VALUES(
+            Y.USER_ID
+          , Y.PAGE_ID
+          , Y.BUTTON_ID
+          , Y.AUTH_GRP_ID
+          , Y.BUTTON_NM
+          , Y.INTRCP_AT
+          , Y.REGISTER_ID
+          , Y.REGIST_DT
+          , Y.UPDUSR_ID
+          , Y.UPDT_DT
+		)
+		WHEN MATCHED THEN UPDATE
+		SET 
+             X.AUTH_GRP_ID = Y.AUTH_GRP_ID
+          ,  X.BUTTON_NM    = Y.BUTTON_NM
+          ,  X.INTRCP_AT   = Y.INTRCP_AT  
+          ,  X.UPDUSR_ID   = Y.UPDUSR_ID  
+          ,  X.UPDT_DT     = Y.UPDT_DT    
+	</insert>
+	
+	<!-- 3-4 권한교환을 위한 사용자 서비스권한 추가  -->
+	<insert id="SYM020300DAO.insertUserSvcAuthExchg" parameterClass="java.util.HashMap" >
+	    MERGE INTO TBCOM_USER_OPRTIN X
+	    USING (
+	        SELECT 
+                 #USER_ID# AS USER_ID
+               , #SVC_ID# AS SVC_ID
+               , #OPRTIN_NM# AS OPRTIN_NM
+               , #AUTH_GRP_ID# AS AUTH_GRP_ID
+               , #INTRCP_AT# AS INTRCP_AT
+               , #REGISTER_ID# AS REGISTER_ID
+               , SYSDATE AS REGIST_DT
+               , #UPDUSR_ID# AS UPDUSR_ID
+               , SYSDATE AS UPDT_DT
+	        FROM DUAL
+	    ) Y
+	    ON (
+	            X.USER_ID     = Y.USER_ID
+	        AND X.SVC_ID      = Y.SVC_ID
+	        AND X.OPRTIN_NM   = Y.OPRTIN_NM
+	    )
+	    WHEN NOT MATCHED THEN INSERT 
+		( 
+            X.USER_ID
+          , X.SVC_ID 
+          , X.OPRTIN_NM
+          , X.AUTH_GRP_ID
+          , X.INTRCP_AT
+          , X.REGISTER_ID
+          , X.REGIST_DT
+          , X.UPDUSR_ID
+          , X.UPDT_DT
+        )
+		VALUES(
+            Y.USER_ID
+          , Y.SVC_ID 
+          , Y.OPRTIN_NM
+          , Y.AUTH_GRP_ID
+          , Y.INTRCP_AT
+          , Y.REGISTER_ID
+          , Y.REGIST_DT
+          , Y.UPDUSR_ID
+          , Y.UPDT_DT
+		)
+		WHEN MATCHED THEN UPDATE
+		SET 
+             X.AUTH_GRP_ID = Y.AUTH_GRP_ID
+          ,  X.INTRCP_AT   = Y.INTRCP_AT  
+          , X.UPDUSR_ID   = Y.UPDUSR_ID  
+          , X.UPDT_DT     = Y.UPDT_DT    
+	</insert>
+	
+	<!--  로그 저장 -->
+    <insert id="SYM020300DAO.insertUserAuthChgHstLog" parameterClass="java.util.HashMap" >
+   		<![CDATA[ 
+			INSERT INTO TBCOM_USER_AUTH_CHGHST 
+			(      AUTH_CHANGE_SN
+			     , USER_ID
+			     , CHANGE_AUTH_KND_CODE
+			     , CHANG_AUTH_TRGET_ID
+			     , PAGE_ID
+			     , SVC_ID
+			     , BFCHG_AUTH_STTUS_CODE
+			     , AFTCH_AUTH_STTUS_CODE
+			     , EVENT_FNCT
+			     , REGISTER_ID
+			     , REGIST_DT
+			     , UPDUSR_ID
+			     , UPDT_DT
+			)
+			VALUES 
+			(
+			    SQ_COM_USER_AUTH_CHGHST_1.NEXTVAL
+			    , #USER_ID#
+			    , #CHANGE_AUTH_KND_CODE#
+			    , #CHANG_AUTH_TRGET_ID#
+			    , #PAGE_ID#
+			    , #SVC_ID#
+			    , #BFCHG_AUTH_STTUS_CODE#
+			    , #AFTCH_AUTH_STTUS_CODE#
+			    , #EVENT_FNCT#
+			    , #REGISTER_ID#
+			    , SYSDATE
+			    , #UPDUSR_ID#
+			    , SYSDATE
+			 )   
+		]]>
+	</insert> 
+</sqlMap>

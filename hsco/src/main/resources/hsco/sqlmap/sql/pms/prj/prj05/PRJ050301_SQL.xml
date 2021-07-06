@@ -1,0 +1,581 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj05">
+
+	<!-- 
+		CRUD : TBPRJ_FAIR_DIARY			공정일지
+		CRUD : TBPRJ_INPT_NMPR			투입인원
+		CRUD : TBPRJ_MTRIL_WRHOUSNG		자재입고
+		CRUD : TBPRJ_MLTRM_OPERT		중기작업
+	-->
+
+	<!-- 공정일지 ================================================== -->
+	<!-- 공정일지 조회 -->
+	<select id="PRJ050301.r1List" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE								/* 사업코드 */
+			,A.CNTRCT_NO								/* 계약번호 */
+			,A.CNTRWK_DE								/* 공사일자 */
+			,A.WETHR									/* 날씨 */
+			,A.TMPRT_TOP								/* 기온_최고 */
+			,A.TMPRT_LWET								/* 기온_최저 */
+			,A.PLAN_RECOVRY								/* 계획_만회 */
+			,A.PLAN_UPDT								/* 계획_수정 */
+			,A.OPRTN									/* 실시 */
+			,A.OPERT_CN									/* 작업내용 */
+			,A.SPCABL_MATTER							/* 특기사항 */
+			,B.RT_1										/* 계획누계(만회) */
+			,B.RT_2										/* 계획누계(수정) */
+			,B.RT_3										/* 실시누계 */
+			,C.OPERT_CN AS OPERT_CN1					/* 작업내용 */
+			,D.OPERT_CN AS OPERT_CN2					/* 작업내용 */
+			,ROWNUM AS RN
+		FROM TBPRJ_FAIR_DIARY A							/* 공정일지 */
+		LEFT JOIN 
+		(	SELECT
+				 BSNS_CODE
+				,CNTRCT_NO
+				,SUM(PLAN_RECOVRY) AS RT_1				/* 계획누계(만회) */
+				,SUM(PLAN_UPDT) AS RT_2					/* 계획누계(수정) */
+				,SUM(OPRTN) AS RT_3						/* 실시누계 */
+			FROM TBPRJ_FAIR_DIARY
+			WHERE BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+			  AND CNTRCT_NO = #CNTRCT_NO#				/* 계약번호 */
+			  AND #CNTRWK_DE# >= CNTRWK_DE
+			GROUP BY BSNS_CODE, CNTRCT_NO
+		) B ON 1=1
+		LEFT JOIN TBPRJ_FAIR_DIARY C
+		  ON (C.BSNS_CODE, C.CNTRCT_NO, C.CNTRWK_DE) IN
+		  ( SELECT BSNS_CODE, CNTRCT_NO, MAX(CNTRWK_DE)
+			FROM TBPRJ_FAIR_DIARY
+			WHERE BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+			  AND CNTRCT_NO = #CNTRCT_NO#				/* 계약번호 */
+			  AND #CNTRWK_DE# > CNTRWK_DE				/* 공사일자 */
+			GROUP BY BSNS_CODE, CNTRCT_NO
+		  )
+		LEFT JOIN TBPRJ_FAIR_DIARY D
+		  ON (D.BSNS_CODE, D.CNTRCT_NO, D.CNTRWK_DE) IN
+		  ( SELECT BSNS_CODE, CNTRCT_NO, MIN(CNTRWK_DE)
+			FROM TBPRJ_FAIR_DIARY
+			WHERE BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+			  AND CNTRCT_NO = #CNTRCT_NO#				/* 계약번호 */
+			  AND CNTRWK_DE > #CNTRWK_DE#				/* 공사일자 */
+			GROUP BY BSNS_CODE, CNTRCT_NO
+		  )
+		WHERE A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND A.CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND A.CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		ORDER BY 1,2,3
+	</select>
+
+	<!-- 공정일지 추가 -->
+	<insert id="PRJ050301.r1C" parameterClass="map">
+		INSERT INTO TBPRJ_FAIR_DIARY (					/* 공정일지 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,CNTRWK_DE									/* 공사일자 */
+			,WETHR										/* 날씨 */
+			,TMPRT_TOP									/* 기온_최고 */
+			,TMPRT_LWET									/* 기온_최저 */
+			,PLAN_RECOVRY								/* 계획_만회 */
+			,PLAN_UPDT									/* 계획_수정 */
+			,OPRTN										/* 실시 */
+			,OPERT_CN									/* 작업내용 */
+			,SPCABL_MATTER								/* 특기사항 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		) VALUES (
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#CNTRWK_DE#								/* 공사일자 */
+			,#WETHR#									/* 날씨 */
+			,#TMPRT_TOP#								/* 기온_최고 */
+			,#TMPRT_LWET#								/* 기온_최저 */
+			,#PLAN_RECOVRY#								/* 계획_만회 */
+			,#PLAN_UPDT#								/* 계획_수정 */
+			,#OPRTN#									/* 실시 */
+			,#OPERT_CN#									/* 작업내용 */
+			,#SPCABL_MATTER#							/* 특기사항 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		)
+	</insert>
+
+	<!-- 공정일지 수정 -->
+	<update id="PRJ050301.r1U" parameterClass="map">
+		UPDATE TBPRJ_FAIR_DIARY							/* 공정일지 */
+		  SET
+			 WETHR = #WETHR#							/* 날씨 */
+			,TMPRT_TOP = #TMPRT_TOP#					/* 기온_최고 */
+			,TMPRT_LWET = #TMPRT_LWET#					/* 기온_최저 */
+			,PLAN_RECOVRY = #PLAN_RECOVRY#				/* 계획_만회 */
+			,PLAN_UPDT = #PLAN_UPDT#					/* 계획_수정 */
+			,OPRTN = #OPRTN#							/* 실시 */
+			,OPERT_CN = #OPERT_CN#						/* 작업내용 */
+			,SPCABL_MATTER = #SPCABL_MATTER#			/* 특기사항 */
+			,UPDUSR_ID = #S_USER_ID#					/* 수정자ID */
+			,UPDT_DT = SYSDATE							/* 수정일시 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+	</update>
+
+	<!-- 공정일지 삭제 -->
+	<delete id="PRJ050301.r1D" parameterClass="map">
+		DELETE FROM TBPRJ_FAIR_DIARY					/* 공정일지 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+	</delete>
+
+
+	<!-- 투입인원 ================================================== -->
+	<!-- 투입인원 조회 -->
+	<select id="PRJ050301.r2List" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE								/* 사업코드 */
+			,A.CNTRCT_NO								/* 계약번호 */
+			,A.CNTRWK_DE								/* 공사일자 */
+			,A.SN										/* 일련번호 */
+			,A.JSSFC									/* 직종 */
+			,A.INPT_NMPR								/* 투입인원 */
+			,B.INPT_NMPR2								/* 누계 투입인원 */
+			,ROW_NUMBER() OVER (PARTITION BY A.BSNS_CODE,A.CNTRCT_NO,A.CNTRWK_DE ORDER BY A.SN) AS RN
+		FROM TBPRJ_INPT_NMPR A							/* 투입인원 */
+		LEFT JOIN 
+		(	SELECT
+				 BSNS_CODE
+				,CNTRCT_NO
+				,SN
+				,SUM(INPT_NMPR) AS INPT_NMPR2			/* 누계 투입인원 */
+			FROM TBPRJ_INPT_NMPR
+			WHERE #CNTRWK_DE# >= CNTRWK_DE
+			GROUP BY BSNS_CODE, CNTRCT_NO, SN
+		) B ON B.BSNS_CODE = A.BSNS_CODE
+		   AND B.CNTRCT_NO = A.CNTRCT_NO
+		   AND B.SN = A.SN
+		WHERE A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND A.CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND A.CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 투입인원 추가 -->
+	<insert id="PRJ050301.r2C" parameterClass="map">
+		INSERT INTO TBPRJ_INPT_NMPR (					/* 투입인원 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,CNTRWK_DE									/* 공사일자 */
+			,SN											/* 일련번호 */
+			,JSSFC										/* 직종 */
+			,INPT_NMPR									/* 투입인원 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		) VALUES (
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#CNTRWK_DE#								/* 공사일자 */
+			,#SN#										/* 일련번호 */
+			,#JSSFC#									/* 직종 */
+			,#INPT_NMPR#								/* 투입인원 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		)
+	</insert>
+
+	<!-- 투입인원 수정 -->
+	<update id="PRJ050301.r2U" parameterClass="map">
+		UPDATE TBPRJ_INPT_NMPR							/* 투입인원 */
+		  SET
+			 JSSFC = #JSSFC#							/* 직종 */
+			,INPT_NMPR = #INPT_NMPR#					/* 투입인원 */
+			,UPDUSR_ID = #S_USER_ID#					/* 수정자ID */
+			,UPDT_DT = SYSDATE							/* 수정일시 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		  AND SN = #SN#									/* 일련번호 */
+	</update>
+
+	<!-- 투입인원 삭제 -->
+	<delete id="PRJ050301.r2D" parameterClass="map">
+		DELETE FROM TBPRJ_INPT_NMPR						/* 투입인원 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		<isNotEmpty property="SN" >
+		  AND SN = #SN#									/* 일련번호 */
+		</isNotEmpty>
+	</delete>
+
+
+	<!-- 자재입고 ================================================== -->
+	<!-- 자재입고 조회 -->
+	<select id="PRJ050301.r3List" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE								/* 사업코드 */
+			,A.CNTRCT_NO								/* 계약번호 */
+			,A.CNTRWK_DE								/* 공사일자 */
+			,A.SN										/* 일련번호 */
+			,A.PRDNM									/* 품명 */
+			,A.STNDRD									/* 규격 */
+			,A.QY										/* 수량 */
+			,A.UNIT_NM									/* 단위 */
+			,B.QY2										/* 누계 */
+			,A.DSGN_QY									/* 설계량 */
+		FROM TBPRJ_MTRIL_WRHOUSNG A						/* 자재입고 */
+		LEFT JOIN 
+		(	SELECT
+				 BSNS_CODE
+				,CNTRCT_NO
+				,SN
+				,SUM(QY) AS QY2							/* 누계 */
+			FROM TBPRJ_MTRIL_WRHOUSNG
+			WHERE #CNTRWK_DE# >= CNTRWK_DE
+			GROUP BY BSNS_CODE, CNTRCT_NO, SN
+		) B ON B.BSNS_CODE = A.BSNS_CODE
+		   AND B.CNTRCT_NO = A.CNTRCT_NO
+		   AND B.SN = A.SN
+		WHERE A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND A.CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND A.CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 자재입고 추가 -->
+	<insert id="PRJ050301.r3C" parameterClass="map">
+		INSERT INTO TBPRJ_MTRIL_WRHOUSNG (				/* 자재입고 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,CNTRWK_DE									/* 공사일자 */
+			,SN											/* 일련번호 */
+			,PRDNM										/* 품명 */
+			,STNDRD										/* 규격 */
+			,QY											/* 수량 */
+			,UNIT_NM									/* 단위 */
+			,DSGN_QY									/* 설계량 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		)
+		VALUES (
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#CNTRWK_DE#								/* 공사일자 */
+			,#SN#										/* 일련번호 */
+			,#PRDNM#									/* 품명 */
+			,#STNDRD#									/* 규격 */
+			,#QY#										/* 수량 */
+			,#UNIT_NM#									/* 단위 */
+			,#DSGN_QY#									/* 설계량 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		)
+	</insert>
+
+	<!-- 자재입고 수정 -->
+	<update id="PRJ050301.r3U" parameterClass="map">
+		UPDATE TBPRJ_MTRIL_WRHOUSNG						/* 자재입고 */
+		  SET
+			 PRDNM = #PRDNM#							/* 품명 */
+			,STNDRD = #STNDRD#							/* 규격 */
+			,QY = #QY#									/* 수량 */
+			,UNIT_NM = #UNIT_NM#						/* 단위 */
+			,DSGN_QY = #DSGN_QY#						/* 설계량 */
+			,UPDUSR_ID = #S_USER_ID#					/* 수정자ID */
+			,UPDT_DT = SYSDATE							/* 수정일시 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		  AND SN = #SN#									/* 일련번호 */
+	</update>
+
+	<!-- 자재입고 삭제 -->
+	<delete id="PRJ050301.r3D" parameterClass="map">
+		DELETE FROM TBPRJ_MTRIL_WRHOUSNG				/* 자재입고 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		<isNotEmpty property="SN" >
+		  AND SN = #SN#									/* 일련번호 */
+		</isNotEmpty>
+	</delete>
+
+
+	<!-- 중기작업 ================================================== -->
+	<!-- 중기작업 조회 -->
+	<select id="PRJ050301.r4List" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE								/* 사업코드 */
+			,A.CNTRCT_NO								/* 계약번호 */
+			,A.CNTRWK_DE								/* 공사일자 */
+			,A.SN										/* 일련번호 */
+			,A.MLTRM_NM									/* 중기명 */
+			,A.STNDRD									/* 규격 */
+			,A.QY										/* 수량 */
+			,A.OPERT_CN									/* 작업내용 */
+			,B.QY2										/* 누계 */
+		FROM TBPRJ_MLTRM_OPERT A						/* 중기작업 */
+		LEFT JOIN 
+		(	SELECT
+				 BSNS_CODE
+				,CNTRCT_NO
+				,SN
+				,SUM(QY) AS QY2							/* 누계 */
+			FROM TBPRJ_MLTRM_OPERT
+			WHERE #CNTRWK_DE# >= CNTRWK_DE
+			GROUP BY BSNS_CODE, CNTRCT_NO, SN
+		) B ON B.BSNS_CODE = A.BSNS_CODE
+		   AND B.CNTRCT_NO = A.CNTRCT_NO
+		   AND B.SN = A.SN
+		WHERE A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND A.CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND A.CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 중기작업 추가 -->
+	<insert id="PRJ050301.r4C" parameterClass="map">
+		INSERT INTO TBPRJ_MLTRM_OPERT (					/* 중기작업 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,CNTRWK_DE									/* 공사일자 */
+			,SN											/* 일련번호 */
+			,MLTRM_NM									/* 중기명 */
+			,STNDRD										/* 규격 */
+			,QY											/* 수량 */
+			,OPERT_CN									/* 작업내용 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		) VALUES (
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#CNTRWK_DE#								/* 공사일자 */
+			,#SN#										/* 일련번호 */
+			,#MLTRM_NM#									/* 중기명 */
+			,#STNDRD#									/* 규격 */
+			,#QY#										/* 수량 */
+			,#OPERT_CN#									/* 작업내용 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		)
+	</insert>
+
+	<!-- 중기작업 수정 -->
+	<update id="PRJ050301.r4U" parameterClass="map">
+		UPDATE TBPRJ_MLTRM_OPERT						/* 중기작업 */
+		  SET
+			 MLTRM_NM = #MLTRM_NM#						/* 중기명 */
+			,STNDRD = #STNDRD#							/* 규격 */
+			,QY = #QY#									/* 수량 */
+			,OPERT_CN = #OPERT_CN#						/* 작업내용 */
+			,UPDUSR_ID = #S_USER_ID#					/* 수정자ID */
+			,UPDT_DT = SYSDATE							/* 수정일시 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		  AND SN = #SN#									/* 일련번호 */
+	</update>
+
+	<!-- 중기작업 삭제 -->
+	<delete id="PRJ050301.r4D" parameterClass="map">
+		DELETE FROM TBPRJ_MLTRM_OPERT					/* 중기작업 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND CNTRWK_DE = #CNTRWK_DE#					/* 공사일자 */
+		<isNotEmpty property="SN" >
+		  AND SN = #SN#									/* 일련번호 */
+		</isNotEmpty>
+	</delete>
+
+
+	<!-- 전일자료복사 ================================================== -->
+	<insert id="PRJ050301.r1Copy" parameterClass="map">
+		INSERT INTO TBPRJ_FAIR_DIARY (					/* 공정일지 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,CNTRWK_DE									/* 공사일자 */
+			,WETHR										/* 날씨 */
+			,TMPRT_TOP									/* 기온_최고 */
+			,TMPRT_LWET									/* 기온_최저 */
+			,PLAN_RECOVRY								/* 계획_만회 */
+			,PLAN_UPDT									/* 계획_수정 */
+			,OPRTN										/* 실시 */
+			,OPERT_CN									/* 작업내용 */
+			,SPCABL_MATTER								/* 특기사항 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		)
+		SELECT
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#CNTRWK_DE#								/* 공사일자 */
+			,A.WETHR									/* 날씨 */
+			,A.TMPRT_TOP								/* 기온_최고 */
+			,A.TMPRT_LWET								/* 기온_최저 */
+			,A.PLAN_RECOVRY								/* 계획_만회 */
+			,A.PLAN_UPDT								/* 계획_수정 */
+			,A.OPRTN									/* 실시 */
+			,A.OPERT_CN									/* 작업내용 */
+			,A.SPCABL_MATTER							/* 특기사항 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		FROM DUAL
+		LEFT JOIN
+		(SELECT *
+		 FROM TBPRJ_FAIR_DIARY							/* 공정일지 */
+		 WHERE (BSNS_CODE, CNTRCT_NO, CNTRWK_DE) =
+		  ( SELECT BSNS_CODE, CNTRCT_NO, MAX(CNTRWK_DE)
+			FROM TBPRJ_FAIR_DIARY
+			WHERE BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+			  AND CNTRCT_NO = #CNTRCT_NO#				/* 계약번호 */
+			  AND #CNTRWK_DE# > CNTRWK_DE				/* 공사일자 */
+			GROUP BY BSNS_CODE, CNTRCT_NO
+		  )
+		) A
+		ON 1 = 1
+	</insert>
+
+	<insert id="PRJ050301.r2Copy" parameterClass="map">
+		INSERT INTO TBPRJ_INPT_NMPR (					/* 투입인원 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,CNTRWK_DE									/* 공사일자 */
+			,SN											/* 일련번호 */
+			,JSSFC										/* 직종 */
+			,INPT_NMPR									/* 투입인원 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		)
+		SELECT
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#CNTRWK_DE#								/* 공사일자 */
+			,NVL(A.SN,1)								/* 일련번호 */
+			,A.JSSFC									/* 직종 */
+			,A.INPT_NMPR								/* 투입인원 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		FROM DUAL,
+		(SELECT *
+		 FROM TBPRJ_INPT_NMPR							/* 투입인원 */
+		 WHERE (BSNS_CODE, CNTRCT_NO, CNTRWK_DE) =
+		  ( SELECT BSNS_CODE, CNTRCT_NO, MAX(CNTRWK_DE)
+			FROM TBPRJ_INPT_NMPR
+			WHERE BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+			  AND CNTRCT_NO = #CNTRCT_NO#				/* 계약번호 */
+			  AND #CNTRWK_DE# > CNTRWK_DE				/* 공사일자 */
+			GROUP BY BSNS_CODE, CNTRCT_NO
+		  )
+		) A
+	</insert>
+
+	<insert id="PRJ050301.r3Copy" parameterClass="map">
+		INSERT INTO TBPRJ_MTRIL_WRHOUSNG (				/* 자재입고 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,CNTRWK_DE									/* 공사일자 */
+			,SN											/* 일련번호 */
+			,PRDNM										/* 품명 */
+			,STNDRD										/* 규격 */
+			,QY											/* 수량 */
+			,UNIT_NM									/* 단위 */
+			,DSGN_QY									/* 설계량 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		)
+		SELECT
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#CNTRWK_DE#								/* 공사일자 */
+			,NVL(A.SN,1)								/* 일련번호 */
+			,A.PRDNM									/* 품명 */
+			,A.STNDRD									/* 규격 */
+			,A.QY										/* 수량 */
+			,A.UNIT_NM									/* 단위 */
+			,A.DSGN_QY									/* 설계량 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		FROM DUAL,
+		(SELECT *
+		 FROM TBPRJ_MTRIL_WRHOUSNG						/* 자재입고 */
+		 WHERE (BSNS_CODE, CNTRCT_NO, CNTRWK_DE) =
+		  ( SELECT BSNS_CODE, CNTRCT_NO, MAX(CNTRWK_DE)
+			FROM TBPRJ_MTRIL_WRHOUSNG
+			WHERE BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+			  AND CNTRCT_NO = #CNTRCT_NO#				/* 계약번호 */
+			  AND #CNTRWK_DE# > CNTRWK_DE				/* 공사일자 */
+			GROUP BY BSNS_CODE, CNTRCT_NO
+		  )
+		) A
+	</insert>
+
+	<insert id="PRJ050301.r4Copy" parameterClass="map">
+		INSERT INTO TBPRJ_MLTRM_OPERT (					/* 중기작업 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,CNTRWK_DE									/* 공사일자 */
+			,SN											/* 일련번호 */
+			,MLTRM_NM									/* 중기명 */
+			,STNDRD										/* 규격 */
+			,QY											/* 수량 */
+			,OPERT_CN									/* 작업내용 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		)
+		SELECT
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#CNTRWK_DE#								/* 공사일자 */
+			,NVL(A.SN,1)								/* 일련번호 */
+			,A.MLTRM_NM									/* 중기명 */
+			,A.STNDRD									/* 규격 */
+			,A.QY										/* 수량 */
+			,A.OPERT_CN									/* 작업내용 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		FROM DUAL,
+		(SELECT *
+		 FROM TBPRJ_MLTRM_OPERT							/* 중기작업 */
+		 WHERE (BSNS_CODE, CNTRCT_NO, CNTRWK_DE) =
+		  ( SELECT BSNS_CODE, CNTRCT_NO, MAX(CNTRWK_DE)
+			FROM TBPRJ_MLTRM_OPERT
+			WHERE BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+			  AND CNTRCT_NO = #CNTRCT_NO#				/* 계약번호 */
+			  AND #CNTRWK_DE# > CNTRWK_DE				/* 공사일자 */
+			GROUP BY BSNS_CODE, CNTRCT_NO
+		  )
+		) A
+	</insert>
+</sqlMap>

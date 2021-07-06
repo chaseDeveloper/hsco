@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ITM070200_SQL">
+
+	<!-- 
+		SLA 평가 결과를 생성  SPITM_SLA_EVL_RESULT_01 
+	  	I_YYYYMM    	
+	  	O_RETURN    	
+	-->
+	<parameterMap id="spitm_sla_evl_result_01" class="java.util.HashMap">
+		<parameter property="I_YYYYMM" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="O_RETURN" jdbcType="VARCHAR" javaType="string" mode="OUT" />
+	</parameterMap>
+	
+		
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  A.SLA_CODE,
+		        TO_NUMBER(A.SLA_CODE) || '.' || B.SLA_CODE_NM AS SLA_CODE_NM,
+		        B.SLA_ALLOT,
+		        A.SLA_GOAL_LEVEL,
+		        A.SLA_LWET_LEVEL,
+		        A.SLA_MESURE_RESULT,
+		        A.SLA_EVL_SCORE,
+            	DECODE(A.SLA_DCSN_ENNC, '1' , '승인', '미승인') as SLA_DCSN_ENNC
+		  FROM TBITM_SLA_EVL_RESULT A, TBITM_SLA_EVL_IEM B
+		 WHERE A.SLA_CODE = B.SLA_CODE
+		   AND A.SLA_RESULT_YM = #S_SLA_RESULT_YM#
+		  ORDER BY SLA_CODE
+    </select>
+    
+    <!-- 그룹코드 수정 -->
+    <update id="ITM070200DAO.ITM070200U" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+		UPDATE TBITM_SLA_EVL_RESULT
+		   SET SLA_DCSN_ENNC = #SLA_DCSN_ENNC#,
+		       UPDUSR_ID = #S_USER_ID#,
+		       UPDT_DT = SYSDATE
+		 WHERE SLA_RESULT_YM = #S_SLA_RESULT_YM#
+		]]>
+    </update>
+    
+
+    
+    <!-- 서비스시간 -->
+	<select id="ITM070200DAO.ITM070200Tab2List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  IT_EMP_NM, 
+                C.TOT_DAY AS DAY
+                , C.TOT_DAY - NVL(b.OFF_DAY,0) AS DAY2
+                , TRUNC((C.TOT_DAY - NVL(b.OFF_DAY,0)) / C.TOT_DAY * 100,2) AS RATE
+                , SFITM_GETSLAPOINT_01('001', SUBSTR(#S_SLA_RESULT_YM#,1,4),C.TOT_DAY - NVL(b.OFF_DAY,0),  C.TOT_DAY) AS EPOINT
+          FROM TBITM_IT_EMP a,
+               (SELECT SERVC_ENTRPS_CODE, IT_EMP, COUNT(1) * 8 AS OFF_DAY 
+                  FROM TBITM_IT_DCLZ_DTLS
+                 WHERE SUBSTR(HVOF_DE,1,6) = #S_SLA_RESULT_YM# GROUP BY SERVC_ENTRPS_CODE, IT_EMP) b,
+               (SELECT (TO_CHAR(LAST_DAY(#S_SLA_RESULT_YM# || '01'), 'DD') - COUNT(1) ) * 8 AS TOT_DAY 
+                  FROM TBHRM_HVOF_INFO 
+                 WHERE SUBSTR(HVOF_DE,1,6) = #S_SLA_RESULT_YM# ) c
+         WHERE a.USE_AT = '1'
+           AND a.SPORT_STLE = '01'
+           AND a.SERVC_ENTRPS_CODE = b.SERVC_ENTRPS_CODE(+)
+           AND a.IT_EMP = b.IT_EMP(+)
+         ORDER BY TO_NUMBER(A.IT_EMP)  
+    </select>
+    
+    <!-- 서비스 가동율 -->
+	<select id="ITM070200DAO.ITM070200Tab3List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  IT_CODE,
+		        IT_CODE_NM,
+		        PTIME,
+		        ETIME,
+		        TRUNC(PTIME - ETIME) AS WTIME,
+		        TRUNC((PTIME - ETIME) / PTIME * 100 ,1) AS WRATE,
+		        SFITM_GETSLAPOINT_01('002',SUBSTR(#S_SLA_RESULT_YM#,1,4), (PTIME - ETIME), PTIME) *  
+		        CASE IT_CODE WHEN 'HW' THEN 0.5
+		                     WHEN 'AS' THEN 0.3
+		                     WHEN 'PS' THEN 0.1
+		                     WHEN 'SS' THEN 0.1
+		        END AS EPOINT
+		  FROM
+		  (        
+		  SELECT CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE END AS IT_CODE,
+		         CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE_NM END AS IT_CODE_NM,
+		         TO_CHAR(LAST_DAY(#S_SLA_RESULT_YM# || '01'),'DD') * 24 AS PTIME,
+		         SUM(NVL(TROBL_TIME,0)) + TRUNC(SUM(NVL(TROBL_MIN,0)) / 60) AS ETIME
+		    FROM 
+		      (
+		        SELECT IT_CL, IT_CODE, IT_CODE_NM  FROM TBITM_IT_CL WHERE SLA_EVL_APPLC_ENNC = '1'
+		      ) A, 
+		      (
+		          SELECT A.IT_CODE, B.TROBL_TIME, B.TROBL_MIN
+		            FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B
+		           WHERE A.SLA_EVL_APPLC_ENNC = '1'
+		             AND A.IT_CODE = NVL(B.IT_CL_1,'%')
+		             AND SVC_TROBL_GRAD IS NOT NULL
+		             AND SVC_TROBL_GRAD IN ('A','B','C','D')
+		             AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM# 
+		       ) B
+		   WHERE A.IT_CODE = B.IT_CODE(+)
+		   GROUP BY CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE END,
+		            CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE_NM END
+		   )	
+    </select>    
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab32List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT    A.IT_CL,
+		            CASE A.IT_CL WHEN '01' THEN 'H/W' WHEN '02' THEN 'S/W' END AS IT_CL_NM,
+		            A.IT_CODE,
+		            A.IT_CODE_NM,
+		            (SELECT IT_DETAIL_CODE_NM FROM TBITM_IT_CL_DETAIL Z WHERE Z.IT_CL = A.IT_CL AND Z.IT_CODE = A.IT_CODE AND Z.IT_DETAIL_CODE = B.IT_CL_2) AS IT_DETAIL_CODE_NM, 
+		            CASE WHEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) BETWEEN 0.1 AND B.SLA_EVL_TOP_EXCLNC THEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) ELSE NULL END AS VAL1,
+		            CASE WHEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) BETWEEN B.SLA_EVL_TOP_EXCLNC + 0.1 AND B.SLA_EVL_EXCLNC THEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) ELSE NULL END AS VAL2,
+		            CASE WHEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) BETWEEN B.SLA_EVL_EXCLNC + 0.1 AND B.SLA_EVL_NRMLTY THEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) ELSE NULL END AS VAL3,
+		            CASE WHEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) BETWEEN B.SLA_EVL_NRMLTY + 0.1 AND B.SLA_EVL_INSFFC THEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) ELSE NULL END AS VAL4,
+		            CASE WHEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) > B.SLA_EVL_BADN THEN NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) ELSE NULL END AS VAL5,
+		            NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1) AS ETIME,
+		            SFITM_GETSLAPOINT_01('005',SUBSTR(#S_SLA_RESULT_YM#,1,4), NVL(TROBL_TIME,0) + TRUNC(NVL(TROBL_MIN,0) / 60,1), 0) AS EPOINT
+		    FROM 
+		      (
+		        SELECT IT_CL, IT_CODE, IT_CODE_NM  FROM TBITM_IT_CL WHERE SLA_EVL_APPLC_ENNC = '1'
+		      ) A, 
+		      (
+		          SELECT A.IT_CODE, B.IT_CL_1, B.IT_CL_2, B.TROBL_TIME, B.TROBL_MIN, C.SLA_EVL_TOP_EXCLNC, C.SLA_EVL_EXCLNC, C.SLA_EVL_NRMLTY, C.SLA_EVL_INSFFC, C.SLA_EVL_BADN
+		            FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B, TBITM_SLA_EVL_STDR C
+		           WHERE A.SLA_EVL_APPLC_ENNC = '1'
+		             AND A.IT_CODE = NVL(B.IT_CL_1,'%')
+		             AND SVC_TROBL_GRAD IS NOT NULL
+		             AND SVC_TROBL_GRAD IN ('A','B','C','D')
+		             AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM#
+		             AND C.SLA_CODE = '005'
+		             AND C.SLA_EVL_YEAR = TO_CHAR(B.SVC_RCEPT_DT,'YYYY') 
+		       ) B
+		   WHERE A.IT_CODE = B.IT_CODE(+)
+		    ORDER BY A.IT_CL, A.IT_CODE	
+    </select>     
+        
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab33List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE END AS IT_CODE,
+		         CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE_NM END AS IT_CODE_NM,
+		         COUNT(B.IT_CODE) CT,
+		         CASE WHEN COUNT(B.IT_CODE) > 0 THEN SFITM_GETSLAPOINT_01('003',SUBSTR(#S_SLA_RESULT_YM#,1,4), COUNT(B.IT_CODE), 0) ELSE 10 END AS EPOINT
+		    FROM 
+		      (
+		        SELECT IT_CL, IT_CODE, IT_CODE_NM  FROM TBITM_IT_CL WHERE SLA_EVL_APPLC_ENNC = '1'
+		      ) A, 
+		      (
+		          SELECT A.IT_CODE, B.TROBL_TIME, B.TROBL_MIN
+		            FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B
+		           WHERE A.SLA_EVL_APPLC_ENNC = '1'
+		             AND A.IT_CODE = NVL(B.IT_CL_1,'%')
+		             AND SVC_TROBL_GRAD IS NOT NULL
+		             AND SVC_TROBL_GRAD IN ('A','B','C','D')
+		             AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM# 
+		       ) B
+		   WHERE A.IT_CODE = B.IT_CODE(+)
+		   GROUP BY CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE END,
+		            CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE_NM END
+			ORDER BY IT_CODE		            
+    </select>  
+
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab34List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE END AS IT_CODE,
+		         CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE_NM END AS IT_CODE_NM,
+		         COUNT(B.IT_CODE) CT,
+		         SUM(CASE B.SAMENSS_TROBL WHEN '1' THEN 1 ELSE 0 END) SAME_CT,
+		         SUM(CASE B.SAMENSS_TROBL WHEN '1' THEN EPOINT ELSE 0 END) AS EPOINT
+		    FROM 
+		      (
+		         SELECT IT_CL, IT_CODE, IT_CODE_NM  FROM TBITM_IT_CL WHERE SLA_EVL_APPLC_ENNC = '1'
+		      ) A, 
+		      (
+		          SELECT A.IT_CODE, B.TROBL_TIME, B.TROBL_MIN, B.SAMENSS_TROBL, B.SVC_TROBL_GRAD, 
+		                  SFITM_GETSLAPOINT_01('004',SUBSTR(#S_SLA_RESULT_YM#,1,4), DECODE(B.SVC_TROBL_GRAD,'A',-5,'B',-4,'C',-3,'D',-2,'E',-1), 0) AS EPOINT
+		            FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B
+		           WHERE A.SLA_EVL_APPLC_ENNC = '1'
+		             AND A.IT_CODE = NVL(B.IT_CL_1,'%')
+		             AND SVC_TROBL_GRAD IS NOT NULL
+		             AND SVC_TROBL_GRAD IN ('A','B','C','D')
+		             AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM# 
+		       ) B
+		   WHERE A.IT_CODE = B.IT_CODE(+)
+		   GROUP BY CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE END,
+		            CASE A.IT_CL WHEN '01' THEN 'HW' ELSE A.IT_CODE_NM END
+		     ORDER BY IT_CODE 	
+    </select>  
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab35List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+          SELECT A.IT_CODE, A.IT_CODE_NM,  B.SVC_RCEPT_DT,  B.SVC_RCEPT_DEPT,  B.SVC_RCEPTER, 
+          		REPLACE(REPLACE(B.SVC_RCEPT_CN, CHR(13),' '), CHR(10), ' ') AS SVC_RCEPT_CN,
+          		B.SVC_OPETR,B.SVC_PROCESS_DT, 
+          		REPLACE(REPLACE(B.SVC_PROCESS_CN, CHR(13),' '), CHR(10), ' ') AS SVC_PROCESS_CN,
+          		B.SVC_TROBL_GRAD, 
+                  B.SAMENSS_TROBL, B.TROBL_TIME, B.TROBL_MIN 
+            FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B, TBITM_SLA_EVL_STDR C
+           WHERE A.SLA_EVL_APPLC_ENNC = '1'
+             AND A.IT_CODE = NVL(B.IT_CL_1,'%')
+             AND SVC_TROBL_GRAD IS NOT NULL
+             AND SVC_TROBL_GRAD IN ('A','B','C','D')
+             AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM#
+             AND C.SLA_CODE = '005'
+             AND C.SLA_EVL_YEAR = TO_CHAR(B.SVC_RCEPT_DT,'YYYY') 
+            ORDER BY B.SVC_RCEPT_DT, B.SVC_RCEPT_NO	
+    </select>     
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab4List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	<![CDATA[	
+	      SELECT A.IT_CODE, A.IT_CODE_NM, B.TCT, B.JCT,
+	            CASE WHEN JCT = 0 OR JCT = 0 THEN 0 ELSE TRUNC(JCT / TCT * 100,2) END AS PRATE,
+	            SFITM_GETSLAPOINT_01('006',SUBSTR(#S_SLA_RESULT_YM#,1,4), JCT, TCT) AS EPOINT
+	        FROM
+	      (
+	         SELECT IT_CL, IT_CODE, IT_CODE_NM  FROM TBITM_IT_CL WHERE SLA_EVL_APPLC_ENNC = '1' AND IT_CL = '02'
+	      ) A, 
+	      (
+	          SELECT A.IT_CODE, A.IT_CODE_NM,
+	                 COUNT(B.SVC_PROCESS_DT) TCT,
+	                 COUNT(CASE WHEN B.SVC_PROCESS_DT IS NOT NULL AND TO_CHAR(B.SVC_PROCESS_DT, 'YYYY-MM-DD') <= COMPT_DT_1_ODR THEN B.SVC_PROCESS_DT ELSE NULL END) AS JCT
+	            FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B
+	           WHERE A.SLA_EVL_APPLC_ENNC = '1'
+	             AND A.IT_CODE = NVL(B.IT_CL_1,'%')
+	             AND A.IT_CL = '02'
+	             AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM# 
+	            GROUP BY A.IT_CODE,  A.IT_CODE_NM 
+	      ) B
+	       WHERE A.IT_CODE = B.IT_CODE(+)
+		]]>	        	
+    </select> 
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab42List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+      SELECT A.IT_CODE, A.IT_CODE_NM, B.TCT,
+            SFITM_GETSLAPOINT_01('008',SUBSTR(#S_SLA_RESULT_YM#,1,4), NVL(TCT,0), 0) AS EPOINT
+        FROM
+      (
+         SELECT IT_CL, IT_CODE, IT_CODE_NM  FROM TBITM_IT_CL WHERE SLA_EVL_APPLC_ENNC = '1' AND IT_CL = '02'
+      ) A, 
+      (
+          SELECT A.IT_CODE, A.IT_CODE_NM,
+                 COUNT(B.SVC_PROCESS_DT) TCT
+            FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B
+           WHERE A.SLA_EVL_APPLC_ENNC = '1'
+             AND A.IT_CODE = NVL(B.IT_CL_1,'%')
+             AND A.IT_CL = '02'
+             AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM# 
+             AND B.SVC_RCEPT_SE = '06'
+            GROUP BY A.IT_CODE,  A.IT_CODE_NM 
+      ) B
+       WHERE A.IT_CODE = B.IT_CODE(+) 	
+    </select>
+
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab43List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+          SELECT A.IT_CODE_NM, C.IT_DETAIL_CODE_NM, B.SVC_RCEPT_SE, 
+          		REPLACE(REPLACE(B.SVC_RCEPT_CN, CHR(13),' '), CHR(10), ' ') AS SVC_RCEPT_CN,
+          		B.SVC_RCEPT_DT, TO_CHAR(TO_DATE(B.COMPT_DT_1_ODR), 'YYYY-MM-DD') as COMPT_DT_1_ODR, B.SVC_PROCESS_DT,B.SVC_OPETR, 
+          		REPLACE(REPLACE(B.SVC_PROCESS_CN, CHR(13),' '), CHR(10), ' ') AS SVC_PROCESS_CN,
+                CASE WHEN B.SVC_PROCESS_DT IS NULL OR 
+                 (B.SVC_PROCESS_DT IS NOT NULL AND TO_CHAR(B.SVC_PROCESS_DT,'YYYY-MM-DD') > COMPT_DT_1_ODR)
+                THEN '미적기' ELSE '적기' END AS FIN_STAT,
+                B.SVC_PROCESS_FILE
+            FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B, TBITM_IT_CL_DETAIL C
+           WHERE A.SLA_EVL_APPLC_ENNC = '1'
+             AND A.IT_CODE = NVL(B.IT_CL_1,'%')
+             AND A.IT_CL = '02'
+             AND B.IT_CL_2 = C.IT_DETAIL_CODE
+             AND A.IT_CL = C.IT_CL
+             AND A.IT_CODE = C.IT_CODE
+             AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM# 
+             ORDER BY B.SVC_RCEPT_NO	
+    </select>       
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab5List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	<![CDATA[		
+          SELECT A.IT_CODE, A.IT_CODE_NM, A.TCT, A.JCT,
+                CASE WHEN JCT = 0 OR JCT = 0 THEN 0 ELSE TRUNC(JCT / TCT * 100,2) END AS PRATE,
+                SFITM_GETSLAPOINT_01('007',SUBSTR(#S_SLA_RESULT_YM#,1,4), JCT, TCT) AS EPOINT
+            FROM
+          (
+              SELECT A.IT_CODE, A.IT_CODE_NM,
+                     COUNT(B.SVC_PROCESS_DT) TCT,
+                     COUNT(CASE WHEN B.SVC_PROCESS_DT IS NOT NULL AND TO_CHAR(B.SVC_PROCESS_DT, 'YYYY-MM-DD') <= COMPT_DT_1_ODR THEN B.SVC_PROCESS_DT ELSE NULL END) AS JCT
+                FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B
+               WHERE A.IT_CODE = NVL(B.IT_CL_1,'%')
+                 AND A.IT_CL = '01'
+                 AND A.IT_CODE = 'OA'
+                 AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM#
+                GROUP BY A.IT_CODE,  A.IT_CODE_NM
+          ) A	
+		]]>          
+    </select> 
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab52List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+          SELECT A.IT_CODE_NM, C.IT_DETAIL_CODE_NM, B.SVC_RCEPT_SE, 
+          		REPLACE(REPLACE(B.SVC_RCEPT_CN, CHR(13),' '), CHR(10), ' ') AS SVC_RCEPT_CN,
+          		B.SVC_RCEPT_DT, TO_CHAR(TO_DATE(B.COMPT_DT_1_ODR), 'YYYY-MM-DD') as COMPT_DT_1_ODR, B.SVC_PROCESS_DT,B.SVC_OPETR, 
+          		REPLACE(REPLACE(B.SVC_PROCESS_CN, CHR(13),' '), CHR(10), ' ') AS SVC_PROCESS_CN,
+                CASE WHEN B.SVC_PROCESS_DT IS NULL OR 
+                 (B.SVC_PROCESS_DT IS NOT NULL AND TO_CHAR(B.SVC_PROCESS_DT,'YYYY-MM-DD') > COMPT_DT_1_ODR)
+                THEN '미적기' ELSE '적기' END AS FIN_STAT,
+                B.SVC_PROCESS_FILE
+            FROM TBITM_IT_CL A, TBITM_SVC_REQUST_PROCESS B, TBITM_IT_CL_DETAIL C
+           WHERE A.IT_CODE = NVL(B.IT_CL_1,'%')
+             AND A.IT_CL = '01'
+             AND A.IT_CODE = 'OA'
+             AND B.IT_CL_2 = C.IT_DETAIL_CODE
+             AND A.IT_CL = C.IT_CL
+             AND A.IT_CODE = C.IT_CODE
+             AND TO_CHAR(B.SVC_RCEPT_DT,'YYYYMM') = #S_SLA_RESULT_YM# 
+             ORDER BY B.SVC_RCEPT_NO	
+    </select>
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab6List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 1 AS ORD, '정기백업' AS PNM,
+		        PCT, TRUNC(NVL(PCT,0)-NVL(ECT,0)) AS ECT, TRUNC((NVL(PCT,0)-NVL(ECT,0)) / NVL(PCT,0) * 100,2) WRATE,
+		        SFITM_GETSLAPOINT_01('009',SUBSTR(#S_SLA_RESULT_YM#,1,4), TRUNC(NVL(PCT,0)-NVL(ECT,0)), NVL(PCT,0)) AS EPOINT  
+		  FROM 
+		  (
+		    SELECT COUNT(IT_CL) * TO_CHAR(LAST_DAY(#S_SLA_RESULT_YM# || '01'), 'DD') AS PCT
+		      FROM TBITM_IT_CL_DETAIL
+		     WHERE IT_CL = '01'
+		       AND IT_CODE = 'SV'   
+		    )A,           
+		   (
+		    SELECT SUM(NVL(BACKUP_ERROR_TIME,0)) AS ECT
+		      FROM TBITM_BACKUP_ERROR_MANAGE   
+		     WHERE TO_CHAR(BACKUP_ERROR_BGNDT,'YYYYMM') = #S_SLA_RESULT_YM#
+		   ) B
+		UNION ALL   
+		SELECT 2 AS ORD, '계획백업' AS PNM,
+		        NULL, NULL AS ECT, NULL WRATE,
+		        CASE WHEN (SELECT SUM(BACKUP_EVL_SCORE) FROM TBITM_BACKUP_ERROR_MANAGE WHERE TO_CHAR(BACKUP_ERROR_BGNDT,'YYYYMM') = #S_SLA_RESULT_YM#) > 0 THEN 
+		                  (SELECT SUM(BACKUP_EVL_SCORE) FROM TBITM_BACKUP_ERROR_MANAGE WHERE TO_CHAR(BACKUP_ERROR_BGNDT,'YYYYMM') = #S_SLA_RESULT_YM#)
+		             ELSE (SELECT SLA_EVL_ALLOT/2  FROM TBITM_SLA_EVL_STDR WHERE SLA_EVL_YEAR = SUBSTR(#S_SLA_RESULT_YM#,1,4) AND SLA_CODE = '009') END AS EPOINT      
+		 FROM DUAL
+		ORDER BY ORD	
+    </select> 
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab62List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT B.IT_DETAIL_CODE_NM, TO_CHAR(A.BACKUP_ERROR_BGNDT,'YYYY-MM-DD HH24:MI:SS') BACKUP_ERROR_BGNDT, 
+	    		TO_CHAR(A.BACKUP_ERROR_ENDDT,'YYYY-MM-DD HH24:MI:SS') BACKUP_ERROR_ENDDT,  
+	            A.BACKUP_ERROR_CAUSE, A.BACKUP_PROCESS_CN, 
+	            A.BACKUP_CHARGER, A.RM, A.SAMENSS_ERROR_AT, 
+	            A.PLAN_BACKUP_ENNC, A.BACKUP_EVL_SCORE, A.BACKUP_ERROR_TIME, 
+	            A.ATCH_FILE, A.DCSN_ENNC
+	      FROM TBITM_BACKUP_ERROR_MANAGE A, TBITM_IT_CL_DETAIL B
+	     WHERE TO_CHAR(BACKUP_ERROR_BGNDT,'YYYYMM') = #S_SLA_RESULT_YM#
+	       AND A.BACKUP_STORAGE = B.IT_DETAIL_CODE
+	       AND B.IT_CODE = 'ST'
+	    ORDER BY BACKUP_ERROR_BGNDT	
+    </select>    
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab7List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT IT_EMP, IT_EMP_NM, CT1,CT2,CT3,CT4,CT5, 
+		            (CASE WHEN CT1 > 0 THEN 0 ELSE 1 END) + 
+		            (CASE WHEN CT2 > 0 THEN 0 ELSE 1 END) +
+		            (CASE WHEN CT3 > 0 THEN 0 ELSE 1 END) +
+		            (CASE WHEN CT4 > 0 THEN 0 ELSE 1 END) +
+		            (CASE WHEN CT5 > 0 THEN 0 ELSE 1 END) AS CT6
+		    FROM
+		    (                
+		        SELECT A.IT_EMP, A.IT_EMP_NM,
+		                NVL((SELECT DISTINCT 1 FROM TBITM_SCRTY_VIOLT Z WHERE TO_CHAR(Z.SCRTY_VIOLT_DT,'YYYYMM') = #S_SLA_RESULT_YM# AND A.IT_EMP = Z.IT_EMP AND Z.SCRTY_IEM = '01'),0) AS CT1,
+		                NVL((SELECT DISTINCT 1 FROM TBITM_SCRTY_VIOLT Z WHERE TO_CHAR(Z.SCRTY_VIOLT_DT,'YYYYMM') = #S_SLA_RESULT_YM# AND A.IT_EMP = Z.IT_EMP AND Z.SCRTY_IEM = '02'),0) AS CT2,
+		                NVL((SELECT DISTINCT 1 FROM TBITM_SCRTY_VIOLT Z WHERE TO_CHAR(Z.SCRTY_VIOLT_DT,'YYYYMM') = #S_SLA_RESULT_YM# AND A.IT_EMP = Z.IT_EMP AND Z.SCRTY_IEM = '03'),0) AS CT3,
+		                NVL((SELECT DISTINCT 1 FROM TBITM_SCRTY_VIOLT Z WHERE TO_CHAR(Z.SCRTY_VIOLT_DT,'YYYYMM') = #S_SLA_RESULT_YM# AND A.IT_EMP = Z.IT_EMP AND Z.SCRTY_IEM = '04'),0) AS CT4,
+		                NVL((SELECT DISTINCT 1 FROM TBITM_SCRTY_VIOLT Z WHERE TO_CHAR(Z.SCRTY_VIOLT_DT,'YYYYMM') = #S_SLA_RESULT_YM# AND A.IT_EMP = Z.IT_EMP AND Z.SCRTY_IEM = '05'),0) AS CT5
+		          FROM TBITM_IT_EMP A
+		         WHERE USE_AT = '1'
+		           AND SPORT_STLE = '01'
+		    )
+		    ORDER BY TO_NUMBER(IT_EMP)	
+    </select> 
+    
+    <!-- 코드 목록조회 -->
+	<select id="ITM070200DAO.ITM070200Tab72List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+                B.SERVC_ENTRPS_CODE,
+                B.ENTRPS_NM, 
+                C.IT_EMP, 
+                C.IT_EMP_NM,
+                A.SN, 
+                A.SCRTY_IEM, 
+                A.SCRTY_VIOLT_DT, 
+                A.RM 
+        FROM TBITM_SCRTY_VIOLT A, TBCTR_SERVC_ENTRPS B, TBITM_IT_EMP C
+        WHERE 1=1
+          AND A.SERVC_ENTRPS_CODE = C.SERVC_ENTRPS_CODE
+          AND A.IT_EMP = C.IT_EMP
+          AND B.SERVC_ENTRPS_CODE = C.SERVC_ENTRPS_CODE
+          AND TO_CHAR(A.SCRTY_VIOLT_DT,'YYYYMM') = #S_SLA_RESULT_YM#
+        ORDER BY A.SN DESC	
+    </select>     
+
+	<procedure id="ITM070200DAO.SP_ITM_SLA_EVL_RESULT_01" parameterMap="spitm_sla_evl_result_01">
+		{ call SPITM_SLA_EVL_RESULT_01(?, ?) }
+	</procedure>
+	
+</sqlMap>

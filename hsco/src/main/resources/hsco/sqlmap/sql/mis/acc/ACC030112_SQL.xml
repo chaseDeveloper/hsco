@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC030112_SQL">	
+	
+	<!-- 매입세금계산서 조회 -->
+	<select id="ACC030112DAO.vatSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT T1.TAXBILL_NO
+		     , T1.REGS_DATE
+		     , T1.SELR_CORP_NO
+		     , T1.SELR_CODE
+		     , T1.SELR_CORP_NM
+		     , T1.SELR_CEO
+		     , NVL(T1.TOTL_AMT, 0)    AS TOTL_AMT
+		     , NVL(T1.CHRG_AMT, 0)    AS CHRG_AMT
+		     , NVL(T1.TAX_AMT, 0)     AS TAX_AMT
+		     , T1.NOTE1
+		     , T2.ITEM_DESP
+		     , T3.ITEM_NM
+		     , T1.SELR_CHRG_EMAIL
+		     , T1.ISSU_SEQNO
+		     , T1.BILL_TYPE
+		     , DECODE(T1.BILL_TYPE, '1', '2', '2', '1')    AS PUCHAS_SELNG_SE
+		     , T1.ISSU_DATE
+		     , T1.ISSU_ID
+		     , T1.TAX_TYPE
+		     , DECODE(SUBSTR(T1.TAX_TYPE, 1, 2), '01', '1', '02', '1', '03', '2', '04', '2')    AS BILL_KND
+		     , T1.POPS_CODE
+		     , T1.MODY_CODE
+		     , T1.STAT_CODE
+		     , DECODE(NVL(T1.TAX_DEDUC_YN, 'N'), 'Y', '1', '0')    AS TAX_DEDUC_YN
+		     , T1.PCHS_TAX_NOTAX_RSN
+		     , T4.DECSN_YEAR
+		     , T4.DECSN_NO
+		     , NVL(T5.DECSN_AMOUNT, 0)    AS DECSN_AMOUNT
+		     , T7.BCNC_CODE
+		  FROM DET_ISSU_MSTR T1
+		       LEFT OUTER JOIN DET_ISSU_DETAIL T2
+		            ON T1.ISSU_SEQNO = T2.ISSU_SEQNO
+		       LEFT OUTER JOIN (
+		                         SELECT T1.ISSU_SEQNO
+		                              , LISTAGG(T2.ITEM_NM, ',') WITHIN GROUP (ORDER BY T1.SELR_CORP_NO) AS ITEM_NM
+		                           FROM DET_ISSU_MSTR T1
+		                                LEFT OUTER JOIN DET_ISSU_DETAIL T2
+		                                     ON T1.ISSU_SEQNO = T2.ISSU_SEQNO
+		                         GROUP BY T1.ISSU_SEQNO
+		                       ) T3
+		            ON T1.ISSU_SEQNO = T3.ISSU_SEQNO
+		       LEFT OUTER JOIN TBACC_TAXBIL_MASTER T4
+		            ON T1.TAXBILL_NO = T4.TAXBILL_NO
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR T5
+		            ON T4.DECSN_YEAR = T5.DECSN_YEAR
+		           AND T4.DECSN_NO   = T5.DECSN_NO
+		       LEFT OUTER JOIN (
+		                         SELECT MAX(S1.BCNC_CODE)     AS BCNC_CODE
+		                              , H_DECRYPT(S1.BIZRNO)  AS BIZRNO
+		                           FROM TBCTR_BCNC_MASTR S1
+		                         GROUP BY H_DECRYPT(S1.BIZRNO)
+		                       ) T6
+		            ON T1.SELR_CORP_NO = T6.BIZRNO
+		       LEFT OUTER JOIN TBCTR_BCNC_MASTR T7
+		            ON T6.BCNC_CODE = T7.BCNC_CODE
+		 WHERE 1=1
+		<isNotEmpty property="PBLICTE_FROM_DE">
+			<isNotEmpty property="PBLICTE_TO_DE">
+				AND T1.REGS_DATE BETWEEN #PBLICTE_FROM_DE# AND #PBLICTE_TO_DE#
+			</isNotEmpty>
+		</isNotEmpty>
+		<isEqual property="PUCHAS_SELNG_SE" compareValue="1">
+			AND T1.BILL_TYPE = '2'
+		</isEqual>
+		<isEqual property="PUCHAS_SELNG_SE" compareValue="2">
+			AND T1.BILL_TYPE = '1'
+		</isEqual>
+		<isEqual property="MAPNG_SE" compareValue="1">
+			AND T1.TAXBILL_NO IS NOT NULL
+		</isEqual>
+		<isEqual property="MAPNG_SE" compareValue="2">
+			AND T1.TAXBILL_NO IS NULL
+		</isEqual>
+		<isNotEmpty property="BCNC_NM">
+			AND T1.SELR_CORP_NM LIKE '%' || #BCNC_NM# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="SELR_CORP_NO">
+			AND T1.SELR_CORP_NO LIKE '%' || #SELR_CORP_NO# || '%'
+		</isNotEmpty>
+		ORDER BY T1.REGS_DATE, T1.SELR_CORP_NO, T1.TOTL_AMT
+	</select>
+	
+	
+	<!-- 세금계산서마스터 조회 -->
+	<select id="ACC030112DAO.selectTaxbilMaster" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT T1.TAXBILL_NO
+		     , T1.PUCHAS_SELNG_SE
+		     , T1.BILL_KND
+		     , T1.PBLICTE_DE
+		     , T1.BCNC_CODE
+		     , T1.BIZRNO
+		     , T1.BCNC_NM
+		     , T1.BIZCND
+		     , T1.ITEM
+		     , T1.RPRSNTV_NM
+		     , T1.BPLC_ADRES
+		     , T1.TAXT_AT
+		     , T1.SUPLY_AMOUNT
+		     , T1.TAXAMT
+		     , T1.SM_AMOUNT
+		     , T1.RQEST_RCPT_SE
+		     , T1.NTS_CONFM_NO
+		     , T1.CASH_SE
+		     , T1.DECSN_YEAR
+		     , T1.DECSN_NO
+		     , T1.DECSN_SEQ
+		     , T2.DET_DCSN_DE /*채무확정일자-돈나간날짜*/
+		     , T2.BUDGET_ACNT_CODE
+		     , T4.BUDGET_ACNT_NM
+		     , T1.PBLICTE_AT
+		  FROM TBACC_TAXBIL_MASTER T1
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR T2
+		            ON T1.DECSN_YEAR = T2.DECSN_YEAR
+		           AND T1.DECSN_NO   = T2.DECSN_NO
+		       LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL T3
+		            ON T1.DECSN_YEAR = T3.DECSN_YEAR
+		           AND T1.DECSN_NO   = T3.DECSN_NO
+		           AND T1.DECSN_SEQ  = T3.SEQ
+		       LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE T4
+		            ON T2.DECSN_YEAR       = T4.YEAR
+		           AND T2.BSNS_SE          = T4.BSNS_SE
+		           AND T2.BALC_SE          = T4.BALC_SE
+		           AND T2.BUDGET_ACNT_CODE = T4.BUDGET_ACNT_CODE
+		 WHERE 1=1
+		   AND T1.PBLICTE_DE      = #PBLICTE_DE#
+		   AND T1.SUPLY_AMOUNT    = #SUPLY_AMOUNT#
+		   AND T1.TAXAMT          = #TAXAMT#
+		   AND T1.PUCHAS_SELNG_SE = #PUCHAS_SELNG_SE#
+		   AND T1.BCNC_CODE       = #BCNC_CODE#
+		   AND T1.NTS_CONFM_NO IS NULL
+		   AND NOT EXISTS (
+		                   SELECT 1
+		                     FROM DET_ISSU_MSTR S1
+		                    WHERE T1.TAXBILL_NO = S1.TAXBILL_NO
+		                  )
+		ORDER BY T1.TAXBILL_NO, T1.BCNC_CODE, T1.DECSN_SEQ
+	</select>
+	
+	
+	<!-- 국세청승인번호 저장 -->
+	<update id="ACC030112DAO.updateNtsConfmNo" parameterClass="java.util.Map">
+		UPDATE TBACC_TAXBIL_MASTER
+		   SET NTS_CONFM_NO = #ISSU_ID#
+		     , UPDUSR_ID    = #S_USER_ID#
+		     , UPDT_DT      = SYSDATE     
+		WHERE TAXBILL_NO = #TAXBILL_NO#
+	</update>
+	
+	
+	<!-- 계산서번호 저장 -->
+	<update id="ACC030112DAO.updateTaxbillNo" parameterClass="java.util.Map">
+		UPDATE DET_ISSU_MSTR
+		   SET TAXBILL_NO = #TAXBILL_NO#
+		 WHERE ISSU_SEQNO = #ISSU_SEQNO#
+		   AND BILL_TYPE  = #BILL_TYPE#
+	</update>
+	
+	
+</sqlMap>

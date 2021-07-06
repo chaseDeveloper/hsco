@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP020502_SQL">
+<!--  설명  : 감정평가결과등록 
+	작성자 : 지효정 -->
+	
+	<!-- 조서 목록 -->
+	<select id="CMP020502DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT 
+			 A.*
+  			,B.THING_UNTPC AS UNTPC	/* 단가 */
+  			,B.EVL_AMOUNT			/* 평가금액 */
+  			,B.REWARD_STLE			/* 일괄적용여부 */
+			,B.BNDE_APPLC_GROUP		/* 일괄적용그룹 */
+  			<isNotEmpty property="BCNC_CODE">
+  			,#BCNC_CODE# AS BCNC_CODE /* 감정평가사코드 */
+  			</isNotEmpty>
+	        ,B.REWARD_STLE|| 
+	        CASE NVL(B.REWARD_STLE,'0') 
+	            WHEN '0' 
+	            THEN LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+	            ELSE 
+	                CASE 
+	                    WHEN A.RWMNY > 0 
+	                    THEN '00' 
+	                    ELSE LPAD(NVL(Y.CODE_ORDR,'99'),2,'0') 
+	                END 
+	        END AS SORT_ODR  			
+		FROM 
+		(
+			SELECT 
+				 BSNS_AREA_CODE		/* 사업지역코드 */
+				,THING_SN			/* 물건일련번호 */
+				,LOCPLC_CODE		/* 소재지 */
+				,SFCMP_GET_LOCPLC(WTNNC.BSNS_AREA_CODE, WTNNC.LOCPLC_CODE) AS LOCPLC_CODE_NM /* 소재지명 */
+				,LNM				/* 지번 */
+				,SLNO				/* 부번 */
+				,LNM_SE				/* 지번구분 */
+				,SFCMP_GET_CODENM('CMP008', WTNNC.LNM_SE) AS LNM_SE_NM/* 지번구분명 */
+				,TRIM(THING_CL) AS THING_CL	/* 물건분류 */
+				,SFCMP_GET_CODENM('CMP001', TRIM(WTNNC.THING_CL)) AS THING_CL_NM/* 물건분류명 */
+				,THING_NM			/* 물건명 */
+				,STRCT_STNDRD		/* 구조규격 */
+				,REAL_LNDCGR		/* 실제지목 */
+				,LNDCGR_LGSTR		/* 지목_공부 */
+				,(
+	            	SELECT
+				 	LNDCGR_NM
+					FROM TBCMP_LNDCGR_CODE
+					WHERE LNDCGR_CODE = WTNNC.LNDCGR_LGSTR
+				 )AS LNDCGR_LGSTR_NM	/* 용지목_공부명 */
+				,LNDCGR_INCRPR		/* 지목_편입 */
+				,(
+	            	SELECT
+				 	LNDCGR_NM
+					FROM TBCMP_LNDCGR_CODE
+					WHERE LNDCGR_CODE = WTNNC.LNDCGR_INCRPR
+				 )AS LNDCGR_INCRPR_NM	/* 지목_편입명 */
+				,AR_LGSTR			/* 면적_공부 */
+				,AR_INCRPR			/* 면적_편입 */
+				,UNIT				/* 단위 */
+				,SFCMP_GET_CODENM('CMP002', WTNNC.UNIT) AS UNIT_NM/* 단위명 */
+				,RWMNY				/* 보상금 */
+				,RM_1				/* 비고1 */
+				,RM_2				/* 비고2 */
+				,NOW_USE_STTUS		/* 현재이용현황 */
+				,SORT_ORDR			/* 정렬순서 */
+				,BGNN_LNM			/* 당초지번 */
+				,LAD_SE				/* 토지구분 */
+				,SFCMP_GET_CODENM('CMP013', WTNNC.LAD_SE) AS LAD_SE_NM/* 토지구분명 */
+				,REMNDR_LAD_SE		/* 잔여토지구분 */
+				,SFCMP_GET_CODENM('CMP014', WTNNC.REMNDR_LAD_SE) AS REMNDR_LAD_SE_NM/* 잔여지구분명 */
+				,RGIST_TRGET_AT		/* 등기대상여부 */
+	  			,REWARD_ODR			/* 보상차수 */
+			FROM TBCMP_THING_WTNNC WTNNC
+			WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			<isNotEmpty property="LOCPLC_CODE">
+			AND	  LOCPLC_CODE = #LOCPLC_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="REWARD_ODR">
+			AND	  REWARD_ODR = #REWARD_ODR#
+			</isNotEmpty>
+			<isEqual property="SELECT" compareValue="0">
+			<isNotEmpty property="THING_CL">
+			AND	  THING_CL IN
+			<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+			#ARR_THING_CL[]#
+			</iterate>
+			</isNotEmpty>
+			</isEqual>
+		)A, TBCMP_APASMT B, TBCMP_LOCPLC_INFO X, TBCOM_CMMN_CODE Y
+		WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE(+)
+		AND   A.THING_SN = B.THING_SN(+)
+		<isNotEmpty property="BCNC_CODE">
+		AND	  B.BCNC_CODE(+) = #BCNC_CODE#
+		</isNotEmpty>
+		AND   A.BSNS_AREA_CODE = X.BSNS_AREA_CODE AND A.LOCPLC_CODE = X.LOCPLC_CODE AND 'CMP001' = Y.GRP_CODE AND A.THING_CL = Y.CODE
+		ORDER BY 
+		<isEqual property="BSNS_AREA_CODE" compareValue="159111101">	    
+	      A.THING_SN,		
+	    </isEqual>  
+	    A.LOCPLC_CODE,A.LNM,A.SLNO
+	    , X.SORT_ORDR, TO_NUMBER(A.LNM), TO_NUMBER(A.SLNO), SORT_ODR, B.BNDE_APPLC_GROUP
+	</select>
+
+	<!-- 감정 평가결과 일괄 삭제 -->
+	<delete id="CMP020502DAO.tbcmpApasmtD" parameterClass="java.util.Map">
+		DELETE FROM TBCMP_APASMT
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   BCNC_CODE = #BCNC_CODE#
+	</delete>
+	
+	<!-- 감정 평가결과 생성, 수정 -->
+	<update id="CMP020502DAO.tbcmpApasmtCU" parameterClass="java.util.Map">
+		MERGE INTO TBCMP_APASMT
+		USING DUAL ON(
+				  BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			AND   THING_SN = #THING_SN#
+			AND   BCNC_CODE = #BCNC_CODE#)
+		WHEN MATCHED THEN 
+			UPDATE SET
+				 THING_UNTPC = #UNTPC# 					/* 단가 */
+				,EVL_AMOUNT = #EVL_AMOUNT#				/* 평가금액 */
+				,REWARD_STLE = #REWARD_STLE#			/* 일괄적용여부 */
+				,BNDE_APPLC_GROUP = #BNDE_APPLC_GROUP#	/* 일괄적용그룹 */
+				,UPDUSR_ID = #S_USER_ID#
+				,UPDT_DT = SYSDATE
+		WHEN NOT MATCHED THEN
+			INSERT(
+				 BSNS_AREA_CODE		/* 사업지역코드 */
+				,THING_SN			/* 물건일련번호 */
+				,THING_UNTPC		/* 단가 */
+				,EVL_AMOUNT			/* 평가금액 */
+				,BCNC_CODE 			/* 감정평가사코드 */
+				,AR					/* 면적 */
+				,REWARD_STLE		/* 일괄적용여부 */
+				,BNDE_APPLC_GROUP	/* 일괄적용그룹 */
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+			) VALUES(
+				#BSNS_AREA_CODE#	/* 사업지역코드 */
+				,#THING_SN#			/* 물건일련번호 */
+				,#UNTPC#			/* 단가 */
+				,#EVL_AMOUNT#		/* 평가금액 */
+				,#BCNC_CODE#		/* 감정평가사코드 */
+				,#AR_LGSTR#			/* 면적 */
+				,#REWARD_STLE#		/* 일괄적용여부 */
+				,#BNDE_APPLC_GROUP#	/* 일괄적용그룹 */
+				,#S_USER_ID#
+				,SYSDATE
+				,#S_USER_ID#
+				,SYSDATE
+			)
+	</update>
+
+	<update id="CMP020502DAO.thingWtnncU" parameterClass="java.util.Map">
+		UPDATE TBCMP_THING_WTNNC SET
+			 REWARD_STLE = #REWARD_STLE#
+			,UPDUSR_ID = #S_USER_ID#
+			,UPDT_DT = SYSDATE		
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   THING_SN = #THING_SN#
+	</update>
+
+
+</sqlMap>

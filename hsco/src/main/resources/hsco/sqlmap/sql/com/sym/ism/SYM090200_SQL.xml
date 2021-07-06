@@ -1,0 +1,2172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM090200_SQL">
+	<!-- 결재선선택 START -->
+	
+	<!-- 결재선 부서사용자정보 -->
+	<select id="SYM090200DAO.sSanctnerDeptUserInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT '0' CHK,
+		       U.USER_ID EMPNO,
+		       U.USER_NM EMPNM,
+		       C.CODE_NM||
+		       CASE
+		         WHEN A.HR_CLSF_SE IS NULL THEN ''
+		         ELSE SUBSTR(A.HR_CLSF_SE, 2,1) || '급'
+		       END AS HR_CLSF_SE,															/*직급 HRM001*/
+		       A.RSPOFC_SE,  																/*직책 HRM214*/
+		       SFHRM_GET_OFCPSCD(A.EMPNO,A.JSSFC_SE,A.HR_CLSF_SE,A.ECNY_DE) AS OFCPS_SE,	/*직위*/
+		       A.DEPT_CODE
+		  FROM TBCOM_USER U
+		 LEFT OUTER JOIN TBHRM_HR_MASTR A ON (A.EMPNO=U.EMPNO)
+		 INNER JOIN TBCOM_CMMN_CODE B ON (B.GRP_CODE='HRM214'
+		                                  AND B.CODE=A.RSPOFC_SE)
+		 INNER JOIN TBCOM_CMMN_CODE C ON (C.GRP_CODE='HRM001'
+		                                  AND C.CODE=A.JSSFC_SE)
+		 WHERE U.DEPT_CODE=#S_DEPT_CODE#
+		   AND U.USER_ID<>#S_USER_ID#
+		   AND U.USER_STTUS_CODE='JA'
+		 ORDER BY B.CODE_ORDR, A.EMPNM
+	]]>
+	</select>
+	
+	<!-- 결재선 사용자조회 -->
+	<select id="SYM090200DAO.sSanctnerUserInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT '0' CHK,
+		       U.USER_ID EMPNO,
+		       U.USER_NM EMPNM,
+		       B.CODE_NM||
+		       CASE
+		         WHEN A.HR_CLSF_SE IS NULL THEN ''
+		         ELSE SUBSTR(A.HR_CLSF_SE, 2,1) || '급'
+		       END AS HR_CLSF_SE,															/*직급 HRM001*/
+		       A.RSPOFC_SE,  																/*직책 HRM214*/
+		       SFHRM_GET_OFCPSCD(A.EMPNO,A.JSSFC_SE,A.HR_CLSF_SE,A.ECNY_DE) AS OFCPS_SE,	/*직위*/
+		       A.DEPT_CODE
+		  FROM TBCOM_USER U
+		  LEFT OUTER JOIN TBHRM_HR_MASTR A ON (A.EMPNO=U.EMPNO)
+		 INNER JOIN TBCOM_CMMN_CODE B ON (B.GRP_CODE='HRM001'
+		                                  AND B.CODE=A.JSSFC_SE)
+		 WHERE U.USER_STTUS_CODE='JA'
+		   AND U.USER_ID<>#S_USER_ID#
+	]]>
+		<isNotEmpty property="EMPNM"> 
+		   AND U.USER_NM LIKE '%'|| #EMPNM# ||'%'
+		</isNotEmpty>
+		 ORDER BY EMPNM
+	</select>
+	
+	<!-- 결재선 최근결재선 -->
+	<select id="SYM090200DAO.sSanctnerRecentInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT '0' CHK,
+		       U.USER_ID EMPNO,
+		       U.USER_NM EMPNM,
+		       ROW_NUMBER() OVER (PARTITION BY A.INNER_SANCTN_ID
+		                              ORDER BY SANCTN_SN ASC) SANCTN_SN,
+		       D.CODE_NM||
+		       CASE
+		         WHEN C.HR_CLSF_SE IS NULL THEN ''
+		         ELSE SUBSTR(C.HR_CLSF_SE, 2,1) || '급'
+		       END AS HR_CLSF_SE,															/*직급 HRM001*/
+		       C.RSPOFC_SE,  																/*직책 HRM214*/
+		       A.SANCTN_STEP, 																/*결재단계 COM028*/
+		       SFHRM_GET_OFCPSCD(C.EMPNO,C.JSSFC_SE,C.HR_CLSF_SE,C.ECNY_DE) AS OFCPS_SE,	/*직위*/
+		       A.SANCTNER_DEPT_CD DEPT_CODE
+		  FROM TBCOM_INNER_SANCTNER A
+		 INNER JOIN (SELECT MAX(B.INNER_SANCTN_ID)
+		                        KEEP(DENSE_RANK FIRST
+		                             ORDER BY B.REGIST_DT DESC) AS INNER_SANCTN_ID
+		               FROM TBCOM_INNER_SANCTN_MASTR B
+		              WHERE B.INNER_SANCTN_MDL_ID=#INNER_SANCTN_MDL_ID#
+		                AND B.USER_ID=#S_USER_ID#) B ON (B.INNER_SANCTN_ID=A.INNER_SANCTN_ID)
+		 INNER JOIN TBCOM_USER U ON (U.USER_ID=A.SANCTNER_ID
+		                             AND U.USER_STTUS_CODE='JA'
+		                             AND U.USER_ID<>#S_USER_ID#)
+		  LEFT OUTER JOIN TBHRM_HR_MASTR C ON (C.EMPNO=U.EMPNO)
+		 INNER JOIN TBCOM_CMMN_CODE D ON (D.GRP_CODE='HRM001'
+		                                  AND D.CODE=C.JSSFC_SE)
+	]]>
+	</select>
+	<!-- 결재선선택 END -->
+	
+	<!-- 내부결재 기안 START -->
+	<!-- 내부결재 기안 초기화면데이터 -->
+	<select id="SYM090200DAO.innerSanctionChk" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+	<![CDATA[
+	    SELECT COUNT(*) CNT
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		 WHERE A.SYS_SE_CODE=#SYS_SE_CODE#
+		   AND A.JOB_SE=#JOB_SE#
+		   AND A.JOB_KEY=#JOB_KEY#
+		   AND A.LAST_SANCTN_STTUS<>'S08'
+		   AND A.LAST_SANCTN_STTUS<>'S09'
+	]]>
+	</select>
+	
+	<select id="SYM090200DAO.innerSanctionMdl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+	    SELECT A.INNER_SANCTN_MDL_ID,
+		       A.INNER_SANCTN_MDL_NM,
+		       A.REQUEST_SCRIN_URL,
+		       NVL(A.SANCTN_LINE_NUM,0) SANCTN_LINE_NUM,
+		       B.INNER_SANCTN_ID
+		  FROM TBCOM_INNER_SANCTN_MDL A
+		  LEFT OUTER JOIN TBCOM_INNER_SANCTN_MASTR B ON (B.INNER_SANCTN_MDL_ID=A.INNER_SANCTN_MDL_ID
+		                                                 AND B.SYS_SE_CODE=#SYS_SE_CODE#
+		                                                 AND B.JOB_SE=#JOB_SE#
+		                                                 AND B.JOB_KEY=#JOB_KEY#
+		                                                 AND B.LAST_SANCTN_STTUS<>'S08'
+		                                                 AND B.LAST_SANCTN_STTUS<>'S09')
+		 WHERE A.INNER_SANCTN_MDL_ID=#INNER_SANCTN_MDL_ID#
+	]]>
+	</select>
+	
+	<!-- 내부결재 ID 생성 -->
+	<select id="SYM090200DAO.innerSanctionId" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT TO_CHAR(SYSDATE, 'YYYYMMDD')
+		       || LPAD(SQ_INNER_SANCTN_ID.NEXTVAL,7,'0') AS INNER_SANCTN_ID
+		 FROM DUAL
+	</select>
+	
+	<!-- 내부결재마스터 INSERT -->
+	<insert id="SYM090200DAO.insInnerSanctionMaster" parameterClass="java.util.HashMap">
+		INSERT INTO TBCOM_INNER_SANCTN_MASTR (	/** 내부결재마스터*/
+			   INNER_SANCTN_ID					/** 내부결재번호*/
+			   ,INNER_SANCTN_MDL_ID				/** 내부결재모형ID*/
+			   ,SYS_SE_CODE						/** 시스템구분코드*/
+			   ,JOB_SE							/** 업무구분*/
+			   ,USER_ID							/** 사용자ID*/
+			   ,DEPT_CODE						/** 부서코드*/
+			   ,SANCTN_SJ						/** 결재제목*/
+			   ,SANCTN_TY						/** 결재유형*/
+			   ,LAST_SANCTN_STEP				/** 최종결재단계*/
+			   ,LAST_SANCTN_STTUS				/** 최종결재상태*/
+			   ,FILE_SN
+			   ,JOB_KEY							/** JOBKEY*/
+			   ,SANCTN_INFO_AMT
+			   ,SANCTN_INFO_DATE
+			   ,SANCTN_INFO_CN1
+			   ,SANCTN_INFO_CN2
+			   ,SANCTN_INFO_CN3
+			   ,REGISTER_ID						/** 등록자ID*/
+			   ,REGIST_DT						/** 등록일시*/
+			   ,UPDUSR_ID						/** 수정자ID*/
+			   ,UPDT_DT							/** 수정일시*/
+		) VALUES (
+			   #INNER_SANCTN_ID#				/** 내부결재번호*/
+			   ,#INNER_SANCTN_MDL_ID#			/** 내부결재모형ID*/
+			   ,#SYS_SE_CODE#					/** 시스템구분코드*/
+			   ,#JOB_SE#						/** 업무구분*/
+			   ,#S_USER_ID#						/** 사용자ID*/
+			   ,#S_DEPT_CODE#					/** 부서코드*/
+			   ,#SANCTN_SJ#						/** 결재제목*/
+			   ,#SANCTN_TY#						/** 결재유형*/
+			   ,#LAST_SANCTN_STEP#				/** 최종결재단계*/
+			   ,#LAST_SANCTN_STTUS#				/** 최종결재상태*/
+			   ,#FILE_SN#
+			   ,#JOB_KEY#						/** JOBKEY*/
+			   ,#SANCTN_INFO_AMT#
+			   ,#SANCTN_INFO_DATE#
+			   ,#SANCTN_INFO_CN1#
+			   ,#SANCTN_INFO_CN2#
+			   ,#SANCTN_INFO_CN3#
+			   ,#S_USER_ID#						/** 등록자ID*/
+			   ,SYSDATE							/** 등록일시*/
+			   ,#S_USER_ID#						/** 수정자ID*/
+			   ,SYSDATE							/** 수정일시*/
+		)
+	</insert>
+	
+	<!-- 내부결재자 INSERT -->
+	<insert id="SYM090200DAO.insInnerSanctner" parameterClass="java.util.HashMap">
+		INSERT INTO TBCOM_INNER_SANCTNER
+			        (INNER_SANCTN_ID,
+			        SANCTN_SN,
+			        SANCTN_STEP,
+			        SANCTNER_DEPT_CD,
+			        SANCTNER_ID,
+			        OFCPS_NM,
+			        REGISTER_ID,
+			        REGIST_DT,
+			        UPDUSR_ID,
+			        UPDT_DT)
+		     VALUES (#INNER_SANCTN_ID#,
+			        #SANCTN_SN#,
+			        #SANCTN_STEP#,
+			        #DEPT_CODE#,
+			        #EMPNO#,
+			        (SELECT SFHRM_GET_OFCPSCD(A.EMPNO,A.JSSFC_SE,A.HR_CLSF_SE,A.ECNY_DE)
+			           FROM TBHRM_HR_MASTR A,
+			                TBCOM_USER B
+			          WHERE B.EMPNO=A.EMPNO
+			            AND B.USER_ID=#EMPNO#),
+			        #S_USER_ID#,
+			        SYSDATE,
+			        #S_USER_ID#,
+			        SYSDATE)
+	</insert>
+	
+	<!-- 내부결재내역 INSERT -->
+	<insert id="SYM090200DAO.insInnerSanctnDtls" parameterClass="java.util.HashMap">
+		INSERT INTO TBCOM_INNER_SANCTN_DTLS
+		           (INNER_SANCTN_SN,
+		           INNER_SANCTN_ID,
+		           SANCTN_SN,
+		           SANCTN_STEP,
+		           SANCTN_STTUS,
+		           SANCTNER_ID,
+		           SANCTN_DT,
+		           REGISTER_ID,
+		           REGIST_DT,
+		           UPDUSR_ID,
+		           UPDT_DT
+		           )
+		    VALUES (TO_CHAR(SYSDATE, 'YYDDMM')
+				    ||LPAD(SQ_INNER_SANCTN_SN.NEXTVAL,10,'0'),
+		            #INNER_SANCTN_ID#,
+		            #SANCTN_SN#,
+		            #SANCTN_STEP#,
+		            #SANCTN_STTUS#,
+		            #EMPNO#,
+		            DECODE(#SANCTN_STEP#,'S1',SYSDATE,NULL),
+		            #S_USER_ID#,
+		            SYSDATE,
+		            #S_USER_ID#,
+		            SYSDATE)
+	</insert>
+	
+	<!-- 내부결재보고서정보 INSERT -->
+	<insert id="SYM090200DAO.insInnerSanctnReprtInfo" parameterClass="java.util.HashMap">
+       INSERT INTO TBCOM_INNER_SANCTN_REPRT_INFO
+			   (INNER_SANCTN_ID,
+		        SN,
+		        SVC_ID,
+		        SVC_URL,
+		        INPUT_DATA_SET,
+		        OUTPUT_DATA_SET,
+		        REPRT_URL,
+		        REPRT_SJ,
+		        STRE_FILE_NM,
+		        REGISTER_ID,
+		        REGIST_DT,
+		        UPDUSR_ID,
+		        UPDT_DT)
+		VALUES (#INNER_SANCTN_ID#,
+		        #SN#,
+		        #SVC_ID#,
+		        #SVC_URL#,
+		        #INPUT_DATA_SET#,
+		        #OUTPUT_DATA_SET#,
+		        #REPRT_URL#,
+		        #REPRT_SJ#,
+		        #STRE_FILE_NM#,
+		        #S_USER_ID#,
+		        SYSDATE,
+		        #S_USER_ID#,
+		        SYSDATE)
+	</insert>
+	
+	<insert id="SYM090200DAO.insInnerSanctnReprtData" parameterClass="java.util.HashMap">
+		INSERT INTO TBCOM_INNER_SANCTN_REPRT_DATA (
+              ORDR
+            , INNER_SANCTN_ID
+            , SN
+            , DATA_SET_SE
+            , PARAMTR_ID
+            , DATA_SET_NM
+            , INPUT_DATA
+            , OUTPUT_XML
+            , REGISTER_ID
+            , REGIST_DT
+            , UPDUSR_ID
+            , UPDT_DT
+	    ) VALUES (
+        	  TO_CHAR(SYSDATE, 'YYDDMM')
+		      ||LPAD(SQ_INNER_SANCTN_REPRT_DATAORDR.NEXTVAL,4,'0')  /* 순차 */
+        	, #INNER_SANCTN_ID#   /* 내부결재ID */
+        	, #SN#                /* 순번 */
+        	, #DATA_SET_SE#	   /* 데이터셋구분 */
+        	, #PARAMTR_ID#	   /* 파라미터ID */
+        	, #DATA_SET_NM#	   /* 데이터셋명 */
+        	, #INPUT_DATA#        /* 입력데이터 */
+        	, #OUTPUT_XML#	   /* 출력XML */
+        	, #S_USER_ID#	   /* 등록자ID */
+        	, SYSDATE		   /* 등록일시 */
+        	, #S_USER_ID#	   /* 수정자ID */
+        	, SYSDATE		   /* 수정일시 */
+	    )     
+	</insert>
+	
+	<insert id="SYM090200DAO.insInnerSanctnReprtDataClob" parameterClass="java.util.HashMap">
+		INSERT INTO TBCOM_INNER_SANCTN_REPRT_DATA (
+		       ORDR
+		       , INNER_SANCTN_ID
+		       , SN
+		       , DATA_SET_SE
+		       , PARAMTR_ID
+		       , DATA_SET_NM
+		       , INPUT_DATA_CLOB
+		       , OUTPUT_XML_CLOB
+		       , REGISTER_ID
+		       , REGIST_DT
+		       , UPDUSR_ID
+		       , UPDT_DT
+		) VALUES (
+		       TO_CHAR(SYSDATE, 'YYDDMM')
+		       ||LPAD(SQ_INNER_SANCTN_REPRT_DATAORDR.NEXTVAL,4,'0')  /* 순차 */
+		       , #INNER_SANCTN_ID#		/* 내부결재ID */
+		       , #SN#					/* 순번 */
+		       , #DATA_SET_SE#			/* 데이터셋구분 */
+		       , #PARAMTR_ID#			/* 파라미터ID */
+		       , #DATA_SET_NM#			/* 데이터셋명 */
+		       , #INPUT_DATA_CLOB:CLOB#		/* 입력데이터 */
+		       , #OUTPUT_XML_CLOB:CLOB#		/* 출력XML */
+		       , #S_USER_ID#			/* 등록자ID */
+		       , SYSDATE				/* 등록일시 */
+		       , #S_USER_ID#			/* 수정자ID */
+		       , SYSDATE				/* 수정일시 */
+	    )
+	</insert>
+	
+	<update id="SYM090200DAO.updInnerSanctionMasterSanctner" parameterClass="java.lang.String">
+	    UPDATE TBCOM_INNER_SANCTN_MASTR A
+		   SET A.LAST_SANCTNER_ID=(SELECT MAX(AA.SANCTNER_ID)
+		                                      KEEP(DENSE_RANK FIRST
+		                                           ORDER BY AA.SANCTN_SN DESC)
+		                             FROM TBCOM_INNER_SANCTN_DTLS AA
+		                            WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		                              AND SANCTN_STEP='S2'						/*결자자*/
+		                              AND SANCTN_STTUS='S00'					/*대기*/),
+		       A.NEXT_SANCTNER_ID=(SELECT MIN(AA.SANCTNER_ID)
+		                                      KEEP(DENSE_RANK FIRST
+		                                           ORDER BY AA.SANCTN_SN ASC)
+		                             FROM TBCOM_INNER_SANCTN_DTLS AA
+		                            WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		                              AND SANCTN_STEP='S2'						/*결자자*/
+		                              AND SANCTN_STTUS='S00'					/*대기*/)
+		 WHERE A.INNER_SANCTN_ID=#INNER_SANCTN_ID#
+	</update>
+	<!-- 내부결재 기안 END -->
+	
+	<!-- 개인결재함 BEGIN -->
+	<select id="SYM090200DAO.innerSanctionList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.INNER_SANCTN_ID,												/*결재ID*/
+		       A.INNER_SANCTN_MDL_ID,											/*내부결재모형ID*/
+		       G.INNER_SANCTN_MDL_NM,											/*내부결재모형명칭*/
+		       A.SYS_SE_CODE,
+		       A.JOB_SE,
+		       A.JOB_KEY,
+		       A.LAST_SANCTN_STTUS,												/*결재상태*/
+		       H.CHRCTR_PREPAR_VALUE_0 LAST_SANCTN_STTUS_IMG,
+		       (SELECT AA.SANCTN_STEP
+		          FROM TBCOM_INNER_SANCTN_DTLS AA
+		         WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		           AND (AA.SANCTNER_ID=#S_USER_ID#
+		                OR
+		                EXISTS (SELECT 'X'
+		                          FROM VICOM_ABSNCE_ESTBS AAA
+		                         WHERE SYSDATE BETWEEN AAA.ABSNCE_BGNDT AND AAA.ABSNCE_ENDDT
+		                           AND AAA.ALTSANC_EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=#S_USER_ID#)			/*대결자*/
+		                           AND AAA.EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=AA.SANCTNER_ID)
+		                           AND AA.SANCTN_STEP='S2'						/*결재자단계만*/
+		              ))
+		           AND ROWNUM=1) SANCTNER_STEP,									/*상신자단계*/
+		       (SELECT BB.CHRCTR_PREPAR_VALUE_0
+		          FROM TBCOM_INNER_SANCTN_DTLS AA
+		          LEFT OUTER JOIN TBCOM_CMMN_CODE BB ON (BB.GRP_CODE = 'COM028' AND BB.CODE=AA.SANCTN_STEP)
+		         WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		           AND (AA.SANCTNER_ID=#S_USER_ID#
+		                OR
+		                EXISTS (SELECT 'X'
+		                          FROM VICOM_ABSNCE_ESTBS AAA
+		                         WHERE SYSDATE BETWEEN AAA.ABSNCE_BGNDT AND AAA.ABSNCE_ENDDT
+		                           AND AAA.ALTSANC_EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=#S_USER_ID#)			/*대결자*/
+		                           AND AAA.EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=AA.SANCTNER_ID)
+		                           AND AA.SANCTN_STEP='S2'						/*결재자단계만*/
+		                ))
+		           AND ROWNUM=1) SANCTNER_STEP_IMG,								/*상신자단계*/
+		       A.SANCTN_SJ,														/*결재제목*/
+		       TO_CHAR(A.REGIST_DT,'YYYYMMDDHH24MISS') DRFT_DT,					/*상신일자*/
+		       A.USER_ID   DRFT_EMPID,											/*상신자ID*/
+		       C.USER_NM   DRFT_EMPNM,											/*상신자명*/
+		       A.DEPT_CODE DRFT_DEPT_CODE,										/*상신부서*/
+		       E.DEPT_NM   DRFT_DEPT_NM,										/*상신부서명*/
+		       TO_CHAR(A.LAST_SANCTN_DT,'YYYYMMDDHH24MISS') LAST_SANCTN_DT,		/*최종결재일자*/
+		       A.LAST_SANCTNER_ID LAST_SANCTN_EMPID,							/*최종결재자ID*/
+		       D.USER_NM LAST_SANCTN_EMPNM,										/*최종결재자명*/
+		       (SELECT AA.SANCTNER_DEPT_CD
+		          FROM TBCOM_INNER_SANCTNER AA
+		         WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		           AND AA.SANCTNER_ID=A.LAST_SANCTNER_ID
+		           AND ROWNUM=1 ) LAST_SANCTN_DEPT_CODE,						/*최종결재부서 이전데이터로인해 서브쿼리작업*/
+		       (SELECT BB.DEPT_NM
+		          FROM TBCOM_INNER_SANCTNER AA,
+		               VWHRM_DEPT BB
+		         WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		           AND AA.SANCTNER_ID=A.LAST_SANCTNER_ID
+		           AND BB.DEPT_CODE=AA.SANCTNER_DEPT_CD
+		           AND ROWNUM=1) LAST_SANCTN_DEPT_NM,							/*최종결재부서명*/
+		       SANCTN_INFO_AMT,
+		       SANCTN_INFO_DATE,
+		       SANCTN_INFO_CN1,
+		       SANCTN_INFO_CN2,
+		       SANCTN_INFO_CN3,
+		       (SELECT TO_CHAR(AA.UPDT_DT,'YYYYMMDDHH24MISS') FROM TBCOM_INNER_SANCTN_REPRT_INFO AA WHERE A.INNER_SANCTN_ID = AA.INNER_SANCTN_ID) AS LAST_UPDT_DT
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		 INNER JOIN TBCOM_INNER_SANCTN_MDL G ON (G.INNER_SANCTN_MDL_ID=A.INNER_SANCTN_MDL_ID)
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE H ON (H.GRP_CODE = 'COM034' AND H.CODE=A.LAST_SANCTN_STTUS)
+		  LEFT OUTER JOIN TBCOM_USER C ON (C.USER_ID=A.USER_ID)
+		  LEFT OUTER JOIN TBCOM_USER D ON (D.USER_ID=A.LAST_SANCTNER_ID)
+		  LEFT OUTER JOIN VWHRM_DEPT E ON (E.DEPT_CODE=A.DEPT_CODE)
+		 WHERE 1=1
+		<!--   EXISTS (SELECT 'X'
+		                 FROM TBCOM_INNER_SANCTNER X
+		                WHERE X.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		                  AND (X.SANCTNER_ID=#S_USER_ID#
+		                       OR
+		                       EXISTS (SELECT AA.EMPNO
+		                                 FROM VICOM_ABSNCE_ESTBS AA
+		                                WHERE SYSDATE BETWEEN AA.ABSNCE_BGNDT AND AA.ABSNCE_ENDDT
+		                                  AND AA.ALTSANC_EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=#S_USER_ID#) /*대결자*/
+		                                  AND AA.EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=X.SANCTNER_ID)
+		                                  AND X.SANCTN_STEP='S2' /*결재자단계만*/
+		                      ))
+		               ) -->
+		<isEqual property="SCH_COND" compareValue="SYM101000Tab1">
+		   AND (EXISTS (SELECT 'X'
+		                  FROM TBCOM_INNER_SANCTN_DTLS X
+		                 WHERE X.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		                   AND X.SANCTN_DT IS NULL
+		                   AND X.SANCTNER_ID=#S_USER_ID#
+		                   AND X.SANCTN_STEP='S3')								/*참조*/
+		       OR
+		       EXISTS (SELECT 'X'
+		                 FROM TBCOM_INNER_SANCTN_DTLS X
+		                WHERE X.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		                  AND X.SANCTN_DT IS NULL
+		                  AND X.SANCTNER_ID=A.NEXT_SANCTNER_ID
+		                  AND X.SANCTNER_ID=#S_USER_ID#
+		                  AND X.SANCTN_STEP='S2')								/*결재*/
+		       OR
+		       EXISTS (SELECT 'X'
+		                 FROM VICOM_ABSNCE_ESTBS AA
+		                WHERE SYSDATE BETWEEN AA.ABSNCE_BGNDT AND AA.ABSNCE_ENDDT
+		                  AND AA.ALTSANC_EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=#S_USER_ID#)
+		                  AND AA.EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=A.NEXT_SANCTNER_ID))						/*대결자*/
+		       )  /*다음결재자*/
+		   AND A.LAST_SANCTN_STTUS IN ('S00','S02')								/*대기, 결재중*/
+		   AND NOT EXISTS (SELECT AA.EMPNO
+		                     FROM VICOM_ABSNCE_ESTBS AA
+		                    WHERE SYSDATE BETWEEN AA.ABSNCE_BGNDT AND AA.ABSNCE_ENDDT
+		                      AND AA.EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=#S_USER_ID#)
+		                      AND AA.EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=A.NEXT_SANCTNER_ID))					/*부재자 미조회*/
+		</isEqual>
+		<isEqual property="SCH_COND" compareValue="SYM101000Tab2">
+		   AND EXISTS (SELECT 'X'
+		                 FROM TBCOM_INNER_SANCTN_DTLS X
+		                WHERE X.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		                  AND (X.SANCTNER_ID=#S_USER_ID#
+		                       OR X.AGNCY_SANCTNER_ID=#S_USER_ID#)
+		                  AND X.SANCTN_STTUS&lt;&gt;'S00'						/*대기*/
+		                  AND X.SANCTN_STEP&lt;&gt;'S1'							/*기안자*/
+		              ) 
+		   AND A.LAST_SANCTN_STTUS&lt;&gt;'S00'									/*대기*/
+		</isEqual>
+		<isEqual property="SCH_COND" compareValue="SYM102000">
+		   AND A.USER_ID=#S_USER_ID#
+		   <isEqual property="SANCTN_STTUS_S08" compareValue="0">
+		   AND A.LAST_SANCTN_STTUS&lt;&gt;'S08'									/*취소*/
+		   </isEqual>
+		</isEqual>
+		<isNotEmpty property="DRFT_USER_NM">
+		   AND C.USER_NM LIKE '%'|| #DRFT_USER_NM# ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="SANCTN_SJ">
+		   AND A.SANCTN_SJ LIKE '%'|| #SANCTN_SJ# ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="LAST_SANCTN_STTUS">
+		   AND A.LAST_SANCTN_STTUS=#LAST_SANCTN_STTUS#
+		</isNotEmpty>
+		<isNotEmpty property="SYS_SE_CODE">
+		   AND A.SYS_SE_CODE=#SYS_SE_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="JOB_SE">
+		   AND A.JOB_SE=#JOB_SE#
+		</isNotEmpty>
+		<isNotEmpty property="INNER_SANCTN_MDL_ID">
+		   AND A.INNER_SANCTN_MDL_ID=#INNER_SANCTN_MDL_ID#
+		</isNotEmpty>
+		<isNotEmpty property="DRFT_STR_DT">
+		   <isNotEmpty property="DRFT_END_DT">
+		   AND A.REGIST_DT BETWEEN TO_DATE(#DRFT_STR_DT#||'000000', 'YYYYMMDDHH24MISS') AND TO_DATE(#DRFT_END_DT#||'235959','YYYYMMDDHH24MISS')
+		   </isNotEmpty>
+		</isNotEmpty>
+		 ORDER BY A.INNER_SANCTN_ID DESC
+	</select>
+	<!-- 개인결재함 END -->
+	
+	<select id="SYM090200DAO.InnerSanctionSttusSm" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT COUNT(*) LAST_SANCTN_STTUS_ALL_CNT,
+		       SUM(CASE
+		             WHEN LAST_SANCTN_STTUS='S00' THEN 1
+		             ELSE 0
+		           END) LAST_SANCTN_STTUS_S00_CNT,
+		       SUM(CASE
+		             WHEN LAST_SANCTN_STTUS='S01' THEN 1
+		             ELSE 0
+		           END) LAST_SANCTN_STTUS_S01_CNT,
+		       SUM(CASE
+		             WHEN LAST_SANCTN_STTUS='S02' THEN 1
+		             ELSE 0
+		           END) LAST_SANCTN_STTUS_S02_CNT,
+		       SUM(CASE
+		             WHEN LAST_SANCTN_STTUS='S08' THEN 1
+		             ELSE 0
+		           END) LAST_SANCTN_STTUS_S08_CNT,
+		       SUM(CASE
+		             WHEN LAST_SANCTN_STTUS='S09' THEN 1
+		             ELSE 0
+		           END) LAST_SANCTN_STTUS_S09_CNT
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		 INNER JOIN TBCOM_INNER_SANCTN_MDL G ON (G.INNER_SANCTN_MDL_ID=A.INNER_SANCTN_MDL_ID)
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE H ON (H.GRP_CODE = 'COM034' AND H.CODE=A.LAST_SANCTN_STTUS)
+		  LEFT OUTER JOIN TBCOM_USER C ON (C.USER_ID=A.USER_ID)
+		  LEFT OUTER JOIN TBCOM_USER D ON (D.USER_ID=A.LAST_SANCTNER_ID)
+		  LEFT OUTER JOIN VWHRM_DEPT E ON (E.DEPT_CODE=A.DEPT_CODE)
+		 WHERE 1=1
+		<isEqual property="SCH_COND" compareValue="SYM102000">
+		   AND A.USER_ID=#S_USER_ID#
+		   <isEqual property="SANCTN_STTUS_S08" compareValue="0">
+		   AND A.LAST_SANCTN_STTUS&lt;&gt;'S08'							/*취소*/
+		   </isEqual>
+		</isEqual>
+		<isNotEmpty property="DRFT_USER_NM">
+		   AND C.USER_NM LIKE '%'|| #DRFT_USER_NM# ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="SANCTN_SJ">
+		   AND A.SANCTN_SJ LIKE '%'|| #SANCTN_SJ# ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="LAST_SANCTN_STTUS">
+		   AND A.LAST_SANCTN_STTUS=#LAST_SANCTN_STTUS#
+		</isNotEmpty>
+		<isNotEmpty property="SYS_SE_CODE">
+		   AND A.SYS_SE_CODE=#SYS_SE_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="JOB_SE">
+		   AND A.JOB_SE=#JOB_SE#
+		</isNotEmpty>
+		<isNotEmpty property="INNER_SANCTN_MDL_ID">
+		   AND A.INNER_SANCTN_MDL_ID=#INNER_SANCTN_MDL_ID#
+		</isNotEmpty>
+		<isNotEmpty property="DRFT_STR_DT">
+		   <isNotEmpty property="DRFT_END_DT">
+		   AND A.REGIST_DT BETWEEN TO_DATE(#DRFT_STR_DT#||'000000', 'YYYYMMDDHH24MISS') AND TO_DATE(#DRFT_END_DT#||'235959','YYYYMMDDHH24MISS')
+		   </isNotEmpty>
+		</isNotEmpty>
+	</select>
+	
+	<!-- 내부결재현황 결재정보 BEGIN -->
+	<select id="SYM090201DAO.innerSanctnMastr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.INNER_SANCTN_ID
+		       , A.INNER_SANCTN_MDL_ID
+		       , B.INNER_SANCTN_MDL_NM
+		       , A.SYS_SE_CODE
+		       , A.JOB_SE
+		       , A.USER_ID
+		       , A.DEPT_CODE
+		       , A.SANCTN_SJ
+		       , A.SANCTN_TY
+		       , A.LAST_SANCTN_STEP
+		       , A.LAST_SANCTN_STTUS
+		       , A.LAST_SANCTNER_ID
+		       , A.LAST_SANCTN_DT
+		       , A.FILE_SN
+		       , A.FILE_SN2
+		       , A.NEXT_SANCTN_STEP
+		       , A.NEXT_SANCTNER_ID
+		       , A.REGISTER_ID
+		       , A.REGIST_DT
+		       , A.UPDUSR_ID
+		       , A.UPDT_DT
+		       , B.POSPROC_AT
+		       , B.POSPROC_CLASS
+		       , B.POSPROC_OPRTIN_NM
+		       , B.REQUEST_SCRIN_URL
+		       , A.JOB_KEY AS JOB_KEY
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		       ,TBCOM_INNER_SANCTN_MDL B
+		 WHERE A.INNER_SANCTN_MDL_ID = B.INNER_SANCTN_MDL_ID
+		   AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#         /* 내부결재번호 */
+	</select>
+	
+	<select id="SYM090201DAO.innerSanctnMastrU" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.INNER_SANCTN_ID
+		       , A.INNER_SANCTN_MDL_ID
+		       , B.INNER_SANCTN_MDL_NM
+		       , A.SYS_SE_CODE
+		       , A.JOB_SE
+		       , A.USER_ID
+		       , A.DEPT_CODE
+		       , A.SANCTN_SJ
+		       , A.SANCTN_TY
+		       , A.LAST_SANCTN_STEP
+		       , A.LAST_SANCTN_STTUS
+		       , A.LAST_SANCTNER_ID
+		       , A.LAST_SANCTN_DT
+		       , A.FILE_SN
+		       , A.FILE_SN2
+		       , A.NEXT_SANCTN_STEP
+		       , A.NEXT_SANCTNER_ID
+		       ,(SELECT AA.SANCTN_STEP
+		           FROM TBCOM_INNER_SANCTN_DTLS AA
+		          WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		            AND AA.SANCTNER_ID=#S_USER_ID# ) SANCTNER_STEP /*로그인사용자 참조자여부판단*/
+		       , CASE
+		           WHEN A.NEXT_SANCTNER_ID=#S_USER_ID# THEN A.NEXT_SANCTNER_ID
+		           ELSE (SELECT AA.EMPNO
+		                   FROM VICOM_ABSNCE_ESTBS AA
+		                  WHERE SYSDATE BETWEEN AA.ABSNCE_BGNDT AND AA.ABSNCE_ENDDT
+		                    AND AA.ALTSANC_EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=#S_USER_ID#)	/*대결자 로그인ID*/
+		                    AND AA.EMPNO=(SELECT UU.EMPNO FROM TBCOM_USER UU WHERE UU.USER_ID=A.NEXT_SANCTNER_ID)
+		                    AND ROWNUM=1)
+		         END CURR_SANCTNER_ID							/*내가처리가능한결재ID*/
+		       , A.REGISTER_ID
+		       , A.REGIST_DT
+		       , A.UPDUSR_ID
+		       , A.UPDT_DT
+		       , B.POSPROC_AT
+		       , B.POSPROC_CLASS
+		       , B.POSPROC_OPRTIN_NM
+		       , B.REQUEST_SCRIN_URL
+		       , A.JOB_KEY AS JOB_KEY
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		       ,TBCOM_INNER_SANCTN_MDL B
+		 WHERE A.INNER_SANCTN_MDL_ID = B.INNER_SANCTN_MDL_ID
+		   AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#			/* 내부결재번호 */
+	</select>
+	
+	<!-- 내부결재보고서 결재라인 -->
+	<select id="SYM090202DAO.innerSanctnReprtApprline" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT NVL(OFCPS_NM,' ') APPRLINE_COL1,
+		       EMPNM APPRLINE_COL2,
+		       SANCTN_DT||'('||SANCTN_STTUS_NM||')' APPRLINE_COL3,
+		       SANCTNER_ID
+		  FROM (
+		        SELECT B.SANCTN_SN,
+		               B.SANCTNER_ID,
+		               CASE
+		                 WHEN AGNCY_SANCTNER_ID IS NULL THEN U.USER_NM 
+		                 ELSE U.USER_NM||CHR(13)||CHR(10)||'('||U1.USER_NM||')' 
+		               END EMPNM,
+		               B.SANCTN_STEP,
+		               C.CODE_NM SANCTN_STEP_NM,
+		               B.SANCTN_STTUS,
+		               D.CODE_NM SANCTN_STTUS_NM,
+		               E.CODE OFCPS_SE,
+		               E.CODE_NM OFCPS_NM,
+		               TO_CHAR(B.SANCTN_DT,'MM/DD') SANCTN_DT
+		          FROM TBCOM_INNER_SANCTN_DTLS B
+		         INNER JOIN TBCOM_INNER_SANCTNER S ON (S.INNER_SANCTN_ID=B.INNER_SANCTN_ID
+		                                               AND S.SANCTN_SN=B.SANCTN_SN
+		                                               AND S.SANCTNER_ID=B.SANCTNER_ID)
+		          LEFT OUTER JOIN TBCOM_USER U ON (U.USER_ID=B.SANCTNER_ID)
+		          LEFT OUTER JOIN TBCOM_USER U1 ON (U1.USER_ID=B.AGNCY_SANCTNER_ID)
+		          LEFT OUTER JOIN TBHRM_HR_MASTR A ON (A.EMPNO=U.EMPNO)
+		          LEFT OUTER JOIN TBCOM_CMMN_CODE C ON (C.GRP_CODE='COM028'
+		                                                AND C.CODE=B.SANCTN_STEP)
+		          LEFT OUTER JOIN TBCOM_CMMN_CODE D ON (D.GRP_CODE='COM032'
+		                                                AND D.CODE=B.SANCTN_STTUS)
+		          LEFT OUTER JOIN TBCOM_CMMN_CODE E ON (E.GRP_CODE='HRM021'
+		                                                AND E.CODE=S.OFCPS_NM)
+		         WHERE B.INNER_SANCTN_ID=#INNER_SANCTN_ID#
+		           AND B.SANCTN_STEP IN ('S1','S2')
+		         ORDER BY B.SANCTN_SN)
+	]]>
+	</select>
+	
+	<select id="SYM090202DAO.innerSanctnReprtInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.INNER_SANCTN_ID				/* 내부결재번호 */
+		       ,A.SN							/* 순번 */
+		       ,A.SVC_ID						/* 서비스ID */
+		       ,A.SVC_URL						/* 서비스URL */
+		       ,A.INPUT_DATA_SET				/* 입력데이터셋 */
+		       ,A.OUTPUT_DATA_SET				/* 출력데이터셋 */
+		       ,A.REPRT_URL						/* 보고서URL */
+		       ,A.REPRT_SJ						/* 보고서제목 */
+		       ,A.STRE_FILE_NM					/* 저장파일명 */
+		  FROM TBCOM_INNER_SANCTN_REPRT_INFO A	/* 내부결재보고서정보 */
+		 WHERE INNER_SANCTN_ID = #INNER_SANCTN_ID#
+		 ORDER BY A.SN ASC
+	</select>
+	
+	<resultMap class="java.util.HashMap" id="innerSanctnReprtData">
+		<result property="INNER_SANCTN_ID" column="INNER_SANCTN_ID" />
+		<result property="SN" column="SN" />
+		<result property="SVC_ID" column="SVC_ID" />
+		<result property="SVC_URL" column="SVC_URL" />
+		<result property="DATA_SET_SE" column="DATA_SET_SE" />
+		<result property="PARAMTR_ID" column="PARAMTR_ID" />
+		<result property="DATA_SET_NM" column="DATA_SET_NM" />
+		<result property="INPUT_DATA" column="INPUT_DATA" javaType="java.lang.String" jdbcType="CLOB" />
+		<result property="OUTPUT_XML" column="OUTPUT_XML" javaType="java.lang.String" jdbcType="CLOB" />
+		<result property="ORDR" column="ORDR" />
+	</resultMap>
+	
+	<select id="SYM090203DAO.innerSanctnReprtData" parameterClass="java.util.HashMap" resultMap="innerSanctnReprtData">
+		SELECT B.INNER_SANCTN_ID						/* 내부결재번호 */
+		       ,B.SN									/* 순번 */
+		       ,B.SVC_ID								/* 서비스ID */
+		       ,B.SVC_URL								/* 서비스URL */
+		       ,A.DATA_SET_SE							/* 데이터셋구분 */
+		       ,A.PARAMTR_ID							/* 파라미터ID */
+		       ,A.DATA_SET_NM							/* 데이터셋명 */
+		       ,A.INPUT_DATA_CLOB INPUT_DATA			/* 입력데이터 */
+		       ,A.OUTPUT_XML_CLOB OUTPUT_XML			/* 출력XML */
+		       ,A.ORDR									/* 순차*/
+		  FROM TBCOM_INNER_SANCTN_REPRT_DATA A			/* 내부결재보고서데이터 */
+		       ,TBCOM_INNER_SANCTN_REPRT_INFO B			/* 내부결재보고서정보 */
+		 WHERE A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+		   AND B.INNER_SANCTN_ID = #INNER_SANCTN_ID#	/* 내부결재번호 */
+		 ORDER BY B.SN, A.ORDR
+	</select>
+	
+	<!-- 내부결재 결재정보 -->
+	<select id="SYM090200DAO.innerSanctnDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT CASE
+		         WHEN A.SANCTN_STEP='S3' THEN 0
+		         ELSE A.SANCTN_SN
+		       END SANCTN_SN,
+		       A.SANCTN_STEP,
+		       A.SANCTN_STTUS,
+		       A.SANCTNER_ID,
+		       CASE
+		         WHEN AGNCY_SANCTNER_ID IS NULL THEN B.USER_NM 
+		         ELSE B.USER_NM||'('||C.USER_NM||')' 
+		       END SANCTNER_NM,
+		       TO_CHAR(A.SANCTN_DT,'YYYYMMDDHH24MISS') SANCTN_DT,
+		       A.OPINION
+		  FROM TBCOM_INNER_SANCTN_DTLS A
+		  LEFT OUTER JOIN TBCOM_USER B ON (B.USER_ID=A.SANCTNER_ID)
+		  LEFT OUTER JOIN TBCOM_USER C ON (C.USER_ID=A.AGNCY_SANCTNER_ID)
+		 WHERE INNER_SANCTN_ID=#INNER_SANCTN_ID#
+		 ORDER BY SANCTN_SN DESC, SANCTN_STEP DESC, SANCTNER_NM	
+	</select>
+	
+	<!-- 내부결재 결재처리 -->
+	<update id="SYM090200DAO.innerSanctnDtlsU" parameterClass="java.util.HashMap">
+		UPDATE TBCOM_INNER_SANCTN_DTLS
+		   SET SANCTN_STTUS=#SANCTN_STTUS#,
+		       AGNCY_SANCTNER_ID=DECODE(SANCTNER_ID,#S_USER_ID#,NULL,#S_USER_ID#),
+		       SANCTN_DT=SYSDATE,
+		       OPINION=#OPINION#,
+		       UPDUSR_ID=#S_USER_ID#,
+		       UPDT_DT=SYSDATE
+		 WHERE INNER_SANCTN_ID=#INNER_SANCTN_ID#
+		   AND SANCTNER_ID=#CURR_SANCTNER_ID#
+		   AND SANCTN_STTUS='S00'
+		   AND SANCTN_STEP='S2'
+	</update>
+	
+	<!-- 내부결재 참조자 결재처리 -->
+	<update id="SYM090200DAO.innerSanctnDtlsU_S3" parameterClass="java.util.HashMap">
+		UPDATE TBCOM_INNER_SANCTN_DTLS
+		   SET SANCTN_STTUS='S01',
+		       SANCTN_DT=SYSDATE,
+		       UPDUSR_ID=#S_USER_ID#,
+		       UPDT_DT=SYSDATE
+		 WHERE INNER_SANCTN_ID=#INNER_SANCTN_ID#
+		   AND SANCTNER_ID=#S_USER_ID#
+		   AND SANCTN_STEP='S3'
+	</update>
+	
+	<!-- 내부결재 결재처리 후처리 조회 -->
+	<select id="SYM090200DAO.innerSanctnMastrLastSttusS" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT INNER_SANCTN_ID,
+		       JOB_SE,
+		       LAST_SANCTNER_ID,
+		       CASE
+		         WHEN #SANCTN_STTUS#='S09' THEN 'S09'
+		         WHEN #SANCTN_STTUS#='S01'
+		              AND (LAST_SANCTNER_ID=#S_USER_ID# 
+		                   OR LAST_SANCTNER_ID=#CURR_SANCTNER_ID#) THEN 'S01'
+		         ELSE 'S02'
+		       END LAST_SANCTN_STTUS,
+		       LAST_SANCTN_STTUS OGN_LAST_SANCTN_STTUS,
+		       (SELECT MIN(AA.SANCTNER_ID) KEEP(DENSE_RANK FIRST
+		                                        ORDER BY AA.SANCTN_SN ASC)
+		         FROM TBCOM_INNER_SANCTN_DTLS AA
+		        WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		              AND SANCTN_STEP='S2'
+		              AND SANCTN_STTUS='S00') NEXT_SANCTER_ID
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		 WHERE INNER_SANCTN_ID=#INNER_SANCTN_ID#
+	</select>
+	
+	<!-- 내부결재 결재처리 후처리 -->
+	<update id="SYM090200DAO.innerSanctnMastrLastSttusU" parameterClass="java.util.HashMap">
+		UPDATE TBCOM_INNER_SANCTN_MASTR A
+		   SET A.LAST_SANCTN_STTUS=#LAST_SANCTN_STTUS#
+		       ,A.LAST_SANCTN_DT=DECODE(#LAST_SANCTN_STTUS#,'S01',SYSDATE,NULL)
+		       ,A.NEXT_SANCTNER_ID=NVL(#NEXT_SANCTER_ID#,A.NEXT_SANCTNER_ID)
+		       ,A.UPDUSR_ID=#S_USER_ID#
+		       ,A.UPDT_DT=SYSDATE
+		 WHERE A.INNER_SANCTN_ID=#INNER_SANCTN_ID#
+		   AND A.LAST_SANCTN_STTUS&lt;&gt;'S08'
+		   AND A.LAST_SANCTN_STTUS&lt;&gt;'S09'
+	</update>
+	<!-- 내부결재현황 결재정보 END -->
+	
+	<!-- MY기안문서 상신취소 -->
+	<update id="SYM090200DAO.innerSanctnMastrLastSttusD" parameterClass="java.util.HashMap">
+		UPDATE TBCOM_INNER_SANCTN_MASTR
+		   SET LAST_SANCTN_STTUS='S08',
+		       UPDUSR_ID=#S_USER_ID#,
+		       UPDT_DT=SYSDATE
+		 WHERE INNER_SANCTN_ID=#INNER_SANCTN_ID#
+		   AND LAST_SANCTN_STTUS='S00'
+   </update>
+   
+	<select id="SYM090203DAO.innerSanctnFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.FILE_SN				/*  파일일련번호 */
+		       ,A.FILE_ORDR				/*  파일순차 */
+		       ,A.FILE_STRE_COURS		/*  파일저장경로 */
+		       ,A.STRE_FILE_NM			/*  저장파일명 */
+		       ,A.ORGINL_FILE_NM		/*  원본파일명 */
+		       ,A.FILE_EXTSN			/*  파일확장자 */
+		       ,A.FILE_CN				/*  파일내용   */
+		       ,A.FILE_MG				/*  파일크기   */
+		       ,A.USE_AT				/*  사용여부   */
+		       ,A.FILE_ID
+		       ,B.SYS_SE_CODE			/*  시스템구분코드 */
+		       ,B.JOB_SE_CODE AS JOB_SE /*  업무구분코드 */
+		       ,ROW_NUMBER() OVER (PARTITION BY A.FILE_SN ORDER BY A.FILE_ORDR ASC) AS SN
+		       ,A.FILE_TY
+		       ,'theme://images/fileUpDownload/file_icon_' || DECODE(LOWER(A.FILE_EXTSN), 'zip', 'ZIP','rar', 'ZIP','7z', 'ZIP', 'jpg', 'IMG', 'jpeg', 'IMG', 'gif', 'IMG', 'png', 'IMG', 'bmp', 'IMG', 'txt', 'TXT', 'xml', 'TXT', 'doc', 'DOC', 'docx', 'DOC', 'xls', 'XLS', 'xlsx', 'XLS', 'ppt', 'PPT', 'pptx', 'PPT', 'pdf', 'PDF', 'hwp', 'HWP', 'hwt', 'HWP', 'ETC' ) || '.png' AS FILE_IMAGE
+		       ,100 AS PROGRS
+		       ,NULL AS TRNSMIS_FILE_SIZE
+		       ,'theme://images/img_WF_ConfirmE.png' AS DELETE_IMAGE
+		       ,NULL AS STTUS
+		       ,'0' AS DEL_CAN
+		  FROM TBCOM_CMMN_ATCHMNFL_MASTR B 										/* 공통첨부파일마스터 */
+		 INNER JOIN TBCOM_CMMN_ATCHMNFL A ON (A.FILE_SN = B.FILE_SN
+		                                      AND A.STRE_FILE_NM IS NOT NULL)	/* 공통첨부파일 */
+		 INNER JOIN TBCOM_INNER_SANCTN_MASTR C ON (C.FILE_SN=B.FILE_SN)
+		 WHERE C.INNER_SANCTN_ID=#INNER_SANCTN_ID#
+	</select>
+	
+	<select id="SYM090200DAO.selectMessenger" parameterClass="java.lang.String" resultClass="java.util.HashMap">
+		SELECT A.USER_ID FROM_EMP_ID,
+		       B.USER_NM FROM_EMP_NM,
+		       A.NEXT_SANCTNER_ID,
+		       C.USER_NM NEXT_SANCTNER_NM,
+		       A.SANCTN_SJ
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		 LEFT OUTER JOIN TBCOM_USER B ON (B.USER_ID=A.USER_ID)
+		 LEFT OUTER JOIN TBCOM_USER C ON (C.USER_ID=A.NEXT_SANCTNER_ID)
+		 WHERE A.INNER_SANCTN_ID=#INNER_SANCTN_ID#
+		   AND A.LAST_SANCTN_STTUS IN ('S00','S02')
+	</select>
+	
+	<select id="SYM090200DAO.selectMessenger_result" parameterClass="java.lang.String" resultClass="java.util.HashMap">
+		SELECT A.NEXT_SANCTNER_ID,
+		       C.USER_NM NEXT_SANCTNER_NM,
+		       A.USER_ID TO_EMP_ID,
+		       B.USER_NM TO_EMP_NM,
+		       A.SANCTN_SJ,
+		       A.LAST_SANCTN_STTUS,
+		       D.CODE_NM LAST_SANCTN_STTUS_NM
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		  LEFT OUTER JOIN TBCOM_USER B ON (B.USER_ID=A.USER_ID)
+		  LEFT OUTER JOIN TBCOM_USER C ON (C.USER_ID=A.NEXT_SANCTNER_ID)
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE D ON (D.GRP_CODE='COM034'
+		                                        AND D.CODE=A.LAST_SANCTN_STTUS)
+		 WHERE A.INNER_SANCTN_ID=#INNER_SANCTN_ID#
+		   AND A.LAST_SANCTN_STTUS IN ('S01','S08','S09')
+	</select>
+	
+	<select id="SYM090200DAO.selectMessenger_S3" parameterClass="java.lang.String" resultClass="java.util.HashMap">
+		SELECT A.USER_ID FROM_EMP_ID,
+		       C.USER_NM FROM_EMP_NM,
+		       B.SANCTNER_ID SANCTNER_S3_ID,
+		       D.USER_NM SANCTNER_S3_NM,
+		       A.SANCTN_SJ
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		 INNER JOIN TBCOM_INNER_SANCTN_DTLS B ON (B.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		                                          AND B.SANCTN_STEP='S3') 
+		 LEFT OUTER JOIN TBCOM_USER C ON (C.USER_ID=A.USER_ID)
+		 LEFT OUTER JOIN TBCOM_USER D ON (D.USER_ID=B.SANCTNER_ID)
+		 WHERE A.INNER_SANCTN_ID=#INNER_SANCTN_ID#
+		   AND A.LAST_SANCTN_STTUS='S00'
+	</select>
+	
+	<select id="SYM090200DAO.selectInnerSanctnPost" parameterClass="java.lang.String" resultClass="java.util.HashMap">
+		SELECT A.INNER_SANCTN_ID,
+		       A.INNER_SANCTN_MDL_ID,
+		       B.INNER_SANCTN_MDL_NM,
+		       A.SYS_SE_CODE,
+		       A.JOB_SE,
+		       A.JOB_KEY,
+		       B.POSPROC_AT,			/*후처리여부*/
+		       B.POSPROC_CLASS,
+		       B.POSPROC_OPRTIN_NM,
+		       A.USER_ID,
+		       A.LAST_SANCTN_STTUS,
+		       A.LAST_SANCTNER_ID,
+		       (SELECT MAX(AA.OPINION) KEEP(DENSE_RANK FIRST
+		                                    ORDER BY AA.SANCTN_SN DESC)
+		          FROM TBCOM_INNER_SANCTN_DTLS AA
+		         WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		           AND SANCTN_STEP='S2'
+		           AND SANCTN_STTUS&lt;&gt;'S00') LAST_OPINION
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		 INNER JOIN TBCOM_INNER_SANCTN_MDL B ON (B.INNER_SANCTN_MDL_ID=A.INNER_SANCTN_MDL_ID)
+		 WHERE A.INNER_SANCTN_ID=#INNER_SANCTN_ID#
+	</select>
+	
+	<select id="SYM090200DAO.selectSMSInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT CODE_NM TITLE
+		       ,(SELECT DEPT_CODE
+		           FROM TBHRM_HR_MASTR
+		          WHERE EMPNO=#FROM_USER_ID#) FROM_DEPT_CODE
+		       ,(SELECT REGEXP_REPLACE(
+		                  REGEXP_REPLACE(
+		                    REGEXP_REPLACE(H_DECRYPT(TELNO_2),'-','')
+		                    ,'\(','')
+		                ,'\)','')
+		           FROM TBHRM_HR_MASTR
+		          WHERE EMPNO=#FROM_USER_ID#) FROM_USR_TEL
+		       ,(SELECT REGEXP_REPLACE(
+		                  REGEXP_REPLACE(
+		                    REGEXP_REPLACE(H_DECRYPT(TELNO_2),'-','')
+		                    ,'\(','')
+		                ,'\)','')
+		           FROM TBHRM_HR_MASTR
+		          WHERE EMPNO=#TO_USER_ID#) TO_USR_TEL
+		       ,REGEXP_REPLACE(
+		          REGEXP_REPLACE(
+		            REGEXP_REPLACE(
+		              REGEXP_REPLACE(
+		                REGEXP_REPLACE(CODE_CN,'%CHANGEWORD1%', #CHANGEWORD1#)
+		                ,'%CHANGEWORD2%', #CHANGEWORD2#)
+		              ,'%CHANGEWORD3%', #CHANGEWORD3#)
+		            ,'%CHANGEWORD4%', #CHANGEWORD4#)
+		          ,'%CHANGEWORD5%', #CHANGEWORD5#) CONTENT
+		  FROM TBCOM_CMMN_CODE
+		 WHERE GRP_CODE='COM057'
+		   AND CODE=#MSG_CODE#
+		   AND USE_AT='1'
+	</select>
+	
+	<procedure id="SYM090200DAO.messeageProcedure" parameterClass="java.util.HashMap">
+		{ CALL SPCOM_SEND_UMS(
+							   #SEND_DEPT_CODE#                         /*전송부서*/
+							  ,'0533500301'                             /*회신번호 0533500350*/
+							  ,#MSGE#                                   /*전송메세지*/
+							  ,#SEND_DT#                                /*전송희망시간(예약)*/
+							  ,#CHANG_WORD1#                            /*맞춤문자1*/
+							  ,#CHANG_WORD2#                            /*맞춤문자2*/
+							  ,#CHANG_WORD3#                            /*맞춤문자3*/
+							  ,#CHANG_WORD4#                            /*맞춤문자4*/
+							  ,#CHANG_WORD5#                            /*맞춤문자5*/
+							  ,#RECIPIENT_NUM#                          /*수신전화번호*/
+							  ,#RCVER_NM#                               /*수신자*/
+							  ,#SENDER_ID#                              /*발신자아이디*/
+							  ,#ETC1#                                   /*비고1*/
+							  ,#ETC2#                                   /*비고2*/
+							  ,#ETC3#                                   /*비고3*/
+							  ,#ETC4#                                   /*비고4*/
+							  ,#ETC5#                                   /*비고5*/
+							  ,#BROAD_MSSAGE_ID#                        /*맞춤문자메시지 일련번호*/
+							  ,#OUT_RESULT_MSG#                         /*오류메세지*/
+							)
+		}
+	</procedure>
+	
+	<!-- 보고서 내용 변경처리 -->
+	<select id="SYM090200DAO.reprtUpdateSelectHisSeq" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT NVL(MAX(HIS_SEQ),0)+1 NEXT_SEQ
+		  FROM TBCOM_INNER_SANCTN_REPRT_DATAH
+		 WHERE INNER_SANCTN_ID = #INNER_SANCTN_ID#
+	</select>
+	<insert id="SYM090200DAO.reprtUpdateInsertHis" parameterClass="java.util.HashMap">
+		INSERT INTO TBCOM_INNER_SANCTN_REPRT_DATAH
+		       (ORDR, INNER_SANCTN_ID, SN, DATA_SET_SE, PARAMTR_ID, DATA_SET_NM,
+		        REGISTER_ID, REGIST_DT, UPDUSR_ID, UPDT_DT,
+		        INPUT_DATA_CLOB, OUTPUT_XML_CLOB, HIS_SEQ)
+		SELECT ORDR, INNER_SANCTN_ID, SN, DATA_SET_SE, PARAMTR_ID, DATA_SET_NM,
+		       REGISTER_ID, REGIST_DT, UPDUSR_ID, UPDT_DT,
+		       INPUT_DATA_CLOB, OUTPUT_XML_CLOB, #HIS_SEQ#
+		  FROM TBCOM_INNER_SANCTN_REPRT_DATA
+		 WHERE INNER_SANCTN_ID=#INNER_SANCTN_ID#
+	</insert>
+	<delete id="SYM090200DAO.reprtUpdateDelData" parameterClass="java.util.HashMap">
+		DELETE TBCOM_INNER_SANCTN_REPRT_DATA
+		 WHERE INNER_SANCTN_ID=#INNER_SANCTN_ID#
+	</delete>
+	<update id="SYM090200DAO.reprtUpdateReprtInfo" parameterClass="java.util.HashMap">
+		UPDATE TBCOM_INNER_SANCTN_REPRT_INFO
+		   SET OUTPUT_DATA_SET=#OUTPUT_DATA_SET#,
+		       UPDUSR_ID=#S_USER_ID#,
+		       UPDT_DT=SYSDATE
+		 WHERE INNER_SANCTN_ID=#INNER_SANCTN_ID#
+	</update>
+<!--	
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+/////////													  /////////
+/////////													  /////////
+/////////	아래구현부는 이전개발자 구현부분으로		  /////////
+/////////	삭제처리할 예정임	2016.07.13					  /////////
+/////////													  /////////
+/////////													  /////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+-->
+	
+	
+    <!-- 내부결재마스터 ================================================== -->
+	<!-- 내부결재ID 채번 -->
+	<select id="SYM090200DAO.innerSanctionId1" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT 
+	          TO_CHAR(SYSDATE, 'YYYY') || SQ_INNER_SANCTN_MASTR_1.NEXTVAL AS INNER_SANCTN_ID
+	        , #INNER_SANCTN_MDL_ID# AS INNER_SANCTN_MDL_ID
+	        , #SYS_SE_CODE# AS SYS_SE_CODE
+	        , #JOB_SE# AS JOB_SE
+	        , #JOB_KEY# AS JOB_KEY
+	     FROM DUAL
+	</select>
+	<!-- 부서장, PL목록 조회-->
+    <select id="SYM090200DAO.DeptManagerList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT 
+            A.EMPNO
+          , A.EMPNM || '[' || C.CODE_NM || ']' || '[' || B.DEPT_NM || ']' AS EMP_DEPT_NM
+          , A.EMPNM 
+          , A.DEPT_CODE
+          , B.DEPT_NM
+          , CASE WHEN A.RSPOFC_SE = '356' THEN 'T5' 
+                 WHEN A.RSPOFC_SE IN ('000', '100', '101', '250', '255', '260', '265', '300', '305', '310', '350'  ) THEN 'T4'
+                 ELSE '' END AS SANCTN_APPN_SE
+        FROM TBHRM_HR_MASTR A
+          ,  VWHRM_DEPT B
+          ,  TBCOM_CMMN_CODE C
+        WHERE A.DEPT_CODE = B.DEPT_CODE
+          AND A.RSPOFC_SE = C.CODE
+          AND A.RETIRE_DE IS NULL
+          <isNotEmpty property="SANCTN_APPN_SE"> 
+              <isEqual property="SANCTN_APPN_SE" compareValue="T4">
+                  AND A.RSPOFC_SE IN ('000', '100', '101', '250', '255', '260', '265', '300', '305', '310', '350'  ) /* 부서장 */
+              </isEqual>
+              <isEqual property="SANCTN_APPN_SE" compareValue="T5">
+                  AND A.RSPOFC_SE='356'
+              </isEqual>
+          </isNotEmpty>
+          AND A.RSPOFC_SE IN ('000', '100', '101', '250', '255', '260', '265', '300', '305', '310', '350', '356') 
+          AND C.GRP_CODE = 'HRM214'
+    </select>
+	
+	<!-- 내부결재 처리 버튼 활성화 조회-->
+	<select id="SYM090200DAO.innerSanctionButtons" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+                NVL(INNER_SANCTN_ID, #INNER_SANCTN_ID#) AS INNER_SANCTN_ID
+              , NVL(B.INNER_SANCTN_SN, 1) AS INNER_SANCTN_SN
+              , NVL(B.SANCTN_STEP, 'S1') AS SANCTN_STEP
+              , NVL(B.LAST_SANCTN_STTUS, 'S00') AS SANCTN_STTUS
+              , CASE WHEN B.LAST_SANCTNER_ID = #S_USER_ID# THEN 
+                         CASE WHEN NVL(B.LAST_SANCTN_STEP, 'S1') = 'S1' THEN '1' 
+                              WHEN NVL(B.LAST_SANCTN_STEP, 'S1') = 'S7' THEN '1' 
+                         ELSE '0' END
+                     ELSE '0' END AS BTN_SAVE  /* 저장 버튼 */
+              , CASE WHEN B.LAST_SANCTNER_ID = #S_USER_ID# THEN 
+                     CASE WHEN NVL(B.LAST_SANCTN_STEP, 'S2') = 'S2' AND NVL(B.SANCTN_STTUS, 'T04') IN ('T03') THEN '1' 
+                          WHEN NVL(B.LAST_SANCTN_STEP, 'S7') = 'S7' AND NVL(B.SANCTN_STTUS, 'T13') IN ('T13') THEN '1'
+                          ELSE '0' END 
+                     ELSE '0' END AS BTN_SANCTN_CALCEL  /* 취소 버튼 */
+              , CASE WHEN B.LAST_SANCTNER_ID = #S_USER_ID# THEN 
+                     CASE WHEN NVL(B.LAST_SANCTN_STEP, 'S1') = 'S1' THEN '1' 
+                          WHEN NVL(B.LAST_SANCTN_STEP, 'S1') > 'S2' AND NVL(B.LAST_SANCTN_STTUS, 'S00') = 'T04' THEN '1'
+                          WHEN NVL(B.LAST_SANCTN_STEP, 'S7') = 'S7' AND NVL(B.LAST_SANCTN_STTUS, 'S00') = 'T13' THEN '1' 
+                          ELSE '0' END 
+                     ELSE '0' END AS BTN_RECOM /* 상신 버튼 */ 
+              , CASE WHEN B.LAST_SANCTNER_ID = B.USER_ID AND B.LAST_SANCTNER_ID = #S_USER_ID# THEN 
+                         CASE WHEN NVL(B.LAST_SANCTN_STEP, 'S1') != 'S2' AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T07', 'T11') THEN '1'
+                              ELSE '0' END 
+                     ELSE '0' END AS BTN_RERECOM /* 재상신 버튼 */
+              , CASE WHEN B.NEXT_SANCTNER_ID = #S_USER_ID# THEN 
+                          CASE WHEN NVL(B.LAST_SANCTN_STEP, 'S1') = 'S2' AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T03') THEN '1'
+                               WHEN NVL(B.LAST_SANCTN_STEP, 'S1') IN ('S3', 'S4') AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T04', 'T06') THEN '1'
+                               WHEN NVL(B.LAST_SANCTN_STEP, 'S1') IN ('S5', 'S6') AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T08', 'T09', 'T10') THEN '1'
+                               ELSE '0' END 
+                     ELSE '0' END AS BTN_CONFRM  /* 승인 버튼 */
+               , CASE WHEN B.NEXT_SANCTNER_ID = #S_USER_ID# THEN 
+                     CASE WHEN NVL(B.LAST_SANCTN_STEP, 'S1') = 'S7' AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T13') THEN '1'
+                         ELSE '0' END 
+                     ELSE '0' END AS BTN_RCEPT /* 접수 버튼 */    
+              , CASE WHEN B.NEXT_SANCTNER_ID = #S_USER_ID# THEN 
+                     CASE WHEN NVL(B.LAST_SANCTN_STEP, 'S1') = 'S2' AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T03') THEN '1'
+                          WHEN NVL(B.LAST_SANCTN_STEP, 'S1') IN ('S3', 'S4') AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T04','T06') THEN '1'
+                          WHEN NVL(B.LAST_SANCTN_STEP, 'S1') IN ('S5', 'S6') AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T09', 'T10') THEN '1'
+                          WHEN NVL(B.LAST_SANCTN_STEP, 'S1') = 'S7' AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T13') THEN '1'
+                          ELSE '0' END 
+                     ELSE '0' END AS BTN_RETURN /* 반려 버튼 */
+              , CASE WHEN B.NEXT_SANCTNER_ID = #S_USER_ID# THEN 
+                     CASE WHEN NVL(B.LAST_SANCTN_STEP, 'S1') = 'S2' AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T03') THEN '1'
+                          WHEN NVL(B.LAST_SANCTN_STEP, 'S1') IN ('S3', 'S4') AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T04') THEN '1'
+                          WHEN NVL(B.LAST_SANCTN_STEP, 'S1') IN ('S5', 'S6') AND NVL(B.LAST_SANCTN_STTUS, 'S00') IN ('T09') THEN '1'
+                          ELSE '0' END 
+                     ELSE '0' END AS BTN_RESRVE  /* 보류 버튼 */
+        FROM TBCOM_INNER_SANCTN_MDL A
+        , (
+                SELECT 
+                      A.INNER_SANCTN_MDL_ID
+                    , A.INNER_SANCTN_ID
+                    , MAX(B.INNER_SANCTN_SN) KEEP(DENSE_RANK FIRST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN DESC) AS INNER_SANCTN_SN
+                    , MAX(B.SANCTN_STEP) KEEP(DENSE_RANK FIRST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN DESC) AS SANCTN_STEP
+                    , MAX(B.SANCTN_STTUS) KEEP(DENSE_RANK FIRST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN DESC) AS SANCTN_STTUS
+                    , MAX(A.LAST_SANCTN_STEP) KEEP(DENSE_RANK FIRST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN DESC) AS LAST_SANCTN_STEP
+                    , MAX(A.LAST_SANCTN_STTUS) KEEP(DENSE_RANK FIRST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN DESC) AS LAST_SANCTN_STTUS
+                    , MAX(A.USER_ID) KEEP(DENSE_RANK FIRST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN DESC) AS USER_ID  /* 기안/상신자 */
+                    , MAX(A.LAST_SANCTNER_ID) KEEP(DENSE_RANK FIRST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN DESC) AS LAST_SANCTNER_ID  /* 최종결재자 */
+                    , MAX(A.NEXT_SANCTN_STEP) KEEP(DENSE_RANK FIRST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN DESC) AS NEXT_SANCTN_STEP  /* 다음결재단계 */
+                    , MAX(A.NEXT_SANCTNER_ID) KEEP(DENSE_RANK FIRST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN DESC) AS NEXT_SANCTNER_ID  /* 다음결재자ID */
+                FROM TBCOM_INNER_SANCTN_MASTR A
+                   , TBCOM_INNER_SANCTN_DTLS B
+                WHERE A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+                  AND A.LAST_SANCTN_STEP = B.SANCTN_STEP
+                  AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#
+                GROUP BY A.INNER_SANCTN_MDL_ID, A.INNER_SANCTN_ID
+        ) B
+        WHERE 1=1
+          AND A.INNER_SANCTN_MDL_ID = B.INNER_SANCTN_MDL_ID(+)
+          AND A.INNER_SANCTN_MDL_ID = #INNER_SANCTN_MDL_ID#
+
+	</select>
+	<!-- 내부결재현황 조회 -->
+	<select id="SYM090200DAO.InnerSanctionSttusList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+		SELECT A.INNER_SANCTN_ID,          /*결재ID*/
+			   A.INNER_SANCTN_MDL_ID,      /*내부결재모형ID*/
+		       G.INNER_SANCTN_MDL_NM,      /*내부결재모형명칭*/
+		       A.LAST_SANCTN_STTUS,        /*결재상태*/
+		       H.CHRCTR_PREPAR_VALUE_0 LAST_SANCTN_STTUS_IMG,
+		       A.SANCTN_SJ,                /*결재제목*/
+		       TO_CHAR(A.REGIST_DT,'YYYYMMDD') DRFT_DT, /*상신일자*/
+		       A.USER_ID   DRFT_EMPID,     /*상신자ID*/
+		       C.EMPNM     DRFT_EMPNM,     /*상신자명*/
+		       A.DEPT_CODE DRFT_DEPT_CODE, /*상신부서*/
+		       E.DEPT_NM   DRFT_DEPT_NM,   /*상신부서명*/
+		       TO_CHAR(A.LAST_SANCTN_DT,'YYYYMMDD') LAST_SANCTN_DT, /*최종결재일자*/
+		       A.LAST_SANCTNER_ID LAST_SANCTN_EMPID,       /*최종결재자ID*/
+		       D.EMPNM LAST_SANCTN_EMPNM,                  /*최종결재자명*/
+               (SELECT AA.SANCTNER_DEPT_CD
+                  FROM TBCOM_INNER_SANCTNER AA
+                 WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		           AND AA.SANCTNER_ID=A.LAST_SANCTNER_ID
+                   AND ROWNUM=1 ) LAST_SANCTN_DEPT_CODE,   /*최종결재부서*/ 
+		       (SELECT BB.DEPT_NM
+                  FROM TBCOM_INNER_SANCTNER AA,
+                       VWHRM_DEPT BB
+                 WHERE AA.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		           AND AA.SANCTNER_ID=A.LAST_SANCTNER_ID
+                   AND BB.DEPT_CODE=AA.SANCTNER_DEPT_CD
+                   AND ROWNUM=1) LAST_SANCTN_DEPT_NM       /*최종결재부서명*/
+		  FROM TBCOM_INNER_SANCTN_MASTR A
+		 INNER JOIN TBCOM_INNER_SANCTN_MDL G ON (G.INNER_SANCTN_MDL_ID=A.INNER_SANCTN_MDL_ID)
+		 LEFT OUTER JOIN TBCOM_CMMN_CODE H ON (H.GRP_CODE = 'COM032' AND H.CODE=A.LAST_SANCTN_STTUS)
+		 LEFT OUTER JOIN TBHRM_HR_MASTR C ON (C.EMPNO=A.USER_ID)
+		 LEFT OUTER JOIN TBHRM_HR_MASTR D ON (D.EMPNO=A.LAST_SANCTNER_ID)
+		 LEFT OUTER JOIN VWHRM_DEPT E ON (E.DEPT_CODE=A.DEPT_CODE)
+	    WHERE EXISTS (SELECT 'X'
+		                  FROM TBCOM_INNER_SANCTNER X
+		                 WHERE X.INNER_SANCTN_ID=A.INNER_SANCTN_ID
+		                   AND X.SANCTNER_ID= #SANCTNER_ID#)
+		<isNotEmpty property="SANCTN_SJ">
+			AND A.SANCTN_SJ LIKE '%'|| #SANCTN_SJ# ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="LAST_SANCTN_STTUS">
+			AND A.LAST_SANCTN_STTUS LIKE '%'|| #LAST_SANCTN_STTUS# ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="DRFT_STR_DT">
+			<isNotEmpty property="DRFT_END_DT">
+			AND A.REGIST_DT BETWEEN TO_DATE(#DRFT_STR_DT#||'000000', 'YYYYMMDDHH24MISS') AND TO_DATE(#DRFT_END_DT#||'235959','YYYYMMDDHH24MISS')
+			</isNotEmpty>
+		</isNotEmpty>
+       ORDER BY A.INNER_SANCTN_ID DESC
+	</select>
+	
+	<!-- 배부결재현황 집계 -->
+	
+	
+	<insert id="SYM090200DAO.insertInnerSanctionMaster" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_INNER_SANCTN_MASTR (			/** 내부결재마스터 */
+        	 INNER_SANCTN_ID			/** 내부결재번호 */
+        	,INNER_SANCTN_MDL_ID	    /** 내부결재모형ID */
+        	,SYS_SE_CODE			    /** 시스템구분코드 */
+        	,JOB_SE			            /** 업무구분 */
+        	,USER_ID			        /** 사용자ID */
+        	,DEPT_CODE			        /** 부서코드 */
+        	,SANCTN_SJ			        /** 결재제목 */
+        	,SANCTN_TY			        /** 결재유형 */
+        	,LAST_SANCTN_STEP			/** 최종결재단계 */
+        	,LAST_SANCTN_STTUS			/** 최종결재상태 */
+        	,LAST_SANCTNER_ID			/** 최종결재자ID */
+        	,LAST_SANCTN_DT			    /** 최종결재일시 */
+        	,FILE_SN			        /** 첨부일련번호 */
+        	,FILE_SN2					/** 내부결재 첨부일련번호 */
+        	,JOB_KEY					/** JOBKEY		*/
+        	,NEXT_SANCTN_STEP           /** 다음결재단계 */
+        	,NEXT_SANCTNER_ID           /* 다음결재자ID */
+        	,REGISTER_ID			        /** 등록자ID */
+        	,REGIST_DT			            /** 등록일시 */
+        	,UPDUSR_ID			            /** 수정자ID */
+        	,UPDT_DT			            /** 수정일시 */
+        ) VALUES (
+        	 #INNER_SANCTN_ID#			/** 내부결재번호 */
+        	,#INNER_SANCTN_MDL_ID#		/** 내부결재모형ID */
+        	,#SYS_SE_CODE#			    /** 시스템구분코드 */
+        	,#JOB_SE#			        /** 업무구분 */
+        	,#USER_ID#			        /** 사용자ID */
+        	,#DEPT_CODE#			    /** 부서코드 */
+        	,#SANCTN_SJ#			    /** 결재제목 */
+        	,#SANCTN_TY#			    /** 결재유형 */
+        	,#LAST_SANCTN_STEP#			/** 최종결재단계 */
+        	,#LAST_SANCTN_STTUS#		/** 최종결재상태 */
+        	,#S_USER_ID#				/** 최종결재자ID */
+        	,SYSDATE   			        /** 최종결재일시 */
+        	,#FILE_SN#			        /** 첨부일련번호 */
+        	,#FILE_SN2#			        /** 내부결재 첨부일련번호 */
+        	,#JOB_KEY#					/** JOBKEY		*/
+        	,#NEXT_SANCTN_STEP#         /** 다음결재단계 */
+        	,#NEXT_SANCTNER_ID#         /* 다음결재자ID */
+        	,#S_USER_ID#			            /** 등록자ID */
+        	,SYSDATE			            /** 등록일시 */
+        	,#S_USER_ID#			            /** 수정자ID */
+        	,SYSDATE			            /** 수정일시 */
+        )
+       </insert>
+
+	<!-- 내부결재마스터 수정 -->
+	<update id="SYM090200DAO.updateInnerSanctionMaster" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_INNER_SANCTN_MASTR			/** 내부결재마스터 */
+          SET
+        	  INNER_SANCTN_MDL_ID = #INNER_SANCTN_MDL_ID#	     /** 내부결재모형ID */
+        	, SYS_SE_CODE         = #SYS_SE_CODE#			     /** 시스템구분코드 */
+        	, JOB_SE              = #JOB_SE#			         /** 업무구분 */
+        	, USER_ID             = #USER_ID#			         /** 사용자ID */
+        	, DEPT_CODE           = #DEPT_CODE#			         /** 부서코드 */
+        	, SANCTN_SJ           = #SANCTN_SJ#			         /** 결재제목 */
+        	, SANCTN_TY           = #SANCTN_TY#			         /** 결재유형 */
+        	, LAST_SANCTN_STEP    = #LAST_SANCTN_STEP#			 /** 최종결재단계 */
+        	, LAST_SANCTN_STTUS   = #LAST_SANCTN_STTUS#			 /** 최종결재상태 */
+        	, LAST_SANCTNER_ID    = #S_USER_ID#			         /** 최종결재자ID */
+        	, LAST_SANCTN_DT      = #LAST_SANCTN_DT#			 /** 최종결재일시 */
+        	, FILE_SN             = #FILE_SN#			         /** 첨부일련번호 */
+        	, FILE_SN2			  = #FILE_SN2#					 /** 내부결재 첨부일련번호 */
+        	, NEXT_SANCTN_STEP    = CASE WHEN #LAST_SANCTN_STTUS# IN ('T02', 'T05', 'T07', 'T11', 'T14','T15', 'T12' ) THEN NULL ELSE #NEXT_SANCTN_STEP# END     /** 다음결재단계 */
+        	, NEXT_SANCTNER_ID    = #NEXT_SANCTNER_ID#           /* 다음결재자ID */
+        	, UPDUSR_ID           = #S_USER_ID#			         /** 수정자ID */
+        	, UPDT_DT = SYSDATE			                         /** 수정일시 */
+        WHERE INNER_SANCTN_ID     = #INNER_SANCTN_ID#			 /** 내부결재번호 */
+	</update>
+	
+	
+
+	<!-- 내부결재마스터 삭제 -->
+	<delete id="SYM090200DAO.deleteInnerSanctionMaster" parameterClass="java.util.HashMap">
+        DELETE FROM TBCOM_INNER_SANCTN_MASTR			/** 내부결재마스터 */
+        WHERE INNER_SANCTN_ID = #INNER_SANCTN_ID#		/** 내부결재번호 */
+	</delete>
+	
+	<!-- 내부결재마스터 결재진행처리 -->
+	<update id="SYM090200DAO.processInnerSanction" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_INNER_SANCTN_MASTR			/** 내부결재마스터 */
+          SET
+        	  LAST_SANCTN_STEP    = #LAST_SANCTN_STEP#			 /** 최종결재단계 */
+        	, LAST_SANCTN_STTUS   = #LAST_SANCTN_STTUS#			 /** 최종결재상태 */
+        	, LAST_SANCTNER_ID    = #LAST_SANCTNER_ID#			 /** 최종결재자ID */
+        	, LAST_SANCTN_DT      = SYSDATE			             /** 최종결재일시 */
+        	, SANCTN_SJ           = #SANCTN_SJ#                  /* 결재제목 */
+        	, NEXT_SANCTN_STEP    = CASE WHEN #LAST_SANCTN_STTUS# IN ('T02', 'T05', 'T07', 'T11', 'T14','T15', 'T12' ) THEN NULL ELSE #NEXT_SANCTN_STEP# END
+        	, NEXT_SANCTNER_ID    = CASE WHEN #LAST_SANCTN_STTUS# IN ('T02', 'T05', 'T07', 'T11', 'T14','T15', 'T12' ) THEN NULL ELSE #NEXT_SANCTNER_ID# END
+        	, FILE_SN			  = #FILE_SN#					 /** FILE_SN */
+        	, FILE_SN2			  = #FILE_SN2#					 /** FILE_SN2 */
+        	, UPDUSR_ID           = #S_USER_ID#			         /** 수정자ID */
+        	, UPDT_DT = SYSDATE			                         /** 수정일시 */
+        WHERE INNER_SANCTN_ID     = #INNER_SANCTN_ID#			 /** 내부결재번호 */
+	</update>
+   <!-- 다음결재단계 및 다음결재자정보 설정 -->
+   <update id="SYM090200DAO.updateNextSanctionerInfo" parameterClass="java.util.HashMap">
+       <![CDATA[
+       MERGE INTO TBCOM_INNER_SANCTN_MASTR X
+       USING (
+         SELECT
+              INNER_SANCTN_ID
+            , SANCTN_SN
+            , CASE WHEN PREV_SANCTN_STTUS IN ('T07', 'T11', 'T15', 'T12' ) THEN NULL /* 반려 전결*/
+                   WHEN PREV_SANCTN_STTUS IN ('T06', 'T10') THEN  PREV_SANCTN_STEP   /* 보류 */
+                   WHEN PREV_SANCTN_STTUS IN ('S02', 'T05', 'T14') THEN  'S1'  /* 상신/통보 취소 */
+                   ELSE SANCTN_STEP END AS SANCTN_STEP
+            , SANCTNER_DEPT_CD
+            , CASE WHEN PREV_SANCTN_STTUS IN ('T07', 'T11', 'T15', 'T12' ) THEN NULL /* 반려 전결*/
+                   WHEN PREV_SANCTN_STTUS IN ('T06', 'T10') THEN PREV_SANCTNER_ID /* 보류 */
+                    WHEN PREV_SANCTN_STTUS IN ('S02', 'T05', 'T14') THEN  PREV_SANCTNER_ID  /* 상신/통보 취소 */
+                   ELSE SANCTNER_ID END AS SANCTNER_ID
+         FROM (
+           SELECT 
+              MAX(A.INNER_SANCTN_ID) KEEP(DENSE_RANK FIRST ORDER BY A.SANCTN_SN ASC) AS INNER_SANCTN_ID
+            , MAX(A.SANCTN_SN) KEEP(DENSE_RANK FIRST ORDER BY A.SANCTN_SN ASC) AS SANCTN_SN
+            , MAX(A.SANCTN_STEP) KEEP(DENSE_RANK FIRST ORDER BY A.SANCTN_SN ASC) AS SANCTN_STEP
+            , MAX(A.SANCTNER_DEPT_CD) KEEP(DENSE_RANK FIRST ORDER BY A.SANCTN_SN ASC) AS SANCTNER_DEPT_CD
+            , MAX(A.SANCTNER_ID) KEEP(DENSE_RANK FIRST ORDER BY A.SANCTN_SN ASC) AS SANCTNER_ID
+            , MAX(B.PREV_SANCTN_STEP) KEEP(DENSE_RANK FIRST ORDER BY A.SANCTN_SN ASC) AS PREV_SANCTN_STEP
+            , MAX(B.PREV_SANCTN_STTUS) KEEP(DENSE_RANK FIRST ORDER BY A.SANCTN_SN ASC) AS PREV_SANCTN_STTUS
+            , MAX(B.PREV_SANCTNER_ID) KEEP(DENSE_RANK FIRST ORDER BY A.SANCTN_SN ASC) AS PREV_SANCTNER_ID
+           FROM TBCOM_INNER_SANCTNER A
+             , (SELECT
+                  A.INNER_SANCTN_ID /** 내부결재번호 */
+                , MAX(B.INNER_SANCTN_SN) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN ASC) AS INNER_SANCTN_SN
+        	    , MAX(B.SANCTN_SN) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN ASC) AS SANCTN_SN
+        	    , MAX(B.SANCTNER_ID) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_STEP, B.INNER_SANCTN_SN ASC) AS PREV_SANCTNER_ID
+        	    , MAX(B.SANCTN_STEP) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_STEP, B.INNER_SANCTN_SN ASC) AS PREV_SANCTN_STEP /* 저장된 내역 STEP */
+                , MAX(B.SANCTN_STTUS) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_STEP, B.INNER_SANCTN_SN ASC) AS PREV_SANCTN_STTUS /* 저장된 내역 STEP */
+                FROM TBCOM_INNER_SANCTN_MASTR A			                     /** 내부결재마스터 */
+                   , TBCOM_INNER_SANCTN_DTLS B                               /** 내부결재내역 */
+                WHERE 1=1
+                  AND A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+                  AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#			          /** 내부결재번호 */
+                GROUP BY A.INNER_SANCTN_ID) B
+           WHERE A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+             AND A.SANCTN_SN > B.SANCTN_SN
+             AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#				          /** 내부결재번호 */
+           GROUP BY A.INNER_SANCTN_ID
+         )
+       ) Y
+       ON (
+           X.INNER_SANCTN_ID = Y.INNER_SANCTN_ID
+       )
+       WHEN MATCHED THEN UPDATE
+            SET 
+               X.NEXT_SANCTN_STEP = Y.SANCTN_STEP
+             , X.NEXT_SANCTNER_ID = Y.SANCTNER_ID
+       ]]>
+	</update>
+   
+
+	<!-- 내부결재내역 ================================================== -->
+    <!-- 내부결재 master 조회 -->
+    <select id="SYM090201DAO.SanctionMasterInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+             A.INNER_SANCTN_ID
+           , A.INNER_SANCTN_MDL_ID
+           , A.SYS_SE_CODE
+           , A.JOB_SE
+           , A.USER_ID
+           , A.DEPT_CODE
+           , A.SANCTN_SJ
+           , A.SANCTN_TY
+           , A.LAST_SANCTN_STEP
+           , A.LAST_SANCTN_STTUS
+           , A.LAST_SANCTNER_ID
+           , A.LAST_SANCTN_DT
+           , A.FILE_SN
+           , A.FILE_SN2
+           , A.NEXT_SANCTN_STEP
+           , A.NEXT_SANCTNER_ID
+           , A.REGISTER_ID
+           , A.REGIST_DT
+           , A.UPDUSR_ID
+           , A.UPDT_DT
+           , B.POSPROC_AT
+           , B.POSPROC_CLASS
+           , B.POSPROC_OPRTIN_NM
+           , B.REQUEST_SCRIN_URL
+           , A.JOB_KEY AS JOB_KEY
+        FROM TBCOM_INNER_SANCTN_MASTR A
+           , TBCOM_INNER_SANCTN_MDL B
+        WHERE A.INNER_SANCTN_MDL_ID = B.INNER_SANCTN_MDL_ID
+          AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#         /* 내부결재번호 */
+    </select>
+    
+    <!-- 내부결재 처리내역 조회 -->
+    <select id="SYM090201DAO.InnerSanctionProcessInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+             A.INNER_SANCTN_ID
+           , A.INNER_SANCTN_MDL_ID
+           , A.SYS_SE_CODE
+           , A.JOB_SE
+           , A.USER_ID
+           , A.DEPT_CODE
+           , A.SANCTN_SJ
+           , A.SANCTN_TY
+           , A.LAST_SANCTN_STEP
+           , A.LAST_SANCTN_STTUS
+           , A.LAST_SANCTNER_ID
+           , TO_CHAR(A.LAST_SANCTN_DT, 'YYYYMMDD HH24MISS') AS LAST_SANCTN_DT /* 최종 결재일시 */
+           , A.FILE_SN
+           , A.FILE_SN2
+           , A.NEXT_SANCTN_STEP
+           , A.NEXT_SANCTNER_ID
+           , A.REGISTER_ID
+           , A.REGIST_DT
+           , A.UPDUSR_ID
+           , A.UPDT_DT
+           , B.POSPROC_AT
+           , B.POSPROC_CLASS
+           , B.POSPROC_OPRTIN_NM
+           , B.REQUEST_SCRIN_URL
+           , C.INNER_SANCTN_SN /** 내부결재일련번호 */  
+           , C.SANCTNER_ID /** 기안자/결재자ID */
+           , C.OPINION /** 의견 */
+           , C.ABSNCE_AT /** 부재여부 */
+           , C.SANCTN_SN /* 결재선 순번 */
+           , A.JOB_KEY AS JOB_KEY
+        FROM TBCOM_INNER_SANCTN_MASTR A
+           , TBCOM_INNER_SANCTN_MDL B
+           , (
+               SELECT
+               	  A.INNER_SANCTN_ID /** 내부결재번호 */
+                , MAX(B.INNER_SANCTN_SN) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS  INNER_SANCTN_SN /** 내부결재일련번호 */  
+               	, MAX(B.SANCTN_STEP) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTN_STEP /** 결재단계 */
+               	, MAX(B.SANCTN_STTUS) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTN_STTUS			                             /** 결재상태 */
+               	, MAX(NVL(B.SANCTNER_ID, B.AGNCY_SANCTNER_ID)) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTNER_ID /** 기안자/결재자ID */
+               	, MAX(B.SANCTN_DT) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTN_DT    /** 결재일시 */
+               	, MAX(B.OPINION) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS OPINION /** 의견 */
+               	, MAX(B.ABSNCE_AT) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS ABSNCE_AT /** 부재여부 */
+                , MAX(B.SANCTN_SN) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTN_SN /* 결재선 순번 */
+               FROM TBCOM_INNER_SANCTN_MASTR A			                     /** 내부결재마스터 */
+                  , TBCOM_INNER_SANCTN_DTLS B                               /** 내부결재내역 */
+               WHERE 1=1
+                 AND A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+                 AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#			          /** 내부결재번호 */
+               GROUP BY A.INNER_SANCTN_ID
+           ) C
+        WHERE A.INNER_SANCTN_MDL_ID = B.INNER_SANCTN_MDL_ID
+          AND A.INNER_SANCTN_ID = C.INNER_SANCTN_ID
+          AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#         /* 내부결재번호 */
+    </select>
+    
+    
+	<!-- 최종 내부결재내역 조회 -->
+	<select id="SYM090201DAO.LastInnerSanctionDtl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+        	  MAX(B.INNER_SANCTN_SN) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS  INNER_SANCTN_SN /** 내부결재일련번호 */  
+        	, MAX(B.SANCTN_STEP) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTN_STEP /** 결재단계 */
+        	, MAX(B.SANCTN_STTUS) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTN_STTUS			                             /** 결재상태 */
+        	, MAX(NVL(B.SANCTNER_ID, B.AGNCY_SANCTNER_ID)) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTNER_ID /** 기안자/결재자ID */
+        	, MAX(B.SANCTN_DT) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTN_DT    /** 결재일시 */
+        	, MAX(B.OPINION) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS OPINION /** 의견 */
+        	, MAX(B.SANCTNER_ID) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTNER_ID    /** 결재일시 */
+        	, MAX(B.ABSNCE_AT) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS ABSNCE_AT /** 부재여부 */
+        	, MAX(A.FILE_SN) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS FILE_SN /** 첨부일련번호 */
+        	, MAX(A.FILE_SN2) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS FILE_SN2 /** 내부결재 첨부일련번호 */
+            , MAX(A.INNER_SANCTN_ID) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS INNER_SANCTN_ID /** 내부결재번호 */
+        	, MAX(A.INNER_SANCTN_MDL_ID) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS INNER_SANCTN_MDL_ID /** 내부결재모형ID */
+        	, MAX(A.SYS_SE_CODE) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SYS_SE_CODE /** 시스템구분코드 */
+        	, MAX(A.JOB_SE) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS JOB_SE /** 업무구분 */
+        	, MAX(B.SANCTN_SN) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT ASC) AS SANCTN_SN
+        FROM TBCOM_INNER_SANCTN_MASTR A			                     /** 내부결재마스터 */
+           , TBCOM_INNER_SANCTN_DTLS B                               /** 내부결재내역 */
+        WHERE 1=1
+          AND A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+          AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#			          /** 내부결재번호 */
+        <isNotEmpty property="" >
+          AND (B.SANCTNER_ID = #S_USER_ID# OR B.AGNCY_SANCTNER_ID = #S_USER_ID#)
+        </isNotEmpty>
+        GROUP BY A.INNER_SANCTN_ID
+        /* ORDER BY B.SANCTN_DT */
+	</select>
+	<!-- 다음결재단계및 다음결재자정보 조회 -->
+	<select id="SYM090201DAO.NextSantnStepInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	     <![CDATA[
+SELECT/* NextSantnStepInfo */
+              INNER_SANCTN_ID
+            , SANCTN_SN
+            , CASE WHEN PREV_SANCTN_STTUS IN ('T07', 'T11', 'T15', 'T12' ) THEN NULL /* 반려 전결*/
+                   WHEN PREV_SANCTN_STTUS IN ('T06', 'T10') THEN  PREV_SANCTN_STEP   /* 보류 */
+                   WHEN PREV_SANCTN_STTUS IN ('S02', 'T05', 'T14') THEN  'S1'  /* 상신/통보 취소 */
+                   ELSE SANCTN_STEP END AS SANCTN_STEP
+            , SANCTNER_DEPT_CD
+            , CASE WHEN PREV_SANCTN_STTUS IN ('T07', 'T11', 'T15', 'T12' ) THEN NULL /* 반려 전결*/
+                   WHEN PREV_SANCTN_STTUS IN ('T06', 'T10') THEN PREV_SANCTNER_ID /* 보류 */
+                   WHEN PREV_SANCTN_STTUS IN ('S02', 'T05', 'T14') THEN  PREV_SANCTNER_ID  /* 상신/통보 취소 */
+                   ELSE SANCTNER_ID END AS SANCTNER_ID
+           , SANCTN_SN2          /* 2중 중결재를 위한 다음 단계 확인용 */
+           , SANCTN_STEP2        /* 2중 중결재를 위한 다음 단계 확인용 */
+         FROM
+                    (         
+                    SELECT
+                                  MAX(K.INNER_SANCTN_ID) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS INNER_SANCTN_ID
+                                , MAX(K.SANCTN_SN) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS SANCTN_SN
+                                , MAX(K.SANCTN_STEP) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS SANCTN_STEP
+                                , MAX(K.SANCTNER_DEPT_CD) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS SANCTNER_DEPT_CD
+                                , MAX(K.SANCTNER_ID) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS SANCTNER_ID
+                                , MAX(K.PREV_SANCTN_STEP) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS PREV_SANCTN_STEP
+                                , MAX(K.PREV_SANCTN_STTUS) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS PREV_SANCTN_STTUS
+                                , MAX(K.PREV_SANCTNER_ID) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS PREV_SANCTNER_ID
+                                , MAX(K.SANCTN_SN2) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS SANCTN_SN2
+                                , MAX(K.SANCTN_STEP2) KEEP(DENSE_RANK FIRST ORDER BY K.SANCTN_SN ASC) AS SANCTN_STEP2
+                    FROM            
+                              (
+                               SELECT
+                                  A.INNER_SANCTN_ID
+                                , A.SANCTN_SN
+                                , A.SANCTN_STEP
+                                , A.SANCTNER_DEPT_CD
+                                , A.SANCTNER_ID
+                                , B.PREV_SANCTN_STEP
+                                , B.PREV_SANCTN_STTUS
+                                , B.PREV_SANCTNER_ID
+                                ,LEAD(A.SANCTN_SN) OVER (ORDER BY A.SANCTN_SN ASC) AS SANCTN_SN2
+                                ,LEAD(A.SANCTN_STEP) OVER (ORDER BY A.SANCTN_STEP) AS SANCTN_STEP2
+                               FROM TBCOM_INNER_SANCTNER A
+                                 , (SELECT
+                                      A.INNER_SANCTN_ID /** 내부결재번호 */
+                                    , MAX(B.INNER_SANCTN_SN) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN ASC) AS INNER_SANCTN_SN
+                                    , MAX(B.SANCTN_SN) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_DT, B.INNER_SANCTN_SN ASC) AS SANCTN_SN
+                                    , MAX(B.SANCTNER_ID) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_STEP, B.INNER_SANCTN_SN ASC) AS PREV_SANCTNER_ID
+                                    , MAX(B.SANCTN_STEP) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_STEP, B.INNER_SANCTN_SN ASC) AS PREV_SANCTN_STEP /* 저장된 내역 STEP */
+                                    , MAX(B.SANCTN_STTUS) KEEP(DENSE_RANK LAST ORDER BY B.SANCTN_STEP, B.INNER_SANCTN_SN ASC) AS PREV_SANCTN_STTUS /* 저장된 내역 STEP */
+                                    FROM TBCOM_INNER_SANCTN_MASTR A                                 /** 내부결재마스터 */
+                                       , TBCOM_INNER_SANCTN_DTLS B                               /** 내부결재내역 */
+                                    WHERE 1=1
+                                      AND A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+                                      AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#                     /** 내부결재번호 */
+                                    GROUP BY A.INNER_SANCTN_ID) B
+                               WHERE A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+                                 AND A.SANCTN_SN > B.SANCTN_SN
+                                 AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#
+                                 )  K GROUP BY K.INNER_SANCTN_ID
+                               )
+
+          
+	    ]]>
+	</select>	
+	<!-- 내부결재결재자   ================================================== -->
+    <!-- 내부결재내역(최초 기안 시점) -->
+
+    <!-- 내부결재자(최초 기안 시점) -->
+    <select id="SYM090201DAO.sanctionerDrftList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+             
+            SELECT /* SYM090201DAO.sanctionerDrftList */
+                  A.INNER_SANCTN_ID		                        /** 내부결재번호 */
+                , A.SANCTN_SN                                      /* 결재순번 */  
+                , A.SANCTN_STEP   /** 결재단계 */
+                , A.SANCTNER_DEPT_CD
+                , D.DEPT_NM
+                , A.SANCTNER_ID /** 기안자/결재자ID */
+                , C.EMPNM
+                , DECODE(C.EMPNM, NULL, '', C.EMPNM || '[' || B.CODE_NM || ']' || '[' || D.DEPT_NM || ']') AS EMP_DEPT_NM
+                , A.REGISTER_ID
+                , A.REGIST_DT
+                , A.UPDUSR_ID
+                , A.UPDT_DT
+                , A.SANCTN_APPN_SE                                      /* 결재구분 */
+                , A.INNER_SANCTN_MDL_ID
+            FROM (
+                SELECT 
+                       A.INNER_SANCTN_ID		                        /** 내부결재번호 */
+                     , A.SANCTN_SN                                      /* 결재순번 */  
+                     , A.SANCTN_STEP   /** 결재단계 */
+                     , NVL(B.SANCTNER_DEPT_CD, A.SANCTNER_DEPT_CD) AS SANCTNER_DEPT_CD
+                     , NVL(B.SANCTNER_ID, A.SANCTNER_ID) AS SANCTNER_ID /** 기안자/결재자ID */
+                     , B.REGISTER_ID
+                     , B.REGIST_DT
+                     , B.UPDUSR_ID
+                     , B.UPDT_DT
+                     , A.SANCTN_APPN_SE                                      /* 결재구분 */
+                     , A.INNER_SANCTN_MDL_ID
+                     , A.RSPOFC_SE
+                FROM (    
+                    SELECT 
+                          A.INNER_SANCTN_MDL_ID
+                        , B.SANCTN_SN
+                        , B.SANCTN_STEP
+                        , DECODE(B.SANCTN_APPN_SE, 'T0', C.DEPT_CODE, 'T1', D.DEPT_CODE, 'T2', '', 'T3', '', 'T4', E.DEPT_CODE, 'T5', F.DEPT_CODE, B.SANCTN_DEPT_CD, 'T6', B.SANCTN_DEPT_CD, 'T7', B.SANCTN_DEPT_CD) AS SANCTNER_DEPT_CD  /* 결재자부서코드 */
+                        , DECODE(B.SANCTN_APPN_SE, 'T0', C.EMPNO, 'T1', B.SANCTNER_ID, 'T2', '', 'T3', '', 'T4', E.EMPNO, 'T5', F.EMPNO, B.SANCTNER_ID) AS SANCTNER_ID 
+                        , B.SANCTN_APPN_SE
+                        , D.RSPOFC_SE
+                        , NVL(G.INNER_SANCTN_ID, #INNER_SANCTN_ID#) AS INNER_SANCTN_ID
+                    FROM 
+                       TBCOM_INNER_SANCTN_MDL A
+                     , TBCOM_INNER_SANCTNER_INFO B
+                     LEFT OUTER JOIN TBHRM_HR_MASTR D
+                          ON D.EMPNO = B.SANCTNER_ID
+                     LEFT OUTER JOIN (
+                               SELECT 
+                                   'T4' AS SANCTN_APPN_SE
+                                 , A.EMPNO
+                                 , A.DEPT_CODE
+                               FROM TBHRM_HR_MASTR A
+                               WHERE A.DEPT_CODE IN (SELECT P.DEPT_CODE FROM TBHRM_HR_MASTR P, TBCOM_USER Q 
+                                                     WHERE P.EMPNO = Q.EMPNO
+                                                       AND P.RETIRE_DE IS NULL
+                                                       AND Q.USER_ID = #S_USER_ID# 
+                                                       )
+                                 AND A.RETIRE_DE IS NULL
+                                 AND A.RSPOFC_SE IN ('101', '250', '255', '260', '265', '300', '305', '310', '350'  )  /* 소속부서장 */
+                                 /* AND B.RSPOFC_SE IN ('000', '100', '101', '250', '255', '260', '265', '300', '305', '310', '350'  )  *//* 부서장 */
+                            ) E
+                          ON B.SANCTN_APPN_SE = E.SANCTN_APPN_SE
+                     LEFT OUTER JOIN (
+                               SELECT 
+                                   'T5' AS SANCTN_APPN_SE
+                                 , A.EMPNO
+                                 , A.DEPT_CODE
+                               FROM TBHRM_HR_MASTR A
+                               WHERE A.DEPT_CODE IN (SELECT P.WORK_DEPT FROM TBHRM_HR_MASTR P, TBCOM_USER Q  
+                                                     WHERE P.EMPNO = Q.EMPNO
+                                                       AND P.RETIRE_DE IS NULL
+                                                       AND Q.USER_ID = #S_USER_ID# 
+                                                     )
+                                 AND A.RETIRE_DE IS NULL
+                                 AND A.RSPOFC_SE IN ('101', '250', '255', '260', '265', '300', '305', '310', '350'  )  /* 소속부서장 */
+                                 /* AND A.RSPOFC_SE IN ('000', '100', '101', '250', '255', '260', '265', '300', '305', '310', '350'  ) */ /* 부서장 */
+                              ) F
+                           ON B.SANCTN_APPN_SE = F.SANCTN_APPN_SE
+                      LEFT OUTER JOIN (SELECT 
+                                           P.EMPNO, P.DEPT_CODE, 'T0' AS SANCTN_APPN_SE 
+                                       FROM TBHRM_HR_MASTR P , TBCOM_USER Q  
+                                       WHERE P.EMPNO = Q.EMPNO AND Q.USER_ID = #S_USER_ID#
+                                      ) C
+                           ON B.SANCTN_APPN_SE = C.SANCTN_APPN_SE
+                      LEFT OUTER JOIN TBCOM_INNER_SANCTN_MASTR G
+                           ON G.INNER_SANCTN_MDL_ID = B.INNER_SANCTN_MDL_ID
+                           <isNotEmpty property="INNER_SANCTN_ID">
+                               AND G.INNER_SANCTN_ID = #INNER_SANCTN_ID#
+                           </isNotEmpty>
+                    WHERE A.INNER_SANCTN_MDL_ID = B.INNER_SANCTN_MDL_ID
+                      AND A.INNER_SANCTN_MDL_ID = #INNER_SANCTN_MDL_ID#
+                      <isNotEmpty property="REQUEST_SCRIN_ID">
+                          AND A.REQUEST_SCRIN_ID = #REQUEST_SCRIN_ID#
+                      </isNotEmpty>
+                 ) A
+                 , (
+                     SELECT * FROM TBCOM_INNER_SANCTNER 
+                     WHERE INNER_SANCTN_ID= #INNER_SANCTN_ID#
+                     ) B
+                 WHERE 1=1
+                   AND A.INNER_SANCTN_ID = B.INNER_SANCTN_ID(+)
+                   AND A.SANCTN_SN = B.SANCTN_SN(+)
+                   AND A.SANCTN_STEP = B.SANCTN_STEP(+)
+            ) A
+            , (SELECT * FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HRM214' ) B
+            , TBHRM_HR_MASTR C
+            , VWHRM_DEPT D
+            WHERE A.RSPOFC_SE = B.CODE(+)   
+              AND A.SANCTNER_ID = C.EMPNO(+)
+              AND A.SANCTNER_DEPT_CD = D.DEPT_CODE(+)
+            ORDER BY A.SANCTN_SN
+    </select>
+    
+    <!-- 결재단계별 내역 목록 조회 -->
+    <select id="SYM090201DAO.SanctionStepsDtl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        <![CDATA[
+        SELECT /* SYM090201DAO.SanctionStepsDtl */
+              A.INNER_SANCTN_ID
+            , A.INNER_SANCTN_SN
+            , A.SANCTN_STEP
+            , A.SANCTN_STTUS
+            , A.SANCTNER_ID
+            , A.EMPNM
+            , A.EMPNM || '[' || B.CODE_NM || ']' || '[' || A.DEPT_NM || ']' AS EMP_DEPT_NM
+            , A.SANCTNER_DEPT_CD
+            , A.DEPT_NM
+            , A.SANCTN_DT
+            , A.OPINION
+            , NVL(A.ABSNCE_AT, '0')  AS ABSNCE_AT
+            , A.AGNCY_SANCTNER_ID
+            , A.AGNCY_EMPNM
+            , A.FILE_SN
+            , A.FILE_SN2
+            , A.INNER_SANCTN_MDL_ID
+            , A.SYS_SE_CODE
+            , A.JOB_SE
+            , A.SANCTN_APPN_SE 
+            , A.SANCTN_SN
+            , A.RECOM_DEPT
+            , A.RECOM_EMPNO   
+            , C.CHRCTR_PREPAR_VALUE_0 AS SANCTN_IMG
+        FROM (
+            SELECT
+                  A.INNER_SANCTN_ID
+                , C.INNER_SANCTN_SN
+                , C.SANCTN_STEP
+                , C.SANCTN_STTUS
+                , C.SANCTNER_ID
+                , D.EMPNM
+                , B.SANCTNER_DEPT_CD
+                , E.DEPT_NM
+                , C.SANCTN_DT
+                , C.OPINION
+                , C.AGNCY_SANCTNER_ID AS AGNCY_SANCTNER_ID
+                , H.EMPNM AS AGNCY_EMPNM
+                , C.ABSNCE_AT
+                , A.FILE_SN
+                , A.FILE_SN2
+                , A.INNER_SANCTN_MDL_ID
+                , A.SYS_SE_CODE
+                , A.JOB_SE
+                , G.SANCTN_APPN_SE 
+                , C.SANCTN_SN
+                , A.DEPT_CODE AS RECOM_DEPT
+                , A.USER_ID AS RECOM_EMPNO 
+                , D.RSPOFC_SE
+            FROM 
+               TBCOM_INNER_SANCTN_MASTR A
+             , TBCOM_INNER_SANCTNER B
+             , TBCOM_INNER_SANCTN_DTLS C
+             , TBHRM_HR_MASTR D
+             , VWHRM_DEPT E
+             , TBCOM_INNER_SANCTNER_INFO G
+             , TBHRM_HR_MASTR H
+            WHERE A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+              AND A.INNER_SANCTN_MDL_ID = G.INNER_SANCTN_MDL_ID
+              AND B.SANCTN_SN = G.SANCTN_SN
+              AND B.SANCTN_STEP = G.SANCTN_STEP
+              AND B.INNER_SANCTN_ID = C.INNER_SANCTN_ID
+              AND B.SANCTN_STEP = C.SANCTN_STEP
+              AND B.SANCTN_SN = C.SANCTN_SN
+              AND C.SANCTNER_ID = D.EMPNO
+              AND B.SANCTNER_DEPT_CD = E.DEPT_CODE(+)
+              AND C.AGNCY_SANCTNER_ID = H.EMPNO(+)
+              AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#
+        ) A
+        , (SELECT * FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HRM214') B
+        , (SELECT * FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'COM032') C
+        WHERE A.RSPOFC_SE = B.CODE
+          AND A.SANCTN_STTUS = C.CODE
+        ORDER BY A.SANCTN_DT, A.SANCTN_SN
+        ]]>
+    </select>
+    
+    <!-- 결재자 목록 조회 -->
+    <select id="SYM090201DAO.InnerSanctionerList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT /* SYM090201DAO.InnerSanctionerList */
+               A.INNER_SANCTN_ID		                        /** 내부결재번호 */
+             , A.SANCTN_SN                                      /* 결재순번 */  
+             , A.SANCTN_STEP   /** 결재단계 */
+             , A.SANCTNER_DEPT_CD
+             , A.DEPT_NM
+             , A.SANCTNER_ID /** 기안자/결재자ID */
+             , A.EMPNM
+             , DECODE(A.EMPNM, NULL, '', A.EMPNM || '[' || C.CODE_NM || ']' || '[' || A.DEPT_NM || ']') AS EMP_DEPT_NM
+             , B.REGISTER_ID
+             , B.REGIST_DT
+             , B.UPDUSR_ID
+             , B.UPDT_DT
+             , B.SANCTN_APPN_SE                                      /* 결재구분 */
+             , A.INNER_SANCTN_MDL_ID
+        FROM (    
+            SELECT 
+                  A.INNER_SANCTN_ID
+                , B.SANCTN_SN
+                , B.SANCTN_STEP
+                , B.SANCTNER_DEPT_CD
+                , C.DEPT_NM
+                , B.SANCTNER_ID
+                , D.EMPNM
+                , B.REGISTER_ID
+                , B.REGIST_DT
+                , B.UPDUSR_ID
+                , B.UPDT_DT
+                , A.INNER_SANCTN_MDL_ID
+                , D.RSPOFC_SE
+            FROM 
+               TBCOM_INNER_SANCTN_MASTR A
+             , TBCOM_INNER_SANCTNER B
+             , VWHRM_DEPT C
+             , TBHRM_HR_MASTR D
+            WHERE A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+              AND B.SANCTNER_DEPT_CD = C.DEPT_CODE(+)
+              AND B.SANCTNER_ID = D.EMPNO(+)
+              AND A.INNER_SANCTN_ID = #INNER_SANCTN_ID#
+              <isNotEmpty property="REQUEST_SCRIN_ID">
+                  AND A.INNER_SANCTN_MDL_ID = #INNER_SANCTN_MDL_ID#
+              </isNotEmpty>
+         ) A
+         , TBCOM_INNER_SANCTNER_INFO B
+         , (SELECT * FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HRM214' ) C
+         WHERE A.INNER_SANCTN_MDL_ID = B.INNER_SANCTN_MDL_ID
+           AND A.SANCTN_SN = B.SANCTN_SN
+           AND A.RSPOFC_SE = C.CODE(+)
+        ORDER BY A.SANCTN_SN
+    </select>
+    
+    <!-- 내부결재자 저장(기안단계) -->
+    <insert id="SYM090201DAO.insertInnerSanctioner" parameterClass="java.util.HashMap">
+        MERGE INTO TBCOM_INNER_SANCTNER X
+        USING (
+            SELECT 
+                  #INNER_SANCTN_ID#  AS INNER_SANCTN_ID   /* 내부결재ID    */
+                , #SANCTN_SN#        AS SANCTN_SN         /* 결재순번      */
+                , #SANCTN_STEP#      AS SANCTN_STEP       /* 결재단계      */
+                , #SANCTNER_DEPT_CD# AS SANCTNER_DEPT_CD  /* 결재자부서 코 */
+                , #SANCTNER_ID#      AS SANCTNER_ID       /* 결재자ID      */
+                , #S_USER_ID#        AS REGISTER_ID       /* 등록자ID      */
+                , SYSDATE            AS REGIST_DT         /* 등록일시      */
+                , #S_USER_ID#        AS UPDUSR_ID         /* 수정자ID      */
+                , SYSDATE            AS UPDT_DT           /* 수정일시      */
+            FROM DUAL
+        ) Y
+        ON (
+              X.INNER_SANCTN_ID = Y.INNER_SANCTN_ID			/** 내부결재일련번호 */
+          AND X.SANCTN_SN       = Y.SANCTN_SN                  /* 결재순번 */   
+        )
+        WHEN NOT MATCHED THEN INSERT(			
+              X.INNER_SANCTN_ID    /* 내부결재ID */
+            , X.SANCTN_SN          /* 결재순번 */
+            , X.SANCTN_STEP        /* 결재단계 */
+            , X.SANCTNER_DEPT_CD   /* 결재자부서코드 */
+            , X.SANCTNER_ID        /* 결재자ID */
+            , X.REGISTER_ID        /* 등록자ID */
+            , X.REGIST_DT          /* 등록일시 */
+            , X.UPDUSR_ID          /* 수정자ID */
+            , X.UPDT_DT            /* 수정일시 */
+        ) VALUES ( 
+              Y.INNER_SANCTN_ID      /* 내부결재ID */      
+            , Y.SANCTN_SN            /* 결재순번 */        
+            , Y.SANCTN_STEP          /* 결재단계 */        
+            , Y.SANCTNER_DEPT_CD     /* 결재자부서코드 */     
+            , Y.SANCTNER_ID          /* 결재자ID */
+            , Y.REGISTER_ID        /* 등록자ID */
+            , Y.REGIST_DT          /* 등록일시 */             
+            , Y.UPDUSR_ID            /* 수정자ID */       
+            , Y.UPDT_DT              /* 수정일시 */        
+        )
+        WHEN MATCHED THEN UPDATE
+         SET
+        	  X.SANCTN_STEP        =  Y.SANCTN_STEP           /* 결재단계 */      
+            , X.SANCTNER_DEPT_CD   =  Y.SANCTNER_DEPT_CD      /* 결재자부서코드 */   
+            , X.SANCTNER_ID        =  Y.SANCTNER_ID           /* 결재자ID */      
+            , X.UPDUSR_ID          =  Y.UPDUSR_ID             /* 수정자ID */     
+            , X.UPDT_DT            =  Y.UPDT_DT                /* 수정일시 */                                    
+    </insert>
+
+    
+	<!-- 내부결재내역 추가 -->
+	<insert id="SYM090201DAO.insertInnerSanctionDtl" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_INNER_SANCTN_DTLS (			/** 내부결재내역 */
+        	 INNER_SANCTN_SN			    /** 내부결재일련번호 */
+        	,INNER_SANCTN_ID			    /** 내부결재번호 */
+        	,SANCTN_SN
+        	,SANCTN_STEP			        /** 결재단계 */
+        	,SANCTN_STTUS			        /** 결재상태 */
+        	,SANCTNER_ID			        /** 결재자ID */
+        	,AGNCY_SANCTNER_ID			    /** 대리결재자ID */
+        	,SANCTN_DT			            /** 결재일시 */
+        	,OPINION			            /** 의견 */
+        	,ABSNCE_AT			            /** 부재여부 */
+        	,REGISTER_ID			        /** 등록자ID */
+        	,REGIST_DT			            /** 등록일시 */
+        	,UPDUSR_ID			            /** 수정자ID */
+        	,UPDT_DT			            /** 수정일시 */
+        ) VALUES (
+        	 SQ_INNER_SANCTN_SN_1.NEXTVAL   /** 내부결재일련번호 */
+        	,#INNER_SANCTN_ID#			    /** 내부결재번호 */
+        	<!--  ,(SELECT M.SANCTN_SN FROM TBCOM_INNER_SANCTNER M WHERE M.INNER_SANCTN_ID = #INNER_SANCTN_ID#  AND M.SANCTN_STEP = #SANCTN_STEP#) -->
+        	, (SELECT CASE WHEN (SELECT COUNT(*) FROM TBCOM_INNER_SANCTNER K
+                                            WHERE K.INNER_SANCTN_ID =#INNER_SANCTN_ID#
+                                                    AND K.SANCTN_STEP =  #SANCTN_STEP#) = 1 THEN  (SELECT M.SANCTN_SN FROM TBCOM_INNER_SANCTNER M WHERE M.INNER_SANCTN_ID = #INNER_SANCTN_ID#  AND M.SANCTN_STEP = #SANCTN_STEP#)
+                                 WHEN  (SELECT COUNT(*) FROM TBCOM_INNER_SANCTNER J
+                                                    WHERE J.INNER_SANCTN_ID = #INNER_SANCTN_ID#
+                                                        AND J.SANCTN_STEP = #SANCTN_STEP# ) >= 2 
+                                                        THEN CASE WHEN (SELECT COUNT(*) FROM TBCOM_INNER_SANCTN_DTLS O 
+                                                                         WHERE O.INNER_SANCTN_ID = #INNER_SANCTN_ID#  
+                                                                         AND O.SANCTN_STEP = 'S4' 
+                                                                         AND O.SANCTN_STTUS = 'T08') = 1 
+                                                         THEN (SELECT  MAX(N.SANCTN_SN) KEEP(DENSE_RANK LAST ORDER BY N.SANCTN_SN ASC)
+                                                                     FROM TBCOM_INNER_SANCTNER N 
+                                                                     WHERE N.INNER_SANCTN_ID = #INNER_SANCTN_ID# 
+                                                                         AND N.SANCTN_STEP = #SANCTN_STEP# )
+                                                         ELSE  (SELECT MAX(N.SANCTN_SN) KEEP(DENSE_RANK FIRST ORDER BY N.SANCTN_SN ASC)
+                                                                      FROM TBCOM_INNER_SANCTNER N WHERE N.INNER_SANCTN_ID = #INNER_SANCTN_ID# 
+                                                                       AND N.SANCTN_STEP =  #SANCTN_STEP# )
+                                                         END
+	                   END CASE FROM DUAL
+             )
+        	,#SANCTN_STEP#			        /** 결재단계 */
+        	,#SANCTN_STTUS#			        /** 결재상태 */
+        	,#SANCTNER_ID#			        /** 결재자ID */
+        	,#AGNCY_SANCTNER_ID#			/** 대리결재자ID */
+        	,SYSDATE     			        /** 결재일시 */
+        	,#OPINION#			            /** 의견 */
+        	,#ABSNCE_AT#			        /** 부재여부 */
+        	,#S_USER_ID#			        /** 등록자ID */
+        	,SYSDATE			            /** 등록일시 */
+        	,#S_USER_ID#			        /** 수정자ID */
+        	,SYSDATE			            /** 수정일시 */
+        )
+	</insert>			
+	<!-- 내부결재보고서정보 수정 -->
+	<update id="SYM090201DAO.updateInnerSanctionDtl" parameterClass="java.util.HashMap">
+	    UPDATE TBCOM_INNER_SANCTN_DTLS
+	        SET
+	             INNER_SANCTN_ID	=  #INNER_SANCTN_ID#	/** 내부결재번호 */
+        	    ,SANCTN_STEP		=  #SANCTN_STEP#		/** 결재단계 */
+        	    ,SANCTN_STTUS		=  #SANCTN_STTUS#		/** 결재상태 */
+        	    ,SANCTNER_ID		=  #SANCTNER_ID#		/** 결재자ID */
+        	    ,AGNCY_SANCTNER_ID	=  #AGNCY_SANCTNER_ID#  /** 대리결재자ID */
+        	    ,SANCTN_DT			=  SYSDATE     		    /** 결재일시 */
+        	    ,OPINION			=  #OPINION#			/** 의견 */
+        	    ,ABSNCE_AT			=  #ABSNCE_AT#			/** 부재여부 */
+        	    ,UPDUSR_ID			=  #S_USER_ID#		    /** 수정자ID */
+        	    ,UPDT_DT			=  SYSDATE		        /** 수정일시 */
+	    WHERE INNER_SANCTN_SN = #INNER_SANCTN_SN#
+	</update>
+
+   
+	
+	<!-- 내부결재보고서정보 ================================================== -->
+
+	<!-- 내부결재보고서정보 조회 -->
+	<select id="SYM090202DAO.reportInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+        	 A.INNER_SANCTN_ID			                /** 내부결재번호 */
+        	,A.SN			                            /** 순번 */
+            ,A.SVC_ID			                        /** 서비스ID */
+        	,A.SVC_URL			                        /** 서비스URL */
+        	,A.INPUT_DATA_SET			                /** 입력데이터셋 */
+        	,A.OUTPUT_DATA_SET			                /** 출력데이터셋 */
+        	,A.REPRT_URL			                    /** 보고서URL */
+        	,A.REPRT_SJ			                        /** 보고서제목 */
+        	,A.STRE_FILE_NM			                    /** 저장파일명 */
+        FROM TBCOM_INNER_SANCTN_REPRT_INFO A			/** 내부결재보고서정보 */
+        WHERE INNER_SANCTN_ID = #INNER_SANCTN_ID#
+        ORDER BY A.SN ASC
+	</select>
+
+	<!-- 내부결재보고서정보 추가 -->
+	<insert id="SYM090202DAO.insertReportInfo" parameterClass="java.util.HashMap">
+        MERGE INTO TBCOM_INNER_SANCTN_REPRT_INFO X
+        USING (
+            SELECT
+                 #INNER_SANCTN_ID#	AS 	INNER_SANCTN_ID
+        	    ,#SN#			    AS  SN
+        	    ,#SVC_ID#		    AS  SVC_ID
+        	    ,#SVC_URL#			AS  SVC_URL
+        	    ,#INPUT_DATA_SET#	AS  INPUT_DATA_SET
+        	    ,#OUTPUT_DATA_SET#	AS  OUTPUT_DATA_SET
+        	    ,#REPRT_URL#		AS 	REPRT_URL
+        	    ,#REPRT_SJ#			AS  REPRT_SJ
+        	    ,#STRE_FILE_NM#		AS  STRE_FILE_NM
+        	    ,#S_USER_ID#		AS  REGISTER_ID
+        	    ,SYSDATE			AS  REGIST_DT
+        	    ,#S_USER_ID#	    AS  UPDUSR_ID
+        	    ,SYSDATE			AS  UPDT_DT
+        	FROM DUAL
+        ) Y
+        ON (
+                X.INNER_SANCTN_ID  = Y.INNER_SANCTN_ID
+            AND X.SN               = Y.SN
+        )
+        WHEN NOT MATCHED THEN INSERT (
+        	 X.INNER_SANCTN_ID	    /** 내부결재번호 */
+        	,X.SVC_ID			        /** 서비스ID */
+        	,X.SN			            /** 순번 */
+        	,X.SVC_URL			    /** 서비스URL */
+        	,X.INPUT_DATA_SET			/** 입력데이터셋 */
+        	,X.OUTPUT_DATA_SET		/** 출력데이터셋 */
+        	,X.REPRT_URL			    /** 보고서URL */
+        	,X.REPRT_SJ			    /** 보고서제목 */
+        	,X.STRE_FILE_NM			/** 저장파일명 */
+        	,X.REGISTER_ID			/** 등록자ID */
+        	,X.REGIST_DT			    /** 등록일시 */
+        	,X.UPDUSR_ID			    /** 수정자ID */
+        	,X.UPDT_DT			    /** 수정일시 */
+        ) VALUES (
+        	 Y.INNER_SANCTN_ID	    /** 내부결재번호 */
+        	,Y.SVC_ID			        /** 서비스ID */
+        	,Y.SN			            /** 순번 */
+        	,Y.SVC_URL			    /** 서비스URL */
+        	,Y.INPUT_DATA_SET			/** 입력데이터셋 */
+        	,Y.OUTPUT_DATA_SET		/** 출력데이터셋 */
+        	,Y.REPRT_URL			    /** 보고서URL */
+        	,Y.REPRT_SJ			    /** 보고서제목 */
+        	,Y.STRE_FILE_NM			/** 저장파일명 */
+        	,Y.REGISTER_ID			/** 등록자ID */
+        	,Y.REGIST_DT			    /** 등록일시 */
+        	,Y.UPDUSR_ID			    /** 수정자ID */
+        	,Y.UPDT_DT			    /** 수정일시 */
+        ) 
+        WHEN MATCHED THEN UPDATE SET 
+              X.SVC_ID          = Y.SVC_ID
+            , X.SVC_URL         = Y.SVC_URL
+            , X.INPUT_DATA_SET  = Y.INPUT_DATA_SET
+            , X.OUTPUT_DATA_SET = Y.OUTPUT_DATA_SET
+            , X.REPRT_URL       = Y.REPRT_URL
+            , X.REPRT_SJ        = Y.REPRT_SJ
+            , X.STRE_FILE_NM    = Y.STRE_FILE_NM
+            , X.UPDUSR_ID       = Y.UPDUSR_ID
+            , X.UPDT_DT         = Y.UPDT_DT
+        
+	</insert>
+
+	<!-- 내부결재보고서정보 수정 -->
+	<update id="SYM090202DAO.updateReportInfo" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_INNER_SANCTN_REPRT_INFO			    /** 내부결재보고서정보 */
+          SET
+        	 SVC_ID = #SVC_ID#			                    /** 서비스ID */
+        	,SVC_URL = #SVC_URL#			                /** 서비스URL */
+        	,INPUT_DATA_SET = #INPUT_DATA_SET#			    /** 입력데이터셋 */
+        	,OUTPUT_DATA_SET = #OUTPUT_DATA_SET#			/** 출력데이터셋 */
+        	,REPRT_URL = #REPRT_URL#			            /** 보고서URL */
+        	,REPRT_SJ = #REPRT_SJ#			                /** 보고서제목 */
+        	,STRE_FILE_NM = #STRE_FILE_NM#			        /** 저장파일명 */
+        	,UPDUSR_ID = #S_USER_ID#			            /** 수정자ID */
+        	,UPDT_DT = SYSDATE			                    /** 수정일시 */
+        WHERE INNER_SANCTN_ID = #INNER_SANCTN_ID#			/** 내부결재번호 */
+          AND SN = #SN#			                            /** 순번 */
+	</update>
+
+	<!-- 내부결재보고서정보 삭제 -->
+	<delete id="SYM090202DAO.deleteReportInfo" parameterClass="java.util.HashMap">
+        DELETE FROM TBCOM_INNER_SANCTN_REPRT_INFO			/** 내부결재보고서정보 */
+        WHERE INNER_SANCTN_ID = #INNER_SANCTN_ID#			/** 내부결재번호 */
+         AND SN = #SN#			                            /** 순번 */
+	</delete>
+
+	<!-- 내부결재보고서데이터 ================================================== -->
+
+	<!-- 내부결재보고서데이터 조회 -->
+	<select id="SYM090203DAO.reportMetaList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+        	 B.INNER_SANCTN_ID			/** 내부결재번호 */
+            ,B.SN			/** 순번 */
+        	,B.SVC_ID			/** 서비스ID */
+        	,B.SVC_URL			/** 서비스URL */
+        	,A.DATA_SET_SE			/** 데이터셋구분 */
+        	,A.PARAMTR_ID			/** 파라미터ID */
+        	,A.DATA_SET_NM			/** 데이터셋명 */
+        	,A.INPUT_DATA			/** 입력데이터 */
+        	,A.OUTPUT_XML			/** 출력XML */
+            ,A.ORDR			/** 순차 */
+        FROM TBCOM_INNER_SANCTN_REPRT_DATA A			/** 내부결재보고서데이터 */
+           , TBCOM_INNER_SANCTN_REPRT_INFO B			/** 내부결재보고서정보 */
+        WHERE A.INNER_SANCTN_ID	 = 	B.INNER_SANCTN_ID	
+          AND B.INNER_SANCTN_ID = #INNER_SANCTN_ID#  /** 내부결재번호 */
+        ORDER BY B.SN, A.ORDR	
+	</select>
+
+	<!-- 내부결재보고서데이터 추가 -->
+	<insert id="SYM090203DAO.insertReportMeta" parameterClass="java.util.HashMap">
+	    INSERT INTO TBCOM_INNER_SANCTN_REPRT_DATA (
+              ORDR
+            , INNER_SANCTN_ID
+            , SN
+            , DATA_SET_SE
+            , PARAMTR_ID
+            , DATA_SET_NM
+            , INPUT_DATA
+            , OUTPUT_XML
+            , REGISTER_ID
+            , REGIST_DT
+            , UPDUSR_ID
+            , UPDT_DT
+	    ) VALUES (
+        	  SQ_INNER_SANCTN_REPRT_DATA_1.NEXTVAL  /* 순차 */
+        	, #INNER_SANCTN_ID#   /* 내부결재ID */
+        	, #SN#                /* 순번 */
+        	, #DATA_SET_SE#	   /* 데이터셋구분 */
+        	, #PARAMTR_ID#	   /* 파라미터ID */
+        	, #DATA_SET_NM#	   /* 데이터셋명 */
+        	, #INPUT_DATA#        /* 입력데이터 */
+        	, #OUTPUT_XML#	   /* 출력XML */
+        	, #S_USER_ID#	   /* 등록자ID */
+        	, SYSDATE		   /* 등록일시 */
+        	, #S_USER_ID#	   /* 수정자ID */
+        	, SYSDATE		   /* 수정일시 */
+	    )     
+	</insert>
+
+	<!-- 내부결재보고서데이터 수정 -->
+	<update id="SYM090203DAO.updateReportMeta" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_INNER_SANCTN_REPRT_DATA			        /** 내부결재보고서데이터 */
+          SET
+                  INNER_SANCTN_ID  = #INNER_SANCTN_ID#   /* 내부결재ID */ 
+                , SN               = #SN#                /* 순번 */     
+                , DATA_SET_SE      = #DATA_SET_SE#	   /* 데이터셋구분 */    
+                , PARAMTR_ID       = #PARAMTR_ID#	   /* 파라미터ID */    
+                , DATA_SET_NM      = #DATA_SET_NM#	   /* 데이터셋명 */     
+                , INPUT_DATA       = #INPUT_DATA#        /* 입력데이터 */  
+                , OUTPUT_XML       = #OUTPUT_XML#	   /* 출력XML */          
+                , UPDUSR_ID        = #S_USER_ID#	   /* 수정자ID */     
+                , UPDT_DT          = SYSDATE		   /* 수정일시 */        
+        WHERE ORDR = #ORDR#			                            /** 순차 */
+	</update>
+
+	<!-- 내부결재보고서데이터 삭제 -->
+	<delete id="SYM090203DAO.deleteReportMeta" parameterClass="java.util.HashMap">
+        DELETE FROM TBCOM_INNER_SANCTN_REPRT_DATA			/** 내부결재보고서데이터 */
+        WHERE ORDR = #ORDR#			                        /** 순차 */
+	</delete>
+    <select id="SYM090203DAO.sancSelectAtchmnFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+       SELECT
+        	  A.FILE_SN			    /*  파일일련번호 */
+        	, A.FILE_ORDR			/*  파일순차 */
+        	, A.FILE_STRE_COURS		/*  파일저장경로 */
+        	, A.STRE_FILE_NM			/*  저장파일명 */
+        	, A.ORGINL_FILE_NM	    /*  원본파일명 */
+        	, A.FILE_EXTSN			/*  파일확장자 */
+        	, A.FILE_CN			    /*  파일내용   */
+        	, A.FILE_MG			    /*  파일크기   */
+        	, A.USE_AT			    /*  사용여부   */
+        	, A.FILE_ID              /*       */
+        	, B.SYS_SE_CODE			/*  시스템구분코드 */
+        	, B.JOB_SE_CODE AS JOB_SE /*  업무구분코드 */
+        	, ROW_NUMBER() OVER (PARTITION BY A.FILE_SN ORDER BY A.FILE_ORDR ASC) AS SN
+        	, A.FILE_TY	
+        	, 'theme://images/fileUpDownload/file_icon_' || DECODE(LOWER(A.FILE_EXTSN), 'zip', 'ZIP','rar', 'ZIP','7z', 'ZIP', 'jpg', 'IMG', 'jpeg', 'IMG', 'gif', 'IMG', 'png', 'IMG', 'bmp', 'IMG', 'txt', 'TXT', 'xml', 'TXT', 'doc', 'DOC', 'docx', 'DOC', 'xls', 'XLS', 'xlsx', 'XLS', 'ppt', 'PPT', 'pptx', 'PPT', 'pdf', 'PDF', 'hwp', 'HWP', 'hwt', 'HWP', 'ETC' ) || '.png' AS FILE_IMAGE
+        	, 100 AS PROGRS
+        	, NULL AS TRNSMIS_FILE_SIZE
+        	, 'theme://images/img_WF_ConfirmE.png' AS DELETE_IMAGE
+        	, NULL AS STTUS
+        	, '0' AS DEL_CAN
+        FROM TBCOM_CMMN_ATCHMNFL A 			/* 공통첨부파일 */
+         ,  TBCOM_CMMN_ATCHMNFL_MASTR B 	/* 공통첨부파일마스터 */
+        WHERE 1=1
+          AND A.FILE_SN = B.FILE_SN
+          AND B.FILE_SN = #FILE_SN#			/* 파일일련번호 */
+        <isNotEmpty property="FILE_SN2">
+        UNION ALL
+		SELECT
+        	  A.FILE_SN			    /*  파일일련번호 */
+        	, A.FILE_ORDR			/*  파일순차 */
+        	, A.FILE_STRE_COURS		/*  파일저장경로 */
+        	, A.STRE_FILE_NM			/*  저장파일명 */
+        	, A.ORGINL_FILE_NM	    /*  원본파일명 */
+        	, A.FILE_EXTSN			/*  파일확장자 */
+        	, A.FILE_CN			    /*  파일내용   */
+        	, A.FILE_MG			    /*  파일크기   */
+        	, A.USE_AT			    /*  사용여부   */
+        	, A.FILE_ID              /*       */
+        	, B.SYS_SE_CODE			/*  시스템구분코드 */
+        	, B.JOB_SE_CODE AS JOB_SE /*  업무구분코드 */
+        	, ROW_NUMBER() OVER (PARTITION BY A.FILE_SN ORDER BY A.FILE_ORDR ASC) AS SN
+        	, A.FILE_TY	
+        	, 'theme://images/fileUpDownload/file_icon_' || DECODE(LOWER(A.FILE_EXTSN), 'zip', 'ZIP','rar', 'ZIP','7z', 'ZIP', 'jpg', 'IMG', 'jpeg', 'IMG', 'gif', 'IMG', 'png', 'IMG', 'bmp', 'IMG', 'txt', 'TXT', 'xml', 'TXT', 'doc', 'DOC', 'docx', 'DOC', 'xls', 'XLS', 'xlsx', 'XLS', 'ppt', 'PPT', 'pptx', 'PPT', 'pdf', 'PDF', 'hwp', 'HWP', 'hwt', 'HWP', 'ETC' ) || '.png' AS FILE_IMAGE
+        	, 100 AS PROGRS
+        	, NULL AS TRNSMIS_FILE_SIZE
+        	, 'theme://images/img_WF_ConfirmE.png' AS DELETE_IMAGE
+        	, NULL AS STTUS
+        	, '1' AS DEL_CAN
+        FROM TBCOM_CMMN_ATCHMNFL A 			/* 공통첨부파일 */
+         ,  TBCOM_CMMN_ATCHMNFL_MASTR B 	/* 공통첨부파일마스터 */
+        WHERE 1=1
+          AND A.FILE_SN = B.FILE_SN
+          AND B.FILE_SN = #FILE_SN2#			/* 파일일련번호 */
+          </isNotEmpty>
+    </select>
+</sqlMap>

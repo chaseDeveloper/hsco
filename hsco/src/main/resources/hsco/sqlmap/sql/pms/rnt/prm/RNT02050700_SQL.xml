@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02050700_SQL">
+
+	<!-- 쿼리명 : 매입임대 건축물정보 조회
+		    설명 : 매입임대 건축물정보 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.10.28
+	-->
+	<select id="RNT02050700DAO.selectBildInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02050700DAO.selectBildInfoList[매입임대 건축물정보 조회] */
+		SELECT A.RENT_HOUSE_NM,												/* 주택명 */
+			   B.RENT_HOUSE_CODE,											/* 주택코드 */
+			   B.DONG,														/* 동 */
+			   B.HO,														/* 호 */
+			   D.NM,														/* 성명 */
+			   D.IHIDNUM,													/* 주민번호 */
+			   D.CNTRCT_DE,													/* 계약일자 */
+			   D.NM,
+			   E.CANCL_DE AS PRE_CANCL_DE,									/* 이전해약일 */
+			   B.DVR_AR,													/* 전용면적 */
+			   B.CMNUSE_AR,													/* 공용면적 */
+			   B.DVR_AR + B.CMNUSE_AR AS TOT_AR,							/* 면적 */
+			   B.AEA,														/* 평형 */
+			   B.ROOM_STRUCTURE,											/* 방구조 */
+			   SUBSTR(A.PUCHAS_DE,1,4) AS PUCHAS_YEAR,						/* 매입년도 */
+			   A.PUCHAS_DE,													/* 매입일자 */
+			   S.RENT_GTN AS GTN,											/* 보증금 */
+			   S.MT_RNTCHRG AS RNTCHRG,										/* 임대료 */
+			   B.MANAGECT_PRECDNT,											/* 선수금 */
+			   C.ZIP,														/* 우편번호 */
+			   C.ADRES,														/* 주소 */
+			   C.ADRES_DETAIL,												/* 상세주소 */
+			   B.CSTMR_NO													/* 한전고객 */
+		  FROM TBRNT_PUCHAS_HOUSE A											/* 임대주택 테이블 */
+		 INNER JOIN TBRNT_PUCHAS_HOUSE_BILD B								/* 임대주택건축물 테이블 */
+			ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		 INNER JOIN TBRNT_PUCHAS_HOUSE_DONG C								/* 임대주택동 테이블 */
+			ON C.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		   AND C.DONG = B.DONG
+		  LEFT JOIN (
+				SELECT A.CNTRCTR_NO,
+					   A.RENT_HOUSE_CODE,
+					   A.DONG,
+					   A.HO,
+					   B.NM,
+					   A.FRST_CNTRCT_DE AS CNTRCT_DE,						/* 최초계약일자 */
+					   SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM,					/* 주민번호 */
+					   A.GTN,												/* 보증금 */
+					   A.RNTCHRG											/* 임대료 */
+				  FROM TBRNT_PUCHAS_CNTRCT A								/* 계약정보 테이블 */
+				 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR B						/* 영구임대고객 테이블 */
+					ON B.PUCHAS_CSTMR_NO = A.PUCHAS_CSTMR_NO
+				 WHERE A.CANCL_DE IS NULL
+			   ) D
+			ON D.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		   AND D.DONG = B.DONG
+		   AND D.HO = B.HO
+		  LEFT JOIN (
+					SELECT MAX(CANCL_DE) AS CANCL_DE, RENT_HOUSE_CODE, DONG, HO
+					  FROM TBRNT_PUCHAS_CNTRCT
+					 WHERE CANCL_DE IS NOT NULL
+					 GROUP BY RENT_HOUSE_CODE, DONG, HO
+			  ) E
+			ON E.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		   AND E.DONG = B.DONG
+		   AND E.HO = B.HO
+		   AND E.CANCL_DE <![CDATA[<=]]> NVL(D.CNTRCT_DE, TO_CHAR (SYSDATE, 'YYYYMMDD'))
+		  LEFT JOIN TBRNT_PUCHAS_STDR S
+			ON S.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		   AND S.DONG = B.DONG
+		   AND S.HO = B.HO
+		   AND S.STDR_YEAR = TO_CHAR(SYSDATE, 'YYYY')
+		 WHERE 1 = 1
+		     AND A.USE_AT = '1'
+		<isNotEmpty property="houseCode">
+		   AND A.RENT_HOUSE_CODE = #houseCode#
+		</isNotEmpty>
+		 ORDER BY B.RENT_HOUSE_CODE, B.HO
+	</select>
+	
+	<!-- 쿼리명 : 매입임대 건축물정보 조회
+		    설명 : 매입임대 건축물정보 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.10.28
+	-->
+	<select id="RNT02050700DAO.selectBildInfoList_etc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02050700DAO.RNT02050700DAO.selectBildInfoList_etc[매입임대 건축물정보 조회(소화기,경보기 대장)] */
+		SELECT A.RENT_HOUSE_NM,												/* 주택명 */
+			   B.RENT_HOUSE_CODE,											/* 주택코드 */
+			   B.DONG,														/* 동 */
+			   B.HO,														/* 호 */
+			   DECODE(D.CNTRCTR_NO,NULL,'공실',D.NM) AS NM,              /* 성명 */
+               DECODE(D.NM, NULL, B.HSHLD_PASSWORD, D.TELNO ) AS TELNO,
+               D.MBTLNO,
+			   D.IHIDNUM,													/* 주민번호 */
+			   D.CNTRCT_DE,													/* 계약일자 */
+			   SUBSTR(A.PUCHAS_DE,1,4) AS PUCHAS_YEAR,						/* 매입년도 */
+			   C.ZIP,														/* 우편번호 */
+			   C.ADRES,														/* 주소 */
+			   C.ADRES_DETAIL,												/* 상세주소 */
+			   A.ENTRC_PASSWORD													/* 현관비번 */
+			   , (select code_nm from tbcom_cmmn_code z where z.grp_code = 'RNT004' and z.code = a.AREA_SE) AS AREA_NM
+		  FROM TBRNT_PUCHAS_HOUSE A											/* 임대주택 테이블 */
+		 INNER JOIN TBRNT_PUCHAS_HOUSE_BILD B								/* 임대주택건축물 테이블 */
+			ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		 INNER JOIN TBRNT_PUCHAS_HOUSE_DONG C								/* 임대주택동 테이블 */
+			ON C.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		   AND C.DONG = B.DONG
+		  LEFT JOIN (
+				SELECT A.CNTRCTR_NO,
+					   A.RENT_HOUSE_CODE,
+					   A.DONG,
+					   A.HO,
+					   B.NM,
+					   B.TELNO,
+                       B.MBTLNO,
+					   A.FRST_CNTRCT_DE AS CNTRCT_DE,						/* 최초계약일자 */
+					   SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM,					/* 주민번호 */
+					   A.GTN,												/* 보증금 */
+					   A.RNTCHRG											/* 임대료 */
+				  FROM TBRNT_PUCHAS_CNTRCT A								/* 계약정보 테이블 */
+				 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR B						/* 영구임대고객 테이블 */
+					ON B.PUCHAS_CSTMR_NO = A.PUCHAS_CSTMR_NO
+				 WHERE A.CANCL_DE IS NULL
+			   ) D
+			ON D.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		   AND D.DONG = B.DONG
+		   AND D.HO = B.HO		  
+		 WHERE 1 = 1
+		     AND A.USE_AT = '1'
+		<isNotEmpty property="AREA_SE">
+		   AND A.AREA_SE = #AREA_SE#
+		</isNotEmpty>     
+		<isNotEmpty property="houseCode">
+		   AND A.RENT_HOUSE_CODE = #houseCode#
+		</isNotEmpty>
+		 ORDER BY B.RENT_HOUSE_CODE, B.HO
+	</select>
+</sqlMap>

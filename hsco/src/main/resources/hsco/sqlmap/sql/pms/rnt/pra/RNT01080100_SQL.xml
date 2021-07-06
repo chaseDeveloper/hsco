@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01080100_SQL">	
+   <!--  설명  : 임대계약현황
+		작성자 : 김지훈 -->
+	<!-- 게약 목록 -->
+	<select id="RNT01080100DAO.rentContRactList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	     WITH TEMP_RN_FMLY AS(
+SELECT CNTRCTR_NO
+     , MAX(DECODE(R_NO,1,NM,'')) FMLY_NM1
+     , MAX(DECODE(R_NO,2,NM,'')) FMLY_NM2
+     , MAX(DECODE(R_NO,3,NM,'')) FMLY_NM3
+     , MAX(DECODE(R_NO,4,NM,'')) FMLY_NM4
+     , MAX(DECODE(R_NO,5,NM,'')) FMLY_NM5
+     , MAX(DECODE(R_NO,6,NM,'')) FMLY_NM6
+     , MAX(DECODE(R_NO,7,NM,'')) FMLY_NM7
+     , MAX(DECODE(R_NO,8,NM,'')) FMLY_NM8
+     , MAX(DECODE(R_NO,9,NM,'')) FMLY_NM9
+     , MAX(DECODE(R_NO,10,NM,'')) FMLY_NM10
+  FROM (
+            SELECT   B.CNTRCTR_NO,
+                     C.NM,
+                     A.PRMANENT_CSTMR_NO,
+                     RANK ()
+                     OVER (PARTITION BY b.CNTRCTR_NO ORDER BY A.SN DESC)
+                     R_NO
+              FROM   TBRNT_RENT_FAMILY_MATTER A,
+                     TBRNT_RENT_CNTRCT B,
+                     TBRNT_PRMANENT_RENT_CSTMR C
+              WHERE   A.CNTRCTR_CSTMR_NO = B.PRMANENT_CSTMR_NO
+                AND A.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO
+        )
+ GROUP BY CNTRCTR_NO
+ )	
+	     SELECT ROWNUM RN       /* 순번 */
+	          , RENT_HOUSE_NM 	/* 임대주택명 */
+	          , DONG 			/* 동 */
+	          , HO 				/* 호 */
+	          , POSTNO 			/* 우편번호 */
+	          , ADDR 			/* 주택소재지 */
+	          , ADRES 			/* 주택 주소 */
+	          , ADRES_DETAIL 	/* 주택 주소 상세 */
+	          , ZIP				/* 우편번호 */
+	          , NM 				/* 계약자 */
+	          , SFCOM_DEC_ALL(PERSON_NO) AS PERSON_NO	/* 주민번호 */
+	          , CTELNO 			/* 전화번호 */
+	          , CHPNO 			/* 휴대전화 */
+	          , FAMILY_CO		/* 가족수 */
+	          , FRST_CNTRCT_DE 	/* 최초계약일자 */
+	          , CNTRCT_DE    	/* 계약일자 */
+	          , RENT_BGNDE   	/* 1차임대시작일 */
+	          , RENT_ENDDE   	/* 1차임대종료일 */
+	          , TOT_AREA 		/* 총면적 */
+	     	  , PER_AREA 		/* 전용면적 */
+	          , PUB_AREA 		/* 공용면적 */
+	          , AEA  			/* 평형 */
+	          , CEND_DATE     	/* 해약일 */
+	          , (SELECT MAX(x.CANCL_DE) 
+	             FROM TBRNT_RENT_CNTRCT z,
+	                  TBRNT_RENT_RESCI  x
+	             WHERE z.CNTRCTR_NO			= x.CNTRCTR_NO
+	               AND z.RENT_HOUSE_CODE 	= a.RENT_HOUSE_CODE
+	               AND z.DONG 				= a.DONG
+	               AND z.HO 				= a.HO
+	               AND x.CANCL_DE <![CDATA[<=]]> a.FRST_CNTRCT_DE) PRE_CEND_DATE 	/* 이전세대 해약일 */
+	          , QULF_NAME 		/* 자격구분 */
+	          , SEC_AMT   		/* 보증금 */
+	          , RNTCHRG   		/* 임대료 */
+	          , DELAY_AMT 		/* 체납임대료 */
+	          , FMLY_NM1 		/* 세대원1 */
+	          , FMLY_NM2 		/* 세대원2 */
+	          , FMLY_NM3 		/* 세대원3 */
+	          , FMLY_NM4 		/* 세대원4 */
+	          , FMLY_NM5 		/* 세대원5 */
+	          , FMLY_NM6 		/* 세대원6 */
+	          , FMLY_NM7 		/* 세대원7 */
+	          , FMLY_NM8 		/* 세대원8 */
+	          , FMLY_NM9 		/* 세대원9 */
+	          , FMLY_NM10 		/* 세대원10 */
+	          , RM       		/* 비고 */
+	          , LWST_PROGRS_AT_NM	/* 소송진행여부 */
+	          , HOUSE_POSESN_AT
+	          , INCOME_EXCESS
+	          , FIRST_ENTRY 		/* 최초등록자 */
+	          , REGIST_DT 			/* 최초등록일시 */
+	          FROM(SELECT a.CNTRCTR_NO,  							/* 계약자 번호 */
+	                      v.NM, 									/* 성명*/
+	                      b.RENT_HOUSE_NM,   						/* 임대주택명  */
+	                      a.RENT_HOUSE_CODE, 						/* 임대주택코드 */
+	                      a.DONG, 									/* 동 */
+	                      a.HO,   									/* 호 */
+	                      a.CNTRCT_DE, 								/* 계약일자 */
+	                      a.FRST_CNTRCT_DE, 						/* 최초계약일자 */
+	                      a.QUALF_SE, 								/* 자격구분 */
+	                      (SELECT CODE_NM
+	                         FROM TBCOM_CMMN_CODE
+	                        WHERE GRP_CODE = 'RNT001'
+	                          AND RTRIM (CODE) = RTRIM (a.QUALF_SE)) AS QULF_NAME, 			/* 자격구분명 */
+	                      a.RENT_BGNDE, 							/* 임대시작일자 */
+	                      a.RENT_ENDDE, 							/* 임대종료일자 */
+	                      a.CNTRCT_AMOUNT + a.SURLUS AS SEC_AMT,	/* 보증금 */
+	                      a.RNTCHRG, 								/* 임대료 */
+	                      d.CREDIT_AMT, 							/* 채권금액 */
+	                      e.DELAY_AMT, 								/* 체납임대료 */
+	                      f.ZIP AS POSTNO, 							/* 우편번호 */
+	                      RTRIM (f.ADRES || ' ' || f.ADRES_DETAIL) AS ADDR, 				/* 주택소재지 */
+	                      f.ADRES, 									/* 주택 주소 */
+	                      f.ADRES_DETAIL, 							/* 주택 주소 상세 */
+	                      F.ZIP,									/* 우편번호 */
+	                      p.USEPRPS, 								/* 사용용도 */
+	                      p.MTLTY,   								/* 상호 */
+	                      NVL (g.DVR_AR, 0) AS PER_AREA, 			/* 전용면적 */
+	                      NVL (g.CMNUSE_AR, 0) AS PUB_AREA, 		/* 공용면적 */
+	                      NVL (g.DVR_AR, 0) + NVL (g.CMNUSE_AR, 0) AS TOT_AREA,				/* 총면적 */
+	                      g.AEA, 									/* 평수 */
+	                      v.ADRES AS LIVE_ADDR,
+	                      v.IHIDNUM AS PERSON_NO,
+	                      v.TELNO || ',' || v.MBTLNO AS TELNO,
+	                      v.TELNO AS CTELNO,
+	                      v.MBTLNO AS CHPNO,
+	                      (SELECT MAX(CANCL_DE)  FROM TBRNT_RENT_RESCI Z WHERE CNTRCTR_NO = a.CNTRCTR_NO ) CEND_DATE,	/* 해약일자 */
+	                      a.FAMILY_CO,  
+	                      P.BIZRNO,    								/* 사업자 등록번호 */
+	                      P.BIZCND,    								/* 업태 */
+	                      P.ITEM       								/* 종목 */
+	                      , f.ZIP AS APT_POSTNO 					/* 우편번호 */
+	                      , f.ADRES || ' ' || f.ADRES_DETAIL AS APT_ADDR					/* 주소 */
+	                      , fmly_nm1   /* 세대원1*/
+	                      , fmly_nm2   /* 세대원2*/
+	                      , fmly_nm3   /* 세대원3*/
+	                      , fmly_nm4   /* 세대원4*/
+	                      , fmly_nm5   /* 세대원5*/
+	                      , fmly_nm6   /* 세대원6*/
+	                      , fmly_nm7   /* 세대원7*/
+	                      , fmly_nm8   /* 세대원8*/
+	                      , fmly_nm9   /* 세대원9*/
+	                      , fmly_nm10 /* 세대원10*/
+	                      , a.RM 							/* 비고 */
+	                      , a.LWST_PROGRS_AT				/* 소송진행여부 */
+	                      , DECODE(a.LWST_PROGRS_AT, '1', '소송진행중', '') AS LWST_PROGRS_AT_NM						/* 소송진행여부명 */
+	                      , DECODE(a.HOUSE_POSESN_AT, '1', '주택소유', '') AS HOUSE_POSESN_AT
+	                      , DECODE(a.INCOME_EXCESS, '1', '소득상회', '') AS INCOME_EXCESS
+	                      , (SELECT USER_NM FROM TBCOM_USER WHERE USER_ID = a.REGISTER_ID) AS FIRST_ENTRY			/* 최초등록자 */
+	                      , a.REGIST_DT, 					/* 최초등록일시 */
+	                        TO_NUMBER(a.DONG) || '-'|| TO_NUMBER(a.HO) AS DONGHO			/* 동/호 */
+	                      , DECODE(b.HOUSE_SE,'R1','영구임대','R2','매입임대') AS APT_CLASS 	/* 주택구분 */
+	                 FROM TBRNT_RENT_CNTRCT a, 				/* 계약정보 */
+	                      TBRNT_RENT_HOUSE b,  				/* 임대주택 */
+	                      TBCOM_USER c,
+	                      ( SELECT CNTRCTR_NO AS CRT_ID, SUM(CDIT_AMOUNT) AS CREDIT_AMT
+	                          FROM TBRNT_RENT_GTN_SEIZR 	/* 임대보증금압류 */
+	                         WHERE RELIS_DE IS NULL
+	                         GROUP BY CNTRCTR_NO
+	                      ) d,
+	                      ( SELECT CNTRCTR_NO AS CRT_ID, SUM(RNTCHRG + RDCAMT_AMOUNT - RCIV_AMOUNT) AS DELAY_AMT
+	                          FROM TBRNT_RENT_MT_RNTCHRG 	/* 임대월임대료 */
+	                         WHERE RCIV_DE IS NULL AND RNTCHRG + RDCAMT_AMOUNT > 0
+	                         GROUP BY CNTRCTR_NO
+	                      ) e,
+	                      TBRNT_PRMANENT_RENT_CSTMR v , 	/* 영구임대고객 */
+	                      TBRNT_SOPSRT_BSNM p, 				/* 상가사업자정보 */
+	                      TBRNT_RENT_HOUSE_DONG f , 		/* 임대주택동 */
+	                      TBRNT_RENT_HOUSE_BILD g ,  		/* 임대주택건축물 */
+	                      TEMP_RN_FMLY z
+	                WHERE a.RENT_HOUSE_CODE 	= b.RENT_HOUSE_CODE
+	                  AND a.UPDUSR_ID 			= c.USER_ID(+)
+	                  AND a.CNTRCTR_NO 			= d.CRT_ID(+)
+	                  AND a.CNTRCTR_NO 			= e.CRT_ID(+)
+	                  AND a.PRMANENT_CSTMR_NO 	= v.PRMANENT_CSTMR_NO(+)
+	                  AND a.CNTRCTR_NO 			= p.CNTRCTR_NO(+)
+	                  AND a.RENT_HOUSE_CODE 	= f.RENT_HOUSE_CODE(+)
+	                  AND a.DONG 				= f.DONG(+)
+	                  AND a.RENT_HOUSE_CODE 	= g.RENT_HOUSE_CODE(+)
+	                  AND a.DONG 				= g.DONG(+)
+	                  AND a.HO					= g.HO(+)
+	                  AND a.CNTRCTR_NO          = z.CNTRCTR_NO(+)
+	                  AND (CASE WHEN SUBSTR(a.FRST_CNTRCT_DE,0,4) = SUBSTR(a.CNTRCT_DE,0,4) THEN '4' ELSE '5' END) LIKE #rentContRacGb#  /* 신규계약 4 / 재계약 5 */
+			<isNotEmpty property="houseSe">	                  
+	                  AND #houseSe# 			LIKE '%'|| b.HOUSE_SE ||'%'					/* 주택구분 */
+	        </isNotEmpty>
+			<isNotEmpty property="rentHouseCode">
+	                  AND a.RENT_HOUSE_CODE = #rentHouseCode#    		/* 주택코드 */
+	        </isNotEmpty>
+	        <isNotEmpty property="contRactFromDe">
+	                  AND (CASE #firstContGb# WHEN '0' THEN a.FRST_CNTRCT_DE ELSE a.CNTRCT_DE END) BETWEEN #contRactFromDe# AND #contRactToDe#
+	        </isNotEmpty>
+	        <isEqual property="houseAt" compareValue="1">
+			   AND NVL(a.HOUSE_POSESN_AT, '0') = '1'
+			</isEqual>
+			<isEqual property="incom" compareValue="1">
+			   AND NVL(a.INCOME_EXCESS, '0') = '1'
+			</isEqual>
+			<isEqual property="Lwst" compareValue="1">
+			   AND NVL(a.LWST_PROGRS_AT, '0') = '1'
+			</isEqual>			
+	                ORDER BY a.RENT_HOUSE_CODE, a.DONG, A.HO) a
+	     	<isEqual property="canCleInc" compareValue="0" >
+	      		WHERE   NVL(CEND_DATE,'00000000') = '00000000'    		/* 해약자포함 여부 */
+	     	</isEqual>
+	</select>
+</sqlMap>

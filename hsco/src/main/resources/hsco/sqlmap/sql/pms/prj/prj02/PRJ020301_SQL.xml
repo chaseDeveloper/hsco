@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_PRMPC_CODE			원가코드
+		CRUD : TBPRJ_PRSMP_PRMPC		추정원가
+		CRUD : TBPRJ_PRSMP_PRMPC_SBJECT	추정원가_과목별
+		CRUD : TBPRJ_PRSMP_PRMPC_DSTRC	추정원가년차
+	-->
+
+	<!-- 원가코드 ================================================== -->
+
+	<select id="PRJ020301.prccdList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.STD_PRMPC_CODE			/* 표준원가코드 */
+	,A.CL_SE			/* 분류구분 */
+	,A.LCLAS_NM			/* 대분류명 */
+	,A.MLSFC_NM			/* 중분류명 */
+	,A.SCLAS_NM			/* 소분류명 */
+	,A.FOM_SE			/* 형식구분 */
+	,DECODE(A.CL_SE, 1, A.LCLAS_NM, 2, A.MLSFC_NM, A.SCLAS_NM)
+	 AS CODE_NM			/* 원가항목명 */
+FROM TBPRJ_PRMPC_CODE A			/* 원가코드 */
+ORDER BY 1,2,3
+	</select>
+
+	<!-- 추정원가 ================================================== -->
+
+	<!-- 추정원가 조회 -->
+	<select id="PRJ020301.cdList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE	/* 사업코드 */
+	,A.BSNS_STEP	/* 사업단계 */
+	,A.ODR			/* 차수 */
+
+	,A.ODR_DTLS			/* 차수내역 */
+FROM TBPRJ_PRSMP_PRMPC A			/* 추정원가 */
+WHERE A.BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND A.BSNS_STEP = #BSNS_STEP#		/* 사업단계 */
+ORDER BY 1,2,3
+	</select>
+
+	<!-- 추정원가 추가 -->
+	<insert id="PRJ020301.cdC" parameterClass="map">
+INSERT INTO TBPRJ_PRSMP_PRMPC (			/* 추정원가 */
+	 BSNS_CODE		/* 사업코드 */
+	,BSNS_STEP		/* 사업단계 */
+	,ODR			/* 차수 */
+
+	,ODR_DTLS			/* 차수내역 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#	/* 사업코드 */
+	,#BSNS_STEP#	/* 사업단계 */
+	,#ODR#			/* 차수 */
+
+	,#ODR_DTLS#			/* 차수내역 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+)
+	</insert>
+
+	<!-- 추정원가 수정 -->
+	<update id="PRJ020301.cdU" parameterClass="map">
+UPDATE TBPRJ_PRSMP_PRMPC		/* 추정원가 */
+  SET
+	 ODR_DTLS = #ODR_DTLS#			/* 차수내역 */
+
+	,UPDUSR_ID = #S_USER_ID#	/* 수정자ID */
+	,UPDT_DT = SYSDATE			/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND BSNS_STEP = #BSNS_STEP#		/* 사업단계 */
+  AND ODR = #ODR#					/* 차수 */
+	</update>
+
+	<!-- 추정원가 삭제 -->
+	<delete id="PRJ020301.cdD" parameterClass="map">
+DELETE FROM TBPRJ_PRSMP_PRMPC			/* 추정원가 */
+WHERE BSNS_CODE = #BSNS_CODE#	/* 사업코드 */
+  AND BSNS_STEP = #BSNS_STEP#	/* 사업단계 */
+  AND ODR = #ODR#				/* 차수 */
+	</delete>
+
+	<!-- 추정원가_과목별 ================================================== -->
+
+	<!-- 추정원가_과목별 조회 -->
+	<select id="PRJ020301.mList" parameterClass="map" resultClass="hashmap">
+WITH DATA AS (
+	SELECT
+		 A.BSNS_CODE		/* 사업코드 */
+		,A.BSNS_STEP		/* 사업단계 */
+		,A.ODR				/* 차수 */
+		,SUBSTR(A.STD_PRMPC_CODE,1,2) AS UP_CD
+
+		,SUM(A.AMOUNT) AS AMT	/* 금액(원) */
+	FROM TBPRJ_PRSMP_PRMPC_SBJECT A				/* 추정원가_과목별 */
+	GROUP BY A.BSNS_CODE, A.BSNS_STEP, A.ODR, SUBSTR(A.STD_PRMPC_CODE,1,2)
+)
+SELECT
+	 A.BSNS_CODE		/* 사업코드 */
+	,A.BSNS_STEP		/* 사업단계 */
+	,A.ODR				/* 차수 */
+	,A.STD_PRMPC_CODE	/* 표준원가코드 */
+
+	,C.CL_SE			/* 분류구분 */
+	,C.FOM_SE			/* 형식구분 */
+	,DECODE(C.CL_SE, 1, C.LCLAS_NM, 2, C.MLSFC_NM, C.SCLAS_NM)
+	 AS CODE_NM			/* 원가항목명 */
+
+	,A.QY				/* 수량 */
+	,A.UNTPC			/* 단가 */
+	,A.UNIT_NM			/* 단위 */
+	,DECODE(C.FOM_SE, 1, S.AMT, A.AMOUNT) AS AMT	/* 금액(원) */
+FROM TBPRJ_PRSMP_PRMPC_SBJECT A				/* 추정원가_과목별 */
+JOIN TBPRJ_PRMPC_CODE C						/* 원가코드 */
+  ON C.STD_PRMPC_CODE = A.STD_PRMPC_CODE
+LEFT JOIN DATA S
+  ON S.BSNS_CODE = A.BSNS_CODE
+ AND S.BSNS_STEP = A.BSNS_STEP
+ AND S.ODR = A.ODR
+ AND S.UP_CD = SUBSTR(A.STD_PRMPC_CODE,1,2)
+WHERE A.BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND A.BSNS_STEP = #BSNS_STEP#		/* 사업단계 */
+  AND A.ODR = #ODR#					/* 차수 */
+ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 추정원가_과목별 추가 -->
+	<insert id="PRJ020301.mC" parameterClass="map">
+INSERT INTO TBPRJ_PRSMP_PRMPC_SBJECT (			/* 추정원가_과목별 */
+	 BSNS_CODE		/* 사업코드 */
+	,BSNS_STEP		/* 사업단계 */
+	,ODR			/* 차수 */
+	,STD_PRMPC_CODE	/* 표준원가코드 */
+
+	,QY			/* 수량 */
+	,UNTPC		/* 단가 */
+	,UNIT_NM	/* 단위 */
+	,AMOUNT		/* 금액 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#	/* 사업코드 */
+	,#BSNS_STEP#	/* 사업단계 */
+	,#ODR#			/* 차수 */
+	,#STD_PRMPC_CODE#	/* 표준원가코드 */
+
+	,#QY#				/* 수량 */
+	,#UNTPC#			/* 단가 */
+	,#UNIT_NM#			/* 단위 */
+	,#AMT#				/* 금액(원) */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+)
+	</insert>
+
+	<!-- 추정원가_과목별 수정 -->
+	<update id="PRJ020301.mU" parameterClass="map">
+UPDATE TBPRJ_PRSMP_PRMPC_SBJECT			/* 추정원가_과목별 */
+  SET
+	 QY = #QY#					/* 수량 */
+	,UNTPC = #UNTPC#			/* 단가 */
+	,UNIT_NM = #UNIT_NM#		/* 단위 */
+	,AMOUNT = #AMT#				/* 금액(원) */
+
+	,UPDUSR_ID = #S_USER_ID#	/* 수정자ID */
+	,UPDT_DT = SYSDATE			/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND BSNS_STEP = #BSNS_STEP#		/* 사업단계 */
+  AND ODR = #ODR#					/* 차수 */
+  AND STD_PRMPC_CODE = #STD_PRMPC_CODE#			/* 표준원가코드 */
+	</update>
+
+	<!-- 추정원가_과목별 삭제 -->
+	<delete id="PRJ020301.mD" parameterClass="map">
+DELETE FROM TBPRJ_PRSMP_PRMPC_SBJECT			/* 추정원가_과목별 */
+WHERE BSNS_CODE = #BSNS_CODE#	/* 사업코드 */
+  AND BSNS_STEP = #BSNS_STEP#	/* 사업단계 */
+  AND ODR = #ODR#				/* 차수 */
+<isNotEmpty property="STD_PRMPC_CODE" >
+  AND STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+</isNotEmpty>
+	</delete>
+
+	<!-- 추정원가년차 ================================================== -->
+
+	<!-- 추정원가년차 조회 -->
+	<select id="PRJ020301.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE		/* 사업코드 */
+	,A.BSNS_STEP		/* 사업단계 */
+	,A.ODR				/* 차수 */
+	,A.STD_PRMPC_CODE	/* 표준원가코드 */
+	,A.YRYC				/* 연차 */
+
+	,A.YEAR					/* 년도 */
+	,A.AMOUNT AS AMT		/* 금액(원) */
+	,A.EXPENS_ELSE			/* 제경비외 */
+	,A.INVT_DTLS			/* 투자기초및내역 */
+FROM TBPRJ_PRSMP_PRMPC_DSTRC A			/* 추정원가년차 */
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A.BSNS_STEP = #BSNS_STEP#			/* 사업단계 */
+  AND A.ODR = #ODR#						/* 차수 */
+  AND A.STD_PRMPC_CODE = #STD_PRMPC_CODE#	/* 표준원가코드 */
+ORDER BY 1,2,3,4,5
+	</select>
+
+	<!-- 추정원가년차 추가 -->
+	<insert id="PRJ020301.rC" parameterClass="map">
+INSERT INTO TBPRJ_PRSMP_PRMPC_DSTRC (			/* 추정원가년차 */
+	 BSNS_CODE		/* 사업코드 */
+	,BSNS_STEP		/* 사업단계 */
+	,ODR			/* 차수 */
+	,STD_PRMPC_CODE	/* 표준원가코드 */
+	,YRYC			/* 연차 */
+
+	,YEAR				/* 년도 */
+	,AMOUNT				/* 금액(원) */
+	,EXPENS_ELSE		/* 제경비외 */
+	,INVT_DTLS			/* 투자기초및내역 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#		/* 사업코드 */
+	,#BSNS_STEP#		/* 사업단계 */
+	,#ODR#				/* 차수 */
+	,#STD_PRMPC_CODE#	/* 표준원가코드 */
+	,#YRYC#				/* 연차 */
+
+	,#YEAR#				/* 년도 */
+	,#AMT#				/* 금액(원) */
+	,#EXPENS_ELSE#		/* 제경비외 */
+	,#INVT_DTLS#		/* 투자기초및내역 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+)
+	</insert>
+
+	<!-- 추정원가년차 수정 -->
+	<update id="PRJ020301.rU" parameterClass="map">
+UPDATE TBPRJ_PRSMP_PRMPC_DSTRC			/* 추정원가년차 */
+  SET
+	 YEAR = #YEAR#					/* 년도 */
+	,AMOUNT = #AMT#					/* 금액(원) */
+	,EXPENS_ELSE = #EXPENS_ELSE#	/* 제경비외 */
+	,INVT_DTLS = #INVT_DTLS#		/* 투자기초및내역 */
+
+	,UPDUSR_ID = #S_USER_ID#	/* 수정자ID */
+	,UPDT_DT = SYSDATE			/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND BSNS_STEP = #BSNS_STEP#		/* 사업단계 */
+  AND ODR = #ODR#					/* 차수 */
+  AND STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+  AND YRYC = #YRYC#					/* 연차 */
+	</update>
+
+	<!-- 추정원가년차 삭제 -->
+	<delete id="PRJ020301.rD" parameterClass="map">
+DELETE FROM TBPRJ_PRSMP_PRMPC_DSTRC			/* 추정원가년차 */
+WHERE BSNS_CODE = #BSNS_CODE#	/* 사업코드 */
+  AND BSNS_STEP = #BSNS_STEP#	/* 사업단계 */
+  AND ODR = #ODR#				/* 차수 */
+<isNotEmpty property="STD_PRMPC_CODE" >
+  AND STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+</isNotEmpty>
+<isNotEmpty property="YRYC" >
+  AND YRYC = #YRYC#				/* 연차 */
+</isNotEmpty>
+	</delete>
+
+	<!-- 차수복사 ================================================== -->
+
+	<insert id="PRJ020301.copy1" parameterClass="map">
+INSERT INTO TBPRJ_PRSMP_PRMPC (			/* 추정원가 */
+	 BSNS_CODE		/* 사업코드 */
+	,BSNS_STEP		/* 사업단계 */
+	,ODR			/* 차수 */
+
+	,ODR_DTLS			/* 차수내역 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+)
+SELECT
+	 #BSNS_CODE#	/* 사업코드 */
+	,#BSNS_STEP#	/* 계약번호 */
+	,#ODR#			/* 공사일자 */
+
+	,A.ODR_DTLS			/* 차수내역 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+FROM DUAL
+LEFT JOIN TBPRJ_PRSMP_PRMPC A
+  ON A.BSNS_CODE = #BSNS_CODE_SRC#		/* 사업코드 */
+ AND A.BSNS_STEP = #BSNS_STEP_SRC#		/* 사업단계 */
+ AND A.ODR = #ODR_SRC#					/* 차수 */
+	</insert>
+
+	<insert id="PRJ020301.copy2" parameterClass="map">
+INSERT INTO TBPRJ_PRSMP_PRMPC_SBJECT (			/* 추정원가_과목별 */
+	 BSNS_CODE		/* 사업코드 */
+	,BSNS_STEP		/* 사업단계 */
+	,ODR			/* 차수 */
+	,STD_PRMPC_CODE	/* 표준원가코드 */
+
+	,QY			/* 수량 */
+	,UNTPC		/* 단가 */
+	,UNIT_NM	/* 단위 */
+	,AMOUNT		/* 금액 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+)
+SELECT
+	 #BSNS_CODE#		/* 사업코드 */
+	,#BSNS_STEP#		/* 계약번호 */
+	,#ODR#				/* 공사일자 */
+	,A.STD_PRMPC_CODE	/* 표준원가코드 */
+
+	,A.QY		/* 수량 */
+	,A.UNTPC	/* 단가 */
+	,A.UNIT_NM	/* 단위 */
+	,A.AMOUNT	/* 금액 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+FROM TBPRJ_PRSMP_PRMPC_SBJECT A			/* 추정원가_과목별 */
+WHERE A.BSNS_CODE = #BSNS_CODE_SRC#		/* 사업코드 */
+  AND A.BSNS_STEP = #BSNS_STEP_SRC#		/* 사업단계 */
+  AND A.ODR = #ODR_SRC#					/* 차수 */
+	</insert>
+
+	<insert id="PRJ020301.copy3" parameterClass="map">
+INSERT INTO TBPRJ_PRSMP_PRMPC_DSTRC (			/* 추정원가년차 */
+	 BSNS_CODE		/* 사업코드 */
+	,BSNS_STEP		/* 사업단계 */
+	,ODR			/* 차수 */
+	,STD_PRMPC_CODE		/* 표준원가코드 */
+	,YRYC			/* 연차 */
+
+	,YEAR				/* 년도 */
+	,AMOUNT				/* 금액 */
+	,EXPENS_ELSE		/* 제경비외 */
+	,INVT_DTLS			/* 투자기초및내역 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+)
+SELECT
+	 #BSNS_CODE#	/* 사업코드 */
+	,#BSNS_STEP#	/* 계약번호 */
+	,#ODR#			/* 공사일자 */
+	,A.STD_PRMPC_CODE	/* 표준원가코드 */
+	,A.YRYC			/* 연차 */
+
+	,A.YEAR				/* 년도 */
+	,A.AMOUNT			/* 금액 */
+	,A.EXPENS_ELSE		/* 제경비외 */
+	,A.INVT_DTLS		/* 투자기초및내역 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+FROM TBPRJ_PRSMP_PRMPC_DSTRC A			/* 추정원가년차 */
+WHERE A.BSNS_CODE = #BSNS_CODE_SRC#		/* 사업코드 */
+  AND A.BSNS_STEP = #BSNS_STEP_SRC#		/* 사업단계 */
+  AND A.ODR = #ODR_SRC#					/* 차수 */
+	</insert>
+
+	<!-- 엑셀 ================================================== -->
+
+	<select id="PRJ020301.xlsList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE		/* 사업코드 */
+	,A.BSNS_STEP		/* 사업단계 */
+	,A.ODR				/* 차수 */
+	,A.STD_PRMPC_CODE	/* 표준원가코드 */
+
+	,C.CL_SE			/* 분류구분 */
+	,C.LCLAS_NM			/* 대분류명 */
+	,C.MLSFC_NM			/* 중분류명 */
+	,C.SCLAS_NM			/* 소분류명 */
+
+	,A.QY				/* 수량 */
+	,A.UNIT_NM			/* 단위 */
+	,A.UNTPC			/* 단가 */
+	,A.AMOUNT AS AMT	/* 금액(원) */
+FROM TBPRJ_PRSMP_PRMPC_SBJECT A				/* 추정원가_과목별 */
+JOIN TBPRJ_PRMPC_CODE C						/* 원가코드 */
+  ON C.STD_PRMPC_CODE = A.STD_PRMPC_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#		/* 사업코드 */
+  AND A.BSNS_STEP = #BSNS_STEP#		/* 사업단계 */
+  AND A.ODR = #ODR#					/* 차수 */
+ORDER BY 1,2,3,4
+	</select>
+
+</sqlMap>

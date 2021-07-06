@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG010104_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+
+	<!-- 입력가능여부 조회 -->
+	<select id="BDG010104DAO.selectInpYn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.selectInpYn*/]]>
+		SELECT CASE WHEN COUNT(1) > 0 THEN '1' ELSE '0' END AS INP_YN
+		FROM   TBBDG_BUDGET_FRMTN_PD t1
+		       LEFT OUTER JOIN TBBDG_BUDGET_FRMTN_PD_DEPT t2
+		            ON t1.YEAR = t2.YEAR
+		           AND t1.SN = t2.SN
+		WHERE  t1.USE_AT = '1'
+		AND    t1.REQST_SE = '1'    /*요구*/
+		AND    t1.BUDGET_SE = '0'   /*본예산*/
+		AND    TO_CHAR(SYSDATE, 'YYYYMMDD') BETWEEN t1.BGNDE AND t1.ENDDE
+		AND    t1.YEAR = #YEAR#
+<!-- 		<isNotEmpty property="DEPT_CODE" prepend="AND    ">(t2.DEPT_CODE = '000000' OR t2.DEPT_CODE = #DEPT_CODE#)</isNotEmpty> -->
+		<isNotEmpty property="DEPT_CODE"><isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">(t2.DEPT_CODE = '000000' OR t2.DEPT_CODE = #DEPT_CODE#)</isNotEqual></isNotEmpty>
+	</select>
+
+
+	<!-- 예산계정코드 조회 -->
+	<select id="BDG010104DAO.selectBudgetAcntCode" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.selectBudgetAcntCode*/]]>
+		WITH BUDGET_ACNT_TREE AS (
+		    SELECT ROWNUM AS RNUM
+		          ,YEAR
+		          ,BSNS_SE
+		          ,BALC_SE
+		          ,BUDGET_ACNT_CODE
+		          ,BUDGET_ACNT_NM
+		          ,BUDGET_ACNT_NM2
+		          ,ACNT_LEVEL
+		          ,UPPER_ACNT_CODE
+		          ,ELPD_EXCUT_RT
+		          ,ELPD_EXCUT_AT
+		          ,PLAN_REGIST_AT
+		          ,CHIT_PROCESS_AT
+		          ,COST_ACNT_CODE
+		          ,COST_ACNT_NM
+		          ,PARTN_ACNT_CODE
+		          ,PARTN_ACNT_NM
+		          ,SYS_CONNECT_BY_PATH(BUDGET_ACNT_NM2,'|')||'|'    AS ACNT_NM_PATH
+		    FROM   (
+		            SELECT a1.YEAR
+		                  ,a1.BSNS_SE
+		                  ,a1.BALC_SE
+		                  ,a1.BUDGET_ACNT_CODE
+		                  ,a1.BUDGET_ACNT_NM
+		                  ,(CASE WHEN a1.ACNT_LEVEL &lt; '4' THEN SUBSTR(a1.BUDGET_ACNT_CODE, 1, 3)
+		                         WHEN SUBSTR(a1.BUDGET_ACNT_CODE, 6) = '00' THEN SUBSTR(a1.BUDGET_ACNT_CODE, 1, 3)||'-'||SUBSTR(a1.BUDGET_ACNT_CODE, 4, 2)
+		                         ELSE SUBSTR(a1.BUDGET_ACNT_CODE, 1, 3)||'-'||SUBSTR(a1.BUDGET_ACNT_CODE, 4)    END) ||'.'|| a1.BUDGET_ACNT_NM     AS BUDGET_ACNT_NM2
+		                  ,DECODE(a1.ACNT_LEVEL,'7', '4',a1.ACNT_LEVEL)                                     AS ACNT_LEVEL
+		                  ,a1.UPPER_ACNT_CODE
+		                  ,a1.ELPD_EXCUT_RT
+		                  ,a1.ELPD_EXCUT_AT
+		                  ,a1.PLAN_REGIST_AT
+		                  ,a1.CHIT_PROCESS_AT
+		                  ,a1.COST_ACNT_CODE
+		                  ,a2.ACCNUT_ACNT_NM    AS COST_ACNT_NM
+		                  ,a1.PARTN_ACNT_CODE
+		                  ,a3.ACCNUT_ACNT_NM    AS PARTN_ACNT_NM
+		            FROM   TBBDG_BUDGET_ACNT_CODE a1
+		                   LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT a2
+		                        ON a1.YEAR = a2.ACCNUT_YEAR
+		                       AND a1.COST_ACNT_CODE = a2.ACCNUT_ACNT_CODE
+		                   LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT a3
+		                        ON a1.YEAR = a3.ACCNUT_YEAR
+		                       AND a1.PARTN_ACNT_CODE = a3.ACCNUT_ACNT_CODE
+		            WHERE  a1.YEAR    = #YEAR#
+		            AND    a1.BSNS_SE = #BSNS_SE#
+		            AND    a1.BALC_SE = #BALC_SE#
+		           )
+		    START WITH UPPER_ACNT_CODE IS NULL
+		    CONNECT BY PRIOR BUDGET_ACNT_CODE = UPPER_ACNT_CODE
+		    ORDER SIBLINGS BY YEAR
+		                     ,BSNS_SE
+		                     ,BALC_SE
+		                     ,BUDGET_ACNT_CODE
+		)
+		SELECT s1.YEAR                              AS YEAR
+		      ,s1.BSNS_SE                           AS BSNS_SE
+		      ,s1.BALC_SE                           AS BALC_SE
+		      ,s1.BUDGET_ACNT_CODE                  AS BUDGET_ACNT_CODE
+		      ,s1.BUDGET_ACNT_NM                    AS BUDGET_ACNT_NM
+		      ,s1.ACNT_LEVEL                        AS ACNT_LEVEL
+		      ,s1.UPPER_ACNT_CODE                   AS UPPER_ACNT_CODE
+		      ,s1.ELPD_EXCUT_RT                     AS ELPD_EXCUT_RT
+		      ,s1.ELPD_EXCUT_AT                     AS ELPD_EXCUT_AT
+		      ,s1.PLAN_REGIST_AT                    AS PLAN_REGIST_AT
+		      ,SUBSTR(s1.ACNT_NM_PATH, INSTR(s1.ACNT_NM_PATH, '|', 1, 1)+1, INSTR(s1.ACNT_NM_PATH, '|', 1, 1+1) - INSTR(s1.ACNT_NM_PATH, '|', 1, 1)-1) AS GWAN
+		      ,SUBSTR(s1.ACNT_NM_PATH, INSTR(s1.ACNT_NM_PATH, '|', 1, 2)+1, INSTR(s1.ACNT_NM_PATH, '|', 1, 2+1) - INSTR(s1.ACNT_NM_PATH, '|', 1, 2)-1) AS HANG
+		      ,SUBSTR(s1.ACNT_NM_PATH, INSTR(s1.ACNT_NM_PATH, '|', 1, 3)+1, INSTR(s1.ACNT_NM_PATH, '|', 1, 3+1) - INSTR(s1.ACNT_NM_PATH, '|', 1, 3)-1) AS SEHANG
+		      ,SUBSTR(s1.ACNT_NM_PATH, INSTR(s1.ACNT_NM_PATH, '|', 1, 4)+1, INSTR(s1.ACNT_NM_PATH, '|', 1, 4+1) - INSTR(s1.ACNT_NM_PATH, '|', 1, 4)-1) AS MOK
+		      ,s1.BUDGET_ACNT_NM2
+		      ,(SELECT COUNT(1) FROM TBBDG_EXPNDTR_UNIT_CODE WHERE YEAR = s1.YEAR AND BSNS_SE = s1.BSNS_SE AND BALC_SE = s1.BALC_SE AND BUDGET_ACNT_CODE = s1.BUDGET_ACNT_CODE)  AS EXPNDTR_UNIT_CNT
+		FROM   BUDGET_ACNT_TREE s1
+		WHERE  1=1
+	</select>
+
+
+	<!-- 지출단위코드 조회 -->
+	<select id="BDG010104DAO.selectExpndtrUnitCode" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.selectExpndtrUnitCode*/]]>
+		SELECT t1.YEAR
+		      ,t1.BSNS_SE
+		      ,t1.BALC_SE
+		      ,t1.BUDGET_ACNT_CODE
+		      ,t1.EXPNDTR_UNIT_CODE
+		      ,t1.EXPNDTR_UNIT_NM
+		      ,t1.DETAIL_BSNS_CODE
+		      ,t2.SE_ACCNUT_ACNT_NM AS DETAIL_BSNS_NM
+		      ,t1.TAXITM_CODE
+		      ,t1.TAXITM_NM
+		      ,t1.DEPT_CODE
+		      ,t1.DEPT_NM
+		      /*,SUBSTR(t1.EXPNDTR_UNIT_CODE, 7) AS UNIT_CODE*/
+		      ,SUBSTR(t1.EXPNDTR_UNIT_CODE, 5) AS UNIT_CODE
+		      ,t1.EXCUT_UNIT_AT
+		      ,t1.ELPD_EXCUT_AT
+		      ,t1.ELPD_EXCUT_RT
+		      ,t1.BUDGET_CNRL_AT
+		      /*,SUBSTR(t1.EXPNDTR_UNIT_CODE, 5,2) AS BSNS_UNIT_CODE*/
+		      ,SUBSTR(t1.EXPNDTR_UNIT_CODE, 0,2) AS BSNS_UNIT_CODE
+		FROM   TBBDG_EXPNDTR_UNIT_CODE t1,
+         	   TBACC_SE_ACCNUT_ACNT_CODE t2
+		WHERE  t1.YEAR 			   = t2.ACCNUT_YEAR
+		AND	   t1.DETAIL_BSNS_CODE = t2.SE_ACCNUT_ACNT_CODE
+		AND    t1.YEAR             = #YEAR#
+		AND    t1.BSNS_SE          = #BSNS_SE#
+		AND    t1.BALC_SE          = #BALC_SE#
+		AND    t1.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">
+				t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEqual>
+		</isNotEmpty>   
+		ORDER BY t1.YEAR
+		        ,t1.BSNS_SE
+		        ,t1.BALC_SE
+		        ,t1.BUDGET_ACNT_CODE
+	</select>
+
+
+	<!-- 지출단위코드 추가 -->
+	<insert id="BDG010104DAO.insertExpndtrUnitCode" parameterClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.insertExpndtrUnitCode*/]]>
+		INSERT INTO TBBDG_EXPNDTR_UNIT_CODE(
+		     YEAR
+		    ,BSNS_SE
+		    ,BALC_SE
+		    ,BUDGET_ACNT_CODE
+		    ,EXPNDTR_UNIT_CODE
+		    ,EXPNDTR_UNIT_NM
+		    ,DETAIL_BSNS_CODE
+		    ,TAXITM_CODE
+		    ,TAXITM_NM
+		    ,DEPT_CODE
+		    ,DEPT_NM
+		    ,EXCUT_UNIT_AT
+		    ,ELPD_EXCUT_AT
+		    ,ELPD_EXCUT_RT
+		    ,BUDGET_CNRL_AT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES (
+		     #YEAR#
+		    ,#BSNS_SE#
+		    ,#BALC_SE#
+		    ,#BUDGET_ACNT_CODE#
+		    ,#EXPNDTR_UNIT_CODE#
+		    ,#EXPNDTR_UNIT_NM#
+		    ,#DETAIL_BSNS_CODE#
+		    ,#TAXITM_CODE#
+		    ,#TAXITM_NM#
+		    ,#DEPT_CODE#
+		    ,#DEPT_NM#
+		    ,NVL(#EXCUT_UNIT_AT#,0)
+		    ,NVL(#ELPD_EXCUT_AT#,0)
+		    ,NVL(#ELPD_EXCUT_RT#,0)
+		    ,#BUDGET_CNRL_AT#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	</insert>
+
+
+	<!-- 지출단위코드 수정 -->
+	<update id="BDG010104DAO.updateExpndtrUnitCode" parameterClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.updateExpndtrUnitCode*/]]>
+		UPDATE TBBDG_EXPNDTR_UNIT_CODE
+		SET    YEAR              = #YEAR#
+		      ,BSNS_SE           = #BSNS_SE#
+		      ,BALC_SE           = #BALC_SE#
+		      ,BUDGET_ACNT_CODE  = #BUDGET_ACNT_CODE#
+		      ,EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+		      ,EXPNDTR_UNIT_NM   = #EXPNDTR_UNIT_NM#
+		      ,DETAIL_BSNS_CODE  = #DETAIL_BSNS_CODE#
+		      ,TAXITM_CODE       = #TAXITM_CODE#
+		      ,TAXITM_NM         = #TAXITM_NM#
+		      ,DEPT_CODE         = #DEPT_CODE#
+		      ,DEPT_NM           = #DEPT_NM#
+		      ,EXCUT_UNIT_AT     = NVL(#EXCUT_UNIT_AT#,0)
+		      ,ELPD_EXCUT_AT     = NVL(#ELPD_EXCUT_AT#,0)
+		      ,ELPD_EXCUT_RT     = NVL(#ELPD_EXCUT_RT#,0)
+		      ,BUDGET_CNRL_AT	 = #BUDGET_CNRL_AT#
+		      ,UPDUSR_ID         = #S_USER_ID#
+		      ,UPDT_DT           = SYSDATE
+		WHERE  YEAR              = #YEAR#
+		AND    BSNS_SE           = #BSNS_SE#
+		AND    BALC_SE           = #BALC_SE#
+		AND    BUDGET_ACNT_CODE  = #BUDGET_ACNT_CODE#
+		AND    EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+	</update>
+
+
+	<!-- 지출단위코드 삭제 -->
+	<delete id="BDG010104DAO.deleteExpndtrUnitCode" parameterClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.deleteExpndtrUnitCode*/]]>
+		DELETE
+		FROM   TBBDG_EXPNDTR_UNIT_CODE
+		WHERE  YEAR              = #YEAR#
+		AND    BSNS_SE           = #BSNS_SE#
+		AND    BALC_SE           = #BALC_SE#
+		AND    BUDGET_ACNT_CODE  = #BUDGET_ACNT_CODE#
+		AND    EXPNDTR_UNIT_CODE = #EXPNDTR_UNIT_CODE#
+	</delete>
+
+
+	<!-- 해당 년도를 사용하고 있는 테이블 조회 -->
+	<select id="BDG010104DAO.selectUseYearCnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.selectUseYearCnt*/]]>
+		SELECT LISTAGG(COLUMN_NAME || ' ' || CNT || '건', ',') WITHIN GROUP (ORDER BY CNT DESC)      AS RTN_MSG
+		      ,NVL(SUM(CNT),0)                                                                      AS TOT_CNT
+		FROM   (
+		        SELECT COUNT (1) AS CNT, '요구예산' AS COLUMN_NAME
+		        FROM   TBBDG_DEMAND_BUDGET
+		        WHERE  YEAR             = #YEAR#
+		        UNION ALL
+		        SELECT COUNT (1) AS CNT, '편성예산' AS COLUMN_NAME
+		        FROM   TBBDG_FRMTN_BUDGET
+		        WHERE  YEAR             = #YEAR#
+		        UNION ALL
+		        SELECT COUNT (1) AS CNT, '회계지출결의' AS COLUMN_NAME
+		        FROM   VHACC_EXP_DSN_MASTR
+		        WHERE  BUDGET_YEAR      = #YEAR#
+		       )
+		WHERE  CNT > 0
+	</select>
+
+	<!-- 해당 계정코드를 사용하고 있는 테이블 조회 -->
+	<select id="BDG010104DAO.selectUseAcntCnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.selectUseAcntCnt*/]]>
+		SELECT LISTAGG(COLUMN_NAME || ' ' || CNT || '건', ',') WITHIN GROUP (ORDER BY CNT DESC)      AS RTN_MSG
+		      ,NVL(SUM(CNT),0)                                                                      AS TOT_CNT
+		FROM   (
+		        SELECT COUNT (1) AS CNT, '요구예산' AS COLUMN_NAME
+		        FROM   TBBDG_DEMAND_BUDGET
+		        WHERE  YEAR             = #YEAR#
+		        AND    BSNS_SE          = #BSNS_SE#
+		        AND    BALC_SE          = #BALC_SE#
+		        AND    BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		        AND    EXPNDTR_UNIT_CODE= #EXPNDTR_UNIT_CODE#
+		        UNION ALL
+		        SELECT COUNT (1) AS CNT, '편성예산' AS COLUMN_NAME
+		        FROM   TBBDG_FRMTN_BUDGET
+		        WHERE  YEAR             = #YEAR#
+		        AND    BSNS_SE          = #BSNS_SE#
+		        AND    BALC_SE          = #BALC_SE#
+		        AND    BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		        AND    EXPNDTR_UNIT_CODE= #EXPNDTR_UNIT_CODE#
+		        UNION ALL
+		        SELECT COUNT (1) AS CNT, '회계지출결의' AS COLUMN_NAME
+		        FROM   VHACC_EXP_DSN_MASTR
+		        WHERE  BUDGET_YEAR      = #YEAR#
+		        AND    BSNS_SE          = #BSNS_SE#
+		        AND    BALC_SE          = #BALC_SE#
+		        AND    BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		        AND    EXPNDTR_UNIT_CODE= #EXPNDTR_UNIT_CODE#
+		       )
+		WHERE  CNT > 0
+	</select>
+
+
+	<!-- (전년도복사_삭제) 회계에서 사용중인 지출단위코드는 삭제해서는 안됨 -->
+	<delete id="BDG010104DAO.deleteCopyPrvYear" parameterClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.deleteCopyPrvYear*/]]>
+		DELETE
+		FROM   TBBDG_EXPNDTR_UNIT_CODE t1
+		WHERE  NOT EXISTS (
+		    SELECT *
+		    FROM   VHACC_EXP_DSN_MASTR
+		    WHERE  BUDGET_YEAR      = t1.YEAR
+		    AND    BSNS_SE          = t1.BSNS_SE
+		    AND    BALC_SE          = t1.BALC_SE
+		    AND    BUDGET_ACNT_CODE = t1.BUDGET_ACNT_CODE
+		    AND    EXPNDTR_UNIT_CODE = t1.EXPNDTR_UNIT_CODE
+		)
+		AND    YEAR    = #YEAR#
+	</delete>
+
+
+	<!-- (전년도복사_추가) 회계에서 사용중인 지출단위코드는 삭제해서는 안됨 -->
+	<insert id="BDG010104DAO.insertCopyPrvYear" parameterClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.insertCopyPrvYear*/]]>
+		INSERT INTO TBBDG_EXPNDTR_UNIT_CODE (
+		     YEAR
+		    ,BSNS_SE
+		    ,BALC_SE
+		    ,BUDGET_ACNT_CODE
+		    ,EXPNDTR_UNIT_CODE
+		    ,EXPNDTR_UNIT_NM
+		    ,DETAIL_BSNS_CODE
+		    ,TAXITM_CODE
+		    ,TAXITM_NM
+		    ,DEPT_CODE
+		    ,DEPT_NM
+		    ,EXCUT_UNIT_AT
+		    ,ELPD_EXCUT_AT
+		    ,ELPD_EXCUT_RT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		SELECT #YEAR#
+		      ,t1.BSNS_SE
+		      ,t1.BALC_SE
+		      ,t1.BUDGET_ACNT_CODE
+		      ,t1.EXPNDTR_UNIT_CODE
+		      ,t1.EXPNDTR_UNIT_NM
+		      ,t1.DETAIL_BSNS_CODE
+		      ,t1.TAXITM_CODE
+		      ,t1.TAXITM_NM
+		      ,t1.DEPT_CODE
+		      ,t1.DEPT_NM
+		      ,t1.EXCUT_UNIT_AT
+		      ,t1.ELPD_EXCUT_AT
+		      ,t1.ELPD_EXCUT_RT
+		      ,#S_USER_ID#
+		      ,SYSDATE
+		      ,#S_USER_ID#
+		      ,SYSDATE
+		FROM   TBBDG_EXPNDTR_UNIT_CODE t1
+		WHERE  t1.YEAR    = TO_NUMBER(#YEAR#)-1
+		AND    NOT EXISTS (
+		    SELECT *
+		    FROM   TBBDG_EXPNDTR_UNIT_CODE
+		    WHERE  YEAR              = t1.YEAR+1
+		    AND    BSNS_SE           = t1.BSNS_SE
+		    AND    BALC_SE           = t1.BALC_SE
+		    AND    BUDGET_ACNT_CODE  = t1.BUDGET_ACNT_CODE
+		    AND    EXPNDTR_UNIT_CODE = t1.EXPNDTR_UNIT_CODE
+<![CDATA[   AND	   DEPT_CODE 		 <> '-'	]]>
+		    AND	   DEPT_CODE IS NOT NULL
+		)
+	</insert>
+	
+	<!-- 해당 계정코드를 사용하고 있는 테이블 조회 -->
+	<select id="BDG010104DAO.selectBsnsAcntCode" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG010104DAO.selectBsnsAcntCode*/]]>
+		SELECT EXPNDTR_BSNS_CODE
+  		  FROM TBACC_SE_ACCNUT_ACNT_CODE
+	 	 WHERE ACCNUT_YEAR = #YEAR#
+		   AND SE_ACCNUT_ACNT_CODE = #DETAIL_BSNS_CODE#
+	</select>
+	
+</sqlMap>

@@ -1,0 +1,480 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN040402_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 년월별 주 조회 -->
+	<select id="FUN040402DAO.selectWeekList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT  WEEK_ATMB       AS CODE
+			       ,WEEK_ATMB||'주' AS CODE_NM
+			       , (SELECT TO_CHAR(SYSDATE,'W') FROM DUAL) AS THIS_WEEK_NUM /*금주 순번취득*/
+			  FROM TBFUN_YEAR_ACCTO_WEEK_ESTBS 
+			 WHERE 1 = 1 
+			   AND PLAN_YM = #PLAN_YM# 
+			   AND BGNDE IS NOT NULL 
+			   AND ENDDE IS NOT NULL
+	    ]]>
+    </select>
+	
+	<!-- 월간 수입/지출 계획 현황 조회 -->
+	<select id="FUN040402DAO.selectMnthngCptalPlanList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT  A.PLAN_YM                       AS PLAN_YM
+			       ,A.DEPT_CODE                     AS DEPT_CODE
+			       ,B.DEPT_NM                       AS DEPT_NM
+			       ,A.BSNS_SE||A.BALC_SE            AS BUDGET_ACNT_SE
+			       ,A.BUDGET_ACNT_CODE              AS BUDGET_ACNT_CODE
+			       ,SFBDG_BUDGET_NAME(A.BUDGET_YEAR, A.BSNS_SE, A.BALC_SE, A.BUDGET_ACNT_CODE, null) AS BUDGET_ACNT_CODE_NM
+			       ,A.EXPNDTR_UNIT_CODE             AS EXPNDTR_UNIT_CODE
+			       ,SFBDG_BUDGET_NAME(A.BUDGET_YEAR, A.BSNS_SE, A.BALC_SE, A.BUDGET_ACNT_CODE, A.EXPNDTR_UNIT_CODE) AS EXPNDTR_UNIT_NM
+			       ,A.BUDGET_YEAR                   AS BUDGET_YEAR
+			       ,A.CONFM_AT                      AS CONFM_AT
+	               ,(
+	                SELECT SUM(NVL(ORIBDGT, 0)
+		                  + NVL(RVSPBGT_1_ODR, 0)
+		                  + NVL(RVSPBGT_2_ODR, 0) 
+		                  + NVL(RVSPBGT_3_ODR, 0) 
+		                  + NVL(RVSPBGT_4_ODR, 0)
+		                  + NVL(RVSPBGT_5_ODR, 0)
+		                  + NVL(RVSPBGT_6_ODR, 0)
+		                  + NVL(RVSPBGT_7_ODR, 0)
+		                  + NVL(CYFD_BUDGET, 0)
+		                  + NVL(MVMN_AM, 0)
+		                  + NVL(BUKIP_MVMN_AM, 0)
+		                  + NVL(DVR_AM, 0)
+		                  + NVL(RSVFND_REQST_AM, 0)
+		                  + NVL(TRSF_AM, 0)
+		            )
+					  FROM TBBDG_EXECUT_BUDGET                                 /*실행예산테이블*/                                                                                                                           
+					 WHERE YEAR               = A.BUDGET_YEAR                  /*예산년도*/                                                                                                                            
+					   AND BSNS_SE            = A.BSNS_SE
+					   AND BALC_SE            = A.BALC_SE                                                                                                                                                 
+					   AND BUDGET_ACNT_CODE   = A.BUDGET_ACNT_CODE             /*예산계정코드*/
+					   AND EXPNDTR_UNIT_CODE  = A.EXPNDTR_UNIT_CODE            /*지출단위코드*/
+					)                               AS BUDGET_AMOUNT              /*예산 금액*/
+	               ,NVL(D.DECSN_AMOUNT,0)			AS EXPNDTR_AMOUNT	                                      /*예산 집행금액*/  
+			       ,A.PLAN_AMOUNT                   AS PLAN_AMOUNT
+			       ,DECODE(NVL(A.CONFM_AT,'0'),'0',A.PLAN_AMOUNT,A.DCSN_AMOUNT)   AS DCSN_AMOUNT
+			       ,(
+	                SELECT COUNT(*)
+	                  FROM TBFUN_WIK_CPTAL_PLAN
+	                 WHERE PLAN_YM           = A.PLAN_YM
+	                   AND BUDGET_YEAR       = A.BUDGET_YEAR
+	                   AND BSNS_SE           = A.BSNS_SE
+	                   AND BALC_SE           = A.BALC_SE
+	                   AND BUDGET_ACNT_CODE  = A.BUDGET_ACNT_CODE
+	                   AND EXPNDTR_UNIT_CODE = A.EXPNDTR_UNIT_CODE
+	                   AND SE = '1'
+			        )                               AS WIK_CNT                      /*주간건수*/
+			       ,NVL(C.EXPNDTR_POSBL_AT, '0')    AS EXPNDTR_POSBL_AT                                      /*지출가능여부*/   
+			       ,A.REGISTER_ID                   AS REGISTER_ID
+			       ,A.REGIST_DT                     AS REGIST_DT
+			       ,A.UPDUSR_ID                     AS UPDUSR_ID
+			       ,A.UPDT_DT                       AS UPDT_DT
+			  FROM  TBFUN_MNTHNG_CPTAL_PLAN A
+                    LEFT OUTER JOIN (SELECT YEAR
+                                            ,BSNS_SE
+                                            ,BALC_SE
+                                            ,BUDGET_ACNT_CODE
+                                            ,EXPNDTR_UNIT_CODE
+                                            ,EXPNDTR_POSBL_AT
+                                     FROM   TBBDG_EXECUT_BUDGET
+                                    )C
+                                 ON A.BUDGET_YEAR = C.YEAR
+                                AND A.BSNS_SE = C.BSNS_SE
+                                AND A.BALC_SE = C.BALC_SE
+                                AND A.BUDGET_ACNT_CODE = C.BUDGET_ACNT_CODE
+                                AND A.EXPNDTR_UNIT_CODE = C.EXPNDTR_UNIT_CODE
+			        LEFT OUTER JOIN (SELECT BUDGET_YEAR
+			                               ,BSNS_SE
+			                               ,BALC_SE
+			                               ,BUDGET_ACNT_CODE
+			                               ,EXPNDTR_UNIT_CODE
+			                               ,NVL(SUM(DECODE(ANACT_KND,'05', CAUSE_ACTION_AMOUNT*-1, CAUSE_ACTION_AMOUNT)),0)  AS CAUSE_ACTION_AMOUNT
+			                               ,NVL(SUM(DECODE(ANACT_KND,'05', DEBT_AMT*-1,            DEBT_AMT           )),0)  AS DEBT_AMT
+			                               ,NVL(SUM(DECSN_AMOUNT)),0)   AS DECSN_AMOUNT
+							]]>
+								<isGreaterEqual property="BUDGET_YEAR" compareValue="2018">
+								     FROM VWACC_EXP_DSN_MASTR
+								</isGreaterEqual>
+								<isLessThan property="BUDGET_YEAR" compareValue="2018">
+								     FROM VHACC_EXP_DSN_MASTR
+								</isLessThan>
+							<![CDATA[
+			                         WHERE  1=1
+			                           AND 	SUBSTR(CAUSE_ACTION_DE,1,6) BETWEEN BUDGET_YEAR||'01' AND BUDGET_YEAR||SUBSTR(#PLAN_YM#,5,2)
+			                         GROUP BY BUDGET_YEAR
+			                                 ,BSNS_SE
+			                                 ,BALC_SE
+			                                 ,BUDGET_ACNT_CODE
+			                                 ,EXPNDTR_UNIT_CODE
+			                        ) D
+			                     ON A.BUDGET_YEAR       = D.BUDGET_YEAR
+			                    AND A.BSNS_SE           = D.BSNS_SE
+			                    AND A.BALC_SE           = D.BALC_SE
+			                    AND A.BUDGET_ACNT_CODE  = D.BUDGET_ACNT_CODE
+			                    AND A.EXPNDTR_UNIT_CODE = D.EXPNDTR_UNIT_CODE  
+			       ,VWHRM_DEPT B
+			 WHERE 1=1
+			   AND A.PLAN_YM = #PLAN_YM#
+		]]>
+		<isNotEmpty property="ACNT_SE">
+		       AND A.BSNS_SE            = SUBSTR(#ACNT_SE#,1,1)
+		       AND A.BALC_SE            = SUBSTR(#ACNT_SE#,2,1)
+		</isNotEmpty>
+        <isNotEmpty property="DEPT_CODE">
+        	<isNotEqual property="DEPT_CODE" compareValue="000000">      
+               AND A.DEPT_CODE          = #DEPT_CODE#
+            </isNotEqual>
+        </isNotEmpty>		
+        <isNotEmpty property="CONFM_AT">
+               AND A.CONFM_AT          = #CONFM_AT#
+        </isNotEmpty>
+		<![CDATA[
+			   AND A.DEPT_CODE          = B.DEPT_CODE
+             ORDER BY A.DEPT_CODE, A.BSNS_SE, A.BALC_SE, A.REGIST_DT   
+	    ]]>
+    </select>	
+    
+	
+	<!-- 주간, 계획외지출 계획 현황 조회 -->
+	<select id="FUN040402DAO.selectWikCptalPlanList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT  A.PLAN_YM                        AS PLAN_YM                  /*계획년월*/
+				   ,A.DECSN_NO
+				   ,A.BUDGET_YEAR
+			       ,A.WEEK_ATMB                      AS WEEK_ATMB                /*주차*/
+			       ,A.SE					         AS SE                       /*주간계획구분*/
+			       ,DECODE(A.SE,'1','1','0')         AS MONTH_AT                 /*월계획여부*/
+			       ,A.SN                             AS SN                       /*일련번호*/
+			       ,A.DEPT_CODE                      AS DEPT_CODE                /*부서코드*/
+			       ,B.DEPT_NM                        AS DEPT_NM                  /*부서명*/
+			       ,A.BSNS_SE||A.BALC_SE             AS BUDGET_ACNT_SE           /*계정구분*/
+			       ,A.BUDGET_ACNT_CODE               AS BUDGET_ACNT_CODE         /*계정과목코드*/
+			       ,SFBDG_BUDGET_NAME(A.BUDGET_YEAR, A.BSNS_SE, A.BALC_SE, A.BUDGET_ACNT_CODE, null) AS BUDGET_ACNT_CODE_NM
+			       ,A.EXPNDTR_UNIT_CODE              AS EXPNDTR_UNIT_CODE		 /*지출단위코드*/
+			       ,SFBDG_BUDGET_NAME(A.BUDGET_YEAR, A.BSNS_SE, A.BALC_SE, A.BUDGET_ACNT_CODE, A.EXPNDTR_UNIT_CODE) AS EXPNDTR_UNIT_NM
+	               ,NVL((
+					SELECT SUM(NVL(ORIBDGT, 0)
+		                  + NVL(RVSPBGT_1_ODR, 0)
+		                  + NVL(RVSPBGT_2_ODR, 0) 
+		                  + NVL(RVSPBGT_3_ODR, 0) 
+		                  + NVL(RVSPBGT_4_ODR, 0)
+		                  + NVL(RVSPBGT_5_ODR, 0)
+		                  + NVL(RVSPBGT_6_ODR, 0)
+		                  + NVL(RVSPBGT_7_ODR, 0)
+		                  + NVL(CYFD_BUDGET, 0)
+		                  + NVL(MVMN_AM, 0)
+		                  + NVL(BUKIP_MVMN_AM, 0)
+		                  + NVL(DVR_AM, 0)
+		                  + NVL(RSVFND_REQST_AM, 0)
+		                  + NVL(TRSF_AM, 0)
+		            ) 
+					FROM   TBBDG_EXECUT_BUDGET                                                                                                                                                              
+					WHERE  YEAR              = A.BUDGET_YEAR                                                                                                                                                  
+					AND    BSNS_SE           = A.BSNS_SE
+					AND    BALC_SE           = A.BALC_SE                                                                                                                                             
+					AND    BUDGET_ACNT_CODE  = A.BUDGET_ACNT_CODE                                                                                                                                           
+					AND    EXPNDTR_UNIT_CODE = A.EXPNDTR_UNIT_CODE
+					),0) AS BUDGET_AMOUNT               /*예산(승인) 금액*/
+	               ,(
+					NVL(SUM(DECSN_AMOUNT)),0)   AS DECSN_AMOUNT
+			]]>
+				<isGreaterEqual property="BUDGET_YEAR" compareValue="2018">
+				    FROM VWACC_EXP_DSN_MASTR
+				</isGreaterEqual>
+				<isLessThan property="BUDGET_YEAR" compareValue="2018">
+				    FROM VHACC_EXP_DSN_MASTR
+				</isLessThan>
+			<![CDATA[
+	                WHERE  1=1
+	                  AND  BUDGET_YEAR = A.BUDGET_YEAR
+	                  AND  SUBSTR(CAUSE_ACTION_DE,1,6) <= A.PLAN_YM
+	                  AND  BSNS_SE           = A.BSNS_SE
+	                  AND  BALC_SE           = A.BALC_SE
+	                  AND  BUDGET_ACNT_CODE  = A.BUDGET_ACNT_CODE
+	                  AND  EXPNDTR_UNIT_CODE = A.EXPNDTR_UNIT_CODE			                  
+	                GROUP BY BUDGET_YEAR,BSNS_SE,BALC_SE,BUDGET_ACNT_CODE,EXPNDTR_UNIT_CODE
+					) AS EXPNDTR_AMOUNT	           /*집행금액*/                       
+			       ,A.PLAN_AMOUNT                    AS PLAN_AMOUNT                /*계획금액*/
+			       ,DECODE(NVL(A.CONFM_AT,'0'),'0',A.PLAN_AMOUNT,A.DCSN_AMOUNT)   AS DCSN_AMOUNT /*승인금액*/
+			       ,A.CONFM_AT                       AS CONFM_AT                   /*승인여부*/
+			       ,A.RM                             AS RM                         /*적요*/
+			       ,A.BUDGET_YEAR                    AS BUDGET_YEAR                /*예산년도*/
+			       ,A.ANACT_KND                      AS ANACT_KND                  /*결의서종류*/
+			       ,A.CAUSE_ACTION_NO                AS CAUSE_ACTION_NO            /*원인행위번호*/
+			       ,A.EXPNDTR_CNFIRM                 AS EXPNDTR_CNFIRM             /*지출확인*/
+			       ,DECODE(A.DECSN_NO, '', '0', '1') AS EXPNDTR_REGIST             /*지출등록*/
+			       ,NVL(C.EXPNDTR_POSBL_AT, '0')     AS EXPNDTR_POSBL_AT           /*지출가능여부*/
+			       ,A.PRMPC_YEAR                     AS PRMPC_YEAR
+			       ,A.PRMPC_CODE                     AS PRMPC_CODE
+			       ,D.ACCNUT_ACNT_NM                 AS ACCNUT_ACNT_NM
+			       ,C.DETAIL_BSNS_CODE 
+			       ,E.BSNS_NM
+		           ,CASE NVL(G.PLAN_REGIST_AT, '0') WHEN '1' THEN F.PLAN_AMOUNT ELSE 0 END AS M_PLAN_AMOUNT
+		           ,CASE NVL(G.PLAN_REGIST_AT, '0') WHEN '1' THEN F.EXCUT_AM ELSE 0 END AS M_EXCUT_AM
+		           ,CASE NVL(G.PLAN_REGIST_AT, '0') WHEN '1' THEN F.BLCE ELSE 0 END AS M_BLCE
+		           ,H.BLCE AS W_BLCE
+		           ,NVL(G.PLAN_REGIST_AT, '0') AS PLAN_REGIST_AT
+				   ,T7.USER_NM AS REGISTER_EMPNM    /* 등록자명		*/           
+				   ,TO_CHAR(A.REGIST_DT, 'YYYY-MM-DD') AS REGIST_DT /* 등록일시        */
+				   ,T8.USER_NM AS UPDUSR_EMPNM      /* 수정자명		*/
+				   ,TO_CHAR(A.UPDT_DT, 'YYYY-MM-DD')  AS UPDT_DT   /* 수정일시        */
+			  FROM  TBFUN_WIK_CPTAL_PLAN A 
+					LEFT OUTER JOIN TBCOM_USER T7
+					ON A.REGISTER_ID = T7.USER_ID
+					LEFT OUTER JOIN TBCOM_USER T8
+					ON A.UPDUSR_ID = T8.USER_ID
+			        LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT D 
+			                     ON D.ACCNUT_YEAR = A.PRMPC_YEAR
+			                    AND D.ACCNUT_ACNT_CODE = A.PRMPC_CODE
+                    LEFT OUTER JOIN (SELECT YEAR
+                                            ,BSNS_SE
+                                            ,BALC_SE
+                                            ,DETAIL_BSNS_CODE
+                                            ,BUDGET_ACNT_CODE
+                                            ,EXPNDTR_UNIT_CODE
+                                            ,EXPNDTR_POSBL_AT
+                                     FROM   TBBDG_EXECUT_BUDGET
+                                      WHERE 1=1
+                                    ) C
+                                 ON A.BUDGET_YEAR = C.YEAR
+                                AND A.BSNS_SE = C.BSNS_SE
+                                AND A.BALC_SE = C.BALC_SE
+                                AND A.BUDGET_ACNT_CODE = C.BUDGET_ACNT_CODE
+                                AND A.EXPNDTR_UNIT_CODE = C.EXPNDTR_UNIT_CODE
+		            LEFT OUTER JOIN 
+		            (SELECT A.PLAN_YM, 
+		                   A.DEPT_CODE, 
+		                   A.BUDGET_YEAR, 
+		                   A.BUDGET_ACNT_CODE, 
+		                   A.EXPNDTR_UNIT_CODE, 
+		                   A.BSNS_SE, 
+		                   A.BALC_SE, 
+		                   SUM(A.DCSN_AMOUNT) AS PLAN_AMOUNT, 
+		                   SUM(A.DECSN_AM) AS EXCUT_AM, 
+		                   SUM(A.DCSN_AMOUNT) - SUM(A.DECSN_AM) AS BLCE 
+		              FROM 
+		                   (SELECT PLAN_YM, 
+		                          DEPT_CODE, 
+		                          BUDGET_YEAR, 
+		                          BUDGET_ACNT_CODE, 
+		                          EXPNDTR_UNIT_CODE, 
+		                          BSNS_SE, 
+		                          BALC_SE, 
+		                          DCSN_AMOUNT, 
+		                          0 AS DECSN_AM 
+		                     FROM TBFUN_MNTHNG_CPTAL_PLAN 
+		                    WHERE PLAN_YM = #PLAN_YM# 
+		                          AND CONFM_AT = '1' 
+		]]>
+		                          <isNotEmpty property="DEPT_CODE"> 
+		                          AND DEPT_CODE = #DEPT_CODE#
+		                          </isNotEmpty>
+		                          <isNotEmpty property="ACNT_SE"> 
+							      AND BSNS_SE = SUBSTR(#ACNT_SE#,1,1)
+							      AND BALC_SE = SUBSTR(#ACNT_SE#,2,1)
+		                          </isNotEmpty>
+		                          
+		<![CDATA[			   		   
+		                       UNION ALL 
+		                   SELECT #PLAN_YM# AS PLAN_YM, 
+		                          t1.DEPT_CODE, 
+		                          t1.BUDGET_YEAR , 
+		                          t1.BUDGET_ACNT_CODE , 
+		                          t1.EXPNDTR_UNIT_CODE, 
+		                          t1.BSNS_SE , 
+		                          t1.BALC_SE , 
+		                          0 AS DSCN_AMOUNT, 
+		                          NVL(SUM(t1.DECSN_AMOUNT)),0)  AS DECSN_AM 
+					]]>
+						<isGreaterEqual property="BUDGET_YEAR" compareValue="2018">
+						    FROM VWACC_EXP_DSN_MASTR t1
+						</isGreaterEqual>
+						<isLessThan property="BUDGET_YEAR" compareValue="2018">
+						    FROM VHACC_EXP_DSN_MASTR t1
+						</isLessThan>
+					<![CDATA[
+		                    WHERE 1=1 
+		                          AND t1.CAUSE_ACTION_DE BETWEEN #PLAN_YM#||'01' AND #PLAN_YM#||'31' 
+		]]>		                           
+		                          <isNotEmpty property="DEPT_CODE"> 
+		                          AND t1.DEPT_CODE = #DEPT_CODE#
+		                          </isNotEmpty>
+		                          <isNotEmpty property="ACNT_SE"> 
+							      AND BSNS_SE = SUBSTR(#ACNT_SE#,1,1)
+							      AND BALC_SE = SUBSTR(#ACNT_SE#,2,1)
+		                          </isNotEmpty>
+		<![CDATA[			   		   
+		                    GROUP BY t1.BUDGET_YEAR, t1.BSNS_SE, t1.BALC_SE, t1.DEPT_CODE, t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE 
+		                   ) A 
+		             GROUP BY A.PLAN_YM, A.DEPT_CODE, A.BUDGET_YEAR, A.BUDGET_ACNT_CODE, A.EXPNDTR_UNIT_CODE, A.BSNS_SE,A.BALC_SE 
+		            ) F
+		            ON F.PLAN_YM = A.PLAN_YM
+		            AND F.DEPT_CODE = A.DEPT_CODE
+		            AND F.BUDGET_YEAR = A.BUDGET_YEAR
+		            AND F.BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE
+		            AND F.EXPNDTR_UNIT_CODE = A.EXPNDTR_UNIT_CODE
+		            AND F.BSNS_SE = A.BSNS_SE
+		            AND F.BALC_SE = A.BALC_SE
+		            LEFT OUTER JOIN 
+		            (SELECT A.PLAN_YM, 
+		                   A.DEPT_CODE, 
+		                   A.BUDGET_YEAR, 
+		                   A.BUDGET_ACNT_CODE, 
+		                   A.EXPNDTR_UNIT_CODE, 
+		                   A.BSNS_SE, 
+		                   A.BALC_SE, 
+		                   SUM(A.DCSN_AMOUNT) AS PLAN_AMOUNT, 
+		                   SUM(A.DECSN_AM) AS EXCUT_AM, 
+		                   SUM(A.DCSN_AMOUNT) - SUM(A.DECSN_AM) AS BLCE 
+		              FROM 
+		                   (SELECT PLAN_YM, 
+		                          DEPT_CODE, 
+		                          BUDGET_YEAR, 
+		                          BUDGET_ACNT_CODE, 
+		                          EXPNDTR_UNIT_CODE, 
+		                          BSNS_SE, 
+		                          BALC_SE, 
+		                          DCSN_AMOUNT, 
+		                          0 AS DECSN_AM 
+		                     FROM TBFUN_WEEK_CPTAL_PLAN 
+		                    WHERE PLAN_YM = #PLAN_YM# 
+		                          AND WEEK_ATMB = #WEEK_ATMB#
+		                          AND CONFM_AT = '1' 
+		]]>
+		                          <isNotEmpty property="DEPT_CODE"> 
+		                          AND DEPT_CODE = #DEPT_CODE#
+		                          </isNotEmpty>
+		                          <isNotEmpty property="ACNT_SE"> 
+							      AND BSNS_SE = SUBSTR(#ACNT_SE#,1,1)
+							      AND BALC_SE = SUBSTR(#ACNT_SE#,2,1)
+		                          </isNotEmpty>
+		                          
+		<![CDATA[			   		   
+		                       UNION ALL 
+		                   SELECT #PLAN_YM# AS PLAN_YM, 
+		                          t1.DEPT_CODE, 
+		                          t1.BUDGET_YEAR , 
+		                          t1.BUDGET_ACNT_CODE , 
+		                          t1.EXPNDTR_UNIT_CODE, 
+		                          t1.BSNS_SE , 
+		                          t1.BALC_SE , 
+		                          0 AS DSCN_AMOUNT, 
+		                          NVL(SUM(t1.DECSN_AMOUNT)),0)  AS DECSN_AM 
+					]]>
+						<isGreaterEqual property="BUDGET_YEAR" compareValue="2018">
+						     FROM VWACC_EXP_DSN_MASTR t1
+						</isGreaterEqual>
+						<isLessThan property="BUDGET_YEAR" compareValue="2018">
+						     FROM VHACC_EXP_DSN_MASTR t1
+						</isLessThan>
+					<![CDATA[
+		                    WHERE 1=1 
+		                          AND t1.CAUSE_ACTION_DE BETWEEN (SELECT BGNDE FROM TBFUN_YEAR_ACCTO_WEEK_ESTBS WHERE PLAN_YM = #PLAN_YM# AND WEEK_ATMB = #WEEK_ATMB#) 
+		                          							 AND (SELECT ENDDE FROM TBFUN_YEAR_ACCTO_WEEK_ESTBS WHERE PLAN_YM = #PLAN_YM# AND WEEK_ATMB = #WEEK_ATMB#)
+		]]>		                           
+		                          <isNotEmpty property="DEPT_CODE"> 
+		                          AND t1.DEPT_CODE = #DEPT_CODE#
+		                          </isNotEmpty>
+		                          <isNotEmpty property="ACNT_SE"> 
+							      AND BSNS_SE = SUBSTR(#ACNT_SE#,1,1)
+							      AND BALC_SE = SUBSTR(#ACNT_SE#,2,1)
+		                          </isNotEmpty>
+		<![CDATA[			   		   
+		                    GROUP BY t1.BUDGET_YEAR, t1.BSNS_SE, t1.BALC_SE, t1.DEPT_CODE, t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE 
+		                   ) A 
+		             GROUP BY A.PLAN_YM, A.DEPT_CODE, A.BUDGET_YEAR, A.BUDGET_ACNT_CODE, A.EXPNDTR_UNIT_CODE, A.BSNS_SE,A.BALC_SE 
+		            ) H
+		            ON H.PLAN_YM = A.PLAN_YM
+		            AND H.DEPT_CODE = A.DEPT_CODE
+		            AND H.BUDGET_YEAR = A.BUDGET_YEAR
+		            AND H.BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE
+		            AND H.EXPNDTR_UNIT_CODE = A.EXPNDTR_UNIT_CODE
+		            AND H.BSNS_SE = A.BSNS_SE
+		            AND H.BALC_SE = A.BALC_SE   		                                            
+			       ,VWHRM_DEPT B
+			       ,TBPRJ_BSNS_CODE E
+			       ,TBBDG_BUDGET_ACNT_CODE G
+			 WHERE 1=1
+			   AND A.DEPT_CODE          = B.DEPT_CODE
+			   AND A.PLAN_YM            = #PLAN_YM#
+			   AND A.WEEK_ATMB          = #WEEK_ATMB#
+			   AND C.DETAIL_BSNS_CODE   = E.BSNS_CODE
+               AND A.BUDGET_YEAR        = G.YEAR
+               AND A.BSNS_SE            = G.BSNS_SE
+               AND A.BALC_SE            = G.BALC_SE
+               AND A.BUDGET_ACNT_CODE   = G.BUDGET_ACNT_CODE
+		]]>
+        <isNotEmpty property="DETAIL_BSNS_CODE">
+        	   AND C.DETAIL_BSNS_CODE = #DETAIL_BSNS_CODE#
+        </isNotEmpty>
+		
+        <isNotEmpty property="PLAN_REGIST_AT">
+               AND NVL(G.PLAN_REGIST_AT,'0') = #PLAN_REGIST_AT#
+        </isNotEmpty>
+		<isNotEmpty property="ACNT_SE">
+		       AND A.BSNS_SE            = SUBSTR(#ACNT_SE#,1,1)
+		       AND A.BALC_SE            = SUBSTR(#ACNT_SE#,2,1)
+		</isNotEmpty>
+        <isNotEmpty property="DEPT_CODE">
+        	<isNotEqual property="DEPT_CODE" compareValue="000000">      
+               AND A.DEPT_CODE          = #DEPT_CODE#
+            </isNotEqual>
+        </isNotEmpty>		
+        <isNotEmpty property="CONFM_AT">
+               AND A.CONFM_AT           = #CONFM_AT#
+        </isNotEmpty>
+		<![CDATA[			   		   
+             ORDER BY A.EXPNDTR_UNIT_CODE, A.SN
+	    ]]>
+    </select>
+    
+	<!-- 월간 수입/지출 계획 수정 -->
+    <update id="FUN040402DAO.MnthngCptalPlanU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBFUN_MNTHNG_CPTAL_PLAN 
+               SET CONFM_AT          = #CONFM_AT#
+                   ,DCSN_AMOUNT      = #DCSN_AMOUNT#
+                   ,UPDUSR_ID        = #S_USER_ID#
+                   ,UPDT_DT	         = SYSDATE
+             WHERE 1=1
+               AND PLAN_YM            = #PLAN_YM#
+               AND DEPT_CODE          = #DEPT_CODE#
+               AND BUDGET_YEAR        = #BUDGET_YEAR#
+		       AND BSNS_SE            = SUBSTR(#BUDGET_ACNT_SE#,1,1)
+		       AND BALC_SE            = SUBSTR(#BUDGET_ACNT_SE#,2,1)
+               AND BUDGET_ACNT_CODE   = #BUDGET_ACNT_CODE#
+               AND BUDGET_YEAR        = #BUDGET_YEAR#
+               AND EXPNDTR_UNIT_CODE  = #EXPNDTR_UNIT_CODE#
+        ]]>
+    </update>
+    
+    <!-- 주간, 계획외지출 계획 수정 -->
+    <update id="FUN040402DAO.WikCptalPlanU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBFUN_WIK_CPTAL_PLAN 
+               SET CONFM_AT          = #CONFM_AT#                 /*승인여부*/
+                   ,DCSN_AMOUNT      = #DCSN_AMOUNT#              /*승인금액*/
+                   ,ANACT_KND        = #ANACT_KND#                /*결의서종류*/
+                   ,CAUSE_ACTION_NO  = #CAUSE_ACTION_NO#          /*원인행위*/
+                   ,CONFMER_ID       = (CASE #CONFM_AT# WHEN '1' THEN #S_USER_ID# ELSE '' END)  
+                   ,CONFM_DT         = (CASE #CONFM_AT# WHEN '1' THEN SYSDATE ELSE null END)
+                   ,UPDUSR_ID        = #S_USER_ID#
+                   ,UPDT_DT	         = SYSDATE
+             WHERE 1=1
+               AND PLAN_YM            = #PLAN_YM#
+               AND DEPT_CODE          = #DEPT_CODE#
+               AND BUDGET_YEAR        = #BUDGET_YEAR#
+		       AND BSNS_SE            = SUBSTR(#BUDGET_ACNT_SE#,1,1)
+		       AND BALC_SE            = SUBSTR(#BUDGET_ACNT_SE#,2,1)
+               AND BUDGET_ACNT_CODE   = #BUDGET_ACNT_CODE#
+               AND EXPNDTR_UNIT_CODE  = #EXPNDTR_UNIT_CODE#
+               AND WEEK_ATMB          = #WEEK_ATMB#
+               AND SE                 = #SE#
+               AND SN                 = #SN#
+        ]]>
+    </update>	
+
+</sqlMap>

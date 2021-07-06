@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN040404_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 검색조건 날짜 정보 조회 -->
+	<select id="FUN040404DAO.selectDateInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT SUBSTR(A.PLAN_YM, 1, 4)                                     AS PLAN_YEAR 
+			       ,SUBSTR(A.PLAN_YM, 5, 2)                                    AS PLAN_MONTH 
+			       ,A.WEEK_ATMB                                                AS PLAN_WEEK 
+			       ,A.BGNDE                                                    AS WFDATE 
+			       ,A.ENDDE                                                    AS TDATE 
+			       ,(SELECT MIN(BGNDE) 
+			           FROM TBFUN_YEAR_ACCTO_WEEK_ESTBS B 
+			          WHERE SUBSTR(A.PLAN_YM, 1, 4) = SUBSTR(B.PLAN_YM, 1, 4)) AS YFDATE 
+			       ,(SELECT MIN(BGNDE) 
+			           FROM TBFUN_YEAR_ACCTO_WEEK_ESTBS B 
+			          WHERE SUBSTR(A.PLAN_YM, 1, 4) = SUBSTR(B.PLAN_YM, 1, 4) 
+			            AND SUBSTR(A.PLAN_YM, 5, 2) = SUBSTR(B.PLAN_YM, 5, 2)) AS MFDATE 
+			  FROM TBFUN_YEAR_ACCTO_WEEK_ESTBS A 
+			 WHERE #TDATE# BETWEEN A.BGNDE AND A.ENDDE   
+	    ]]>
+    </select>
+    
+	<!-- 수입/지출실적집계 지출 조회 -->
+	<select id="FUN040404DAO.selectExpndtrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TEMP AS (
+				SELECT DECSN_YEAR , 
+				       DECSN_NO , 
+				       DECSN_AMOUNT
+				  FROM TBACC_EXP_DSN_DETAIL 
+				 WHERE SEQ = '1'
+				 
+				UNION ALL
+				
+				SELECT DECSN_YEAR , 
+				       DECSN_NO , 
+				       DECSN_AMOUNT
+				  FROM TBACC_EXP_DSN_DETAIL_TRVCT 
+				 WHERE SEQ = '1'
+			)
+			SELECT T1.DEPT_CODE          AS DEPT_CODE
+			     , MAX(T3.DEPT_NM)       AS DEPT_NM
+			     , T1.BSNS_SE            AS BSNS_SE
+			     , T1.BALC_SE            AS BALC_SE
+			     , MAX(T4.CODE_NM)       AS ACCT_CLASS_NAME
+			     , T1.BUDGET_ACNT_CODE   AS BUDGET_ACNT_CODE
+			     , SFBDG_GET_NAME(T1.BUDGET_YEAR, T1.BSNS_SE, T1.BALC_SE, T1.BUDGET_ACNT_CODE, NULL) AS BUDGET_ACNT_NM
+			     , T1.EXPNDTR_UNIT_CODE  AS EXPNDTR_UNIT_CODE
+			     , MAX(T5.BUKIP_NM)      AS EXPNDTR_UNIT_NM
+			     , T1.BSNS_CODE          AS BSNS_CODE
+			     , MAX(T2.BSNS_NM)       AS BSNS_NM
+			     , MAX(T1.YDECSN_AMOUNT) AS YDECSN_AMOUNT
+			     , MAX(T1.MDECSN_AMOUNT) AS MDECSN_AMOUNT 
+			  FROM ( 
+			        /* 년간 실적 금액 구하는 부분 */
+			                
+			         SELECT A.DEPT_CODE
+			              , A.BUDGET_YEAR
+			              , A.BSNS_SE
+			              , A.BALC_SE
+			              , A.BUDGET_ACNT_CODE
+			              , A.EXPNDTR_UNIT_CODE
+			              , A.BSNS_CODE
+			              , SUM(A.DECSN_AMOUNT) AS YDECSN_AMOUNT
+			              , 0                   AS MDECSN_AMOUNT
+			          FROM TBACC_EXP_DSN_MASTR A 
+			          INNER JOIN TEMP B 
+			                  ON A.DECSN_YEAR = B.DECSN_YEAR 
+			                 AND A.DECSN_NO = B.DECSN_NO 
+			         WHERE 1 = 1
+			           AND A.BSNS_SE || A.BALC_SE IN ( '12', '22', '32' )  /* 사업구분 || 수지구분 */
+			           AND NVL(A.EXPNDTR_CNFIRM_AT,'0') = '1' /* 지출확인여부 */
+			           AND A.BUDGET_YEAR = SUBSTR(#srcDate#, 1, 4)
+			           AND A.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN SUBSTR(#srcDate#, 1, 4) || '0101' AND #srcDate#  /* 자금지출장부일자 */
+			         GROUP BY A.DEPT_CODE, A.BUDGET_YEAR, A.BSNS_SE, A.BALC_SE, A.BUDGET_ACNT_CODE, A.EXPNDTR_UNIT_CODE, A.BSNS_CODE
+			
+			        UNION ALL
+			        
+			        /* 월간 실적 금액 구하는 부분 */
+			        
+			          SELECT A.DEPT_CODE
+			               , A.BUDGET_YEAR
+			               , A.BSNS_SE
+			               , A.BALC_SE
+			               , A.BUDGET_ACNT_CODE
+			               , A.EXPNDTR_UNIT_CODE
+			               , A.BSNS_CODE
+			               , 0                   AS YDECSN_AMOUNT
+			               , SUM(A.DECSN_AMOUNT) AS MDECSN_AMOUNT
+			          FROM TBACC_EXP_DSN_MASTR A 
+			          INNER JOIN TEMP B 
+			                  ON A.DECSN_YEAR = B.DECSN_YEAR 
+			                 AND A.DECSN_NO = B.DECSN_NO 
+			         WHERE 1 = 1
+			           AND A.BSNS_SE || A.BALC_SE IN ( '12', '22', '32' ) /* 사업구분 || 수지구분 */
+			           AND NVL(A.EXPNDTR_CNFIRM_AT,'0') = '1' /* 지출확인여부 */
+			           AND A.BUDGET_YEAR = SUBSTR(#srcDate#, 1, 4)
+			           AND A.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN SUBSTR(#srcDate#, 1, 6) || '01' AND #srcDate# /* 자금지출장부일자 */
+			         GROUP BY A.DEPT_CODE, A.BUDGET_YEAR, A.BSNS_SE, A.BALC_SE, A.BUDGET_ACNT_CODE, A.EXPNDTR_UNIT_CODE, A.BSNS_CODE
+			       ) T1
+			       LEFT OUTER JOIN TBPRJ_BSNS_CODE T2
+			               ON T1.BSNS_CODE = T2.BSNS_CODE
+			       LEFT OUTER JOIN VWHRM_DEPT T3 
+			               ON T1.DEPT_CODE = T3.DEPT_CODE
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE T4
+			               ON T4.GRP_CODE = 'BDG017'
+			              AND T1.BSNS_SE||T1.BALC_SE = T4.CODE
+			       LEFT OUTER JOIN TBBDG_BUKIP_CODE T5
+			               ON T1.EXPNDTR_UNIT_CODE = T5.BUKIP_CODE
+			  WHERE 1=1
+		]]>
+			<isNotEmpty property="DEPT_CODE">
+			  <isNotEqual property="DEPT_CODE" compareValue="000000">
+			    AND T1.DEPT_CODE = #DEPT_CODE#
+			  </isNotEqual>
+	        </isNotEmpty>
+			<isNotEmpty property="BSNS_CODE">
+			    AND T1.BSNS_CODE = #BSNS_CODE#
+			</isNotEmpty>
+		<![CDATA[
+			  GROUP BY T1.DEPT_CODE, T1.BUDGET_YEAR, T1.BSNS_SE, T1.BALC_SE, T1.BUDGET_ACNT_CODE, T1.EXPNDTR_UNIT_CODE, T1.BSNS_CODE
+			  ORDER BY T1.DEPT_CODE, T1.BUDGET_YEAR, T1.BSNS_SE, T1.BALC_SE, T1.BUDGET_ACNT_CODE, T1.EXPNDTR_UNIT_CODE, T1.BSNS_CODE
+		]]>
+    </select>
+
+
+	<!-- 수입/지출실적집계 수입 조회 -->
+	<select id="FUN040404DAO.selectIncmeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TEMP AS (
+			    SELECT t1.*
+			         , t2.DECSN_AMOUNT
+			      FROM TBACC_INC_DSN_MASTR t1
+			     INNER JOIN (
+			                 SELECT DECSN_YEAR
+			                      , DECSN_NO
+			                      , SUM(DECSN_AMOUNT) AS DECSN_AMOUNT
+			                   FROM TBACC_INC_DSN_DETAIL
+			                  GROUP BY DECSN_YEAR, DECSN_NO
+			                ) t2
+			             ON t1.DECSN_YEAR  = t2.DECSN_YEAR
+			            AND t1.DECSN_NO    = t2.DECSN_NO
+			     WHERE t1.HSCO_INC_ACNUT_AT = '1' /* 1:공사수입계좌 */
+			       AND t1.BUDGET_YEAR = SUBSTR(#srcDate#, 1, 4)
+			),
+			TEMP2 AS (
+			    /* 년간 실적 금액 구하는 부분 */
+			    SELECT t1.DEPT_CODE
+			        , t1.BUDGET_YEAR
+			        , t1.BSNS_SE
+			        , t1.BALC_SE
+			        , t1.BUDGET_ACNT_CODE
+			        , t1.EXPNDTR_UNIT_CODE
+			        , t1.BSNS_CODE
+			        , SUM(t1.DECSN_AMOUNT) AS YR_DECSN_AMOUNT
+			        , 0 AS MT_DECSN_AMOUNT
+			     FROM TEMP t1
+			    WHERE t1.ITNC_DE BETWEEN SUBSTR('20171231', 1, 4) || '0101' AND '20171231'
+			    GROUP BY t1.DEPT_CODE, t1.BUDGET_YEAR, t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE, t1.BSNS_CODE
+			    
+			    UNION ALL
+			    
+			    /* 월간 실적 금액 구하는 부분 */
+			    SELECT t1.DEPT_CODE
+			        , t1.BUDGET_YEAR
+			        , t1.BSNS_SE
+			        , t1.BALC_SE
+			        , t1.BUDGET_ACNT_CODE
+			        , t1.EXPNDTR_UNIT_CODE
+			        , t1.BSNS_CODE
+			        , 0 AS YR_DECSN_AMOUNT
+			        , SUM(t1.DECSN_AMOUNT) AS MT_DECSN_AMOUNT
+			     FROM TEMP t1
+			    WHERE t1.ITNC_DE BETWEEN SUBSTR('20171231', 1, 6) || '01' AND '20171231'
+			    GROUP BY t1.DEPT_CODE, t1.BUDGET_YEAR, t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE, t1.BSNS_CODE
+			)
+			SELECT t1.DEPT_CODE                   /*부서코드*/
+			     , t5.DEPT_NM                     /*부서명*/       
+			     , t1.BSNS_SE                     /*사업구분*/           
+			     , t1.BALC_SE                     /*수지구분*/
+			     , t2.CODE_NM AS ACCT_CLASS_NAME  /*계정구분명*/
+			     , t1.BUDGET_ACNT_CODE            /*예산계정코드*/
+			     , t3.BUDGET_ACNT_NM              /*예산계정명*/
+			     , t1.EXPNDTR_UNIT_CODE           /*부기코드*/
+			     , t4.BUKIP_NM AS EXPNDTR_UNIT_NM /*부기명*/
+			     , t1.BSNS_CODE                   /*사업코드*/
+			     , t6.BSNS_NM                     /*사업코드명*/        
+			     , t1.YDECSN_AMOUNT               /*연간금액*/
+			     , t1.MDECSN_AMOUNT               /*월간금액*/
+			  FROM (SELECT t1.DEPT_CODE
+			             , t1.BUDGET_YEAR
+			             , t1.BSNS_SE
+			             , t1.BALC_SE
+			             , t1.BUDGET_ACNT_CODE
+			             , t1.EXPNDTR_UNIT_CODE
+			             , t1.BSNS_CODE
+			             , MAX(t1.YR_DECSN_AMOUNT) AS YDECSN_AMOUNT
+			             , MAX(t1.MT_DECSN_AMOUNT) AS MDECSN_AMOUNT
+			         FROM TEMP2 t1
+			        GROUP BY t1.DEPT_CODE, t1.BUDGET_YEAR, t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE, t1.BSNS_CODE
+			       )t1
+			  LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+			          ON t2.GRP_CODE = 'BDG017'
+			         AND t1.BSNS_SE||T1.BALC_SE = t2.CODE
+			  LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t3
+			          ON t1.BUDGET_YEAR       = t3.YEAR
+			         AND t1.BSNS_SE           = t3.BSNS_SE
+			         AND t1.BALC_SE           = t3.BALC_SE
+			         AND t1.BUDGET_ACNT_CODE  = t3.BUDGET_ACNT_CODE
+			  LEFT OUTER JOIN TBBDG_BUKIP_CODE t4
+			          ON t1.EXPNDTR_UNIT_CODE = t4.BUKIP_CODE
+			  LEFT OUTER JOIN VWHRM_DEPT t5
+			          ON t1.DEPT_CODE = t5.DEPT_CODE
+			  LEFT OUTER JOIN TBPRJ_BSNS_CODE t6
+			          ON t1.BSNS_CODE = t6.BSNS_CODE
+			 WHERE 1=1
+		]]>
+		<isNotEmpty property="DEPT_CODE">
+		  <isNotEqual property="DEPT_CODE" compareValue="000000">
+			   AND t1.DEPT_CODE = #DEPT_CODE#
+		  </isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+			   AND t1.BSNS_CODE = #BSNS_CODE#
+		</isNotEmpty>
+		<![CDATA[
+			 ORDER BY t1.DEPT_CODE, t1.BUDGET_YEAR, t1.BSNS_SE, t1.BALC_SE, t1.BUDGET_ACNT_CODE, t1.EXPNDTR_UNIT_CODE, t1.BSNS_CODE
+	    ]]>
+    </select>        
+
+</sqlMap>

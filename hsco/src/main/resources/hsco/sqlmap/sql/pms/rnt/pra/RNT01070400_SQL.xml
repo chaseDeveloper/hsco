@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01070400_SQL">	
+   <!--  설명  : 지원금청구
+		작성자 : 지효정 -->
+	<!-- 청구자료 목록 -->
+	<select id="RNT01070400DAO.rentSprmnyRcivList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		SELECT	
+	         RCIV_NO			/*수납번호*/
+	        ,RENT_HOUSE_CODE	/*주택코드*/
+	        ,RENT_HOUSE_NM		/*주택명*/
+	        ,DONG				/*동*/
+	        ,HO					/*호*/
+			,CNTRCTR_NO			/*계약자번호*/
+			,PAYMTHD			/*납부방법*/		
+	        ,NM					/*계약자명*/
+	        ,IHIDNUM			/*계약자 주민번호*/
+	        ,OPERT_SE_NM		/*작업구분명*/
+	        ,OPERT_SE			/*작업구분*/
+			,'지원금' AS PAY_DIV_NM
+	        ,PROCESS_STTUS_NM	/*처리상태명*/
+	        ,PROCESS_STTUS		/*처리상태*/
+	        ,RQEST_AMOUNT		/*납부금액*/
+	        ,OVDINTR			/*연체이자*/
+	        ,PAY_TOT			/*계*/
+	        ,RCIV_AMOUNT		/*수납금액*/
+	        ,DECODE(OPERT_SE, 'O', RCIV_AMOUNT - NVL(PAY_TOT, 0), 0) AS MISS_AMT	/*과오금액*/
+	        ,PAY_TMLMT			/*납부기한*/
+	        ,RCIV_DE			/*수납일자*/
+	        ,DECODE(OPERT_SE, 'H', RCIV_AMOUNT - NVL(PAY_TOT,0), 0) AS CHA_AMT	/*차액*/
+    	FROM(
+	        SELECT
+			     A.CNTRCTR_NO				/*계약자번호*/	 
+	            ,A.RCIV_NO					/*수납번호*/
+	            ,B.RENT_HOUSE_CODE			/*주택코드*/
+	            ,C.RENT_HOUSE_NM			/*주택명*/
+	            ,B.DONG						/*동*/
+	            ,B.HO						/*호*/
+				,A.PAYMTHD					/*납부방법*/		
+	            ,E.NM						/*계약자 */
+	            ,E.IHIDNUM					/*주민번호*/
+	            ,CASE A.OPERT_SE 	
+	                WHEN 'N' THEN '미확인'
+	                WHEN 'J' THEN '정상'
+	                WHEN 'O' THEN '과오납'
+	                WHEN 'H' THEN '확인요망'    
+	                ELSE A.OPERT_SE 
+	             END AS OPERT_SE_NM			/*작업구분명*/
+	            ,A.OPERT_SE					/*작업구분*/
+	            ,CASE A.PROCESS_STTUS 
+	                WHEN 'N' THEN '미 처 리'
+	                WHEN 'C' THEN '처리완료'  
+	                ELSE A.RCIV_SE 
+	             END AS PROCESS_STTUS_NM	/*처리상태명*/
+	            ,A.PROCESS_STTUS			/*처리상태*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.RQEST_AMOUNT 
+	             END AS RQEST_AMOUNT		/*납부금액*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.OVDINTR 
+	             END AS OVDINTR				/*연체이자*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.PAY_TOT 
+	             END AS PAY_TOT				/*계*/
+	            ,A.RCIV_AMOUNT				/*수납금액*/
+	            ,A.FALT_AMOUNT				/*과오금액*/
+	            ,A.PAY_TMLMT				/*납부기한일*/
+	            ,A.RCIV_DE					/*수납일자*/
+	        FROM 
+	             TBRNT_RENT_SPRMNY_RCIV A 	/*임대료 지원금 수납*/
+	            ,TBRNT_RENT_CNTRCT B 		/*임대계약자*/
+	            ,TBRNT_RENT_HOUSE C			/*임대주택*/
+	            ,(
+	            	SELECT 
+	            	CNTRCTR_NO
+	                , SUM(RQEST_AMOUNT) AS RQEST_AMOUNT
+	                , SUM(OVDINTR) AS OVDINTR
+	                , SUM(PAY_TOT) AS PAY_TOT
+	                FROM (
+	                     SELECT 
+	                        CNTRCTR_NO	/*계약번호*/
+	                        ,PAY_TMLMT
+	                        ,SUM(NVL(RQEST_AMOUNT,0)) AS RQEST_AMOUNT	/*임대료*/
+	                        ,0 AS OVDINTR							/*연체이자*/
+	                        ,SUM(NVL(RQEST_AMOUNT,0)) AS PAY_TOT	/*차액*/
+	                     FROM TBRNT_GTN_SPORT V /*월임대료*/
+	                     WHERE ( RCIV_DE = #rcivDe# OR (PAY_TMLMT <=
+	                                (SELECT MAX(D.PAY_TMLMT)
+	                                 FROM TBRNT_RENT_SPRMNY_RCIV D /*임대료 지원금 수납*/
+	                                 WHERE V.CNTRCTR_NO   = D.CNTRCTR_NO
+	                                 AND   D.RCIV_DE = #rcivDe#
+	                                 AND   D.NTIC_SE = '2')  AND  RCIV_DE IS NULL 
+	                                  ) 
+	                                 
+	                     )
+	                      GROUP BY CNTRCTR_NO, PAY_TMLMT
+	                )GROUP BY CNTRCTR_NO
+	            ) D 
+	            , (
+	                SELECT 
+	                    CNTRCTR_NO
+	                    ,COUNT(1) AS CNT 
+	                FROM TBRNT_RENT_SPRMNY_RCIV /*임대료 지원금 수납*/
+	                WHERE RCIV_DE = #rcivDe# 
+	                AND   NTIC_SE = '2' 
+	                GROUP BY CNTRCTR_NO
+	            ) A1
+	        ,TBRNT_PRMANENT_RENT_CSTMR E
+	        WHERE A.RCIV_DE   = #rcivDe#
+	        AND  A.NTIC_SE = '2'
+	        AND   A.PAYMTHD != 'V'
+	        ]]>
+	        <isNotEqual property="paymthd" compareValue="%">
+	        AND   A.PAYMTHD = #paymthd#
+	        </isNotEqual>
+	        <![CDATA[
+	        AND   A.CNTRCTR_NO = B.CNTRCTR_NO
+	        AND   B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+	        AND   INSTR( 'R1,R3', C.HOUSE_SE) > 0
+	        ]]>
+	        <isNotEqual property="rentHouseCode" compareValue="%">
+	        AND   B.RENT_HOUSE_CODE = #rentHouseCode#
+	        </isNotEqual>
+	        <isNotEmpty property="dong">
+	        AND   B.DONG LIKE '%' || #dong# || '%'
+	        </isNotEmpty>
+	        <isNotEmpty property="ho">
+	        AND   B.HO LIKE '%' || #ho# || '%'
+	        </isNotEmpty>
+	        <![CDATA[
+	        AND   A.CNTRCTR_NO = D.CNTRCTR_NO(+)
+	        AND   A.CNTRCTR_NO = A1.CNTRCTR_NO
+	        AND   B.PRMANENT_CSTMR_NO = E.PRMANENT_CSTMR_NO
+	        AND   A.CNTRCTR_NO = A1.CNTRCTR_NO
+        
+			UNION ALL
+
+	        SELECT
+			     A.CNTRCTR_NO				/*계약자번호*/	 
+	            ,A.RCIV_NO					/*수납번호*/
+	            ,B.RENT_HOUSE_CODE			/*주택코드*/
+	            ,C.RENT_HOUSE_NM			/*주택명*/
+	            ,B.DONG						/*동*/
+	            ,B.HO						/*호*/
+				,A.PAYMTHD					/*납부방법*/		
+	            ,E.NM						/*계약자 */
+	            ,E.IHIDNUM					/*주민번호*/
+	            ,CASE A.OPERT_SE 	
+	                WHEN 'N' THEN '미확인'
+	                WHEN 'J' THEN '정상'
+	                WHEN 'O' THEN '과오납'
+	                WHEN 'H' THEN '확인요망'    
+	                ELSE A.OPERT_SE 
+	             END AS OPERT_SE_NM			/*작업구분명*/
+	            ,A.OPERT_SE					/*작업구분*/
+	            ,CASE A.PROCESS_STTUS 
+	                WHEN 'N' THEN '미 처 리'
+	                WHEN 'C' THEN '처리완료'  
+	                ELSE A.RCIV_SE 
+	             END AS PROCESS_STTUS_NM	/*처리상태명*/
+	            ,A.PROCESS_STTUS			/*처리상태*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.RQEST_AMOUNT 
+	             END AS RQEST_AMOUNT				/*납부금액*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.OVDINTR 
+	             END AS OVDINTR				/*연체이자*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.PAY_TOT 
+	             END AS PAY_TOT				/*계*/
+	            ,A.RCIV_AMOUNT				/*수납금액*/
+	            ,A.FALT_AMOUNT				/*과오금액*/
+	            ,A.PAY_TMLMT				/*납부기한일*/
+	            ,A.RCIV_DE					/*수납일자*/
+			FROM 
+          		 TBRNT_RENT_SPRMNY_RCIV A 	/*임대료 지원금 수납*/
+				,TBRNT_RENT_CNTRCT B 		/*임대계약자*/
+            	,TBRNT_RENT_HOUSE C			/*임대주택*/
+            	,(
+					SELECT 
+                 		CNTRCTR_NO
+	                    ,PAY_TMLMT
+	                    ,TRUNC(SUM(NVL(RQEST_AMOUNT,0)),-1)  AS RQEST_AMOUNT
+	                    ,0 AS OVDINTR
+	                    ,TRUNC(SUM(NVL(RQEST_AMOUNT,0)),-1) AS PAY_TOT
+                   	FROM TBRNT_GTN_SPORT V
+					WHERE ( RCIV_DE = #rcivDe# OR RCIV_DE IS NULL )
+                  GROUP BY CNTRCTR_NO, PAY_TMLMT
+                ) D 
+            	,(
+            		SELECT 
+                		CNTRCTR_NO
+                    	,COUNT(1) AS CNT 
+                	FROM TBRNT_RENT_SPRMNY_RCIV /*임대료 지원금 수납*/
+	                WHERE RCIV_DE = #rcivDe# 
+	                AND   NTIC_SE = '2' 
+	                GROUP BY CNTRCTR_NO
+                 ) A1
+            	,TBRNT_PRMANENT_RENT_CSTMR E
+			WHERE A.RCIV_DE   = #rcivDe#
+			AND   A.NTIC_SE = '2'
+            AND   A.PAYMTHD = 'V'
+            ]]>
+            <isNotEqual property="paymthd" compareValue="%">
+			AND   A.PAYMTHD = #paymthd#
+			</isNotEqual>
+			<![CDATA[
+			AND   A.CNTRCTR_NO     = B.CNTRCTR_NO
+			AND   B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+			AND   INSTR( 'R1,R3', C.HOUSE_SE) > 0
+			]]>
+			<isNotEqual property="rentHouseCode" compareValue="%">
+			AND   B.RENT_HOUSE_CODE = #rentHouseCode#
+			</isNotEqual>
+			<isNotEmpty property="dong">
+			AND   B.DONG       LIKE '%' || #dong# || '%'
+			</isNotEmpty>
+			<isNotEmpty property="ho">
+			AND   B.HO         LIKE '%' || #ho# || '%'
+			</isNotEmpty>
+			<![CDATA[
+			AND   A.CNTRCTR_NO = D.CNTRCTR_NO(+)
+			AND   A.PAY_TMLMT = D.PAY_TMLMT(+)
+			AND   A.CNTRCTR_NO = A1.CNTRCTR_NO(+)
+			AND   B.PRMANENT_CSTMR_NO = E.PRMANENT_CSTMR_NO
+		)
+		ORDER BY RENT_HOUSE_NM, DONG, HO
+	]]>
+	</select>	
+	
+	<select id="RNT01070400DAO.rentSprmnyRcivSumList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		SELECT	
+	         COUNT(1) AS CNT_T		/*전체갯수*/
+	        ,SUM(RCIV_AMOUNT) AS AMT_T	/*전체금액*/
+	        ,SUM( CASE WHEN OPERT_SE = 'J' THEN 1       ELSE 0 END ) AS CNT_J /*정상갯수*/
+	        ,SUM( CASE WHEN OPERT_SE = 'J' THEN RCIV_AMOUNT ELSE 0 END ) AS AMT_J /*정상금액*/
+	        ,SUM( CASE WHEN OPERT_SE = 'O' THEN 1     ELSE 0 END ) AS CNT_O	/*과오납갯수*/
+	        ,SUM( CASE WHEN OPERT_SE = 'O' THEN RCIV_AMOUNT ELSE 0 END) AS AMT_O	/*과오납금액*/
+	        ,SUM( CASE WHEN OPERT_SE IN('H','N') THEN 1     ELSE 0 END ) AS CNT_H	/*확인갯수*/
+	        ,SUM( CASE WHEN OPERT_SE IN('H','N') THEN RCIV_AMOUNT ELSE 0 END ) AS AMT_H	/*확인금액*/
+    	FROM(
+	        SELECT
+			     A.CNTRCTR_NO				/*계약자번호*/	 
+	            ,A.RCIV_NO					/*수납번호*/
+	            ,B.RENT_HOUSE_CODE			/*주택코드*/
+	            ,C.RENT_HOUSE_NM			/*주택명*/
+	            ,B.DONG						/*동*/
+	            ,B.HO						/*호*/
+				,A.PAYMTHD					/*납부방법*/		
+	            ,E.NM						/*계약자 */
+	            ,E.IHIDNUM					/*주민번호*/
+	            ,CASE A.OPERT_SE 	
+	                WHEN 'N' THEN '미확인'
+	                WHEN 'J' THEN '정상'
+	                WHEN 'O' THEN '과오납'
+	                WHEN 'H' THEN '확인요망'    
+	                ELSE A.OPERT_SE 
+	             END AS OPERT_SE_NM			/*작업구분명*/
+	            ,A.OPERT_SE					/*작업구분*/
+	            ,CASE A.PROCESS_STTUS 
+	                WHEN 'N' THEN '미 처 리'
+	                WHEN 'C' THEN '처리완료'  
+	                ELSE A.RCIV_SE 
+	             END AS PROCESS_STTUS_NM	/*처리상태명*/
+	            ,A.PROCESS_STTUS			/*처리상태*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.RQEST_AMOUNT 
+	             END AS RQEST_AMOUNT		/*납부금액*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.OVDINTR 
+	             END AS OVDINTR				/*연체이자*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.PAY_TOT 
+	             END AS PAY_TOT				/*계*/
+	            ,A.RCIV_AMOUNT				/*수납금액*/
+	            ,A.FALT_AMOUNT				/*과오금액*/
+	            ,A.PAY_TMLMT				/*납부기한일*/
+	            ,A.RCIV_DE					/*수납일자*/
+	        FROM 
+	             TBRNT_RENT_SPRMNY_RCIV A 	/*임대료 지원금 수납*/
+	            ,TBRNT_RENT_CNTRCT B 		/*임대계약자*/
+	            ,TBRNT_RENT_HOUSE C			/*임대주택*/
+	            ,(
+	            	SELECT 
+	            	CNTRCTR_NO
+	                , SUM(RQEST_AMOUNT) AS RQEST_AMOUNT
+	                , SUM(OVDINTR) AS OVDINTR
+	                , SUM(PAY_TOT) AS PAY_TOT
+	                FROM (
+	                     SELECT 
+	                        CNTRCTR_NO	/*계약번호*/
+	                        ,PAY_TMLMT
+	                        ,SUM(NVL(RQEST_AMOUNT,0)) AS RQEST_AMOUNT	/*임대료*/
+	                        ,0 AS OVDINTR							/*연체이자*/
+	                        ,SUM(NVL(RQEST_AMOUNT,0)) AS PAY_TOT	/*차액*/
+	                     FROM TBRNT_GTN_SPORT V /*월임대료*/
+	                     WHERE ( RCIV_DE = #rcivDe# OR (PAY_TMLMT <=
+	                                (SELECT MAX(D.PAY_TMLMT)
+	                                 FROM TBRNT_RENT_SPRMNY_RCIV D /*임대료 지원금 수납*/
+	                                 WHERE V.CNTRCTR_NO   = D.CNTRCTR_NO
+	                                 AND   D.RCIV_DE = #rcivDe#
+	                                 AND   D.NTIC_SE = '2')  AND  RCIV_DE IS NULL 
+	                                  ) 
+	                                 
+	                     )
+	                      GROUP BY CNTRCTR_NO, PAY_TMLMT
+	                )GROUP BY CNTRCTR_NO
+	            ) D 
+	            , (
+	                SELECT 
+	                    CNTRCTR_NO
+	                    ,COUNT(1) AS CNT 
+	                FROM TBRNT_RENT_SPRMNY_RCIV /*임대료 지원금 수납*/
+	                WHERE RCIV_DE = #rcivDe# 
+	                AND   NTIC_SE = '2' 
+	                GROUP BY CNTRCTR_NO
+	            ) A1
+	        ,TBRNT_PRMANENT_RENT_CSTMR E
+	        WHERE A.RCIV_DE   = #rcivDe#
+	        AND  A.NTIC_SE = '2'
+	        AND   A.PAYMTHD != 'V'
+	        AND   A.PAYMTHD LIKE #paymthd#
+	        AND   A.CNTRCTR_NO = B.CNTRCTR_NO
+	        AND   B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+	        AND   INSTR( 'R1,R3', C.HOUSE_SE) > 0
+	        AND   B.RENT_HOUSE_CODE LIKE #rentHouseCode# || '%'
+	        AND   B.DONG LIKE #dong# || '%'
+	        AND   B.HO LIKE #ho# || '%'
+	        AND   A.CNTRCTR_NO = D.CNTRCTR_NO(+)
+	        AND   A.CNTRCTR_NO = A1.CNTRCTR_NO
+	        AND   B.PRMANENT_CSTMR_NO = E.PRMANENT_CSTMR_NO
+	        AND   A.CNTRCTR_NO = A1.CNTRCTR_NO
+        
+			UNION ALL
+
+	        SELECT
+			     A.CNTRCTR_NO				/*계약자번호*/	 
+	            ,A.RCIV_NO					/*수납번호*/
+	            ,B.RENT_HOUSE_CODE			/*주택코드*/
+	            ,C.RENT_HOUSE_NM			/*주택명*/
+	            ,B.DONG						/*동*/
+	            ,B.HO						/*호*/
+				,A.PAYMTHD					/*납부방법*/		
+	            ,E.NM						/*계약자 */
+	            ,E.IHIDNUM					/*주민번호*/
+	            ,CASE A.OPERT_SE 	
+	                WHEN 'N' THEN '미확인'
+	                WHEN 'J' THEN '정상'
+	                WHEN 'O' THEN '과오납'
+	                WHEN 'H' THEN '확인요망'    
+	                ELSE A.OPERT_SE 
+	             END AS OPERT_SE_NM			/*작업구분명*/
+	            ,A.OPERT_SE					/*작업구분*/
+	            ,CASE A.PROCESS_STTUS 
+	                WHEN 'N' THEN '미 처 리'
+	                WHEN 'C' THEN '처리완료'  
+	                ELSE A.RCIV_SE 
+	             END AS PROCESS_STTUS_NM	/*처리상태명*/
+	            ,A.PROCESS_STTUS			/*처리상태*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.RQEST_AMOUNT 
+	             END AS RQEST_AMOUNT				/*납부금액*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.OVDINTR 
+	             END AS OVDINTR				/*연체이자*/
+	            ,CASE 
+	                WHEN A.OPERT_SE = 'O' AND (A.RCIV_AMOUNT = D.RQEST_AMOUNT OR NVL(A1.CNT,0) > 1) THEN 0 
+	                ELSE D.PAY_TOT 
+	             END AS PAY_TOT				/*계*/
+	            ,A.RCIV_AMOUNT				/*수납금액*/
+	            ,A.FALT_AMOUNT				/*과오금액*/
+	            ,A.PAY_TMLMT				/*납부기한일*/
+	            ,A.RCIV_DE					/*수납일자*/
+			FROM 
+          		 TBRNT_RENT_SPRMNY_RCIV A 	/*임대료 지원금 수납*/
+				,TBRNT_RENT_CNTRCT B 		/*임대계약자*/
+            	,TBRNT_RENT_HOUSE C			/*임대주택*/
+            	,(
+					SELECT 
+                 		CNTRCTR_NO
+	                    ,PAY_TMLMT
+	                    ,TRUNC(SUM(NVL(RQEST_AMOUNT,0)),-1)  AS RQEST_AMOUNT
+	                    ,0 AS OVDINTR
+	                    ,TRUNC(SUM(NVL(RQEST_AMOUNT,0)),-1) AS PAY_TOT
+                   	FROM TBRNT_GTN_SPORT V
+					WHERE ( RCIV_DE = #rcivDe# OR RCIV_DE IS NULL )
+                  GROUP BY CNTRCTR_NO, PAY_TMLMT
+                ) D 
+            	,(
+            		SELECT 
+                		CNTRCTR_NO
+                    	,COUNT(1) AS CNT 
+                	FROM TBRNT_RENT_SPRMNY_RCIV /*임대료 지원금 수납*/
+	                WHERE RCIV_DE = #rcivDe# 
+	                AND   NTIC_SE = '2' 
+	                GROUP BY CNTRCTR_NO
+                 ) A1
+            	,TBRNT_PRMANENT_RENT_CSTMR E
+			WHERE A.RCIV_DE   = #rcivDe#
+			AND   A.NTIC_SE = '2'
+            AND   A.PAYMTHD = 'V'
+			AND   A.PAYMTHD LIKE #paymthd#
+			AND   A.CNTRCTR_NO     = B.CNTRCTR_NO
+			AND   B.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+			AND   INSTR( 'R1,R3', C.HOUSE_SE) > 0
+			AND   B.RENT_HOUSE_CODE LIKE #rentHouseCode# || '%'
+			AND   B.DONG       LIKE #dong# || '%'
+			AND   B.HO         LIKE #ho# || '%'
+			AND   A.CNTRCTR_NO = D.CNTRCTR_NO(+)
+			AND   A.PAY_TMLMT = D.PAY_TMLMT(+)
+			AND   A.CNTRCTR_NO = A1.CNTRCTR_NO(+)
+			AND   B.PRMANENT_CSTMR_NO = E.PRMANENT_CSTMR_NO
+		)
+		ORDER BY RENT_HOUSE_NM, DONG, HO
+	]]>
+	</select>
+	
+	<!-- 수납 결의 -->
+	<parameterMap id="SPRNT_REC_DESC_RECEIPT_BS_PARAM" class="java.util.HashMap">
+		<parameter property="rcivDe" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="paymthd" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="rentHouseCode" jdbcType="VARCHAR" javaType="string" mode="IN" />	 
+		<parameter property="dong" jdbcType="VARCHAR" javaType="string" mode="IN" />	 
+		<parameter property="ho" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	</parameterMap>
+	
+	<procedure id="RNT01070400DAO.SPRNT_REC_DESC_RECEIPT_BS" parameterMap="SPRNT_REC_DESC_RECEIPT_BS_PARAM">
+		{ CALL SPRNT_REC_DESC_RECEIPT_BS(?, ?, ?, ?, ?, ?) }
+	</procedure>
+	
+	<!-- 수납 결의 취소 -->
+	<parameterMap id="SPRNT_REC_DESC_CANCEL_BS_PARAM" class="java.util.HashMap">
+		<parameter property="rcivDe" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="paymthd" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="cntrctrNo" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="rentHouseCode" jdbcType="VARCHAR" javaType="string" mode="IN" />	 
+		<parameter property="dong" jdbcType="VARCHAR" javaType="string" mode="IN" />	 
+		<parameter property="ho" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	</parameterMap>
+	
+	<procedure id="RNT01070400DAO.SPRNT_REC_DESC_CANCEL_BS" parameterMap="SPRNT_REC_DESC_CANCEL_BS_PARAM">
+		{ CALL SPRNT_REC_DESC_CANCEL_BS(?, ?, ?, ?, ?, ?, ?) }
+	</procedure>
+</sqlMap>

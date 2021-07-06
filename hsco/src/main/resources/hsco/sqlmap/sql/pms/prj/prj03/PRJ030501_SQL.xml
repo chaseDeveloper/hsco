@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj03">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_PRMPC_CODE			원가코드
+		 R   : TBPRJ_ACMSLT_PRMPC_SM	실적원가집계
+	-->
+
+	<!--  조회 -->
+	<select id="PRJ030501.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.ACCNUT_YEAR				/* 회계년도 */
+	,A.BSNS_CODE				/* 사업코드 */
+	,A.STD_PRMPC_CODE			/* 표준원가코드 */
+	,A.AMT						/* 실적금액(억원) */
+	,ROUND(100 * RATIO_TO_REPORT(A.AMT) OVER (PARTITION BY A.ACCNUT_YEAR,A.BSNS_CODE), 2)
+	 AS RT						/* 구성비 */
+
+	,C.CL_SE			/* 분류구분 */
+	,DECODE(C.CL_SE, 1, C.LCLAS_NM, 2, C.MLSFC_NM, C.SCLAS_NM)
+	 AS CODE_NM			/* 원가항목명 */
+
+FROM (
+SELECT
+	 A.ACCNUT_YEAR				/* 회계년도 */
+	,A.BSNS_CODE				/* 사업코드 */
+	,A.STD_PRMPC_CODE			/* 표준원가코드 */
+	,ROUND(SUM(A.ACMSLT_AMOUNT) /100000000,2) AS AMT	/* 실적금액(억원) */
+FROM TBPRJ_ACMSLT_PRMPC_SM A			/* 실적원가집계 */
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#				/* 회계년도 */
+  AND A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+GROUP BY ACCNUT_YEAR,BSNS_CODE,STD_PRMPC_CODE
+) A
+LEFT JOIN TBPRJ_PRMPC_CODE C			/* 표준원가코드 */
+  ON A.STD_PRMPC_CODE = C.STD_PRMPC_CODE
+ORDER BY 1
+	</select>
+
+	<!-- 실적원가집계(연차별) ================================================== -->
+
+	<select id="PRJ030501.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.ACCNUT_YEAR					/* 사업년월 */
+	,ROUND(SUM(A.ACMSLT_AMOUNT) /100000000,2) AS AMT	/* 실적금액(억원) */
+FROM TBPRJ_ACMSLT_PRMPC_SM A			/* 실적원가집계 */
+WHERE A.ACCNUT_YEAR >= #ACCNUT_YEAR#				/* 회계년도 */
+  AND A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+  AND A.STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+GROUP BY ACCNUT_YEAR
+ORDER BY 1
+	</select>
+
+	<!-- 실적원가집계(월별) ================================================== -->
+
+	<select id="PRJ030501.r2List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_YM						/* 사업년월 */
+	,ROUND(SUM(A.ACMSLT_AMOUNT) /100000000,2) AS AMT	/* 실적금액(억원) */
+FROM TBPRJ_ACMSLT_PRMPC_SM A			/* 실적원가집계 */
+WHERE A.ACCNUT_YEAR = #ACCNUT_YEAR#				/* 회계년도 */
+  AND A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+  AND A.STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+GROUP BY BSNS_YM
+ORDER BY 1
+	</select>
+
+</sqlMap>

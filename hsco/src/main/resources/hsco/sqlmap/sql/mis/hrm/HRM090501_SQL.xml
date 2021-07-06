@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM090501_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 사우회비 현황 조회 -->
+	<select id="HRM090501DAO.selectEmpAsscDuesList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT  YYYYMM
+		       ,CASE WHEN YYYYMM = '000000' THEN CYFD_AMOUNT ELSE NULL END                      AS CYFD_AMOUNT
+		       ,INCME_AMOUNT
+		       ,EXPNDTR_AMOUNT
+		       ,CASE WHEN YYYYMM = '000000' THEN CYFD_AMOUNT ELSE (CYFD_AMOUNT+BLCE_AMOUNT) END AS BLCE_AMOUNT
+		FROM  (
+				SELECT  TB_AMOUNT.YYYYMM
+				       ,SUM(TB_AMOUNT.CYFD_AMOUNT) OVER(ORDER BY TB_AMOUNT.YYYYMM)                                          AS CYFD_AMOUNT
+				       ,TB_AMOUNT.INCME_AMOUNT
+				       ,TB_AMOUNT.EXPNDTR_AMOUNT
+				       ,CASE WHEN TB_AMOUNT.YYYYMM = '000000' THEN TB_AMOUNT.CYFD_AMOUNT
+				             ELSE SUM(TB_AMOUNT.INCME_AMOUNT-TB_AMOUNT.EXPNDTR_AMOUNT) OVER(ORDER BY TB_AMOUNT.YYYYMM) END  AS BLCE_AMOUNT
+				FROM (
+					SELECT '000000'                                                AS YYYYMM
+					      ,NVL(SUM(INCME_AMOUNT),0) - NVL(SUM(EXPNDTR_AMOUNT),0)   AS CYFD_AMOUNT
+					      ,NULL                                                    AS INCME_AMOUNT
+					      ,NULL                                                    AS EXPNDTR_AMOUNT
+					FROM TBHRM_EMP_ASSC_DUES
+					WHERE SUBSTR(DUES_DE, 0, 6) < #YYYYMM_ST#
+					UNION ALL
+					SELECT TB_DATE.YYYYMM
+					      ,NULL                              AS CYFD_AMOUNT
+					      ,NVL(SUM(t1.INCME_AMOUNT),0)       AS INCME_AMOUNT
+					      ,NVL(SUM(t1.EXPNDTR_AMOUNT),0)     AS EXPNDTR_AMOUNT
+					FROM (
+						  SELECT TO_CHAR(ADD_MONTHS(TO_DATE(#YYYYMM_ST#,'YYYYMM')-1, LEVEL), 'YYYYMM') YYYYMM 
+					      FROM DUAL 
+					      CONNECT BY LEVEL <= (SELECT MONTHS_BETWEEN(TO_DATE(#YYYYMM_ED#, 'YYYYMM'), TO_DATE(#YYYYMM_ST#, 'YYYYMM'))+1 FROM DUAL)
+						 ) TB_DATE
+					LEFT OUTER JOIN TBHRM_EMP_ASSC_DUES t1
+					  ON TB_DATE.YYYYMM = SUBSTR(t1.DUES_DE, 0,6)
+					GROUP BY TB_DATE.YYYYMM
+				) TB_AMOUNT
+				ORDER BY YYYYMM
+			)
+	    ORDER BY YYYYMM
+			]]>
+    </select>
+    
+	
+	<!-- 사우회비 상세내역 조회 -->
+	<select id="HRM090501DAO.selectEmpAsscDuesDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT DUES_DE
+			     , SN
+			     , IEM_SE
+			     , INCME_AMOUNT
+			     , EXPNDTR_AMOUNT
+			     , #BLCE_AMOUNT# + SUM(NVL(INCME_AMOUNT,0)-NVL(EXPNDTR_AMOUNT,0)) OVER(ORDER BY DUES_DE, SN) AS BLCE_AMOUNT
+			     , SUMMY
+			     , RM
+			     , REGISTER_ID
+			     , REGIST_DT
+			     , UPDUSR_ID
+			     , UPDT_DT
+			FROM TBHRM_EMP_ASSC_DUES
+			WHERE SUBSTR(DUES_DE, 0, 6) = #YYYYMM#
+			ORDER BY DUES_DE, SN
+    </select>
+    
+    <!-- 사우회비 상세내역 등록 -->
+    <insert id="HRM090501DAO.empAsscDuesC" parameterClass="java.util.HashMap">
+        <![CDATA[/* HRM090501DAO.empAsscDuesC */]]>
+			INSERT INTO TBHRM_EMP_ASSC_DUES (
+			      DUES_DE
+			    , SN
+			    , IEM_SE
+			    , INCME_AMOUNT
+			    , EXPNDTR_AMOUNT
+			    , SUMMY
+			    , RM
+			    , REGISTER_ID
+			    , REGIST_DT
+			    , UPDUSR_ID
+			    , UPDT_DT
+			) VALUES (
+			      #DUES_DE#
+			    , (SELECT NVL(MAX(SN),0)+1 FROM TBHRM_EMP_ASSC_DUES WHERE DUES_DE=#DUES_DE#)
+			    , #IEM_SE#
+			    , #INCME_AMOUNT#
+			    , #EXPNDTR_AMOUNT#
+			    , #SUMMY#
+			    , #RM#
+			    , #S_USER_ID#
+			    , SYSDATE
+			    , #S_USER_ID#
+			    , SYSDATE
+			)
+    </insert>
+    
+    <!-- 사우회비 상세내역 수정 -->
+    <update id="HRM090501DAO.empAsscDuesU" parameterClass="java.util.HashMap">
+        <![CDATA[/* HRM090501DAO.empAsscDuesU */]]>
+			UPDATE TBHRM_EMP_ASSC_DUES SET
+			       INCME_AMOUNT   = #INCME_AMOUNT#
+			     , EXPNDTR_AMOUNT = #EXPNDTR_AMOUNT#
+			     , IEM_SE         = #IEM_SE#
+			     , SUMMY          = #SUMMY#
+			     , RM             = #RM#
+			     , UPDUSR_ID      = #S_USER_ID#
+			     , UPDT_DT        = SYSDATE
+			 WHERE DUES_DE        = #DUES_DE#
+			   AND SN             = #SN#
+    </update>
+    
+    <!-- 사우회비 상세내역 삭제 -->
+    <delete id="HRM090501DAO.empAsscDuesD" parameterClass="java.util.HashMap">
+			DELETE FROM TBHRM_EMP_ASSC_DUES 
+			 WHERE DUES_DE  = #DUES_DE#
+			   AND SN       = #SN#
+    </delete>
+</sqlMap>

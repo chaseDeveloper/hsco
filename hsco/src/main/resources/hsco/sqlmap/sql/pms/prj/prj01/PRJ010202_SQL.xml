@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj01">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_PRSMP_PRMPC		추정원가
+		 R   : TBPRJ_BSNS_SUMRY			사업개요
+		CRUD : TBPRJ_WCT_SM				사업비집계
+		 R   : TBPRJ_PRMPC_CODE			원가코드
+	-->
+
+	<!-- 사업비집계 ================================================== -->
+
+	<select id="PRJ010202.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 BC.BSNS_CODE			/* 사업코드 */
+	,BC.BSNS_NM				/* 사업명 */
+	,BC.BSNS_TY				/* 사업유형 */
+	,BC.BSNS_TY_NM			/* 사업유형명 */
+	,BC.BSNS_BEGIN_YM		/* 사업시작년월 */
+	,BC.BSNS_END_YM			/* 사업종료년월 */
+	,BC.RM				/* 비고 */
+	,BC.CL_SE			/* 분류구분 */
+	,BC.SLE_SE			/* 판매구분 */
+	,BS.STRWRK_DE			/* 착공일자 */
+	,BS.COMPET_DE			/* 준공일자 */
+	,ROUND(WS.AMT /100000000,2) AS AMT	/* 사업비집계(억원) */
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+JOIN TBPRJ_BSNS_SUMRY BS ON BS.BSNS_CODE = BC.BSNS_CODE			/* 사업개요 */
+LEFT JOIN (
+	SELECT
+		 BSNS_CODE
+  <isEqual property="GB" compareValue="1">
+		,SUM(PLAN_AMOUNT) AS AMT			/* 계획금액 */
+  </isEqual>
+  <isNotEqual property="GB" compareValue="1">
+		,SUM(ACMSLT_AMOUNT) AS AMT			/* 실적금액 */
+  </isNotEqual>
+	FROM TBPRJ_WCT_SM		/* 사업비집계 */
+	GROUP BY BSNS_CODE
+) WS ON WS.BSNS_CODE = BC.BSNS_CODE
+WHERE BC.BSNS_TY = #BSNS_TY#			/* 사업코드 */
+<isNotEmpty property="BSNS_GB" >
+  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+</isNotEmpty>
+ORDER BY 1
+	</select>
+
+	<!-- 사업비집계 삭제 -->
+	<delete id="PRJ010202.mD" parameterClass="map">
+DELETE FROM TBPRJ_WCT_SM				/* 사업비집계 */
+WHERE 1=1
+<isNotEmpty property="BSNS_CODE" >
+  AND BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+</isNotEmpty>
+<isNotEmpty property="BSNS_YEAR" >
+  AND BSNS_YEAR = #BSNS_YEAR#			/* 사업년도 */
+</isNotEmpty>
+<isNotEmpty property="BSNS_TY" >
+  AND BSNS_CODE IN 
+  (
+	SELECT BSNS_CODE
+	FROM TBPRJ_BSNS_CODE
+	WHERE BSNS_TY = #BSNS_TY#			/* 사업유형 */
+  )
+</isNotEmpty>
+	</delete>
+
+	<!-- 사업비집계-년도별 ================================================== -->
+
+	<select id="PRJ010202.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.BSNS_YEAR			/* 사업년도 */
+	,ROUND(A.AMT /100000000,2) AS AMT		/* 사업비(억원) */
+FROM (
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+	SELECT
+		 BSNS_CODE
+		,BSNS_YEAR			/* 사업년도 */
+  <isEqual property="GB" compareValue="1">
+		,SUM(A.PLAN_AMOUNT) AS AMT			/* 계획금액 */
+  </isEqual>
+  <isNotEqual property="GB" compareValue="1">
+		,SUM(A.ACMSLT_AMOUNT) AS AMT		/* 실적금액 */
+  </isNotEqual>
+	FROM TBPRJ_WCT_SM A		/* 사업비집계 */
+	GROUP BY BSNS_CODE, BSNS_YEAR
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">		/* 원장 : 추정원가 */
+	SELECT
+		 BSNS_CODE
+		,BSNS_YEAR			/* 사업년도 */
+  <isEqual property="GB" compareValue="1">
+		,SUM(A.PLAN_AMOUNT) AS AMT			/* 계획금액 */
+  </isEqual>
+  <isNotEqual property="GB" compareValue="1">
+		,SUM(A.ACMSLT_AMOUNT) AS AMT		/* 실적금액 */
+  </isNotEqual>
+	FROM TBPRJ_WCT_SM A		/* 사업비집계 */
+	GROUP BY BSNS_CODE, BSNS_YEAR
+</isEqual>
+) A
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2
+	</select>
+
+	<!-- 사업비집계-원가별 ================================================== -->
+
+	<select id="PRJ010202.r2List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.BSNS_YEAR			/* 사업년도 */
+	,A.STD_PRMPC_CODE		/* 표준원가코드 */
+	,ROUND(A.AMT /100000000,2) AS AMT		/* 사업비(억원) */
+
+	,C.LCLAS_NM			/* 대분류명 */
+	,C.MLSFC_NM			/* 중분류명 */
+	,C.SCLAS_NM			/* 소분류명 */
+
+FROM (
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+	SELECT
+		 A.BSNS_CODE
+		,A.BSNS_YEAR			/* 사업년도 */
+		,A.STD_PRMPC_CODE		/* 표준원가코드 */
+  <isEqual property="GB" compareValue="1">
+		,SUM(A.PLAN_AMOUNT) AS AMT		/* 계획금액 */
+  </isEqual>
+  <isNotEqual property="GB" compareValue="1">
+		,SUM(A.ACMSLT_AMOUNT) AS AMT	/* 실적금액 */
+  </isNotEqual>
+	FROM TBPRJ_WCT_SM A			/* 사업비집계 */
+	GROUP BY A.BSNS_CODE,A.BSNS_YEAR,A.STD_PRMPC_CODE
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">		/* 원장 : 추정원가 */
+	SELECT
+		 A.BSNS_CODE
+		,A.BSNS_YEAR			/* 사업년도 */
+		,A.STD_PRMPC_CODE		/* 표준원가코드 */
+  <isEqual property="GB" compareValue="1">
+		,SUM(A.PLAN_AMOUNT) AS AMT		/* 계획금액 */
+  </isEqual>
+  <isNotEqual property="GB" compareValue="1">
+		,SUM(A.ACMSLT_AMOUNT) AS AMT	/* 실적금액 */
+  </isNotEqual>
+	FROM TBPRJ_WCT_SM A			/* 사업비집계 */
+	GROUP BY A.BSNS_CODE,A.BSNS_YEAR,A.STD_PRMPC_CODE
+</isEqual>
+) A
+JOIN TBPRJ_PRMPC_CODE C		/* 원가코드 */
+  ON C.STD_PRMPC_CODE = A.STD_PRMPC_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+<isNotEmpty property="BSNS_YEAR" >
+  AND A.BSNS_YEAR = #BSNS_YEAR#			/* 사업코드 */
+</isNotEmpty>
+ORDER BY 1,2,3
+	</select>
+
+	<!-- 생성 ================================================== -->
+
+	<!-- 사업비집계 생성 -->
+	<insert id="PRJ010202.make" parameterClass="map">
+INSERT INTO TBPRJ_WCT_SM (			/* 사업비집계 */
+	 BSNS_CODE			/* 사업코드 */
+	,BSNS_YEAR			/* 사업년도 */
+	,STD_PRMPC_CODE		/* 표준원가코드 */
+	,PLAN_AMOUNT		/* 계획금액 */
+	,ACMSLT_AMOUNT		/* 실적금액 */
+
+	,REGISTER_ID		/* 등록자ID */
+	,REGIST_DT			/* 등록일시 */
+	,UPDUSR_ID			/* 수정자ID */
+	,UPDT_DT			/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#			/* 사업코드 */
+	,#BSNS_YEAR#			/* 사업년도 */
+	,#STD_PRMPC_CODE#		/* 표준원가코드 */
+	,#PLAN_AMOUNT#			/* 계획금액 */
+	,#ACMSLT_AMOUNT#		/* 실적금액 */
+
+	,#S_USER_ID#		/* 등록자ID */
+	,SYSDATE			/* 등록일시 */
+	,#S_USER_ID#		/* 수정자ID */
+	,SYSDATE			/* 수정일시 */
+)
+	</insert>
+
+
+	<!--
+SELECT
+FROM TBPRJ_PRSMP_PRMPC
+LEFT JOIN (
+	SELECT
+	FROM TBPRJ_PRSMP_PRMPC_DSTRC		 추정원가년차
+)
+LEFT JOIN (
+	SELECT
+	FROM TBPRJ_PRSMP_PRMPC_SBJECT		 추정원가_과목별
+)
+	-->
+
+
+	<!--  ================================================== -->
+
+
+	<!-- 추정원가 조회 -->
+	<select id="PRJ010202.m2List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.BSNS_STEP			/* 사업단계 */
+	,MAX(A.ODR) AS ODR		/* 차수 */
+FROM TBPRJ_PRSMP_PRMPC A			/* 추정원가 */
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A.BSNS_STEP = #BSNS_STEP#			/* 사업단계 */
+<isNotEmpty property="CD1" >
+</isNotEmpty>
+GROUP BY BSNS_CODE,BSNS_STEP
+ORDER BY 1,2,3
+	</select>
+
+	<!-- 사업개요 조회 -->
+	<select id="PRJ010202.m3List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.STRWRK_DE			/* 착공일자 */
+	,A.COMPET_DE			/* 준공일자 */
+FROM TBPRJ_BSNS_SUMRY A			/* 사업개요 */
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+<isNotEmpty property="CD1" >
+</isNotEmpty>
+ORDER BY 1,2,3
+	</select>
+
+
+
+
+
+
+
+
+	<!-- 사업비집계 ================================================== -->
+
+	<!-- 사업비집계 조회 -->
+	<select id="PRJ010202.bak_rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.BSNS_YEAR			/* 사업년도 */
+	,A.STD_PRMPC_CODE		/* 표준원가코드 */
+	,A.PLAN_AMOUNT			/* 계획금액 */
+	,A.ACMSLT_AMOUNT		/* 실적금액 */
+	,A.REGISTER_ID			/* 등록자ID */
+	,A.REGIST_DT			/* 등록일시 */
+	,A.UPDUSR_ID			/* 수정자ID */
+	,A.UPDT_DT				/* 수정일시 */
+FROM TBPRJ_WCT_SM A			/* 사업비집계 */
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A.BSNS_YEAR = #BSNS_YEAR#			/* 사업년도 */
+  AND A.STD_PRMPC_CODE = #STD_PRMPC_CODE#			/* 표준원가코드 */
+<isNotEmpty property="CD1" >
+</isNotEmpty>
+ORDER BY 1,2,3
+	</select>
+
+	<!-- 사업비집계 추가 -->
+	<insert id="PRJ010202.bak_rC" parameterClass="map">
+INSERT INTO TBPRJ_WCT_SM (			/* 사업비집계 */
+	 BSNS_CODE			/* 사업코드 */
+	,BSNS_YEAR			/* 사업년도 */
+	,STD_PRMPC_CODE		/* 표준원가코드 */
+	,PLAN_AMOUNT		/* 계획금액 */
+	,ACMSLT_AMOUNT		/* 실적금액 */
+	,REGISTER_ID		/* 등록자ID */
+	,REGIST_DT			/* 등록일시 */
+	,UPDUSR_ID			/* 수정자ID */
+	,UPDT_DT			/* 수정일시 */
+) VALUES (
+	 #BSNS_CODE#			/* 사업코드 */
+	,#BSNS_YEAR#			/* 사업년도 */
+	,#STD_PRMPC_CODE#		/* 표준원가코드 */
+	,#PLAN_AMOUNT#			/* 계획금액 */
+	,#ACMSLT_AMOUNT#		/* 실적금액 */
+	,#S_USER_ID#			/* 등록자ID */
+	,SYSDATE			/* 등록일시 */
+	,#S_USER_ID#			/* 수정자ID */
+	,SYSDATE			/* 수정일시 */
+)
+	</insert>
+
+	<!-- 사업비집계 수정 -->
+	<update id="PRJ010202.bak_rU" parameterClass="map">
+UPDATE TBPRJ_WCT_SM			/* 사업비집계 */
+  SET
+	 PLAN_AMOUNT = #PLAN_AMOUNT#			/* 계획금액 */
+	,ACMSLT_AMOUNT = #ACMSLT_AMOUNT#		/* 실적금액 */
+	,UPDUSR_ID = #S_USER_ID#				/* 수정자ID */
+	,UPDT_DT = SYSDATE					/* 수정일시 */
+WHERE BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND BSNS_YEAR = #BSNS_YEAR#			/* 사업년도 */
+  AND STD_PRMPC_CODE = #STD_PRMPC_CODE#			/* 표준원가코드 */
+	</update>
+
+	<!-- 사업비집계 삭제 -->
+	<delete id="PRJ010202.bak_rD" parameterClass="map">
+DELETE FROM TBPRJ_WCT_SM				/* 사업비집계 */
+WHERE BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND BSNS_YEAR = #BSNS_YEAR#			/* 사업년도 */
+  AND STD_PRMPC_CODE = #STD_PRMPC_CODE#			/* 표준원가코드 */
+	</delete>
+
+</sqlMap>

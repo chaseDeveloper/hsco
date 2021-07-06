@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM100102_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 이사회관리번호 조회 -->
+	<select id="HRM100102DAO.selectBodManageNo" parameterClass="java.util.HashMap" resultClass="java.lang.String">	    
+		<![CDATA[ /*HRM100102DAO.selectBodManageNo*/ ]]>
+		<![CDATA[	
+			SELECT SUBSTR(#BOD_DE#,1,4)||LPAD(NVL(MAX(SUBSTR(BOD_MANAGE_NO,5,3)),0)+1,3,'0') AS BOD_MANAGE_NO
+			FROM   TBHRM_BOD_MASTR
+			WHERE  SUBSTR(BOD_DE,1,4) = SUBSTR(#BOD_DE#,1,4)
+			  AND  BOD_CD_SE = #BOD_CD_SE#
+		]]> 		        	     
+    </select>	
+    
+	<!-- 이사회 목록 조회(팝업) -->
+	<select id="HRM100102DAO.selectBodMasterPopUp" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*HRM100102DAO.selectBodMasterPopUp*/ ]]>
+		<![CDATA[	
+			SELECT BOD_MANAGE_NO                              AS BOD_MANAGE_NO
+			       ,BOD_CD_SE                                 AS BOD_CD_SE
+			       ,DECODE(BOD_SE,'1','정기','2','임시',NULL) AS BOD_SE       
+			       ,BOD_DE                                    AS BOD_DE  
+			       ,PLACE                                     AS PLACE
+			       ,BOD_NM                                    AS BOD_NM
+			FROM   TBHRM_BOD_MASTR
+			WHERE  SUBSTR(BOD_DE,1,4) = #YEAR#
+			  AND  BOD_CD_SE = #BOD_CD_SE#
+			ORDER BY BOD_MANAGE_NO DESC
+		]]> 		        	     
+    </select>  
+    
+    <!-- 이사회 임원 명단 조회 -->
+	<select id="HRM100102DAO.selectBodNmstList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*HRM100102DAO.selectBodNmstList*/ ]]>
+		<![CDATA[	
+			SELECT '1'                           AS CHK
+				   ,BOD_CD_SE                    AS BOD_CD_SE
+				   ,EXCTV_NO                     AS EXCTV_NO       
+			       ,OFCPS_NM                     AS OFCPS_NM       
+			       ,NM                           AS NM   
+			       ,DECODE(REPLACE(CTTPC1,'-',''), NULL, NULL, CTTPC1) AS CTTPC1
+				   ,'0' AS CHRM_CHK			       
+			  FROM TBHRM_BOD_NMST
+			 WHERE 1=1
+			   AND NMST_YEAR = #YEAR#
+			   AND BOD_CD_SE = #BOD_CD_SE#
+		]]> 		        	     
+    </select>  
+	
+	<!-- 이사회마스터 목록 조회 -->
+	<select id="HRM100102DAO.selectBodMaster" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*HRM100102DAO.selectBodMaster*/ ]]>
+		<![CDATA[	
+            SELECT T1.BOD_MANAGE_NO                     AS BOD_MANAGE_NO
+                   ,T1.BOD_CD_SE                        AS BOD_CD_SE
+                   ,DECODE(T1.BOD_SE,NULL,'',T1.BOD_SE) AS BOD_SE       
+                   ,T1.BOD_DE                           AS BOD_DE
+                   ,SUBSTR(T1.BEGIN_TIME,1,2)           AS BEGIN_TIME1
+                   ,SUBSTR(T1.BEGIN_TIME,3,2)           AS BEGIN_TIME2  
+                   ,SUBSTR(T1.END_TIME,1,2)             AS END_TIME1
+                   ,SUBSTR(T1.END_TIME,3,2)             AS END_TIME2     
+                   ,T1.PLACE                            AS PLACE        
+                   ,T1.TOT_HMV_CO                       AS TOT_HMV_CO   
+                   ,T1.ATEND_HMV_CO                     AS ATEND_HMV_CO 
+                   ,T1.CHRM                             AS CHRM
+                   ,T1.FILE_SN                          AS FILE_SN
+                   ,T1.BOD_NM                           AS BOD_NM
+                   ,T1.SANCTN_NO                        AS SANCTN_NO           /* 결재번호 */
+                   ,T1.REGISTER_ID                   AS REGISTER_ID 
+                   ,TO_CHAR(T1.REGIST_DT,'YYYYMMDDHH24MISS') AS REGIST_DT
+                   ,T1.UPDUSR_ID                     AS UPDUSR_ID
+                   ,TO_CHAR(T1.UPDT_DT,'YYYYMMDD')   AS UPDT_DT
+                   ,SFCOM_GET_DRFTSTS(T1.SANCTN_NO, T1.REGIST_DT) AS DRFT_STS                       /* 기안상태       */     
+                   ,'theme://images/sanctn/' || 'D' || 
+                      SFCOM_GET_DRFTSTS(T1.SANCTN_NO, T1.REGIST_DT) || '.png'        AS DRFT_STS_IMG     /* 기안상태Img */ 
+                   ,TO_CHAR(T2.DRFT_DT,'YYYY-MM-DD HH24:MI:SS')          AS DRFT_DT          /* 기안일시       */                               
+                   ,SFCOM_GET_APPRSTS(T1.SANCTN_NO, T1.REGIST_DT)                       AS SANCTN_STS       /* 결재상태       */
+                   ,'theme://images/sanctn/' || 'A' || 
+                      SFCOM_GET_APPRSTS(T1.SANCTN_NO, T1.REGIST_DT) || '.png'        AS SANCTN_STS_IMG     /* 결재상태Img */
+                   ,TO_CHAR(T2.LAST_SANCTN_DT,'YYYY-MM-DD HH24:MI:SS')   AS LAST_SANCTN_DT   /* 최종결재일시 */
+            FROM   TBHRM_BOD_MASTR T1
+                   LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR T2
+                                ON T1.SANCTN_NO = T2.SANCTN_NO
+			WHERE  T1.BOD_MANAGE_NO = #BOD_MANAGE_NO#
+			 AND   T1.BOD_CD_SE = #BOD_CD_SE#
+		]]> 		        	     
+    </select>
+    
+    
+    <!-- 이사회마스터 등록 -->
+    <insert id="HRM100102DAO.saveBodMasterC" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodMasterC*/ ]]>
+        <![CDATA[
+            INSERT INTO TBHRM_BOD_MASTR (
+                BOD_CD_SE
+			    ,BOD_MANAGE_NO       
+		        ,BOD_SE      
+		        ,BOD_DE
+		        ,BEGIN_TIME   
+		        ,END_TIME             
+		        ,PLACE
+		        ,TOT_HMV_CO  
+		        ,ATEND_HMV_CO                   
+		        ,CHRM
+		        ,BOD_NM
+                ,REGISTER_ID
+                ,REGIST_DT
+                ,UPDUSR_ID
+                ,UPDT_DT
+             ) VALUES (
+                #BOD_CD_SE#
+                ,#BOD_MANAGE_NO#
+			    ,#BOD_SE#
+		        ,#BOD_DE#
+		        ,#BEGIN_TIME1#||#BEGIN_TIME2#
+		        ,#END_TIME1#||#END_TIME2#
+		        ,#PLACE#
+		        ,#TOT_HMV_CO#
+		        ,#ATEND_HMV_CO#
+		        ,#CHRM#
+		        ,#BOD_NM#
+                ,#S_USER_ID#
+                ,SYSDATE
+                ,#S_USER_ID#
+                ,SYSDATE
+             )
+        ]]>
+    </insert>
+
+
+    <!-- 이사회마스터 수정 -->
+    <update id="HRM100102DAO.saveBodMasterU" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodMasterU*/ ]]>
+        <![CDATA[
+            UPDATE TBHRM_BOD_MASTR 
+               SET BOD_SE          = #BOD_SE#      
+		           ,BOD_DE         = #BOD_DE#      
+		           ,BEGIN_TIME     = #BEGIN_TIME1#||#BEGIN_TIME2#  
+		           ,END_TIME       = #END_TIME1#||#END_TIME2#    
+		           ,PLACE          = #PLACE#       
+		           ,TOT_HMV_CO     = #TOT_HMV_CO#  
+		           ,ATEND_HMV_CO   = #ATEND_HMV_CO#
+		           ,CHRM           = #CHRM# 
+		           ,BOD_NM         = #BOD_NM#
+		           ,UPDUSR_ID      = #S_USER_ID#   
+                   ,UPDT_DT        = SYSDATE       
+             WHERE 1=1
+               AND BOD_CD_SE     = #BOD_CD_SE#
+               AND BOD_MANAGE_NO = #BOD_MANAGE_NO#
+        ]]>
+    </update>
+
+
+    <!-- 이사회마스터 삭제 -->
+    <delete id="HRM100102DAO.saveBodMasterD03" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodMasterD*/ ]]>
+        <![CDATA[
+            DELETE 
+              FROM TBHRM_BOD_MASTR 
+             WHERE 1=1
+               AND BOD_CD_SE = #BOD_CD_SE#
+               AND BOD_MANAGE_NO = #BOD_MANAGE_NO#
+        ]]>
+    </delete>
+    
+    <delete id="HRM100102DAO.saveBodMasterD01" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodMasterD01*/ ]]>
+        <![CDATA[
+            DELETE 
+              FROM TBHRM_BOD_ATDRN 
+             WHERE 1=1
+               AND BOD_CD_SE = #BOD_CD_SE#
+               AND BOD_MANAGE_NO = #BOD_MANAGE_NO#
+        ]]>
+    </delete> 
+    
+    <delete id="HRM100102DAO.saveBodMasterD02" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodMasterD02*/ ]]>
+        <![CDATA[
+            DELETE 
+              FROM TBHRM_BOD_BI_CN 
+             WHERE 1=1
+               AND BOD_CD_SE = #BOD_CD_SE#
+               AND BOD_MANAGE_NO = #BOD_MANAGE_NO#
+        ]]>
+    </delete>         
+
+	<!-- 이사회참석자 목록 조회 -->
+	<select id="HRM100102DAO.selectBodAtdrn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*HRM100102DAO.selectBodAtdrn*/ ]]>
+		<![CDATA[	
+			SELECT #BOD_MANAGE_NO#                 AS BOD_MANAGE_NO
+			       ,B.EXCTV_NO                     AS EXCTV_NO 
+			       ,B.BOD_CD_SE                    AS BOD_CD_SE      
+			       ,B.OFCPS_NM                     AS OFCPS_NM       
+			       ,B.NM                           AS NM   
+			       ,DECODE(REPLACE(B.CTTPC1,'-',''), NULL, NULL, B.CTTPC1) AS CTTPC1
+			       ,DECODE(A.BOD_MANAGE_NO, NULL, '0'
+			                                    , '1') AS CHK
+			       ,A.AGENT_NM                     AS AGENT_NM                             
+			       ,A.REGISTER_ID                  AS REGISTER_ID 
+			       ,TO_CHAR(A.REGIST_DT,'YYYYMMDD')AS REGIST_DT
+			       ,A.UPDUSR_ID                    AS UPDUSR_ID
+			       ,TO_CHAR(A.UPDT_DT,'YYYYMMDD')  AS UPDT_DT
+			FROM   TBHRM_BOD_NMST B
+			       LEFT OUTER JOIN TBHRM_BOD_ATDRN A
+			                    ON A.BOD_MANAGE_NO = #BOD_MANAGE_NO#
+			                   AND A.EXCTV_NO = B.EXCTV_NO
+			                   AND A.BOD_CD_SE = B.BOD_CD_SE
+			WHERE  B.NMST_YEAR = #YEAR#
+			   AND B.BOD_CD_SE = #BOD_CD_SE#
+		]]> 		        	     
+    </select>
+    
+    
+    <!-- 이사회참석자 등록 -->
+    <insert id="HRM100102DAO.saveBodAtdrnC" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodAtdrnC*/ ]]>
+        <![CDATA[
+           MERGE INTO TBHRM_BOD_ATDRN
+				  USING DUAL
+				  ON (BOD_MANAGE_NO = #BOD_MANAGE_NO# AND EXCTV_NO = #EXCTV_NO#)				  				            
+				  WHEN NOT MATCHED THEN 
+				  INSERT(
+				  			BOD_CD_SE
+						    ,BOD_MANAGE_NO       
+					        ,EXCTV_NO
+					        ,AGENT_NM
+			                ,REGISTER_ID
+			                ,REGIST_DT
+			                ,UPDUSR_ID
+			                ,UPDT_DT				            
+				  )VALUES(
+				  			#BOD_CD_SE#
+			                ,#BOD_MANAGE_NO#
+						    ,#EXCTV_NO#
+						    ,#AGENT_NM#
+			                ,#S_USER_ID#
+			                ,SYSDATE
+			                ,#S_USER_ID#
+			                ,SYSDATE
+				  )             
+        ]]>
+    </insert>
+
+
+    <!-- 이사회참석자 삭제 -->
+    <delete id="HRM100102DAO.saveBodAtdrnD" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodAtdrnD*/ ]]>
+        <![CDATA[
+            DELETE 
+              FROM TBHRM_BOD_ATDRN 
+             WHERE 1=1
+               AND BOD_CD_SE = #BOD_CD_SE#
+               AND BOD_MANAGE_NO = #BOD_MANAGE_NO#
+               AND EXCTV_NO = #EXCTV_NO#
+        ]]>      
+    </delete>
+    
+	<!-- 이사회의안내용 목록 조회 -->
+	<select id="HRM100102DAO.selectBodBiCn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*HRM100102DAO.selectBodBiCn*/ ]]>
+		<![CDATA[	
+			SELECT  A.BOD_CD_SE                     AS BOD_CD_SE
+				   ,A.BOD_MANAGE_NO                 AS BOD_MANAGE_NO
+			       ,A.BI_NO                         AS BI_NO       
+			       ,A.BI_NM                         AS BI_NM       
+			       ,A.DECSN_SE                      AS DECSN_SE   
+			       ,A.DECSN_CN                      AS DECSN_CN     
+			       ,A.PROPSE_DEPT_CODE              AS PROPSE_DEPT_CODE
+			       ,B.DEPT_NM                       AS PROPSE_DEPT_NM                                                                  
+			       ,A.CONFM_AT                      AS CONFM_AT
+			       ,A.REGISTER_ID                   AS REGISTER_ID 
+			       ,TO_CHAR(A.REGIST_DT,'YYYYMMDD') AS REGIST_DT
+			       ,A.UPDUSR_ID                     AS UPDUSR_ID
+			       ,TO_CHAR(A.UPDT_DT,'YYYYMMDD')   AS UPDT_DT
+			FROM   TBHRM_BOD_BI_CN A
+			       LEFT OUTER JOIN VWHRM_DEPT B
+			                    ON A.PROPSE_DEPT_CODE = B.DEPT_CODE
+			WHERE  A.BOD_MANAGE_NO = #BOD_MANAGE_NO#
+			  AND  A.BOD_CD_SE = #BOD_CD_SE#
+		]]> 		        	     
+    </select>
+    
+    
+    <!-- 이사회의안내용 등록 -->
+    <insert id="HRM100102DAO.saveBodBiCnC" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodBiCnC*/ ]]>
+        <![CDATA[
+            INSERT INTO TBHRM_BOD_BI_CN (
+                BOD_CD_SE
+                ,BOD_MANAGE_NO
+                ,BI_NO
+			    ,BI_NM                  
+		        ,DECSN_SE        
+		        ,DECSN_CN        
+		        ,PROPSE_DEPT_CODE 
+		        ,CONFM_AT
+                ,REGISTER_ID
+                ,REGIST_DT
+                ,UPDUSR_ID
+                ,UPDT_DT
+             ) VALUES (
+                #BOD_CD_SE#
+                ,#BOD_MANAGE_NO#
+                ,(SELECT NVL(MAX(BI_NO),0)+1
+                  FROM   TBHRM_BOD_BI_CN
+                  WHERE  BOD_MANAGE_NO = #BOD_MANAGE_NO#
+                        AND BOD_CD_SE = #BOD_CD_SE#
+                 )
+                ,#BI_NM#           
+			    ,#DECSN_SE#        
+		        ,#DECSN_CN#        
+		        ,#PROPSE_DEPT_CODE#
+		        ,#CONFM_AT#
+                ,#S_USER_ID#
+                ,SYSDATE
+                ,#S_USER_ID#
+                ,SYSDATE
+             )
+        ]]>
+    </insert>
+
+
+    <!-- 이사회의안내용 수정 -->
+    <update id="HRM100102DAO.saveBodBiCnU" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodBiCnU*/ ]]>
+        <![CDATA[
+            UPDATE TBHRM_BOD_BI_CN 
+               SET BI_NM             = #BI_NM#      
+		           ,DECSN_SE         = #DECSN_SE#      
+		           ,DECSN_CN         = #DECSN_CN#  
+		           ,PROPSE_DEPT_CODE = #PROPSE_DEPT_CODE#    
+		           ,CONFM_AT         = #CONFM_AT#
+		           ,UPDUSR_ID        = #S_USER_ID#   
+                   ,UPDT_DT          = SYSDATE       
+             WHERE 1=1
+               AND BOD_CD_SE = #BOD_CD_SE#
+               AND BOD_MANAGE_NO = #BOD_MANAGE_NO#
+               AND BI_NO = #BI_NO#
+        ]]>
+    </update>
+
+
+    <!-- 이사회의안내용 삭제 -->
+    <delete id="HRM100102DAO.saveBodBiCnD" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.saveBodBiCnD*/ ]]>
+        <![CDATA[
+            DELETE 
+              FROM TBHRM_BOD_BI_CN 
+             WHERE 1=1
+               AND BOD_CD_SE = #BOD_CD_SE#
+               AND BOD_MANAGE_NO = #BOD_MANAGE_NO#
+               AND BI_NO = #BI_NO#
+        ]]>
+    </delete>    
+
+    <!-- 이사회마스터 수정(파일일련번호) -->
+    <update id="HRM100102DAO.updateNewFileSn" parameterClass="java.util.HashMap">
+    	<![CDATA[ /*HRM100102DAO.updateNewFileSn*/ ]]>
+        <![CDATA[
+            UPDATE TBHRM_BOD_MASTR 
+               SET FILE_SN          = #FILE_SN#  
+             WHERE 1=1
+               AND BOD_MANAGE_NO = #BOD_MANAGE_NO#
+               AND BOD_CD_SE = #BOD_CD_SE#
+        ]]>
+    </update>
+    
+	<!-- 이사회마스터 수정(결재번호) -->
+    <update id="HRM100102DAO.approveU" parameterClass="java.util.HashMap">
+    	<![CDATA[ /* HRM100102DAO.approveU */ ]]>
+        <![CDATA[
+          UPDATE    TBHRM_BOD_MASTR
+          SET       SANCTN_NO      = 	#SANCTN_NO#
+          WHERE  	BOD_MANAGE_NO  = 	#BOD_MANAGE_NO#
+          		AND BOD_CD_SE = #BOD_CD_SE#
+        ]]>
+    </update>      
+    
+    <!-- 전자결재번호 조회 -->
+	<select id="HRM100102DAO.selectSanctnNO" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		<![CDATA[ /* HRM100102DAO.selectSanctnNO */ ]]>
+			SELECT SANCTN_NO 
+			FROM   TBCOM_ELCTRN_SANCTN_MASTR 
+			WHERE  INTRLCK_IDNTFR = #KEY#
+    </select>    
+</sqlMap>

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01080600SQL">	
+
+	<!-- 쿼리명 : 특별관리대상 조회
+	설명 : 특별관리대상 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 지효정
+	최초작성일 : 2016.03.21
+	-->
+	<select id="RNT01080600DAO.selectSpeclManageList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT B.RENT_HOUSE_NM,
+			   A.RENT_HOUSE_CODE,
+			   A.DONG,
+			   A.HO,
+			   A.CNTRCTR_NO,
+			   I.NM,
+			   I.TELNO,
+			   I.MBTLNO,
+			   A.CNTRCT_DE,
+			   A.RENT_ENDDE,
+			   SFCMP_GET_CODENM('RNT001', A.QUALF_SE) AS QULF_NAME,
+			   DECODE(A.HOUSE_POSESN_AT, '1', '유', '무') AS HOUSE_POSESN_AT,
+			   D.GUAR_CHK,
+			   D.GUAR_CNT,
+			   E.MAMT,
+			   E.MCNT,
+			   DECODE(A.LWST_PROGRS_AT, '1', '소송중', '') AS S_CHK,
+			   SUBSTR(C.ZIP, 1, 3) || '-' || SUBSTR(C.ZIP, 4, 3) AS ZIP,
+			   RTRIM(C.ADRES || ' ' || C.ADRES_DETAIL) AS ADDR
+		  FROM TBRNT_RENT_CNTRCT A
+		 INNER JOIN TBRNT_RENT_HOUSE B
+			ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		 INNER JOIN TBRNT_RENT_HOUSE_DONG C
+			ON C.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		   AND C.DONG = A.DONG
+		 INNER JOIN TBRNT_PRMANENT_RENT_CSTMR I
+			ON I.PRMANENT_CSTMR_NO = A.PRMANENT_CSTMR_NO
+		  LEFT JOIN (
+					SELECT CNTRCTR_NO,
+						   CASE WHEN SUM (CNT1) > 0 THEN '압류(' || SUM (CNT1) || ')' END ||
+						   CASE WHEN SUM (CNT2) > 0 THEN '가압류(' || SUM (CNT2) || ')' END ||
+						   CASE WHEN SUM (CNT3) > 0 THEN '기타압류(' || SUM (CNT3) || ')' END AS GUAR_CHK,
+						  SUM (CNT1) AS GUAR_CNT
+					 FROM (
+							SELECT CNTRCTR_NO,
+								   CASE WHEN SEIZR_SE IN ('00', '02', '03') THEN 1 ELSE 0 END AS CNT1,
+								   CASE WHEN SEIZR_SE IN ('01') THEN 1 ELSE 0 END AS CNT2,
+								   CASE WHEN NVL (SEIZR_SE, '99') NOT IN ('00', '01', '02', '03')
+										THEN 1 ELSE 0
+									END AS CNT3
+							  FROM TBRNT_RENT_GTN_SEIZR
+							 WHERE RELIS_DE IS NULL
+						   )
+					 GROUP BY CNTRCTR_NO
+			   ) D
+			ON D.CNTRCTR_NO = A.CNTRCTR_NO
+		  LEFT JOIN (
+					SELECT CNTRCTR_NO,
+						   SUM(NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) + NVL(OVDINTR, 0)) AS MAMT,
+						   COUNT(1) AS MCNT
+					  FROM TBRNT_RENT_MT_RNTCHRG
+					 WHERE RCIV_DE IS NULL
+					   AND NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) + NVL(OVDINTR, 0) > 0
+					 GROUP BY CNTRCTR_NO
+			   ) E
+			ON E.CNTRCTR_NO = A.CNTRCTR_NO
+		   AND E.MCNT >= #npymMonth#
+		 WHERE A.CANCL_DE IS NULL
+		<isNotEmpty property="rentHouseCode">
+		   AND A.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="houseSe">
+		   AND B.HOUSE_SE = #houseSe#
+		</isNotEmpty>
+		   AND (   E.CNTRCTR_NO IS NOT NULL
+				OR A.HOUSE_POSESN_AT = '1'
+				OR SUBSTR(A.RENT_ENDDE, 1, 6) <![CDATA[<]]> #processDe#
+			   )
+		 ORDER BY A.RENT_HOUSE_CODE, A.DONG, A.HO 
+	</select>
+</sqlMap>

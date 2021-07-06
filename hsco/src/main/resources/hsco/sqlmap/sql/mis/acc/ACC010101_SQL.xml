@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC010101_SQL">	
+	
+	<!-- 예산계정 목록 -->
+	<select id="ACC010101DAO.budgetAcntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.YEAR
+			 , t1.BSNS_SE
+			 , t1.BALC_SE
+			 , t1.BUDGET_ACNT_CODE
+			 , t1.BUDGET_ACNT_NM
+			 , t3.BUKIP_CODE
+			 , t3.BUKIP_NM
+			 , t1.ACNT_LEVEL
+			 ,(CASE WHEN t1.ACNT_LEVEL < '4' THEN SUBSTR(t1.BUDGET_ACNT_CODE, 1, 3)
+                    WHEN SUBSTR(t1.BUDGET_ACNT_CODE, 6) = '00' THEN SUBSTR(t1.BUDGET_ACNT_CODE, 1, 3)||'-'||SUBSTR(t1.BUDGET_ACNT_CODE, 4, 2)
+                    ELSE SUBSTR(t1.BUDGET_ACNT_CODE, 1, 3)||'-'||SUBSTR(t1.BUDGET_ACNT_CODE, 4)    END) ||'.'|| t1.BUDGET_ACNT_NM     AS BUDGET_ACNT_NM2
+             ,CASE WHEN t3.BUKIP_CODE IS NOT NULL THEN t3.BUKIP_CODE||'.'||t3.BUKIP_NM ELSE NULL END AS BUKIP_NM2
+             ,t4.JRNLZ_CNT
+		FROM (SELECT ROWNUM AS RNUM, v1.*
+		      FROM VHBDG_BUDGET_ACNT_CODE v1) t1
+		     LEFT OUTER JOIN TBBDG_BUDGET_BUKIP_MAPPING t2
+		     ON  t1.YEAR             = t2.YEAR 
+		     AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE 
+		     LEFT OUTER JOIN TBBDG_BUKIP_CODE t3
+		     ON  t2.BUKIP_CODE = t3.BUKIP_CODE 
+		     LEFT OUTER JOIN (
+	             SELECT BUDGET_YEAR
+	                   ,BSNS_SE
+	                   ,BALC_SE
+	                   ,BUDGET_ACNT_CODE
+	                   ,BUKIP_CODE
+	                   ,COUNT(1)         AS JRNLZ_CNT
+	             FROM   TBACC_ATMC_JRNLZ_TY
+	             GROUP BY BUDGET_YEAR
+	                     ,BSNS_SE
+	                     ,BALC_SE
+	                     ,BUDGET_ACNT_CODE
+	                     ,BUKIP_CODE
+             ) t4
+              ON t1.YEAR = t4.BUDGET_YEAR
+             AND t1.BSNS_SE = t4.BSNS_SE
+             AND t1.BALC_SE = t4.BALC_SE
+             AND t1.BUDGET_ACNT_CODE = t4.BUDGET_ACNT_CODE
+             AND t3.BUKIP_CODE = t4.BUKIP_CODE
+		WHERE t1.YEAR = #YEAR# 
+		  AND t1.BSNS_SE = #BSNS_SE#
+		  AND t1.BALC_SE = #BALC_SE#
+	]]>
+		 <isNotEmpty property="BUKIP_NM">
+		  AND t3.BUKIP_NM LIKE '%'|| #BUKIP_NM# ||'%'
+		 </isNotEmpty>   
+		ORDER BY t1.RNUM, t3.BUKIP_CODE
+	</select>
+	
+	<!-- 자동분개유형 조회 -->
+	<select id="ACC010101DAO.selectAtmcJrnlzTy" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.BUDGET_YEAR                  AS BUDGET_YEAR
+		      ,t1.BSNS_SE                      AS BSNS_SE
+		      ,t1.BALC_SE                      AS BALC_SE
+		      ,t1.BUDGET_ACNT_CODE             AS BUDGET_ACNT_CODE
+		      ,t1.BUKIP_CODE				   AS BUKIP_CODE
+		      ,t1.SN                           AS SN
+		      ,t1.GNRL_DEBTOR_ACNT_CODE        AS GNRL_DEBTOR_ACNT_CODE
+		      ,t2.ACCNUT_ACNT_NM               AS GNRL_DEBTOR_ACNT_NM
+		      ,t1.GNRL_CRDIT_ACNT_CODE         AS GNRL_CRDIT_ACNT_CODE
+		      ,t3.ACCNUT_ACNT_NM               AS GNRL_CRDIT_ACNT_NM
+		      ,t1.SETOFF_DEBTOR_ACNT_CODE      AS SETOFF_DEBTOR_ACNT_CODE
+		      ,t4.ACCNUT_ACNT_NM               AS SETOFF_DEBTOR_ACNT_NM
+		      ,t1.SETOFF_CRDIT_ACNT_CODE       AS SETOFF_CRDIT_ACNT_CODE
+		      ,t5.ACCNUT_ACNT_NM               AS SETOFF_CRDIT_ACNT_NM
+		FROM   TBACC_ATMC_JRNLZ_TY t1
+		       LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+		            ON t1.BUDGET_YEAR             = t2.ACCNUT_YEAR
+		           AND t1.GNRL_DEBTOR_ACNT_CODE   = t2.ACCNUT_ACNT_CODE
+		       LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		            ON t1.BUDGET_YEAR             = t3.ACCNUT_YEAR
+		           AND t1.GNRL_CRDIT_ACNT_CODE    = t3.ACCNUT_ACNT_CODE
+		       LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t4
+		            ON t1.BUDGET_YEAR             = t4.ACCNUT_YEAR
+		           AND t1.SETOFF_DEBTOR_ACNT_CODE = t4.ACCNUT_ACNT_CODE
+		       LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t5
+		            ON t1.BUDGET_YEAR             = t5.ACCNUT_YEAR
+		           AND t1.SETOFF_CRDIT_ACNT_CODE  = t5.ACCNUT_ACNT_CODE
+		WHERE  t1.BUDGET_YEAR      = #YEAR#
+		AND    t1.BSNS_SE          = #BSNS_SE#
+		AND    t1.BALC_SE          = #BALC_SE#
+		AND    t1.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		AND    t1.BUKIP_CODE	   = #BUKIP_CODE#
+		ORDER BY t1.BUDGET_YEAR
+		        ,t1.BSNS_SE
+		        ,t1.BALC_SE
+		        ,t1.BUDGET_ACNT_CODE
+		        ,t1.BUKIP_CODE
+		        ,t1.SN
+	</select>
+
+	<!-- (전년도복사_삭제_자동분개유형) -->
+	<delete id="ACC010101DAO.deleteCopyPrvYearJrnlzTy" parameterClass="java.util.HashMap">
+	<![CDATA[/*ACC010101DAO.deleteCopyPrvYearJrnlzTy*/]]>
+		DELETE
+		FROM   TBACC_ATMC_JRNLZ_TY
+		WHERE  BUDGET_YEAR = #YEAR#
+	</delete>
+
+
+	<!-- (전년도복사_추가_자동분개유형) -->
+	<insert id="ACC010101DAO.insertCopyPrvYearJrnlzTy" parameterClass="java.util.HashMap">
+	<![CDATA[/*ACC010101DAO.insertCopyPrvYearJrnlzTy*/]]>
+		INSERT INTO TBACC_ATMC_JRNLZ_TY (
+		     BUDGET_YEAR
+		    ,BSNS_SE
+		    ,BALC_SE
+		    ,BUDGET_ACNT_CODE
+		    ,BUKIP_CODE
+		    ,SN
+		    ,GNRL_DEBTOR_ACNT_CODE
+		    ,GNRL_CRDIT_ACNT_CODE
+		    ,SETOFF_DEBTOR_ACNT_CODE
+		    ,SETOFF_CRDIT_ACNT_CODE
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		SELECT #YEAR#              AS BUDGET_YEAR
+		      ,BSNS_SE
+		      ,BALC_SE
+		      ,BUDGET_ACNT_CODE
+		      ,BUKIP_CODE
+		      ,SN
+		      ,GNRL_DEBTOR_ACNT_CODE
+		      ,GNRL_CRDIT_ACNT_CODE
+		      ,SETOFF_DEBTOR_ACNT_CODE
+		      ,SETOFF_CRDIT_ACNT_CODE
+		      ,#S_USER_ID#
+		      ,SYSDATE
+		      ,#S_USER_ID#
+		      ,SYSDATE
+		FROM   TBACC_ATMC_JRNLZ_TY
+		WHERE  BUDGET_YEAR = TO_NUMBER(#YEAR#)-1
+	</insert>
+	
+	
+	<insert id="ACC010101DAO.insertAtmcJrnlzTy" parameterClass="java.util.HashMap">
+		INSERT INTO TBACC_ATMC_JRNLZ_TY (
+		     BUDGET_YEAR
+		    ,BSNS_SE
+		    ,BALC_SE
+		    ,BUDGET_ACNT_CODE
+		    ,BUKIP_CODE
+		    ,SN
+		    ,GNRL_DEBTOR_ACNT_CODE
+		    ,GNRL_CRDIT_ACNT_CODE
+		    ,SETOFF_DEBTOR_ACNT_CODE
+		    ,SETOFF_CRDIT_ACNT_CODE
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES (
+		     #BUDGET_YEAR#
+		    ,#BSNS_SE#
+		    ,#BALC_SE#
+		    ,#BUDGET_ACNT_CODE#
+		    ,#BUKIP_CODE#
+		    ,(
+		      SELECT NVL(MAX(SN),0)+1
+		      FROM   TBACC_ATMC_JRNLZ_TY
+		      WHERE  BUDGET_YEAR      = #BUDGET_YEAR#
+		      AND    BSNS_SE          = #BSNS_SE#
+		      AND    BALC_SE          = #BALC_SE#
+		      AND    BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		      AND    BUKIP_CODE		  = #BUKIP_CODE#
+		     )
+		    ,#GNRL_DEBTOR_ACNT_CODE#
+		    ,#GNRL_CRDIT_ACNT_CODE#
+		    ,#SETOFF_DEBTOR_ACNT_CODE#
+		    ,#SETOFF_CRDIT_ACNT_CODE#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	</insert>
+	
+	<update id="ACC010101DAO.updateAtmcJrnlzTy" parameterClass="java.util.HashMap">
+		UPDATE TBACC_ATMC_JRNLZ_TY
+		SET    GNRL_DEBTOR_ACNT_CODE   = #GNRL_DEBTOR_ACNT_CODE#
+		      ,GNRL_CRDIT_ACNT_CODE    = #GNRL_CRDIT_ACNT_CODE#
+		      ,SETOFF_DEBTOR_ACNT_CODE = #SETOFF_DEBTOR_ACNT_CODE#
+		      ,SETOFF_CRDIT_ACNT_CODE  = #SETOFF_CRDIT_ACNT_CODE#
+		      ,UPDUSR_ID               = #S_USER_ID#
+		      ,UPDT_DT                 = SYSDATE
+		WHERE  BUDGET_YEAR             = #BUDGET_YEAR#
+		AND    BSNS_SE                 = #BSNS_SE#
+		AND    BALC_SE                 = #BALC_SE#
+		AND    BUDGET_ACNT_CODE        = #BUDGET_ACNT_CODE#
+		AND    BUKIP_CODE			   = #BUKIP_CODE#
+		AND    SN                      = #SN#
+	</update>
+	
+	<delete id="ACC010101DAO.deleteAtmcJrnlzTy" parameterClass="java.util.HashMap">
+		DELETE TBACC_ATMC_JRNLZ_TY
+		WHERE  BUDGET_YEAR             = #BUDGET_YEAR#
+		AND    BSNS_SE                 = #BSNS_SE#
+		AND    BALC_SE                 = #BALC_SE#
+		AND    BUDGET_ACNT_CODE        = #BUDGET_ACNT_CODE#
+		AND    BUKIP_CODE			   = #BUKIP_CODE#
+		<isNotEmpty property="SN" prepend="AND    ">SN                      = #SN#</isNotEmpty>
+	</delete>
+	
+	
+	<select id="ACC010101DAO.selectAtmcJrnlzTyPopup" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.BUDGET_YEAR                  AS BUDGET_YEAR
+		      ,t1.BSNS_SE                      AS BSNS_SE
+		      ,t1.BALC_SE                      AS BALC_SE
+		      ,t1.BUDGET_ACNT_CODE             AS BUDGET_ACNT_CODE
+		      ,t1.BUKIP_CODE				   AS BUKIP_CODE
+		      ,t1.SN                           AS SN
+		      ,t1.GNRL_DEBTOR_ACNT_CODE        AS GNRL_DEBTOR_ACNT_CODE
+		      ,t2.ACCNUT_ACNT_NM               AS GNRL_DEBTOR_ACNT_NM
+		      ,t1.GNRL_CRDIT_ACNT_CODE         AS GNRL_CRDIT_ACNT_CODE
+		      ,t3.ACCNUT_ACNT_NM               AS GNRL_CRDIT_ACNT_NM
+		      ,t1.SETOFF_DEBTOR_ACNT_CODE      AS SETOFF_DEBTOR_ACNT_CODE
+		      ,t4.ACCNUT_ACNT_NM               AS SETOFF_DEBTOR_ACNT_NM
+		      ,t1.SETOFF_CRDIT_ACNT_CODE       AS SETOFF_CRDIT_ACNT_CODE
+		      ,t5.ACCNUT_ACNT_NM               AS SETOFF_CRDIT_ACNT_NM
+		FROM   (SELECT
+				       BUDGET_YEAR
+				      ,BSNS_SE
+				      ,BALC_SE
+				      ,BUDGET_ACNT_CODE
+				      ,BUKIP_CODE
+				      ,SN
+				      ,CASE WHEN #CARD_AT# = '1' AND GNRL_DEBTOR_ACNT_CODE = '21002010' THEN '21002020' ELSE GNRL_DEBTOR_ACNT_CODE END AS GNRL_DEBTOR_ACNT_CODE
+				      ,CASE WHEN #CARD_AT# = '1' AND GNRL_CRDIT_ACNT_CODE = '21002010' THEN '21002020' ELSE GNRL_CRDIT_ACNT_CODE END AS GNRL_CRDIT_ACNT_CODE
+				      ,CASE WHEN #CARD_AT# = '1' AND SETOFF_DEBTOR_ACNT_CODE = '21002010' THEN '21002020' ELSE SETOFF_DEBTOR_ACNT_CODE END AS SETOFF_DEBTOR_ACNT_CODE
+				      ,CASE WHEN #CARD_AT# = '1' AND SETOFF_CRDIT_ACNT_CODE = '21002010' THEN '21002020' ELSE SETOFF_CRDIT_ACNT_CODE END AS SETOFF_CRDIT_ACNT_CODE
+				FROM TBACC_ATMC_JRNLZ_TY
+			   ) t1
+		       LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+		            ON t1.BUDGET_YEAR             = t2.ACCNUT_YEAR
+		           AND t1.GNRL_DEBTOR_ACNT_CODE   = t2.ACCNUT_ACNT_CODE
+		       LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		            ON t1.BUDGET_YEAR             = t3.ACCNUT_YEAR
+		           AND t1.GNRL_CRDIT_ACNT_CODE    = t3.ACCNUT_ACNT_CODE
+		       LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t4
+		            ON t1.BUDGET_YEAR             = t4.ACCNUT_YEAR
+		           AND t1.SETOFF_DEBTOR_ACNT_CODE = t4.ACCNUT_ACNT_CODE
+		       LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t5
+		            ON t1.BUDGET_YEAR             = t5.ACCNUT_YEAR
+		           AND t1.SETOFF_CRDIT_ACNT_CODE  = t5.ACCNUT_ACNT_CODE
+		WHERE  t1.BUDGET_YEAR      = #YEAR#
+		AND    t1.BSNS_SE          = #BSNS_SE#
+		AND    t1.BALC_SE          = #BALC_SE#
+		AND    t1.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		AND    t1.BUKIP_CODE	   = #BUKIP_CODE#
+		ORDER BY t1.BUDGET_YEAR
+		        ,t1.BSNS_SE
+		        ,t1.BALC_SE
+		        ,t1.BUDGET_ACNT_CODE
+		        ,t1.BUKIP_CODE
+		        ,t1.SN
+	</select>
+	
+	
+	
+	<select id="ACC010101DAO.selectJrnlzTyUseCnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 BUDGET_YEAR        
+			,BSNS_SE            
+			,BALC_SE            
+			,BUDGET_ACNT_CODE   
+			,EXPNDTR_UNIT_CODE		AS BUKIP_CODE
+			,ATMC_JRNLZ_TY_CODE 	AS SN
+			,COUNT(*) 				AS CNT
+		FROM TBACC_EXP_DSN_MASTR
+		WHERE  BUDGET_YEAR             = #BUDGET_YEAR#
+		AND    BSNS_SE                 = #BSNS_SE#
+		AND    BALC_SE                 = #BALC_SE#
+		AND    BUDGET_ACNT_CODE        = #BUDGET_ACNT_CODE#
+		AND    EXPNDTR_UNIT_CODE	   = #BUKIP_CODE#
+		AND	   ATMC_JRNLZ_TY_CODE      = #SN#
+		GROUP BY BUDGET_YEAR,
+		    BSNS_SE,
+		    BALC_SE,
+		    BUDGET_ACNT_CODE,
+		    EXPNDTR_UNIT_CODE,
+		    ATMC_JRNLZ_TY_CODE
+	</select>
+
+</sqlMap>

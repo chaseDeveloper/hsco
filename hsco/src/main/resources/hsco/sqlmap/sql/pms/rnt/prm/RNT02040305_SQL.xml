@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02040305_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 세대별 체납내역 조회
+		    설명 : 매입임대 세대별 체납내역 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.18
+	-->	
+	<select id="RNT02040305DAO.selectManagectGenerationNpymList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02040305DAO.selectManagectGenerationNpymList[매입임대 세대별 체납내역 조회] */
+		SELECT A.CNTRCTR_NO,
+			   A.RENT_HOUSE_CODE,
+			   B.RENT_HOUSE_NM,
+			   A.DONG,
+			   A.HO,
+			   D.NM,
+			   D.TELNO,
+			   D.MBTLNO,
+			   A.RM,
+			   RTRIM (C.ADRES) || ' ' || RTRIM (C.ADRES_DETAIL) AS ADRES,
+			   C.ZIP,
+			   0 AS DEL_AMT,
+			   0 AS DEL_INT,
+			   E.AMT AS TOTAL,
+			   E.CNT,
+			   DECODE (A.CANCL_DE, NULL, '', '해약') AS CANCL_DE,
+			   F.AMT1,
+			   F.AMT2,
+			   F.AMT3,
+			   F.MCNT
+		  FROM TBRNT_PUCHAS_CNTRCT A
+		 INNER JOIN TBRNT_PUCHAS_HOUSE B
+			ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		 INNER JOIN TBRNT_PUCHAS_HOUSE_DONG C
+			ON C.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		   AND C.DONG = A.DONG
+		 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR D
+			ON D.PUCHAS_CSTMR_NO = A.PUCHAS_CSTMR_NO
+		 INNER JOIN (
+				SELECT CNTRCTR_NO,
+					   COUNT(1) AS CNT,
+					   SUM(AMT) AS AMT,
+					   MIN(PAY_TMLMT) AS MIN_YM,
+					   MAX(PAY_TMLMT) AS MAX_YM
+				  FROM (
+						SELECT CNTRCTR_NO,
+							   PAY_TMLMT,
+							   TRUNC(SUM(NVL(MANAGECT, 0) + NVL(RDCAMT_AMOUNT, 0)), -1) AS AMT
+						  FROM TBRNT_MT_MANAGECT
+						 WHERE (RCIV_DE IS NULL OR RCIV_DE <![CDATA[>]]> #stdDe#)
+						   AND PAY_TMLMT <![CDATA[<=]]> #payTmlmt#
+						 GROUP BY CNTRCTR_NO, PAY_TMLMT
+						HAVING TRUNC(SUM(NVL(MANAGECT, 0) + NVL(RDCAMT_AMOUNT, 0)), -1) > 0
+					   )
+				 GROUP BY CNTRCTR_NO
+			   ) E
+			ON E.CNTRCTR_NO = A.CNTRCTR_NO
+		  LEFT JOIN (
+				SELECT CNTRCTR_NO,
+					   SUM(NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0)) AS AMT1,
+					   SUM(NVL(OVDINTR, 0)) AS AMT2,
+					   SUM(NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) + NVL(OVDINTR, 0)) AS AMT3,
+					   COUNT (1) AS MCNT
+				  FROM TBRNT_PUCHAS_MT_RNTCHRG V
+				 WHERE RCIV_DE IS NULL
+				 GROUP BY CNTRCTR_NO
+			   ) F
+			ON F.CNTRCTR_NO = A.CNTRCTR_NO
+		 WHERE 1 = 1
+		<isNotEmpty property="houseCode">
+		   AND A.RENT_HOUSE_CODE = #houseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		   AND A.DONG = LPAD(#dong#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		   AND A.HO = LPAD(#ho#, 4, '0')
+		</isNotEmpty>
+		<isEqual property="cntrctSe" compareValue="1">
+		   AND A.CANCL_DE IS NULL
+		</isEqual>
+		<isEqual property="cntrctSe" compareValue="0">
+		   AND A.CANCL_DE IS NOT NULL
+		</isEqual>
+		<isNotEmpty property="stNpymAmt">
+			<isNotEmpty property="edNpymAmt">
+		   AND E.AMT BETWEEN #stNpymAmt# AND #edNpymAmt#
+			</isNotEmpty>
+		</isNotEmpty>
+		<isNotEmpty property="stNpymMm">
+			<isNotEmpty property="edNpymMm">
+		   AND E.CNT BETWEEN #stNpymMm# AND #edNpymMm#
+			</isNotEmpty>
+		</isNotEmpty>
+		 ORDER BY A.RENT_HOUSE_CODE, A.DONG, A.HO
+	</select>
+
+
+	<!-- 쿼리명 : 매입임대 주택별 체납내역 조회
+		    설명 : 매입임대 주택별 체납내역 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.18
+	-->	
+	<select id="RNT02040305DAO.selectManagectHouseNpymList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		/* RNT02040305DAO.selectManagectHouseNpymList[매입임대 주택별 체납내역 조회] */
+		SELECT A.RENT_HOUSE_CODE,
+			   B.RENT_HOUSE_NM,
+			   COUNT(0) AS DEL_AMT,
+			   0 AS DEL_INT,
+			   SUM (AMT) AS TOTAL,
+			   0 AS MRENT_AMT
+		  FROM TBRNT_PUCHAS_CNTRCT A
+		 INNER JOIN TBRNT_PUCHAS_HOUSE B
+			ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		 INNER JOIN TBRNT_PUCHAS_HOUSE_DONG C
+			ON C.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		   AND C.DONG = A.DONG
+		 INNER JOIN (
+				SELECT CNTRCTR_NO,
+					   COUNT(1) AS CNT,
+					   SUM(AMT) AS AMT,
+					   MIN(PAY_TMLMT) AS MIN_YM,
+					   MAX(PAY_TMLMT) AS MAX_YM
+				  FROM (
+						SELECT CNTRCTR_NO,
+							   PAY_TMLMT,
+							   TRUNC(SUM(NVL(MANAGECT, 0) + NVL(RDCAMT_AMOUNT, 0)), -1) AS AMT
+						  FROM TBRNT_MT_MANAGECT
+						 WHERE (RCIV_DE IS NULL OR RCIV_DE <![CDATA[>]]> #stdDe#)
+						   AND PAY_TMLMT <![CDATA[<=]]> #payTmlmt#
+						 GROUP BY CNTRCTR_NO, PAY_TMLMT
+						HAVING TRUNC(SUM(NVL(MANAGECT, 0) + NVL(RDCAMT_AMOUNT, 0)), -1) > 0
+					   )
+				 GROUP BY CNTRCTR_NO
+			   ) D
+			ON D.CNTRCTR_NO = A.CNTRCTR_NO
+		 WHERE 1= 1
+		<isNotEmpty property="houseCode">
+		   AND A.RENT_HOUSE_CODE = #houseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		   AND A.DONG = LPAD(#dong#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		   AND A.HO = LPAD(#ho#, 4, '0')
+		</isNotEmpty>
+		<isEqual property="cntrctSe" compareValue="1">
+		   AND A.CANCL_DE IS NULL
+		</isEqual>
+		<isEqual property="cntrctSe" compareValue="0">
+		   AND A.CANCL_DE IS NOT NULL
+		</isEqual>
+		<isNotEmpty property="stNpymAmt">
+			<isNotEmpty property="edNpymAmt">
+		   AND D.AMT BETWEEN #stNpymAmt# AND #edNpymAmt#
+			</isNotEmpty>
+		</isNotEmpty>
+		<isNotEmpty property="stNpymMm">
+			<isNotEmpty property="edNpymMm">
+		   AND D.CNT BETWEEN #stNpymMm# AND #edNpymMm#
+			</isNotEmpty>
+		</isNotEmpty>
+		 GROUP BY A.RENT_HOUSE_CODE, B.RENT_HOUSE_NM
+		 ORDER BY A.RENT_HOUSE_CODE
+	</select>
+</sqlMap>

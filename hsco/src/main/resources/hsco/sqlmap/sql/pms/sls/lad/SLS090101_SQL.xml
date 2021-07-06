@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS090101_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   
+   	<!-- 납부안내관리 조회 -->
+	<select id="SLS090101DAO.selectLadLcntrctrSmsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			WITH
+			TAB_01 AS
+			(
+			SELECT
+				  LAD_CSTMR_NO
+				, CSTMR_NM
+				, IHIDNUM
+				, ZIP
+				, ADRES
+				, ADRES_DETAIL
+				, TELNO
+				/*, NVL(MBTLNO, TELNO) AS MBTLNO 2016.06.17 */
+				, MBTLNO
+				, EMAIL
+			  FROM TBSLS_LAD_CSTMR
+			 WHERE 1 = 1
+			),
+			TAB_02 AS
+			(
+			SELECT
+				  T1.LAD_CODE
+				, T1.BLCK
+				, T1.LOT
+				, T1.LOT_TY
+				, T1.BLCK || '-' || T1.LOT || '-' || T1.LOT_TY AS BLCK_LOT_TY
+				, T1.LAD_SE
+				, T1.PRPOS_SE
+				, T1.CNTRCT_STTUS
+				, T2.CNTRCTR_NO
+				, (
+				    SELECT S1.LAD_NM
+					FROM TBSLS_LAD_INFO S1
+				    WHERE S1.LAD_CODE = T1.LAD_CODE
+				  ) AS LAD_NM
+				, T2.LAD_CSTMR_NO
+				, T2.CNTRCT_DE
+				, T2.CNTRCT_TY
+				, T2.SUPLY_SE
+				, T2.CANCL_DE
+			  FROM TBSLS_LAD_DETAIL_INFO T1
+				 , TBSLS_LCNTRCTR T2
+			 WHERE 1 = 1
+			   AND T1.LAD_CODE = T2.LAD_CODE
+			   AND T1.BLCK = T2.BLCK
+			   AND T1.LOT = T2.LOT
+			   AND T1.LOT_TY = T2.LOT_TY
+
+			   AND T2.CANCL_DE IS NULL
+
+			)
+			,
+			TAB_03 AS
+			(  SELECT *
+			     FROM (
+				        SELECT 
+						        A.MT_PR
+						       ,A.MT_SEQ 
+						       ,(SELECT SFSAL_GETDEPTNM_01(MT_REFKEY) 
+						           FROM EMMA.EM_SMT_TRAN
+						          WHERE MT_PR = A.MT_PR)  AS DEPT_CODE              /* 부서코드*/
+						       ,(SELECT TO_CHAR(DATE_CLIENT_REQ,'YYYY-MM-DD HH24:MI')
+						           FROM EMMA.EM_SMT_TRAN
+						          WHERE MT_PR = A.MT_PR)	           AS REG_DATE     /* 발송일시 */  
+						       ,TO_CHAR(DATE_RSLT,'YYYY-MM-DD HH24:MI')  AS DATE_RSLT    /* 단말기수신일시 */        
+						       ,(SELECT SERVICE_TYPE 
+						           FROM EMMA.EM_SMT_TRAN
+						          WHERE MT_PR = A.MT_PR)   AS  SERVICE_TYPE         /* SMS,MMX */
+						       ,A.MSG_STATUS
+						       ,A.RECIPIENT_NUM
+						       ,A.CHANGE_WORD5
+						       ,(SELECT CONTENT
+						           FROM EMMA.EM_SMT_TRAN
+						          WHERE MT_PR = A.MT_PR)  AS  CONTENT   /* 메시지 */
+						 FROM EMMA.EM_SMT_CLIENT A
+						WHERE 1=1
+			
+					<isNotEmpty property="DEPT_CODE">
+						  AND A.MT_PR IN  (SELECT MT_PR 
+						                     FROM EMMA.EM_SMT_TRAN
+						                    WHERE MT_REFKEY = #DEPT_CODE#)
+					</isNotEmpty>
+						
+					    UNION ALL
+					
+						SELECT 
+						        A.MT_PR
+						       ,A.MT_SEQ 
+						       ,(SELECT SFSAL_GETDEPTNM_01(MT_REFKEY) 
+						           FROM EMMA.EM_MMT_TRAN
+						           WHERE MT_PR = A.MT_PR)  AS DEPT_CODE              /* 부서코드*/
+						       ,(SELECT TO_CHAR(DATE_CLIENT_REQ,'YYYY-MM-DD HH24:MI')
+						           FROM EMMA.EM_MMT_TRAN
+						          WHERE MT_PR = A.MT_PR)	           AS REG_DATE     /* 발송일시 */  
+						       ,TO_CHAR(DATE_RSLT,'YYYY-MM-DD HH24:MI')  AS DATE_RSLT    /* 단말기수신일시 */        
+						       ,(SELECT SERVICE_TYPE 
+						           FROM EMMA.EM_MMT_TRAN
+						          WHERE MT_PR = A.MT_PR)   AS  SERVICE_TYPE         /* SMS,MMX */
+						       ,A.MSG_STATUS
+						       ,A.RECIPIENT_NUM
+						       ,A.CHANGE_WORD5
+						       ,(SELECT CONTENT
+						           FROM EMMA.EM_MMT_TRAN
+						          WHERE MT_PR = A.MT_PR)  AS  CONTENT   /* 메시지 */
+						 FROM EMMA.EM_MMT_CLIENT A
+						WHERE 1=1
+			
+					<isNotEmpty property="DEPT_CODE">
+						  AND A.MT_PR IN  (SELECT MT_PR 
+						                     FROM EMMA.EM_MMT_TRAN
+						                    WHERE MT_REFKEY = #DEPT_CODE#)
+					</isNotEmpty>
+						)
+			)
+			SELECT '0' AS CHK
+				, 'LAD' AS JOB_SE 
+				, B.LAD_CODE
+				, SFSLS_LAD_NM(B.LAD_CODE, 'ALL_LAD_NM') AS ALL_LAD_NM
+				, B.BLCK
+				, B.LOT
+				, B.LOT_TY
+				, B.BLCK_LOT_TY
+				, B.CNTRCTR_NO
+				, B.LAD_SE
+				, B.PRPOS_SE
+				, B.CNTRCT_DE
+				, B.CNTRCT_TY
+				, SFCOM_CODE_NM('LAD0A4', B.CNTRCT_TY, 'ALL_CODE_NM') AS CNTRCT_TY_NM
+				, B.CNTRCT_STTUS
+				, B.SUPLY_SE
+				, B.LAD_NM
+				, A.LAD_CSTMR_NO
+				, A.CSTMR_NM AS NM				
+				, A.TELNO
+				, A.MBTLNO
+				, CASE WHEN B.CNTRCTR_NO IS NULL THEN '' ELSE RPAD(A.CSTMR_NM, 10, ' ') || ' [' || B.CNTRCTR_NO || ']' END AS ALL_CNTRCTR_NO
+				
+				, C.REG_DATE AS SNDNG_DT
+			    , C.CONTENT AS SNDNG_DTLS
+			    
+			  FROM TAB_01 A
+				 , TAB_02 B
+				 , TAB_03 C
+			 WHERE 1 = 1
+
+			   AND A.LAD_CSTMR_NO(+) = B.LAD_CSTMR_NO
+			   AND A.MBTLNO = C.RECIPIENT_NUM(+)
+			    
+			<isNotEmpty property="LAD_CODE">
+			   AND B.LAD_CODE = #LAD_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="BLCK">
+			   AND B.BLCK = #BLCK#
+			</isNotEmpty>
+			<isNotEmpty property="LOT">
+			   AND B.LOT = #LOT#
+			</isNotEmpty>
+			<isNotEmpty property="LOT_TY">
+			   AND B.LOT_TY = #LOT_TY#
+			</isNotEmpty>
+
+			 ORDER BY B.LAD_CODE, TO_NUMBER(B.BLCK), TO_NUMBER(B.LOT), B.LOT_TY
+    </select>
+    	
+</sqlMap>

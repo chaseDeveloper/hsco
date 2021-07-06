@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL040110_SQL">	
+	
+	<!-- 평균임금 급여코드 -->
+	<select id="SAL040110DAO.selectAvgCodeList" resultClass="java.util.HashMap">
+		SELECT
+		      PYMNT_DDC_CODE
+		    , PYMNT_DDC_CODE_NM
+		FROM TBSAL_PYMNT_DDC_STDR_CODE
+		WHERE PYMNT_DDC_SE = '0'
+		  AND PYMNT_DDC_CODE NOT IN (
+		         '1220' /*상여수당*/
+		        ,'1170' /*연차수당*/
+		        ,'1240' /*가계지원비*/
+		        ,'1040' /*명절휴가비*/
+		        ,'1180' /*경영평가급*/
+		        ,'1330' /*기관성과급*/
+		        ,'1340' /*자체성과급*/
+		        ,'1020' /*정근수당*/
+		      )
+		ORDER BY OUTPT_ORDR
+	</select>
+	
+	<!-- 상여수당 급여코드 -->
+	<select id="SAL040110DAO.selectBnsCodeList" resultClass="java.util.HashMap">
+		SELECT
+		      PYMNT_DDC_CODE
+		    , PYMNT_DDC_CODE_NM
+		FROM TBSAL_PYMNT_DDC_STDR_CODE
+		WHERE PYMNT_DDC_SE = '0'
+		  AND PYMNT_DDC_CODE IN (
+		         '1220' /*상여수당*/
+		        ,'1170' /*연차수당*/
+		        ,'1240' /*가계지원비*/
+		        ,'1040' /*명절휴가비*/
+		        ,'1180' /*경영평가급*/
+		        ,'1330' /*기관성과급*/
+		        ,'1340' /*자체성과급*/
+		        ,'1020' /*정근수당*/
+		      )
+		ORDER BY OUTPT_ORDR
+	</select>
+	
+	<!-- 평균임금내역 -->
+	<select id="SAL040110DAO.selectAvgSalaryList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		WITH TBL_SALARY AS (
+			SELECT
+			     EMPNO
+			<iterate property="avgList">
+				,SUM(DECODE(PYMNT_DDC_CODE, #avgList[].PYMNT_DDC_CODE#,AMOUNT,0)) AS CODE$avgList[].PYMNT_DDC_CODE$
+			</iterate>
+			    ,SUM(AMOUNT)                                 			  AS TOTAMT
+			FROM TBSAL_MT_SALARY_DTLS t1
+			WHERE 1=1
+			  AND PYMNT_YM BETWEEN TO_CHAR(ADD_MONTHS(TO_DATE(#PYMNT_YM#,'YYYYMM'),-2),'YYYYMM') AND DECODE(SUBSTR(#PYMNT_YM#,5,2),'12',SUBSTR(#PYMNT_YM#,1,4)||'13',#PYMNT_YM#)
+			  AND EXISTS (
+			    SELECT 1
+			    FROM TBSAL_PYMNT_DDC_STDR_CODE t2
+			    WHERE t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			      AND t2.PYMNT_DDC_SE = '0'
+			      AND t2.PYMNT_DDC_CODE IN (
+					<iterate conjunction="," property="avgList">
+						#avgList[].PYMNT_DDC_CODE#
+					</iterate>
+			      )    
+			  )
+			GROUP BY EMPNO
+		)
+		SELECT 
+		       t1.*
+			  ,t2.EMPNM
+			  ,t3.DEPT_NM
+			  ,t4.CODE_NM	AS JSSFC_NM
+			  ,t5.CODE_NM	AS CLSF_NM
+		FROM TBL_SALARY t1
+			 INNER JOIN TBHRM_HR_MASTR t2
+			 ON  t1.EMPNO = t2.EMPNO 
+			 LEFT OUTER JOIN VWHRM_DEPT t3
+			 ON  t2.DEPT_CODE = t3.DEPT_CODE
+			 LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			 ON  t2.JSSFC_SE = t4.CODE
+			 AND t4.GRP_CODE = 'HRM001'
+			 LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+			 ON  t2.HR_CLSF_SE = t5.CODE
+			 AND t5.GRP_CODE = 'HRM002'
+		ORDER BY t3.OUTPT_ORDR, t4.CODE_ORDR, t5.CODE_ORDR, t1.EMPNO
+	</select>
+	
+	<!-- 상여수당내역 --> 
+    <select id="SAL040110DAO.selectBnsSalaryList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		WITH TBL_SALARY AS (
+			SELECT
+			     EMPNO
+			<iterate property="bnsList">
+				,SUM(DECODE(PYMNT_DDC_CODE,#bnsList[].PYMNT_DDC_CODE#,AMOUNT,0)) AS CODE$bnsList[].PYMNT_DDC_CODE$
+			</iterate>
+			    ,SUM(AMOUNT)                                 			  AS TOTAMT
+			FROM TBSAL_MT_SALARY_DTLS t1
+			WHERE 1=1
+			  AND PYMNT_YM BETWEEN TO_CHAR(ADD_MONTHS(TO_DATE(#PYMNT_YM#,'YYYYMM'),-11),'YYYYMM') AND DECODE(SUBSTR(#PYMNT_YM#,5,2),'12',SUBSTR(#PYMNT_YM#,1,4)||'13',#PYMNT_YM#)
+			  AND EXISTS (
+			    SELECT 1
+			    FROM TBSAL_PYMNT_DDC_STDR_CODE t2
+			    WHERE t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			      AND t2.PYMNT_DDC_SE = '0'
+			      AND t2.PYMNT_DDC_CODE IN (
+					<iterate conjunction="," property="bnsList">
+						#bnsList[].PYMNT_DDC_CODE#
+					</iterate>
+			      )    
+			  )
+			GROUP BY EMPNO
+		)
+		SELECT 
+		       t1.*
+			  ,t2.EMPNM
+			  ,t3.DEPT_NM
+			  ,t4.CODE_NM	AS JSSFC_NM
+			  ,t5.CODE_NM	AS CLSF_NM
+		FROM TBL_SALARY t1
+			 INNER JOIN TBHRM_HR_MASTR t2
+			 ON  t1.EMPNO = t2.EMPNO 
+			 LEFT OUTER JOIN VWHRM_DEPT t3
+			 ON  t2.DEPT_CODE = t3.DEPT_CODE
+			 LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			 ON  t2.JSSFC_SE = t4.CODE
+			 AND t4.GRP_CODE = 'HRM001'
+			 LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+			 ON  t2.HR_CLSF_SE = t5.CODE
+			 AND t5.GRP_CODE = 'HRM002'
+		ORDER BY t3.OUTPT_ORDR, t4.CODE_ORDR, t5.CODE_ORDR, t1.EMPNO
+    </select>
+
+
+	<!-- 퇴직금 추계액 -->
+	<select id="SAL040110DAO.selectEstmatAmtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH TBL_AVG_SALARY AS (
+			SELECT
+			     EMPNO
+			    ,SUM(AMOUNT) AS TOTAMT
+			FROM TBSAL_MT_SALARY_DTLS t1
+			WHERE 1=1
+			  AND PYMNT_YM BETWEEN TO_CHAR(ADD_MONTHS(TO_DATE(#PYMNT_YM#,'YYYYMM'),-2),'YYYYMM') AND DECODE(SUBSTR(#PYMNT_YM#,5,2),'12',SUBSTR(#PYMNT_YM#,1,4)||'13',#PYMNT_YM#)
+			  AND EXISTS (
+			    SELECT 1
+			    FROM TBSAL_PYMNT_DDC_STDR_CODE t2
+			    WHERE t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			      AND t2.PYMNT_DDC_SE = '0'
+			      AND t2.PYMNT_DDC_CODE IN (
+					<iterate conjunction="," property="avgList">
+						#avgList[].PYMNT_DDC_CODE#
+					</iterate>
+			      )    
+			  )
+			GROUP BY EMPNO
+		),
+		TBL_BLS_SALARY AS (
+			SELECT
+			     EMPNO
+			    ,SUM(AMOUNT) AS TOTAMT
+			FROM TBSAL_MT_SALARY_DTLS t1
+			WHERE 1=1
+			  AND PYMNT_YM BETWEEN TO_CHAR(ADD_MONTHS(TO_DATE(#PYMNT_YM#,'YYYYMM'),-11),'YYYYMM') AND DECODE(SUBSTR(#PYMNT_YM#,5,2),'12',SUBSTR(#PYMNT_YM#,1,4)||'13',#PYMNT_YM#)
+			  AND EXISTS (
+			    SELECT 1
+			    FROM TBSAL_PYMNT_DDC_STDR_CODE t2
+			    WHERE t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			      AND t2.PYMNT_DDC_SE = '0'
+			      AND t2.PYMNT_DDC_CODE IN (
+					<iterate conjunction="," property="bnsList" >
+						#bnsList[].PYMNT_DDC_CODE#
+					</iterate>
+			      )    
+			  )
+			GROUP BY EMPNO
+		),
+		TBL_ESTMAT AS (
+			SELECT
+		         t1.EMPNO
+		        ,t1.EMPNM
+		        ,t1.ECNY_DE
+		        ,t4.LAST_RETIRE_DE
+		        ,DATEDIF(TO_DATE(NVL(t4.LAST_RETIRE_DE,t1.ECNY_DE),'YYYYMMDD'),LAST_DAY(TO_DATE(#PYMNT_YM#,'YYYYMM')),'y') 	AS YR_CNT
+		        ,DATEDIF(TO_DATE(NVL(t4.LAST_RETIRE_DE,t1.ECNY_DE),'YYYYMMDD'),LAST_DAY(TO_DATE(#PYMNT_YM#,'YYYYMM')),'ym') AS MM_CNT
+		        ,TRUNC(NVL(t2.TOTAMT,0)/3 + NVL(t3.TOTAMT,0)/12) 															AS AVG_AMT
+		        ,NVL(t2.TOTAMT,0)																							AS TOTAMT
+		    FROM TBHRM_HR_MASTR t1
+		         LEFT OUTER JOIN TBL_AVG_SALARY t2
+				 ON t1.EMPNO = t2.EMPNO
+		         LEFT OUTER JOIN TBL_BLS_SALARY t3
+		         ON t1.EMPNO = t3.EMPNO
+		         LEFT OUTER JOIN (
+		            SELECT EMPNO, MAX(LAST_RETIRE_DE) AS LAST_RETIRE_DE
+		            FROM TBSAL_RETIRE_SALARY
+		            WHERE RETIRE_SE = '1'
+		            GROUP BY EMPNO
+		         ) t4
+		         ON t1.EMPNO = t4.EMPNO
+	    )
+	    SELECT 
+	    	 EMPNO															AS EMPNO			/* 사원번호 */
+	    	,EMPNM                                                          AS EMPNM            /* 성명 */
+	    	,ECNY_DE                                                        AS ECNY_DE          /* 입사일자 */
+	    	,LAST_RETIRE_DE                                                 AS LAST_RETIRE_DE	/* 중간정산일자 */
+	    	,NVL(LAST_RETIRE_DE, ECNY_DE)									AS RECKN_DE     	/* 기산일자 */
+	    	,CASE WHEN LAST_RETIRE_DE IS NULL THEN '' ELSE '중간정산' END	AS MID_EXCCLC   	/* 중간정산 */
+	    	,YR_CNT                                                         AS YR_CNT       	/* 연 */
+	    	,MM_CNT                                                         AS MM_CNT       	/* 월 */
+	    	,AVG_AMT                                                        AS AVG_AMT      	/* 평균급여 */
+	    	,TRUNC((AVG_AMT * YR_CNT) + (AVG_AMT * (MM_CNT / 12)))			AS ESTMAT_AMT   	/* 추계액 */
+	    FROM TBL_ESTMAT
+	    WHERE TOTAMT <![CDATA[<>]]> 0  
+	    ORDER BY EMPNM
+	</select>
+</sqlMap>

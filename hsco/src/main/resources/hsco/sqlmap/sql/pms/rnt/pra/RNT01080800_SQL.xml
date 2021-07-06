@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01080800SQL">	
+
+	<!-- 쿼리명 : 수납현황(개별)
+	설명 : 수납현황(개별)
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.10.27
+	-->
+	<select id="RNT01080800DAO.selectIndividRcivList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+   SELECT c.RENT_HOUSE_NM,
+          b.DONG,
+          B.HO,
+          v.NM,
+          d.AEA,
+          b.RNTCHRG,
+          (SELECT CODE_NM
+             FROM TBCOM_CMMN_CODE
+		     WHERE GRP_CODE = 'RNT009'
+               AND CODE = a.PAY_SE) PAY_SE,
+          a.PAY_TMLMT,
+          a.RCIV_DE,
+          a.RCIV_AMOUNT,
+          a.FALT_AMOUNT,
+          decode(a.PAYMTHD,'A','자동이체','O','지로','V','가상계좌') as PAYMTHD,
+          a.BANK_CODE,
+          (SELECT CODE_NM AS bank_nm
+		     FROM TBCOM_CMMN_CODE
+		    WHERE GRP_CODE = 'COM021'
+		      AND INTGR_PREPAR_VALUE = 1
+		      AND CODE = a.BANK_CODE) AS BANK_NM /* 은행명 */
+     FROM TBRNT_RENT_SPRMNY_RCIV  a,  /* 임대료 지원금 수납 */
+          TBRNT_RENT_CNTRCT b,        /* 계약정보 */
+          TBRNT_RENT_HOUSE  c,        /* 임대주택 */
+          TBRNT_RENT_HOUSE_BILD d ,   /* 임대주택 건축물 */
+          TBRNT_PRMANENT_RENT_CSTMR v /* 영구임대고객 */
+    WHERE a.CNTRCTR_NO = b.CNTRCTR_NO
+      AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+      AND a.RCIV_DE BETWEEN #rcivFromDe# AND #rcivToDe#
+     <isNotEmpty property="paySe">
+		AND a.PAY_SE LIKE #paySe#
+     </isNotEmpty>
+     <isNotEmpty property="rentHouseCode">
+	   AND b.RENT_HOUSE_CODE = #rentHouseCode#
+     </isNotEmpty>
+     <isNotEmpty property="houseSe">
+      AND c.HOUSE_SE = #houseSe#
+     </isNotEmpty>
+     <isNotEmpty property="dong">
+      AND b.DONG = LPAD(#dong#, 4, '0')
+     </isNotEmpty>
+     <isNotEmpty property="ho">
+      AND b.HO = LPAD(#ho#, 4, '0')
+     </isNotEmpty>
+      AND b.PRMANENT_CSTMR_NO = v.PRMANENT_CSTMR_NO(+)
+      AND b.RENT_HOUSE_CODE = d.RENT_HOUSE_CODE(+)
+      AND b.DONG = d.DONG(+)
+      AND b.HO = d.HO(+)
+      <isNotEmpty property="aeaGb">
+      AND d.AEA = #aeaGb#
+      </isNotEmpty>
+      AND a.PROCESS_STTUS = 'C'   /* 처리상태 */
+    ORDER BY B.RENT_HOUSE_CODE, B.DONG, B.HO
+
+	</select>
+	
+	<!-- 쿼리명 : 수납현황(개월별)
+	설명 : 수납현황(개월별)
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.10.27
+	-->
+	<select id="RNT01080800DAO.selectMonthlyRcivList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT  RENT_HOUSE_NM,
+                  DONG,
+                  HO,
+                  NM,
+                  CNT,
+                  PAY_AMT,
+                  OVDINTR,
+                  PAY_AMT + OVDINTR AS RCIV_AMOUNT
+            FROM  TBRNT_RENT_CNTRCT a,
+                  TBRNT_RENT_HOUSE  c,
+                  TBRNT_PRMANENT_RENT_CSTMR d,
+                    (SELECT a.CNTRCTR_NO,
+                            COUNT(1) AS CNT,
+                            SUM(NVL(a.RNTCHRG,0) + NVL(a.RDCAMT_AMOUNT,0)) AS PAY_AMT, /* 임대료 */
+                            SUM(NVL(OVDINTR,0)) AS OVDINTR  /* 연체이자 */
+                       FROM TBRNT_RENT_MT_RNTCHRG a,   /* 임대월 임대료 */
+                            TBRNT_RENT_CNTRCT       b  /* 계약정보 */
+                       WHERE a.RCIV_DE BETWEEN #rcivFromDe# AND #rcivToDe#
+                        AND a.CNTRCTR_NO = b.CNTRCTR_NO
+                      <isNotEmpty property="rentHouseCode">
+	                    AND b.RENT_HOUSE_CODE = #rentHouseCode#
+                      </isNotEmpty>
+                      <isNotEmpty property="dong">
+                        AND b.DONG = LPAD(#dong#, 4, '0')
+                      </isNotEmpty>
+                      <isNotEmpty property="ho">
+                        AND b.HO = LPAD(#ho#, 4, '0')
+                      </isNotEmpty>
+                     GROUP BY a.CNTRCTR_NO) b
+            WHERE a.CNTRCTR_NO = b.CNTRCTR_NO
+              AND a.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+              AND a.PRMANENT_CSTMR_NO = d.PRMANENT_CSTMR_NO(+)
+            <isNotEmpty property="houseSe">
+              AND c.HOUSE_SE = #houseSe#
+            </isNotEmpty>
+              AND b.CNT >= #month#
+		ORDER BY A.RENT_HOUSE_CODE, A.DONG, A.HO
+	</select>
+</sqlMap>

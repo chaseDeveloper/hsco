@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050407_SQL">	
+
+	<!-- 가동설비자산명세서: 총괄 -->
+	<select id="ACC050407DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*ACC050407DAO.select*/]]>
+		<![CDATA[
+		WITH MAIN_T AS (
+		    SELECT 
+		         SUBSTR(ASSETS_CL_CODE,1,1)||'0000' AS ASSETS_CL_CODE
+		        ,SUM(CASE WHEN TRIM(b1.ACQS_DE) IS NULL OR b1.ACQS_DE <= #ACCNUT_YEAR#||'01' THEN ACQS_AMOUNT ELSE 0 END) AS PRE_ACQS_AMT  /* 전기이월 */
+		        ,SUM(CASE WHEN b1.ACQS_DE LIKE #ACCNUT_YEAR#||'%' THEN ACQS_AMOUNT ELSE 0 END) AS INCRS_ACQS_AMT  /* 당기증가 */
+		        ,NVL(SUM(CASE WHEN b1.DPRC_COMPT_YEAR < #ACCNUT_YEAR# THEN b2.DPRC_ACMTL_AMOUNT 
+		                  ELSE b2.FSTRM_DPRC_ACMTL_AMOUNT END),0) AS PRE_DPRC_AMT
+		        ,SUM(CASE WHEN DPRC_YM LIKE #ACCNUT_YEAR#||'%' THEN b2.THSTRM_DPRT_AM ELSE 0 END) AS INCRS_DPRC_AMT
+		        ,NVL(SUM(CASE WHEN TRIM(b1.ACQS_DE) IS NULL OR b1.ACQS_DE <= #ACCNUT_YEAR#||'01' THEN b1.GOVSUBY_ACQS_AMOUNT ELSE 0 END),0)
+		         - NVL(SUM(CASE WHEN b1.DPRC_COMPT_YEAR < #ACCNUT_YEAR# THEN b2.GOVSUBY_DPRC_ACMTL_AMOUNT 
+		                  ELSE b2.GOVSUBY_FSTRM_AMOUNT END),0)
+		                  AS PRE_GOVSUBY_AMT
+		        ,SUM(b1.GOVSUBY_ACQS_AMOUNT) AS GOVSUBY_ACQS_AMOUNT
+		        ,SUM(CASE WHEN b1.ACQS_DE LIKE #ACCNUT_YEAR#||'%' THEN GOVSUBY_ACQS_AMOUNT ELSE 0 END) AS INCRS_GOVSUBY_AMT
+		        ,SUM(CASE WHEN DPRC_YM LIKE #ACCNUT_YEAR#||'%' THEN b2.GOVSUBY_THSTRM_DPRT_AM ELSE 0 END) AS DCRS_GOVSUBY_AMT 
+		    FROM TBASS_ASSETS_MASTR b1
+		         LEFT OUTER JOIN
+		         (SELECT a1.ASSETS_NO
+		                ,a1.DPRC_YM
+		                ,a1.FSTRM_DPRC_ACMTL_AMOUNT
+		                ,a1.THSTRM_DPRT_AM
+		                ,a1.DPRC_ACMTL_AMOUNT
+		                ,a1.GOVSUBY_FSTRM_AMOUNT
+		                ,a1.GOVSUBY_THSTRM_DPRT_AM
+		                ,a1.GOVSUBY_DPRC_ACMTL_AMOUNT
+		                ,a1.TRMEND_BLCE
+		          FROM TBASS_DPRC a1,
+		               (SELECT ASSETS_NO, MAX(DPRC_YM) AS DPRC_YM
+		                FROM TBASS_DPRC
+		                WHERE DPRC_YM <= #ACCNUT_YEAR#||'12'
+		                GROUP BY ASSETS_NO
+		               ) a2
+		          WHERE a1.ASSETS_NO = a2.ASSETS_NO
+		            AND a1.DPRC_YM = a2.DPRC_YM
+		         ) b2
+		         ON b1.ASSETS_NO = b2.ASSETS_NO
+		    WHERE (SUBSTR(b1.ACQS_DE,1,6) <= #ACCNUT_YEAR#||'12' OR b1.ACQS_DE IS NULL)
+		      AND b1.ASSETS_CL_CODE NOT IN ('J0000','K0000')
+		      AND NOT EXISTS (
+		        SELECT 1
+		        FROM TBASS_ATLD_MANAGE b3
+		             INNER JOIN TBASS_ATLD_MANAGE_DETAIL b4
+		             ON b3.REQST_YEAR = b4.REQST_YEAR
+		             AND b3.ODR = b4.ODR
+		        WHERE b1.ASSETS_NO = b4.ASSETS_NO
+		          AND b3.DISUSE_PROCESS_AT = '1'
+		          AND SUBSTR(b3.DISUSE_PROCESS_DE,1,4) < #ACCNUT_YEAR#
+		       )
+		    GROUP BY SUBSTR(ASSETS_CL_CODE,1,1)||'0000'
+		),
+		ATLD_T AS (
+		SELECT 
+		         SUBSTR(ASSETS_CL_CODE,1,1)||'0000' AS ASSETS_CL_CODE
+		        ,NVL(SUM(b1.ACQS_AMOUNT),0) AS DCRS_ACQS_AMT /* 처분자산:취득원가 */
+		        ,NVL(SUM(b2.DPRC_ACMTL_AMOUNT),0) AS DCRS_DPRC_AMT  /*처분자산:상각누계액*/
+		        ,SUM(NVL(b1.GOVSUBY_ACQS_AMOUNT,0) - NVL(b2.GOVSUBY_DPRC_ACMTL_AMOUNT,0)) AS DCRS_GOVSUBY_AMT /*처분자산:국보고조금잔액*/
+		    FROM TBASS_ASSETS_MASTR b1
+		         LEFT OUTER JOIN
+		         (SELECT a1.ASSETS_NO
+		                ,a1.DPRC_YM
+		                ,a1.FSTRM_DPRC_ACMTL_AMOUNT
+		                ,a1.THSTRM_DPRT_AM
+		                ,a1.DPRC_ACMTL_AMOUNT
+		                ,a1.GOVSUBY_FSTRM_AMOUNT
+		                ,a1.GOVSUBY_THSTRM_DPRT_AM
+		                ,a1.GOVSUBY_DPRC_ACMTL_AMOUNT
+		                ,a1.TRMEND_BLCE
+		          FROM TBASS_DPRC a1,
+		               (SELECT ASSETS_NO, MAX(DPRC_YM) AS DPRC_YM
+		                FROM TBASS_DPRC
+		                WHERE DPRC_YM <= #ACCNUT_YEAR#||'12'
+		                GROUP BY ASSETS_NO
+		               ) a2
+		          WHERE a1.ASSETS_NO = a2.ASSETS_NO
+		            AND a1.DPRC_YM = a2.DPRC_YM
+		         ) b2
+		         ON b1.ASSETS_NO = b2.ASSETS_NO
+		    WHERE (SUBSTR(b1.ACQS_DE,1,6) <= #ACCNUT_YEAR#||'12' OR b1.ACQS_DE IS NULL)
+		      AND b1.ASSETS_CL_CODE NOT IN ('J0000','K0000')
+		      AND EXISTS (
+		        SELECT 1
+		        FROM TBASS_ATLD_MANAGE b3
+		             INNER JOIN TBASS_ATLD_MANAGE_DETAIL b4
+		             ON b3.REQST_YEAR = b4.REQST_YEAR
+		             AND b3.ODR = b4.ODR
+		        WHERE b1.ASSETS_NO = b4.ASSETS_NO
+		          AND b3.DISUSE_PROCESS_AT = '1'
+		          AND SUBSTR(b3.DISUSE_PROCESS_DE,1,4) = #ACCNUT_YEAR#
+		       )
+		    GROUP BY SUBSTR(ASSETS_CL_CODE,1,1)||'0000'
+		)
+		SELECT 
+		     t1.ASSETS_CL_NM
+		    ,NVL(t2.PRE_ACQS_AMT,0)   AS PRE_ACQS_AMT
+		    ,NVL(t2.INCRS_ACQS_AMT,0) AS INCRS_ACQS_AMT
+		    ,NVL(t3.DCRS_ACQS_AMT,0)  AS DCRS_ACQS_AMT
+		    ,NVL(t2.PRE_ACQS_AMT,0) + NVL(t2.INCRS_ACQS_AMT,0) - NVL(t3.DCRS_ACQS_AMT,0) AS ACQS_AMT
+		    ,NVL(t2.PRE_DPRC_AMT,0)   AS PRE_DPRC_AMT
+		    ,NVL(t2.INCRS_DPRC_AMT,0) AS INCRS_DPRC_AMT
+		    ,NVL(t3.DCRS_DPRC_AMT,0)  AS DCRS_DPRC_AMT
+		    ,NVL(t2.PRE_DPRC_AMT,0) + NVL(t2.INCRS_DPRC_AMT,0) - NVL(t3.DCRS_DPRC_AMT,0) AS DPRC_AMT
+		    ,NVL(t2.PRE_GOVSUBY_AMT,0) AS PRE_GOVSUBY_AMT
+		    ,NVL(t2.INCRS_GOVSUBY_AMT,0) AS INCRS_GOVSUBY_AMT
+		    ,NVL(t2.DCRS_GOVSUBY_AMT,0) + NVL(t3.DCRS_GOVSUBY_AMT,0) AS DCRS_GOVSUBY_AMT
+		    ,NVL(t2.PRE_GOVSUBY_AMT,0) + NVL(t2.INCRS_GOVSUBY_AMT,0) - NVL(t2.DCRS_GOVSUBY_AMT,0) - NVL(t3.DCRS_GOVSUBY_AMT,0) AS GOVSUBY_AMT
+		    ,(NVL(t2.PRE_ACQS_AMT,0) + NVL(t2.INCRS_ACQS_AMT,0) - NVL(t3.DCRS_ACQS_AMT,0))
+		     - (NVL(t2.PRE_DPRC_AMT,0) + NVL(t2.INCRS_DPRC_AMT,0) - NVL(t3.DCRS_DPRC_AMT,0))
+		     - (NVL(t2.PRE_GOVSUBY_AMT,0) + NVL(t2.INCRS_GOVSUBY_AMT,0) - NVL(t2.DCRS_GOVSUBY_AMT,0) - NVL(t3.DCRS_GOVSUBY_AMT,0)) AS AMT
+		FROM TBASS_ASSETS_CL t1
+		     LEFT OUTER JOIN MAIN_T t2
+		     ON t1.ASSETS_CL_CODE = t2.ASSETS_CL_CODE
+		     LEFT OUTER JOIN ATLD_T t3
+		     ON t1.ASSETS_CL_CODE = t3.ASSETS_CL_CODE
+		WHERE t1.ASSETS_CL_CODE IN ('A0000', 'B0000', 'C0000', 'D0000', 'E0000', 'F0000', 'G0000')
+		ORDER BY t1.ASSETS_CL_CODE
+		]]>
+	</select>
+
+	<!--가동설비자산취득명세서 리스트조회 -->
+	<select id="ACC050407DAO.assAssetsMassterList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC050407DAO.assAssetsMassterList*/ ]]>
+		SELECT
+		     ASSETS_NM
+		    ,ACQS_DE
+		    ,STNDRD
+		    ,QY
+		    ,UNTPC
+		    ,ACQS_AMOUNT
+		FROM TBASS_ASSETS_MASTR
+		WHERE ACQS_DE LIKE '%'|| #ACCNUT_YEAR# ||'%'
+		  AND ASSETS_CL_CODE LIKE 'G%'
+		ORDER BY ACQS_DE
+    </select>
+    
+    	<!-- 상각완료자산명세서 리스트조회 -->
+	<select id="ACC050407DAO.assAssetsCLMassterList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC050407DAO.assAssetsCLMassterList*/ ]]>
+		SELECT
+		     t1.ASSETS_NM  /*자산명*/
+		    ,t1.ACQS_AMOUNT  /*취득금액*/
+		    ,TO_CHAR(TO_DATE(t1.ACQS_DE,'YYYYMMDD'),'YY.MM') AS ACQS_YM
+		    ,t2.CN_YYCNT /*내용년수*/
+		    ,t1.DPRC_COMPT_YEAR /*상각완료년도*/
+		    ,t1.SRVIVE_AMOUNT /*잔존가액*/
+		    ,NVL(t1.ACQS_AMOUNT,0) - NVL(t1.SRVIVE_AMOUNT,0) AS RSVMNEY_ACMTL /*충당금누계*/
+		FROM TBASS_ASSETS_MASTR t1
+		     INNER JOIN TBASS_ASSETS_CL t2
+		     ON t1.ASSETS_CL_CODE = t2.ASSETS_CL_CODE
+		WHERE t2.DPRC_TRGET_AT = '1' /*감가상각대상여부*/
+		  AND t1.DPRT_COMPT_AT = '1' /*상각완료여부*/
+		  AND t1.DPRC_COMPT_YEAR <![CDATA[<=]]> #ACCNUT_YEAR#
+		  AND t1.ASSETS_CL_CODE NOT IN ('J0000','K0000')
+		ORDER BY t1.DPRC_COMPT_YEAR, t1.ASSETS_NO
+    </select>
+    
+  	<!-- 가동설비자산처분명세서 리스트조회 -->
+	<select id="ACC050407DAO.assAssetsMassterList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /*ACC050407DAO.assAssetsMassterList2*/ ]]>
+		SELECT
+		     t1.ASSETS_NM   /*자산명*/
+		    ,t1.ACQS_DE     /*취득일자*/
+		    ,t1.ACQS_AMOUNT /*취득금액*/
+		    ,NVL(t4.DPRC_ACMTL_AMOUNT,0) AS DPRC_ACMTL_AMOUNT /*감가상각누계액*/
+		    ,NVL(t4.TRMEND_BLCE,0) AS TRMEND_BLCE /*장부가액*/
+		    ,t2.DISUSE_AMOUNT     /*처분액*/
+		    ,NVL(t2.DISUSE_AMOUNT,0) - NVL(t4.TRMEND_BLCE,0) AS PRFLOS /*손익 */
+		    <!-- 마스터 -> 디테일 2016.07.27 -->
+		    ,t2.DISUSE_PROCESS_DE /*처분일자*/
+		    ,t2.DISUSE_PROCESS_DE AS DISUSE_DCSN_DE    /*승인일자*/
+		
+		FROM TBASS_ASSETS_MASTR t1
+		     
+		     INNER JOIN TBASS_ATLD_MANAGE_DETAIL t2
+		     ON t1.ASSETS_NO = t2.ASSETS_NO
+		     
+		     INNER JOIN TBASS_ATLD_MANAGE t3
+		     ON  t2.REQST_YEAR = t3.REQST_YEAR
+		     AND t2.ODR = t3.ODR
+		     <!-- 마스터 -> 디테일 2016.07.27 -->
+		     AND t2.DISUSE_PROCESS_AT = '1'  /*불용확정여부*/
+		    
+		     LEFT OUTER JOIN
+		     (SELECT a1.ASSETS_NO, a1.DPRC_ACMTL_AMOUNT, a1.TRMEND_BLCE
+		      FROM TBASS_DPRC a1,
+		           (SELECT ASSETS_NO, MAX(DPRC_YM) AS DPRC_YM
+		            FROM TBASS_DPRC
+		            WHERE DPRC_YM <![CDATA[<=]]>  #ACCNUT_YEAR#||'12'
+		            GROUP BY ASSETS_NO
+		           ) a2
+		      WHERE a1.ASSETS_NO = a2.ASSETS_NO
+		        AND a1.DPRC_YM = a2.DPRC_YM
+		     ) t4
+		     ON t1.ASSETS_NO = t4.ASSETS_NO
+		WHERE 1=1
+		<!-- 마스터 -> 디테일 2016.07.27 -->
+		  AND t2.DISUSE_PROCESS_DE LIKE #ACCNUT_YEAR# || '%'
+    </select>
+ </sqlMap>

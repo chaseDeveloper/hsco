@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC060101_SQL">	
+	
+	<!-- 구분회계 이월자료 전체 -->
+	<select id="ACC060101DAO.stacntCyfdSeAllList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+		     t1.ACCNUT_YEAR
+		    ,t1.ACCNUT_MT
+		    ,t1.ACCNUT_ACNT_CODE
+		    ,t3.ACCNUT_ACNT_NM
+		    ,t1.SE_ACCNUT_ACNT_CODE
+		    ,t2.SE_ACCNUT_ACNT_NM
+		    ,t1.DEBTOR_AMOUNT
+		    ,t1.CRDIT_AMOUNT
+		FROM TBACC_ACCNUT_STACNT_SE t1
+		     LEFT OUTER JOIN TBACC_SE_ACCNUT_ACNT_CODE t2
+		     ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		     AND t1.SE_ACCNUT_ACNT_CODE = t2.SE_ACCNUT_ACNT_CODE
+		     LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t3
+		     ON  t1.ACCNUT_YEAR = t3.ACCNUT_YEAR
+		     AND t1.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		WHERE t1.ACCNUT_YEAR  = #ACCNUT_YEAR#
+		  AND t1.ACCNUT_MT    = '00'
+		  AND (NVL(t1.DEBTOR_AMOUNT,0) <![CDATA[<>]]> 0 OR NVL(t1.CRDIT_AMOUNT,0) <![CDATA[<>]]> 0)
+		ORDER BY t1.SE_ACCNUT_ACNT_CODE, t1.ACCNUT_ACNT_CODE
+	</select>
+	
+	<!-- 구분회계 목록 -->
+	<select id="ACC060101DAO.seAccnutAcntCodeList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+			 ACCNUT_YEAR
+		    ,SE_ACCNUT_ACNT_CODE
+		    ,SE_ACCNUT_ACNT_NM
+		FROM TBACC_SE_ACCNUT_ACNT_CODE
+		WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+		ORDER BY SE_ACCNUT_ACNT_CODE
+	</select>
+	
+	<!-- 구분회계별 이월자료 목록 -->
+	<select id="ACC060101DAO.stacntCyfdSeList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+		     t1.ACCNUT_YEAR
+		    ,t1.ACCNUT_ACNT_CODE
+		    ,NVL(t1.OUTPT_ACNT_NM,t1.ACCNUT_ACNT_NM) AS ACCNUT_ACNT_NM
+		    ,'00' AS ACCNUT_MT
+		    ,#SE_ACCNUT_ACNT_CODE# AS SE_ACCNUT_ACNT_CODE
+		    ,NVL(t2.DEBTOR_AMOUNT,'0') AS DEBTOR_AMOUNT
+		    ,NVL(t2.CRDIT_AMOUNT,'0') AS CRDIT_AMOUNT
+		    ,NVL(t1.CHIT_PROCESS_AT,'0') AS CHIT_PROCESS_AT
+		FROM TBACC_ACCNUT_ACNT_SBJECT t1
+		     LEFT OUTER JOIN 
+		     (SELECT
+		           ACCNUT_YEAR
+		          ,ACCNUT_MT
+		          ,ACCNUT_ACNT_CODE
+		          ,SE_ACCNUT_ACNT_CODE
+		          ,DEBTOR_AMOUNT
+		          ,CRDIT_AMOUNT
+		      FROM TBACC_ACCNUT_STACNT_SE
+		      WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+		        AND ACCNUT_MT   = '00'
+		        AND SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		     ) t2
+		     ON  t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		     AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+		WHERE t1.ACCNUT_YEAR = #ACCNUT_YEAR#
+		  AND SUBSTR(t1.ACCNUT_ACNT_CODE,1,1) IN ('1','2','3')
+		  AND #SE_ACCNUT_ACNT_CODE# IS NOT NULL
+		ORDER BY t1.ACCNUT_ACNT_CODE
+	</select>
+	
+	
+	<!-- 이월자료 저장 -->
+	<update id="ACC060101DAO.stacntCyfdSeU" parameterClass="java.util.HashMap">
+		MERGE INTO TBACC_ACCNUT_STACNT_SE
+		USING DUAL
+		ON (
+				ACCNUT_YEAR			= #ACCNUT_YEAR#
+			AND ACCNUT_MT           = #ACCNUT_MT#
+			AND ACCNUT_ACNT_CODE    = #ACCNUT_ACNT_CODE#
+			AND SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		)
+		WHEN MATCHED THEN
+			UPDATE 
+			SET
+				 DEBTOR_AMOUNT	= #DEBTOR_AMOUNT#
+				,CRDIT_AMOUNT	= #CRDIT_AMOUNT#
+				,UPDUSR_ID		= #S_USER_ID#
+				,UPDT_DT		= SYSDATE
+		WHEN NOT MATCHED THEN
+			INSERT
+			(
+				 ACCNUT_YEAR
+				,ACCNUT_MT
+				,ACCNUT_ACNT_CODE
+				,SE_ACCNUT_ACNT_CODE
+				,ACNT_LEVEL
+				,UPPER_ACNT_CODE
+				,DEBTOR_AMOUNT
+				,CRDIT_AMOUNT
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+			) VALUES (
+				 #ACCNUT_YEAR#
+				,#ACCNUT_MT#
+				,#ACCNUT_ACNT_CODE#
+				,#SE_ACCNUT_ACNT_CODE#
+				,NULL
+				,NULL
+				,#DEBTOR_AMOUNT#
+				,#CRDIT_AMOUNT#
+				,#S_USER_ID#
+				,SYSDATE
+				,#S_USER_ID#
+				,SYSDATE
+			)
+	</update>
+	
+	<!-- 결산자료이월 실행 -->
+	<procedure id="ACC060101DAO.callSpaccSyfdSe" parameterClass="java.util.HashMap">
+		{ CALL SPACC_STACNT_SYFD_SE(#ACCNUT_YEAR#, #S_USER_ID#) }
+	</procedure>
+	
+</sqlMap>

@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT040504">
+
+<!--
+	 쿼리명 : 재고현황 조회
+	설명 : 재고현황 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.08.17
+	-->
+	<select id="RNT040504DAO.getList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+SELECT  A.HOUSE_CODE
+      , A.THNG_CODE
+      , A.STNDRD_CODE
+      , A.IN_QY
+      , A.OUT_QY
+      , A.IN_QY - A.OUT_QY AS TOTAL_QY
+  FROM(          
+        SELECT
+            A.HOUSE_CODE
+          , A.THNG_CODE
+          , A.STNDRD_CODE
+          , NVL(IN_QY,0) AS  IN_QY
+          , NVL(OUT_QY,0) AS OUT_QY
+        FROM (SELECT HOUSE_CODE
+                   , THNG_CODE
+                   , STNDRD_CODE
+                   , SUM(QY) AS IN_QY
+                FROM TBRNT_THNG_WRHOUSNG
+               WHERE HOUSE_CODE = #HOUSE_CODE# 
+                 <isNotEmpty property="THNG_CODE1">
+                 AND THNG_CODE BETWEEN #THNG_CODE1# AND #THNG_CODE2#
+                 </isNotEmpty>
+               GROUP BY HOUSE_CODE , THNG_CODE , STNDRD_CODE) A
+        LEFT JOIN (SELECT HOUSE_CODE
+                        , THNG_CODE
+                        , STNDRD_CODE
+                        , SUM(QY) AS OUT_QY
+                     FROM TBRNT_THNG_DLIVY
+                    WHERE HOUSE_CODE = #HOUSE_CODE#
+                      <isNotEmpty property="THNG_CODE1"> 
+                      AND THNG_CODE BETWEEN #THNG_CODE1# AND #THNG_CODE2#
+                      </isNotEmpty>
+                     GROUP BY HOUSE_CODE , THNG_CODE , STNDRD_CODE) B ON A.HOUSE_CODE = B.HOUSE_CODE AND A.THNG_CODE = B.THNG_CODE
+        JOIN TBRNT_THNG_CODE D ON A.THNG_CODE = D.THNG_CODE                
+        WHERE 1=1
+        <isNotEmpty property="CODE">
+          AND D.CODE = #CODE# 
+        </isNotEmpty>
+) A		
+	</select>
+ 
+<!-- 
+	쿼리명 : 출고현황 조회
+	설명 : 출고현황 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.08.17
+-->
+<select id="RNT040504DAO.getListR1" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+SELECT HOUSE_CODE
+     , DONG
+     , HO
+	 , THNG_CODE
+	 , STNDRD_CODE
+	 , SN
+	 , DLIVY_DE
+	 , QY
+	 , DLIVY_PRVONSH
+	 , RM
+	 , REGISTER_ID
+	 , REGIST_DT
+	 , UPDUSR_ID
+	 , UPDT_DT
+  FROM TBRNT_THNG_DLIVY
+ WHERE 1=1
+   AND HOUSE_CODE = #HOUSE_CODE#
+   AND THNG_CODE = #THNG_CODE#
+   AND DLIVY_DE BETWEEN #WRHOUSNG_DE1# AND #WRHOUSNG_DE2# 
+</select>
+
+
+<!-- 	
+	 쿼리명 : 물품출고등록 수정
+	설명 : 물품출고등록 수정 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.08.17 
+-->	
+	
+<update id="RNT040504DAO.listU" parameterClass="java.util.Map">
+UPDATE TBRNT_THNG_DLIVY   
+  SET
+     DLIVY_DE = #DLIVY_DE#
+    ,DONG = LPAD(#DONG# , 4 , '0')
+    ,HO  = LPAD(#HO# , 4 , '0')    
+    ,QY = #QY#            
+    ,RM = #RM#            
+    ,STNDRD_CODE = #STNDRD_CODE#
+    ,DLIVY_PRVONSH = #DLIVY_PRVONSH#
+    ,UPDUSR_ID = #S_USER_ID#  
+    ,UPDT_DT = SYSDATE     
+WHERE THNG_CODE = #THNG_CODE# 
+  AND HOUSE_CODE = #HOUSE_CODE# 
+  AND SN = #SN#
+</update>
+	
+<!-- 	
+	쿼리명 : 물품출고등록 신규 
+	설명 : 물품출고등록 신규 쿼리 
+	수정일  수정자  수정내용 
+	
+	작성자 : 이광원 
+	최초작성일 : 2015.08.17
+-->
+<insert id="RNT040504DAO.listC" parameterClass="java.util.Map">
+INSERT INTO TBRNT_THNG_DLIVY (            
+     HOUSE_CODE       
+    ,DONG
+    ,HO     
+    ,THNG_CODE             
+    ,SN            
+    ,DLIVY_DE                  
+    ,QY            
+    ,DLIVY_PRVONSH
+    ,RM       
+    ,STNDRD_CODE
+    ,REGISTER_ID             
+    ,REGIST_DT             
+    ,UPDUSR_ID             
+    ,UPDT_DT             
+) VALUES (
+     #HOUSE_CODE#
+    ,LPAD(#DONG# , 4 , '0')
+    ,LPAD(#HO#, 4 , '0')       
+    ,#THNG_CODE#  
+    ,(SELECT NVL(MAX(SN),0)+1 
+        FROM TBRNT_THNG_DLIVY 
+       WHERE HOUSE_CODE = #HOUSE_CODE#
+         AND THNG_CODE = #THNG_CODE#)         
+    ,#DLIVY_DE#   
+    ,#QY# 
+    ,#DLIVY_PRVONSH#
+    ,#RM#              
+    ,#STNDRD_CODE#         
+    ,#S_USER_ID# 
+    ,SYSDATE
+    ,#S_USER_ID#   
+    ,SYSDATE
+)
+</insert>
+
+<!-- 
+	쿼리명 : 물품출고등록 삭제
+	설명 :물품출고등록 삭제 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이광원
+	최초작성일 : 2015.07.14 
+-->	
+<delete id="RNT040504DAO.listD" parameterClass="java.util.Map">
+DELETE FROM TBRNT_THNG_DLIVY    
+WHERE HOUSE_CODE = #HOUSE_CODE#            
+  AND THNG_CODE = #THNG_CODE#  
+  AND SN = #SN#
+</delete>
+
+	
+</sqlMap>

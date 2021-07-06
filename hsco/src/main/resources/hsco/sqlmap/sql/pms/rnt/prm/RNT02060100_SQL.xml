@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01060100SQL">	
+
+	<!-- 쿼리명 : 세입관리 결의서조회
+	설명 : 세입관리 결의서조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.04
+	-->
+	<select id="RNT02060100DAO.selectAnactList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+           SELECT a.ANACT_SE,      /* 결의구분 */
+                  a.MDAT_DE,       /*결의일자 */
+                  a.MDAT_DECSN_NO, /* 조정결의번호 */
+                  a.PAY_SE,       /* 납부구분 */
+                  a.RENT_HOUSE_CODE,
+                  c.RENT_HOUSE_NM,
+                  a.DONG,
+                  a.HO,
+                  (SELECT p.NM
+                     FROM TBRNT_PUCHAS_CNTRCT z,
+                          TBRNT_PUCHAS_RENT_CSTMR p
+                     WHERE z.PUCHAS_CSTMR_NO = p.PUCHAS_CSTMR_NO
+                       AND z.CNTRCTR_NO = a.CNTRCTR_NO) NM,
+                  (SELECT AEA
+                     FROM TBRNT_PUCHAS_HOUSE_BILD z
+                     WHERE RENT_HOUSE_CODE = a.RENT_HOUSE_CODE
+                       AND DONG = a.DONG
+                       AND HO = a.HO) AEA,
+                  a.OCCRRNC_CO, /* 발생건수 */
+                  a.ANACT_AMOUNT, /* 결의금액 */
+                  a.PAY_TMLMT, /* 납부기한 */
+                  a.BSNS_SE, /* 사업구분(계정구분) */
+                  a.BUDGET_ACNT_CODE, /* 계정코드(계정과목) */
+                  a.EXPNDTR_UNIT_CODE, /* 지출단위코드(부기코드) */
+                  a.PAYER_MATTER, /* 납입자사항(비고) */
+                  a.SUMRY_1, /* 적요1 */
+                  a.SUMRY_2,  /* 적요2 */
+                  a.CNTRCTR_NO , /* 계약자번호 */
+                  (SELECT CODE_NM
+                    FROM TBCOM_CMMN_CODE z
+                   WHERE GRP_CODE = 'BDG001'
+                     AND CODE = a.BSNS_SE) BSNS_SE_NM, /* 사업구분명 */
+                 a.BUDGET_ACNT_CODE,   /* 예산계정코드 */
+                 (SELECT  BUDGET_ACNT_NM
+                    FROM  TBBDG_BUDGET_ACNT_CODE z
+                    WHERE z.YEAR              = a.BUDGET_YEAR
+                      AND z.BSNS_SE           = a.BSNS_SE
+                      AND z.BUDGET_ACNT_CODE  = a.BUDGET_ACNT_CODE
+                     ) AS BUDGET_ACNT_NM, /* 예산계정코드명 */
+                 a.EXPNDTR_UNIT_CODE, /* 지출단위코드 */
+                 (SELECT EXPNDTR_UNIT_NM  TBBDG_TAXITM_CODE
+                    FROM TBBDG_EXPNDTR_UNIT_CODE z
+                    WHERE z.YEAR              = a.BUDGET_YEAR
+                      AND z.BSNS_SE           = a.BSNS_SE
+                      AND z.BUDGET_ACNT_CODE  = a.BUDGET_ACNT_CODE
+                      AND z.EXPNDTR_UNIT_CODE = a.EXPNDTR_UNIT_CODE) EXPNDTR_UNIT_NM   /* 지출단위코드명 */
+             FROM TBRNT_PUCHAS_ANACT a,
+                  TBRNT_PUCHAS_HOUSE c
+             WHERE 1=1
+			<isNotEmpty property="anact_chk">
+               AND ANACT_SE IN
+               <iterate property="arr_anact_chk" open="(" close=")" conjunction=",">
+               #arr_anact_chk[]#
+               </iterate>
+ 			</isNotEmpty>
+               AND a.MDAT_DE BETWEEN #decsnFromDe# AND #decsnToDe#
+               AND a.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+            <isNotEmpty property="houseSe">
+               AND #houseSe# LIKE '%' || c.HOUSE_SE || '%'           /* 주택구분 */
+            </isNotEmpty>
+            <isNotEmpty property="rentHouseCode">
+	           AND a.RENT_HOUSE_CODE LIKE #rentHouseCode#
+            </isNotEmpty>
+            <isNotEmpty property="dong">
+               AND a.DONG LIKE #dong#
+            </isNotEmpty>
+            <isNotEmpty property="ho">
+               AND a.HO  LIKE #ho#
+            </isNotEmpty>
+             ORDER BY a.RENT_HOUSE_CODE,
+                      a.DONG,
+                      a.HO,
+                      a.MDAT_DE,
+                      a.ANACT_SE
+
+	</select>
+	
+	<!-- 세입관리 결의서신규등록  -->
+	<insert id="RNT02060100DAO.AnactListInsert" parameterClass="java.util.HashMap" >
+		INSERT INTO TBRNT_PUCHAS_ANACT
+
+                      ( ANACT_SE,
+                        MDAT_DE,
+                        MDAT_DECSN_NO,
+                        PAY_SE,
+                        CNTRCTR_NO,
+                        RENT_HOUSE_CODE,
+                        DONG,
+                        HO,
+                        OCCRRNC_CO,
+                        ANACT_AMOUNT,
+                        PAYER_MATTER,
+                        PAY_TMLMT,
+                        SUMRY_1,
+                        SUMRY_2,
+                        BUDGET_YEAR,
+                        BSNS_SE,
+                        BUDGET_ACNT_CODE,
+                        EXPNDTR_UNIT_CODE,
+                        DEPT_CODE,
+                        REGISTER_ID,
+                        REGIST_DT,
+                        UPDUSR_ID,
+                        UPDT_DT
+                      )
+              VALUES( #ANACT_SE#,
+                      #MDAT_DE#,
+                     (SELECT NVL (MAX(to_number(MDAT_DECSN_NO)), 0)
+                        FROM TBRNT_PUCHAS_ANACT
+                        WHERE ANACT_SE = #ANACT_SE#
+                          AND MDAT_DE  = #MDAT_DE#) + 1,
+                     #PAY_SE#,
+                     #CNTRCTR_NO#,
+                     #RENT_HOUSE_CODE#,
+                     #DONG#,
+                     #HO#,
+                     #OCCRRNC_CO#,
+                     #ANACT_AMOUNT#,
+                     #PAYER_MATTER#,
+                     #PAY_TMLMT#,
+                     #SUMRY_1#,
+                     #SUMRY_2#,
+                     #BUDGET_YEAR#,         /* 예산계정 팝업에서 적용할예정 */
+                     #BSNS_SE#,             /* 예산계정 팝업에서 적용할예정 */
+                     #BUDGET_ACNT_CODE#,    /* 예산계정 팝업에서 적용할예정 */
+                     #EXPNDTR_UNIT_CODE#,   /* 예산계정 팝업에서 적용할예정 */
+                     #DEPT_CODE#,           /* 예산계정 팝업에서 적용할예정 */
+                     #S_USER_ID#,
+                     SYSDATE,
+                     #S_USER_ID#,
+                     SYSDATE)
+	</insert>
+	
+	<!-- 세입관리 결의서수정 -->
+	<update id="RNT02060100DAO.AnactListUpdate" parameterClass="java.util.HashMap" >
+    UPDATE TBRNT_PUCHAS_ANACT
+      SET OCCRRNC_CO         =  #OCCRRNC_CO#,
+          ANACT_AMOUNT       =  #ANACT_AMOUNT#,
+          PAYER_MATTER       =  #PAYER_MATTER#,
+          PAY_TMLMT          =  #PAY_TMLMT#,
+          SUMRY_1            =  #SUMRY_1#,
+          SUMRY_2            =  #SUMRY_2#,
+          BUDGET_YEAR        =  #BUDGET_YEAR#,
+          BSNS_SE            =  #BSNS_SE#,
+          BUDGET_ACNT_CODE   =  #BUDGET_ACNT_CODE#,
+          EXPNDTR_UNIT_CODE  =  #EXPNDTR_UNIT_CODE#,
+          DEPT_CODE          =  #DEPT_CODE#,
+          UPDUSR_ID          =  #S_USER_ID#,
+          UPDT_DT            =  SYSDATE
+  WHERE ANACT_SE             =  #ANACT_SE#
+    AND MDAT_DE              =  #MDAT_DE#
+    AND MDAT_DECSN_NO        =  #MDAT_DECSN_NO#
+	</update>
+	
+	<!-- 세입관리 결의서삭제-->
+	<delete id="RNT02060100DAO.AnactListDelete" parameterClass="java.util.HashMap">
+   DELETE FROM TBRNT_PUCHAS_ANACT
+    WHERE ANACT_SE 			=  #ANACT_SE#
+     AND  MDAT_DE  			=  #MDAT_DE#
+     AND  MDAT_DECSN_NO  	= #MDAT_DECSN_NO#
+	</delete>
+</sqlMap>

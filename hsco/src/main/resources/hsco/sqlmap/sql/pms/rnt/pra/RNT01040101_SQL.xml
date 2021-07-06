@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01040101_SQL">	
+   <!--  설명  : 임대보증금관리
+		작성자 : 지효정 -->
+	
+	<!-- 보증금 정보 목록 -->
+	<select id="RNT01040101DAO.rentGtnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 CNTRCTR_NO    	/*계약자번호*/
+		    ,GTN_SN        	/*보증금순번*/
+		    ,GTN_SE        	/*보증금구분*/
+		    ,SFCOM_CODE_NM('RNT009', GTN_SE) AS GTN_SE_NM	/*보증금구분명*/
+		    ,CNTRCT_YEAR   	/*계약년도*/
+		    ,QUALF_SE      	/*자격구분*/
+		    ,GTN           	/*보증금*/
+		    ,PAY_TMLMT     	/*납부기한*/
+		    ,RCIV_DE       	/*수납일자*/
+		    ,SN            	/*일련번호*/
+		    ,RM				/*비고*/
+		    ,NVL(GTN,0) AS REMAIN_AMOUNT
+		    ,DECODE(RCIV_DE,NULL,0,NVL(GTN,0)) AS RCIV_AMOUNT
+		FROM TBRNT_RENT_GTN
+		WHERE CNTRCTR_NO = #cntrctrNo#
+		AND GTN_SE IN (
+			SELECT   CODE
+			FROM     TBCOM_CMMN_CODE
+			WHERE    GRP_CODE              = 'RNT009'
+			AND      USE_AT                = '1'
+			AND      CHRCTR_PREPAR_VALUE_0 = 'S')
+		ORDER BY PAY_TMLMT DESC
+	</select>
+	
+	<!-- 보증금 정보 생성 -->
+	<insert id="RNT01040101DAO.rentGtnC" parameterClass="java.util.HashMap">
+		INSERT INTO TBRNT_RENT_GTN(
+		 	 CNTRCTR_NO    	/*계약자번호*/
+		    ,GTN_SN        	/*보증금순번*/
+		    ,GTN_SE        	/*보증금구분*/
+		    ,CNTRCT_YEAR   	/*계약년도*/
+		    ,QUALF_SE      	/*자격구분*/
+		    ,GTN           	/*보증금*/
+		    ,PAY_TMLMT     	/*납부기한*/
+		    ,RCIV_DE       	/*수납일자*/
+		    ,SN            	/*일련번호*/
+		    ,RM				/*비고*/
+		    ,REGISTER_ID
+			,REGIST_DT  
+			,UPDUSR_ID  
+			,UPDT_DT
+		)
+		VALUES(
+			 #CNTRCTR_NO#    	/*계약자번호*/
+		    ,(SELECT NVL(MAX(GTN_SN), 0) + 1 FROM TBRNT_RENT_GTN WHERE CNTRCTR_NO = #CNTRCTR_NO#)   /*보증금순번*/
+		    ,#GTN_SE#        	/*보증금구분*/
+		    ,#CNTRCT_YEAR#   	/*계약년도*/
+		    ,#QUALF_SE#      	/*자격구분*/
+		    ,#GTN#           	/*보증금*/
+		    ,#PAY_TMLMT#     	/*납부기한*/
+		    ,#RCIV_DE#       	/*수납일자*/
+		    ,(SELECT MAX(SN)+1 FROM TBRNT_RENT_GTN WHERE CNTRCTR_NO = #CNTRCTR_NO#)		/*일련번호*/
+		    ,#RM#				/*비고*/
+		    ,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+	
+	<!-- 보증금 정보 수정 -->
+	<update id="RNT01040101DAO.rentGtnU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_RENT_GTN SET
+			 GTN_SE = #GTN_SE#       		/*보증금구분*/
+		    ,CNTRCT_YEAR = #CNTRCT_YEAR#   	/*계약년도*/
+		    ,QUALF_SE = #QUALF_SE#      	/*자격구분*/
+		    ,GTN = #GTN#           			/*보증금*/
+		    ,PAY_TMLMT = #PAY_TMLMT#     	/*납부기한*/
+		    ,RCIV_DE = #RCIV_DE#       		/*수납일자*/
+		    ,SN = #SN#            			/*일련번호*/
+		    ,RM = #RM#						/*비고*/
+			,UPDUSR_ID = #S_USER_ID# 
+			,UPDT_DT = SYSDATE
+		WHERE CNTRCTR_NO = #CNTRCTR_NO#
+		AND   GTN_SN = #GTN_SN#
+	</update>
+	
+	<!-- 보증금 정보 삭제 -->
+	<delete id="RNT01040101DAO.rentGtnD" parameterClass="java.util.HashMap">
+		DELETE FROM TBRNT_RENT_GTN
+		WHERE CNTRCTR_NO = #CNTRCTR_NO#
+		AND   GTN_SN = #GTN_SN#
+	</delete>
+	
+	<!-- 연체이자 재생성 -->
+	<update id="RNT01040101DAO.ovdintrU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_RENT_GTN SET 
+			 OVDINTR = SFRNT_RENT_DELAY_RATE(PAY_TMLMT, #payTmlmt#, NVL(GTN,0))
+			,UPDUSR_ID = #S_USER_ID# 
+			,UPDT_DT = SYSDATE
+		WHERE CNTRCTR_NO = #CNTRCTR_NO#
+		AND GTN_SN = #GTN_SN#
+		AND CNTRCT_YEAR = #CNTRCT_YEAR#
+		AND GTN_SE = '5'
+		AND PAY_TMLMT = #PAY_TMLMT#
+		AND RCIV_DE IS NULL
+	</update>
+	
+	<select id="RNT01040101DAO.selectNoticeSheetReport" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+				  	#RENT_HOUSE_CODE# AS RENT_HOUSE_CODE
+					,#DONG# AS DONG
+					,#HO# AS HO
+					,#RENT_HOUSE_NM# AS RENT_HOUSE_NM
+					,#ADRES# AS ADRES
+					,#RENT_HOUSE_NM# || ' ' ||#DONG# || '동 ' || #HO# || '호'  AS ADDR
+					,#ZIP#  AS ZIP
+					,#NM#  AS NM
+					,#DONG# || '동 ' || #HO# || '호' AS DONGHO
+					,substr(#PAY_TMLMT#, 1,4) AS YYYY_1
+					,substr(#PAY_TMLMT#, 5,2) AS MM_1
+					,substr(#PAY_TMLMT#, 1,4) AS YYYY
+					,substr(#PAY_TMLMT#, 5,2) AS MM
+					,substr(#PAY_TMLMT#, 7,8) AS DD
+					,NVL(#RENT_AMT#, 0) AS RENT_AMT
+					,NVL(#DEL_AMT#, 0) AS DEL_AMT
+					,NVL(#DEL_INT#, 0) AS DEL_INT
+					,#GTN# AS GTN
+					,(NVL(#RENT_AMT#, 0)+NVL(#DEL_AMT#, 0)+NVL(#DEL_INT#, 0)+#GTN#) AS TOTAL_AMT
+					,('4' || #RENT_HOUSE_CODE# || #DONG# || #HO# || #PAY_TMLMT# || lpad(((#GTN#) * 5 / 100), 10, '0') || SFRNT_OCR_CODE_CHECK('4' || #RENT_HOUSE_CODE# || #DONG# || #HO# || #PAY_TMLMT# || lpad(nvl(((#GTN#) * 5 / 100), 0), 10, '0')) || '000') AS OCRBAND
+		FROM dual 	
+	</select>	
+	
+	<!-- 지원금 미납금 합계 -->
+	<select id="RNT01040101DAO.gtnSportList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+				NVL(SUM(RQEST_AMOUNT), 0) AS RQEST_AMOUNT_SUM
+		FROM 	TBRNT_GTN_SPORT A
+		WHERE 	A.CNTRCTR_NO = #cntrctrNo#
+    	AND 	A.RCIV_DE IS NULL
+	</select>
+</sqlMap>

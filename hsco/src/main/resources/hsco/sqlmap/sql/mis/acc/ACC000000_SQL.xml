@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC000000_SQL">	
+
+	<!-- 전표조회 -->
+	<select id="ACC000000DAO.chit" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+     		 t1.CHIT_CONFM_AT   	/* 전표승인여부 */
+		    ,t1.CHIT_DE         	/* 전표일자 */
+		    ,t1.ACCNUT_YEAR			/* 회계년도	*/
+		    ,t1.CHIT_NO         	/* 전표번호 */
+		    ,t2.BUDGET_ACNT_LIST  	/* 예산계정목록 */
+		    ,t3.ACCNUT_ACNT_LIST  	/* 회계계정목록 */
+		    ,t1.DECSN_YEAR      	/* 결의년도 */
+		    ,t1.DECSN_NO        	/* 결의번호 */
+		    ,t1.CHIT_SE				/* 전표구분 */
+		    ,t1.CHIT_KND			/* 전표종류 */
+		    ,t1.CHIT_TY				/* 전표유형 */
+		    ,NVL(t1.CPTAL_EXPNDTR_DE, t5.CPTAL_EXPNDTR_ACNTBK_DE) AS CPTAL_EXPNDTR_DE	/* 자금지출일자 */
+		    ,t4.DEBTOR_AMOUNT   	/* 차변 */
+		    ,t4.CRDIT_AMOUNT    	/* 대변 */
+		    ,t1.SUMRY_1         	/* 적요1 */
+		    ,t1.SUMRY_2         	/* 적요2 */
+		    ,t2.BUDGET_YEAR			/* 예산년도 */      
+		    ,t2.BSNS_SE          	/* 사업구분 */
+		    ,t2.BALC_SE          	/* 수지구분 */
+		    ,t2.BUDGET_ACNT_CODE 	/* 예산코드 */
+		    ,t2.BUDGET_ACNT_NM   	/* 예산명 */
+		    ,t2.EXPNDTR_UNIT_CODE	/* 지출단위코드 */
+		    ,t2.EXPNDTR_UNIT_NM  	/* 지출단위명 */
+		    ,t2.DEPT_CODE			/* 부서코드 */
+		    ,t5.ITNC_DE				/* 발의일자 */
+		    ,t5.DET_DCSN_DE			/* 채무확정일자 */
+		    ,DECODE(t1.CHIT_SE,'1','VAL0','2','VAL1',NULL) AS CHIT_TY_DATACOL /* 전표유형 datacolumn */
+		FROM TBACC_CHIT_MASTR t1
+		     LEFT OUTER JOIN
+		     (SELECT 
+		           ACCNUT_YEAR
+		          ,CHIT_NO
+		          ,LISTAGG(BUDGET_ACNT_NM,',') WITHIN GROUP(ORDER BY NULL) 		AS BUDGET_ACNT_LIST
+		          ,MAX(BUDGET_YEAR) KEEP(DENSE_RANK FIRST ORDER BY NULL) 		AS BUDGET_YEAR
+		          ,MAX(BSNS_SE) KEEP(DENSE_RANK FIRST ORDER BY NULL) 			AS BSNS_SE
+		          ,MAX(BALC_SE) KEEP(DENSE_RANK FIRST ORDER BY NULL) 			AS BALC_SE
+		          ,MAX(BUDGET_ACNT_CODE) KEEP(DENSE_RANK FIRST ORDER BY NULL) 	AS BUDGET_ACNT_CODE
+              	  ,MAX(BUDGET_ACNT_NM) KEEP(DENSE_RANK FIRST ORDER BY NULL) 	AS BUDGET_ACNT_NM
+		          ,MAX(EXPNDTR_UNIT_CODE) KEEP(DENSE_RANK FIRST ORDER BY NULL) 	AS EXPNDTR_UNIT_CODE
+              	  ,MAX(EXPNDTR_UNIT_NM) KEEP(DENSE_RANK FIRST ORDER BY NULL) 	AS EXPNDTR_UNIT_NM
+              	  ,MAX(DEPT_CODE) KEEP(DENSE_RANK FIRST ORDER BY NULL) 			AS DEPT_CODE
+		      FROM (
+		      SELECT
+		            DISTINCT
+		           a1.ACCNUT_YEAR
+		          ,a1.CHIT_NO
+		          ,a2.BUDGET_ACNT_NM
+		          ,a1.BUDGET_YEAR
+		          ,a1.BSNS_SE
+		          ,a1.BALC_SE
+		          ,a1.BUDGET_ACNT_CODE
+		          ,a1.EXPNDTR_UNIT_CODE
+              	  ,a3.EXPNDTR_UNIT_NM
+              	  ,a1.DEPT_CODE
+		      FROM TBACC_CHIT_DETAIL a1
+		           LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE a2
+		           ON  a1.BUDGET_YEAR = a2.YEAR
+		           AND a1.BSNS_SE = a2.BSNS_SE
+		           AND a1.BALC_SE = a2.BALC_SE
+		           AND a1.BUDGET_ACNT_CODE = a2.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN TBBDG_EXPNDTR_UNIT_CODE a3
+		           ON  a1.BUDGET_YEAR = a3.YEAR
+		           AND a1.BSNS_SE = a3.BSNS_SE
+		           AND a1.BALC_SE = a3.BALC_SE
+		           AND a1.BUDGET_ACNT_CODE = a3.BUDGET_ACNT_CODE
+		           AND a1.EXPNDTR_UNIT_CODE = a3.EXPNDTR_UNIT_CODE
+		      )
+		      GROUP BY ACCNUT_YEAR, CHIT_NO
+		     ) t2
+		     ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+		     AND t1.CHIT_NO = t2.CHIT_NO
+		     LEFT OUTER JOIN
+		     (SELECT 
+		           ACCNUT_YEAR
+		          ,CHIT_NO
+		          ,LISTAGG(ACCNUT_ACNT_NM,',') WITHIN GROUP(ORDER BY NULL) AS ACCNUT_ACNT_LIST
+		      FROM (
+		            SELECT
+		                 DISTINCT
+		                 b1.ACCNUT_YEAR
+		                ,b1.CHIT_NO
+		                ,b2.ACCNUT_ACNT_NM
+		            FROM TBACC_CHIT_DETAIL b1
+		                 LEFT OUTER JOIN
+		                 TBACC_ACCNUT_ACNT_SBJECT b2
+		                 ON  b1.ACCNUT_YEAR = b2.ACCNUT_YEAR
+		                 AND  b1.ACCNUT_ACNT_CODE = b2.ACCNUT_ACNT_CODE
+		          )
+		      GROUP BY ACCNUT_YEAR, CHIT_NO
+		     ) t3
+		     ON t1.ACCNUT_YEAR = t3.ACCNUT_YEAR
+		     AND t1.CHIT_NO = t3.CHIT_NO
+		    LEFT OUTER JOIN
+		    (SELECT 
+		         ACCNUT_YEAR
+		        ,CHIT_NO
+		        ,NVL(SUM(DEBTOR_AMOUNT),0) AS DEBTOR_AMOUNT
+		        ,NVL(SUM(CRDIT_AMOUNT),0) AS CRDIT_AMOUNT
+		     FROM TBACC_CHIT_DETAIL
+		     GROUP BY ACCNUT_YEAR, CHIT_NO
+		    ) t4
+		    ON t1.ACCNUT_YEAR = t4.ACCNUT_YEAR
+		    AND t1.CHIT_NO = t4.CHIT_NO
+		    LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t5
+		    ON t1.DECSN_YEAR = t5.DECSN_YEAR
+			AND t1.DECSN_NO = t5.DECSN_NO
+		WHERE t1.ACCNUT_YEAR = #ACCNUT_YEAR#
+		  AND t1.CHIT_NO = #CHIT_NO#
+	</select>
+	
+	<!-- 전표상세 목록 -->
+	<select id="ACC000000DAO.chitDetailList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+			 t1.ACCNUT_YEAR
+			,t1.CHIT_NO
+			,t1.SEQ
+			,t1.ACCNUT_ACNT_CODE
+			,t2.ACCNUT_ACNT_NM
+			,t1.BUDGET_YEAR
+			,t1.BSNS_SE
+			,t1.BALC_SE
+			,t1.BUDGET_ACNT_CODE
+			,t1.DEPT_CODE
+			,t1.EXPNDTR_UNIT_CODE
+			,t1.BSNS_CODE
+			,t3.BSNS_NM
+			,t1.PRMPC_YEAR
+			,t1.PRMPC_CODE
+			,t4.ACCNUT_ACNT_NM	AS PRMPC_NM
+			,t1.DEBTOR_AMOUNT
+			,t1.CRDIT_AMOUNT
+			,t5.CHIT_DE
+			,t5.SUMRY_1
+		FROM TBACC_CHIT_DETAIL t1
+			 LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+			 ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+			 AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+			 LEFT OUTER JOIN TBPRJ_BSNS_CODE t3
+			 ON t1.BSNS_CODE = t3.BSNS_CODE
+			 LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t4
+			 ON t1.PRMPC_YEAR = t4.ACCNUT_YEAR
+			 AND t1.PRMPC_CODE = t4.ACCNUT_ACNT_CODE
+			 INNER JOIN TBACC_CHIT_MASTR t5
+			 ON t1.ACCNUT_YEAR = t5.ACCNUT_YEAR
+			 AND t1.CHIT_NO = t5.CHIT_NO
+		WHERE t1.ACCNUT_YEAR 	= #ACCNUT_YEAR#
+		  AND t1.CHIT_NO		= #CHIT_NO#
+		ORDER BY t1.SEQ
+	</select>
+
+
+	<!-- 사업코드 팝업 -->
+	<select id="ACC000000DAO.bsnsCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 BSNS_CODE
+			,BSNS_NM
+			,BSNS_TY
+			,BSNS_TY_NM
+			,BSNS_BEGIN_YM
+			,BSNS_END_YM
+			,RM
+			,CL_SE
+			,SLE_SE
+		FROM TBPRJ_BSNS_CODE
+		ORDER BY BSNS_CODE, BSNS_NM, BSNS_TY
+	</select>
+	
+	<!-- 원가코드 팝업 -->
+	<select id="ACC000000DAO.prmpcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+             A.PRMPC_AT
+            ,A.LWPRT_ACNT_NM
+            ,A.BALC_SE
+            ,A.LWPRT_ACNT
+            ,A.ACCNUT_YEAR
+            ,A.ACCNUT_ACNT_CODE
+            ,A.ACNT_SE
+            ,A.OUTPT_SEQ
+            ,A.USE_AT
+            ,A.ACCNUT_ACNT_NM
+            ,A.ACNT_LEVEL
+            ,A.OUTPT_ACNT_NM
+            ,A.OUTPT_AT
+            ,A.UPPER_ACNT_CODE
+            ,A.DBRT_SE
+		FROM TBACC_ACCNUT_ACNT_SBJECT A
+		WHERE ACCNUT_YEAR = #YEAR#
+		  AND PRMPC_AT = '1'
+		START WITH A.UPPER_ACNT_CODE IS NULL AND A.ACCNUT_YEAR = #YEAR#
+		CONNECT BY PRIOR A.ACCNUT_ACNT_CODE = A.UPPER_ACNT_CODE AND A.ACCNUT_YEAR = #YEAR#
+		ORDER SIBLINGS BY A.OUTPT_SEQ
+	</select>
+	
+	<!-- 구분회계코드 -->
+	<select id="ACC000000DAO.seAccnutAcntCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		    ACCNUT_YEAR 
+		  , SE_ACCNUT_ACNT_CODE
+		  , SE_ACCNUT_ACNT_NM
+		  , '['||SUBSTR(SE_ACCNUT_ACNT_CODE,1,3)||'-'|| 
+		    SUBSTR(SE_ACCNUT_ACNT_CODE,4,4)||'-'||
+		    SUBSTR(SE_ACCNUT_ACNT_CODE,8,2)||'-'||
+		    SUBSTR(SE_ACCNUT_ACNT_CODE,10,2)||']'||
+		    SE_ACCNUT_ACNT_NM AS SE_ACCNUT_ACNT_CODENM
+		FROM TBACC_SE_ACCNUT_ACNT_CODE
+		WHERE ACCNUT_YEAR = SUBSTR(#YYYY#,1,4)
+		ORDER BY SE_ACCNUT_ACNT_CODE
+	</select>
+	
+	<!-- 구분회계코드(유형별) -->
+	<select id="ACC000000DAO.seAccnutAcntCodeTyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT NULL AS CODE
+		 	 , '전체' AS CODE_NM
+		 	 , '전체' AS CODENM
+	 	FROM DUAL
+		UNION ALL
+		SELECT t1.CODE
+			 , DECODE(t1.SE_ACC_CODE,'2',t3.BSNS_NM,t2.CODE_NM) AS CODE_NM
+			 , '['||t1.CODE||']'||DECODE(t1.SE_ACC_CODE,'2',t3.BSNS_NM,t2.CODE_NM) AS CODENM
+		FROM (
+		      SELECT '1' AS SE_ACC_CODE, BSNS_DISTRICT  AS CODE
+		      FROM TBACC_SE_ACCNUT_ACNT_CODE
+		      WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+		      GROUP BY BSNS_DISTRICT
+		      UNION ALL
+		      SELECT '2' AS SE_ACC_CODE, BSNS_HSMP      AS CODE
+		      FROM TBACC_SE_ACCNUT_ACNT_CODE
+		      WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+		      GROUP BY BSNS_HSMP
+		      UNION ALL
+		      SELECT '3' AS SE_ACC_CODE, SUPLY_TY       AS CODE
+		      FROM TBACC_SE_ACCNUT_ACNT_CODE
+		      WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+		      GROUP BY SUPLY_TY
+		      UNION ALL
+		      SELECT '4' AS SE_ACC_CODE, BSNS_TY        AS CODE
+		      FROM TBACC_SE_ACCNUT_ACNT_CODE
+		      WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+		      GROUP BY BSNS_TY
+		     ) t1
+		     LEFT OUTER JOIN TBACC_SE_ACCNUT_ACNT_TY_MANAGE t2
+		     ON  t1.SE_ACC_CODE = t2.SE_ACC_CODE
+		     AND t1.CODE        = t2.CODE
+		     AND t1.SE_ACC_CODE IN ('1','3','4')
+		     LEFT OUTER JOIN TBPRJ_BSNS_CODE t3
+		     ON  t1.CODE        = t3.BSNS_CODE
+		     AND t1.SE_ACC_CODE = '2'
+		WHERE t1.SE_ACC_CODE = #SE_ACC_CODE#
+		ORDER BY CODE NULLS FIRST
+	</select>
+	
+	<!-- 회계 전표,결산 마감여부 -->
+	<select id="ACC000000DAO.accClosAt" parameterClass="java.lang.String" resultClass="java.util.HashMap">
+		SELECT 
+		    NVL(CHIT_CLOS_AT,'0')   	AS CHIT_CLOSE_AT
+		  , NVL(STACNT_CLOS_AT,'0') 	AS STACNT_CLOS_AT
+		  , NVL(SE_ACCNUT_CLOS_AT,'0') 	AS SE_ACCNUT_CLOS_AT
+		FROM TBACC_CLOS_DE_MANAGE
+		WHERE CLOS_SE LIKE '0%'
+		  AND CLOS_YM LIKE SUBSTR(#value#,1,6)||'%'
+	</select>
+	
+	<!-- 예산정보 조회 -->
+    <select id="ACC000000DAO.budgetInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT
+		      t1.YEAR               AS BUDGET_YEAR
+		     ,t1.BSNS_SE            AS BSNS_SE
+		     ,t1.BALC_SE            AS BALC_SE
+		     ,t1.BUDGET_ACNT_CODE   AS BUDGET_ACNT_CODE
+		     ,t2.EXPNDTR_UNIT_CODE  AS EXPNDTR_UNIT_CODE
+		     ,t1.BUDGET_ACNT_NM     AS BUDGET_ACNT_NM
+		     ,SFBDG_EXPNDTR_UNIT_NM(t1.YEAR,t1.BSNS_SE,t1.BALC_SE,t1.BUDGET_ACNT_CODE,t2.EXPNDTR_UNIT_CODE) 		AS EXPNDTR_UNIT_NM
+		     ,SFACC_BUDGET_BALC(t1.YEAR,t1.BSNS_SE,t1.BALC_SE,t1.BUDGET_ACNT_CODE,'2') 								AS BUDGET_ACNT_BLCE
+		     ,SFACC_EXPNDTR_UNIT_BALC(t1.YEAR,t1.BSNS_SE,t1.BALC_SE,t1.BUDGET_ACNT_CODE,t2.EXPNDTR_UNIT_CODE,'2') 	AS EXPNDTR_UNIT_CODE_BLCE
+		FROM TBBDG_BUDGET_ACNT_CODE t1
+		     INNER JOIN TBBDG_EXPNDTR_UNIT_CODE t2
+		     ON  t1.YEAR              = t2.YEAR
+		     AND t1.BSNS_SE           = t2.BSNS_SE
+		     AND t1.BALC_SE           = t2.BALC_SE
+		     AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+		WHERE t1.YEAR 				= #BUDGET_YEAR#
+		  AND t1.BSNS_SE 			= #BSNS_SE#
+		  AND t1.BALC_SE 			= #BALC_SE#
+		  AND t1.BUDGET_ACNT_CODE 	= #BUDGET_ACNT_CODE#
+		  AND t2.EXPNDTR_UNIT_CODE 	= #EXPNDTR_UNIT_CODE#
+    </select>
+	
+	<!-- 사업지구(구분회계코드) 목록 팝업 조회 -->
+	<select id="ACC000000DAO.seAccnutAcntCodePopList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT T1.BSNS_CODE
+		     , T1.BSNS_NM
+		     , T2.BSNS_TY
+		     , T3.CODE_NM AS BSNS_TY_NM
+		     , T1.USE_AT
+		FROM TBPRJ_BSNS_CODE T1
+		LEFT OUTER JOIN TBPRJ_BSNS_SUMRY T2
+		        ON T1.BSNS_CODE = T2.BSNS_CODE
+		LEFT OUTER JOIN TBCOM_CMMN_CODE T3
+		        ON  T3.GRP_CODE = 'PRJ012'
+		       AND T2.BSNS_TY  = T3.CODE
+		WHERE 1=1
+		  AND T1.USE_AT = '1'
+		<isNotEmpty property="BSNS_CODE" prepend="AND ">
+				T1.BSNS_CODE LIKE '%'|| #BSNS_CODE# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_NM" prepend="AND ">
+				T1.BSNS_NM LIKE '%'|| #BSNS_NM# || '%'
+		</isNotEmpty>
+		ORDER BY T1.BSNS_CODE, T2.BSNS_TY
+	</select>
+	
+<!-- 전표 상세내역 삭제 -->
+	<delete id="ACC000000DAO.deleteChitDetail" parameterClass="java.util.HashMap">
+		DELETE FROM TBACC_CHIT_DETAIL WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+		AND CHIT_NO = #CHIT_NO#
+	</delete>
+<!-- 전표 마스터 삭제 -->	
+	<delete id="ACC000000DAO.deleteChitMaster" parameterClass="java.util.HashMap">
+		DELETE FROM TBACC_CHIT_MASTR WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+		AND CHIT_NO = #CHIT_NO#
+	</delete>
+<!--  -->	
+	<update id="ACC000000DAO.updateOperIncme" parameterClass="java.util.HashMap">
+		UPDATE TBBDG_OPER_INCME SET 
+		<isEqual property="CHIT_NO_TY" compareValue="LEV">
+			   LEV_CHIT_NO   = 0
+	    </isEqual>
+	    <isEqual property="CHIT_NO_TY" compareValue="INCME">
+			   INCME_CHIT_NO = 0
+		</isEqual>
+		 WHERE 1=1
+		   AND YEAR = #ACCNUT_YEAR#
+		   AND BSNS_SE = #BSNS_SE#
+		   AND BALC_SE = #BALC_SE#
+		   AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		   AND INCME_DT = #INCME_DT#
+	    <isEqual property="CHIT_NO_TY" compareValue="LEV">
+		   AND LEV_CHIT_NO = #CHIT_NO#
+		</isEqual>
+		<isEqual property="CHIT_NO_TY" compareValue="INCME">
+		   AND INCME_CHIT_NO = #CHIT_NO#
+		</isEqual>
+	</update>
+	
+</sqlMap>

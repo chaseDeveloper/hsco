@@ -1,0 +1,1510 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="Sttus">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	 
+	<!-- 민원신호등 -->	
+	<select id="SttusDAO.selectTemp1" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			SELECT NVL(RED_CNT,0) + NVL(YELLOW_CNT,0) + NVL(GREEN_CNT,0) AS TOT_CNT
+			     , NVL(RED_CNT,0)    AS RED_CNT
+			     , NVL(YELLOW_CNT,0) AS YELLOW_CNT
+			     , NVL(GREEN_CNT,0)  AS GREEN_CNT
+			FROM (SELECT SUM(CASE WHEN t1.STATUS <> '완료' AND TRUNC((TO_DATE(t1.RGST_DATE,'YYYY-MM-DD')+7) - (SYSDATE)) <= 0 THEN 1 ELSE 0 END) AS RED_CNT /*빨간신호*/
+			           , SUM(CASE WHEN t1.STATUS = '신청' THEN 1 ELSE 0 END) AS YELLOW_CNT /*노란신호*/
+			           , SUM(CASE WHEN t1.STATUS = '완료' THEN 1 ELSE 0 END) AS GREEN_CNT /*녹색신호*/
+			      FROM MINWON@DL_ASIS_INCTOOL t1
+			      INNER JOIN VWHRM_DEPT_CODE_TM t2
+			            ON  t1.CONF_DEPTNM  = t2.DEPT_NM
+			      WHERE SUBSTR(t1.RGST_DATE,1,4) = TO_CHAR(SYSDATE, 'YYYY')  /*당해년도*/
+			      )
+		]]>
+	</select>
+    
+    <!-- 직원현황 -->	
+	<select id="SttusDAO.selectTemp2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			SELECT M1.HR_200_SUM_CNT
+			      ,M1.HR_ETC_SUM_CNT
+			      ,M1.HR_201_CNT
+			      ,M1.HR_202_CNT
+			      ,M1.HR_203_CNT
+			      ,M1.HR_204_CNT
+			      ,M1.HR_205_CNT
+			      ,    CASE WHEN M1.HR_300_SUM_CNT <> 0 THEN '청원경찰:'   || M1.HR_300_SUM_CNT || '명' ELSE '' END
+			        || CASE WHEN M1.HR_400_SUM_CNT <> 0 THEN DECODE(HR_300_SUM_CNT, 0, '', ', ') || '계약직:'     || M1.HR_400_SUM_CNT || '명' ELSE '' END
+			        || CASE WHEN M1.HR_500_SUM_CNT <> 0 THEN DECODE(HR_300_SUM_CNT+HR_400_SUM_CNT, 0, '', ', ') || '업무직:' || M1.HR_500_SUM_CNT || '명' ELSE '' END
+			        || CASE WHEN M1.HR_600_SUM_CNT <> 0 THEN DECODE(HR_300_SUM_CNT+HR_400_SUM_CNT+HR_500_SUM_CNT, 0, '', ', ') || '전임강사:'   || M1.HR_600_SUM_CNT || '명' ELSE '' END
+			        || CASE WHEN M1.HR_800_SUM_CNT <> 0 THEN DECODE(HR_300_SUM_CNT+HR_400_SUM_CNT+HR_500_SUM_CNT+HR_600_SUM_CNT, 0, '', ', ') || '파견직:'     || M1.HR_800_SUM_CNT || '명' ELSE '' END AS HR_ETC_INFO
+			FROM (
+			    SELECT  SUM(CASE WHEN t1.JSSFC_SE = '02' THEN 1 ELSE 0 END) AS HR_200_SUM_CNT
+			          , SUM(CASE WHEN t1.JSSFC_SE <> '02' THEN 1 ELSE 0 END) AS HR_ETC_SUM_CNT
+			          , SUM(CASE WHEN t1.HR_CLSF_SE = '201' THEN 1 ELSE 0 END) AS HR_201_CNT /*2급*/
+			          , SUM(CASE WHEN t1.HR_CLSF_SE = '202' THEN 1 ELSE 0 END) AS HR_202_CNT /*3급*/
+			          , SUM(CASE WHEN t1.HR_CLSF_SE = '203' THEN 1 ELSE 0 END) AS HR_203_CNT /*4급*/
+			          , SUM(CASE WHEN t1.HR_CLSF_SE = '204' THEN 1 ELSE 0 END) AS HR_204_CNT /*5급*/
+			          , SUM(CASE WHEN t1.HR_CLSF_SE = '205' THEN 1 ELSE 0 END) AS HR_205_CNT /*6급*/
+			          , SUM(CASE WHEN t1.JSSFC_SE = '03' THEN 1 ELSE 0 END) AS HR_300_SUM_CNT /*청원경찰 총인원*/
+			          , SUM(CASE WHEN t1.JSSFC_SE = '04' THEN 1 ELSE 0 END) AS HR_400_SUM_CNT /*계약직 총인원*/
+			          , SUM(CASE WHEN t1.JSSFC_SE = '05' THEN 1 ELSE 0 END) AS HR_500_SUM_CNT /*업무직 총인원*/
+			          , SUM(CASE WHEN t1.JSSFC_SE = '06' THEN 1 ELSE 0 END) AS HR_600_SUM_CNT /*전임강사 총인원*/
+			          , SUM(CASE WHEN t1.JSSFC_SE = '08' THEN 1 ELSE 0 END) AS HR_800_SUM_CNT /*파견직 총인원*/
+			    FROM TBHRM_HR_MASTR_TM t1
+			        INNER JOIN VWHRM_DEPT_CODE_TM t2
+			          ON  t1.DEPT_CODE  = t2.DEPT_CODE
+			    WHERE 1=1
+			    AND   t1.EMPNO NOT IN ('11711303', '11711301', '11777302') /*개발자제외*/
+			) M1
+		]]>
+	</select>
+    
+    <!-- 지출현황 -->	
+	<select id="SttusDAO.selectTemp3" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO#  /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			SELECT t5.CODE_NM AS ANACT_KND
+			      ,t4.DEPT_NM
+			      ,t1.DET_DCSN_DE
+			      ,t1.CPTAL_EXPNDTR_ACNTBK_DE
+			      ,t1.DECSN_AMOUNT
+			      ,t1.SUMRY
+			      ,DECODE(t1.ANACT_KND,'01',t3.RCPT_MAN,t2.RCPT_MAN) AS RCPT_MAN
+			FROM TBACC_EXP_DSN_MASTR t1
+			     LEFT OUTER JOIN 
+			     (SELECT a1.DECSN_YEAR , a1.DECSN_NO , DECODE(a2.CNT,1,a1.RCPT_MAN,a1.RCPT_MAN||' 외 '||(a2.CNT-1)||'명') AS RCPT_MAN
+			      FROM TBACC_EXP_DSN_DETAIL a1
+			           INNER JOIN
+			           (SELECT DECSN_YEAR, DECSN_NO, COUNT(1) AS CNT
+			            FROM TBACC_EXP_DSN_DETAIL
+			            WHERE DECSN_YEAR = TO_CHAR(SYSDATE,'YYYY')
+			            GROUP BY DECSN_YEAR, DECSN_NO
+			           ) a2
+			           ON  a1.DECSN_YEAR = a2.DECSN_YEAR
+			           AND a1.DECSN_NO = a2.DECSN_NO
+			      WHERE a1.DECSN_YEAR = TO_CHAR(SYSDATE,'YYYY')
+			        AND a1.SEQ = '1'
+			     ) t2
+					 ON  t1.DECSN_YEAR = t2.DECSN_YEAR
+					 AND t1.DECSN_NO   = t2.DECSN_NO
+			     LEFT OUTER JOIN 
+			     (SELECT b1.DECSN_YEAR , b1.DECSN_NO , DECODE(b2.CNT,1,b1.RCPT_MAN,b1.RCPT_MAN||' 외 '||(b2.CNT-1)||'명') AS RCPT_MAN
+			      FROM TBACC_EXP_DSN_DETAIL_TRVCT b1
+			           INNER JOIN
+			           (SELECT DECSN_YEAR, DECSN_NO, COUNT(1) AS CNT
+			            FROM TBACC_EXP_DSN_DETAIL_TRVCT
+			            WHERE DECSN_YEAR = TO_CHAR(SYSDATE,'YYYY')
+			            GROUP BY DECSN_YEAR, DECSN_NO
+			           ) b2
+			           ON  b1.DECSN_YEAR = b2.DECSN_YEAR
+			           AND b1.DECSN_NO = b2.DECSN_NO
+			      WHERE b1.DECSN_YEAR = TO_CHAR(SYSDATE,'YYYY')
+			        AND b1.SEQ = '1'
+			     ) t3
+			     ON  t1.DECSN_YEAR = t3.DECSN_YEAR
+					 AND t1.DECSN_NO   = t3.DECSN_NO
+			     LEFT OUTER JOIN VWHRM_DEPT t4
+			     ON  t1.DEPT_CODE = t4.DEPT_CODE
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+			     ON  t1.ANACT_KND = t5.CODE
+			     AND t5.GRP_CODE = 'ACC002'
+			     LEFT OUTER JOIN VIEW_MIS_SANCTN_KND@DL_INTRACITY t6
+			  	 ON  t1.SANCTN_NO = t6.SANCTN_NO
+			WHERE t1.DECSN_YEAR = TO_CHAR(SYSDATE,'YYYY')
+			  AND t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN TO_CHAR(SYSDATE - 14,'YYYYMMDD') AND TO_CHAR(SYSDATE + 1, 'YYYYMMDD')
+			  AND (t1.SANCTN_NO = '0' OR t6.SANCTN_KND = '5')
+			  AND t1.DEPT_CODE IN (SELECT DEPT_CODE FROM VWHRM_DEPT_CODE_TM)
+			ORDER BY CPTAL_EXPNDTR_ACNTBK_DE DESC
+		]]>
+	</select>
+    
+    <!-- 수입금현황 -->	
+	<select id="SttusDAO.selectTemp4" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			, TB_NH AS (
+			    SELECT  
+			           t1.BANK_CD
+			          ,t3.FNNC_INSTT_CODE_NM AS BANK_NM
+			          ,t1.ACCT_NO
+			          ,t2.ACNUT_NM
+			          ,t1.CURR_UNIT
+			          ,t1.INQNO
+			          ,t1.ACCT_TXDAY
+			          ,t1.ACCT_TXDAY_SEQ
+			          ,t1.ACCT_GB
+			          ,t1.REMARK1
+			          ,t1.INOUT_GUBUN
+			          ,t1.TX_AMT
+			          ,t1.TX_CUR_BAL
+			          ,t1.BIGO
+			          ,t2.DEPT_CODE
+			          ,t4.DEPT_NM
+			          ,NVL(t2.HSCO_INC_ACNUT_AT, '0') AS HSCO_INC_ACNUT_AT
+			    FROM NH_ACCT_HIS t1
+			        INNER JOIN TBFUN_BRANCH_ACNUT t2
+			           ON TRIM(REPLACE(t1.ACCT_NO, '-', ''))  = TRIM(REPLACE(t2.ACNUTNO, '-', ''))
+			         LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t3
+			           ON t2.BANK_CODE = t3.FNNC_INSTT_CODE
+			         LEFT OUTER JOIN VWHRM_DEPT t4
+			           ON t2.DEPT_CODE = t4.DEPT_CODE
+			) 
+			SELECT  t3.DEPT_NM    /*부서명*/
+			       ,t3.BANK_NM    /*은행명*/
+			       ,t3.ACCT_NO    /*계좌번호*/
+			       ,t3.ACNUT_NM   /*계좌명*/
+			       ,t3.ACCT_TXDAY /*거래일*/
+			       ,t3.REMARK1    /*비고*/
+			       ,t3.TX_AMT     /*수입금*/
+			       ,t1.ITNC_DE    
+			       ,t1.DECSN_YEAR
+			       ,t1.DECSN_NO
+			FROM TBACC_INC_DSN_MASTR t1
+			    INNER JOIN TBACC_INC_DSN_DETAIL t2
+			       ON t1.DECSN_YEAR = t2.DECSN_YEAR
+			      AND t1.DECSN_NO = t2.DECSN_NO
+			    RIGHT OUTER JOIN TB_NH t3
+			       ON t2.BANK_CD        = t3.BANK_CD
+			       AND TRIM(REPLACE(t2.ACCT_NO, '-', '')) = TRIM(REPLACE(t3.ACCT_NO, '-', ''))
+			       AND t2.ACCT_TXDAY     = t3.ACCT_TXDAY
+			       AND t2.ACCT_TXDAY_SEQ = t3.ACCT_TXDAY_SEQ 
+			    INNER JOIN VWHRM_DEPT_CODE_TM t4
+			       ON  t3.DEPT_CODE  = t4.DEPT_CODE
+			WHERE 1=1 
+			AND t3.ACCT_TXDAY LIKE TO_CHAR(SYSDATE, 'YYYYMM') || '%'
+			ORDER BY t3.ACCT_TXDAY DESC, t3.BANK_CD ASC, t3.DEPT_CODE ASC, t3.ACCT_NO ASC
+		]]>
+	</select>
+    
+    <!-- 계약현황 -->	
+	<select id="SttusDAO.selectTemp5" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM VWHRM_DEPT s2 INNER JOIN TBHRM_HR_MASTR_TM s3 ON s2.DEPT_CODE = s3.DEPT_CODE 
+			        WHERE s3.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			                OR s1.DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			              )
+			    )
+			)
+			SELECT MNG_DEPT_NM                                                                                     /*부서명*/
+			      ,COUNT(1)                                                                 AS TOT_CNT             /*총건수*/
+			      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '001', 1, 0)),0)                         AS PROGRS_CNT          /*진행건수*/
+			      ,NVL(SUM(DECODE(PROGRS_STTUS_SE, '002', 1, 0)),0)                         AS COMPT_CNT           /*준공건수*/
+			      ,TRUNC(NVL(SUM(CNTRCT_AMOUNT),0)/1000,0)                                  AS TOT_CNTRCT_AMOUNT   /*계약금액*/
+			      ,TRUNC((NVL(SUM(CNTRCT_AMOUNT),0) - NVL(SUM(DECSN_AMOUNT),0))/1000,0)     AS TOT_REMAIN_AMOUNT   /*미지급금액*/
+			FROM   (
+			        SELECT s1.MNG_DEPT_CODE
+			              ,NVL(s4.DEPT_NM, '알수없음')      AS MNG_DEPT_NM
+			              ,s1.CNTRCT_NO
+			              ,s1.CNTRCT_NM
+			              ,s1.CNTRCT_SE
+			              ,s3.CODE_NM                                                                                           AS CNTRCT_SE_NM
+			              ,NVL(s1.INFRML_CNTRCT_AT,'0')                                                                         AS INFRML_CNTRCT_AT
+			              ,CASE WHEN TO_CHAR(SYSDATE,'YYYYMMDD') >= SFCTR_COMPET_DE(s1.CNTRCT_NO) THEN '002' ELSE '001' END     AS PROGRS_STTUS_SE
+			              ,SFCTR_CNTRCT_AMOUNT(s1.CNTRCT_NO,NULL)                                                               AS CNTRCT_AMOUNT
+			              ,s1.CNTRCT_DE                                                                                         AS CNTRCT_DE
+			              ,s1.STRWRK_DE                                                                                         AS STRWRK_DE
+			              ,SFCTR_COMPET_DE(s1.CNTRCT_NO)                                                                        AS COMPET_DE
+			              ,NVL(s2.DECSN_AMOUNT,0)                                                                               AS DECSN_AMOUNT
+			        FROM   TBCTR_CNTRCT s1
+			               LEFT OUTER JOIN (
+			                                SELECT r1.CNTRCT_NO
+			                                      ,SUM(r2.DECSN_AMOUNT)     AS DECSN_AMOUNT
+			                                FROM   TBCTR_CNTRCT_DECSN r1
+			                                       INNER JOIN VHACC_EXP_DSN_MASTR r2
+			                                            ON r1.CNTRCT_DECSN_YEAR = r2.BUDGET_YEAR
+			                                           AND r1.DECSN_NO = r2.DECSN_NO
+			                                WHERE  1=1
+			                                GROUP BY r1.CNTRCT_NO
+			                               ) s2
+			                    ON s1.CNTRCT_NO = s2.CNTRCT_NO
+			               LEFT OUTER JOIN TBCOM_CMMN_CODE s3
+			                    ON s1.CNTRCT_SE = s3.CODE
+			                   AND s3.GRP_CODE = 'CTR022'
+			               INNER JOIN VWHRM_DEPT_CODE_TM s4
+			                    ON s1.MNG_DEPT_CODE = s4.DEPT_CODE
+			        WHERE  SUBSTR(s1.CNTRCT_NO,1,4) = TO_CHAR(SYSDATE, 'YYYY')  /*당해년도*/
+			        ORDER BY SUBSTR(s1.CNTRCT_NO,1,4), CNTRCT_SE
+			       )
+			WHERE  1=1
+			GROUP BY MNG_DEPT_CODE, MNG_DEPT_NM
+			ORDER BY MNG_DEPT_CODE
+		]]>
+	</select>
+    
+    <!-- 근무현황 -->	
+	<select id="SttusDAO.selectTemp6" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			SELECT SFCOM_CODE_NM('HRM028', t1.ASORT_CODE, 'CODE_NM')   AS ASORT_NM /*구분*/
+			      ,t2.DEPT_NM   /*부서명*/
+			      ,t3.EMPNM     /*성명*/
+			      ,t1.BGNDE
+			      ,t1.BEGIN_TM
+			      ,t1.ENDDE
+			      ,t1.END_TM
+			      ,t1.DAYCNT
+			      ,t1.PRVONSH   /*사유*/
+			FROM TBHRM_WRKCP t1
+			    INNER JOIN VWHRM_DEPT_CODE_TM t2
+			      ON  t1.DEPT_CODE  = t2.DEPT_CODE
+			    INNER JOIN TBHRM_HR_MASTR_TM t3
+			      ON t1.EMPNO = t3.EMPNO
+			    LEFT OUTER JOIN INTRAWARE.VIEW_MIS_SANCTN_KND@DL_INTRACITY t4
+			      ON  t1.SANCTN_NO = t4.SANCTN_NO
+			WHERE (t1.SANCTN_NO = '0' OR t4.SANCTN_KND = '5')
+			AND TO_CHAR(SYSDATE, 'YYYYMMDD') BETWEEN t1.BGNDE AND t1.ENDDE /*[오늘일자로 고정]*/
+		]]>
+	</select>
+    
+    <!-- 개선요청 -->	
+	<select id="SttusDAO.selectTemp7" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT T1.QNA_SN
+		     , T1.REFRN_QNA_SN
+		     , T1.QNA_SJ
+		     , T1.QNA_CN
+		     , T1.QNA_SE_CODE
+		     , T1.FILE_SN
+		     , T1.QNA_STTUS
+		     , T3.CODE_NM                                     AS QNA_STTUS_NM
+		     , T1.SECRET_AT
+		     , T1.CHARGER
+		     , T1.COMPT_RQESTDE
+		     , T1.REGISTER_ID
+		     , NVL(T2.USER_NM, T1.REGISTER_ID)                AS REGISTER_NM
+		     , TO_CHAR(T1.REGIST_DT, 'YYYY-MM-DD HH24:MI')    AS REGISTER_DT
+		  FROM TBCOM_HPCM_QNA T1
+		       LEFT OUTER JOIN TBCOM_USER T2
+		            ON T1.REGISTER_ID = T2.USER_ID
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T3
+		            ON T1.QNA_STTUS = T3.CODE
+		           AND T3.GRP_CODE  = 'COM055'
+		 WHERE 1=1
+		   AND T1.REFRN_QNA_SN IS NULL
+		   AND T1.REGISTER_ID = #S_USER_ID#
+	</select>
+    
+    <!-- 경영지시사항 -->	
+	<select id="SttusDAO.selectTemp8" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO#  /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			SELECT
+			      t3.CODE_NM AS PGRS_DS              /* 구분 */
+			     ,t1.PRC_TLMT_DE AS PRC_TLMT_DE      /* 처리기한 */
+			     ,t1.NSTC_DE AS NSTC_DE              /* 지시일자 */
+			     ,t4.CODE_NM AS NSTC_DS              /* 관리구분 */
+			     ,t1.NSTC_TL                         /* 지시사항 */
+			     ,t2.PFM_DE AS PFM_DE                /* 완료일 */
+			     ,t2.PFM_DTLS                        /* 처리내역 */
+			     ,t5.DEPT_NM                         /* 팀명 */
+			FROM TBBDG_DRCT_MATTER t1
+			     LEFT OUTER JOIN TBBDG_DRCT_MATTER_FLFL t2
+			     ON  t1.WRK_YR = t2.WRK_YR
+			     AND t1.SN = t2.SN
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+			     ON  t1.PGRS_DS_CODE = t3.CODE
+			     AND t3.GRP_CODE = 'BDG026'
+			     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			     ON  t1.NSTC_DS = t4.CODE
+			     AND t4.GRP_CODE = 'BDG027'
+			     LEFT OUTER JOIN VWHRM_DEPT t5
+			     ON  t2.TEAM_CODE = t5.DEPT_CODE
+			     INNER JOIN VWHRM_DEPT_CODE_TM  t6
+			     ON  t2.TEAM_CODE = t6.DEPT_CODE
+			WHERE t1.WRK_YR = TO_CHAR(SYSDATE,'YYYY')
+			ORDER BY t1.NSTC_DE, t1.ADM_NO DESC
+		]]>
+	</select>
+	
+    <!-- 민원내역 -->	
+	<select id="SttusDAO.selectTemp1Dtl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			SELECT 
+			     t1.MID            /*민원번호*/
+			    ,t1.CONF_DEPTNM    /*담당부서*/
+			    ,t1.USERNM         /*민원인*/
+			    ,t1.TITLE          /*민원제목*/
+			    ,t1.RGST_DATE      /*접수일자*/
+			    ,TO_CHAR(TO_DATE(t1.RGST_DATE,'YYYY-MM-DD')+7, 'YYYY-MM-DD') AS LIMIT_DATE /*처리기한*/
+			    ,t1.CMPT_DATE      /*완료일자*/
+			    ,t1.KIND           /*민원유형*/
+			    ,t1.STATUS         /*진행구분*/
+			    ,t3.GWUSERNM       /*담당자*/
+			    ,CASE WHEN t1.STATUS = '완료' THEN '0' ELSE TO_CHAR(TRUNC((TO_DATE(t1.RGST_DATE,'YYYY-MM-DD')+7) - (SYSDATE))) END JAN_DT /*남은일수*/
+			FROM MINWON@DL_ASIS_INCTOOL t1
+			    INNER JOIN VWHRM_DEPT_CODE_TM t2
+			      ON  t1.CONF_DEPTNM  = t2.DEPT_NM
+			    LEFT OUTER JOIN DEPTMW@DL_ASIS_INCTOOL t3
+			      ON t1.MID = t3.MID
+			WHERE SUBSTR(t1.RGST_DATE,1,4) = TO_CHAR(SYSDATE, 'YYYY')  /*당해년도*/
+			ORDER BY t1.RGST_DATE DESC
+		]]>
+	</select>
+	
+	<!-- 청렴퀴즈참여 데이터 조회 -->
+	<select id="SttusDAO.selectTemp9" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT T1.QUSTNR_MANAGE_SN
+		      ,T1.QUSTNR_SE
+		      ,NVL2(T2.QUSTNR_MANAGE_SN, 1, 0) AS PARTCPTN_AT /*답변여부*/
+		  FROM TBHRM_QUSTNR_MANAGE T1
+		       LEFT OUTER JOIN (
+		                        SELECT C1.QUSTNR_MANAGE_SN
+		                              ,C1.QUSTNR_SE
+		                              ,C1.EMPNO
+		                          FROM TBHRM_QUSTNR_PARTCPTN_MANAGE C1
+		                         GROUP BY C1.QUSTNR_MANAGE_SN
+		                                 ,C1.QUSTNR_SE
+		                                 ,C1.EMPNO
+		                       )T2
+		         ON T1.QUSTNR_MANAGE_SN = T2.QUSTNR_MANAGE_SN
+		        AND T1.QUSTNR_SE        = T2.QUSTNR_SE
+		        AND T2.EMPNO = #EMPNO#
+		 WHERE 1=1
+		   AND TO_CHAR(SYSDATE, 'YYYYMMDD') BETWEEN T1.QUSTNR_BGNDE AND T1.QUSTNR_ENDDE 
+		 ORDER BY T1.REGIST_DT DESC
+	</select>
+	
+    <!-- 부서원명단 -->	
+	<select id="SttusDAO.selectTemp2Popup01" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			/* 2020.07.07 김종환 과장 요청으로 겸직자 제외
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.JBLN_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			*/
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , JBLN_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			, TBHRM_HR_ACDMCR_TM AS (
+			    SELECT EMPNO, LISTAGG(MAJOR_SUBJCT || ' ' || NVL(SFCOM_CODE_NM('HRM016', DGRI_SE, 'CODE_NM'), ''), ',') WITHIN GROUP(ORDER BY EMPNO, SEQ) AS MAJOR_SUBJCT
+			    FROM TBHRM_HR_ACDMCR
+			    WHERE ACDMCR_SE >= '040'
+			    GROUP BY EMPNO
+			)
+			, CLSF_GNFD_DTLS_TM AS ( /*현직급 임용일*/
+			    SELECT EMPNO, CLSF_SE, MIN(GNFD_DE) AS CLSF_GNFD_DE
+			    FROM   TBHRM_GNFD_DTLS 
+			    GROUP BY EMPNO, CLSF_SE
+			)
+			SELECT  t2.DEPT_NM
+			      , SFCOM_CODE_NM('HRM001', t1.JSSFC_SE, 'CODE_NM')   AS JSSFC_SE_NM /*직종*/
+			      , SFCOM_CODE_NM('HRM002', t1.HR_CLSF_SE, 'CODE_NM') AS HR_CLSF_NM  /*직급*/
+			      , SFCOM_CODE_NM('HRM003', t1.OFCPS_SE, 'CODE_NM')   AS OFCPS_NM    /*직위*/
+			      , SFCOM_CODE_NM('HRM004', t1.JBLN_SE, 'CODE_NM')    AS JBLN_SE_NM  /*직렬*/
+			      , t1.EMPNM
+			      , t1.ECNY_DE                 /*입사일자*/
+			      , t3.CLSF_GNFD_DE            /*현직급임용일*/
+			      , t1.BRTHDY                  /*생년월일*/
+			      , t4.MAJOR_SUBJCT            /*전공*/
+			      , t1.JSSFC_SE
+			      , t1.OFCPS_SE
+			      , t1.HR_CLSF_SE
+			      , t1.EMPNO
+			      , t1.DEPT_CODE
+			FROM TBHRM_HR_MASTR_TM t1
+			    INNER JOIN VWHRM_DEPT_CODE_TM t2
+			      ON  t1.DEPT_CODE  = t2.DEPT_CODE
+			    LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+			      ON t1.EMPNO       = t3.EMPNO
+			    AND  t1.HR_CLSF_SE  = t3.CLSF_SE
+			    LEFT OUTER JOIN TBHRM_HR_ACDMCR_TM t4
+			      ON  t1.EMPNO = t4.EMPNO
+			WHERE 1=1
+			AND   t1.EMPNO NOT IN ('11711303', '11711301', '11777302') /*개발자제외*/
+			ORDER BY t2.OUTPT_ORDR
+			       , t1.JSSFC_SE
+			       , t1.OFCPS_SE
+			       , t1.HR_CLSF_SE
+		]]>
+	</select>
+	
+	<!-- 부서원 근태현황 -->	
+	<select id="SttusDAO.selectTemp2Popup02" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			/* 2020.07.07 김종환 과장 요청으로 겸직자 제외
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			*/
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			, TBHRM_WRKCP_TM AS (
+			    SELECT A.EMPNO                                           AS EMPNO,
+			           SUBSTR(A.BGNDE,0,4)                               AS YEAR,
+			           SUM(DECODE(A.ASORT_CODE,'102',A.DAYCNT,'103',A.DAYCNT,0)) AS CNT01,   /*반차*/
+			           SUM(DECODE(A.ASORT_CODE,'101',A.DAYCNT,0))        AS CNT02, /*연차*/
+			           SUM(DECODE(A.ASORT_CODE,'003',A.DAYCNT,0))        AS CNT03, /*교육*/
+			           SUM(DECODE(A.ASORT_CODE,'303',A.DAYCNT,0))        AS CNT04, /*하계휴가*/
+			           SUM(DECODE(A.ASORT_CODE,'202',A.DAYCNT,0))        AS CNT05, /*병가*/
+			           SUM(DECODE(A.ASORT_CODE,'001',A.DAYCNT,0))        AS CNT06, /*관내출장*/
+			           SUM(DECODE(A.ASORT_CODE,'002',A.DAYCNT,0))        AS CNT07, /*관외출장*/
+			           SUM(DECODE(A.ASORT_CODE,'005',A.DAYCNT,0))        AS CNT08, /*국외출장*/
+			           SUM(DECODE(A.ASORT_CODE,'208',A.DAYCNT,0))        AS CNT09  /*타임오프*/
+			    FROM   TBHRM_WRKCP A
+			           LEFT OUTER JOIN INTRAWARE.VIEW_MIS_SANCTN_KND@DL_INTRACITY B
+			                ON A.SANCTN_NO = B.SANCTN_NO
+			    WHERE (SUBSTR(A.BGNDE,0,6) >= #BGN_YM# AND SUBSTR(A.BGNDE,0,6) <= #END_YM#)
+			    AND   (A.SANCTN_NO = '0' OR B.SANCTN_KND = '5')
+			    GROUP BY A.EMPNO
+			            ,SUBSTR(A.BGNDE,0,4)
+			)
+			SELECT  t2.DEPT_NM
+			      , SFCOM_CODE_NM('HRM003', t1.OFCPS_SE, 'CODE_NM')   AS OFCPS_NM    /*직위*/
+			      , SFCOM_CODE_NM('HRM002', t1.HR_CLSF_SE, 'CODE_NM') AS HR_CLSF_NM  /*직급*/ 
+			      , t1.EMPNM
+			      , t3.* /* t3 컬럼명 참고하여 그대로 화면구성 */
+			      
+			      , t1.JSSFC_SE
+			      , t1.OFCPS_SE
+			      , t1.HR_CLSF_SE
+			      , SFCOM_CODE_NM('HRM001', t1.JSSFC_SE, 'CODE_NM')   AS JSSFC_NM 
+			      , t1.EMPNO
+			      , t1.DEPT_CODE
+			FROM TBHRM_HR_MASTR_TM t1
+			    INNER JOIN VWHRM_DEPT_CODE_TM t2
+			      ON  t1.DEPT_CODE  = t2.DEPT_CODE
+			    LEFT OUTER JOIN TBHRM_WRKCP_TM t3
+			      ON t1.EMPNO       = t3.EMPNO
+			WHERE 1=1
+			AND   t1.EMPNO NOT IN ('11711303', '11711301', '11777302') /*개발자제외*/
+			ORDER BY t2.OUTPT_ORDR
+			       , t1.JSSFC_SE
+			       , t1.OFCPS_SE
+			       , t1.HR_CLSF_SE
+		]]>
+	</select>
+	
+	<!-- 계약세부내역 조회 -->	
+	<select id="SttusDAO.selectTemp5Popup01" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM VWHRM_DEPT s2 INNER JOIN TBHRM_HR_MASTR_TM s3 ON s2.DEPT_CODE = s3.DEPT_CODE 
+			        WHERE s3.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			                OR s1.DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			              )
+			    )
+			)
+			SELECT NVL(s4.DEPT_NM, '알수없음')                                                                          AS DEPT_NM           /*팀명*/
+			      ,CASE WHEN TO_CHAR(SYSDATE,'YYYYMMDD') >= SFCTR_COMPET_DE(s1.CNTRCT_NO) THEN '진행' ELSE '완료' END   AS PROGRS_STTUS_SE   /*구분*/
+			      ,s3.CODE_NM                                                                                           AS CNTRCT_SE_NM      /*계약구분*/
+			      ,s1.CNTRCT_NM                                                                                                              /*계약명*/ 
+			      ,SFCTR_CNTRCT_AMOUNT(s1.CNTRCT_NO,NULL)                                                               AS CNTRCT_AMOUNT     /*계약금액*/
+			      ,SFCTR_CNTRCT_AMOUNT(s1.CNTRCT_NO,NULL) - NVL(s2.DECSN_AMOUNT,0)                                      AS JAN_CNTRCT_AMOUNT /*미지급액*/
+			      ,s6.BCNC_NM                                                                                                                /*계약업체명*/
+			      ,s1.STRWRK_DE                                                                                         AS STRWRK_DE         /*착수일*/
+			      ,SFCTR_COMPET_DE(s1.CNTRCT_NO)                                                                        AS COMPET_DE         /*준공일*/
+			      ,s5.MANGR_EMPNM                                                                                                            /*감독관*/
+			FROM   TBCTR_CNTRCT s1
+			       LEFT OUTER JOIN (
+			            SELECT r1.CNTRCT_NO
+			                  ,SUM(r2.DECSN_AMOUNT)     AS DECSN_AMOUNT
+			            FROM   TBCTR_CNTRCT_DECSN r1
+			                   INNER JOIN VHACC_EXP_DSN_MASTR r2
+			                        ON r1.CNTRCT_DECSN_YEAR = r2.BUDGET_YEAR
+			                       AND r1.DECSN_NO = r2.DECSN_NO
+			            WHERE  1=1
+			            GROUP BY r1.CNTRCT_NO
+			       ) s2 ON s1.CNTRCT_NO = s2.CNTRCT_NO
+			       LEFT OUTER JOIN TBCOM_CMMN_CODE s3
+			            ON s1.CNTRCT_SE = s3.CODE
+			           AND s3.GRP_CODE = 'CTR022'
+			       INNER JOIN VWHRM_DEPT_CODE_TM s4
+			            ON s1.MNG_DEPT_CODE = s4.DEPT_CODE
+			       LEFT OUTER JOIN (
+			            SELECT CNTRCT_NO
+			                 , LISTAGG(MANGR_EMPNM, ', ') WITHIN GROUP(ORDER BY MANGR_EMPNM)    AS MANGR_EMPNM
+			              FROM   (
+			                    SELECT s1.CNTRCT_NO
+			                         , s1.SN
+			                         , s1.MANGR_EMPNO
+			                         , s3.DEPT_NM || ' ' || s4.CODE_NM || DECODE(s7.CODE_NM,NULL,'','('||s7.CODE_NM||')') || ' ' || s5.CODE_NM || ' ' || s6.CODE_NM || ' ' || s2.EMPNM    AS MANGR_EMPNM
+			                      FROM TBCTR_CNTRCT_MANGR s1
+			                           LEFT OUTER JOIN TBHRM_HR_MASTR s2
+			                                ON s1.MANGR_EMPNO = s2.EMPNO
+			                           LEFT OUTER JOIN VWHRM_DEPT s3
+			                                ON s2.DEPT_CODE = s3.DEPT_CODE
+			                           LEFT OUTER JOIN TBCOM_CMMN_CODE s4
+			                                ON s2.JSSFC_SE = s4.CODE
+			                               AND s4.GRP_CODE = 'HRM001'
+			                           LEFT OUTER JOIN TBCOM_CMMN_CODE s5
+			                                ON s2.HR_CLSF_SE = s5.CODE
+			                               AND s5.GRP_CODE   = 'HRM002'
+			                           LEFT OUTER JOIN TBCOM_CMMN_CODE s6
+			                                ON s2.OFCPS_SE = s6.CODE
+			                               AND s6.GRP_CODE = 'HRM003'
+			                           LEFT OUTER JOIN TBCOM_CMMN_CODE s7
+			                                ON s2.JBLN_SE  = s7.CODE
+			                               AND s7.GRP_CODE = 'HRM004'
+			                     WHERE s1.CONFM_AT = '1'
+			                    ORDER BY s1.SN
+			                   )
+			            GROUP BY CNTRCT_NO
+			      ) s5 ON s1.CNTRCT_NO = s5.CNTRCT_NO
+			      LEFT OUTER JOIN (
+			          SELECT CNTRCT_NO
+			               , LISTAGG(BCNC_NM, ', ') WITHIN GROUP(ORDER BY BCNC_NM)    AS BCNC_NM
+			            FROM (
+			                  SELECT a.CNTRCT_NO
+			                       , b.BCNC_NM || ' [대표자 : ' || RPRSNTV || ', ' || a.QOTA_RT || '% 지분]'    AS BCNC_NM
+			                    FROM TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS a
+			                         LEFT OUTER JOIN TBCTR_BCNC_MASTR b
+			                              ON a.BCNC_CODE = b.BCNC_CODE
+			                 )
+			          GROUP BY CNTRCT_NO
+			      ) s6 ON s1.CNTRCT_NO = s6.CNTRCT_NO
+			WHERE  SUBSTR(s1.CNTRCT_NO,1,4)  = TO_CHAR(SYSDATE, 'YYYY')
+			ORDER BY SUBSTR(s1.CNTRCT_NO,1,4), CNTRCT_SE
+		]]>
+	</select>
+	
+	<!-- 카드별 세부내역 마스터 조회 -->	
+	<select id="SttusDAO.selectTemp7Popup01Master" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			SELECT t2.DEPT_NM                              /*부서명*/
+			     , t1.CARD_CMPNY
+			     , t3.FNNC_INSTT_CODE_NM AS CARD_CMPNY_NM  /*카드사명*/
+			     , t1.CARD_NM                              /*카드명*/
+			     , t1.CARD_NO                              /*카드번호*/
+			     , t1.CARD_SE
+			FROM TBACC_CPR_CARD_MANAGE t1
+			    LEFT OUTER JOIN VWHRM_DEPT t2
+			      ON  t1.DEPT_CODE  = t2.DEPT_CODE
+			    LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t3
+			      ON t1.CARD_CMPNY = t3.FNNC_INSTT_CODE
+			WHERE t1.CARD_SE <> '2'
+			AND t1.DEPT_CODE IN (
+			    SELECT s1.DEPT_CODE
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        From VWHRM_DEPT S2
+			        WHERE s2.DEPT_CODE IN (SELECT DEPT_CODE FROM VWHRM_DEPT_CODE_TM)
+			        AND   (s1.UPPER_DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE  <>  '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			                OR s1.DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE  <>  '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			              )
+			    )
+			)
+
+		]]>
+	</select>
+	
+	<!-- 카드별 세부내역 디테일 조회 -->	
+	<select id="SttusDAO.selectTemp7Popup01Detail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TBHRM_HR_MASTR_TM AS (
+			    SELECT t1.EMPNO
+			         , t2.EMPNM
+			         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+			         , t2.JSSFC_SE
+			         , t2.HR_CLSF_SE
+			         , t2.OFCPS_SE
+			         , t2.ECNY_DE
+			         , t2.BRTHDY
+			    FROM TBHRM_CTS_MAN t1
+			        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON  t1.EMPNO = t2.EMPNO
+			    WHERE STTUS_SE <> '009'
+			        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+			    UNION ALL
+			    SELECT EMPNO
+			         , EMPNM
+			         , DEPT_CODE
+			         , JSSFC_SE
+			         , HR_CLSF_SE
+			         , OFCPS_SE
+			         , ECNY_DE
+			         , BRTHDY
+			    FROM TBHRM_HR_MASTR
+			    WHERE STTUS_SE <> '009'
+			)
+			, VWHRM_DEPT_CODE_TM AS (
+			    SELECT *
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM TBHRM_HR_MASTR_TM s2
+			        WHERE s2.EMPNO = #EMPNO# /*[변수처리] 로그인사번*/
+			        AND   (s1.UPPER_DEPT_CODE = s2.DEPT_CODE 
+			                OR s1.DEPT_CODE = s2.DEPT_CODE
+			              )
+			    )
+			)
+			SELECT TRIM(t1.APPR_DATE) AS APPR_DATE  /*승인일자*/
+			     , TRIM(t1.APPR_TIME) AS APPR_TIME  /*승인시간*/
+			     , t1.CHAIN_NM                      /*가맹점*/
+			     , t1.CHAIN_ID 						/*가맹점사업자번호*/ 
+			     , t1.APPR_AMT                      /*승인금액*/
+			     , t5.EMPNM      AS REAL_USER       /*실사용자*/
+			     , t1.PRVONSH                       /*사용내용*/
+			     , t4.DECSN_NO                      /*결의번호*/
+			     , t4.ITNC_DE                       /*결의일자*/
+			     , t6.EMPNM      AS DECSN_USER      /*결의자*/
+			FROM NH_APPR t1
+			    INNER JOIN TBACC_CPR_CARD_MANAGE t2
+			      ON t1.CARD_NO = t2.CARD_NO
+			    INNER JOIN VWHRM_DEPT t3
+			      ON  t2.DEPT_CODE  = t3.DEPT_CODE
+			    LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t4
+			      ON  t1.DATAYEAR   = t4.DECSN_YEAR
+			    AND   t1.SEQKEY     = t4.DECSN_NO
+			    LEFT OUTER JOIN TBHRM_HR_MASTR t5
+			      ON  t1.REAL_USER = t5.EMPNO
+			    LEFT OUTER JOIN TBHRM_HR_MASTR t6
+			      ON  t4.REGISTER_ID = t6.EMPNO
+			WHERE SUBSTR(TRIM(t1.APPR_DATE), 1, 6) = TO_CHAR(SYSDATE, 'YYYYMM') /*조회월 기준*/
+			AND t2.DEPT_CODE IN (
+			    SELECT s1.DEPT_CODE
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        From VWHRM_DEPT S2
+			        WHERE s2.DEPT_CODE IN (SELECT DEPT_CODE FROM TBHRM_HR_MASTR_TM)
+			        AND   (s1.UPPER_DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE  <>  '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			                OR s1.DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE  <>  '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			              )
+			    )
+			)
+			  AND t1.CANCEL_YN != 'Y'
+			  AND t1.CARD_NO = #CARD_NO#
+			ORDER BY t1.APPR_DATE DESC
+		]]>
+	</select>
+	
+		
+	<!-- 공지조회  -->
+	<select id="SttusDAO.selectTemp10" resultClass="java.util.HashMap">
+		SELECT
+			 SJ  /*제목*/
+			,CN  /*내용*/
+		FROM TBCOM_NOTICE_MANAGE
+		WHERE NOTICE_AT = '1'
+	</select>
+	
+	<!-- 팀별구매현황 조회 -->
+	<select id="SttusDAO.selectTemp11" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*SttusDAO.selectTemp11 (팀별구매현황 조회) */]]>
+		WITH TBHRM_HR_MASTR_TM AS (
+		    SELECT t1.EMPNO
+		         , t2.EMPNM
+		         , t1.CTS_TRGET_DEPT_CODE AS DEPT_CODE
+		         , t2.JSSFC_SE
+		         , t2.HR_CLSF_SE
+		         , t2.OFCPS_SE
+		         , t2.ECNY_DE
+		         , t2.BRTHDY
+		    FROM TBHRM_CTS_MAN t1
+		        LEFT OUTER JOIN TBHRM_HR_MASTR t2
+		        ON  t1.EMPNO = t2.EMPNO
+		    WHERE STTUS_SE <![CDATA[<>]]> '009'
+		        AND (t1.RELIS_DE IS NULL OR t1.RELIS_DE > TO_CHAR(SYSDATE, 'YYYYMMDD'))
+		    UNION ALL
+		    SELECT EMPNO
+		         , EMPNM
+		         , DEPT_CODE
+		         , JSSFC_SE
+		         , HR_CLSF_SE
+		         , OFCPS_SE
+		         , ECNY_DE
+		         , BRTHDY
+		    FROM TBHRM_HR_MASTR
+		    WHERE STTUS_SE <![CDATA[<>]]> '009'
+		), EXP_DSN_T AS (
+		    SELECT DECSN_YN
+		          ,CYFD_SE
+		          ,CHIT_YN
+		          ,ITNC_DE
+		          ,CAUSE_ACTION_DE
+		          ,DET_DCSN_DE
+		          ,CPTAL_EXPNDTR_ACNTBK_DE
+		          ,CHECK_NO
+		          ,DECSN_YEAR
+		          ,DECSN_NO
+		          ,SEQ
+		          ,ANACT_KND
+		          ,SUMRY
+		          ,ROUND(DECSN_AMOUNT * NVL(TRIM(#PLAN_RT#),100) / 100)   AS DECSN_AMOUNT
+		          ,SUPLY_AMOUNT
+		          ,VAT_AMOUNT
+		          ,TAXXPT_AMOUNT
+		          ,BIZRNO
+		          ,BCNC_CODE
+		          ,BCNC_NM
+		          ,BSNS_BALC_NM
+		          ,BUDGET_ACNT_CODE
+		          ,BUDGET_ACNT_NM
+		          ,EXPNDTR_UNIT_CODE
+		          ,EXPNDTR_UNIT_NM
+		          ,CNTRCT_SE
+		          ,ENTRPRS_SE
+		          ,MTHD_SE
+		          ,SMLPZ
+		          ,FEMALE_ENTRPRS
+		          ,DSPSN
+		          ,DSPSN_STD_BPLC
+		          ,SRSILL_DSPSN
+		          ,SOCTY_ENTRPRS
+		          ,SOCTY_CPER_MXTR
+		          ,TCNDVLP
+		          ,GREEN_PRDUCT
+		          ,DEPT_CODE
+		          ,DEPT_NAME
+		          ,TAXBILL_NO
+		          ,PBLICTE_DE
+		          ,NTS_CONFM_NO
+		          ,BILL_KND
+		          ,TAXT_AT
+		          ,RQEST_RCPT_SE
+		          ,PBLICTE_AT
+		          ,PXCOND_ODR
+		          ,CNTRCT_NO
+		          ,INFRML_CNTRCT_AT
+		    FROM   (
+		            SELECT CASE WHEN TRIM(t3.DECSN_NO) IS NULL THEN '0' ELSE '1' END   AS DECSN_YN         /*지출여부*/
+		                  ,NVL(t3.CYFD_SE, '0')                                        AS CYFD_SE          /*이월구분*/
+		                  ,CASE WHEN t4.CHIT_NO IS NOT NULL THEN '1' ELSE '0' END      AS CHIT_YN          /*전표여부*/
+		                  ,t3.ITNC_DE                                                                      /* 발의일자(결의일자) */
+		                  ,t5.CNSUL_DE                                                 AS CAUSE_ACTION_DE  /*원인행위일자*/
+		                  ,t3.DET_DCSN_DE                                                                  /*채무확정일자*/
+		                  ,t3.CPTAL_EXPNDTR_ACNTBK_DE
+		                  ,t3.CHECK_NO
+		                  ,t2.DECSN_YEAR
+		                  ,t2.DECSN_NO
+		                  ,t2.SEQ
+		                  ,t3.ANACT_KND
+		                  ,t3.SUMRY
+		                  ,DECODE(t14.ISSU_ID, NULL, DECODE(NVL(t1.SM_AMOUNT,0), 0, NVL(t1.SUPLY_AMOUNT,0)+NVL(t1.TAXAMT,0), t1.SM_AMOUNT), t14.TOTL_AMT)   AS DECSN_AMOUNT     /*결의금액*/
+		                  ,DECODE(t14.ISSU_ID, NULL, t1.SUPLY_AMOUNT, t14.CHRG_AMT)                                                                         AS SUPLY_AMOUNT     /*공급가액*/
+		                  ,DECODE(t14.ISSU_ID, NULL, t1.TAXAMT,       t14.TAX_AMT)                                                                          AS VAT_AMOUNT       /*부가세금액*/
+		                  ,t2.TAXXPT_AMOUNT                         /*면세금액*/
+		                  ,DECODE(t14.ISSU_ID, NULL, t1.BIZRNO,    t14.SELR_CORP_NO)    AS BIZRNO
+		                  ,t1.BCNC_CODE
+		                  ,DECODE(t14.ISSU_ID, NULL, t1.BCNC_NM,   t14.SELR_CORP_NM)    AS BCNC_NM
+		                  ,t8.CODE_NM           AS BSNS_BALC_NM     /*계정구분명*/
+		                  ,t3.BUDGET_ACNT_CODE
+		                  ,t7.BUDGET_ACNT_NM
+		                  ,t3.EXPNDTR_UNIT_CODE      /*지출단위코드*/
+		                  ,t9.BUKIP_NM                                             AS EXPNDTR_UNIT_NM
+		                  ,CASE WHEN t12.CNTRCT_SE IS NOT NULL THEN t12.CNTRCT_SE
+		                        WHEN t12.CNTRCT_SE IS NULL AND t3.ANACT_KND = '06' THEN '1'     /* 공사 : 계약과의 연결점 없이 공사와집행결의 */
+		                        WHEN t12.CNTRCT_SE IS NULL AND t3.ANACT_KND = '02' THEN '3'     /* 물품 : 계약과의 연결점 없이 구입과지출결의 */
+		                        WHEN t12.CNTRCT_SE IS NULL AND t3.ANACT_KND = '03' AND DECODE(NVL(t10.DATA_COUNT,0), 0, '2', '1') = '1' THEN '2'     /* 물품 : 계약과의 연결점 없이 일반지출결의 이면서 대지급 */
+		                        WHEN t12.CNTRCT_SE IS NULL AND t3.ANACT_KND = '03' THEN '2'     /* 용역 : 계약과의 연결점 없이 일반지출결의 */
+		                   END          AS CNTRCT_SE
+		                  ,DECODE(t2.ENTRPRS_SE,'3' ,'3', '1')                     AS ENTRPRS_SE
+		                  ,DECODE(NVL(t10.DATA_COUNT,0), 0, '2', '1')              AS MTHD_SE
+		                  ,DECODE(t2.ENTRPRS_SE,'3' ,'3', '1')                     AS SMLPZ            /*중소기업여부*/
+		                  ,t2.FEMALE_ENTRPRS
+		                  ,t2.DSPSN
+		                  ,t2.DSPSN_STD_BPLC
+		                  ,t2.SRSILL_DSPSN
+		                  ,t2.SOCTY_ENTRPRS
+		                  ,t2.SOCTY_CPER_MXTR
+		                  ,t2.TCNDVLP
+		                  ,t2.GREEN_PRDUCT
+		                  ,t3.DEPT_CODE 
+		                  ,SFSAL_GETDEPTNM_01(t3.DEPT_CODE)                         AS DEPT_NAME
+		                  ,t1.TAXBILL_NO
+		                  ,t1.PBLICTE_DE
+		                  ,t1.NTS_CONFM_NO
+		                  ,t1.BILL_KND
+		                  ,t1.TAXT_AT
+		                  ,t1.RQEST_RCPT_SE
+		                  ,t1.PBLICTE_AT
+		                  ,DECODE(t11.PXCOND_SE, NULL, NULL, t13.CODE_NM || ' ' || t11.PXCOND_ODR || '차')     AS PXCOND_ODR
+		                  ,t12.CNTRCT_NO
+		                  ,t12.INFRML_CNTRCT_AT
+		            FROM   TBACC_TAXBIL_MASTER t1
+		                   LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t2
+		                        ON t1.DECSN_YEAR = t2.DECSN_YEAR
+		                       AND t1.DECSN_NO = t2.DECSN_NO
+		                       AND t1.DECSN_SEQ = t2.SEQ
+		                   INNER JOIN TBACC_EXP_DSN_MASTR t3
+		                        ON t2.DECSN_YEAR = t3.DECSN_YEAR
+		                       AND t2.DECSN_NO = t3.DECSN_NO
+		                   LEFT OUTER JOIN (
+		                                    SELECT DECSN_YEAR
+		                                          ,DECSN_NO
+		                                          ,MAX(CHIT_NO)        AS CHIT_NO
+		                                    FROM   TBACC_CHIT_MASTR
+		                                    GROUP BY DECSN_YEAR, DECSN_NO
+		                                   ) t4
+		                        ON t3.DECSN_YEAR = t4.DECSN_YEAR
+		                       AND t3.DECSN_NO   = t4.DECSN_NO
+		                   LEFT OUTER JOIN TBACC_CNSUL t5
+		                        ON t3.CAUSE_ACTION_NO = t5.CAUSE_ACTION_NO
+		                   LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t7
+		                        ON t3.BUDGET_YEAR = t7.YEAR
+		                       AND t3.BSNS_SE = t7.BSNS_SE
+		                       AND t3.BALC_SE = t7.BALC_SE
+		                       AND t3.BUDGET_ACNT_CODE = t7.BUDGET_ACNT_CODE
+		                   LEFT OUTER JOIN TBCOM_CMMN_CODE t8
+		                        ON t8.GRP_CODE = 'BDG017'
+		                       AND t8.USE_AT = '1' 
+		                       AND t3.BSNS_SE = SUBSTR(t8.CODE,1,1)
+		                       AND t3.BALC_SE = SUBSTR(t8.CODE,2,1)
+		                   LEFT OUTER JOIN TBBDG_BUKIP_CODE t9
+		                        ON t3.EXPNDTR_UNIT_CODE = t9.BUKIP_CODE
+		                   LEFT OUTER JOIN (
+		                                    SELECT DECSN_YEAR
+		                                          ,DECSN_NO
+		                                          ,COUNT(1)       AS DATA_COUNT
+		                                    FROM   TBACC_EXP_DSN_DETAIL
+		                                    WHERE  BCNC_CODE = '001370'  /* 인천지방조달청 */
+		                                    GROUP BY DECSN_YEAR
+		                                            ,DECSN_NO
+		                                   ) t10
+		                        ON t3.DECSN_YEAR = t10.DECSN_YEAR
+		                       AND t3.DECSN_NO = t10.DECSN_NO
+		                   LEFT OUTER JOIN TBCTR_CNTRCT_DECSN t11
+		                        ON t3.DECSN_YEAR = t11.DECSN_YEAR
+		                       AND t3.DECSN_NO = t11.DECSN_NO
+		                   LEFT OUTER JOIN TBCTR_CNTRCT t12
+		                        ON t11.CNTRCT_NO = t12.CNTRCT_NO
+		                   LEFT OUTER JOIN TBCOM_CMMN_CODE t13
+		                        ON t11.PXCOND_SE = t13.CODE
+		                       AND t13.GRP_CODE = 'CTR039'
+		                   LEFT OUTER JOIN DET_ISSU_MSTR t14
+		                        ON t1.NTS_CONFM_NO = t14.ISSU_ID
+		                   LEFT OUTER JOIN INTRAWARE.VIEW_MIS_SANCTN_KND@DL_INTRACITY t15
+                                ON t3.SANCTN_NO  = t15.SANCTN_NO
+		            WHERE  t3.ANACT_KND IN ('02', '03', '06')                                            /* 결의서종류(02:구입과지출, 03:일반지출, 06:공사와집행) */
+		            AND   (t3.SANCTN_NO = '0' OR t15.SANCTN_KND = '5')                                  /* 결의서 전자결재 완료 */                                     /* 결의서 전자결재 완료 */
+		            AND    t3.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#              /* 자금지출장부일자 */
+		           )
+		    WHERE  NTS_CONFM_NO IS NOT NULL       /* 세금계산서 국세청발행여부 */
+		    AND    DEPT_CODE IN (SELECT DEPT_CODE 
+		                           FROM TABLE(SFHRM_DEPT_TREE(
+		                                                      (SELECT CASE WHEN DEPT_CODE = '010000' OR DEPT_SE = '03' THEN UPPER_DEPT_CODE /*윤리감사팀(010000)은 화성도시공사 전체조회*/
+		                                                                   ELSE DEPT_CODE END 
+		                                                         FROM VWHRM_DEPT
+		                                                        WHERE DEPT_CODE = (SELECT MAX(DEPT_CODE)
+		                                                                             FROM TBHRM_HR_MASTR_TM 
+		                                                                            WHERE EMPNO = #EMPNO#) /*[변수처리] 로그인사번*/
+		                                                      )
+		                                                     )
+		                                     )
+		                        )     /* 부서코드 */
+		), DATA_GRP_T AS (
+		    SELECT 'SMLPZ'              AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  SMLPZ = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'FEMALE_ENTRPRS'     AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  FEMALE_ENTRPRS = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'DSPSN'              AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  DSPSN = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'DSPSN_STD_BPLC'     AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  DSPSN_STD_BPLC = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'SRSILL_DSPSN'       AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  SRSILL_DSPSN = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'SOCTY_ENTRPRS'      AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  SOCTY_ENTRPRS = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'SOCTY_CPER_MXTR'    AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  SOCTY_CPER_MXTR = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'TCNDVLP'            AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  TCNDVLP = '1'
+		    GROUP BY CNTRCT_SE
+		    UNION ALL
+		    SELECT 'GREEN_PRDUCT'       AS EXP_COL
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  GREEN_PRDUCT = '1'
+		    GROUP BY CNTRCT_SE
+		), DATA_HEAD_T AS (
+		    SELECT 'SMLPZ'   AS EXP_COL
+		          ,'중소기업 제품'           AS EXP_COL_NM
+		          ,1                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('1','2','3') THEN '0' ELSE '1' END)     AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'FEMALE_ENTRPRS'   AS EXP_COL
+		          ,'여성기업 제품'           AS EXP_COL_NM
+		          ,2                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('1','2','3') THEN '0' ELSE '1' END)     AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'DSPSN'   AS EXP_COL
+		          ,'장애인기업 생산품'           AS EXP_COL_NM
+		          ,3                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('1','2','3') THEN '0' ELSE '1' END)     AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'DSPSN_STD_BPLC'   AS EXP_COL
+		          ,'장애인표준사업장 생산품'           AS EXP_COL_NM
+		          ,4                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('2','3') THEN '0' ELSE '1' END)         AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'SRSILL_DSPSN'   AS EXP_COL
+		          ,'중증장애인 생산품'           AS EXP_COL_NM
+		          ,5                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('2','3') THEN '0' ELSE '1' END)         AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'SOCTY_ENTRPRS'   AS EXP_COL
+		          ,'사회적기업 제품'           AS EXP_COL_NM
+		          ,6                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('2','3') THEN '0' ELSE '1' END)         AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'SOCTY_CPER_MXTR'   AS EXP_COL
+		          ,'사회적협동조합 제품'           AS EXP_COL_NM
+		          ,7                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('2','3') THEN '0' ELSE '1' END)         AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'TCNDVLP'   AS EXP_COL
+		          ,'중소기업 기술개발제품'           AS EXP_COL_NM
+		          ,8                AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('3') THEN '0' ELSE '1' END)             AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    UNION ALL
+		    SELECT 'GREEN_PRDUCT'   AS EXP_COL
+		          ,'녹색 제품'           AS EXP_COL_NM
+		          ,9               AS SORT_RANK
+		          ,CODE             AS CNTRCT_SE
+		          ,CODE_NM          AS CNTRCT_SE_NM
+		          ,(CASE WHEN CODE IN ('3') THEN '0' ELSE '1' END)             AS NRMLT_AT
+		    FROM   TBCOM_CMMN_CODE
+		    WHERE  GRP_CODE = 'CTR022'
+		    ORDER BY SORT_RANK, CNTRCT_SE
+		), ALL_DATA_T AS (
+		    SELECT CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)    AS ALL_DECSN_AMOUNT
+		    FROM   EXP_DSN_T
+		    WHERE  1=1
+		    GROUP BY CNTRCT_SE
+		), DATA_T AS (
+		    SELECT EXP_COL
+		          ,EXP_COL_NM
+		          ,NRMLT_AT
+		          ,SORT_RANK
+		          ,CNTRCT_SE
+		          ,SUM(DECSN_AMOUNT)        AS DECSN_AMOUNT
+		    FROM   (
+		            SELECT t1.EXP_COL
+		                  ,t1.EXP_COL_NM
+		                  ,t1.SORT_RANK
+		                  ,t1.CNTRCT_SE
+		                  ,t1.CNTRCT_SE_NM
+		                  ,NVL(t2.DECSN_AMOUNT,0)     AS DECSN_AMOUNT
+		                  ,t1.NRMLT_AT
+		            FROM   DATA_HEAD_T t1
+		                   LEFT OUTER JOIN DATA_GRP_T t2
+		                   ON t1.EXP_COL = t2.EXP_COL
+		                   AND t1.CNTRCT_SE = t2.CNTRCT_SE
+		            WHERE  1=1
+		            ORDER BY t1.SORT_RANK, t1.CNTRCT_SE, t1.NRMLT_AT
+		           )
+		    GROUP BY EXP_COL, EXP_COL_NM, SORT_RANK, CNTRCT_SE, NRMLT_AT
+		    ORDER BY NRMLT_AT DESC, SORT_RANK
+		)
+		SELECT t1.EXP_COL
+		      ,t1.EXP_COL_NM
+		      ,t1.NRMLT_AT
+		      ,t1.SORT_RANK
+		      ,t1.CNTRCT_SE
+		      ,t2.ALL_DECSN_AMOUNT
+		      ,t1.DECSN_AMOUNT
+		      ,ROUND(t1.DECSN_AMOUNT / t2.ALL_DECSN_AMOUNT * 100, 2)      AS DECSN_PER
+		      ,T3.GOAL_RATE
+		FROM   DATA_T t1
+		       LEFT OUTER JOIN ALL_DATA_T t2
+		            ON t1.CNTRCT_SE = t2.CNTRCT_SE
+		       LEFT OUTER JOIN TBCTR_PUBLIC_PURCHS_GOAL T3
+		            ON T1.EXP_COL = T3.PRDUCT_SE
+		            AND T1.CNTRCT_SE = T3.CNTRCT_SE
+		WHERE  1=1
+		ORDER BY NRMLT_AT DESC, SORT_RANK
+	</select>
+	
+</sqlMap>

@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH030104_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 비계량지표 목록조회 -->
+	<select id="ACH030104DAO.selectListMst" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT                                                    
+		       AA.V_IX_CODE                                               AS V_IX_CODE                                          
+		      ,AA.S_IX_CODE                                               AS S_IX_CODE                                         
+		      ,SFACH_GET_IXNM(AA.EVL_YEAR, AA.ODR_SE,AA.S_IX_CODE )       AS S_IX_NM
+		      ,AA.C_IX_CODE                                               AS C_IX_CODE                                         
+		      ,SFACH_GET_IXNM(AA.EVL_YEAR, AA.ODR_SE,AA.C_IX_CODE )       AS C_IX_NM
+		      ,AA.IX_CDNM												  AS IX_CDNM
+		      ,AA.EVL_YEAR                                                AS EVL_YEAR                                          
+		      ,AA.ODR_SE                                                  AS ODR_SE                                            
+		      ,AA.IX_CODE                                                 AS IX_CODE                                           
+		      ,AA.APPLC_SCOPE_SE                                          AS APPLC_SCOPE_SE
+		      FROM (
+		              SELECT 
+		                    SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'001') AS V_IX_CODE
+		                   ,SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'002') AS S_IX_CODE
+		                   ,SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'003') AS C_IX_CODE             
+		                   ,'[ ' || A.IX_CODE || ' ] ' || A.IX_NM AS IX_CDNM			
+		                   ,A.EVL_YEAR        AS EVL_YEAR      
+		                   ,A.ODR_SE          AS ODR_SE        
+		                   ,A.IX_CODE         AS IX_CODE       
+		                   ,A.APPLC_SCOPE_SE  AS APPLC_SCOPE_SE
+		              FROM TBACH_KPI A
+		             WHERE 1=1
+		               AND A.USE_AT = '1'
+		               AND A.IX_CHARCT = '001'
+		               AND A.IX_SE = '004'
+		               AND A.EVL_YEAR = #EVL_YEAR#
+		               AND A.ODR_SE = #ODR_SE#
+		  			<isNotEmpty property="APPLC_SCOPE_SE">		               
+		               AND A.APPLC_SCOPE_SE = #APPLC_SCOPE_SE#  
+		            </isNotEmpty>    
+		               ) AA
+		     ORDER BY AA.V_IX_CODE
+		             ,AA.S_IX_CODE
+		             ,AA.C_IX_CODE
+		             ,AA.IX_CODE  		        	     
+    </select>
+    
+    <!-- 지표별 비계량평가자  조회 -->
+	<select id="ACH030104DAO.selectListDtl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			   DECODE( NVL(A.EVL_MAN_NO,'0'), '0', '0', '1') AS ASIGN_AT
+			  ,A.EVL_YEAR 									 AS EVL_YEAR
+			  ,A.ODR_SE 									 AS ODR_SE
+			  ,A.EVL_MAN_NO 								 AS EVL_MAN_NO
+			  ,A.IX_CODE 									 AS IX_CODE
+			  ,B.EVL_YEAR 									 AS M_EVL_YEAR
+			  ,B.ODR_SE 									 AS M_ODR_SE
+			  ,B.EVL_MAN_SE 								 AS M_EVL_MAN_SE
+			  ,B.EVL_MAN_NO 								 AS M_EVL_MAN_NO
+			  ,B.EVL_RSPOFC_SE 								 AS M_EVL_RSPOFC_SE
+			  ,B.RM 										 AS M_RM
+			  ,C.USER_NM									 AS USER_NM
+		 FROM TBACH_QLE_EVL_MAN_CNNC A
+		     ,TBACH_QLE_EVL_MAN B
+		     ,TBCOM_USER C
+		WHERE 1=1
+		  AND B.EVL_YEAR      = A.EVL_YEAR(+) 
+		  AND B.ODR_SE        = A.ODR_SE(+)
+		  AND B.EVL_MAN_NO    = A.EVL_MAN_NO(+)
+		  AND B.EVL_MAN_EMPNO = C.USER_ID(+)
+		  AND B.EVL_MAN_SE    = '001'
+		  AND B.EVL_YEAR      = #EVL_YEAR#
+		  AND B.ODR_SE        = #ODR_SE#
+		  AND A.IX_CODE(+)    = #IX_CODE#
+		ORDER BY B.EVL_RSPOFC_SE ,B.EVL_MAN_NO
+    </select>
+    
+     <!-- 비계량평가자 등록 -->
+    <insert id="ACH030104DAO.dtlC" parameterClass="java.util.HashMap" >
+		INSERT INTO TBACH_QLE_EVL_MAN_CNNC (
+					  EVL_YEAR
+					, ODR_SE
+					, EVL_MAN_NO
+					, IX_CODE
+					, REGISTER_ID
+					, REGIST_DT
+					, UPDUSR_ID
+					, UPDT_DT
+				   )
+			  VALUES
+				   (
+					  #EVL_YEAR#
+					, #ODR_SE#
+					, #M_EVL_MAN_NO#
+					, #IX_CODE#
+				    , #S_USER_ID#
+				    , SYSDATE
+				    , #S_USER_ID#
+				    , SYSDATE
+					)
+    </insert>
+    
+    <!-- 비계량평가자  삭제 -->
+    <delete id="ACH030104DAO.dtlD" parameterClass="java.util.HashMap" >
+		DELETE TBACH_QLE_EVL_MAN_CNNC
+		 WHERE 1 = 1
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#
+		   AND EVL_MAN_NO = #EVL_MAN_NO#
+		   AND IX_CODE = #IX_CODE#
+    </delete>
+    
+    <!-- 비계량지표평가 내역  삭제 -->
+    <delete id="ACH030104DAO.dtlEvlD" parameterClass="java.util.HashMap" >
+		DELETE TBACH_QLEVAL_EVL		   
+		 WHERE 1 = 1
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE = #ODR_SE#
+		   AND IX_CODE = #IX_CODE#
+		   AND EVL_MAN_NO = #EVL_MAN_NO#
+    </delete>    
+
+</sqlMap>

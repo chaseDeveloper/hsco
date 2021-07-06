@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM060201_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 대상사원 조회 -->
+	<select id="HRM060201DAO.selectTrgetEmpl" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">	
+	<![CDATA[
+		SELECT s1.*
+		     , DECODE(s1.CLSF_SE, '201', 'F1'
+		                        , '202', 'F1'
+		                        , '401', 'F1'
+		                        , '402', 'F1'
+		                        , '203', 'F2'
+		                        , '204', 'F2'
+		                        , '205', 'F2'
+		                        , '403', 'F2'
+		                        , '404', 'F2'
+		                        , '405', 'F2'
+		                        , 'F2')    AS GRD_FORMAT
+		FROM   (
+		          WITH CLSF_GNFD_DTLS_TM AS (
+		              SELECT EMPNO
+		                    ,CLSF_SE
+		                    ,MIN(GNFD_DE) AS CLSF_GNFD_DE
+		              FROM   TBHRM_GNFD_DTLS
+		              WHERE  GNFD_SE = '012'
+		              AND    DCSN_AT = '1'
+		              GROUP BY EMPNO, CLSF_SE
+		          )
+		          SELECT s1.EMPNO
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'EMPNM',     #STDR_DE#)   AS EMPNM
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'DEPT_CODE', #STDR_DE#)   AS DEPT_CODE
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JSSFC_SE',  #STDR_DE#)   AS JSSFC_SE
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE',   #STDR_DE#)   AS CLSF_SE
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JBLN_SE',   #STDR_DE#)   AS JBLN_SE
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'DEPT_NM',   #STDR_DE#)   AS DEPT_NM
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JSSFC_NM',  #STDR_DE#)   AS JSSFC_NM
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_NM',   #STDR_DE#)   AS CLSF_NN
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JBLN_NM',   #STDR_DE#)   AS JBLN_NM
+		                ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'STTUS_SE',  #STDR_DE#)   AS STTUS_SE
+		                ,DECODE(FLOOR((MONTHS_BETWEEN(TO_DATE(#STDR_DE#,'YYYYMMDD'), TO_DATE(NVL(s1.NOW_CLSF_EMPLMN_DE, S3.CLSF_GNFD_DE), 'YYYYMMDD'))) / 12), 0, NULL, FLOOR((MONTHS_BETWEEN(TO_DATE(#STDR_DE#,'YYYYMMDD'), TO_DATE(NVL(s1.NOW_CLSF_EMPLMN_DE, S3.CLSF_GNFD_DE), 'YYYYMMDD'))) / 12))   AS CLSF_YEAR /*현보직근무연수_년*/
+		          FROM   TBHRM_HR_MASTR s1
+		                 LEFT OUTER JOIN CLSF_GNFD_DTLS_TM s3
+		                      ON s1.EMPNO = s3.EMPNO
+		                     AND SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE', #STDR_DE#) = s3.CLSF_SE
+		       ) s1
+		WHERE s1.CLSF_YEAR >= (CASE WHEN s1.CLSF_SE IN ('202', '402') THEN 5 WHEN s1.CLSF_SE IN ('205', '405') THEN 2 ELSE 3 END)
+		AND   s1.JSSFC_SE IN ('02' /*, '04' 일반직만 대상으로.. 2018.01.15 인사과장 */)
+		AND   s1.STTUS_SE <> '009'
+	]]>
+	<isNotEmpty property="EMPNM">
+		AND    s1.EMPNM LIKE '%' || #EMPNM# || '%'
+	</isNotEmpty>
+	<![CDATA[
+		ORDER BY s1.JSSFC_SE, s1.DEPT_CODE, s1.CLSF_SE, s1.EMPNO
+	]]>
+	</select>
+
+
+	<!-- 경력평정 조회 -->
+	<select id="HRM060201DAO.selectCareerEvl" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH CLSF_GNFD_DTLS_TM AS (
+		    SELECT EMPNO
+		          ,CLSF_SE
+		          ,MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM   TBHRM_GNFD_DTLS
+		    WHERE  GNFD_SE = '012'
+		    AND    DCSN_AT = '1'
+		    GROUP BY EMPNO, CLSF_SE
+		)
+		SELECT s1.CNVRSN_SE
+		      ,s1.EMPNO
+		      ,s1.EMPNM
+		      ,s1.DEPT_CODE
+		      ,s1.DEPT_NM
+		      ,s1.JSSFC_SE
+		      ,s1.JSSFC_NM
+		      ,s1.CLSF_SE
+		      ,s1.CLSF_NM
+		      ,s1.JBLN_SE
+		      ,s1.JBLN_NM
+		      ,s1.CLSF_GNFD_DE
+		      ,s1.EVL_STDR_DE
+		      ,s1.CNVRSN_Y
+		      ,s1.CNVRSN_M
+		      ,s1.CNVRSN_D
+		      ,s1.CNVRSN_CAREER_PD_ORIGN
+		      ,s1.CNVRSN_CAREER_PD
+		      ,s1.CLSF_NUM
+		      ,(CASE WHEN /*3급이상*/ s1.CLSF_NUM = 3 AND s1.CNVRSN_CAREER_PD <= 72 THEN s1.CNVRSN_CAREER_PD ELSE 0 END)                       AS CNVRSN_PD_BELOW_72
+		      ,(CASE WHEN /*3급이상*/ s1.CLSF_NUM = 3 AND s1.CNVRSN_CAREER_PD > 72 THEN s1.CNVRSN_CAREER_PD - 72 ELSE 0 END)                   AS CNVRSN_PD_OVER_72
+		      ,(CASE WHEN /*4급이하*/ s1.CLSF_NUM = 4 AND s1.CNVRSN_CAREER_PD <= 60 THEN s1.CNVRSN_CAREER_PD ELSE 0 END)                       AS CNVRSN_PD_BELOW_60
+		      ,(CASE WHEN /*4급이하*/ s1.CLSF_NUM = 4 AND s1.CNVRSN_CAREER_PD > 60 THEN s1.CNVRSN_CAREER_PD - 60 ELSE 0 END)                   AS CNVRSN_PD_OVER_60
+		      ,ROUND((CASE WHEN /*3급이상*/ s1.CLSF_NUM = 3 AND s1.CNVRSN_CAREER_PD <= 72 THEN s1.CNVRSN_CAREER_PD ELSE 0 END)     * 0.35,2)   AS CNVRSN_SCORE_BELOW_72
+		      ,ROUND((CASE WHEN /*3급이상*/ s1.CLSF_NUM = 3 AND s1.CNVRSN_CAREER_PD > 72 THEN s1.CNVRSN_CAREER_PD - 72 ELSE 0 END) * 0.11,2)   AS CNVRSN_SCORE_OVER_72
+		      ,ROUND((CASE WHEN /*4급이하*/ s1.CLSF_NUM = 4 AND s1.CNVRSN_CAREER_PD <= 60 THEN s1.CNVRSN_CAREER_PD ELSE 0 END)     * 0.40,2)   AS CNVRSN_SCORE_BELOW_60
+		      ,ROUND((CASE WHEN /*4급이하*/ s1.CLSF_NUM = 4 AND s1.CNVRSN_CAREER_PD > 60 THEN s1.CNVRSN_CAREER_PD - 60 ELSE 0 END) * 0.17,2)   AS CNVRSN_SCORE_OVER_60
+		FROM   (
+		        SELECT r1.CNVRSN_SE
+		              ,r1.EMPNO
+		              ,r1.EMPNM
+		              ,r1.DEPT_CODE
+		              ,r1.DEPT_NM
+		              ,r1.JSSFC_SE
+		              ,r1.JSSFC_NM
+		              ,r1.CLSF_SE
+		              ,DECODE(r1.CLSF_SE, '201', 3, '202', 3, '203', 4, '204', 4, '205', 4, 4) AS CLSF_NUM
+		              ,r1.CLSF_NM
+		              ,r1.JBLN_SE
+		              ,r1.JBLN_NM
+		              ,r1.CLSF_GNFD_DE
+		              ,r1.EVL_STDR_DE
+		              ,SFHRM_DATEDIF(TO_DATE(r1.CLSF_GNFD_DE,'YYYYMMDD'),TO_DATE(r1.EVL_STDR_DE,'YYYYMMDD'),'Y')                        AS CNVRSN_Y
+		              ,SFHRM_DATEDIF(TO_DATE(r1.CLSF_GNFD_DE,'YYYYMMDD'),TO_DATE(r1.EVL_STDR_DE,'YYYYMMDD'),'YM')                       AS CNVRSN_M
+		              ,SFHRM_DATEDIF(TO_DATE(r1.CLSF_GNFD_DE,'YYYYMMDD'),TO_DATE(r1.EVL_STDR_DE,'YYYYMMDD'),'MD')                       AS CNVRSN_D
+		              ,ROUND(NVL(MONTHS_BETWEEN(TO_DATE(r1.EVL_STDR_DE, 'YYYYMMDD'), TO_DATE(r1.CLSF_GNFD_DE, 'YYYYMMDD')),0),0)                                    AS CNVRSN_CAREER_PD_ORIGN
+		              ,ROUND(NVL(MONTHS_BETWEEN(TO_DATE(r1.EVL_STDR_DE, 'YYYYMMDD'), TO_DATE(r1.CLSF_GNFD_DE, 'YYYYMMDD')),0) * DECODE(r1.CNVRSN_SE,'B',0.6,1),0)   AS CNVRSN_CAREER_PD
+		        FROM   (
+		                SELECT 'A'              AS CNVRSN_SE
+		                      ,t1.EMPNO
+		                      ,t1.EMPNM
+		                      ,t1.DEPT_CODE
+		                      ,t4.DEPT_NM
+		                      ,t1.JSSFC_SE                                              AS JSSFC_SE
+		                      ,t5.CODE_NM                                               AS JSSFC_NM
+		                      ,NVL(t2.CLSF_SE, t1.HR_CLSF_SE)                           AS CLSF_SE
+		                      ,t6.CODE_NM                                               AS CLSF_NM
+		                      ,t1.JBLN_SE                                               AS JBLN_SE
+		                      ,t7.CODE_NM                                               AS JBLN_NM
+		                      ,NVL(t1.NOW_CLSF_EMPLMN_DE, t2.CLSF_GNFD_DE)              AS CLSF_GNFD_DE
+		                      ,TO_CHAR(TO_DATE(#STDR_DE#,'YYYYMMDD')-1,'YYYYMMDD')      AS EVL_STDR_DE
+		                FROM   TBHRM_HR_MASTR t1
+		                       LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t2
+		                            ON t1.EMPNO      = t2.EMPNO
+		                           AND t1.HR_CLSF_SE = t2.CLSF_SE
+		                       LEFT OUTER JOIN TBHRM_DEPT t4
+		                            ON t1.DEPT_CODE = t4.DEPT_CODE
+		                       LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		                            ON t1.JSSFC_SE = t5.CODE
+		                           AND t5.GRP_CODE = 'HRM001'
+		                       LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+		                            ON NVL(t2.CLSF_SE, t1.HR_CLSF_SE) = t6.CODE
+		                           AND t6.GRP_CODE = 'HRM002'
+		                       LEFT OUTER JOIN TBCOM_CMMN_CODE t7
+		                            ON t1.JBLN_SE = t7.CODE
+		                           AND t7.GRP_CODE = 'HRM004'
+		                WHERE t1.STTUS_SE <> '009' /*퇴직자 제외*/
+		                AND   t1.JSSFC_SE <> '01'  /*임원은 평정대상에서 제외*/
+		                UNION ALL
+		                SELECT 'B'                                                                                      AS CNVRSN_SE
+		                      ,t1.EMPNO
+		                      ,t1.EMPNM
+		                      ,t1.DEPT_CODE
+		                      ,t4.DEPT_NM
+		                      ,t1.JSSFC_SE                                                                              AS JSSFC_SE
+		                      ,t5.CODE_NM                                                                               AS JSSFC_NM
+		                      ,NVL(t3.CLSF_SE, (t1.HR_CLSF_SE+1))                                                       AS CLSF_SE
+		                      ,t6.CODE_NM                                                                               AS CLSF_NM
+		                      ,t1.JBLN_SE                                                                               AS JBLN_SE
+		                      ,t7.CODE_NM                                                                               AS JBLN_NM
+		                      /**,NVL(t3.CLSF_GNFD_DE, t1.ECNY_DE)                                                      AS CLSF_GNFD_DE */
+		                      ,CASE WHEN t3.CLSF_GNFD_DE IS NOT NULL THEN t3.CLSF_GNFD_DE ELSE 
+		                      			CASE WHEN t1.ECNY_DE <> t2.CLSF_GNFD_DE THEN t1.ECNY_DE ELSE NULL END
+		                       END                                                                                      AS CLSF_GNFD_DE
+		                      ,TO_CHAR(TO_DATE(NVL(t1.NOW_CLSF_EMPLMN_DE, t2.CLSF_GNFD_DE),'YYYYMMDD')-1,'YYYYMMDD')    AS EVL_STDR_DE
+		                FROM   TBHRM_HR_MASTR t1
+		                       LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t2
+		                            ON t1.EMPNO      = t2.EMPNO
+		                           AND t1.HR_CLSF_SE = t2.CLSF_SE
+		                       LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+		                            ON t1.EMPNO      = t3.EMPNO
+		                           AND (t1.HR_CLSF_SE+1) = t3.CLSF_SE
+		                       LEFT OUTER JOIN TBHRM_DEPT t4
+		                            ON t1.DEPT_CODE = t4.DEPT_CODE
+		                       LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		                            ON t1.JSSFC_SE = t5.CODE
+		                           AND t5.GRP_CODE = 'HRM001'
+		                       LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+		                            ON NVL(t3.CLSF_SE, (t1.HR_CLSF_SE+1)) = t6.CODE
+		                           AND t6.GRP_CODE = 'HRM002'
+		                       LEFT OUTER JOIN TBCOM_CMMN_CODE t7
+		                            ON t1.JBLN_SE = t7.CODE
+		                           AND t7.GRP_CODE = 'HRM004'
+		                WHERE t1.STTUS_SE <> '009' /*퇴직자 제외*/
+		                AND   t1.JSSFC_SE <> '01'  /*임원은 평정대상에서 제외*/
+		               ) r1
+		        WHERE  1=1
+		       ) s1
+		WHERE  s1.EMPNO = #EMPNO#
+	]]>
+	</select>
+
+
+	<!-- 직급별 교육인정시간 및 점수 조회 -->
+	<select id="HRM060201DAO.selectEdcEvl" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH CLSF_GNFD_DTLS_TM AS (
+		    SELECT EMPNO
+		          ,CLSF_SE
+		          ,MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM   TBHRM_GNFD_DTLS
+		    WHERE  GNFD_SE = '012'
+		    AND    DCSN_AT = '1'
+		    GROUP BY EMPNO, CLSF_SE
+		),
+		EDC_EVL_TM AS (
+		    SELECT r1.*
+		          ,CASE WHEN SUBSTR(#STDR_DE#,1,4) <= '2016' THEN  (
+		                                                            CASE WHEN NVL(r1.EDC_CNFRM_TIME,0) >= DECODE(r1.CLSF_SE, '202', 120, '203', 150, '204', 170, '205', 140) THEN 10
+		                                                                 WHEN NVL(r1.EDC_CNFRM_TIME,0) BETWEEN DECODE(r1.CLSF_SE, '202', 111, '203', 131, '204', 161, '205', 131) AND DECODE(r1.CLSF_SE, '202', 119, '203', 139, '204', 169, '205', 139) THEN 7
+		                                                                 WHEN NVL(r1.EDC_CNFRM_TIME,0) < DECODE(r1.CLSF_SE, '202', 110, '203', 130, '204', 160, '205', 130) THEN 5
+		                                                            END
+		                                                           ) 
+		                ELSE (
+		                      CASE WHEN NVL(r1.TOT_EDC_COMPL_TIME,0) = 0                                                THEN 0
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 100 THEN 10
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 90  THEN 9
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 80  THEN 8
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 70  THEN 7
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 60  THEN 6
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 50  THEN 5
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 40  THEN 4
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 30  THEN 3
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 20  THEN 2
+		                           WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100) >= 10  THEN 1
+		                           ELSE 0 END
+		                     )
+		           END  AS  EVL_SCORE
+		    FROM   (
+		             SELECT s1.*
+		                   ,NVL(s2.EDC_CNFRM_TIME,0)                                                                              AS EDC_CNFRM_TIME       /* 당해직급 누적시간(실적) */
+		                   ,(CASE WHEN NVL(s2.EDC_CNFRM_TIME,0) >= NVL(s1.TOT_EDC_COMPL_TIME,0) THEN '충족' ELSE '미충족' END)    AS SUFFCN_AT
+		             FROM   (
+		                       SELECT s1.EMPNO
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'EMPNM',     #STDR_DE#)   AS EMPNM
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'DEPT_CODE', #STDR_DE#)   AS DEPT_CODE
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JSSFC_SE',  #STDR_DE#)   AS JSSFC_SE
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE',   #STDR_DE#)   AS CLSF_SE
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JBLN_SE',   #STDR_DE#)   AS JBLN_SE
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'OFCPS_SE',   #STDR_DE#)  AS OFCPS_SE
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'DEPT_NM',   #STDR_DE#)   AS DEPT_NM
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JSSFC_NM',  #STDR_DE#)   AS JSSFC_NM
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_NM',   #STDR_DE#)   AS CLSF_NN
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JBLN_NM',   #STDR_DE#)   AS JBLN_NM
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'OFCPS_NM',   #STDR_DE#)  AS OFCPS_NM
+		                             ,s1.ECNY_DE
+		                             ,s1.NOW_CLSF_EMPLMN_DE
+		                             ,s1.BRTHDY
+		                             ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'STTUS_SE',   #STDR_DE#)  AS STTUS_SE
+		                             ,SFCOM_CODE_NM('HRM005', SFHRM_GET_EMPL_INFO(s1.EMPNO, 'STTUS_SE',   #STDR_DE#), 'CODE_NM') AS STTUS_NM
+		                             ,NVL(CASE WHEN SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE',   #STDR_DE#) = '101' /*임원*/ THEN s4.EDC_TIME_MNGER
+		                                       WHEN SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE',   #STDR_DE#) IN ('201', '202', '401', '402') /*관리자(2급,3급,가급,나급*/ THEN s4.EDC_TIME_MNGR
+		                                       WHEN SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE',   #STDR_DE#) IN ('203','403') /*4급, 다급*/ THEN s4.EDC_TIME_PRCAFS_GRAD_4
+		                                       WHEN SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE',   #STDR_DE#) IN ('204','404') /*5급, 라급*/ THEN s4.EDC_TIME_PRCAFS_GRAD_5
+		                                       WHEN SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE',   #STDR_DE#) IN ('205','405') /*6급, 마급*/ THEN s4.EDC_TIME_PRCAFS_GRAD_6
+		                                       ELSE s4.EDC_TIME_STOPRT_EMP /*현업직원(영양사,청경,시설관리원 등)*/
+		                                  END, 0) AS TOT_EDC_COMPL_TIME        /* 당해직급(총) 의무이수시간 */
+		                             ,NVL(SFHRM_GET_EDC_COMPL_TIME(SUBSTR(#STDR_DE#,1,4), 'D1', SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE',   #STDR_DE#)),0) AS YR_EDC_COMPL_TIME    /* 당해직급(연간) 의무이수시간 */
+		                             ,DECODE(FLOOR((MONTHS_BETWEEN(TO_DATE(#STDR_DE#,'YYYYMMDD'), TO_DATE(NVL(s1.NOW_CLSF_EMPLMN_DE, S3.CLSF_GNFD_DE), 'YYYYMMDD'))) / 12), 0, NULL, FLOOR((MONTHS_BETWEEN(TO_DATE(#STDR_DE#,'YYYYMMDD'), TO_DATE(NVL(s1.NOW_CLSF_EMPLMN_DE, S3.CLSF_GNFD_DE), 'YYYYMMDD'))) / 12))   AS CLSF_YEAR /*현보직근무연수_년*/
+		                       FROM   TBHRM_HR_MASTR s1
+		                              LEFT OUTER JOIN CLSF_GNFD_DTLS_TM s3
+		                                   ON s1.EMPNO = s3.EMPNO
+		                                  AND SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE', #STDR_DE#) = s3.CLSF_SE
+		                              LEFT OUTER JOIN (
+		                                                SELECT SUM(EDC_TIME_MNGER) AS EDC_TIME_MNGER
+		                                                     , SUM(EDC_TIME_MNGR)  AS EDC_TIME_MNGR
+		                                                     , SUM(EDC_TIME_PRCAFS_GRAD_4) AS EDC_TIME_PRCAFS_GRAD_4
+		                                                     , SUM(EDC_TIME_PRCAFS_GRAD_5) AS EDC_TIME_PRCAFS_GRAD_5
+		                                                     , SUM(EDC_TIME_PRCAFS_GRAD_6) AS EDC_TIME_PRCAFS_GRAD_6
+		                                                     , SUM(EDC_TIME_STOPRT_EMP) AS EDC_TIME_STOPRT_EMP
+		                                                FROM TBHRM_EDC_COMPL_TIME_MANAGE
+		                                                WHERE YEAR >= '2016'
+		                                                AND   YEAR <= SUBSTR(#STDR_DE#,1,4)
+		                                                AND   EDC_TIME_SE = 'D1'
+		                                                GROUP BY EDC_TIME_SE
+		                                              ) s4
+		                                   ON 1=1
+		                    ) s1
+		                    LEFT OUTER JOIN (
+		                                     SELECT t2.EMPNO  AS EMPNO
+		                                           ,SUM(CASE WHEN (NVL(t1.FYER_MXMM_RCOGN_TIME,0) <= NVL(t2.EDC_SUM_TIME,0)) THEN NVL(t1.FYER_MXMM_RCOGN_TIME,0) ELSE NVL(t2.EDC_SUM_TIME,0)  END) AS EDC_CNFRM_TIME
+		                                     FROM   TBHRM_EDC_TY_RCOGN_TIME t1
+		                                            INNER JOIN (
+		                                                        SELECT YEAR, EDC_TY_SN, EMPNO, SUM(EDC_RCOGN_TIME) AS EDC_SUM_TIME
+		                                                        FROM TBHRM_EDC_MANAGE 
+		                                                        GROUP BY YEAR, EDC_TY_SN, EMPNO
+		                                                       ) t2
+		                                                 ON t1.YEAR  = t2.YEAR
+		                                                AND t1.SN    = t2.EDC_TY_SN
+		                                     WHERE  t1.YEAR >= '2016'
+		                                       AND  t1.YEAR <= SUBSTR(#STDR_DE#,1,4)
+		                                     GROUP BY t2.EMPNO
+		                                    ) s2
+		                         ON s1.EMPNO = s2.EMPNO
+		             WHERE s1.CLSF_YEAR >= (CASE WHEN s1.CLSF_SE IN ('202', '402') THEN 5 WHEN s1.CLSF_SE IN ('205', '405') THEN 2 ELSE 3 END)
+		             AND   s1.JSSFC_SE IN ('02' /*, '04' 일반직만 대상으로.. 2018.01.15 인사과장 */)
+		             AND   s1.STTUS_SE <> '009'
+		           ) r1
+		    WHERE  1=1
+		    ORDER BY JSSFC_SE, OFCPS_SE, JBLN_SE, CLSF_SE
+		)
+		SELECT NVL(MAX(DECODE(e1.CLSF_SE, '201', e1.EDC_CNFRM_TIME, '401', e1.EDC_CNFRM_TIME, 0)),0)   AS CLSF_CONFRM_201
+		      ,NVL(MAX(DECODE(e1.CLSF_SE, '202', e1.EDC_CNFRM_TIME, '402', e1.EDC_CNFRM_TIME, 0)),0)   AS CLSF_CONFRM_202
+		      ,NVL(MAX(DECODE(e1.CLSF_SE, '203', e1.EDC_CNFRM_TIME, '403', e1.EDC_CNFRM_TIME, 0)),0)   AS CLSF_CONFRM_203
+		      ,NVL(MAX(DECODE(e1.CLSF_SE, '204', e1.EDC_CNFRM_TIME, '404', e1.EDC_CNFRM_TIME, 0)),0)   AS CLSF_CONFRM_204
+		      ,NVL(MAX(DECODE(e1.CLSF_SE, '205', e1.EDC_CNFRM_TIME, '405', e1.EDC_CNFRM_TIME, 0)),0)   AS CLSF_CONFRM_205
+		      ,NVL(MAX(e1.EDC_CNFRM_TIME),0)                                                           AS EDC_CNFRM_TIME
+		      ,NVL(MAX(e1.EVL_SCORE),0)                                                                AS EVL_SCORE
+		FROM   EDC_EVL_TM e1
+		WHERE  e1.EMPNO = #EMPNO#
+	]]>
+	</select>
+
+
+	<!-- 포상가점 조회 -->
+	<select id="HRM060201DAO.selectRwardEvl" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH CLSF_GNFD_DTLS_TM AS (
+		    SELECT EMPNO
+		          ,CLSF_SE
+		          ,MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM   TBHRM_GNFD_DTLS
+		    WHERE  GNFD_SE = '012'
+		    AND    DCSN_AT = '1'
+		    GROUP BY EMPNO, CLSF_SE
+		)
+		SELECT WNPZ_DE
+		      ,EMPNO
+		      ,EMPNM
+		      ,PZDCR_SE
+		      ,PZDCR_NM
+		      ,CNFER_INSTT
+		      ,WNPZ_RESN
+		      ,PZDCR_SCORE
+		FROM   (
+		        SELECT t2.WNPZ_DE                       AS WNPZ_DE
+		              ,t1.EMPNO                         AS EMPNO
+		              ,t1.EMPNM                         AS EMPNM
+		              ,t2.PZDCR_SE                      AS PZDCR_SE
+		              ,t4.CODE_NM                       AS PZDCR_NM
+		              ,t2.CNFER_INSTT                   AS CNFER_INSTT
+		              ,t2.WNPZ_RESN                     AS WNPZ_RESN
+		              ,t4.MSTK_PREPAR_VALUE             AS PZDCR_SCORE
+		              ,RANK() OVER(PARTITION BY t2.EMPNO ORDER BY NVL(t4.MSTK_PREPAR_VALUE,0) DESC, WNPZ_DE ASC)  AS RNK
+		        FROM   TBHRM_HR_MASTR t1
+		               LEFT OUTER JOIN TBHRM_RWARD_DTLS t2
+		                    ON t1.EMPNO = t2.EMPNO
+		               LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+		                    ON t1.EMPNO      = t3.EMPNO
+		                   AND t1.HR_CLSF_SE = t3.CLSF_SE
+		               LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		                    ON t2.PZDCR_SE = t4.CODE
+		                   AND t4.GRP_CODE = 'HRM030'
+		        WHERE  t4.MSTK_PREPAR_VALUE IS NOT NULL
+		        AND    t1.EMPNO = #EMPNO#
+		        AND    t2.WNPZ_DE BETWEEN NVL(t1.NOW_CLSF_EMPLMN_DE, t3.CLSF_GNFD_DE) AND #STDR_DE#
+		       )
+		WHERE  RNK = '1'
+	]]>
+	</select>
+
+
+	<!-- 자격평정점수 조회 -->
+	<select id="HRM060201DAO.selectQualfEvl" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH CLSF_GNFD_DTLS_TM AS (
+		    SELECT EMPNO
+		          ,CLSF_SE
+		          ,MIN(GNFD_DE) AS CLSF_GNFD_DE
+		    FROM   TBHRM_GNFD_DTLS
+		    WHERE  GNFD_SE = '012'
+		    AND    DCSN_AT = '1'
+		    GROUP BY EMPNO, CLSF_SE
+		)
+		SELECT ACQS_DE
+		      ,EMPNO
+		      ,EMPNM
+		      ,QUALF_CODE
+		      ,QUALF_NM
+		      ,PBLICTE_OFFIC_NM
+		      ,QUALF_SCORE
+		FROM   (
+		        SELECT t2.ACQS_DE
+		              ,t1.EMPNO
+		              ,t1.EMPNM
+		              ,t2.QUALF_CODE
+		              ,t4.CODE_NM                    AS QUALF_NM
+		              ,t2.PBLICTE_OFFIC_NM
+		              ,t4.MSTK_PREPAR_VALUE          AS QUALF_SCORE
+		              ,RANK() OVER(PARTITION BY t2.EMPNO ORDER BY NVL(t4.MSTK_PREPAR_VALUE,0) DESC, t2.ACQS_DE ASC)  AS RNK
+		        FROM   TBHRM_HR_MASTR t1
+		               LEFT OUTER JOIN TBHRM_HR_QUALF t2
+		                    ON t1.EMPNO      = t2.EMPNO
+		               LEFT OUTER JOIN CLSF_GNFD_DTLS_TM t3
+		                    ON t1.EMPNO      = t3.EMPNO
+		                   AND t1.HR_CLSF_SE = t3.CLSF_SE
+		               LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		                    ON t2.QUALF_CODE = t4.CODE
+		                   AND t4.GRP_CODE   = 'HRM009'
+		        WHERE  t4.MSTK_PREPAR_VALUE IS NOT NULL
+		        AND    t1.EMPNO = #EMPNO#
+		        AND    t2.ACQS_DE BETWEEN NVL(t1.NOW_CLSF_EMPLMN_DE, t3.CLSF_GNFD_DE) AND #STDR_DE#
+		       )
+		WHERE  RNK = '1'
+	]]>
+	</select>
+
+
+</sqlMap>

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070305_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 쿼리명 : 당직수당지급관리
+	설명 : 당직수당지급관리 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 박세현
+	최초작성일 : 2016.10.31
+	-->
+	<!-- 당직수당지급내역 조회 -->
+	<select id="HRM070305DAO.selectBndtPymntExpndtrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[		
+			SELECT A.PYMNT_YM AS PYMNT_YM
+			     , A.PYMNT_DE AS PYMNT_DE  
+			     , (SELECT SUM(AA.BNDT_ALLWNC) FROM TBHRM_BNDT_PYMNT AA WHERE AA.PYMNT_YM = A.PYMNT_YM) AS BNDT_ALLWNC_TOT
+			     , A.SANCTN_NO
+			     , SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT)                        AS DRFT_STS            /* 기안상태        */
+				 , 'theme://images/sanctn/' || 'D' || SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT) || '.png'        AS DRFT_STS_IMG        /* 기안상태Img    */
+				 , TO_CHAR(B.DRFT_DT,'YYYY-MM-DD HH24:MI:SS')            AS DRFT_DT            /* 기안일시        */
+				 , SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT)                        AS SANCTN_STS        /* 결재상태        */
+				 , 'theme://images/sanctn/' || 'A' || SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT) || '.png'        AS SANCTN_STS_IMG    /* 결재상태Img    */
+				 , TO_CHAR(B.LAST_SANCTN_DT,'YYYY-MM-DD HH24:MI:SS')     AS LAST_SANCTN_DT    /* 최종결재일시    */
+			FROM
+			  TBHRM_BNDT_PYMNT_EXPNDTR A ,
+			  TBCOM_ELCTRN_SANCTN_MASTR B
+			WHERE A.SANCTN_NO   = B.SANCTN_NO(+)
+			AND   A.PYMNT_YM LIKE #PYMNT_YEAR# || '%'
+			ORDER BY A.PYMNT_YM DESC, A.PYMNT_DE DESC 
+		]]>
+	</select>  
+			
+	<!-- 당직수당지급상세정보 조회 -->
+	<select id="HRM070305DAO.selectBndtPymntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT A.PYMNT_YM
+		     , B.PYMNT_DE
+		     , A.EMPNO
+		     , A.EMPNM
+		     , E.BNDT_DE
+		     , E.BNDT_SE
+			 , A.JSSFC_SE
+			 , A.DEPT_CODE
+			 , SFSAL_GETDEPTNM_01(A.DEPT_CODE) AS DEPT_NM
+			 , A.CLSF_SE
+			 , SFHRM_GET_OFCPSCD(A.EMPNO ,A.JSSFC_SE ,A.CLSF_SE ,C.ECNY_DE) AS OFCPS
+			 , SFCMP_GET_CODENM('COM021' ,D.SALARY_BANK_CODE) AS SALARY_BANK_NM         
+			 , D.SALARY_BANK_ACNUT                            AS SALARY_BANK_ACNUT         
+			 , SFCMP_GET_CODENM('COM021' ,D.ALLWNC_BANK_CODE) AS ALLWNC_BANK_NM         
+			 , D.ALLWNC_BANK_ACNUT                            AS ALLWNC_BANK_ACNUT         
+			 , A.BNDT_ALLWNC                                  AS BNDT_ALLWNC              
+		FROM TBHRM_BNDT_PYMNT A
+		   , TBHRM_BNDT_PYMNT_EXPNDTR B
+		   , TBHRM_HR_MASTR C
+		   , TBSAL_EMPL_BANK_ACNUT D
+		   , TBHRM_DALY_BNDT E
+		WHERE A.PYMNT_YM = B.PYMNT_YM
+		AND   A.EMPNO   	= C.EMPNO
+		AND   B.PYMNT_YM 	= #PYMNT_YM#
+		AND   B.PYMNT_DE 	= #PYMNT_DE#
+		AND   A.EMPNO 		= D.EMPNO(+)
+		AND   A.BNDT_DE 	= E.BNDT_DE
+		AND   A.EMPNO 		= E.EMPNO 
+		AND   A.BNDT_SE 	= E.BNDT_SE
+		AND   A.SEQ 		= E.SEQ		
+		ORDER BY A.BNDT_DE
+		       , A.SEQ
+		       , C.SEXDSTN DESC  
+	]]>
+	</select>
+	
+    <!--  결재번호 입력-->			
+    <update id="HRM070305DAO.approveU" parameterClass="java.util.HashMap">
+        <![CDATA[
+              UPDATE TBHRM_BNDT_PYMNT_EXPNDTR A
+              SET    SANCTN_NO = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+                   , UPDUSR_ID =  #S_USER_ID#
+                   , UPDT_DT   =  SYSDATE              
+              WHERE  PYMNT_YM  = #PYMNT_YM#
+
+        ]]>
+    </update>
+  </sqlMap>

@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020207_SQL">	
+	
+     
+	<!-- 지출결의등록 목록 -->
+	<select id="ACC020207DAO.wikCptalPlanList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		WITH TB_EXP_DSN_MASTR AS (
+			SELECT *
+			FROM TBACC_EXP_DSN_MASTR
+			WHERE 1=1
+			<isNotEmpty property="DEPT_CODE">
+            	<isNotEqual property="DEPT_CODE" compareValue="000000">
+            	AND DEPT_CODE = #DEPT_CODE#
+            	</isNotEqual>
+	        </isNotEmpty>
+	        <isNotEmpty property="ANACT_KND">
+	        	AND ANACT_KND = #ANACT_KND#
+	        </isNotEmpty>
+	        <isNotEmpty property="SEARCH_TEXT">
+				<isEqual property="SEARCH_GUBUN" compareValue="1">
+				AND CHECK_NO = #SEARCH_TEXT#							/* 수표번호			*/
+				</isEqual>
+				 <isEqual property="SEARCH_GUBUN" compareValue="2">
+				AND DECSN_NO LIKE '%' || #SEARCH_TEXT# || '%'		/* 결의번호  			*/
+				</isEqual>
+				<isEqual property="SEARCH_GUBUN" compareValue="3">
+				AND SUMRY LIKE '%' || #SEARCH_TEXT# || '%'		/*적요*/
+				</isEqual>
+			</isNotEmpty>
+			<isEqual property="STDR_DE" compareValue="1">
+			  	AND ITNC_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#		/* 결의일자			*/
+			</isEqual>
+			<isEqual property="STDR_DE" compareValue="2">
+			  	AND DET_DCSN_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#	/* 채무확정일자		*/
+			</isEqual>
+			<isEqual property="STDR_DE" compareValue="3">
+			  	AND CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#	/* 자금지출일자		*/
+			</isEqual>
+			<isNotEmpty property="SANCTN_KND">
+			  	AND SFCOM_GET_SANCTN_KND(SANCTN_NO) = #SANCTN_KND#
+			</isNotEmpty>
+		)
+		SELECT
+		     t2.DEPT_NM                                                               /* 부서명      */
+		    ,t1.DECSN_YEAR                                                            /* 지출년도      */
+		    ,t1.DECSN_NO                                                              /* 결의번호      */  
+		    ,t1.SUMRY                                                                 /* 적요      */
+		    ,SFCOM_GET_SANCTN_DOC_NO(t1.SANCTN_NO) AS DOC_ID                          /* 문서번호      */
+		    ,t1.SANCTN_NO                                                             /* 결재번호      */
+		    ,SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) AS SANCTN_KND                         /* 결재구분      */
+		FROM TB_EXP_DSN_MASTR t1
+		     LEFT OUTER JOIN TBHRM_DEPT t2
+		     ON  t1.DEPT_CODE = t2.DEPT_CODE
+		     LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t3
+		     ON  t1.BUDGET_YEAR       = t3.YEAR 
+		     AND t1.BSNS_SE           = t3.BSNS_SE 
+			 AND t1.BALC_SE           = t3.BALC_SE
+			 AND t1.BUDGET_ACNT_CODE  = t3.BUDGET_ACNT_CODE
+		     LEFT OUTER JOIN TBBDG_BUKIP_CODE t4
+		     ON  t1.EXPNDTR_UNIT_CODE = t4.BUKIP_CODE
+		     LEFT OUTER JOIN TBCOM_USER t5
+		     ON  t1.REGISTER_ID = t5.USER_ID
+		     LEFT OUTER JOIN TBHRM_HR_MASTR t6
+		     ON  t5.EMPNO = t6.EMPNO
+		WHERE 1=1
+		<isNotEmpty property="SEARCH_TEXT">
+			<isEqual property="SEARCH_GUBUN" compareValue="4">
+				AND t3.BUDGET_ACNT_NM LIKE '%' || #SEARCH_TEXT# || '%'
+			</isEqual>
+			 <isEqual property="SEARCH_GUBUN" compareValue="5">
+				AND t4.BUKIP_NM LIKE '%' || #SEARCH_TEXT# || '%'
+			</isEqual>
+			<isEqual property="SEARCH_GUBUN" compareValue="6">
+				AND t6.EMPNM LIKE '%' || #SEARCH_TEXT# || '%'
+			</isEqual> 
+		</isNotEmpty>
+		ORDER BY t1.DECSN_YEAR ASC, t1.CPTAL_EXPNDTR_ACNTBK_DE ASC NULLS LAST, t1.REGIST_DT, t1.DECSN_NO
+	</select>
+	
+	
+	<!-- 지출결의 이력(마스터) 조회 -->
+	<select id="ACC020207DAO.selectExpDsnMastrHist" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT X1.P_TYPE 
+		      ,X1.DECSN_YEAR
+		      ,X1.DECSN_NO
+		      ,X1.SN
+		      ,X1.OCCRRNC_DT
+		      ,X1.CAUSE_ACTION_NO
+		      ,X1.BUDGET_YEAR
+		      ,X1.BSNS_SE
+		      ,X1.BALC_SE
+		      ,X1.BUDGET_ACNT_CODE
+		      ,X1.ATMC_JRNLZ_TY_CODE
+		      ,X1.ANACT_KND
+		      ,X1.DEPT_CODE
+		      ,X1.CYFD_SE
+		      ,X1.ITNC_DE
+		      ,X1.PYMNT_ITNC_DE
+		      ,X1.DET_DCSN_DE
+		      ,X1.PRMPC_JRNLZPR_RGIST_DE
+		      ,X1.CPTAL_EXPNDTR_ACNTBK_DE
+		      ,X1.EXPNDTR_BUDGET_CNRL_DE
+		      ,X1.DECSN_AMOUNT
+		      ,X1.BUDGET_ACNT_BLCE
+		      ,X1.EXPNDTR_UNIT_CODE
+		      ,X1.EXPNDTR_UNIT_CODE_BLCE
+		      ,X1.CPTAL_CHRG_CONFM
+		      ,X1.TIMHDER_CONFM
+		      ,X1.EXPNDTR_CNFIRM_AT
+		      ,X1.CNTRCT_NO
+		      ,X1.FNNC_INSTT_CODE
+		      ,X1.ACNUTNO
+		      ,X1.BSNS_CODE
+		      ,X1.PRMPC_YEAR
+		      ,X1.PRMPC_CODE
+		      ,X1.CHECK_NO
+		      ,X1.SUMRY
+		      ,X1.FILE_SN
+		      ,X1.SANCTN_NO
+		      ,X1.SANCTN_SE
+		      ,X1.ORIBDGT_DECSN_AMOUNT
+		      ,X1.CYFD_BUDGET_DECSN_AMOUNT
+		      ,X1.REGISTER_ID
+		      ,X1.REGIST_DT
+		      ,X1.UPDUSR_ID
+		      ,X1.UPDT_DT
+		      ,X1.DRFT_APPRID
+		      ,X1.DRFT_DATE
+		      ,X1.DRFT_USERID
+		      ,X1.TRG_FORM_ID
+		      ,X1.TRG_FORM_ID2
+		      ,X1.PARENT_DECSN_NO
+		      ,X1.BUDGET_DEPT_CODE
+		      ,X1.PRUF_SE_CODE
+		      ,X1.RETURN_AT
+		      ,X1.RETURN_DT
+		      ,X1.SPLEMNT_AT
+		      ,X1.SPLEMNT_DT
+		      ,X1.SPLEMNT_MAN_EMPNO
+		      ,X1.EXPNDTR_UPDT_REQ_CN
+		      ,X1.CAUSE_ACTION_DE
+		  FROM (
+		        /*지출결의마스터*/
+		        SELECT 'TYPE01' AS P_TYPE /*지출결의마스터*/
+		              ,T1.DECSN_YEAR
+		              ,T1.DECSN_NO
+		              ,0 AS SN
+		              ,NULL AS OCCRRNC_DT
+		              ,T1.CAUSE_ACTION_NO
+		              ,T1.BUDGET_YEAR
+		              ,T1.BSNS_SE
+		              ,T1.BALC_SE
+		              ,T1.BUDGET_ACNT_CODE
+		              ,T1.ATMC_JRNLZ_TY_CODE
+		              ,T1.ANACT_KND
+		              ,T1.DEPT_CODE
+		              ,T1.CYFD_SE
+		              ,T1.ITNC_DE
+		              ,T1.PYMNT_ITNC_DE
+		              ,T1.DET_DCSN_DE
+		              ,T1.PRMPC_JRNLZPR_RGIST_DE
+		              ,T1.CPTAL_EXPNDTR_ACNTBK_DE
+		              ,T1.EXPNDTR_BUDGET_CNRL_DE
+		              ,T1.DECSN_AMOUNT
+		              ,T1.BUDGET_ACNT_BLCE
+		              ,T1.EXPNDTR_UNIT_CODE
+		              ,T1.EXPNDTR_UNIT_CODE_BLCE
+		              ,T1.CPTAL_CHRG_CONFM
+		              ,T1.TIMHDER_CONFM
+		              ,T1.EXPNDTR_CNFIRM_AT
+		              ,T1.CNTRCT_NO
+		              ,T1.FNNC_INSTT_CODE
+		              ,T1.ACNUTNO
+		              ,T1.BSNS_CODE
+		              ,T1.PRMPC_YEAR
+		              ,T1.PRMPC_CODE
+		              ,T1.CHECK_NO
+		              ,T1.SUMRY
+		              ,T1.FILE_SN
+		              ,T1.SANCTN_NO
+		              ,T1.SANCTN_SE
+		              ,T1.ORIBDGT_DECSN_AMOUNT
+		              ,T1.CYFD_BUDGET_DECSN_AMOUNT
+		              ,T1.REGISTER_ID
+		              ,T1.REGIST_DT
+		              ,T1.UPDUSR_ID
+		              ,T1.UPDT_DT
+		              ,T1.DRFT_APPRID
+		              ,T1.DRFT_DATE
+		              ,T1.DRFT_USERID
+		              ,T1.TRG_FORM_ID
+		              ,T1.TRG_FORM_ID2
+		              ,T1.PARENT_DECSN_NO
+		              ,T1.BUDGET_DEPT_CODE
+		              ,T1.PRUF_SE_CODE
+		              ,T1.RETURN_AT
+		              ,T1.RETURN_DT
+		              ,T1.SPLEMNT_AT
+		              ,T1.SPLEMNT_DT
+		              ,T1.SPLEMNT_MAN_EMPNO
+		              ,T1.EXPNDTR_UPDT_REQ_CN
+		              ,T1.CAUSE_ACTION_DE
+		          FROM TBACC_EXP_DSN_MASTR T1
+		         WHERE T1.DECSN_YEAR = #DECSN_YEAR#
+		           AND T1.DECSN_NO= #DECSN_NO#
+		        UNION ALL
+		        /*지출결의마스터 이력*/
+		        SELECT 'TYPE02' AS P_TYPE /*지출결의마스터 이력*/
+		              ,T1.DECSN_YEAR
+		              ,T1.DECSN_NO
+		              ,T1.SN
+		              ,TO_CHAR(T1.OCCRRNC_DT, 'YYYY-MM-DD HH24:MI:SS') AS OCCRRNC_DT
+		              ,T1.CAUSE_ACTION_NO
+		              ,T1.BUDGET_YEAR
+		              ,T1.BSNS_SE
+		              ,T1.BALC_SE
+		              ,T1.BUDGET_ACNT_CODE
+		              ,T1.ATMC_JRNLZ_TY_CODE
+		              ,T1.ANACT_KND
+		              ,T1.DEPT_CODE
+		              ,T1.CYFD_SE
+		              ,T1.ITNC_DE
+		              ,T1.PYMNT_ITNC_DE
+		              ,T1.DET_DCSN_DE
+		              ,T1.PRMPC_JRNLZPR_RGIST_DE
+		              ,T1.CPTAL_EXPNDTR_ACNTBK_DE
+		              ,T1.EXPNDTR_BUDGET_CNRL_DE
+		              ,T1.DECSN_AMOUNT
+		              ,T1.BUDGET_ACNT_BLCE
+		              ,T1.EXPNDTR_UNIT_CODE
+		              ,T1.EXPNDTR_UNIT_CODE_BLCE
+		              ,T1.CPTAL_CHRG_CONFM
+		              ,T1.TIMHDER_CONFM
+		              ,T1.EXPNDTR_CNFIRM_AT
+		              ,T1.CNTRCT_NO
+		              ,T1.FNNC_INSTT_CODE
+		              ,T1.ACNUTNO
+		              ,T1.BSNS_CODE
+		              ,T1.PRMPC_YEAR
+		              ,T1.PRMPC_CODE
+		              ,T1.CHECK_NO
+		              ,T1.SUMRY
+		              ,T1.FILE_SN
+		              ,T1.SANCTN_NO
+		              ,T1.SANCTN_SE
+		              ,T1.ORIBDGT_DECSN_AMOUNT
+		              ,T1.CYFD_BUDGET_DECSN_AMOUNT
+		              ,T1.REGISTER_ID
+		              ,T1.REGIST_DT
+		              ,T1.UPDUSR_ID
+		              ,T1.UPDT_DT
+		              ,T1.DRFT_APPRID
+		              ,T1.DRFT_DATE
+		              ,T1.DRFT_USERID
+		              ,T1.TRG_FORM_ID
+		              ,T1.TRG_FORM_ID2
+		              ,T1.PARENT_DECSN_NO
+		              ,T1.BUDGET_DEPT_CODE
+		              ,T1.PRUF_SE_CODE
+		              ,T1.RETURN_AT
+		              ,T1.RETURN_DT
+		              ,T1.SPLEMNT_AT
+		              ,T1.SPLEMNT_DT
+		              ,T1.SPLEMNT_MAN_EMPNO
+		              ,T1.EXPNDTR_UPDT_REQ_CN
+		              ,T1.CAUSE_ACTION_DE
+		         FROM TBACC_EXP_DSN_MASTR_HIST T1
+		        WHERE T1.DECSN_YEAR = #DECSN_YEAR#
+		          AND T1.DECSN_NO= #DECSN_NO#
+		       )X1
+		ORDER BY X1.P_TYPE ASC, X1.SN DESC
+	</select>
+	
+	<!-- 지출결의 이력(디테일) 조회 -->
+	<select id="ACC020207DAO.selectExpDsnMtrDetHist" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT X1.P_TYPE
+		      ,X1.DECSN_YEAR
+		      ,X1.DECSN_NO
+		      ,X1.SN
+		      ,X1.OCCRRNC_DT
+		      ,X1.BSNS_CODE
+		      ,X1.CNTRCT_NO
+		      ,X1.CNTRCT_DE
+		      ,X1.ACPTNC_DE
+		      ,X1.ORDER_DE
+		      ,X1.DVYFG_DE
+		      ,X1.COMPT_DE
+		      ,X1.PYMNT_CMMND_PBLICTE_DE
+		      ,X1.TAXXPT_AMOUNT
+		      ,X1.VAT_DECSN_AMOUNT
+		      ,X1.SUPLY_AMOUNT
+		      ,X1.VAT_AMOUNT
+		      ,X1.DSGN_AMOUNT
+		      ,X1.CNTRCT_SE
+		      ,X1.CNTRCT_MTHD
+		      ,X1.PYMNT_SE
+		      ,X1.IHIDNUM
+		      ,X1.ATCH_FILE
+		      ,X1.ATCH_FLPTH
+		      ,X1.ATCH_FILE_1
+		      ,X1.ATCH_FLPTH_1
+		      ,X1.REGISTER_ID
+		      ,X1.REGIST_DT
+		      ,X1.UPDUSR_ID
+		      ,X1.UPDT_DT
+		      ,X1.CNTR_RGST_STA_DE
+		  FROM (
+		        /*지출결의마스터상세*/ 
+		        SELECT 'TYPE_01' AS P_TYPE
+		              ,T1.DECSN_YEAR
+		              ,T1.DECSN_NO
+		              ,0 AS SN
+		              ,NULL AS OCCRRNC_DT
+		              ,T1.BSNS_CODE
+		              ,T1.CNTRCT_NO
+		              ,T1.CNTRCT_DE
+		              ,T1.ACPTNC_DE
+		              ,T1.ORDER_DE
+		              ,T1.DVYFG_DE
+		              ,T1.COMPT_DE
+		              ,T1.PYMNT_CMMND_PBLICTE_DE
+		              ,T1.TAXXPT_AMOUNT
+		              ,T1.VAT_DECSN_AMOUNT
+		              ,T1.SUPLY_AMOUNT
+		              ,T1.VAT_AMOUNT
+		              ,T1.DSGN_AMOUNT
+		              ,T1.CNTRCT_SE
+		              ,T1.CNTRCT_MTHD
+		              ,T1.PYMNT_SE
+		              ,T1.IHIDNUM
+		              ,T1.ATCH_FILE
+		              ,T1.ATCH_FLPTH
+		              ,T1.ATCH_FILE_1
+		              ,T1.ATCH_FLPTH_1
+		              ,T1.REGISTER_ID
+		              ,T1.REGIST_DT
+		              ,T1.UPDUSR_ID
+		              ,T1.UPDT_DT
+		              ,T1.CNTR_RGST_STA_DE
+		          FROM TBACC_EXP_DSN_MTR_DET T1
+		         WHERE T1.DECSN_YEAR = #DECSN_YEAR#
+		           AND T1.DECSN_NO= #DECSN_NO#
+		        UNION ALL
+		         /*지출결의마스터상세이력*/
+		        SELECT 'TYPE_02' AS P_TYPE
+		              ,T1.DECSN_YEAR
+		              ,T1.DECSN_NO
+		              ,T1.SN
+		              ,TO_CHAR(T1.OCCRRNC_DT, 'YYYY-MM-DD HH24:MI:SS') AS OCCRRNC_DT
+		              ,T1.BSNS_CODE
+		              ,T1.CNTRCT_NO
+		              ,T1.CNTRCT_DE
+		              ,T1.ACPTNC_DE
+		              ,T1.ORDER_DE
+		              ,T1.DVYFG_DE
+		              ,T1.COMPT_DE
+		              ,T1.PYMNT_CMMND_PBLICTE_DE
+		              ,T1.TAXXPT_AMOUNT
+		              ,T1.VAT_DECSN_AMOUNT
+		              ,T1.SUPLY_AMOUNT
+		              ,T1.VAT_AMOUNT
+		              ,T1.DSGN_AMOUNT
+		              ,T1.CNTRCT_SE
+		              ,T1.CNTRCT_MTHD
+		              ,T1.PYMNT_SE
+		              ,T1.IHIDNUM
+		              ,T1.ATCH_FILE
+		              ,T1.ATCH_FLPTH
+		              ,T1.ATCH_FILE_1
+		              ,T1.ATCH_FLPTH_1
+		              ,T1.REGISTER_ID
+		              ,T1.REGIST_DT
+		              ,T1.UPDUSR_ID
+		              ,T1.UPDT_DT
+		              ,T1.CNTR_RGST_STA_DE
+		          FROM TBACC_EXP_DSN_MTR_DET_HIST T1
+		         WHERE T1.DECSN_YEAR = #DECSN_YEAR#
+		           AND T1.DECSN_NO= #DECSN_NO#
+		       )X1
+		ORDER BY X1.P_TYPE ASC, X1.SN DESC
+	</select>
+
+</sqlMap>

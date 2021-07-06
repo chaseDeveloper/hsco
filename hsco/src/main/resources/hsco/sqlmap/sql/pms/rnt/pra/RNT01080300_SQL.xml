@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01080300_SQL">	
+   <!--  설명  : 문제세대(주택,체납,미계약)현황
+		작성자 : 김지훈 -->
+	<!-- 게약 목록 -->
+	<select id="RNT01080300DAO.rentIssueHouseList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH vi_rn_delay_info AS(SELECT cntrctr_no,
+								      SUM(rntchrg) AS pay_amt,
+								      SUM(ovdintr) AS del_int,
+								      SUM(rntchrg + ovdintr) AS del_amt,
+								      COUNT(1) AS cnt
+							    FROM tbrnt_rent_mt_rntchrg
+							    WHERE rciv_de IS NULL
+								GROUP BY cntrctr_no)
+		SELECT *
+		  FROM (
+		        SELECT a.CNTRCT_AMOUNT + a.SURLUS AS sec_amt1, 	/* 현보증금 */
+		               a.RENT_HOUSE_CODE, 						/* 주택코드 */
+		               h.RENT_HOUSE_NM,
+		               a.dong,
+		               a.ho,
+		               r.NM AS cont_name, 						/* 계약자 */
+		               SFCOM_DEC_ALL(r.IHIDNUM) AS cont_prn, 	/* 주민번호 */
+		               r.telno,  								/* 전화번호 */
+		               r.MBTLNO, 								/* 휴대폰번호 */
+		               a.CNTRCT_DE,  							/* 계약일자 */
+		               RENT_ENDDE_BFCHG, 						/* 임대종료일자_변경전 */
+		               A.RENT_ENDDE,
+		               (SELECT CODE_NM
+		                  FROM TBCOM_CMMN_CODE Z
+		                 WHERE GRP_CODE = 'RNT001'
+		                   AND RTRIM (CODE) = RTRIM(a.QUALF_SE)) qulf_class, 			/* 자격구분 */
+		               DECODE( nvl(a.HOUSE_POSESN_AT,'0'),'0','무','유') AS house_yn, 	/* 주택소유여부 */
+		               SUBSTR(c.Guar_Chk,1,127) AS guar_chk, 							/* 압류구분 */
+		               NVL(f.pay_amt,0) pay_amt,					/* 체납금액 */
+		               f.cnt,  										/* 체납개월 */
+		               g.ADRES || ' ' || g.ADRES_DETAIL AS addr1, 	/* 주소 */
+		               g.ZIP AS postno, 
+		               h.RENT_HOUSE_NM || ' ' || a.dong || '동 ' || a.ho || '호'  AS ADDR,
+		               a.dong || '동 ' || a.ho || '호'  AS DongHo,
+		               TO_CHAR(SYSDATE,'YYYY') AS YYYY_1,
+		               TO_CHAR(SYSDATE,'MM') AS MM_1,
+		               TO_CHAR(SYSDATE,'YYYY') AS YYYY,
+		               TO_CHAR(SYSDATE,'MM') AS MM,
+		               TO_CHAR(SYSDATE,'DD') AS DD,
+		               0 AS rent_amt, 0 AS del_amt, 0 AS del_int,
+		               b.sec_amt AS sec_amt, 
+		               b.sec_amt AS Total_amt,
+		               (SELECT SUM(GTN) 
+		                  FROM TBRNT_RENT_GTN r 
+		                 WHERE r.CNTRCTR_NO = a.CNTRCTR_NO
+		                   AND r.RCIV_DE IS NOT NULL) AS rec_amt, 		/* 납부보증금 */
+		               a.RM,   											/* 비고 */
+		               p.AEA,  											/* 평형 */
+		               DECODE(DEATH_AT, '1', '사망', '') AS death_yn 	/* 사망여부 */
+		          FROM TBRNT_RENT_CNTRCT a,
+		               TBRNT_PRMANENT_RENT_CSTMR r,
+		               TBRNT_RENT_HOUSE h,
+		               TBRNT_RENT_HOUSE_DONG g,
+		               TBRNT_RENT_HOUSE_BILD p,   /* 임대주택건축물 */
+		               (SELECT a.*, (CNTRCT_AMOUNT + SURLUS) - GTN_BFCHG AS SEC_AMT
+		                  FROM TBRNT_RENT_RE_CNTRCT a /* 임대 재계약 */
+		                 WHERE SUBSTR(a.RENT_ENDDE_BFCHG,1,6)  <![CDATA[<=]]>  #enddeBfchg#
+		                   AND a.RENT_ENDDE_BFCHG = (SELECT MAX(RENT_ENDDE_BFCHG) 
+		                   							   FROM TBRNT_RENT_RE_CNTRCT b
+		                                              WHERE b.CNTRCTR_NO = a.CNTRCTR_NO
+		                                                AND b.CNTRCT_DE IS NULL
+		                                                AND SUBSTR(b.RENT_ENDDE_BFCHG,1,6)   <![CDATA[<=]]> #enddeBfchg# )
+		                   AND a.CNTRCT_DE IS NULL
+		                   AND (CNTRCT_AMOUNT + SURLUS) - GTN_BFCHG  <![CDATA[>=]]> -0.900000000e+008
+		               ) b,
+		               (SELECT CNTRCTR_NO, CASE WHEN SUM(cnt0) > 0 THEN '압류('||SUM(cnt0)||')' END ||
+		                                   CASE WHEN SUM(cnt1) > 0 THEN '가압류('||SUM(cnt1)||')' END ||
+		                                   CASE WHEN SUM(cnt2) > 0 THEN '압류및추심('||SUM(cnt2)||')' END ||
+		                                   CASE WHEN SUM(cnt3) > 0 THEN '압류및전부('||SUM(cnt3)||')' END ||
+		                                   CASE WHEN SUM(cnt4) > 0 THEN '채권양도('||SUM(cnt4)||')' END ||
+		                                   CASE WHEN SUM(cnt5) > 0 THEN '기타('||SUM(cnt5)||')' END AS Guar_Chk,
+		                                   SUM(cnt1) AS guar_cnt
+		                  FROM (SELECT CNTRCTR_NO,
+		                               CASE WHEN SEIZR_SE in('00') THEN 1 ELSE 0 END AS cnt0,
+		                               CASE WHEN SEIZR_SE in('01') THEN 1 ELSE 0 END AS cnt1,
+		                               CASE WHEN SEIZR_SE in('02') THEN 1 ELSE 0 END AS cnt2,
+		                               CASE WHEN SEIZR_SE in('03') THEN 1 ELSE 0 END AS cnt3,
+		                               CASE WHEN SEIZR_SE in('04') THEN 1 ELSE 0 END AS cnt4,
+		                               CASE WHEN NVL(SEIZR_SE,'99') not in('00','01','02','03','04') THEN 1 ELSE 0 END AS cnt5
+		                          FROM TBRNT_RENT_GTN_SEIZR 			/* 보증금 압류정보 */
+		                         WHERE (RELIS_DE IS NULL OR RELIS_DE = '')
+		                       ) GROUP BY CNTRCTR_NO
+		               ) c, vi_rn_delay_info  f
+		         WHERE a.CNTRCTR_NO 		= b.CNTRCTR_NO
+		           AND a.CNTRCTR_NO 		= c.CNTRCTR_NO(+)
+		           AND a.CNTRCTR_NO 		= f.CNTRCTR_NO(+)
+		           AND a.PRMANENT_CSTMR_NO 	= r.PRMANENT_CSTMR_NO(+)
+		           AND a.RENT_HOUSE_CODE 	= p.RENT_HOUSE_CODE(+)
+		           AND a.dong 				= p.dong(+)
+		           AND a.ho 				= p.ho(+)
+		           AND a.RENT_HOUSE_CODE 	= g.RENT_HOUSE_CODE
+		           AND a.dong 				= g.dong
+		           AND a.RENT_HOUSE_CODE 	= h.RENT_HOUSE_CODE
+		           AND NOT EXISTS(SELECT 'X'
+		                            FROM TBRNT_RENT_RESCI Z
+		                           WHERE CNTRCTR_NO = a.CNTRCTR_NO) 	/* 해약일 체크 */
+		           <isNotEmpty property="rentHouseCode">
+		                  AND h.RENT_HOUSE_CODE = #rentHouseCode#    	/* 주택코드 */
+		           </isNotEmpty>
+		           <isNotEmpty property="houseSe">
+		                  AND   #houseSe# LIKE '%' || h.HOUSE_SE || '%' /* 주택구분 */
+		           </isNotEmpty>
+		   )
+		 WHERE RENT_ENDDE_BFCHG > CNTRCT_DE
+		 ORDER BY RENT_HOUSE_CODE, dong, ho
+	</select>
+</sqlMap>

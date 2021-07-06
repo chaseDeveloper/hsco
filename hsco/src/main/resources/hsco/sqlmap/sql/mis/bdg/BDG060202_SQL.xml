@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG060202_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<parameterMap id="anytmAsignParam" class="java.util.HashMap">
+        <parameter property="IN_YEAR"             jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="IN_BUDGET_SE"        jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="IN_BSNS_SE"          jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="IN_BALC_SE"          jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="IN_BSNS_CODE"        jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="IN_DEPT_CODE"        jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="IN_BUDGET_ACNT_CODE" jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="IN_DEMAND_MT"        jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="IN_DCSN_AM"          jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="IN_REGISTER_ID"      jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+        <parameter property="OUT_RESULT_MSG"      jdbcType="VARCHAR" javaType="java.lang.String" mode="OUT" />
+    </parameterMap>
+    
+    <!-- 수시배정등록승인 시 정기배정 감액 -->
+    <procedure id="BDG060202DAO.callSpbdgAnytmAsign" parameterMap="anytmAsignParam">
+        { call SPBDG_ANYTM_ASIGN(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+    </procedure>
+	
+	
+	<!-- 수시배정요구 조회 -->
+	<select id="BDG060202DAO.selectAnytmAsignDemand" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG060202DAO.selectAnytmAsignDemand*/]]>
+		SELECT TB1.YEAR
+		     , TB1.BUDGET_SE
+		     , TB1.BSNS_SE
+		     , TB1.BALC_SE
+		     , TB1.BSNS_CODE
+		     , TB1.BSNS_NM
+		     , TB1.DEPT_CODE
+		     , TB1.DEPT_NM
+		     , TB1.BUDGET_ACNT_CODE
+		     , TB1.BUDGET_ACNT_NM
+		     , TB1.SN
+		     , TB1.ASIGN_TYPE
+		     , TB1.ASIGN_RESN
+		     , TB1.DEMAND_AM
+		     , TB1.DEMAND_MT
+		     , TB1.DCSN_AM
+		     , TB1.DCSN_DE
+		     , TB1.DCSN_AT
+		     , TO_CHAR(TB1.REGIST_DT, 'YYYYMMDD')                       AS REGIST_DT
+		     , NVL(TB2.LEGACY_ASIGN_AM, 0)                              AS LEGACY_ASIGN_AM
+		     , NVL(TB3.BUDGET_AM, 0)                                    AS BUDGET_AM
+		     , NVL(TB3.BUDGET_AM, 0) - NVL(TB2.LEGACY_ASIGN_AM, 0)      AS BUDGET_ASIGN_BLCE
+		     , NVL(TB4.DECSN_AMOUNT,0)                                  AS DECSN_AMOUNT
+		     , NVL(TB2.LEGACY_ASIGN_AM, 0) - NVL(TB4.DECSN_AMOUNT,0)    AS ASIGN_EXCUT_BLCE
+		  FROM (
+		        SELECT T1.YEAR
+		             , T1.BUDGET_SE
+		             , T1.BSNS_SE
+		             , T1.BALC_SE
+		             , T1.BSNS_CODE
+		             , T6.BSNS_NM
+		             , T1.DEPT_CODE
+		             , T5.DEPT_NM
+		             , T1.BUDGET_ACNT_CODE
+		             , T2.BUDGET_ACNT_NM
+		             , T1.SN
+		             , T1.ASIGN_TYPE
+		             , T1.ASIGN_RESN
+		             , T1.DEMAND_AM
+		             , T1.DEMAND_MT
+		             , T1.DCSN_AM
+		             , T1.DCSN_DE
+		             , T1.DCSN_AT
+		             , T1.REGISTER_ID
+		             , T1.REGIST_DT
+		             , T1.UPDUSR_ID
+		             , T1.UPDT_DT
+		          FROM TBBDG_BUDGET_ASIGN T1
+		               LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE T2
+		                    ON T1.YEAR             = T2.YEAR
+		                   AND T1.BSNS_SE          = T2.BSNS_SE
+		                   AND T1.BALC_SE          = T2.BALC_SE
+		                   AND T1.BUDGET_ACNT_CODE = T2.BUDGET_ACNT_CODE
+		               LEFT OUTER JOIN VWHRM_DEPT T5
+		                    ON T1.DEPT_CODE = T5.DEPT_CODE
+		               LEFT OUTER JOIN TBPRJ_BSNS_CODE T6
+		                    ON T1.BSNS_CODE = T6.BSNS_CODE
+		       ) TB1
+		       LEFT OUTER JOIN (
+		                        SELECT T.YEAR
+                                     , T.BSNS_SE
+                                     , T.BALC_SE
+                                     , T.BSNS_CODE
+                                     , T.DEPT_CODE
+                                     , T.BUDGET_ACNT_CODE
+                                     , NVL(SUM(T.DCSN_AM), 0) AS LEGACY_ASIGN_AM
+                                  FROM ( 
+                                        SELECT YEAR
+                                             , BSNS_SE
+                                             , BALC_SE
+                                             , BSNS_CODE
+                                             , DEPT_CODE
+                                             , BUDGET_ACNT_CODE
+                                             , DCSN_AM
+                                          FROM TBBDG_BUDGET_ASIGN
+                                         WHERE DCSN_DE IS NOT NULL
+                                           AND ASIGN_TYPE != '88'
+                                       ) T
+                                GROUP BY T.YEAR
+                                       , T.BSNS_SE
+                                       , T.BALC_SE
+                                       , T.BSNS_CODE
+                                       , T.DEPT_CODE
+                                       , T.BUDGET_ACNT_CODE
+		                       ) TB2
+		            ON TB1.YEAR             = TB2.YEAR
+		           AND TB1.BSNS_SE          = TB2.BSNS_SE
+		           AND TB1.BALC_SE          = TB2.BALC_SE
+		           AND TB1.BSNS_CODE        = TB2.BSNS_CODE
+		           AND TB1.DEPT_CODE        = TB2.DEPT_CODE
+		           AND TB1.BUDGET_ACNT_CODE = TB2.BUDGET_ACNT_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT YEAR
+		                             , BSNS_SE
+		                             , BALC_SE
+		                             , DETAIL_BSNS_CODE
+		                             , DEPT_CODE
+		                             , BUDGET_ACNT_CODE
+		                             , SUM(NVL(ORIBDGT,0)
+		                                   + NVL(RVSPBGT_1_ODR,0)
+		                                   + NVL(RVSPBGT_2_ODR,0)
+		                                   + NVL(RVSPBGT_3_ODR,0)
+		                                   + NVL(RVSPBGT_4_ODR,0)
+		                                   + NVL(RVSPBGT_5_ODR,0)
+		                                   + NVL(RVSPBGT_6_ODR,0)
+		                                   + NVL(RVSPBGT_7_ODR,0)
+		                                   + NVL(CYFD_BUDGET,0) + NVL(TRSF_AM,0) + NVL(MVMN_AM,0) + NVL(BUKIP_MVMN_AM,0) + NVL(DVR_AM,0) + NVL(RSVFND_REQST_AM,0))    AS BUDGET_AM
+		                          FROM TBBDG_EXECUT_BUDGET
+		                        GROUP BY YEAR
+		                               , BSNS_SE
+		                               , BALC_SE
+		                               , DETAIL_BSNS_CODE
+		                               , DEPT_CODE
+		                               , BUDGET_ACNT_CODE
+		                       ) TB3
+		            ON TB1.YEAR = TB3.YEAR
+		           AND TB1.BSNS_SE = TB3.BSNS_SE
+		           AND TB1.BALC_SE = TB3.BALC_SE
+		           AND TB1.BSNS_CODE = TB3.DETAIL_BSNS_CODE
+		           AND TB1.DEPT_CODE = TB3.DEPT_CODE
+		           AND TB1.BUDGET_ACNT_CODE = TB3.BUDGET_ACNT_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT BUDGET_YEAR
+		                              ,BSNS_SE
+		                              ,BALC_SE
+		                              ,BSNS_CODE
+		                              ,DEPT_CODE
+		                              ,BUDGET_ACNT_CODE
+		                              ,NVL(SUM(CAUSE_ACTION_AMOUNT),0)    AS CAUSE_ACTION_AMOUNT
+		                              ,NVL(SUM(DEBT_AMT),0)               AS DEBT_AMT
+		                              ,NVL(SUM(DECSN_AMOUNT),0)           AS DECSN_AMOUNT
+		<isEqual property="YEAR_SE" compareValue="1">
+		                        FROM   VHACC_EXP_DSN_MASTR
+		</isEqual>
+		<isEqual property="YEAR_SE" compareValue="2">
+		                        FROM   VWACC_EXP_DSN_MASTR
+		</isEqual>
+		                        WHERE  1=1
+		                        GROUP BY BUDGET_YEAR
+		                                ,BSNS_SE
+		                                ,BALC_SE
+		                                ,BSNS_CODE
+		                                ,DEPT_CODE
+		                                ,BUDGET_ACNT_CODE
+		                       ) TB4
+                    ON TB1.YEAR              = TB4.BUDGET_YEAR
+                   AND TB1.BSNS_SE           = TB4.BSNS_SE
+                   AND TB1.BALC_SE           = TB4.BALC_SE
+                   AND TB1.BSNS_CODE         = TB4.BSNS_CODE
+                   AND TB1.DEPT_CODE         = TB4.DEPT_CODE
+                   AND TB1.BUDGET_ACNT_CODE  = TB4.BUDGET_ACNT_CODE
+		 WHERE 1=1
+		   AND TB1.ASIGN_TYPE = '00'
+		<isNotEmpty property="YEAR"      prepend="AND ">TB1.YEAR      = #YEAR#</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+		  <isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">
+                (TB1.DEPT_CODE='000000' OR TB1.DEPT_CODE = #DEPT_CODE#)
+            </isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="BUDGET_SE" prepend="AND ">TB1.BUDGET_SE = #BUDGET_SE#</isNotEmpty>
+		ORDER BY TB1.BSNS_CODE
+		       , TB1.DEPT_CODE
+		       , TB1.BUDGET_ACNT_CODE
+		       , TB1.SN
+	</select>
+	
+	
+    <!-- 수시배정요구수정 -->
+    <update id="BDG060202DAO.updateAnytmAsignDemand" parameterClass="java.util.HashMap">
+    <![CDATA[/*BDG060202DAO.updateAnytmAsignDemand*/]]>
+        UPDATE TBBDG_BUDGET_ASIGN
+           SET UPDUSR_ID  = #S_USER_ID#
+             , UPDT_DT    = SYSDATE
+        <isEqual property="DCSN_AT" compareValue="1">
+             , DCSN_AM    = #DEMAND_AM#
+             , DCSN_DE    = TO_CHAR(SYSDATE, 'YYYYMMDD')
+             , DCSN_AT    = '1'
+        </isEqual>
+        <isNotEqual property="DCSN_AT" compareValue="1">
+             , DCSN_AM    = NULL
+             , DCSN_DE    = NULL
+             , DCSN_AT    = '0'
+        </isNotEqual>
+         WHERE YEAR             = #YEAR#
+           AND BUDGET_SE        = #BUDGET_SE#
+           AND BSNS_SE          = #BSNS_SE#
+           AND BALC_SE          = #BALC_SE#
+           AND BSNS_CODE        = #BSNS_CODE#
+           AND DEPT_CODE        = #DEPT_CODE#
+           AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+           AND SN               = #SN#
+    </update>
+	
+	
+</sqlMap>

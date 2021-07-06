@@ -1,0 +1,888 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP040700_SQL">
+<!-- 설명  : 보상금지불조서
+	작성자 : 지효정 -->
+
+	<!-- 조서 목록 -->
+	<select id="CMP040700DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+	SELECT A.RQEST_CNT, 
+	       A.ST, 
+	       A.FULL_LOCPLC_CODE_NM, 
+	       A.CODE_NM, 
+	       A.STRCT_STNDRD, 
+	       A.AR_LGSTR, 
+	       A.AR_INCRPR, 
+	       A.AR, 
+	       A.UNIT, 
+	       A.UNTPC, 
+	       A.RWMNY, 
+	       A.ACNUTNO, 
+	       A.BANK_NM, 
+	       A.RQEST_AMOUNT, 
+	       A.RQEST_BLCE, 
+	       A.RQEST_DE, 
+	       A.PYMNT_DE, 
+	       A.RM, 
+	       A.OWNER_NM, 
+	       A.ADRES, 
+	       A.TELNO_1 AS TELNO_1, 
+	       A.RQEST_SN, 
+	       A.SORT_ORD, 
+	       A.BNDE_APPLC_GROUP, 
+	       A.LNM, 
+	       A.SLNO, 
+	       A.SORT_ORDR, 
+	       A.GROUP_ORDER, 
+	       A.BSNS_AREA_CODE, 
+	       A.THING_SN, 
+	       A.OWNER_NO, 
+	       A.OWNER_RUM, 
+	       A.RQEST_NUM, 
+	       A.BF_RQEST_AMOUNT, 
+	       A.OWNER_NM AS NM_ORDER , 
+	       A.INNER_SANCTN_ID, 
+	       B.EMPNM_1, 
+	       B.EMPNM_2, 
+	       B.EMPNM_3
+	FROM (	        
+		SELECT 0 AS RQEST_CNT,
+		       M.ST,
+		       M.FULL_LOCPLC_CODE_NM,
+		       M.CODE_NM,
+		       M.STRCT_STNDRD,
+		       M.AR_LGSTR,
+		       M.AR_INCRPR,
+		       M.AR,
+		       M.UNIT,
+		       M.UNTPC,
+		       M.RWMNY,
+		       CASE WHEN L.RQEST_NUM > 0 THEN L.ACNUTNO ELSE '' END AS ACNUTNO,
+		       CASE WHEN L.RQEST_NUM > 0 THEN L.BANK_NM ELSE '' END AS BANK_NM,
+		       L.RQEST_AMOUNT,
+		       (
+		           CASE
+		               WHEN NVL (L.RQEST_AMOUNT, 0) = 0
+		               THEN 0
+		               ELSE M.T_AMT - NVL(L.BF_RQEST_AMOUNT,0) - SUM(L.RQEST_AMOUNT) OVER (PARTITION BY M.OWNER_NO  ORDER BY M.OWNER_NO, L.RQEST_NUM)
+		           END
+		       ) AS RQEST_BLCE,
+		       L.RQEST_DE,
+		       L.PYMNT_DE,
+		       L.RM,
+		       CASE WHEN M.OWNER_RUM = 1 THEN M.OWNER_NM ELSE '' END AS OWNER_NM, 
+		       CASE WHEN M.OWNER_RUM = 1 THEN M.ADRES ELSE '' END AS ADRES, 
+		       CASE WHEN M.OWNER_RUM = 1 THEN M.TELNO_1 ELSE '' END AS TELNO_1,
+		       M.RQEST_SN,
+		       M.SORT_ORD,
+		       M.BNDE_APPLC_GROUP,
+		       M.LNM,
+		       M.SLNO,
+		       M.SORT_ORDR,
+		       M.GROUP_ORDER,
+		       M.BSNS_AREA_CODE,
+		       M.THING_SN,
+		       M.OWNER_NO,
+		       M.OWNER_RUM,
+		       L.RQEST_NUM,
+		       L.BF_RQEST_AMOUNT,
+		       LPAD (M.OWNER_NO, 5, '0') || '-' || M.OWNER_NM AS NM_ORDER,
+		       /* L.INNER_SANCTN_ID AS INNER_SANCTN_ID_OLD1, */
+		       M.INNER_SANCTN_ID
+		  FROM
+		       (SELECT ROW_NUMBER () OVER (PARTITION BY K.OWNER_NM, K.OWNER_NO ORDER BY K.OWNER_NM, K.SORT_ORDR, K.LNM, K.SLNO, K.SORT_ORD, K.THING_SN) AS OWNER_RUM,
+		              SUM (RWMNY) OVER (PARTITION BY K.OWNER_NM, K.OWNER_NO ORDER BY K.OWNER_NM) AS T_AMT,
+		              K.*
+		         FROM
+		              (SELECT DISTINCT '1' AS ST,
+		                     SFCMP_GET_LOCPLC (A.BSNS_AREA_CODE, A.LOCPLC_CODE)|| ' '|| DECODE (A.SLNO,NULL, A.LNM,A.LNM || '-' || A.SLNO) AS FULL_LOCPLC_CODE_NM,
+		                     F.CODE_NM,
+		                     A.STRCT_STNDRD,
+		                     TO_CHAR (A.AR_LGSTR) AS AR_LGSTR,
+		                     TO_CHAR (A.AR_INCRPR) AS AR_INCRPR,
+		                     TO_CHAR (B.AR) AS AR,
+		                     SFCMP_GET_CODENM ('CMP002', TRIM (A.UNIT)) AS UNIT,
+		                     TO_CHAR (NVL (A.THING_UNTPC, 0)) AS UNTPC,
+		                     B.RWMNY,
+		                     E.OWNER_NM,
+		                     E.ADRES,
+		                     E.TELNO_1 AS TELNO_1,
+		                     0 AS RQEST_SN,
+		                     A.REWARD_STLE,
+		                     (A.REWARD_STLE||
+		                     (
+		                         CASE NVL (A.REWARD_STLE, '0')
+		                             WHEN '0'
+		                             THEN LPAD (NVL (F.CODE_ORDR, '99'), 2, '0')
+		                             ELSE
+		                                 CASE
+		                                     WHEN A.RWMNY > 0
+		                                     THEN '00'
+		                                     ELSE LPAD (NVL (F.CODE_ORDR, '99'), 2, '0')
+		                                 END
+		                         END
+		                     )
+		                     ) AS SORT_ORD,
+		                     A.BNDE_APPLC_GROUP,
+		                     SUBSTR ('0000' || A.LNM, -4) AS LNM,
+		                     SUBSTR ('0000' || A.SLNO, -4) AS SLNO,
+		                     G.SORT_ORDR,
+		                     0 AS GROUP_ORDER,
+		                     A.BSNS_AREA_CODE,
+		                     A.THING_SN,
+		                     B.OWNER_NO
+		                     , I.INNER_SANCTN_ID
+		                FROM TBCMP_THING_WTNNC A,
+		                     TBCMP_THING_OWNER B,
+		                     TBCMP_OWNER E,
+		                     TBCOM_CMMN_CODE F,
+		                     TBCMP_LOCPLC_INFO G ,
+		                     (SELECT AA.BSNS_AREA_CODE,
+		                            AA.OWNER_NO
+		                       FROM
+		                            (SELECT AAA.BSNS_AREA_CODE,
+		                                   AAA.OWNER_NO,
+		                                   COUNT (*) AS THING_NUM
+		                              FROM TBCMP_THING_OWNER AAA,
+		                                   TBCMP_THING_WTNNC BBB
+		                             WHERE AAA.BSNS_AREA_CODE = BBB.BSNS_AREA_CODE
+		                                   AND AAA.THING_SN = BBB.THING_SN
+		                                   <isEqual property="SELECT" compareValue="0"> 
+										   <isNotEmpty property="THING_CL">
+										   AND BBB.THING_CL IN
+										   <iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+										   #ARR_THING_CL[]#
+										   </iterate>
+										   </isNotEmpty>
+		                                   </isEqual>
+		                             GROUP BY AAA.BSNS_AREA_CODE,
+		                                   AAA.OWNER_NO
+		                            ) AA,
+		                            (SELECT BSNS_AREA_CODE,
+		                                   OWNER_NO,
+		                                   COUNT (*) AS RQEST_NUM
+		                              FROM TBCMP_RWMNY_PYMNT
+		                             WHERE 1 = 1
+										   <isNotEmpty property="ST_RQEST_DE">
+										   AND (RQEST_DE IS NULL OR RQEST_DE <![CDATA[>=]]> #ST_RQEST_DE#)
+										   </isNotEmpty>
+										   <isNotEmpty property="ED_RQEST_DE">
+										   AND (RQEST_DE IS NULL OR RQEST_DE <![CDATA[<=]]> #ED_RQEST_DE#)
+										   </isNotEmpty>
+										   <isNotEmpty property="ST_PYMNT_DE">
+										   AND (PYMNT_DE IS NULL OR PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+										   </isNotEmpty>
+										   <isNotEmpty property="ED_PYMNT_DE">
+										   AND (PYMNT_DE IS NULL OR PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+										   </isNotEmpty>
+		                             GROUP BY BSNS_AREA_CODE,
+		                                   OWNER_NO
+		                            ) BB
+		                      WHERE AA.BSNS_AREA_CODE = BB.BSNS_AREA_CODE(+)
+		                            AND AA.OWNER_NO = BB.OWNER_NO(+)
+		                            AND AA.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		                            AND NVL (AA.THING_NUM, 0) >= NVL (BB.RQEST_NUM, 0)
+		                     ) F,		                     
+                             (SELECT a.BSNS_AREA_CODE, a.OWNER_NO, a.RQEST_SN, b.THING_SN, b.OWNER_SN, a.INNER_SANCTN_ID 
+                                 FROM TBCMP_RWMNY_PYMNT a
+                                         , (SELECT BSNS_AREA_CODE, OWNER_NO, THING_SN, OWNER_SN, MIN(RQEST_SN) AS RQEST_SN
+                                               FROM TBCMP_THING_RWMNY 
+                                              GROUP BY BSNS_AREA_CODE, OWNER_NO, THING_SN, OWNER_SN
+                                            ) b
+                                WHERE a.BSNS_AREA_CODE = #BSNS_AREA_CODE#                                   
+                                     and a.BSNS_AREA_CODE = b.BSNS_AREA_CODE
+                                     and a.owner_no = b.owner_no
+                                     and a.RQEST_SN = b.RQEST_SN   
+                                   ) I
+		               WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		                     AND A.THING_SN = B.THING_SN
+		                     AND B.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+		                     AND B.OWNER_NO = E.OWNER_NO
+		                     AND '1' = E.OWNER_SE
+		                     AND 'CMP001' = F.GRP_CODE
+		                     AND A.THING_CL = F.CODE
+		                     AND A.BSNS_AREA_CODE = G.BSNS_AREA_CODE
+		                     AND A.LOCPLC_CODE = G.LOCPLC_CODE
+		                     AND F.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		                     AND F.OWNER_NO = B.OWNER_NO
+		                     AND A.BSNS_AREA_CODE = #BSNS_AREA_CODE#		
+		                     AND B.BSNS_AREA_CODE = I.BSNS_AREA_CODE(+)                                         
+                             AND B.OWNER_NO = I.OWNER_NO(+)
+                             AND B.THING_SN = I.THING_SN(+)
+                             AND B.OWNER_SN = I.OWNER_SN(+)                     
+							 <isNotEmpty property="LOCPLC_CODE">
+							 AND A.LOCPLC_CODE = #LOCPLC_CODE#
+							 </isNotEmpty>
+							 <isEqual property="SELECT" compareValue="0">
+							 <isNotEmpty property="THING_CL">
+							 AND A.THING_CL IN
+							 <iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+							 #ARR_THING_CL[]#
+							 </iterate>
+							 </isNotEmpty>
+							 </isEqual>
+							 <isNotEmpty property="IHIDNUM">
+							 AND SFCOM_DEC_ALL(E.IHIDNUM) LIKE '%'||#IHIDNUM#||'%'
+							 </isNotEmpty>
+			                 <isNotEmpty property="NM">
+			                 AND E.OWNER_NM LIKE '%' || #NM# || '%'
+			                 </isNotEmpty>
+		              ) K
+		       ) M,
+		       (SELECT A.BSNS_AREA_CODE,
+		              A.OWNER_NO,
+		              A.RQEST_SN,
+		              A.ACNUTNO,
+		              A.BANK_CODE,
+		              (SELECT CODE_NM
+		                FROM TBCOM_CMMN_CODE
+		               WHERE GRP_CODE = 'COM021'
+		                     AND CODE = A.BANK_CODE
+		              ) AS BANK_NM,
+		              A.RQEST_AMOUNT,
+		              A.RQEST_DE,
+		              A.PYMNT_DE,
+		              B.RM,
+		              NVL (ROW_NUMBER () OVER (PARTITION BY A.OWNER_NO ORDER BY A.OWNER_NO, A.RQEST_SN),0) AS RQEST_NUM ,
+		              (SELECT SUM(D.RQEST_AMOUNT)
+		                FROM TBCMP_RWMNY_PYMNT D ,
+		                     (SELECT DISTINCT G.BSNS_AREA_CODE,
+		                            G.OWNER_NO,
+		                            G.RQEST_SN
+		                       FROM TBCMP_THING_RWMNY F,
+		                            TBCMP_THING_RWMNY G
+		                      WHERE F.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		                            AND F.BSNS_AREA_CODE = G.BSNS_AREA_CODE
+		                            AND G.THING_SN = F.THING_SN
+		                            AND G.OWNER_SN = F.OWNER_SN
+		                            AND G.OWNER_NO = F.OWNER_NO
+		                            AND G.RQEST_SN <![CDATA[ < ]]>  F.RQEST_SN
+		                     ) F
+		               WHERE D.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		                     AND D.BSNS_AREA_CODE = F.BSNS_AREA_CODE
+		                     AND D.OWNER_NO = F.OWNER_NO
+		                     AND D.RQEST_SN = F.RQEST_SN
+						     <isNotEmpty property="ST_RQEST_DE">
+						     AND (D.RQEST_DE IS NULL OR D.RQEST_DE <![CDATA[<]]> #ST_RQEST_DE#)
+						     </isNotEmpty>
+						     <isNotEmpty property="ED_RQEST_DE">
+						     AND (D.RQEST_DE IS NULL OR D.RQEST_DE <![CDATA[>]]> #ED_RQEST_DE#)
+						     </isNotEmpty>
+						     <isNotEmpty property="ST_PYMNT_DE">
+						     AND (D.PYMNT_DE IS NULL OR D.PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+						     </isNotEmpty>
+						     <isNotEmpty property="ED_PYMNT_DE">
+						     AND (D.PYMNT_DE IS NULL OR D.PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+						     </isNotEmpty>
+		              ) AS BF_RQEST_AMOUNT,
+		              A.INNER_SANCTN_ID
+		         FROM TBCMP_RWMNY_PYMNT A,
+		              TBCMP_BILLER_CHANGE B
+		        WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE(+)
+		              AND A.OWNER_NO = B.OWNER_NO(+)
+		              AND A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+					  <isNotEmpty property="ST_RQEST_DE">
+					  AND (A.RQEST_DE IS NULL OR A.RQEST_DE <![CDATA[>=]]> #ST_RQEST_DE#)
+					  </isNotEmpty>
+					  <isNotEmpty property="ED_RQEST_DE">
+					  AND (A.RQEST_DE IS NULL OR A.RQEST_DE <![CDATA[<=]]> #ED_RQEST_DE#)
+					  </isNotEmpty>
+					  <isNotEmpty property="ST_PYMNT_DE">
+					  AND (A.PYMNT_DE IS NULL OR A.PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+					  </isNotEmpty>
+					  <isNotEmpty property="ED_PYMNT_DE">
+					  AND (A.PYMNT_DE IS NULL OR A.PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+					  </isNotEmpty>
+		     ORDER BY A.BSNS_AREA_CODE,
+		              A.OWNER_NO,
+		              A.RQEST_SN
+		       ) L
+		 WHERE M.BSNS_AREA_CODE = L.BSNS_AREA_CODE(+)
+		       AND M.OWNER_NO = L.OWNER_NO(+)
+		       AND M.OWNER_RUM = L.RQEST_NUM(+)
+		    UNION ALL
+		SELECT 0 AS RQEST_CNT,
+		       M.ST,
+		       M.FULL_LOCPLC_CODE_NM,
+		       M.CODE_NM,
+		       M.STRCT_STNDRD,
+		       M.AR_LGSTR,
+		       M.AR_INCRPR,
+		       M.AR,
+		       M.UNIT,
+		       CASE RQEST_NUM WHEN 1 THEN M.UNTPC ELSE '0' END AS UNTPC,
+		       CASE RQEST_NUM WHEN 1 THEN M.RWMNY ELSE 0 END AS RWMNY, 
+		       M.ACNUTNO,
+		       M.BANK_NM,
+		       M.RQEST_AMOUNT,
+		      NVL( (
+		           CASE
+		               WHEN NVL (M.RQEST_AMOUNT, 0) = 0
+		               THEN 0
+		               ELSE M.T_AMT - NVL(M.BF_RQEST_AMOUNT,0) - 
+		               SUM (M.RQEST_AMOUNT) OVER (PARTITION BY M.OWNER_NO ORDER BY M.OWNER_NO, M.RQEST_NUM)
+		           END
+		       ),0) AS RQEST_BLCE,
+		       M.RQEST_DE,
+		       M.PYMNT_DE,
+		       M.RM,
+		       M.OWNER_NM,
+		       M.ADRES,
+		       M.TELNO_1 AS TELNO_1,
+		       M.RQEST_SN,
+		       M.SORT_ORD,
+		       M.BNDE_APPLC_GROUP,
+		       M.LNM,
+		       M.SLNO,
+		       M.SORT_ORDR,
+		       M.GROUP_ORDER,
+		       M.BSNS_AREA_CODE,
+		       M.THING_SN,
+		       M.OWNER_NO,
+		       M.OWNER_RUM,
+		       M.RQEST_NUM,
+		       M.BF_RQEST_AMOUNT,
+		       LPAD(M.OWNER_NO,5,'0') || '-' ||  M.OWNER_NM AS NM_ORDER,
+		       M.INNER_SANCTN_ID
+		  FROM
+		       (SELECT ROW_NUMBER () OVER (PARTITION BY K.OWNER_NM, K.OWNER_NO ORDER BY K.OWNER_NM, K.SORT_ORDR, K.LNM, K.SLNO, K.SORT_ORD, K.THING_SN, L.RQEST_NUM) AS OWNER_RUM,
+		              (SELECT SUM (R.RWMNY)
+		                FROM TBCMP_THING_OWNER R
+		               WHERE R.BSNS_AREA_CODE = L.BSNS_AREA_CODE
+		                     AND R.OWNER_NO = L.OWNER_NO
+		                   /*  AND THING_SN = K.THING_SN */
+		              ) AS T_AMT,
+		              L.ST,
+		              K.FULL_LOCPLC_CODE_NM,
+		              K.CODE_NM,
+		              K.STRCT_STNDRD,
+		              K.AR_LGSTR,
+		              K.AR_INCRPR,
+		              K.AR,
+		              K.UNIT,
+		              K.UNTPC,
+		              K.RWMNY,
+		              L.ACNUTNO,
+		              L.BANK_NM,
+		              L.RQEST_AMOUNT,
+		              0 AS RQEST_BLCE,
+		              L.RQEST_DE,
+		              L.PYMNT_DE,
+		              L.RM,
+		              L.OWNER_NM,
+		              L.ADRES,
+		              L.TELNO_1 AS TELNO_1,
+		              K.RQEST_SN,
+		              K.SORT_ORD,
+		              K.BNDE_APPLC_GROUP,
+		              K.LNM,
+		              K.SLNO,
+		              K.SORT_ORDR,
+		              K.GROUP_ORDER,
+		              K.BSNS_AREA_CODE,
+		              K.THING_SN,
+		              L.OWNER_NO,
+		              L.RQEST_NUM,
+		              L.BF_RQEST_AMOUNT,
+		              L.INNER_SANCTN_ID AS INNER_SANCTN_ID_OLD
+		              , L.INNER_SANCTN_ID
+		         FROM
+		              (SELECT '1' AS ST,
+		                     SFCMP_GET_LOCPLC (A.BSNS_AREA_CODE, A.LOCPLC_CODE) || ' ' || DECODE (A.SLNO, NULL, A.LNM, A.LNM || '-' || A.SLNO) AS FULL_LOCPLC_CODE_NM,
+		                     F.CODE_NM,
+		                     A.STRCT_STNDRD,
+		                     TO_CHAR (A.AR_LGSTR) AS AR_LGSTR,
+		                     TO_CHAR (A.AR_INCRPR) AS AR_INCRPR,
+		                     TO_CHAR (B.AR) AS AR,
+		                     SFCMP_GET_CODENM ('CMP002', TRIM (A.UNIT)) AS UNIT,
+		                     TO_CHAR (NVL (A.THING_UNTPC, 0)) AS UNTPC,
+		                     B.RWMNY,
+		                     E.OWNER_NM,
+		                     E.ADRES,
+		                     E.TELNO_1 AS TELNO_1,
+		                     0 AS RQEST_SN,
+		                     A.REWARD_STLE,
+		                     ( A.REWARD_STLE ||
+		                     (
+		                         CASE NVL (A.REWARD_STLE, '0')
+		                             WHEN '0'
+		                             THEN LPAD (NVL (F.CODE_ORDR, '99'), 2, '0')
+		                             ELSE
+		                                 CASE
+		                                     WHEN A.RWMNY > 0
+		                                     THEN '00'
+		                                     ELSE LPAD (NVL (F.CODE_ORDR, '99'), 2, '0')
+		                                 END
+		                         END
+		                     )
+		                     ) AS SORT_ORD,
+		                     A.BNDE_APPLC_GROUP,
+		                     SUBSTR ('0000' || A.LNM, -4) AS LNM,
+		                     SUBSTR ('0000' || A.SLNO, -4) AS SLNO,
+		                     G.SORT_ORDR,
+		                     0 AS GROUP_ORDER,
+		                     A.BSNS_AREA_CODE,
+		                     A.THING_SN,
+		                     B.OWNER_NO
+		                     ,I.INNER_SANCTN_ID
+		                     , ROW_NUMBER ()                                          
+                                         OVER (PARTITION BY E.OWNER_NM, E.OWNER_NO 
+                                               ORDER BY E.OWNER_NM, G.SORT_ORDR, A.LNM, A.SLNO, A.THING_SN) AS OWNER_RUM
+		                FROM TBCMP_THING_WTNNC A,
+		                     TBCMP_THING_OWNER B,
+		                     TBCMP_OWNER E,
+		                     TBCOM_CMMN_CODE F,
+		                     TBCMP_LOCPLC_INFO G,
+		                     (SELECT BB.BSNS_AREA_CODE,
+		                            BB.OWNER_NO
+		                       FROM
+		                            (SELECT AAA.BSNS_AREA_CODE,
+		                                   AAA.OWNER_NO,
+		                                   COUNT (*) AS THING_NUM
+		                              FROM TBCMP_THING_OWNER AAA,
+		                                   TBCMP_THING_WTNNC BBB
+		                             WHERE AAA.BSNS_AREA_CODE = BBB.BSNS_AREA_CODE
+		                                   AND AAA.THING_SN = BBB.THING_SN
+		                                   <isEqual property="SELECT" compareValue="0">
+										   <isNotEmpty property="THING_CL">
+										   AND BBB.THING_CL IN
+										   <iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+										   #ARR_THING_CL[]#
+										   </iterate>
+										   </isNotEmpty>
+		                                   </isEqual>
+		                             GROUP BY AAA.BSNS_AREA_CODE,
+		                                   AAA.OWNER_NO
+		                            ) AA,
+		                            (SELECT BSNS_AREA_CODE,
+		                                   OWNER_NO,
+		                                   COUNT (*) AS RQEST_NUM
+		                              FROM TBCMP_RWMNY_PYMNT
+		                             WHERE 1 = 1
+										   <isNotEmpty property="ST_RQEST_DE">
+										   AND (RQEST_DE IS NULL OR RQEST_DE <![CDATA[>=]]> #ST_RQEST_DE#)
+										   </isNotEmpty>
+										   <isNotEmpty property="ED_RQEST_DE">
+										   AND (RQEST_DE IS NULL OR RQEST_DE <![CDATA[<=]]> #ED_RQEST_DE#)
+										   </isNotEmpty>
+										   <isNotEmpty property="ST_PYMNT_DE">
+										   AND (PYMNT_DE IS NULL OR PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+										   </isNotEmpty>
+										   <isNotEmpty property="ED_PYMNT_DE">
+										   AND (PYMNT_DE IS NULL OR PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+										   </isNotEmpty>
+		                             GROUP BY BSNS_AREA_CODE,
+		                                   OWNER_NO
+		                            ) BB
+		                      WHERE AA.BSNS_AREA_CODE = BB.BSNS_AREA_CODE
+		                            AND AA.OWNER_NO = BB.OWNER_NO
+		                            AND AA.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		                            AND NVL (AA.THING_NUM, 0) <![CDATA[ < ]]> NVL (BB.RQEST_NUM, 0)
+		                     ) F1,		                     
+                             (SELECT a.BSNS_AREA_CODE, a.OWNER_NO, a.RQEST_SN, b.THING_SN, b.OWNER_SN, a.INNER_SANCTN_ID 
+                                 FROM TBCMP_RWMNY_PYMNT a
+                                         , (SELECT BSNS_AREA_CODE, OWNER_NO, THING_SN, OWNER_SN, MIN(RQEST_SN) AS RQEST_SN
+                                               FROM TBCMP_THING_RWMNY 
+                                              GROUP BY BSNS_AREA_CODE, OWNER_NO, THING_SN, OWNER_SN
+                                            ) b
+                                WHERE a.BSNS_AREA_CODE = #BSNS_AREA_CODE#                                   
+                                     and a.BSNS_AREA_CODE = b.BSNS_AREA_CODE
+                                     and a.owner_no = b.owner_no
+                                     and a.RQEST_SN = b.RQEST_SN   
+                                   ) I
+		               WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		                     AND A.THING_SN = B.THING_SN
+		                     AND B.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+		                     AND B.OWNER_NO = E.OWNER_NO
+		                     AND '1' = E.OWNER_SE
+		                     AND 'CMP001' = F.GRP_CODE
+		                     AND A.THING_CL = F.CODE
+		                     AND A.BSNS_AREA_CODE = G.BSNS_AREA_CODE
+		                     AND A.LOCPLC_CODE = G.LOCPLC_CODE
+		                     AND F1.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		                     AND F1.OWNER_NO = B.OWNER_NO
+		                     AND A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		                     AND B.BSNS_AREA_CODE = I.BSNS_AREA_CODE(+)                                         
+                             AND B.OWNER_NO = I.OWNER_NO(+)
+                             AND B.THING_SN = I.THING_SN(+)
+                             AND B.OWNER_SN = I.OWNER_SN(+)                                         
+							 <isNotEmpty property="LOCPLC_CODE">
+							 AND A.LOCPLC_CODE = #LOCPLC_CODE#
+							 </isNotEmpty>
+							 <isEqual property="SELECT" compareValue="0">
+							 <isNotEmpty property="THING_CL">
+							 AND A.THING_CL IN
+							 <iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+							 #ARR_THING_CL[]#
+							 </iterate>
+							 </isNotEmpty>
+							 </isEqual>
+		                     <isNotEmpty property="NM">
+		                     AND E.OWNER_NM LIKE '%'||#NM#||'%'
+		                     </isNotEmpty>
+							 <isNotEmpty property="IHIDNUM">
+							 AND SFCOM_DEC_ALL(E.IHIDNUM) LIKE '%'||#IHIDNUM#||'%'
+							 </isNotEmpty>
+		              ) K,
+		              (SELECT '1' AS ST, A.BSNS_AREA_CODE,
+		                     A.OWNER_NO,
+		                     E.OWNER_NM,
+		                     E.ADRES,
+		                     E.TELNO_1 AS TELNO_1,
+		                     A.RQEST_SN,
+		                     A.ACNUTNO,
+		                     A.BANK_CODE,
+		                     (SELECT CODE_NM
+		                       FROM TBCOM_CMMN_CODE
+		                      WHERE GRP_CODE = 'COM021'
+		                            AND CODE = A.BANK_CODE
+		                     ) AS BANK_NM,
+		                     A.RQEST_AMOUNT,
+		                     A.RQEST_DE,
+		                     A.PYMNT_DE,
+		                     B.RM,
+		                     NVL ( ROW_NUMBER () OVER (PARTITION BY A.OWNER_NO ORDER BY A.OWNER_NO, A.RQEST_SN), 0) AS RQEST_NUM ,
+		                     (SELECT SUM(D.RQEST_AMOUNT)
+		                       FROM TBCMP_RWMNY_PYMNT D ,
+		                            (SELECT DISTINCT G.BSNS_AREA_CODE,
+		                                   G.OWNER_NO,
+		                                   G.RQEST_SN
+		                              FROM TBCMP_THING_RWMNY F,
+		                                   TBCMP_THING_RWMNY G
+		                             WHERE F.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		                                   AND F.BSNS_AREA_CODE = G.BSNS_AREA_CODE
+		                                   AND G.THING_SN = F.THING_SN
+		                                   AND G.OWNER_SN = F.OWNER_SN
+		                                   AND G.OWNER_NO = F.OWNER_NO
+		                                   AND G.RQEST_SN <![CDATA[ < ]]> F.RQEST_SN
+		                            ) F
+		                      WHERE D.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		                            AND D.BSNS_AREA_CODE = F.BSNS_AREA_CODE
+		                            AND D.OWNER_NO = F.OWNER_NO
+		                            AND D.RQEST_SN = F.RQEST_SN
+									<isNotEmpty property="ST_RQEST_DE">
+									AND (D.RQEST_DE IS NULL OR D.RQEST_DE <![CDATA[<]]> #ST_RQEST_DE#)
+									</isNotEmpty>
+									<isNotEmpty property="ED_RQEST_DE">
+									AND (D.RQEST_DE IS NULL OR D.RQEST_DE <![CDATA[>]]> #ED_RQEST_DE#)
+									</isNotEmpty>
+									<isNotEmpty property="ST_PYMNT_DE">
+									AND (D.PYMNT_DE IS NULL OR D.PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+									</isNotEmpty>
+									<isNotEmpty property="ED_PYMNT_DE">
+									AND (D.PYMNT_DE IS NULL OR D.PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+									</isNotEmpty>
+		                     ) AS BF_RQEST_AMOUNT,
+		                     A.INNER_SANCTN_ID
+		                     , ROW_NUMBER () OVER (PARTITION BY A.OWNER_NO 
+                                               ORDER BY A.OWNER_NO ) AS OWNER_RUM
+		                FROM TBCMP_RWMNY_PYMNT A,
+		                     TBCMP_BILLER_CHANGE B,
+		                      TBCMP_OWNER E,
+		                      (SELECT BB.BSNS_AREA_CODE,
+		                            BB.OWNER_NO
+		                       FROM
+		                            (SELECT AAA.BSNS_AREA_CODE,
+		                                   AAA.OWNER_NO,
+		                                   COUNT (*) AS THING_NUM
+		                              FROM TBCMP_THING_OWNER AAA,
+		                                   TBCMP_THING_WTNNC BBB
+		                             WHERE AAA.BSNS_AREA_CODE = BBB.BSNS_AREA_CODE
+		                                   AND AAA.THING_SN = BBB.THING_SN
+		                                   <isEqual property="SELECT" compareValue="0">
+										   <isNotEmpty property="THING_CL">
+										   AND BBB.THING_CL IN
+										   <iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+										   #ARR_THING_CL[]#
+										   </iterate>
+										   </isNotEmpty>
+		                                   </isEqual>
+		                             GROUP BY AAA.BSNS_AREA_CODE,
+		                                   AAA.OWNER_NO
+		                            ) AA,
+		                            (SELECT BSNS_AREA_CODE,
+		                                   OWNER_NO,
+		                                   COUNT (*) AS RQEST_NUM
+		                              FROM TBCMP_RWMNY_PYMNT
+		                             WHERE 1 = 1
+										   <isNotEmpty property="ST_RQEST_DE">
+										   AND (RQEST_DE IS NULL OR RQEST_DE <![CDATA[>=]]> #ST_RQEST_DE#)
+										   </isNotEmpty>
+										   <isNotEmpty property="ED_RQEST_DE">
+										   AND (RQEST_DE IS NULL OR RQEST_DE <![CDATA[<=]]> #ED_RQEST_DE#)
+										   </isNotEmpty>
+										   <isNotEmpty property="ST_PYMNT_DE">
+										   AND (PYMNT_DE IS NULL OR PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+										   </isNotEmpty>
+										   <isNotEmpty property="ED_PYMNT_DE">
+										   AND (PYMNT_DE IS NULL OR PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+										   </isNotEmpty>
+		                             GROUP BY BSNS_AREA_CODE,
+		                                   OWNER_NO
+		                            ) BB
+		                      WHERE AA.BSNS_AREA_CODE = BB.BSNS_AREA_CODE
+		                            AND AA.OWNER_NO = BB.OWNER_NO
+		                            AND AA.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		                            AND NVL (AA.THING_NUM, 0) <![CDATA[ < ]]> NVL (BB.RQEST_NUM, 0)
+		                     ) F1	
+		               WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE(+)
+		                     AND A.OWNER_NO = B.OWNER_NO(+)
+		                     AND A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+						     <isNotEmpty property="ST_RQEST_DE">
+						     AND (A.RQEST_DE IS NULL OR A.RQEST_DE <![CDATA[>=]]> #ST_RQEST_DE#)
+						     </isNotEmpty>
+						     <isNotEmpty property="ED_RQEST_DE">
+						     AND (A.RQEST_DE IS NULL OR A.RQEST_DE <![CDATA[<=]]> #ED_RQEST_DE#)
+						     </isNotEmpty>
+						     <isNotEmpty property="ST_PYMNT_DE">
+						     AND (A.PYMNT_DE IS NULL OR A.PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+						     </isNotEmpty>
+						     <isNotEmpty property="ED_PYMNT_DE">
+						     AND (A.PYMNT_DE IS NULL OR A.PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+						     </isNotEmpty>
+						     AND  A.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+		                     AND A.OWNER_NO = E.OWNER_NO
+		                      <isNotEmpty property="NM">
+		                     AND E.OWNER_NM LIKE '%'||#NM#||'%'
+		                     </isNotEmpty>
+							 <isNotEmpty property="IHIDNUM">
+							 AND SFCOM_DEC_ALL(E.IHIDNUM) LIKE '%'||#IHIDNUM#||'%'
+							 </isNotEmpty>
+							 AND  A.BSNS_AREA_CODE = F1.BSNS_AREA_CODE
+		                     AND A.OWNER_NO = F1.OWNER_NO
+		            ORDER BY A.BSNS_AREA_CODE,
+		                     A.OWNER_NO,
+		                     A.RQEST_SN
+		              ) L
+		        WHERE   L.BSNS_AREA_CODE = K.BSNS_AREA_CODE(+)
+                               AND L.OWNER_NO = K.OWNER_NO(+)
+                               AND L.OWNER_RUM = K.OWNER_RUM(+)
+		       ) M
+		    UNION ALL
+		SELECT RANK() OVER(ORDER BY E.OWNER_NM, E.OWNER_NO) RQEST_CNT,
+		       '0' AS ST,
+		       '** 소계 **' AS FULL_LOCPLC_CODE_NM,
+		       '' AS CODE_NM,
+		       '' AS STRCT_STNDRD,
+		       '' AS AR_LGSTR,
+		       '' AS AR_INCRPR,
+		       '' AS AR,
+		       '' AS UNIT,
+		       '' AS UNTPC,
+		       NVL (SUM (B.RWMNY), 0) AS RWMNY,
+		       '' AS ACNUTNO,
+		       '' AS BANK_NM,
+		       NVL (D.RQEST_AMOUNT, 0) AS RQEST_AMOUNT,
+		       NVL (SUM (B.RWMNY), 0) - NVL (D.RQEST_AMOUNT, 0) AS RQEST_BLCE,
+		       '' AS RQEST_DE,
+		       '' AS PYMNT_DE,
+		       '' RM,
+		       '' AS OWNER_NM,
+		       '' AS ADRES,
+		       '' AS TELNO_1,
+		       0 AS RQEST_SN,
+		       '' AS SORT_ORD,
+		       0 AS BNDE_APPLC_GROUP,
+		       '' AS LNM,
+		       '' AS SLNO,
+		       0 AS THING_SORT_ORDR,
+		       0 AS GROUP_ORDER,
+		       A.BSNS_AREA_CODE,
+		       0 AS THING_SN,
+		       E.OWNER_NO,
+		       0 OWNER_NUM,
+		       0 AS RQEST_NUM,
+		       (SELECT SUM(D.RQEST_AMOUNT)
+		         FROM TBCMP_RWMNY_PYMNT D ,
+		              (SELECT DISTINCT G.BSNS_AREA_CODE,
+		                     G.OWNER_NO,
+		                     G.RQEST_SN
+		                FROM TBCMP_THING_RWMNY F,
+		                     TBCMP_THING_RWMNY G
+		               WHERE F.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		                     AND F.BSNS_AREA_CODE = G.BSNS_AREA_CODE
+		                     AND G.THING_SN = F.THING_SN
+		                     AND G.OWNER_SN = F.OWNER_SN
+		                     AND G.OWNER_NO = F.OWNER_NO
+		                     AND G.RQEST_SN <![CDATA[ < ]]> F.RQEST_SN
+		              ) F
+		        WHERE D.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		              AND D.BSNS_AREA_CODE = F.BSNS_AREA_CODE
+		              AND D.OWNER_NO = F.OWNER_NO
+		              AND D.RQEST_SN = F.RQEST_SN
+					  <isNotEmpty property="ST_RQEST_DE">
+					  AND (D.RQEST_DE IS NULL OR D.RQEST_DE <![CDATA[<]]> #ST_RQEST_DE#)
+					  </isNotEmpty>
+					  <isNotEmpty property="ED_RQEST_DE">
+					  AND (D.RQEST_DE IS NULL OR D.RQEST_DE <![CDATA[>]]> #ED_RQEST_DE#)
+					  </isNotEmpty>
+					  <isNotEmpty property="ST_PYMNT_DE">
+					  AND (D.PYMNT_DE IS NULL OR D.PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+					  </isNotEmpty>
+					  <isNotEmpty property="ED_PYMNT_DE">
+					  AND (D.PYMNT_DE IS NULL OR D.PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+					  </isNotEmpty>
+		       ) AS BF_RQEST_AMOUNT,
+		       LPAD(E.OWNER_NO,5,'0') || '-' || E.OWNER_NM AS NM_ORDER,
+		       '' AS INNER_SANCTN_ID
+		  FROM TBCMP_THING_WTNNC A,
+		       TBCMP_THING_OWNER B,
+		       (SELECT DISTINCT C.BSNS_AREA_CODE,
+		              C.THING_SN,
+		              C.OWNER_SN,
+		              C.OWNER_NO
+		         FROM TBCMP_THING_RWMNY C
+		        WHERE C.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		       ) C ,
+		       (SELECT BSNS_AREA_CODE,
+		              OWNER_NO,
+		              SUM (RQEST_AMOUNT) AS RQEST_AMOUNT
+		         FROM TBCMP_RWMNY_PYMNT
+		        WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+					  <isNotEmpty property="ST_RQEST_DE">
+					  AND (RQEST_DE IS NULL OR RQEST_DE <![CDATA[>=]]> #ST_RQEST_DE#)
+					  </isNotEmpty>
+					  <isNotEmpty property="ED_RQEST_DE">
+					  AND (RQEST_DE IS NULL OR RQEST_DE <![CDATA[<=]]> #ED_RQEST_DE#)
+					  </isNotEmpty>
+					  <isNotEmpty property="ST_PYMNT_DE">
+					  AND (PYMNT_DE IS NULL OR PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+					  </isNotEmpty>
+					  <isNotEmpty property="ED_PYMNT_DE">
+					  AND (PYMNT_DE IS NULL OR PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+					  </isNotEmpty>
+					  GROUP BY BSNS_AREA_CODE,
+		              OWNER_NO
+		       ) D,
+		       TBCMP_OWNER E
+		 WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		       AND A.THING_SN = B.THING_SN
+		       AND B.BSNS_AREA_CODE = D.BSNS_AREA_CODE(+)
+		       AND B.OWNER_NO = D.OWNER_NO(+)
+		       AND B.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+		       AND B.OWNER_NO = E.OWNER_NO
+		       AND E.OWNER_SE = '1'
+		       AND A.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		       AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE(+)
+		       AND B.THING_SN = C.THING_SN(+)
+		       AND B.OWNER_SN = C.OWNER_SN(+)
+		       AND B.OWNER_NO = C.OWNER_NO(+)
+               <isNotEmpty property="NM">
+               AND E.OWNER_NM LIKE '%' || #NM# || '%'
+               </isNotEmpty>
+			   <isNotEmpty property="LOCPLC_CODE">
+			   AND A.LOCPLC_CODE = #LOCPLC_CODE#
+			   </isNotEmpty>
+			   <isEqual property="SELECT" compareValue="0">
+			   <isNotEmpty property="THING_CL">
+   			   AND A.THING_CL IN
+			   <iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+			   #ARR_THING_CL[]#
+			   </iterate>
+			   </isNotEmpty>
+			   </isEqual>
+			   <isNotEmpty property="IHIDNUM">
+			   AND SFCOM_DEC_ALL(E.IHIDNUM) LIKE '%'||#IHIDNUM#||'%'
+			   </isNotEmpty>
+		 GROUP BY A.BSNS_AREA_CODE,
+		      E.OWNER_NM,		       
+		       E.OWNER_NO,
+		       D.RQEST_AMOUNT
+	) A,
+    (SELECT SFCMP_GET_CODENM('HRM021', SFHRM_GET_OFCPSCD(A1.EMPNO, A1.JSSFC_SE, A1.HR_CLSF_SE, A1.ECNY_DE)) AS OFCPSCD_NM1, 
+            SFCMP_GET_CODENM('HRM021', SFHRM_GET_OFCPSCD(A2.EMPNO, A2.JSSFC_SE, A2.HR_CLSF_SE, A2.ECNY_DE)) AS OFCPSCD_NM2, 
+            SFCMP_GET_CODENM('HRM021', SFHRM_GET_OFCPSCD(A3.EMPNO, A3.JSSFC_SE, A3.HR_CLSF_SE, A3.ECNY_DE)) AS OFCPSCD_NM3, 
+            A1.EMPNM AS EMPNM_1, 
+            A2.EMPNM AS EMPNM_2 , 
+            A3.EMPNM AS EMPNM_3 ,
+            A.INNER_SANCTN_ID AS INNER_ID 
+       FROM 
+            (SELECT MAX(CASE A.SANCTN_SN WHEN 0 THEN CASE B.SANCTN_STTUS WHEN 'S01' THEN A.SANCTNER_ID ELSE '' END ELSE '' END) AS SANCTN_1, 
+                    MAX(CASE A.SANCTN_SN WHEN 1 THEN CASE B.SANCTN_STTUS WHEN 'S01' THEN A.SANCTNER_ID ELSE '' END ELSE '' END) AS SANCTN_2, 
+                    MAX(CASE A.SANCTN_SN WHEN 2 THEN CASE B.SANCTN_STTUS WHEN 'S01' THEN A.SANCTNER_ID ELSE '' END ELSE '' END) AS SANCTN_3,
+                    A.INNER_SANCTN_ID 
+              FROM TBCOM_INNER_SANCTNER A, 
+                   TBCOM_INNER_SANCTN_DTLS B,
+                   TBCMP_RWMNY_PYMNT C
+             WHERE A.INNER_SANCTN_ID = C.INNER_SANCTN_ID 
+                   AND C.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			       AND A.INNER_SANCTN_ID = B.INNER_SANCTN_ID
+			       AND A.SANCTN_SN = B.SANCTN_SN
+			       AND A.SANCTN_STEP = B.SANCTN_STEP                   
+				   <isNotEmpty property="ST_RQEST_DE">
+				   AND (C.RQEST_DE IS NULL OR C.RQEST_DE <![CDATA[>=]]> #ST_RQEST_DE#)
+				   </isNotEmpty>
+				   <isNotEmpty property="ED_RQEST_DE">
+				   AND (C.RQEST_DE IS NULL OR C.RQEST_DE <![CDATA[<=]]> #ED_RQEST_DE#)
+				   </isNotEmpty>
+				   <isNotEmpty property="ST_PYMNT_DE">
+				   AND (C.PYMNT_DE IS NULL OR C.PYMNT_DE <![CDATA[>=]]> #ST_PYMNT_DE#)
+				   </isNotEmpty>
+				   <isNotEmpty property="ED_PYMNT_DE">
+				   AND (C.PYMNT_DE IS NULL OR C.PYMNT_DE <![CDATA[<=]]> #ED_PYMNT_DE#)
+				   </isNotEmpty>
+             GROUP BY A.INNER_SANCTN_ID 
+            ) A, 
+            TBHRM_HR_MASTR A1, 
+            TBHRM_HR_MASTR A2, 
+            TBHRM_HR_MASTR A3 
+      WHERE A.SANCTN_1 = A1.EMPNO(+) 
+            AND A.SANCTN_2 = A2.EMPNO(+) 
+            AND A.SANCTN_3 = A3.EMPNO(+) 
+    ) B 
+ 	WHERE A.INNER_SANCTN_ID = B.INNER_ID(+)	
+	ORDER BY A.NM_ORDER,ST,SORT_ORDR,LNM,SLNO,RQEST_NUM, OWNER_RUM,RQEST_SN ASC	
+	</select>
+
+	<select id="CMP040700DAO.ownerThingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT
+		     A.BSNS_AREA_CODE	/* 사업지역코드 */
+		    ,A.THING_SN			/* 물건일련번호 */
+		    ,B.OWNER_SN			/* 소유자일련번호 */
+		    ,SFCMP_GET_LOCPLC(A.BSNS_AREA_CODE, A.LOCPLC_CODE) || ' ' ||
+		     DECODE(A.SLNO, NULL, A.LNM, A.LNM || '-' || A.SLNO) AS FULL_LOCPLC_CODE_NM
+		    ,SFCMP_GET_CODENM('CMP001', TRIM(A.THING_CL)) AS THING_CL_NM	/* 물건분류 */
+		    ,A.THING_NM			/* 물건명 */
+		    ,A.STRCT_STNDRD		/* 구조규격 */
+		    ,A.AR_INCRPR		/* 면적_편입 */
+		    ,B.AR				/* 소유면적 */
+		    ,B.INPUT_TME		/* 입력횟수 */
+		    ,C.OWNER_NM			/* 소유자명*/
+		FROM TBCMP_THING_WTNNC A, TBCMP_THING_OWNER B, TBCMP_OWNER C
+		WHERE A.BSNS_AREA_CODE = #bsnsAreaCode#
+		AND   A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		AND   A.THING_SN = B.THING_SN
+		AND   B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+		AND   B.OWNER_NO = C.OWNER_NO
+		<isNotEmpty property="locplcCode">
+	    AND   A.LOCPLC_CODE = #locplcCode#
+	   	</isNotEmpty>
+		<isNotEmpty property="nm">
+        AND   C.OWNER_NM LIKE '%' || #nm# || '%'
+        </isNotEmpty>
+        <isNotEmpty property="inputTme">
+        <isEqual property="inputTme" compareValue="0">
+        AND   (B.INPUT_TME = #inputTme# OR B.INPUT_TME IS NULL)
+        </isEqual>
+        <isNotEqual property="inputTme" compareValue="0">
+	    AND   B.INPUT_TME = #inputTme#
+	    </isNotEqual>
+	   	</isNotEmpty>
+				<isNotEmpty property="THING_CL">
+				AND	  A.THING_CL IN
+				<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+				#ARR_THING_CL[]#
+				</iterate>
+				</isNotEmpty>
+	</select>
+
+	<update id="CMP040700DAO.ownerThingWtnncU" parameterClass="java.util.Map">
+		UPDATE TBCMP_THING_OWNER SET
+			 INPUT_TME = #INPUT_TME#
+			,UPDUSR_ID = #S_USER_ID#
+			,UPDT_DT = SYSDATE
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND   THING_SN = #THING_SN#
+		AND   OWNER_SN = #OWNER_SN#
+	</update>
+</sqlMap>

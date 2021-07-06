@@ -1,0 +1,510 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02030200_SQL">
+
+	<!-- 쿼리명 : 매입임대 대기자 리스트 조회
+		    설명 : 매입임대 대기자 리스트 조회 쿼리
+		  수정일 : 수정자  수정내용
+		  작성자 : 변승우
+	    최초작성일 : 2015.11.09
+	-->	
+	<select id="RNT02030200DAO.selectWaitrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02030200DAO.selectWaitrList[매입임대 대기자 리스트 조회] */
+		SELECT A.AREA_CODE,										/* 지역코드 */
+			   A.RCEPT_DE,										/* 접수일자 */
+			   A.WAIT_RCEPT_SN,									/* 대기접수일련번호 */
+			   A.CNTRCTR_NO,									/* 계약자번호 : 미계약상태인 대기자 */
+			   A.PUCHAS_CSTMR_NO,								/* 매입고객번호 */
+			   A.ROOM_STRUCTURE,								/* 방구조 */
+			   A.WAIT_NO,										/* 대기순번 */
+			   C.NM,											/* 성명 */
+			   SFCOM_DEC_ALL(C.IHIDNUM) AS IHIDNUM,				/* 주민번호 */
+			   C.ZIP,											/* 우편번호 */
+			   C.ADRES,											/* 주소 */
+			   C.ADRES_DETAIL,									/* 상세주소 */
+			   C.TELNO,											/* 전화번호 */
+			   C.MBTLNO,										/* 휴대전화 */
+			   A.FAMILY_CO,										/* 가족수 */
+			   NVL(A.HOUSE_POSESN_AT, '0') AS HOUSE_POSESN_AT	/* 주택소유여부 */
+		  FROM TBRNT_PUCHAS_WAITR A								/* 매입대기자 */
+		 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR C					/* 매입임대고객 */
+			ON A.PUCHAS_CSTMR_NO = C.PUCHAS_CSTMR_NO
+		 WHERE A.CNTRCTR_NO IS NULL
+		   AND SUBSTR(A.GDCC_SNDNG_DE,1,6) = #sndngMt#			/* 조건 : 발송월 */
+		<isNotEmpty property="areaCode">
+		   AND A.AREA_CODE = #areaCode#
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+		   AND C.NM LIKE '%' || #nm#  || '%'					/* 조건 : 대기자명 */
+		</isNotEmpty>
+		ORDER BY A.RCEPT_DE, A.ROOM_STRUCTURE, A.WAIT_NO
+	</select>
+
+
+	<!-- 쿼리명 : 매입임대 거래가능 주택정보 조회
+		    설명 : 매입임대 거래가능 주택정보 조회 쿼리
+		  수정일 : 수정자  수정내용
+		  작성자 : 변승우
+	    최초작성일 : 2015.11.09
+	-->
+	<select id="RNT02030200DAO.selectCntrctrPosblHouseList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02030200DAO.selectCntrctrPosblHouseList[매입임대 거래가능 주택정보 조회] */
+		SELECT (SELECT CODE_NM
+				  FROM TBCOM_CMMN_CODE
+				 WHERE GRP_CODE = 'RNT004'
+				   AND CODE = B.AREA_SE) AS AREA_SE,		/* 지역 */
+			   A.RENT_HOUSE_CODE,							/* 주택코드 */
+			   B.RENT_HOUSE_NM,								/* 주택명 */
+			   A.DONG,										/* 동 */
+			   A.HO,										/* 호 */
+			   A.ROOM_STRUCTURE,							/* 방구조 = 주택형 */
+			   A.DVR_AR,									/* 전용면적 */
+			   A.CMNUSE_AR,									/* 공용면적 */
+			   C.RENT_GTN AS GTN,							/* 보증금 */
+			   C.MT_RNTCHRG AS RNTCHRG,						/* 임대료 */
+			   A.MANAGECT_PRECDNT,							/* 선수금 */
+			   A.RM,										/* 비고 */
+			   A.SUPLY_POSBL_DE,							/* 공급가능일자 */
+			   A.PORTAL_REGIST_AT,							/* 포털등록여부 */
+			   A.SUPLY_SE,									/* 공급여부 */
+			   B.RENT_HOUSE_NM || '-' || A.DONG || '-' || A.HO AS KEY,	/* KEY*/
+			   (D.ADRES || ' ' || D.ADRES_DETAIL) AS RENT_HOUSE_ADRES
+		  FROM TBRNT_PUCHAS_HOUSE_BILD A					/* 임대주택건축물 테이블 */
+		 INNER JOIN TBRNT_PUCHAS_HOUSE B					/* 임대주택 테이블 */
+			ON B.RENT_HOUSE_CODE 	= A.RENT_HOUSE_CODE
+		  LEFT JOIN TBRNT_PUCHAS_STDR C
+			ON C.RENT_HOUSE_CODE 	= A.RENT_HOUSE_CODE
+		   AND C.DONG 				= A.DONG
+		   AND C.HO 				= A.HO
+		   AND C.STDR_YEAR 			= TO_CHAR(SYSDATE, 'YYYY')
+          LEFT JOIN TBRNT_PUCHAS_HOUSE_DONG D
+            ON A.RENT_HOUSE_CODE 	= D.RENT_HOUSE_CODE
+           AND A.DONG 				= D.DONG
+		 WHERE A.SUPLY_SE 			= '1'
+		   AND A.CNTRCTR_NO IS NULL
+		<isNotEmpty property="roomStructure">
+		   AND A.ROOM_STRUCTURE = #roomStructure#
+		</isNotEmpty>
+		 ORDER BY B.RENT_HOUSE_NM, A.DONG , A.HO
+	</select>
+
+
+	<!-- 쿼리명 : 선수금계좌번호 조회
+		    설명 : 선수금계좌번호 조회
+		  수정일 : 수정자  수정내용
+		  작성자 : 한상훈
+	    최초작성일 : 2017.07.20
+	-->
+	<select id="RNT02030200DAO.selectPrecdntAccount" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02030200DAO.selectPrecdntAccount[선수금계좌번호 조회] */
+		SELECT CHRCTR_PREPAR_VALUE_0 AS ACCOUNT
+		  FROM TBCOM_CMMN_CODE
+		 WHERE GRP_CODE = 'RNT019'
+		   AND CODE = '01'
+	</select>
+
+
+	<!-- 쿼리명 : 매입임대 대기자 가족목록 조회
+		    설명 : 매입임대 대기자 가족목록 조회
+		  수정일 : 수정자  수정내용
+		  작성자 : 한상훈
+	    최초작성일 : 2017.07.20
+	-->
+	<select id="RNT02030200DAO.selectPuchasRentCstmrFamilyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02030200DAO.selectPuchasRentCstmrFamilyList[매입임대 대기자 가족목록 조회] */
+		SELECT A.SN,						/* 일련번호 */
+			   A.PUCHAS_CSTMR_NO,			/* 매입고객번호 */
+			   A.FAMILY_RELATE,				/* 가족관계 */
+			   A.RM,						/* 비고 */
+			   A.EXAMIN_ID,					/* 조사ID */
+			   A.FAMILY_NO,					/* 가족번호 */
+			   A.PORTAL_REGIST_AT,			/* 포털등록여부 */
+			   A.CNTRCTR_NO,				/* 계약자번호 */
+			   A.WAITR_CSTMR_NO,			/* 대기자고객번호 */
+			   A.CNTRCTR_CSTMR_NO,			/* 계약자고객번호 */
+			   A.AREA_CODE,					/* 지역코드 */
+			   A.RCEPT_DE,					/* 접수일자 */
+			   A.WAIT_RCEPT_SN,				/* 대기접수일련번호 */
+			   B.NM,						/* 성명 */
+			   SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM,			/* 주민등록번호 */
+			   B.ZIP,						/* 우편번호 */
+			   B.ADRES,						/* 주소 */
+			   B.ADRES_DETAIL,				/* 주소_상세 */
+			   B.TELNO,						/* 전화번호 */
+			   B.MBTLNO,					/* 휴대폰번호 */
+			   B.EMAIL						/* 이메일 */
+		  FROM TBRNT_PUCHAS_FAMILY_MATTER A
+		 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR B
+			ON A.PUCHAS_CSTMR_NO = B.PUCHAS_CSTMR_NO
+		 WHERE A.CNTRCTR_NO = #CNTRCTR_NO#
+			OR (
+				   A.AREA_CODE = #AREA_CODE#
+			   AND A.RCEPT_DE = #RCEPT_DE#
+			   AND A.WAIT_RCEPT_SN = #WAIT_RCEPT_SN#
+			   )
+		 ORDER BY A.FAMILY_RELATE
+	</select>
+
+
+	<!-- 쿼리명 : 계약등록(매입)
+		    설명 : 계약등록 -> 대기자정보 수정 -> 임대가족사항 수정 -> 건축물정보 수정 -> 보증금정보 등록 -> 가상계좌등록(보증금, 임대료, 주거급여)
+		  수정일 : 수정자  수정내용
+		  작성자 : 한상훈
+	    최초작성일 : 2017.07.19
+	-->
+	<insert id="RNT02030200DAO.puchasCntrctC" parameterClass="java.util.HashMap">
+		<selectKey keyProperty="CNTRCTR_NO" resultClass="string">
+		/* selectKey[계약자번호조회(매입)] */
+		SELECT (SELECT #RENT_HOUSE_CODE# || SUBSTR(HOUSE_SE, 1 , 2)
+				  FROM TBRNT_PUCHAS_HOUSE
+				 WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#)
+			   ||
+			   (SELECT LPAD(NVL(MAX(SUBSTR(CNTRCTR_NO, 6, 5)), 0) + 1, 5, '0')
+				  FROM TBRNT_PUCHAS_CNTRCT
+				 WHERE SUBSTR(CNTRCTR_NO, 1,5) = (SELECT #RENT_HOUSE_CODE# || SUBSTR(HOUSE_SE , 1 , 2)
+													FROM TBRNT_PUCHAS_HOUSE
+												   WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#))
+		  FROM DUAL
+		</selectKey>
+		/* RNT02030200DAO.puchasCntrctC[계약등록(매입)] */
+		BEGIN
+			/* 계약정보 등록 */
+			INSERT INTO TBRNT_PUCHAS_CNTRCT(
+				   CNTRCTR_NO,							/* 계약자번호 */
+				   RENT_HOUSE_CODE,						/* 임대주택코드 */
+				   DONG,								/* 동 */
+				   HO,									/* 호 */
+				   HOUSE_POSESN_AT,						/* 주택소유여부 */
+				   PUCHAS_CSTMR_NO,						/* 매입고객번호 */
+				   CNTRCT_DE,							/* 계약일자 */
+				   CNTRCT_CO,							/* 계약횟수 */
+				   QUALF_SE,							/* 자격구분 */
+				   RENT_BGNDE,							/* 임대시작일자 */
+				   RENT_ENDDE,							/* 임대종료일자 */
+				   GTN,									/* 보증금 */
+				   RNTCHRG,								/* 임대료 */
+				   FAMILY_CO,							/* 가족수 */
+				   MANAGECT_PRECDNT,					/* 관리비선수금 */
+				   FRST_CNTRCT_DE,						/* 최초계약일자 */
+				   NPYM_INTR_EXEMPT_AT,					/* 체납이자면제여부 */
+				   MANAGECT_RDCXPT_AT,					/* 관리비감면여부 */
+				   DEATH_AT,							/* 사망여부 */
+				   TROBL_AT,							/* 장애여부 */
+				   LWST_PROGRS_AT,						/* 소송진행여부 */
+				   INCOME_EXCESS,						/* 소득초과여부 */
+				   PORTAL_REGIST_AT,					/* 포털등록여부 */
+				   CANCL_DE,							/* 해약일자 */
+				   RM,									/* 비고 */
+				   REGISTER_ID,							/* 등록자ID */
+				   REGIST_DT,							/* 등록일시 */
+				   UPDUSR_ID,							/* 수정자ID */
+				   UPDT_DT								/* 수정일시 */
+			)
+			VALUES(
+				   #CNTRCTR_NO#,						/* 계약자번호 */
+				   #RENT_HOUSE_CODE#,					/* 임대주택코드 */
+				   #DONG#,								/* 동 */
+				   #HO#,								/* 호 */
+				   #HOUSE_POSESN_AT#,					/* 주택소유여부 */
+				   #PUCHAS_CSTMR_NO#,					/* 매입고객번호 */
+				   #CNTRCT_DE#,							/* 계약일자 */
+				   '1',									/* 계약횟수 */
+				   #QUALF_SE#,							/* 자격구분 */
+				   #RENT_BGNDE#,						/* 임대시작일자 */
+				   #RENT_ENDDE#,						/* 임대종료일자 */
+				   #GTN#,								/* 보증금 */
+				   #RNTCHRG#,							/* 임대료 */
+				   #FAMILY_CO#,							/* 가족수 */
+				   #MANAGECT_PRECDNT#,					/* 관리비선수금 */
+				   #CNTRCT_DE#,							/* 최초계약일자 */
+				   #NPYM_INTR_EXEMPT_AT#,				/* 체납이자면제여부 */
+				   #MANAGECT_RDCXPT_AT#,				/* 관리비감면여부 */
+				   '0',									/* 사망여부 */
+				   '0',									/* 장애여부 */
+				   '0',									/* 소송진행여부 */
+				   '0',									/* 소득초과여부 */
+				   '0',									/* 포털등록여부 */
+				   NULL,								/* 해약일자 */
+				   #RM#,								/* 비고 */
+				   #S_USER_ID#,							/* 등록자ID */
+				   SYSDATE,								/* 등록일시 */
+				   #S_USER_ID#,							/* 수정자ID */
+				   SYSDATE								/* 수정일시 */
+			);
+
+			/* 대기자정보 업데이트 - 계약정보 */
+			UPDATE TBRNT_PUCHAS_WAITR
+			   SET CNTRCTR_NO = #CNTRCTR_NO#,			/* 계약자번호 */
+				   FAMILY_CO = #FAMILY_CO#,				/* 가족수 */
+				   UPDUSR_ID = #S_USER_ID#,				/* 수정자ID */
+				   UPDT_DT = SYSDATE					/* 수정일시 */
+			 WHERE AREA_CODE = #AREA_CODE#				/* 조건 : 지역코드 */
+			   AND RCEPT_DE = #RCEPT_DE#				/* 조건 : 접수일자 */
+			   AND WAIT_RCEPT_SN = #WAIT_RCEPT_SN#		/* 조건 : 대기접수일련번호 */
+			;
+
+			/*임대소유물건 업데이트 - 계약자번호 수정 */
+			UPDATE TBRNT_PUCHAS_POSESN_THING
+			   SET CNTRCTR_NO = #CNTRCTR_NO#,			/* 계약자번호 */
+				   UPDUSR_ID = #S_USER_ID#,				/* 수정자ID */
+				   UPDT_DT = SYSDATE					/* 수정일시 */
+			 WHERE AREA_CODE = #AREA_CODE#				/* 조건 : 지역코드 */
+			   AND RCEPT_DE = #RCEPT_DE#				/* 조건 : 접수일자 */
+			   AND WAIT_RCEPT_SN = #WAIT_RCEPT_SN#		/* 조건 : 대기접수일련번호 */
+			;
+
+			/* 임대가족사항 업데이트 - 계약자번호 수정 */
+			UPDATE TBRNT_PUCHAS_FAMILY_MATTER
+			   SET CNTRCTR_NO = #CNTRCTR_NO#,			/* 계약자번호 */
+				   UPDUSR_ID = #S_USER_ID#,				/* 수정자ID */
+				   UPDT_DT = SYSDATE					/* 수정일시 */
+			 WHERE AREA_CODE = #AREA_CODE#				/* 조건 : 지역코드 */
+			   AND RCEPT_DE = #RCEPT_DE#				/* 조건 : 접수일자 */
+			   AND WAIT_RCEPT_SN = #WAIT_RCEPT_SN#		/* 조건 : 대기접수일련번호 */
+			;
+
+			/* 건축물정보 공급불가로 수정 */
+			UPDATE TBRNT_PUCHAS_HOUSE_BILD
+			   SET CNTRCTR_NO = #CNTRCTR_NO#,			/* 계약자번호 */
+				   SUPLY_SE = '0',						/* 공급가능여부 : 0 공급불가 */
+				   SUPLY_POSBL_DE = '',					/* 공급가능일자 */
+				   UPDUSR_ID = #S_USER_ID#,				/* 수정자ID */
+				   UPDT_DT = SYSDATE					/* 수정일시 */
+			 WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#	/* 조건 : 임대주택코드 */
+			   AND DONG = #DONG#						/* 조건 : 동 */
+			   AND HO = #HO#							/* 조건 : 호 */
+			;
+
+			/* 보증금정보 등록 */
+			INSERT INTO TBRNT_PUCHAS_GTN(
+				   CNTRCTR_NO,							/* 계약자번호 */
+				   GTN_SN,								/* 보증금순번 */
+				   GTN_SE,								/* 보증금구분 */
+				   CNTRCT_YEAR,							/* 계약년도 */
+				   GTN,									/* 보증금 */
+				   PAY_TMLMT,							/* 납부기한 */
+				   RCIV_DE,								/* 수납일자 */
+				   SN,									/* 일련번호 */
+				   RM,									/* 비고 */
+				   REGISTER_ID,							/* 등록자ID */
+				   REGIST_DT,							/* 등록일시 */
+				   UPDUSR_ID,							/* 수정자ID */
+				   UPDT_DT								/* 수정일시 */
+			)
+			VALUES(
+				   #CNTRCTR_NO#,						/* 계약자번호 */
+				   (SELECT NVL(MAX(GTN_SN), 0) + 1 FROM TBRNT_PUCHAS_GTN WHERE CNTRCTR_NO = #CNTRCTR_NO#),		/* 보증금순번 */
+				   '4',									/* 보증금구분 */
+				   SUBSTR(#CNTRCT_DE#, 1, 4),			/* 계약년도 */
+				   #GTN#,								/* 보증금 */
+				   #PAY_TMLMT#,							/* 납부기한 */
+				   NULL,								/* 수납일자 */
+				   (SELECT NVL(MAX(GTN_SN), 0) + 1 FROM TBRNT_PUCHAS_GTN WHERE CNTRCTR_NO = #CNTRCTR_NO#),		/* 일련번호 */
+				   NULL,								/* 비고 */
+				   #S_USER_ID#,							/* 등록자ID */
+				   SYSDATE,								/* 등록일시 */
+				   #S_USER_ID#,							/* 수정자ID */
+				   SYSDATE								/* 수정일시 */
+			);
+
+			/* 가상계좌 등록(임대료) */
+			SP_VA_MAST_PUCHAS_U('RN', '031',  #CNTRCTR_NO#, '', '1', #S_USER_ID#);
+			SP_VA_MAST_PUCHAS_U('RN', '004',  #CNTRCTR_NO#, '', '0', #S_USER_ID#);
+			SP_VA_MAST_PUCHAS_U('RN', '020',  #CNTRCTR_NO#, '', '0', #S_USER_ID#);
+			SP_VA_MAST_PUCHAS_U('RN', '071',  #CNTRCTR_NO#, '', '0', #S_USER_ID#);
+			
+			/* 가상계좌 등록(보증금) */
+			SP_VA_MAST_PUCHAS_U('RN', '031', #CNTRCTR_NO#, '', '1', #S_USER_ID#, 'BJ');
+			SP_VA_MAST_PUCHAS_U('RN', '004', #CNTRCTR_NO#, '', '0', #S_USER_ID#, 'BJ');
+			SP_VA_MAST_PUCHAS_U('RN', '020', #CNTRCTR_NO#, '', '0', #S_USER_ID#, 'BJ');
+			SP_VA_MAST_PUCHAS_U('RN', '071', #CNTRCTR_NO#, '', '0', #S_USER_ID#, 'BJ');
+			
+			/* 가상계좌 등록(주거급여) */
+			SP_VA_MAST_PUCHAS_U('RN', '031', #CNTRCTR_NO#, '', '1', #S_USER_ID#, 'RS');
+			
+			/* 가상계좌 등록(관리비) */
+			SP_VA_MAST_PUCHAS_U('MA', '031', #CNTRCTR_NO#, '', '1', #S_USER_ID#);
+		END;
+	</insert>
+
+
+	<!-- 쿼리명 : 임대주택 계약가능여부 조회
+		    설명 : 임대주택 계약가능여부 조회 조회 쿼리
+		  수정일 : 수정자  수정내용
+		  작성자 : 한상훈
+	    최초작성일 : 2017.07.22
+	-->
+	<select id="RNT02030200DAO.selectHouseCntrctrPosblAt" parameterClass="java.util.HashMap" resultClass="String">
+		/* RNT02030200DAO.selectHouseCntrctrPosblAt[임대주택 계약가능여부 조회] */
+		SELECT NVL2(CNTRCTR_NO, 0, 1) * 
+			   NVL2(SUPLY_POSBL_DE, 1, 0) * 
+			   SUPLY_SE AS SUPLY_SE							/* 공급여부 */
+		  FROM TBRNT_PUCHAS_HOUSE_BILD
+		 WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		   AND DONG = #DONG#
+		   AND HO = #HO#
+	</select>
+
+
+	<!-- 쿼리명 : 매입임대고객 등록
+		    설명 : 매입임대고객 등록
+		  수정일 : 수정자  수정내용
+		  작성자 : 한상훈
+	    최초작성일 : 2017.07.22
+	-->
+	<insert id="RNT02030200DAO.puchasRentCstmrC" parameterClass="hashmap">
+		<selectKey keyProperty="PUCHAS_CSTMR_NO" resultClass="string">
+		/* selectKey[매입고객번호] */
+		SELECT SQ_TBRNT_PRMANENT_RENT_CSTMR_1.NEXTVAL
+		  FROM DUAL
+		</selectKey>
+		/* RNT02030200DAO.puchasRentCstmrC[매입임대고객 등록] */
+		INSERT INTO TBRNT_PUCHAS_RENT_CSTMR (
+			   PUCHAS_CSTMR_NO,							/* 매입고객번호 */
+			   NM,										/* 성명 */
+			   IHIDNUM,									/* 주민등록번호 */
+			   ZIP,										/* 우편번호 */
+			   ADRES,									/* 주소 */
+			   ADRES_DETAIL,							/* 주소_상세 */
+			   TELNO,									/* 전화번호 */
+			   MBTLNO,									/* 휴대폰번호 */
+			   EMAIL,									/* 이메일 */
+			   REGISTER_ID,								/* 등록자ID */
+			   REGIST_DT,								/* 등록일시 */
+			   UPDUSR_ID,								/* 수정자ID */
+			   UPDT_DT									/* 수정일시 */
+		)
+		SELECT #PUCHAS_CSTMR_NO# AS PUCHAS_CSTMR_NO,	/* 매입고객번호 */
+			   #NM# AS NM,								/* 성명 */
+			   SFCOM_ENC_ALL(#IHIDNUM#) AS IHIDNUM,		/* 주민등록번호 */
+			   ZIP,										/* 우편번호 */
+			   ADRES,									/* 주소 */
+			   ADRES_DETAIL,							/* 주소_상세 */
+			   #TELNO# AS TELNO,						/* 전화번호 */
+			   '' AS MBTLNO,							/* 휴대폰번호 */
+			   '' AS EMAIL,								/* 이메일 */
+			   #S_USER_ID# AS REGISTER_ID,				/* 등록자ID */
+			   SYSDATE AS REGIST_DT,					/* 등록일시 */
+			   #S_USER_ID# AS UPDUSR_ID,				/* 수정자ID */
+			   SYSDATE AS UPDT_DT						/* 수정일시 */
+		  FROM TBRNT_PUCHAS_HOUSE
+		 WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+	</insert>
+
+
+	<!-- 쿼리명 : 기존계약자 계약등록(매입)
+		    설명 : 계약등록 -> 건축물정보 수정 -> 가상계좌등록(보증금, 임대료, 주거급여)
+		  수정일 : 수정자  수정내용
+		  작성자 : 한상훈
+	    최초작성일 : 2017.07.22
+	-->
+	<insert id="RNT02030200DAO.legacyCntrctrC" parameterClass="java.util.HashMap">
+		<selectKey keyProperty="CNTRCTR_NO" resultClass="string">
+		/* selectKey[계약자번호조회(매입)] */
+		SELECT (SELECT #RENT_HOUSE_CODE# || SUBSTR(HOUSE_SE, 1 ,2)
+				  FROM TBRNT_PUCHAS_HOUSE
+				 WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#)
+			   ||
+			   (SELECT LPAD(NVL(MAX(SUBSTR(CNTRCTR_NO, 6, 5)), 0) + 1, 5, '0')
+				  FROM TBRNT_PUCHAS_CNTRCT
+				 WHERE SUBSTR(CNTRCTR_NO, 1, 5) = (SELECT #RENT_HOUSE_CODE# || SUBSTR(HOUSE_SE, 1, 2)
+													FROM TBRNT_PUCHAS_HOUSE
+												   WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#))
+		  FROM DUAL
+		</selectKey>
+		/* RNT02030200DAO.legacyCntrctrC[계약등록(매입)] */
+		BEGIN
+			/* 계약정보 등록 */
+			INSERT INTO TBRNT_PUCHAS_CNTRCT(
+				   CNTRCTR_NO,							/* 계약자번호 */
+				   RENT_HOUSE_CODE,						/* 임대주택코드 */
+				   DONG,								/* 동 */
+				   HO,									/* 호 */
+				   HOUSE_POSESN_AT,						/* 주택소유여부 */
+				   PUCHAS_CSTMR_NO,						/* 매입고객번호 */
+				   CNTRCT_DE,							/* 계약일자 */
+				   CNTRCT_CO,							/* 계약횟수 */
+				   QUALF_SE,							/* 자격구분 */
+				   RENT_BGNDE,							/* 임대시작일자 */
+				   RENT_ENDDE,							/* 임대종료일자 */
+				   GTN,									/* 보증금 */
+				   RNTCHRG,								/* 임대료 */
+				   FAMILY_CO,							/* 가족수 */
+				   MANAGECT_PRECDNT,					/* 관리비선수금 */
+				   FRST_CNTRCT_DE,						/* 최초계약일자 */
+				   NPYM_INTR_EXEMPT_AT,					/* 체납이자면제여부 */
+				   MANAGECT_RDCXPT_AT,					/* 관리비감면여부 */
+				   DEATH_AT,							/* 사망여부 */
+				   TROBL_AT,							/* 장애여부 */
+				   LWST_PROGRS_AT,						/* 소송진행여부 */
+				   INCOME_EXCESS,						/* 소득초과여부 */
+				   PORTAL_REGIST_AT,					/* 포털등록여부 */
+				   CANCL_DE,							/* 해약일자 */
+				   RM,									/* 비고 */
+				   REGISTER_ID,							/* 등록자ID */
+				   REGIST_DT,							/* 등록일시 */
+				   UPDUSR_ID,							/* 수정자ID */
+				   UPDT_DT								/* 수정일시 */
+			)
+			VALUES(
+				   #CNTRCTR_NO#,						/* 계약자번호 */
+				   #RENT_HOUSE_CODE#,					/* 임대주택코드 */
+				   #DONG#,								/* 동 */
+				   #HO#,								/* 호 */
+				   '0',									/* 주택소유여부 */
+				   #PUCHAS_CSTMR_NO#,					/* 매입고객번호 */
+				   #CNTRCT_DE#,							/* 계약일자 */
+				   '1',									/* 계약횟수 */
+				   NVL((SELECT CODE
+						  FROM TBCOM_CMMN_CODE
+						 WHERE GRP_CODE = 'RNT001' 
+						   AND CODE_NM = #QUALF_NM#
+						), '28'),						/* 자격구분 : 기본값 (28 : 기존계약자) */
+				   #RENT_BGNDE#,						/* 임대시작일자 */
+				   #RENT_ENDDE#,						/* 임대종료일자 */
+				   #GTN#,								/* 보증금 */
+				   #RNTCHRG#,							/* 임대료 */
+				   #FAMILY_CO#,							/* 가족수 */
+				   '0',									/* 관리비선수금 */
+				   #CNTRCT_DE#,							/* 최초계약일자 */
+				   '0',									/* 체납이자면제여부 */
+				   '0',									/* 관리비감면여부 */
+				   '0',									/* 사망여부 */
+				   '0',									/* 장애여부 */
+				   '0',									/* 소송진행여부 */
+				   '0',									/* 소득초과여부 */
+				   '0',									/* 포털등록여부 */
+				   NULL,								/* 해약일자 */
+				   #RM#,								/* 비고 */
+				   #S_USER_ID#,							/* 등록자ID */
+				   SYSDATE,								/* 등록일시 */
+				   #S_USER_ID#,							/* 수정자ID */
+				   SYSDATE								/* 수정일시 */
+			);
+
+			/* 건축물정보 공급불가로 수정 */
+			UPDATE TBRNT_PUCHAS_HOUSE_BILD
+			   SET CNTRCTR_NO = #CNTRCTR_NO#,			/* 계약자번호 */
+				   SUPLY_SE = '0',						/* 공급가능여부 : 0 공급불가 */
+				   SUPLY_POSBL_DE = '',					/* 공급가능일자 */
+				   UPDUSR_ID = #S_USER_ID#,				/* 수정자ID */
+				   UPDT_DT = SYSDATE					/* 수정일시 */
+			 WHERE RENT_HOUSE_CODE = #RENT_HOUSE_CODE#	/* 조건 : 임대주택코드 */
+			   AND DONG = #DONG#						/* 조건 : 동 */
+			   AND HO = #HO#							/* 조건 : 호 */
+			;
+
+			/* 가상계좌 등록(임대료) */
+			SP_VA_MAST_PUCHAS_U('RN', '', #CNTRCTR_NO#, '', '1', #S_USER_ID#);
+			
+			/* 가상계좌 등록(보증금) */
+			SP_VA_MAST_PUCHAS_U('RN', '', #CNTRCTR_NO#, '', '1', #S_USER_ID#, 'BJ');
+			
+			/* 가상계좌 등록(주거급여) */
+			SP_VA_MAST_PUCHAS_U('RN', '031', #CNTRCTR_NO#, '', '0', #S_USER_ID#, 'RS');
+			
+			/* 가상계좌 등록(관리비) */
+			SP_VA_MAST_PUCHAS_U('MA', '031', #CNTRCTR_NO#, '', '1', #S_USER_ID#);
+		END;
+	</insert>
+</sqlMap>

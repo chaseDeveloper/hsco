@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01080200_SQL">	
+   <!--  설명  : 영구임대자격별현황
+		작성자 : 김지훈 -->
+	<!-- 게약 목록 -->
+	<select id="RNT01080200DAO.rentContQualfCondtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+					LV
+					,RENT_HOUSE_CODE
+					,RENT_HOUSE_NM
+					,QUALF_SE
+					,CASE 
+						WHEN LV = 2
+							AND QUALF_SE IS NULL
+							THEN '*** 주택별 소계 ***'
+						ELSE QUALF_NM
+						END QUALF_NM
+					,CNT
+					,OLD_CNT
+					,FCNT_0
+					,FCNT_1
+					,FCNT_2
+					,FCNT_3
+					,FCNT_4
+		FROM (
+					SELECT 
+								GROUPING(RENT_HOUSE_CODE) + GROUPING(RENT_HOUSE_NM) + GROUPING(QUALF_SE) + GROUPING(QUALF_NM) LV
+								,RENT_HOUSE_CODE
+								, RENT_HOUSE_NM
+								,QUALF_SE
+								,QUALF_NM
+								,COUNT(*) CNT
+								,SUM(OLD_CNT) OLD_CNT
+								,SUM(FCNT_0) FCNT_0
+								,SUM(FCNT_1) FCNT_1
+								,SUM(FCNT_2) FCNT_2
+								,SUM(FCNT_3) FCNT_3
+								,SUM(FCNT_4) FCNT_4
+					FROM (
+								SELECT 
+											a.RENT_HOUSE_CODE
+											,b.RENT_HOUSE_NM
+											,a.QUALF_SE
+											,CASE 
+												WHEN SFRNT_GET_ISDATE('19' || SUBSTR(SFCOM_DEC_ALL(C.IHIDNUM), 0, 6)) = 1
+													THEN CASE 
+															WHEN TRUNC(MONTHS_BETWEEN(SYSDATE, TRUNC(TO_DATE('19' || SUBSTR(SFCOM_DEC_ALL(C.IHIDNUM), 0, 6), 'YYYYMMDD'), 'MM')) / 12) >= 65
+																THEN 1
+															ELSE 0
+															END
+												ELSE 0
+												END OLD_CNT
+											,(SELECT 
+														CODE_NM
+											  FROM TBCOM_CMMN_CODE Z
+											  WHERE GRP_CODE = 'RNT001'
+											  AND RTRIM(CODE) = RTRIM(a.QUALF_SE)
+											  ) QUALF_NM
+											,CASE 
+												WHEN NVL(a.FAMILY_CO, 0) = 1
+													THEN 1
+												ELSE 0
+												END fcnt_0
+											,CASE 
+												WHEN NVL(a.FAMILY_CO, 0) = 2
+													THEN 1
+												ELSE 0
+												END fcnt_1
+											,CASE 
+												WHEN NVL(a.FAMILY_CO, 0) = 3
+													THEN 1
+												ELSE 0
+												END fcnt_2
+											,CASE 
+												WHEN NVL(a.FAMILY_CO, 0) = 4
+													THEN 1
+												ELSE 0
+												END fcnt_3
+											,CASE 
+												WHEN NVL(a.FAMILY_CO, 0) >= 5
+													THEN 1
+												ELSE 0
+												END fcnt_4
+								FROM		TBRNT_RENT_CNTRCT a
+											,TBRNT_RENT_HOUSE b
+											,TBRNT_PRMANENT_RENT_CSTMR c
+								WHERE 	a.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+								AND a.PRMANENT_CSTMR_NO = c.PRMANENT_CSTMR_NO
+								AND A.CANCL_DE IS NULL
+								<isNotEmpty property="houseSe">
+								   AND B.HOUSE_SE = #houseSe#
+								</isNotEmpty>
+								<isNotEmpty property="rentHouseCode">
+								AND a.RENT_HOUSE_CODE LIKE #rentHouseCode#
+								</isNotEmpty>
+								AND a.CNTRCT_DE BETWEEN #contRactFromDe# AND #contRactToDe#
+				)
+		GROUP BY ROLLUP(RENT_HOUSE_CODE, RENT_HOUSE_NM, QUALF_SE, QUALF_NM)
+		ORDER BY RENT_HOUSE_CODE NULLS FIRST	,QUALF_SE NULLS LAST
+			)
+		WHERE LV IN (0	,2)
+	</select>
+</sqlMap>

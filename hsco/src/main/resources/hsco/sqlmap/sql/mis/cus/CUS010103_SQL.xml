@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010103_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+    
+    <!--해당부서의 사원 목록조회-->
+    <select id="CUS010103DAO.selectEmpList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    <![CDATA[
+             SELECT 
+                   A.EMPNO AS DEPT_CHARGER_EMPNO          /*사번*/
+                  ,A.EMPNM AS DEPT_CHARGER_NM             /*사원명*/
+                  ,A.RSPOFC_SE                            /*직책*/
+                  ,A.OFCPS                                /*직종*/
+                  ,(SELECT DCLZ_SE
+                      FROM TBHRM_WRKCP
+                     WHERE 1=1
+                       AND TO_CHAR(SYSDATE,'YYYYMMDD') >= TO_CHAR(BGNDT,'YYYYMMDD')
+                       AND TO_CHAR(SYSDATE,'YYYYMMDD') <= TO_CHAR(ENDDT,'YYYYMMDD')
+                       AND EMPNO = A.EMPNO
+                       AND ROWNUM = 1
+                   ) AS DCLZ_SE
+               FROM (SELECT 
+                           A.EMPNO
+                          ,A.EMPNM
+                          ,A.RSPOFC_SE
+                          ,SFHRM_GET_OFCPSCD(A.EMPNO, A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE) AS OFCPS
+                       FROM TBHRM_HR_MASTR A,
+                            TBCOM_USER B
+                      WHERE A.EMPNO = B.EMPNO(+) AND A.DEPT_CODE = #DEPT_CODE#
+                        AND A.RSPOFC_SE NOT IN('080', '091') AND B.USER_STTUS_CODE = 'JA'
+                      GROUP BY A.EMPNO, A.EMPNM, A.RSPOFC_SE, A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE ) A
+              WHERE 1=1
+        ]]>  
+		<isNotEmpty property="EMPNO1">
+			    AND A.EMPNO NOT IN (#EMPNO1#) 
+		</isNotEmpty>
+		<isNotEmpty property="EMPNO2">
+			    AND A.EMPNO NOT IN (#EMPNO2#) 
+		</isNotEmpty>
+                ORDER BY RSPOFC_SE, OFCPS, EMPNO
+    </select>
+    
+     <!--담당자지정관리 목록조회-->
+    <select id="CUS010103DAO.selectChargerAppnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT A.CHARGER_NO                       AS CHARGER_NO
+			     , A.CHARGER_SE                       AS CHARGER_SE
+			     , A.DEPT_CODE                        AS DEPT_CODE
+			     , SFHRM_GET_DEPTNM(A.DEPT_CODE, '1') AS DEPT_NM
+			     , A.EMPNO                          AS EMPNO
+			     , C.EMPNM                          AS EMP_NM
+			     , B.DCLZ_SE                        AS DCLZ_SE
+			     , A.REGISTER_ID                    AS REGISTER_ID
+			     , TO_CHAR(A.REGIST_DT, 'YYYYMMDD') AS REGIST_DT
+			     , A.UPDUSR_ID                      AS UPDUSR_ID
+			     , TO_CHAR(A.UPDT_DT, 'YYYYMMDD')   AS UPDT_DT
+			FROM   TBCUS_CHARGER_APPN A
+			       LEFT OUTER JOIN (SELECT EMPNO, DCLZ_SE
+			                          FROM TBHRM_WRKCP
+			                         WHERE 1=1
+			                           AND TO_CHAR(SYSDATE,'YYYYMMDD') >= TO_CHAR(BGNDT,'YYYYMMDD')
+			                           AND TO_CHAR(SYSDATE,'YYYYMMDD') <= TO_CHAR(ENDDT,'YYYYMMDD')
+			                       ) B
+			                    ON B.EMPNO = A.EMPNO
+			       LEFT OUTER JOIN TBHRM_HR_MASTR C
+			                    ON C.EMPNO = A.EMPNO
+			ORDER BY CHARGER_SE, DEPT_CODE, EMPNO
+		]]>
+    </select>
+    
+    <!--담당자지정관리 입력 -->
+    <insert id="CUS010103DAO.chargerAppnListC" parameterClass="java.util.HashMap">
+        <![CDATA[
+            INSERT INTO TBCUS_CHARGER_APPN (
+                         CHARGER_NO
+						,CHARGER_SE
+						,DEPT_CODE
+						,EMPNO
+						,REGISTER_ID
+						,REGIST_DT
+						,UPDUSR_ID
+						,UPDT_DT
+             ) VALUES (
+	               (SELECT LPAD(NVL(MAX(CHARGER_NO),0)+1, 3, '0') FROM TBCUS_CHARGER_APPN)
+   				  ,#CHARGER_SE#
+				  ,#DEPT_CODE#
+				  ,#EMPNO#
+                  ,#S_USER_ID#
+                  ,SYSDATE
+                  ,#S_USER_ID#
+                  ,SYSDATE
+             )
+        ]]>
+    </insert>
+    
+    <!-- 그룹 사용자 추가 -->
+    <insert id="CUS010103DAO.TBCOM_USER_GRPC" parameterClass="java.util.Map" >
+Begin
+		INSERT INTO TBCOM_USER_GRP (
+		                AUTH_GRP_ID, USER_ID, INTRCP_AT,
+		                REGISTER_ID, REGIST_DT,
+		                UPDUSR_ID, UPDT_DT
+		            )
+		     Select
+		            #AUTH_GRP_ID#, #EMPNO#, '0',
+		            #S_USER_ID#, SYSDATE,
+		            #S_USER_ID#, SYSDATE
+		     From
+		     	Dual
+		     Where
+		     	Not Exists (
+		     		Select * From TBCOM_USER_GRP iA
+		     		Where
+		     			iA.AUTH_GRP_ID = #AUTH_GRP_ID#
+		     			And iA.USER_ID = #EMPNO#
+		     	);
+End;
+
+	</insert>
+    
+    <!--담당자지정관리 테이블수정 -->
+    <update id="CUS010103DAO.chargerAppnListU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBCUS_CHARGER_APPN SET
+						 EMPNO      = #EMPNO#
+						,CHARGER_SE = #CHARGER_SE#
+						,UPDUSR_ID  = #S_USER_ID#
+						,UPDT_DT    = SYSDATE
+            WHERE  CHARGER_NO = #CHARGER_NO#
+          ]]>
+    </update>
+    
+    <!--담당자지정관리 삭제 -->
+    <insert id="CUS010103DAO.chargerAppnListD" parameterClass="java.util.HashMap">
+        <![CDATA[
+           DELETE FROM TBCUS_CHARGER_APPN
+            WHERE  CHARGER_NO = #CHARGER_NO#
+        ]]>
+    </insert>
+    
+    <!--  그룹 사용자 삭제 -->
+    <delete id="CUS010103DAO.TBCOM_USER_GRPD" parameterClass="java.util.Map" >
+	      	DELETE FROM TBCOM_USER_GRP
+			WHERE
+				USER_ID = #EMPNO#
+			AND AUTH_GRP_ID = #AUTH_GRP_ID#
+    </delete>
+    
+    
+    <!--고객 등급 조회 -->
+	<select id="CUS010103DAO.authuserList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 0 AS CHK,
+		       A.AUTH_GRP_ID,
+		       (SELECT K.AUTH_GRP_NM
+		          FROM TBCOM_AUTH_GRP K
+		         WHERE K.AUTH_GRP_ID = A.AUTH_GRP_ID AND ROWNUM = 1)
+		          AS AUTH_GRP_NM,
+		       B.USER_ID,
+		       B.USER_NM,
+		       C.EMPNO,
+		       D.DEPT_CODE,
+		       D.DEPT_NM,
+		          (SELECT CODE_NM
+		             FROM TBCOM_CMMN_CODE
+		            WHERE GRP_CODE = 'HRM001' AND CODE = C.JSSFC_SE)
+		       || CASE
+		             WHEN C.HR_CLSF_SE IS NULL THEN ''
+		             ELSE SUBSTR (C.HR_CLSF_SE, 2, 1) || '급'
+		          END
+		          AS HR_CLSF_SE,
+		       (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE
+		         WHERE GRP_CODE = 'HRM214' AND CODE = C.RSPOFC_SE)
+		          AS RSPOFC_NM
+		  FROM TBCOM_USER_GRP A,
+		       TBCOM_USER B,
+		       TBHRM_HR_MASTR C,
+		       VWHRM_DEPT D
+		 WHERE     A.USER_ID = B.USER_ID
+		       AND B.EMPNO = C.EMPNO(+)
+		       AND C.DEPT_CODE = D.DEPT_CODE(+)
+		       AND AUTH_GRP_ID IN ('CUS_DEPT', 'CUS_USER')
+		ORDER BY AUTH_GRP_ID, USER_ID
+	</select>
+</sqlMap>

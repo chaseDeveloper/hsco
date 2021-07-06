@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01080700SQL">	
+
+	<!-- 쿼리명 : 건죽물정보조회
+	설명 : 건죽물정보조회 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.10.26
+	-->
+	<select id="RNT01080700DAO.selectRentHouseInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT01080700DAO.selectRentHouseInfoList[건죽물정보조회] */
+		SELECT A.RENT_HOUSE_NM,											/* 주택명 */
+			   C.RENT_HOUSE_CODE,										/* 주택코드 */
+			   C.DONG,
+			   C.HO,
+			   D.CNTRCT_DE,												/* 계약일자 */
+			   D.NM,
+			   E.CANCL_DE AS PRE_CANCL_DE,								/* 이전해약일 */
+			   C.DVR_AR,												/* 전용면적 */
+			   C.CMNUSE_AR,												/* 공용면적 */
+			   C.DVR_AR + C.CMNUSE_AR AS TOT_AR,						/* 면적 */
+			   C.AEA,													/* 평형 */
+			   C.RENT_GTN,												/* 보증금 */
+			   C.MT_RNTCHRG,											/* 임대료 */
+			   B.ZIP,
+			   B.ADRES,
+			   B.ADRES_DETAIL,
+			   SFCOM_DEC_ALL (D.IHIDNUM) AS IHIDNUM						/* 주민번호 */
+		  FROM TBRNT_RENT_HOUSE A										/* 임대주택 */
+		 INNER JOIN TBRNT_RENT_HOUSE_DONG B
+			ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		 INNER JOIN (
+					SELECT A.*,
+						   B.RENT_GTN,
+						   B.MT_RNTCHRG,
+						   C.HOUSE_SE
+					  FROM TBRNT_RENT_HOUSE_BILD A
+					 INNER JOIN TBRNT_RENT_HOUSE C
+						ON C.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+					   AND C.HOUSE_SE = 'R1'
+					  LEFT JOIN TBRNT_RNTCHRG_STDR B
+						ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+					   AND B.AEA = A.AEA
+					   AND B.FLOOR_SE = A.FLOOR
+					   AND STDR_YEAR = TO_CHAR (SYSDATE, 'YYYY')
+					   AND QUALF_SE = '1'
+					 UNION ALL
+					SELECT A.*,
+						   B.RENT_GTN,
+						   B.MT_RNTCHRG,
+						   C.HOUSE_SE
+					  FROM TBRNT_RENT_HOUSE_BILD A
+					 INNER JOIN TBRNT_RENT_HOUSE C
+						ON C.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+					   AND C.HOUSE_SE = 'R3'
+					  LEFT JOIN TBRNT_RNTCHRG_STDR_STORE B
+						ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+					   AND B.DONG = A.DONG
+					   AND B.HO = A.HO
+					   AND STDR_YEAR = TO_CHAR (SYSDATE, 'YYYY')
+			   ) C
+			ON C.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		   AND C.DONG = B.DONG
+		  LEFT JOIN (
+					SELECT RENT_HOUSE_CODE,
+						   DONG,
+						   HO,
+						   NM,
+						   FRST_CNTRCT_DE CNTRCT_DE,
+						   IHIDNUM
+					  FROM TBRNT_RENT_CNTRCT A							/* 계약정보 */
+					 INNER JOIN TBRNT_PRMANENT_RENT_CSTMR B				/* 영구임대고객 */
+						ON B.PRMANENT_CSTMR_NO = A.PRMANENT_CSTMR_NO
+					 WHERE A.CANCL_DE IS NULL							/* 해약일 체크 */
+			   ) D
+			ON D.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		   AND D.DONG = C.DONG
+		   AND D.HO = C.HO
+		  LEFT JOIN (
+					SELECT MAX(CANCL_DE) AS CANCL_DE, RENT_HOUSE_CODE, DONG, HO
+					  FROM TBRNT_RENT_CNTRCT
+					 WHERE CANCL_DE IS NOT NULL
+					 GROUP BY RENT_HOUSE_CODE, DONG, HO
+			  ) E
+			ON E.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+		   AND E.DONG = C.DONG
+		   AND E.HO = C.HO
+		   AND E.CANCL_DE <![CDATA[<=]]> NVL(D.CNTRCT_DE, TO_CHAR (SYSDATE, 'YYYYMMDD'))
+		 WHERE 1 = 1
+	<isNotEmpty property="houseSe">
+		   AND #houseSe# LIKE '%' || A.HOUSE_SE || '%'					/* 주택구분 */
+	</isNotEmpty>
+	<isNotEmpty property="rentHouseCode">
+		   AND A.RENT_HOUSE_CODE = #rentHouseCode#
+	</isNotEmpty>
+		ORDER BY C.RENT_HOUSE_CODE, C.DONG, C.HO
+	</select>
+</sqlMap>

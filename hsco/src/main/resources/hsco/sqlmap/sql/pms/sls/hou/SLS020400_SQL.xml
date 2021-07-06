@@ -1,0 +1,840 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS020400DAO">	
+	
+	<!-- 쿼리명 : 분양확인서 정보 조회영역
+	설명 : 분양확인서 정보 조회 쿼리
+	수정일          수정자    수정내용
+	2016.02.02  박병일    쿼리재작성
+	작성자 : 변승우
+	최초작성일 : 2015. 09 .04
+	-->
+	<select id="SLS020400DAO.selectPayInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.* ,
+		       DECODE( ( A.PAYAMT + NVL(A.ARRRG_AMOUNT,0) + A.POINT_DSCNT_AM + NVL(A.ARRRG_DSCNT_AMOUNT,0) + NVL(A.POINT_DSCNT_AM,0) ) - NVL( A.RCIV_AMOUNT, 0 ), 0 , -1, 0 ) AS F_CHECK,
+		       (
+		           CASE
+		               WHEN A.RCIV_DE IS NULL
+		               THEN ( A.PAYAMT + NVL(A.ARRRG_AMOUNT,0) + NVL(A.ARRRG_DSCNT_AMOUNT,0) + NVL(A.POINT_DSCNT_AM,0))
+		               ELSE 0
+		           END
+		       ) AS F_MISU_AMT,
+		       NVL(A.ARRRG_AMOUNT,0) + NVL(A.ARRRG_DSCNT_AMOUNT,0) + NVL(A.POINT_DSCNT_AM,0) AS F_ARRRG_AMOUNT,
+		       A.RCIV_AMOUNT AS CORTSUM_AMT,
+		       SUBSTR(SFCOM_CODE_NM('HOU0A8',A.PAY_SE,'ALL_CODE_NM'),1,127) AS F_PAY_SE, 			<!-- 납부구분 -->
+		       SUBSTR(SFCOM_CODE_NM('HOU0A9',A.PAY_SN,'ALL_CODE_NM'),1,127) AS F_PAY_SN, 			<!-- 납부순번 -->
+		       SUBSTR(SFCOM_CODE_NM('HOU0A1',A.PAY_CODE,'ALL_CODE_NM'),1,127) AS F_CORTCODE, 		<!-- 납부코드 -->
+		       SUBSTR(SFCOM_CODE_NM('HOU0A7',A.PAYMTHD,'ALL_CODE_NM'),1,127) AS F_PAYMEANS, 		<!-- 납부방법 -->
+		       SUBSTR(SFCOM_CODE_NM('COM021',A.PAY_BANK_CODE,'ALL_CODE_NM'),1,127) AS F_BANKCODE, 	<!-- 납부은행 -->
+		       '[' || A.UPDUSR_ID || '] ' || TO_CHAR(A.UPDT_DT,'YYYYMMDDHH24MISS') AS F_LAST_ENTRY,
+		       (
+		           CASE
+		               WHEN D.HOUSE_STLE = '02'
+		               THEN
+		                   CASE
+		                       WHEN D.BILDNG_CT = 0
+		                           OR D.PLOT_CT = 0
+		                       THEN 0
+		                       ELSE TRUNC((D.BILDNG_CT / (TRUNC(D.PLOT_CT + D.BILDNG_CT + (D.BILDNG_CT * 0.1),0)) ) * A.PAYAMT, -1) * 0.1
+		                   END
+		               ELSE 0
+		           END
+		       ) AS VAT_AMT,
+		       '1' AS CHK
+		  FROM TBSLS_HOUSE_LTTOT_PAY A,
+		       TBSLS_HCNTRCTR B,
+		       TBSLS_HOUSE_DONG_HO C,
+		       TBSLS_HOUSE_TY D
+		 WHERE 1=1
+		   AND A.CNTRCTR_NO = B.CNTRCTR_NO
+		   AND B.HOUSE_CODE = C.HOUSE_CODE
+		   AND B.DONG = C.DONG
+		   AND B.HO = C.HO
+		   AND C.HOUSE_CODE = D.HOUSE_CODE(+)
+		   AND C.HOUSE_TY_CODE = D.HOUSE_TY_CODE(+)
+		   AND A.CNTRCTR_NO = #CNTRCTR_NO#
+		 <isNotEmpty property="LTTOT_RENT_SE">
+		   AND A.LTTOT_RENT_SE = #LTTOT_RENT_SE#
+		 </isNotEmpty>
+		ORDER BY A.PAY_TMLMT,
+		       A.PAY_CODE,
+		       A.RCIV_DE
+	</select>
+	
+	<!-- 쿼리명 : 분양확인서 조회 [C01], 수납확인서 조회 [C02] -->
+	<select id="SLS020400DAO.selectFormListC01" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		WITH V_SLS_HCNTRCTR AS
+		(
+		    SELECT /* V_SLS_HCNTRCTR 계약자(배우자)정보 */
+		         a1.CNTRCTR_NO																			/* 계약자_코드 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.HOUSE_CODE)) AS HOUSE_CODE						/* 계약자_주택코드 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.DONG)) AS DONG									/* 계약자_동 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.HO)) AS HO										/* 계약자_호 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.HOUSE_CSTMR_NO)) AS HOUSE_CSTMR_NO				/* 계약자_주택고객번호 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.CSTMR_NM)) AS CSTMR_NM							/* 계약자_성명 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.IHIDNUM)) AS IHIDNUM							/* 계약자_주민번호 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.CNTRCTR_STTUS_CODE)) AS CNTRCTR_STTUS_CODE		/* 계약자_상태코드 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.RENT_LTTOT_CNVRS_DE)) AS RENT_LTTOT_CNVRS_DE	/* 계약자_임대분양전환일자 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.RENT_BGNDE)) AS RENT_BGNDE						/* 계약자_임대시작일자 */
+		       , MAX(DECODE(a1.FAMILY_RELATE, '000', a1.RENT_ENDDE)) AS RENT_ENDDE						/* 계약자_임대종료일자 */
+		       /* 배우자 성명(999는 임시) */
+		       , MAX(CASE WHEN a1.FAMILY_RELATE = '005' OR a1.FAMILY_RELATE = '006' OR a1.FAMILY_RELATE = '999' THEN a1.CSTMR_NM ELSE '' END) AS SU_NM
+		  FROM (
+		        SELECT a.CNTRCTR_NO				/* 계약자번호 */
+		             , a.HOUSE_CSTMR_NO			/* 주택고객번호 */
+		             , '000' AS FAMILY_RELATE	/* 가족관계 : 000 본인 ) */
+		             , b.CSTMR_NM				/* 성명 */
+		             , b.IHIDNUM				/* 주민번호 */
+		             , a.HOUSE_CODE				/* 주택코드 */
+		             , a.DONG					/* 동 */
+		             , a.HO						/* 호 */
+		             , a.CNTRCTR_STTUS_CODE		/* 상태코드 */
+		             , a.RENT_LTTOT_CNVRS_DE	/* 임대분양전환일자 */
+		             , a.RENT_BGNDE				/* 임대시작일 */
+		             , a.RENT_ENDDE				/* 임대종료일 */
+		         FROM TBSLS_HCNTRCTR a			/* 주택계약자 */
+		            , TBSLS_HOUSE_CSTMR b		/* 주택고객 */
+		        WHERE 1 = 1
+		          AND a.HOUSE_CSTMR_NO = b.HOUSE_CSTMR_NO(+)	/* 주택고객번호 */
+		        UNION ALL
+		        SELECT a.CNTRCTR_NO				/* 계약자번호 */
+		             , a.HOUSE_CSTMR_NO			/* 주택고객번호 */
+		             , a.FAMILY_RELATE  		/* 가족관계 */
+		             , b.CSTMR_NM				/* 성명 */
+		             , b.IHIDNUM				/* 주민번호 */
+		             , '' AS HOUSE_CODE
+		             , '' AS DONG
+		             , '' HO
+		             , '' AS CNTRCTR_STTUS_CODE
+		             , '' AS RENT_LTTOT_CNVRS_DE
+		             , '' AS RENT_BGNDE			/* 임대시작일 */
+		             , '' AS RENT_ENDDE			/* 임대종료일 */
+		        FROM TBSLS_HCNTRCTR_FAMILY a	/* 주택계약자 가족 */
+		           , TBSLS_HOUSE_CSTMR b		/* 주택고객 */
+		        WHERE a.HOUSE_CSTMR_NO = b.HOUSE_CSTMR_NO(+)
+		          AND a.FAMILY_RELATE IN ('005','006')	/* 배우자 */
+		          AND a.USE_AT = '1'
+		    ) a1
+		    GROUP BY a1.CNTRCTR_NO
+		)
+		,V_HOUSE_INFO AS (
+		 		 SELECT /* 주택정보 조회 */
+				 		x.HOUSE_CODE				/* 주택코드 */
+				      , x.HOUSE_NM					/* 주택명 */
+				      , x.HOUSE_SE					/* 주택구분 */
+				      , (SELECT CODE_NM
+				           FROM TBCOM_CMMN_CODE
+					  	  WHERE GRP_CODE = 'HOU0A2'
+				            AND CODE = x.HOUSE_SE
+				        ) AS HOUSE_SE_NM			/* 주택구분명 */
+		              , x.LOCPLC_ZIP				/* 소재지우편번호 */
+		              , x.LOCPLC_BASS_ADRES			/* 소재지기본주소 */
+		              , x.LOCPLC_DETAIL_ADRES		/* 소재지상세주소 */
+		              , x.LOCPLC_ZIP_LNM			/* 소재지우편번호지번 */
+		              , x.LOCPLC_BASS_ADRES_LNM		/* 소재지기본주소지번 */
+		              , x.LOCPLC_DETAIL_ADRES_LNM	/* 소재지상세주소지번 */
+		              , x.BDNBR						/* 건물번호 */
+		              , x.LTTOT_CNVRS_SE			/* 분양전환구분 */
+		              , x.LTTOT_CNVRS_DE			/* 분양전환일자 */
+		              , x.BSNS_CODE					/* 사업코드 */
+		              , x.MVN_DE					/* 입주일자 */
+		              , x.USE_AT					/* 사용여부 */
+		              , x.BILDNG_STRCT				/* 건축구조 */
+		              , x.STRWRK_DE					/* 착공일자 */
+		              , x.COMPET_DE					/* 준공일자 */
+		              , x.CN_YYCNT					/* 내용년수 */
+		              , x.TOT_PLOT_AR				/* 총대지면적 */
+		              , x.LAD_PRMPC					/* 토지원기 */
+		              , x.RM AS HOUSE_RM			/* 주택_비고 */
+		              , x.HMPG_USE_AT				/* 홈페이지 사용여부 */
+		              /* 주택타입 */
+				      , y.HOUSE_TY_CODE				/* 주택타입코드 */
+				      , y.AEA						/* 평형 */
+				      , y.TY_AEA					/* 타입평형 */
+		              , y.HOUSE_DRC					/* 주택방향 */
+		              , (SELECT CODE_NM
+		                   FROM TBCOM_CMMN_CODE
+						  WHERE GRP_CODE = 'HOU002'
+		                    AND CODE = y.HOUSE_DRC
+		                ) AS HOUSE_DRC_NM			/* 주택방향명 */
+		              , y.ROOM_CO					/* 방수 */
+		              , y.HOUSE_STLE				/* 주택형태 */
+		              , (SELECT CODE_NM
+		                   FROM TBCOM_CMMN_CODE
+						  WHERE GRP_CODE = 'HOU003'
+		                    AND CODE = y.HOUSE_STLE
+		                ) AS HOUSE_STLE_NM			/* 주택형태명 */
+		              , y.SUPLY_AMOUNT				/* 공급가액 */
+		              , y.VAT						/* 부가세 */
+		              , y.INHBTNT_BILDNG_CT			/* 주민건축비용 */
+		              , y.INHBTNT_VAT				/* 주민부가세 */
+		              , y.RNTCHRG AS TY_RNTCHRG		/* 타입_임대료 */
+		              , y.KJF						/* 국민주택기금 */
+		              , y.FINANC_LMT_AMOUNT			/* 융자한도금액 */
+		              , y.PLOT_CT					/* 대비비용 */
+		              , y.BILDNG_CT					/* 건축비용 */
+		              , y.HOUSE_DVR_AR				/* 주택전용면적 */
+		              , y.HOUSE_CMNUSE_AR			/* 주택공용면적 */
+		              , y.HOUSE_LTTOT_AR			/* 주택분양면적 */
+		              , y.HOUSE_CNTRCT_AR			/* 주택계약면적 */
+		              , y.HOUSE_LEGAL_EXCESS		/* 주택법정초과 */
+		              , y.HOUSE_BILDNG_AR			/* 주택건축면적 */
+		              , y.HOUSE_ETC_CMNUSE			/* 주택기타공용 */
+		              , y.HOUSE_PLOT_QOTA			/* 주택재지지분 */
+		              , y.RM AS TY_RM				/* 타입_비고 */
+				      /* 주택동호 */
+		              , z.DONG						/* 동 */
+				      , z.HO						/* 호 */
+		              , z.FLOOR						/* 층 */
+		              , z.LTTOT_TY_CODE				/* 분양타입코드 */
+				      , z.RENT_TY_CODE				/* 임대타입코드 */
+		              , z.BASS_LTTOT_AMOUNT			/* 기본분양금액 */
+		              , z.BASS_GTN					/* 기본보증금 */
+				      , z.BASS_RNTCHRG				/* 기본임대료 */
+				      , z.LTTOT_AMOUNT				/* 분양금액 */
+				      , z.RNTCHRG					/* 임대료 */
+		              , z.GTN						/* 보증금 */
+		              , z.RM AS DONG_HO_RM			/* 동호_비고 */
+				   FROM TBSLS_HOUSE_INFO x        	/* 주택정보 */
+				      , TBSLS_HOUSE_TY y          	/* 주택타입 */
+				      , TBSLS_HOUSE_DONG_HO z     	/* 주택동호 */
+				  WHERE 1 = 1
+				    AND x.HOUSE_CODE = z.HOUSE_CODE
+				    AND z.HOUSE_CODE = y.HOUSE_CODE(+)
+				    AND z.HOUSE_TY_CODE = y.HOUSE_TY_CODE(+)
+		)
+		SELECT  A.CNTRCTR_NO AS CNTRCTR_NO
+		      , A.HOUSE_CODE AS HOUSE_CODE
+		      , V2.LOCPLC_BASS_ADRES_LNM ||' ' || V2.LOCPLC_DETAIL_ADRES_LNM AS SOJAEJI
+		      , V2.HOUSE_NM ||' ' || TO_NUMBER(V2.DONG) || '동 ' || TO_NUMBER(V2.HO) || '호' AS JUTEK
+		      , B.CSTMR_NM  AS CSTMR_NM
+		      , SFCOM_DEC_ALL(B.IHIDNUM)  AS IHIDNUM
+		      , B.ADRES || B.ADRES_DETAIL AS ADDR
+		      , NVL(B.TELNO,B.MBTLNO) AS TELNO
+		      , SFCOM_CODE_NM('HOU004', NVL(A.LTTOT_QUALF_SE, A.RENT_QUALF_SE)) AS QULF_CLASS
+		      , (SELECT SUM(PAYAMT)
+		         FROM TBSLS_HOUSE_LTTOT_PAY
+		        WHERE 1=1
+		          AND CNTRCTR_NO = A.CNTRCTR_NO
+		          AND LTTOT_RENT_SE = #LTTOT_RENT_SE# /* 분양임화성분 (S:분양,R:임대분양, L:임대료) */
+		       ) AS TOTAMT
+		      , SFCOM_CODE_NM('HOU0A1', C.PAY_CODE) AS GUBUN
+		      , SFCOM_CODE_NM('HOU0A8', C.PAY_SE,'ALL_CODE_NM') AS NAPBU_CODE
+		      , SFCOM_CODE_NM('HOU0A9', C.PAY_SN,'ALL_CODE_NM') AS NAPBU_SEQ
+		      , C.PAY_TMLMT AS PAY_TMLMT
+		      , CASE
+		           WHEN ( NVL(C.RM,'A') = 'K' AND #OUTPT_SE# = '1' )    /* 출력물구분 (1:분양확인서, 2:수납확인서) */
+		           THEN C.RCIV_DE
+		           ELSE C.PAY_TMLMT
+		         END AS NAPBU_END
+			  , C.PAYAMT AS GIJUN_AMT
+		      , C.ARRRG_AMOUNT + NVL(ARRRG_DSCNT_AMOUNT,0) + NVL(POINT_DSCNT_AM,0) AS HALIN_AMT
+		      , C.YRINS_SALE_INTR AS YEONBU_EJA
+		      , (  CASE #OUTPT_SE#
+		                 WHEN '1'
+		                 THEN
+		                     CASE
+		                         WHEN NVL(C.ARRRG_AMOUNT,0) <![CDATA[ < ]]> 0
+		                         THEN C.RCIV_AMOUNT - NVL(C.YRINS_SALE_INTR,0)
+		                         ELSE C.RCIV_AMOUNT - NVL(C.ARRRG_AMOUNT,0) - NVL(C.YRINS_SALE_INTR,0)
+		                     END
+		                 ELSE C.RCIV_AMOUNT - NVL(C.YRINS_SALE_INTR,0)
+		             END
+		         ) AS NAPBU_AMT
+		      , ( CASE
+		               WHEN NVL(C.RM,'A') <![CDATA[ <> ]]> 'K'
+		               THEN
+		                   CASE #OUTPT_SE#
+		                       WHEN '1'
+		                       THEN
+		                           CASE
+		                               WHEN NVL(C.ARRRG_AMOUNT,0) <![CDATA[ < ]]> 0
+		                               THEN NVL(C.RCIV_AMOUNT,0)
+		                               ELSE NVL(C.RCIV_AMOUNT,0) - NVL(C.ARRRG_AMOUNT,0)
+		                           END
+		                       ELSE NVL(C.RCIV_AMOUNT,0)
+		                   END
+		           END
+		       ) + NVL(POINT_DSCNT_AM,0) AS RNAPBU_AMT
+		      , ( CASE
+		               WHEN NVL(C.RM,'A') = 'K'
+		                   AND #OUTPT_SE# = '1'
+		                   AND C.RCIV_DE IS NOT NULL
+		               THEN '국민주택기금'
+		               WHEN NVL(C.RM,'A') <![CDATA[ <> ]]> 'K'
+		               THEN C.RCIV_DE
+		           END
+		       ) AS SUNAP_DATE
+		      , (  CASE
+		               WHEN ( V2.HOUSE_STLE = '02' AND C.RCIV_AMOUNT > 0 )
+		                   OR ( V2.HOUSE_SE = 'S3' AND C.RCIV_AMOUNT > 0 )
+		               THEN
+		                   CASE
+		                       WHEN C.PAY_CODE IN('SB','SC','SD')
+		                       THEN C.PAYAMT - TRUNC (C.PAYAMT / 1.1, 0)
+		                       ELSE
+		                           CASE
+		                               WHEN V2.BILDNG_CT = 0
+		                                   OR V2.PLOT_CT = 0
+		                               THEN 0
+		                               ELSE
+		                                   CASE  
+		                                       <![CDATA[
+		                                       WHEN V2.HOUSE_STLE <> '02'
+		                                           AND V2.HOUSE_SE <> 'S3'
+		                                       ]]>
+		                                       THEN 0
+		                                       ELSE
+		                                           CASE
+		                                               <![CDATA[
+		                                               WHEN ( C.PAY_TMLMT < '20110101'
+		                                                       OR C.RCIV_DE < '20110101'
+		                                                       OR A.CNTRCTR_NO IN('1332007801','1331999601')
+		                                                   )
+		                                               ]]>    
+		                                               THEN
+		                                                   CASE
+		                                                       WHEN NVL(A.RENT_QUALF_SE,A.LTTOT_QUALF_SE) = '28'
+		                                                       THEN TRUNC((DECODE(NVL(V2.INHBTNT_BILDNG_CT,0),0,V2.BILDNG_CT,V2.INHBTNT_BILDNG_CT) / (TRUNC(V2.PLOT_CT + DECODE(NVL(V2.INHBTNT_BILDNG_CT,0),0,V2.BILDNG_CT,V2.INHBTNT_BILDNG_CT) + (DECODE(NVL(V2.INHBTNT_BILDNG_CT,0),0,V2.BILDNG_CT,V2.INHBTNT_BILDNG_CT) * 0.1),0)) ) * C.PAYAMT, -1) * 0.1
+		                                                       ELSE TRUNC((V2.BILDNG_CT / (TRUNC(V2.PLOT_CT + V2.BILDNG_CT + (V2.BILDNG_CT * 0.1),0)) ) * C.PAYAMT, -1) * 0.1
+		                                                   END
+		                                               ELSE
+		                                                   CASE
+		                                                       WHEN NVL(A.RENT_QUALF_SE,A.LTTOT_QUALF_SE) = '28'
+		                                                       THEN TRUNC((DECODE(NVL(V2.INHBTNT_BILDNG_CT,0),0,V2.BILDNG_CT,V2.INHBTNT_BILDNG_CT) / (TRUNC(V2.PLOT_CT + DECODE(NVL(V2.INHBTNT_BILDNG_CT,0),0,V2.BILDNG_CT,V2.INHBTNT_BILDNG_CT) + (DECODE(NVL(V2.INHBTNT_BILDNG_CT,0),0,V2.BILDNG_CT,V2.INHBTNT_BILDNG_CT) * 0.1),0)) ) *
+		                                                           (
+		                                                               CASE
+		                                                                   WHEN NVL(C.ARRRG_AMOUNT,0) <![CDATA[ < ]]> 0
+		                                                                   THEN NVL(C.PAYAMT,0) + NVL(C.ARRRG_AMOUNT,0) + NVL(C.POINT_DSCNT_AM,0)
+		                                                                   ELSE NVL(C.PAYAMT,0) + NVL(C.POINT_DSCNT_AM,0)
+		                                                               END
+		                                                           )
+		                                                           , -1) * 0.1
+		                                                       ELSE TRUNC((V2.BILDNG_CT / (TRUNC(V2.PLOT_CT + V2.BILDNG_CT + (V2.BILDNG_CT * 0.1),0)) ) *
+		                                                           (
+		                                                               CASE
+		                                                                   WHEN NVL(C.ARRRG_AMOUNT,0) <![CDATA[ < ]]> 0 
+		                                                                   THEN NVL(C.PAYAMT,0) + NVL(C.ARRRG_AMOUNT,0) + NVL(C.POINT_DSCNT_AM,0)
+		                                                                   ELSE NVL(C.PAYAMT,0) + NVL(C.POINT_DSCNT_AM,0)
+		                                                               END
+		                                                           )
+		                                                           , -1) * 0.1
+		                                                   END
+		                                           END
+		                                   END
+		                           END
+		                   END
+		               ELSE 0
+		           END
+		       ) AS VAT_AMT
+		      , C.PAY_CODE AS PAY_CODE
+		      <![CDATA[      
+		      , NVL((SELECT SUM(MT_RNTCHRG + DFNNT_AMOUNT) FROM TBSLS_HOUSE_RENT_PAY M 
+		              WHERE M.CNTRCTR_NO = A.CNTRCTR_NO AND M.RCIV_DE IS NULL 
+		                AND RQEST_YM < TO_CHAR(SYSDATE,'YYYYMM') ),0) AS MRENT_AMT
+		      , NVL((SELECT SUM(DET_AMOUNT) FROM TBSLS_HCNTRCTR_SEIZR M WHERE M.CNTRCTR_NO = A.CNTRCTR_NO AND M.RELIS_DE IS NULL),0) AS DEBT_AMT
+              , CASE WHEN TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),24), 'YYYYMMDD') < V2.LTTOT_CNVRS_DE AND TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),24), 'YYYYMMDD') > TO_CHAR(SYSDATE,'YYYYMMDD') 
+                          THEN TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),24), 'YYYYMMDD')
+                     WHEN TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),48), 'YYYYMMDD') < V2.LTTOT_CNVRS_DE AND TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),48), 'YYYYMMDD') > TO_CHAR(SYSDATE,'YYYYMMDD') 
+                          THEN TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),48), 'YYYYMMDD')
+                     WHEN TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),72), 'YYYYMMDD') < V2.LTTOT_CNVRS_DE AND TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),72), 'YYYYMMDD') > TO_CHAR(SYSDATE,'YYYYMMDD') 
+                          THEN TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),72), 'YYYYMMDD')
+                     WHEN TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),96), 'YYYYMMDD') < V2.LTTOT_CNVRS_DE AND TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),96), 'YYYYMMDD') > TO_CHAR(SYSDATE,'YYYYMMDD') 
+                          THEN TO_CHAR(ADD_MONTHS(TO_DATE(V2.MVN_DE, 'YYYYMMDD'),96), 'YYYYMMDD')
+                     ELSE NULL END AS NEXT_CONT_DATE
+               ]]>      
+		  FROM TBSLS_HCNTRCTR A
+		      ,TBSLS_HOUSE_CSTMR B
+		      ,TBSLS_HOUSE_LTTOT_PAY C
+		      ,V_SLS_HCNTRCTR V1
+		      ,V_HOUSE_INFO V2
+		 WHERE 1=1
+		   AND A.CNTRCTR_NO = #CNTRCTR_NO#
+		   AND A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+		   AND A.CNTRCTR_NO = C.CNTRCTR_NO
+		   AND C.LTTOT_RENT_SE = #LTTOT_RENT_SE# /* 분양임화성분 (S:분양, R:임대분양, L:임대료) */
+		   AND A.CNTRCTR_NO = V1.CNTRCTR_NO
+		   AND A.HOUSE_CODE = V2.HOUSE_CODE
+		   AND A.DONG = V2.DONG
+		   AND A.HO = V2.HO
+	  ORDER BY PAY_CODE
+		      ,PAY_TMLMT
+		      ,SUNAP_DATE
+	</select>
+	
+	<!-- 쿼리명 : 입주예정확인서 조회 [C03], 입주확인서 조회 [04] -->
+	<select id="SLS020400DAO.selectFormListC03" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT A.CNTRCTR_NO AS CNTRCTR_NO
+		     , A.HOUSE_CODE AS HOUSE_CODE
+		     , TRIM(C.LOCPLC_BASS_ADRES_LNM) || ' ' || TRIM(C.LOCPLC_DETAIL_ADRES_LNM) AS LOCPLC_ADRES
+		     , C.HOUSE_NM ||' ' || TO_NUMBER(A.DONG)||'동 '||TO_NUMBER(A.HO)||'호' AS JUTEK
+		     , B.CSTMR_NM AS CSTMR_NM
+		     , SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM
+		     , TRIM(B.ADRES || ' ' || B.ADRES_DETAIL) AS ADRES
+		     , A.RENT_MVN_PRARNDE AS RENT_MVN_PRARNDE
+		  FROM TBSLS_HCNTRCTR A
+		     , TBSLS_HOUSE_CSTMR B
+		     , TBSLS_HOUSE_INFO C
+		 WHERE 1=1
+		   AND A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+		   AND A.CNTRCTR_NO = #CNTRCTR_NO#
+		   AND A.HOUSE_CODE = C.HOUSE_CODE
+	</select>
+	
+	
+	<!-- 쿼리명 : 입대료 납부증명서 조회 [C05] (임대료 납부증명서 기본정보 조회) -->
+	<select id="SLS020400DAO.selectFormInfoC05" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT /* SLS020400DAO.selectFormInfoC05 임대료 납부증명서 기본정보 조회 */
+			   a.CNTRCTR_NO						/* 계약자번호 */
+		     , a.HOUSE_CODE						/* 주택코드 */
+		     , b.HOUSE_NM						/* 주택명 */
+		     , b.LOCPLC_ZIP						/* 소재지 우편번호 */
+		     , b.LOCPLC_ZIP_LNM					/* 소재지 우편번호_지번 */
+		     , b.LOCPLC_BASS_ADRES || '  ' || b.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES	/* 소재지 주소 */
+		     , b.LOCPLC_BASS_ADRES_LNM || '  ' || b.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM	/* 소재지 주소_지번 */
+		     , TO_NUMBER(a.DONG) AS DONG		/* 동 */
+		     , TO_NUMBER(a.HO) AS HO			/* 호 */
+		     , e.CSTMR_NM						/* 고객명 */
+		     , e.IHIDNUM						/* 주민등록번호 */
+		     , SUBSTR(SFCOM_DEC_ALL(e.IHIDNUM),0,7) || '******' AS IHIDNUM_MSK		/* 주민등록번호_마스크 */
+		     , f.CODE_NM AS HOUSE_SE_NM			/* 주택구분명 */
+		     , (NVL(d.HOUSE_DVR_AR, 0) + NVL(d.HOUSE_CMNUSE_AR, 0)) AS HOUSE_AR 	/* 주택면적(주택전용면적 + 주택공용면적) */
+		     , NVL(d.HOUSE_DVR_AR , 0) AS HOUSE_DVR_AR			/* 주택전용면적 */
+		     , NVL(d.HOUSE_CMNUSE_AR, 0) AS HOUSE_CMNUSE_AR		/* 주택공용면적 */
+		     , NVL(d.HOUSE_PLOT_QOTA, 0) AS HOUSE_PLOT_QOTA		/* 주택대지지분 */
+		     , (SELECT SUM(PAYAMT)
+		          FROM TBSLS_HOUSE_LTTOT_PAY	/* 주택분양납부 */
+		         WHERE CNTRCTR_NO = #CNTRCTR_NO#
+		           AND PAY_CODE LIKE 'R%'
+		       ) AS TOT_RENT_AMT				/* 임대보증금(납부금액) */
+		     , a.RENT_BGNDE						/* 임대시작일자 */
+		     , a.RENT_ENDDE						/* 임대종료일자 */
+		     , (SELECT NVL(x.RNTCHRG, 0)
+		         FROM TBSLS_HOUSE_RNTCHRG x		/* 주택임대료 */
+		        WHERE x.CNTRCTR_NO 	= #CNTRCTR_NO#
+		          AND x.APPLC_DE 	= (SELECT MAX(y.APPLC_DE)
+		               				     FROM TBSLS_HOUSE_RNTCHRG y
+		               				    WHERE y.CNTRCTR_NO = x.CNTRCTR_NO)
+		       ) AS MON_PAY_AMT			/* 월 임대료 */
+		  FROM TBSLS_HCNTRCTR a			/* 주택계약자 */
+		     , TBSLS_HOUSE_INFO b		/* 주택정보 */
+		     , TBSLS_HOUSE_DONG_HO c	/* 주택동호 */
+		     , TBSLS_HOUSE_TY d	 		/* 주택타입 */
+		     , TBSLS_HOUSE_CSTMR e		/* 주택고객 */
+		     , (SELECT CODE
+		     		 , CODE_NM
+		          FROM TBCOM_CMMN_CODE	/* 공통코드 */
+		         WHERE GRP_CODE = 'HOU0A2'
+		       ) f
+		 WHERE 1 = 1
+		   AND a.HOUSE_CODE 	= b.HOUSE_CODE
+		   AND a.HOUSE_CODE 	= c.HOUSE_CODE(+)
+		   AND a.DONG 			= c.DONG(+)
+		   AND a.HO 			= c.HO(+)
+		   AND c.HOUSE_CODE 	= d.HOUSE_CODE(+)
+		   AND c.HOUSE_TY_CODE 	= d.HOUSE_TY_CODE(+)
+		   AND a.HOUSE_CSTMR_NO = e.HOUSE_CSTMR_NO(+)
+		   AND b.HOUSE_SE 		= f.CODE(+)
+		   AND a.CNTRCTR_NO 	= #CNTRCTR_NO#
+	</select>
+	
+	<!-- 쿼리명 : 입대료 납부증명서 조회 [C05] (임대료 납부증명서 수납내역 조회) -->
+	<select id="SLS020400DAO.selectFormListC05" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT /* SLS020400DAO.selectFormListC05 임대료 납부증명서 수납내역 조회 */
+			   v1.CNTRCTR_NO
+		     , v1.RQEST_YM
+		     , v1.IMDAE_AMT
+		     , v1.ARRRG_AMOUNT
+		     , v1.RCIV_DE
+		     , v2.RQEST_YM2
+		     , v2.IMDAE_AMT2
+		     , v2.ARRRG_AMOUNT2
+		     , v2.RCIV_DE2
+		  FROM (SELECT ROWNUM AS NO
+		             , a1.CNTRCTR_NO
+		             , DECODE(MOD(ROWNUM, 2), 1, a1.RQEST_YM) AS RQEST_YM
+		             , DECODE(MOD(ROWNUM, 2), 1, a1.IMDAE_AMT) AS IMDAE_AMT
+		             , DECODE(MOD(ROWNUM, 2), 1, a1.ARRRG_AMOUNT) AS ARRRG_AMOUNT
+		             , DECODE(MOD(ROWNUM, 2), 1, a1.RCIV_DE) AS RCIV_DE
+		          FROM (SELECT a.CNTRCTR_NO
+		                     , b.RQEST_YM					/* 청구년월 YM */
+		                     , b.MT_RNTCHRG + b.DFNNT_AMOUNT AS IMDAE_AMT	/* 월임대료 + 차액금액 */
+		                     , b.ARRRG_AMOUNT				/* 연체금액 DELAY_IJA */
+		                     , b.RCIV_DE					/* 수납일자 SUNAP_DATE */
+		                  FROM TBSLS_HCNTRCTR a 			/* 계약자 정보 SLT_CT_INFO A */
+		                     , TBSLS_HOUSE_RENT_PAY b		/* 주택임대납부 SLT_CT_VORN */
+		                 WHERE 1=1
+		                   AND a.CNTRCTR_NO = b.CNTRCTR_NO
+		                   AND b.RCIV_DE IS NOT NULL		/* 수납일자 */
+		              <isNotEmpty property="RNTCHRG_YM_FM">
+						<isNotEmpty property="RNTCHRG_YM_TO">
+						   AND b.RQEST_YM BETWEEN #RNTCHRG_YM_FM# AND #RNTCHRG_YM_TO#	
+						</isNotEmpty>
+						<isEmpty property="RNTCHRG_YM_TO">
+						   <![CDATA[
+						   AND b.RQEST_YM >= #RNTCHRG_YM_FM#
+						   ]]>
+						</isEmpty>
+				      </isNotEmpty>
+				      <isEmpty property="RNTCHRG_YM_FM">
+				      	<isNotEmpty property="RNTCHRG_YM_TO">
+				      	   <![CDATA[
+				      	   AND b.RQEST_YM <= #RNTCHRG_YM_TO#
+				      	   ]]>
+				      	</isNotEmpty>
+				      </isEmpty>
+		                   AND a.CNTRCTR_NO = #CNTRCTR_NO#
+		                 ORDER BY b.RQEST_YM
+		               ) a1
+		  	   ) v1
+		     , (SELECT ROWNUM-1 AS NO
+		             , a1.CNTRCTR_NO
+		             , DECODE(MOD(ROWNUM, 2), 0, a1.RQEST_YM) AS RQEST_YM2
+		             , DECODE(MOD(ROWNUM, 2), 0, a1.IMDAE_AMT) AS IMDAE_AMT2
+		             , DECODE(MOD(ROWNUM, 2), 0, a1.ARRRG_AMOUNT) AS ARRRG_AMOUNT2
+		             , DECODE(MOD(ROWNUM, 2), 0, a1.RCIV_DE) AS RCIV_DE2
+		          FROM (SELECT a.CNTRCTR_NO
+		                     , b.RQEST_YM					/* 청구년월 YM */
+		                     , b.MT_RNTCHRG + b.DFNNT_AMOUNT AS IMDAE_AMT	/* 월임대료 + 차액금액 */
+		                     , b.ARRRG_AMOUNT				/* 연체금액 DELAY_IJA */
+		                     , b.RCIV_DE					/* 수납일자 SUNAP_DATE */
+		                  FROM TBSLS_HCNTRCTR a 			/* 계약자 정보 SLT_CT_INFO A */
+		                     , TBSLS_HOUSE_RENT_PAY b		/* 주택임대납부 SLT_CT_VORN */
+		                 WHERE 1=1
+		                   AND a.CNTRCTR_NO = b.CNTRCTR_NO
+		                   AND b.RCIV_DE IS NOT NULL		/* 수납일자 */
+		              <isNotEmpty property="RNTCHRG_YM_FM">
+						<isNotEmpty property="RNTCHRG_YM_TO">
+						   AND b.RQEST_YM BETWEEN #RNTCHRG_YM_FM# AND #RNTCHRG_YM_TO#	
+						</isNotEmpty>
+						<isEmpty property="RNTCHRG_YM_TO">
+						   <![CDATA[
+						   AND b.RQEST_YM >= #RNTCHRG_YM_FM#
+						   ]]>
+						</isEmpty>
+				      </isNotEmpty>
+				      <isEmpty property="RNTCHRG_YM_FM">
+				      	<isNotEmpty property="RNTCHRG_YM_TO">
+				      	   <![CDATA[
+				      	   AND b.RQEST_YM <= #RNTCHRG_YM_TO#
+				      	   ]]>
+				      	</isNotEmpty>
+				      </isEmpty>
+		                   AND a.CNTRCTR_NO = #CNTRCTR_NO#
+		                 ORDER BY b.RQEST_YM
+		               ) a1
+		  	   ) v2
+		 WHERE v1.NO = v2.NO(+)
+		   AND v1.RQEST_YM IS NOT NULL
+	</select>
+
+	<!-- 임대료 납부확인서 조회 [C06] -->
+	<select id="SLS020400DAO.selectFormListC06" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT B.HOUSE_NM||' '||A.DONG||'동 '||A.HO||'호 ' AS ADDR
+		  , C.CSTMR_NM
+		  , SFCOM_DEC_ALL(C.IHIDNUM) AS IHIDNUM
+		FROM TBSLS_HCNTRCTR A
+		  , TBSLS_HOUSE_INFO B
+		  , TBSLS_HOUSE_CSTMR C
+		WHERE A.HOUSE_CODE	 	= B.HOUSE_CODE
+		AND A.HOUSE_CSTMR_NO 	= C.HOUSE_CSTMR_NO
+		AND A.CNTRCTR_NO 		= #CNTRCTR_NO#
+	</select>
+	
+	<!-- 분양계약서 조회 [C07] -->
+	
+	
+	<!-- 임대계약서 조회 [C08] -->
+	<select id="SLS020400DAO.selectFormListC08" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+SELECT E.CSTMR_NM, SFCOM_DEC_ALL(E.IHIDNUM )AS IHIDNUM,
+       TRIM(E.TELNO ||' '|| E.MBTLNO) AS TELNO,
+         TRIM(E.ADRES || ' ' || E.ADRES_DETAIL) AS ADDR,
+       A.DONG, A.HO,
+       SUBSTR(A.CNTRCT_DE, 1,4) AS CRT_YEAR,
+       SUBSTR(A.CNTRCT_DE, 5,2) AS CRT_MONTH,
+       SUBSTR(A.CNTRCT_DE, 7,2) AS CRT_DAY,
+       SUBSTR(A.RENT_MVN_PRARNDE, 1, 4) AS IN_YEAR,
+       SUBSTR(A.RENT_MVN_PRARNDE, 5, 2)   AS IN_MONTH,
+       SUBSTR(A.RENT_MVN_PRARNDE, 7, 2)   AS IN_DAY,       
+       ' ' AS USE_TYPE,
+       DECODE(#AREA_CHK#,'0',NULL,C.ROOM_CO) AS ROOM_CNT,
+       DECODE(#AREA_CHK#,'0',NULL,C.AEA) AS PYEONG,
+       DECODE(#AREA_CHK#,'0',NULL,TRIM(TO_CHAR(C.HOUSE_DVR_AR,'FM999,999,990.0990'))) AS PER_AREA,
+       DECODE(#AREA_CHK#,'0',NULL,TRIM(TO_CHAR(C.HOUSE_CMNUSE_AR,'FM999,999,990.0990'))) AS PUB_AREA,
+       DECODE(#AREA_CHK#,'0',NULL,TRIM(TO_CHAR(C.HOUSE_DVR_AR + C.HOUSE_CMNUSE_AR,'FM999,999,990.0990'))) AS TOT_AREA,
+       DECODE(#AREA_CHK#,'0',NULL,TRIM(TO_CHAR(C.HOUSE_ETC_CMNUSE,'FM999,999,990.0990')) ) AS ETC_AREA,
+       DECODE(#AREA_CHK#,'0',NULL,TRIM(TO_CHAR(C.HOUSE_CNTRCT_AR,'FM999,999,990.0990'))) AS CONT_AREA,
+       DECODE(#AREA_CHK#,'0',NULL,TRIM(TO_CHAR( C.HOUSE_DVR_AR + C.HOUSE_CMNUSE_AR + C.HOUSE_ETC_CMNUSE,'FM999,999,990.0990'))) AS TOT_AREA1,
+       B.BASS_LTTOT_AMOUNT  AS SEC_AMT1,  
+       B.BASS_RNTCHRG AS RENT_AMT1,
+       A.RENT_BGNDE AS RENT_DATE1,
+       ' ' AS RENT_DATE2,' ' AS RENT_DATE3,
+       CASE WHEN A.HOUSE_CODE = '307' AND A.CNTRCT_DE >= '20130301' THEN
+                 (SELECT SUM(PAYAMT) FROM TBSLS_HOUSE_LTTOT_PAY D WHERE D.CNTRCTR_NO = A.CNTRCTR_NO AND D.PAY_CODE = 'R0')
+            ELSE (SELECT SUM(PAYAMT) FROM TBSLS_HOUSE_TYBY_PAY D WHERE D.HOUSE_CODE = B.HOUSE_CODE AND D.HOUSE_TY_CODE = B.HOUSE_TY_CODE AND PAY_CODE = 'R0') END AS R0_AMT,
+       CASE WHEN A.HOUSE_CODE = '307' AND A.CNTRCT_DE >= '20130301' THEN
+                 (SELECT SUM(PAYAMT) FROM TBSLS_HOUSE_LTTOT_PAY D WHERE D.CNTRCTR_NO = A.CNTRCTR_NO AND D.PAY_CODE = 'R9')
+            ELSE (SELECT SUM(PAYAMT) FROM TBSLS_HOUSE_TYBY_PAY D WHERE D.HOUSE_CODE = B.HOUSE_CODE AND D.HOUSE_TY_CODE = B.HOUSE_TY_CODE AND PAY_CODE = 'R9') END AS R9_AMT
+       , TRIM(D.LOCPLC_BASS_ADRES_LNM)  || ' ' || TRIM(D.LOCPLC_DETAIL_ADRES_LNM) AS APT_ADDR
+       , D.HOUSE_NM ||' ' ||TO_NUMBER(A.DONG) ||'동 ' || TO_NUMBER(A.HO) || '호' AS DONG_HO
+       , '(' || #RNT_YCNT# || '년)' AS YEAR_CNT
+       , NVL(A.RENT_BGNDE, A.CNTRCT_DE) AS RENT_FDATE1
+       , D.LTTOT_CNVRS_DE AS RENT_TDATE1
+       , V1.N_R0_AMT, V1.N_R9_AMT, V1.N_TOT_AMT, NVL(V2.N_RENT_AMT,B.BASS_RNTCHRG) AS N_RENT_AMT
+       , SFSLS_HOUSE_RECONT_DATE('F',#RNT_YCNT#,A.HOUSE_CODE) AS RE_RENT_FDATE 
+       , SFSLS_HOUSE_RECONT_DATE('T',#RNT_YCNT#,A.HOUSE_CODE) AS RE_RENT_TDATE
+       , (SELECT MAX(RCIV_DE) FROM TBSLS_HOUSE_LTTOT_PAY F 
+           WHERE F.CNTRCTR_NO = A.CNTRCTR_NO 
+               AND F.PAY_CODE LIKE 'R%' 
+               AND F.PAY_CODE NOT IN('R0','R9','RP') 
+               AND F.RCIV_DE > A.RENT_BGNDE
+               AND mod(F.payamt,1000000) <![CDATA[	<> ]]> 0
+            ) AS RE_CONT_DATE
+  FROM TBSLS_HCNTRCTR A, 
+       TBSLS_HOUSE_DONG_HO B, 
+       TBSLS_HOUSE_TY C, 
+       TBSLS_HOUSE_INFO D, 
+       (SELECT CNTRCTR_NO, 
+               SUM(CASE WHEN PAY_CODE = 'R0' THEN PAYAMT ELSE 0 END) AS N_R0_AMT,
+               SUM(CASE WHEN PAY_CODE <![CDATA[<>]]> 'R0' THEN PAYAMT ELSE 0 END) AS N_R9_AMT,
+               SUM(PAYAMT) AS N_TOT_AMT
+          FROM TBSLS_HOUSE_LTTOT_PAY
+         WHERE CNTRCTR_NO = #CNTRCTR_NO#
+           AND PAY_CODE LIKE 'R%'
+         GROUP BY CNTRCTR_NO
+        ) V1,
+        (SELECT CNTRCTR_NO, RNTCHRG AS N_RENT_AMT
+           FROM TBSLS_HOUSE_RNTCHRG  
+          WHERE CNTRCTR_NO = #CNTRCTR_NO#
+            AND APPLC_DE = (SELECT MAX(APPLC_DE) FROM TBSLS_HOUSE_RNTCHRG WHERE CNTRCTR_NO = #CNTRCTR_NO#)      
+        ) V2,
+        TBSLS_HOUSE_CSTMR E
+ WHERE A.HOUSE_CODE   = B.HOUSE_CODE
+   AND A.DONG       = B.DONG
+   AND A.HO         = B.HO
+   AND B.HOUSE_CODE    = C.HOUSE_CODE(+)
+   AND B.HOUSE_TY_CODE = C.HOUSE_TY_CODE(+)
+   AND A.HOUSE_CODE = D.HOUSE_CODE
+   AND A.CNTRCTR_NO      = #CNTRCTR_NO#
+   AND A.CNTRCTR_NO      = V1.CNTRCTR_NO(+)
+   AND A.CNTRCTR_NO      = V2.CNTRCTR_NO(+)
+   AND A.HOUSE_CSTMR_NO  = E.HOUSE_CSTMR_NO
+	</select>	
+	
+	<!-- 임대해약확인서 조회 [C09] -->
+	
+	
+	<!-- 임대해약확인서 조회 [C10] -->
+	<select id="SLS020400DAO.selectFormListC10" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT C.HOUSE_NM ||' ' || TO_NUMBER(A.DONG) || '동 '|| TO_NUMBER(A.HO) || '호  (' ||
+		    (
+		        SELECT HOUSE_DVR_AR
+		        FROM TBSLS_HOUSE_TY T
+		        WHERE T.HOUSE_CODE  = D.HOUSE_CODE
+		        AND T.HOUSE_TY_CODE = D.HOUSE_TY_CODE
+		    )
+		    ||'㎡)' AS APT_INFO
+		  , E.CSTMR_NM
+		  , SFCOM_DEC_ALL(E.IHIDNUM) AS IHIDNUM
+		  , NVL(
+		    (
+		        SELECT SUM(PAYAMT)
+		        FROM TBSLS_HOUSE_LTTOT_PAY
+		        WHERE CNTRCTR_NO = A.CNTRCTR_NO
+		        AND PAY_CODE LIKE 'R%'
+		    )
+		    , 0) AS SEC_AMT
+		  , NVL(
+		    (
+		        SELECT SUM(PAYAMT)
+		        FROM TBSLS_HOUSE_LTTOT_PAY
+		        WHERE CNTRCTR_NO = A.CNTRCTR_NO
+		        AND PAY_CODE LIKE 'R%'
+		        AND RCIV_DE IS NOT NULL
+		    )
+		    , 0) AS REC_AMT
+		  , B.PENLTY		/* 위약금 */
+		  , NVL(F.ARRRG_AMOUNT, 0) + NVL(G.RETURN_ARRRG_AMOUNT, 0) + NVL(F.RNTCHRG_THSMON, 0) AS RENT_AMT	/* 연체금액 + 반환연체금액 + 임대료_당월 */
+		  , '0'  AS MANAGE_AMT
+		  , NVL(B.PENLTY, 0) + NVL(F.ARRRG_AMOUNT, 0) + NVL(G.RETURN_ARRRG_AMOUNT, 0) + NVL(F.RNTCHRG_THSMON, 0) + NVL('0', 0) AS TOT_AMT
+		FROM TBSLS_HCNTRCTR A
+		  , TBSLS_HCNTRCTR_CANCL B
+		  , TBSLS_HOUSE_INFO C
+		  , TBSLS_HOUSE_DONG_HO D
+		  , TBSLS_HOUSE_CSTMR E
+		  , TBSLS_HOUSE_RENT_CANCL F
+		  , TBSLS_HOUSE_LTTOT_CANCL G
+		WHERE A.CNTRCTR_NO   = B.CNTRCTR_NO
+		AND A.HOUSE_CODE     = C.HOUSE_CODE
+		AND A.HOUSE_CODE     = D.HOUSE_CODE
+		AND A.DONG           = D.DONG
+		AND A.HO             = D.HO
+		AND A.HOUSE_CSTMR_NO = E.HOUSE_CSTMR_NO
+		AND A.CNTRCTR_NO     = F.CNTRCTR_NO(+)
+		AND A.CNTRCTR_NO     = G.CNTRCTR_NO(+)
+		AND A.CNTRCTR_NO     = #CNTRCTR_NO#
+	</select>
+
+	<!-- 부동산거래신고서 조회 [C11] -->
+	<select id="SLS020400DAO.selectFormListC11" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT H.CSTMR_NM
+		  , SFCOM_DEC_ALL(H.IHIDNUM) AS IHIDNUM
+		  , H.TELNO
+		  , H.MBTLNO
+		  , TRIM(H.ADRES|| ' ' || H.ADRES_DETAIL)                                                                                                                           AS ADDR
+		  , SUBSTR(TRIM(M.LOCPLC_BASS_ADRES_LNM) ||' '|| M.LOCPLC_DETAIL_ADRES_LNM || ' ' || M.HOUSE_NM ||' ' || TO_NUMBER(A.DONG) ||'동 ' || TO_NUMBER(A.HO) ||'호', 1, 127) AS APT_ADDR
+		  , A.DONG
+		  , A.HO
+		  , TO_CHAR(TO_DATE(NVL(A.RENT_LTTOT_CNVRS_DE, A.CNTRCT_DE), 'YYYYMMDD'), 'yyyy') AS CRT_YEAR
+		  , TO_CHAR(TO_DATE(NVL(A.RENT_LTTOT_CNVRS_DE, A.CNTRCT_DE), 'YYYYMMDD'), 'mm')   AS CRT_MONTH
+		  , TO_CHAR(TO_DATE(NVL(A.RENT_LTTOT_CNVRS_DE, A.CNTRCT_DE), 'YYYYMMDD'), 'dd')   AS CRT_DAY
+		  , TRIM(TO_CHAR(M.TOT_PLOT_AR, 'fm999,999,990.0990')) ||' ㎡)'                    AS TOT_AREA
+		  , TRIM(TO_CHAR(C.HOUSE_DVR_AR, 'fm999,999,990.0990')) ||'㎡'                     AS PER_AREA
+		  , TRIM(TO_CHAR(C.HOUSE_PLOT_QOTA, 'fm999,999,990.0990')) ||'㎡'                  AS AREA_RA
+		  , V.CORT_AMT
+		  , V.CONT_AMT
+		  , V.JUNG_AMT
+		  , V.REM_AMT
+		  , TO_CHAR(TO_DATE(V.JUNG_DATE, 'YYYYMMDD'), 'yyyy')                                                                            AS JUNG_YEAR
+		  , TO_CHAR(TO_DATE(V.JUNG_DATE, 'YYYYMMDD'), 'mm')                                                                              AS JUNG_MONTH
+		  , TO_CHAR(TO_DATE(V.JUNG_DATE, 'YYYYMMDD'), 'dd')                                                                              AS JUNG_DAY
+		  , TO_CHAR(TO_DATE(V.REM_DATE, 'YYYYMMDD'), 'yyyy')                                                                             AS REM_YEAR
+		  , TO_CHAR(TO_DATE(V.REM_DATE, 'YYYYMMDD'), 'mm')                                                                               AS REM_MONTH
+		  , TO_CHAR(TO_DATE(V.REM_DATE, 'YYYYMMDD'), 'dd')                                                                               AS REM_DAY
+		  , TRIM(TO_CHAR(M.TOT_PLOT_AR, 'fm999,999,990.0990')) ||' 분의 ' || TRIM(TO_CHAR(C.HOUSE_PLOT_QOTA, 'fm999,999,990.0990')) || ')' AS AREA_RA1
+		  , CASE
+		        WHEN M.HOUSE_SE IN('S3', 'S4')
+		        THEN '상가'
+		        WHEN M.HOUSE_SE IN('S1', 'S2')
+		        THEN '아파트'
+		        ELSE '기타'
+		    END AS HOUSE_SE
+		FROM TBSLS_HCNTRCTR A
+		  , TBSLS_HOUSE_DONG_HO B
+		  , TBSLS_HOUSE_TY C
+		  , TBSLS_HOUSE_INFO M
+		  , TBSLS_HOUSE_CSTMR H
+		  ,(
+		        SELECT CNTRCTR_NO
+		          , SUM(CORT_AMT)  AS CORT_AMT
+		          , SUM(CONT_AMT)  AS CONT_AMT
+		          , SUM(JUNG_AMT)  AS JUNG_AMT
+		          , SUM(REM_AMT)   AS REM_AMT
+		          , MIN(JUNG_DATE) AS JUNG_DATE
+		          , MAX(REM_DATE)  AS REM_DATE
+		        FROM
+		            (
+		                SELECT CNTRCTR_NO
+		                  , CASE
+		                        WHEN PAY_CODE NOT IN('SB', 'SC')
+		                        THEN PAYAMT
+		                        ELSE 0
+		                    END CORT_AMT
+		                  , CASE
+		                        WHEN PAY_CODE NOT IN('S0', 'R0', 'S9', 'S9', 'SB', 'SC')
+		                        THEN PAY_TMLMT
+		                        ELSE NULL
+		                    END AS JUNG_DATE
+		                  , CASE
+		                        WHEN PAY_CODE IN('S9', 'R9')
+		                        THEN PAY_TMLMT
+		                        ELSE NULL
+		                    END AS REM_DATE
+		                  , CASE
+		                        WHEN PAY_CODE IN('S0', 'R0')
+		                        THEN PAYAMT
+		                        ELSE 0
+		                    END AS CONT_AMT
+		                  , CASE
+		                        WHEN PAY_CODE NOT IN('S0', 'R0', 'S9', 'S9', 'SB', 'SC')
+		                        THEN PAYAMT
+		                        ELSE 0
+		                    END AS JUNG_AMT
+		                  , CASE
+		                        WHEN PAY_CODE IN('S9', 'R9')
+		                        THEN PAYAMT
+		                        ELSE 0
+		                    END AS REM_AMT
+		                FROM TBSLS_HOUSE_LTTOT_PAY
+		                WHERE CNTRCTR_NO = #CNTRCTR_NO#
+		                AND PAY_CODE LIKE 'S%'
+		            )
+		        GROUP BY CNTRCTR_NO
+		    )
+		    V
+		WHERE A.HOUSE_CODE   = B.HOUSE_CODE
+		AND A.DONG           = B.DONG
+		AND A.HO             = B.HO
+		AND B.HOUSE_CODE     = C.HOUSE_CODE(+)
+		AND B.HOUSE_TY_CODE  = C.HOUSE_TY_CODE(+)
+		AND A.CNTRCTR_NO     = V.CNTRCTR_NO(+)
+		AND A.HOUSE_CODE     = M.HOUSE_CODE
+		AND A.HOUSE_CSTMR_NO = H.HOUSE_CSTMR_NO
+		AND A.CNTRCTR_NO     = #CNTRCTR_NO#
+	</select>
+
+	<!-- 쿼리명 : 주택임대차계약갱신 확인서 조회 [C12] (기본정보 조회) -->
+	<select id="SLS020400DAO.selectFormInfoC12" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT A.CNTRCTR_NO, C.HOUSE_NM || ' ' || TO_NUMBER(D.DONG) || '동 '|| TO_NUMBER(D.HO) || '호' AS APT_INFO,
+		       G.CSTMR_NM, SFCOM_DEC_ALL(G.IHIDNUM) AS IHIDNUM, B.CHANGE_DE, B.CHGHY_CODE,
+		       E.HOUSE_DVR_AR, E.HOUSE_PLOT_QOTA
+		       , TRIM(TO_CHAR((SELECT RNTCHRG FROM TBSLS_HOUSE_RNTCHRG V WHERE V.CNTRCTR_NO = A.CNTRCTR_NO 
+		             AND V.APPLC_DE = (SELECT MAX(APPLC_DE) FROM TBSLS_HOUSE_RNTCHRG V1 WHERE V1.CNTRCTR_NO = V.CNTRCTR_NO) ), '999,999,999,999')) AS ORG_RENT_AMT 
+		       , TRIM(TO_CHAR((SELECT SUM(PAYAMT) FROM TBSLS_HOUSE_LTTOT_PAY V WHERE V.CNTRCTR_NO = A.CNTRCTR_NO AND V.PAY_CODE LIKE 'R%' AND V.RCIV_DE IS NOT NULL), '999,999,999,999')) AS ORG_SEC_AMT
+		       , C.LOCPLC_ZIP AS APT_POSTNO, C.LOCPLC_BASS_ADRES || ' ' || C.LOCPLC_DETAIL_ADRES AS APT_ADDR
+		       , A.CNTRCT_DE
+		       , C.LTTOT_CNVRS_DE
+		       , (SELECT '우 '||C.ZIP||' '||C.ADRES||' '||C.ADRES_DETAIL||' / 전화 '||A.CHRCTR_PREPAR_VALUE_2 || ' / FAX '||CHRCTR_PREPAR_VALUE_1
+		            FROM TBCOM_CMMN_CODE A, TBHRM_HR_MASTR B, TBPMS_CPR_INFO C
+		            WHERE A.CHRCTR_PREPAR_VALUE_0 = B.EMPNO
+		            AND A.GRP_CODE = 'HOU012' AND CODE = '01') HEADER1
+		       , (SELECT '판매지원처 처장 '||A.CHRCTR_PREPAR_VALUE_0
+                    FROM TBCOM_CMMN_CODE A, TBPMS_CPR_INFO C
+                    WHERE A.GRP_CODE = 'PCOM07' AND CODE = 'HOU001') HEADER2
+		       , (SELECT '담당( '||A.CHRCTR_PREPAR_VALUE_0 ||', '||CHRCTR_PREPAR_VALUE_1||')'
+                    FROM TBCOM_CMMN_CODE A, TBPMS_CPR_INFO C
+                    WHERE A.GRP_CODE = 'PCOM07' AND CODE = 'HOU007') HEADER3
+		  FROM TBSLS_HCNTRCTR A, 
+		       (SELECT CNTRCTR_NO, CHANGE_DE, SUBSTR(SFCOM_CODE_NM('HOU0A8',A.CHGHY_CODE,'ALL_CODE_NM'),1,127) AS CHGHY_CODE  
+		          FROM TBSLS_HCNTRCTR_CHANGE A
+		         WHERE CNTRCTR_NO = #CNTRCTR_NO#
+		           AND CHANGE_SN = (SELECT MAX(CHANGE_SN) FROM TBSLS_HCNTRCTR_CHANGE B 
+		                           WHERE B.CNTRCTR_NO = A.CNTRCTR_NO)  
+		       ) B
+		       ,TBSLS_HOUSE_INFO C, 
+		       TBSLS_HOUSE_DONG_HO D, 
+		       TBSLS_HOUSE_TY E,
+		       (SELECT HOUSE_CODE, HOUSE_TY_CODE, SUM(PAYAMT) AS SEC_AMT
+		          FROM TBSLS_HOUSE_TYBY_PAY
+		         GROUP BY HOUSE_CODE, HOUSE_TY_CODE
+		       ) F,
+		       TBSLS_HOUSE_CSTMR G
+		 WHERE A.CNTRCTR_NO    = #CNTRCTR_NO#
+		   AND A.CNTRCTR_NO    = B.CNTRCTR_NO(+)
+		   AND A.HOUSE_CODE = C.HOUSE_CODE
+		   AND A.HOUSE_CODE = D.HOUSE_CODE
+		   AND A.DONG = D.DONG
+		   AND A.HO = D.HO
+		   AND D.HOUSE_CODE = E.HOUSE_CODE
+		   AND D.HOUSE_TY_CODE = E.HOUSE_TY_CODE
+		   AND D.HOUSE_CODE = F.HOUSE_CODE
+		   AND D.HOUSE_TY_CODE = F.HOUSE_TY_CODE
+		   AND A.HOUSE_CSTMR_NO = G.HOUSE_CSTMR_NO
+	</select>
+	
+	<!-- 쿼리명 : 주택임대차계약갱신 확인서 조회 [C12] (내역 조회) -->
+	<select id="SLS020400DAO.selectFormListC12" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT PAY_CODE,
+		       CASE WHEN PAY_CODE IN('R0','R9') THEN SFCOM_CODE_NM('HOU0A1',PAY_CODE,'ALL_CODE_NM')
+		            ELSE '증액(재)보증금' END AS CODE_NM,   
+		       PAYAMT, ARRRG_AMOUNT, PAY_TMLMT, RCIV_DE, PAYAMT + ARRRG_AMOUNT AS TAMT 
+		  FROM TBSLS_HOUSE_LTTOT_PAY
+		 WHERE CNTRCTR_NO = #CNTRCTR_NO#
+		  AND RCIV_DE IS NOT NULL
+		 ORDER BY RCIV_DE, PAY_TMLMT, PAY_CODE   
+	</select>
+		
+	
+	<!-- 권리침해확인서 조회 [C13] -->
+	
+</sqlMap>

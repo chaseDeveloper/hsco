@@ -1,0 +1,1923 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL030107_SQL">	
+	
+    <!-- 급여인상생성정보 목록조회 -->
+	<select id="SAL030107DAO.selectUpSalaryCreatList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT A.PYMNT_YM
+		       , A.SALARY_SE
+		       , A.PYMNT_SE
+		       , A.PYMNT_DE
+		       , A.PYMNT_NMPR
+		       , A.DCSN_AT
+		       , A.DCSN_DE
+		       , A.CALC_TOTAMT
+		       , A.DDC_TOTAMT
+		       , A.RL_RECPT_AMOUNT
+		       , A.OPERTOR
+		    FROM TBSAL_MT_SALARY_CREAT A
+		   WHERE SUBSTR(A.PYMNT_YM, 1, 4) = SUBSTR(#PYMNT_DE#, 1, 4)
+		     AND A.SALARY_SE              = #SALARY_SE#
+		ORDER BY A.PYMNT_YM DESC
+		       , A.PYMNT_SE ASC
+		       , A.PYMNT_DE ASC
+	</select>  
+    
+	<!-- 월급여인상내역정보 목록조회 -->
+	<select id="SAL030107DAO.selectUpSalaryPymntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.PYMNT_YM
+		     , A.PYMNT_SE
+		     , A.PYMNT_DE
+		     , A.DCSN_AT
+		     , A.DCSN_DE
+		  FROM TBSAL_MT_SALARY_CREAT A
+		 WHERE A.SALARY_SE 	= '2'
+		   AND A.PYMNT_DE  	= #PYMNT_DE#
+		<isNotEmpty property="DCSN_AT">
+		   AND A.DCSN_AT 	= #DCSN_AT#
+		</isNotEmpty>
+    </select> 
+    
+    <!-- 인상기본급생성내역정보 목록조회 -->
+	<select id="SAL030107DAO.selectUpSalaryTableList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.APPLC_DE
+		     , A.EMPL_SE
+		     , A.CLSF_CODE
+		     , A.SRCLS
+		     , A.BASS_AMOUNT
+		  FROM TBSAL_INCRSE_SLARY_TABLE A
+		 WHERE 1 = 1
+    </select> 
+    
+     <!-- 인상 기본급 삭제 -->
+    <delete id="SAL030107DAO.deleteUpSalaryPymntD" parameterClass="java.util.HashMap">
+        DELETE FROM TBSAL_INCRSE_SLARY_TABLE
+    </delete> 
+    
+    <!-- 인상 기본급 생성 -->
+    <insert id="SAL030107DAO.insertUpSalaryPymnt_1" parameterClass="java.util.HashMap">
+    <![CDATA[
+    	INSERT INTO TBSAL_INCRSE_SLARY_TABLE (
+             APPLC_DE
+			,EMPL_SE
+			,CLSF_CODE
+			,SRCLS
+			,BASS_AMOUNT
+			,RM
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)
+		WITH YR_SAL_T AS (
+		    SELECT 
+		         EMPNO
+		        ,MAX(EMPNM)
+		        ,MIN(EMPL_SE)                   AS EMPL_SE
+		        ,MIN(CLSF_CODE)                 AS CLSF_CODE
+		        ,PKG_SAL_UTIL.FN_GET_SRCLS(t1.EMPNO,(SUBSTR(#PYMNT_DE2#,1,4)-1)||'1231') AS SRCLS /*전년도호봉기준일*/
+		        ,PKG_SAL_UTIL.FN_GET_SRCLS_MM(t1.EMPNO) AS MM
+		        ,NVL(SUM(BSLRY),0)              AS BSLRY                  /*기본급*/
+		        ,NVL(SUM(CNSTRC_ALLWNC),0)      AS CNSTRC_ALLWNC          /*건설수당*/
+		        ,NVL(SUM(INORG_CNWK_ALLWNC),0)  AS INORG_CNWK_ALLWNC      /*장기근속수당*/
+		        ,NVL(SUM(TCHNLGY_ALLWNC),0)     AS TCHNLGY_ALLWNC         /*기술수당*/
+		        ,NVL(SUM(SPCL_JOB_ALLWNC),0)    AS SPCL_JOB_ALLWNC        /*특수업무*/
+		        ,NVL(SUM(YRYC_ALLWNC),0)        AS YRYC_ALLWNC            /*연차수당*/
+		        ,NVL(SUM(TRTMNT_ALLWNC),0)      AS TRTMNT_ALLWNC          /*대우수당*/
+		        ,NVL(SUM(TIME__ELSE_ALLWNC),0)  AS TIME__ELSE_ALLWNC      /*시간외수당*/
+		        ,NVL(SUM(RESTDE_ALLWNC),0)      AS RESTDE_ALLWNC          /*휴일수당*/
+		        ,NVL(SUM(MLSV_SBSIDY),0)        AS MLSV_SBSIDY            /*급식*/
+		        ,NVL(SUM(RSPOFC_SBSIDY),0)      AS RSPOFC_SBSIDY          /*직책보조비*/
+		        ,NVL(SUM(TRNSPORT_SBSIDY),0)    AS TRNSPORT_SBSIDY        /*교통보조비*/
+		        ,NVL(SUM(DRV_ALLWNC),0)         AS DRV_ALLWNC             /*운전수당*/
+		        ,NVL(SUM(RISK_ALLWNC),0)        AS RISK_ALLWNC            /*위험수당*/
+		        ,NVL(SUM(SPCIFY_JOB_EXC),0)     AS SPCIFY_JOB_EXC         /*특정업무*/
+		    FROM TBSAL_MT_SALARY_PYMNT t1
+		    WHERE PYMNT_DE LIKE (SUBSTR(#PYMNT_DE2#,1,4)-1)||'%' /*전년도*/
+		      AND CLOS_AT = '1'
+		    GROUP BY EMPNO
+		    ORDER BY EMPL_SE, CLSF_CODE, SRCLS
+		),
+		YR_SAL_T2 AS (
+		SELECT   DECODE(t1.EMPL_SE,'002','001',t1.EMPL_SE) AS EMPL_SE
+		        , t1.CLSF_CODE
+		        , count(1)                         AS CNT
+		        ,TRUNC(AVG(TO_NUMBER(t1.SRCLS)),0) AS SRCLS
+		        ,CASE WHEN TRUNC(AVG(TO_NUMBER(t1.SRCLS)),0)+1 > 30 THEN 30
+		              ELSE  TRUNC(AVG(TO_NUMBER(t1.SRCLS)),0)+1
+		         END AFT_SRCLS
+		        ,NVL(SUM(t1.BSLRY),0)              AS BSLRY                  /*기본급*/
+		        ,NVL(SUM(t1.CNSTRC_ALLWNC),0)      AS CNSTRC_ALLWNC          /*건설수당*/
+		        ,NVL(SUM(t1.INORG_CNWK_ALLWNC),0)  AS INORG_CNWK_ALLWNC      /*장기근속수당*/
+		        ,NVL(SUM(t1.TCHNLGY_ALLWNC),0)     AS TCHNLGY_ALLWNC         /*기술수당*/
+		        ,NVL(SUM(t1.SPCL_JOB_ALLWNC),0)    AS SPCL_JOB_ALLWNC        /*특수업무*/
+		        ,NVL(SUM(t1.YRYC_ALLWNC),0)        AS YRYC_ALLWNC            /*연차수당*/
+		        ,NVL(SUM(t1.TRTMNT_ALLWNC),0)      AS TRTMNT_ALLWNC          /*대우수당*/
+		        ,NVL(SUM(t1.TIME__ELSE_ALLWNC),0)  AS TIME__ELSE_ALLWNC      /*시간외수당*/
+		        ,NVL(SUM(t1.RESTDE_ALLWNC),0)      AS RESTDE_ALLWNC          /*휴일수당*/
+		        ,NVL(SUM(t1.MLSV_SBSIDY),0)        AS MLSV_SBSIDY            /*급식*/
+		        ,NVL(SUM(t1.RSPOFC_SBSIDY),0)      AS RSPOFC_SBSIDY          /*직책보조비*/
+		        ,NVL(SUM(t1.TRNSPORT_SBSIDY),0)    AS TRNSPORT_SBSIDY        /*교통보조비*/
+		        ,NVL(SUM(t1.DRV_ALLWNC),0)         AS DRV_ALLWNC             /*운전수당*/
+		        ,NVL(SUM(t1.RISK_ALLWNC),0)        AS RISK_ALLWNC            /*위험수당*/
+		        ,NVL(SUM(t1.SPCIFY_JOB_EXC),0)     AS SPCIFY_JOB_EXC         /*특정업무*/
+		        ,NVL(SUM(t1.BSLRY),0)+NVL(SUM(t1.CNSTRC_ALLWNC),0)+NVL(SUM(t1.INORG_CNWK_ALLWNC),0)
+		         +NVL(SUM(t1.TCHNLGY_ALLWNC),0)+NVL(SUM(t1.SPCL_JOB_ALLWNC),0)+NVL(SUM(t1.YRYC_ALLWNC),0)
+		         +NVL(SUM(t1.TRTMNT_ALLWNC),0)+NVL(SUM(t1.TIME__ELSE_ALLWNC),0)+NVL(SUM(t1.RESTDE_ALLWNC),0)
+		         +NVL(SUM(t1.MLSV_SBSIDY),0)+NVL(SUM(t1.RSPOFC_SBSIDY),0)+NVL(SUM(t1.TRNSPORT_SBSIDY),0)
+		         +NVL(SUM(t1.DRV_ALLWNC),0)+NVL(SUM(t1.RISK_ALLWNC),0)+NVL(SUM(t1.SPCIFY_JOB_EXC),0) AS TOT_AMT
+		        ,NVL(SUM(t1.INORG_CNWK_ALLWNC),0)
+		         +NVL(SUM(t1.TCHNLGY_ALLWNC),0)+NVL(SUM(t1.SPCL_JOB_ALLWNC),0)
+		         +NVL(SUM(t1.TRTMNT_ALLWNC),0)+NVL(SUM(t1.RESTDE_ALLWNC),0)
+		         +NVL(SUM(t1.MLSV_SBSIDY),0)+NVL(SUM(t1.RSPOFC_SBSIDY),0)+NVL(SUM(t1.TRNSPORT_SBSIDY),0)
+		         +NVL(SUM(t1.DRV_ALLWNC),0)+NVL(SUM(t1.RISK_ALLWNC),0)+NVL(SUM(t1.SPCIFY_JOB_EXC),0) AS ETC_AMT
+		FROM YR_SAL_T t1
+		     INNER JOIN TBHRM_HR_MASTR t2
+		     ON t1.EMPNO = t2.EMPNO
+		WHERE (t2.RETIRE_DE IS NULL OR t2.RETIRE_DE > #PYMNT_DE2#) /*퇴사자제외*/
+		  AND t1.EMPL_SE IN ('001','002','003')
+		GROUP BY DECODE(t1.EMPL_SE,'002','001',t1.EMPL_SE), t1.CLSF_CODE
+		ORDER BY DECODE(t1.EMPL_SE,'002','001',t1.EMPL_SE), t1.CLSF_CODE
+		),
+		YR_SAL_T3 AS (
+		SELECT t1.EMPL_SE
+		      , t1.CLSF_CODE
+		      , t1.CNT
+		      , t1.SRCLS
+		      , t1.AFT_SRCLS
+		      , t1.BSLRY
+		      , t1.CNSTRC_ALLWNC
+		      , t1.TIME__ELSE_ALLWNC
+		      , t1.YRYC_ALLWNC
+		      , t1.TOT_AMT
+		      , t1.ETC_AMT
+		      ,(t2.BASS_AMOUNT - t3.BASS_AMOUNT)*12*t1.CNT AS INC_BSLRY 														/*기본급 증가액*/
+		      ,TRUNC(((t2.BASS_AMOUNT - t3.BASS_AMOUNT)*12*t1.CNT)* CNSTRC_ALLWNC / t1.BSLRY,0) 	AS INC_CNSTRC_ALLWNC 		/*건설수당증가액*/
+		      ,TRUNC(((t2.BASS_AMOUNT - t3.BASS_AMOUNT)*12*t1.CNT)* TIME__ELSE_ALLWNC / t1.BSLRY,0) AS INC_TIME__ELSE_ALLWNC 	/*시간외수당증가액*/
+		      ,TRUNC(((t2.BASS_AMOUNT - t3.BASS_AMOUNT)*12*t1.CNT)* YRYC_ALLWNC / t1.BSLRY,0) 		AS INC_YRYC_ALLWNC 			/*연차수당증가액*/
+		FROM YR_SAL_T2 t1
+		     INNER JOIN
+		     (SELECT EMPL_SE, CLSF_CODE, SRCLS, BASS_AMOUNT
+		      FROM TBSAL_SLARY_TABLE
+		      WHERE APPLC_DE = (SELECT MAX(APPLC_DE)
+		                        FROM TBSAL_SLARY_TABLE
+		                        WHERE APPLC_DE LIKE (SUBSTR(#PYMNT_DE2#,1,4)-1)||'%'	/*작년봉급테이블*/
+		                        ) 
+		     ) t2
+		     ON  t1.EMPL_SE = t2.EMPL_SE
+		     AND t1.CLSF_CODE = t2.CLSF_CODE
+		     AND t1.AFT_SRCLS = t2.SRCLS
+		     INNER JOIN
+		     (SELECT EMPL_SE, CLSF_CODE, SRCLS, BASS_AMOUNT
+		      FROM TBSAL_SLARY_TABLE
+		      WHERE APPLC_DE = (SELECT MAX(APPLC_DE)
+		                        FROM TBSAL_SLARY_TABLE
+		                        WHERE APPLC_DE LIKE (SUBSTR(#PYMNT_DE2#,1,4)-1)||'%' /*작년봉급테이블*/
+		                        ) 
+		     ) t3
+		     ON  t1.EMPL_SE = t3.EMPL_SE
+		     AND t1.CLSF_CODE = t3.CLSF_CODE
+		     AND t1.SRCLS = t3.SRCLS
+		ORDER BY t1.EMPL_SE, t1.CLSF_CODE
+		),
+		YR_SAL_T4 AS (
+			SELECT EMPL_SE
+				 , DECODE(EMPL_SE,'001','업무직','기술직') AS EMPL_NM
+			     , CLSF_CODE
+			     , CNT
+			     , SRCLS
+			     , AFT_SRCLS
+			     , TOT_AMT
+			     , BSLRY
+			     , CNSTRC_ALLWNC
+			     , TIME__ELSE_ALLWNC
+			     , YRYC_ALLWNC
+			     , ETC_AMT
+			     , INC_BSLRY
+			     , INC_CNSTRC_ALLWNC
+			     , INC_TIME__ELSE_ALLWNC
+			     , INC_YRYC_ALLWNC
+			     , INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC AS INC_SRCLS_AMT /* 승급인상범위액 */
+			     , ROUND((INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC) / TOT_AMT * 100,2) AS INC_SRCLS_RT /*승급인상률*/
+			     , BSLRY + INC_BSLRY AS SUM_BSLRY
+			     , CNSTRC_ALLWNC + INC_CNSTRC_ALLWNC AS SUM_CNSTRC_ALLWNC
+			     , TIME__ELSE_ALLWNC + INC_TIME__ELSE_ALLWNC AS SUM_TIME__ELSE_ALLWNC
+			     , YRYC_ALLWNC + INC_YRYC_ALLWNC AS SUM_YRYC_ALLWNC
+			     , ROUND(TOT_AMT * NVL(#UP_RATE#,0) / 100,0) AS INC_AMT /* 인상률범위액 */
+			     , ROUND(
+			       ROUND(TOT_AMT * NVL(#UP_RATE#,0) / 100,0) /
+			       (BSLRY + INC_BSLRY
+			       +CNSTRC_ALLWNC + INC_CNSTRC_ALLWNC
+			       +TIME__ELSE_ALLWNC + INC_TIME__ELSE_ALLWNC
+			       +YRYC_ALLWNC + INC_YRYC_ALLWNC)*100
+			       ,2) AS BASE_INC_RT /*기본급 인상률*/
+			    ,  INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC + ROUND(TOT_AMT * NVL(#UP_RATE#,0) / 100,0) AS INC_TOT_AMT
+			    , ROUND((INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC + ROUND(TOT_AMT * NVL(#UP_RATE#,0) / 100,0))/TOT_AMT*100,2) AS INC_TOT_RT
+			    , INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC + ROUND(TOT_AMT * NVL(#UP_RATE#,0) / 100,0) + TOT_AMT AS AMT
+			    , NVL(#UP_RATE#,0) AS UP_RATE
+			FROM YR_SAL_T3
+			ORDER BY EMPL_SE, CLSF_CODE
+		)
+		SELECT 
+		       #PYMNT_DE2#
+		      ,t1.EMPL_SE
+		      ,t1.CLSF_CODE
+		      ,t1.SRCLS
+		      ,CASE WHEN t1.EMPL_SE IN ('001','002','003')
+		            THEN TRUNC(t1.BASS_AMOUNT * (1 + (NVL(t2.INC_TOT_RT,NVL(#UP_RATE#,0))/100)),-3)
+		            ELSE t1.BASS_AMOUNT
+		       END AS BASS_AMOUNT
+		      ,CASE WHEN t1.EMPL_SE IN ('001','002','003')
+		      		THEN NVL(t2.INC_TOT_RT,NVL(#UP_RATE#,0))||'%'
+		      		ELSE NULL
+		       END AS RM
+		      ,#S_USER_ID#           /* 등록자ID */
+		      ,SYSDATE               /* 등록일시 */
+		      ,#S_USER_ID#           /* 수정자ID */
+		      ,SYSDATE               /* 수정일시 */
+		FROM TBSAL_SLARY_TABLE t1
+		     LEFT OUTER JOIN YR_SAL_T4 t2
+		     ON  DECODE(t1.EMPL_SE,'002','001',t1.EMPL_SE) = t2.EMPL_SE
+		     AND t1.CLSF_CODE = t2.CLSF_CODE
+		WHERE APPLC_DE = (SELECT MAX(APPLC_DE) FROM TBSAL_SLARY_TABLE )
+		ORDER BY t1.EMPL_SE, t1.CLSF_CODE, t1.SRCLS
+    ]]>
+    </insert>
+    
+    <insert id="SAL030107DAO.insertUpSalaryPymnt_1_old" parameterClass="java.util.HashMap">
+         <![CDATA[
+              INSERT INTO TBSAL_INCRSE_SLARY_TABLE (
+				             APPLC_DE
+							,EMPL_SE
+							,CLSF_CODE
+							,SRCLS
+							,BASS_AMOUNT
+							,RM
+							,REGISTER_ID
+							,REGIST_DT
+							,UPDUSR_ID
+							,UPDT_DT
+				)
+				SELECT 
+						     #PYMNT_DE2#
+						    ,EMPL_SE
+						    ,CLSF_CODE
+						    ,SRCLS
+						    ,FLOOR((BASS_AMOUNT + (BASS_AMOUNT * #UP_RATE# /100))/1000)*1000  AS  BASS_AMOUNT
+						    ,RM
+						    ,#S_USER_ID#           /* 등록자ID */
+						    ,SYSDATE               /* 등록일시 */
+						    ,#S_USER_ID#           /* 수정자ID */
+						    ,SYSDATE               /* 수정일시 */
+				FROM TBSAL_SLARY_TABLE
+				WHERE APPLC_DE = (SELECT MAX(APPLC_DE) FROM TBSAL_SLARY_TABLE )
+          ]]>       
+    </insert> 
+    
+     <!-- 월급여데이터생성- 마스터기초생성 -->
+    <insert id="SAL030107DAO.insertUpSalaryPymnt_2" parameterClass="java.util.HashMap">
+        <![CDATA[
+            INSERT INTO TBSAL_MT_SALARY_PYMNT (
+							 PYMNT_YM     /* 지급년월  */ 
+							,SALARY_SE    /* 급여구분  */ 
+							,PYMNT_SE     /* 지급구분  */
+							,PYMNT_DE     /* 지급일자 */ 
+							,EMPNO        /* 사번 */ 
+							,EMPNM        /* 사원명 */
+							,EMPL_SE      /* 사원구분 */
+							,ANSLRY_AT    /* 연봉여부 */
+							,DEPT_CODE    /* 부서코드 */
+							,DEPT_NM      /* 부서명 */
+							,PRMPC_SE     /* 원가구분 */
+							,RSPOFC_SE    /* 직책구분 */
+							,CLSF_CODE    /* 직급코드 */
+							,SRCLS        /* 호봉 */
+							,ECNY_DE      /* 입사일자 */
+							,RETIRE_DE    /* 퇴사일자 */
+							,STDR_DE /* 호봉승급일 */
+							,CLSF_PRMOT_DE  /* 직급승진일 */
+							,DCLZ_SE        /* 근태구분 */
+							,BGNDE          /* 시작일 */
+							,ENDDE          /* 종료일 */
+							,LBUN_SBSCRB_SE /* 노조가입구분 */
+							,TRTMT_EMP_AT   /* 대우직원여부 */
+							,DSPSN_GRAD     /* 장애자등급 */
+							,WORK_STTUS     /* 근무상태 */
+							,MT_DAYCNT      /* 월일수 */
+							,NTHG_PLAN_ABSENC_DAYCNT /* 무계획결근일수 */
+							,ABSENC_DAYCNT  /* 결근일수 */
+							,LATEN_DAYCNT   /* 지각일수 */
+							,SLYRD_RT       /* 감봉율 */
+							,LAYOFF_SALARY_RT          /* 휴직급여율 */
+							,INDVDL_PRICEWAGE_PYMNT_RT /* 개인성과급지급율 */
+							,SEIZR_AT           /* 압류여부 */
+							,HN_DDC_NMPR        /* 인적공제인원 */
+							,TIME__ELSE_TIME    /* 시간외시간 */
+							,NIGHT_LABOR_TIME   /* 야간근로시간 */
+							,RESTDE_LABOR_TIME  /* 휴일근로시간 */
+							,YEAST_HLDY_RCOGN   /* 국공휴일인정 */
+						
+							,SALARY_BANK_CODE   /* 급여은행코드 */
+							,SALARY_BANK_ACNUT  /* 급여은행계좌 */
+							
+							,ALLWNC_BANK_CODE   /* 수당은행코드 */
+							,ALLWNC_BANK_ACNUT  /* 수당은행계좌 */
+							,BSLRY              /* 기본급 */
+							,BSLRY_EXCCLC       /* 기본급정산 */
+							,CNSTRC_ALLWNC      /* 건설수당 */
+							,INORG_CNWK_ALLWNC  /* 장기근속수당 */
+							,TCHNLGY_ALLWNC     /* 기술수당 */
+							,FAMILY_ALLWNC      /* 가족수당 */
+							,SPCL_JOB_ALLWNC    /* 특수업무수당 */
+							,SPCIFY_JOB_EXC     /* 특정업무수행 */
+							,DRV_ALLWNC         /* 운전수당 */
+							,RISK_ALLWNC        /* 위험수당 */
+							,TRTMNT_ALLWNC      /* 대우수당 */
+							,YRYC_ALLWNC        /* 연차수당 */
+							,SCHXPN_SBSIDY      /* 학자금보조비 */
+							,INCNTV_PRICEWAGE    /* 인센티브성과급 */
+							,BUDGET_PRICEWAGE   /* 예산성과급 */
+							,DTY_ALLWNC         /* 직무수당 */
+							,TIME__ELSE_ALLWNC  /* 시간외수당 */
+							,MLSV_SBSIDY        /* 급식보조비 */
+							,RSPOFC_SBSIDY      /* 직책보조비 */
+							,TRNSPORT_SBSIDY    /* 교통보조비 */
+							,JOB_PRTN_TRVCT     /* 업무추진여비 */
+							,SPT_SYSM_CT        /* 현장체제비 */
+							,MNG_ALLWNC         /* 감독수당 */
+							,MANAGE_JOB_ALLWNC  /* 관리업무수당 */
+							,RESTDE_ALLWNC      /* 휴일수당 */
+							,INFANT_NRTR_CT     /* 영유아보육비 */
+							,ETC_ALLWNC         /* 기타수당 */
+							,ALLWNC_EXCCLC      /* 수당정산 */
+							,SALARY_PYMNT_TOTAMT /* 급여지급총액 */
+							,ALLWNC_PYMNT_TOTAMT /* 수당지급총액 */
+							,TOT_PYMNTAMT       /* 총지급액 */
+							,TAXT_AMOUNT        /* 과세금액 */
+							,TAXXMPT_AMOUNT     /* 비과세금액 */
+							,INCMTAX            /* 소득세 */
+							,LCLTY_INCMTAX      /* 지방소득세 */
+							,HLTHINS            /* 건강보험 */
+							,NPN                /* 국민연금 */
+							,EMPLYMINSRNC       /* 고용보험 */
+							,ENDW_PRNCPAL       /* 기금원금 */
+							,ENDW_INTR          /* 기금이자 */
+							,MXTR_CT            /* 조합비 */
+							,SRVC_GRP_ENDW      /* 봉사단기금 */
+							,SCHXPN_RPAY        /* 학자금상환 */
+							,YND_EXCCLC         /* 연말정산 */
+							,MENDNG_SEIZR       /* 보수압류 */
+							,INCMTAX_EXCCLC     /* 소득세정산 */
+							,LCLTY_INCMTAX_EXCCLC /* 지방소득세정산 */
+							,HLTHINS_EXCCLC       /* 건강보험정산 */
+							,EMPLYMINSRNC_EXCCLC  /* 고용보험정산 */
+							,DDC_TOTAMT         /* 공제총액 */
+							,ODYGS              /* 통상임금 */
+							,RL_RECPT_AMOUNT    /* 실수령액 */
+							,CLOS_AT            /* 마감여부 */
+							,CLOS_DE            /* 마감일자 */
+							,RM                 /* 비고 */
+							,REGISTER_ID        /* 등록자ID */
+							,REGIST_DT          /* 등록일시 */
+							,UPDUSR_ID          /* 수정자ID */
+							,UPDT_DT            /* 수정일시 */
+		) 
+		SELECT 
+				             SUBSTR(#PYMNT_YM#,1,6)     /* 지급년월  */ 
+							,'2'                        /* 급여구분  */ 
+							,'2'                        /* 지급구분 1일:1 20일:2 */
+							,#PYMNT_DE#                 /* 지급일자 */ 
+							,A.EMPNO                    /* 사번 */ 
+							,A.EMPNM                    /* 사원명 */
+							,A.JSSFC_SE                 /* 사원구분 */
+							,''                         /* 연봉여부 */
+							,A.DEPT_CODE                           /* 부서코드 */
+							,SFSAL_GETDEPTNM_01(A.DEPT_CODE)       /* 부서명 */
+							,''                                    /* 원가구분 */
+							,A.RSPOFC_SE                           /* 직책구분 */
+							,A.PAY_CLSF_SE                         /* 직급코드 */
+							,A.SRCLS                               /* 호봉 */
+							,A.ECNY_DE                             /* 입사일자 */
+							,A.RETIRE_DE                           /* 퇴사일자 */
+							,A.STDR_DE                             /* 기준일자 */
+							,''                                    /* 직급승진일 */
+							,''                                    /* 근태구분 */
+							,''                                    /* 시작일 */
+							,''                                    /* 종료일 */
+						    ,''                                    /* 노조가입구분 */
+					        ,''                                    /* 대우직원구분 */					          
+						    ,''                                    /* 장애자등급 */							  
+							,''                                    /* 근무상태 */
+							,''    /* 월일수 */
+							,0     /* 무계획결근일수 */
+							,0     /* 결근일수 */
+							,0     /* 지각일수 */
+							,0     /* 감봉율 */
+							,0     /* 휴직급여율 */
+							,0     /* 개인성과급지급율 */
+							,''    /* 압류여부 */
+							  
+							,''         /* 인적공제인원 */
+							  
+							,0      /* 시간외시간 */
+							  
+							,0      /* 야간근로시간 */
+							,0      /* 휴일근로시간 */
+							,0      /* 국공휴일인정 */
+							
+							,(SELECT G.SALARY_BANK_CODE 
+							  FROM TBSAL_EMPL_BANK_ACNUT G
+							  WHERE G.EMPNO = A.EMPNO )       /* 급여은행코드 */
+							  
+							,(SELECT G2.SALARY_BANK_ACNUT
+							  FROM TBSAL_EMPL_BANK_ACNUT G2
+							  WHERE G2.EMPNO = A.EMPNO )      /* 급여은행계좌 */
+							  
+						
+							,(SELECT G3.ALLWNC_BANK_CODE 
+							  FROM TBSAL_EMPL_BANK_ACNUT G3
+							  WHERE G3.EMPNO = A.EMPNO )      /* 수당은행코드 */
+							  
+							,(SELECT G4.ALLWNC_BANK_ACNUT 
+							  FROM TBSAL_EMPL_BANK_ACNUT G4
+							  WHERE G4.EMPNO = A.EMPNO )      /* 수당은행계좌 */
+							  
+							,0      /* 기본급 */
+							,0      /* 기본급정산 */
+							,0      /* 건설수당 */
+							,0      /* 장기근속수당 */
+							,0      /* 기술수당 */
+							,0      /* 가족수당 */
+							,0      /* 특수업무수당 */
+							,0      /* 특정업무수행 */
+							,0      /* 운전수당 */
+							,0      /* 위험수당 */
+							,0      /* 대우수당 */
+							,0      /* 연차수당 */
+							,0      /* 학자금보조비 */
+							,0      /* 인센티브성과급 */
+							,0      /* 예산성과급 */
+							,0      /* 직무수당 */
+							,0      /* 시간외수당 */
+							,0      /* 급식보조비 */
+							,0      /* 직책보조비 */
+							,0      /* 교통보조비 */
+							,0      /* 업무추진여비 */
+							,0      /* 현장체제비 */
+							,0      /* 감독수당 */
+							,0      /* 관리업무수당 */
+							,0      /* 휴일수당 */
+							,0      /* 영유아보육비 */
+							,0      /* 기타수당 */
+							,0      /* 수당정산 */
+							,0      /* 급여지급총액 */
+							,0      /* 수당지급총액 */
+							,0      /* 총지급액 */
+							,0      /* 과세금액 */
+							,0      /* 비과세금액 */
+							,0      /* 소득세 */
+							,0      /* 지방소득세 */
+							,0      /* 건강보험 */
+							,0      /* 국민연금 */
+							,0      /* 고용보험 */
+							,0      /* 기금원금 */
+							,0      /* 기금이자 */
+							,0      /* 조합비 */
+							,0      /* 봉사단기금 */
+							,0      /* 학자금상환 */
+							,0      /* 연말정산 */
+							,0      /* 보수압류 */
+							,0      /* 소득세정산 */
+							,0      /* 지방소득세정산 */
+							,0      /* 건강보험정산 */
+							,0      /* 고용보험정산 */
+							,0      /* 공제총액 */
+							,0      /* 통상임금 */
+							,0      /* 실수령액 */
+							,''    /* 마감여부 */
+							,''    /* 마감일자 */
+							,''    /* 비고 */
+							,#S_USER_ID#     /* 등록자ID */
+							,SYSDATE         /* 등록일시 */
+							,#S_USER_ID#     /* 수정자ID */
+							,SYSDATE         /* 수정일시 */
+				FROM TBHRM_HR_MASTR A
+				WHERE A.STTUS_SE = '000'
+		]]>		
+		<![CDATA[		
+				AND SUBSTR(A.ECNY_DE,1,6) <= #PYMNT_YM#
+		]]>		
+				AND A.JSSFC_SE IN ('000','001','002','003','007')
+				AND A.PAY_CLSF_SE IS NOT NULL				
+				ORDER BY A.JSSFC_SE, A.PAY_CLSF_SE, A.SRCLS
+    </insert>  
+    
+    <!-- 급여인상 기본급 차액생성 -->
+    <insert id="SAL030107DAO.insertUpSalaryPymntC_1" parameterClass="java.util.HashMap">
+          <![CDATA[         
+              INSERT INTO TBSAL_MT_PYMNT_DTLS (
+				            SN                    /* 일련번호 */
+				           ,PYMNT_YM              /* 지급년월 */
+				           ,SALARY_SE             /* 급여구분 */
+				           ,PYMNT_DE              /* 지급일자 */
+				           ,EMPNO                 /* 사번 */
+				           ,EMPNM                 /* 사원명 */
+				           ,DEPT_CODE             /* 부서코드 */
+				           ,CLSF_CODE             /* 직급코드 */
+				           ,PYMNT_DDC_CODE        /* 지급공제코드 */
+				           ,PYMNT_DETAIL_CODE     /* 지급상세코드 */
+				           ,PYMNT_AMOUNT          /* 지급금액 */
+				           ,UPDT_AMOUNT           /* 수정금액 */
+				           ,TAXT_AT               /* 과세여부 */
+				           ,ALLWNC_SE             /* 수당구분 */
+				           ,PRMPC_SE              /* 원가구분 */
+				           ,PYMNT_SE              /* 지급구분 */
+				           ,CLOS_AT               /* 마감여부 */
+				           ,CLOS_DE               /* 마감일자 */
+				           ,RM                    /* 비고 */
+				           ,RM_2                  /* 비고 */
+				           ,REGISTER_ID           /* 등록자ID */
+						   ,REGIST_DT             /* 등록일시 */
+						   ,UPDUSR_ID             /* 수정자ID */
+						   ,UPDT_DT               /* 수정일시 */
+				)
+				SELECT 
+				            SQ_TBSAL_2.NEXTVAL
+				           ,A.PYMNT_YM            /* 지급년월 */
+				           ,'2'                   /* 급여구분 */
+				           ,#PYMNT_DE#            /* 지급일자 */
+				           ,A.EMPNO               /* 사번 */
+				           ,A.EMPNM               /* 사원명 */
+				           ,A.DEPT_CODE           /* 부서코드 */
+				           ,A.CLSF_CODE           /* 직급코드 */
+				           ,'P1010'               /* 기본급 */
+				           ,'P1010'               /* 지급상세코드 */
+				           , CASE	WHEN NVL(ANSLRY_AT, 'N') = 'N' THEN SFSAL_DAY_PERC_CALC5((SELECT B.BASS_AMOUNT  FROM TBSAL_INCRSE_SLARY_TABLE B  
+																							WHERE B.EMPL_SE = A.EMPL_SE
+																							AND B.CLSF_CODE = A.CLSF_CODE
+																							AND B.SRCLS = A.SRCLS)
+																						  , EMPNO, PYMNT_YM, PYMNT_SE)
+									ELSE SFSAL_DAY_PERC_CALC5((SELECT B.ANSLRY_AMOUNT  
+																	FROM TBSAL_INCRSE_ANSLRY_INFO B  
+																	WHERE B.EMPNO = A.EMPNO)
+																  , EMPNO, PYMNT_YM, PYMNT_SE) END PYMNT_AMOUNT          /* 지급금액 */
+				           ,0                     /* 수정금액 */
+				           ,''                    /* 과세여부 */
+				           ,'1'                   /* 수당구분  일반:1, 복리:2 */
+				           ,''                    /* 원가구분 */
+				           ,'2'                   /* 지급구분 1일:1 20일:2 */
+				           ,''                    /* 마감여부 마감:1 */
+				           ,''                    /* 마감일자 */
+				           ,  CASE	WHEN NVL(ANSLRY_AT, 'N') = 'N' THEN SFSAL_DAY_PERC_CALC5((SELECT B.BASS_AMOUNT  FROM TBSAL_INCRSE_SLARY_TABLE B  
+																							WHERE B.EMPL_SE = A.EMPL_SE
+																							AND B.CLSF_CODE = A.CLSF_CODE
+																							AND B.SRCLS = A.SRCLS)
+																						  , EMPNO, PYMNT_YM, PYMNT_SE)
+									ELSE SFSAL_DAY_PERC_CALC5((SELECT B.ANSLRY_AMOUNT  
+																	FROM TBSAL_INCRSE_ANSLRY_INFO B  
+																	WHERE B.EMPNO = A.EMPNO)
+																  , EMPNO, PYMNT_YM, PYMNT_SE) END +
+							(SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  
+						     WHERE C.EMPNO= A.EMPNO
+						     AND C.PYMNT_YM = A.PYMNT_YM
+						     AND C.SALARY_SE = A.SALARY_SE
+						     AND C.PYMNT_SE = A.PYMNT_SE     
+						     AND C.PYMNT_DDC_CODE = 'P1010')  
+						   ,(SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  
+						     WHERE C.EMPNO= A.EMPNO
+						     AND C.PYMNT_YM = A.PYMNT_YM
+						     AND C.SALARY_SE = A.SALARY_SE
+						     AND C.PYMNT_SE = A.PYMNT_SE     
+						     AND C.PYMNT_DDC_CODE = 'P1010')  
+				           ,#S_USER_ID#           /* 등록자ID */
+						   ,SYSDATE               /* 등록일시 */
+						   ,#S_USER_ID#           /* 수정자ID */
+						   ,SYSDATE               /* 수정일시 */
+				FROM TBSAL_MT_SALARY_PYMNT A
+				WHERE A.PYMNT_YM BETWEEN #PYMNT_YM1# AND #PYMNT_YM2#
+				AND A.SALARY_SE = '1'
+				AND A.PYMNT_SE = '2'
+				AND EXISTS ( SELECT 1 FROM TBHRM_HR_MASTR ST WHERE ST.STTUS_SE = '000' AND A.EMPNO = ST.EMPNO ) 
+				AND EXISTS (  SELECT 1 
+				              FROM TBSAL_MT_PYMNT_DTLS ST 
+				              WHERE ST.EMPNO= A.EMPNO
+						      AND ST.PYMNT_YM = A.PYMNT_YM
+						      AND ST.SALARY_SE = A.SALARY_SE
+						      AND ST.PYMNT_SE = A.PYMNT_SE     
+						      AND ST.PYMNT_DDC_CODE = 'P1010' )
+          ]]>
+      </insert>  
+      
+    <!-- 급여인상 건설수당 차액생성 -->
+    <insert id="SAL030107DAO.insertUpSalaryPymntC_2" parameterClass="java.util.HashMap">
+          <![CDATA[         
+              INSERT INTO TBSAL_MT_PYMNT_DTLS (
+				            SN                    /* 일련번호 */
+				           ,PYMNT_YM              /* 지급년월 */
+				           ,SALARY_SE             /* 급여구분 */
+				           ,PYMNT_DE              /* 지급일자 */
+				           ,EMPNO                 /* 사번 */
+				           ,EMPNM                 /* 사원명 */
+				           ,DEPT_CODE             /* 부서코드 */
+				           ,CLSF_CODE             /* 직급코드 */
+				           ,PYMNT_DDC_CODE        /* 지급공제코드 */
+				           ,PYMNT_DETAIL_CODE     /* 지급상세코드 */
+				           ,PYMNT_AMOUNT          /* 지급금액 */
+				           ,UPDT_AMOUNT           /* 수정금액 */
+				           ,TAXT_AT               /* 과세여부 */
+				           ,ALLWNC_SE             /* 수당구분 */
+				           ,PRMPC_SE              /* 원가구분 */
+				           ,PYMNT_SE              /* 지급구분 */
+				           ,CLOS_AT               /* 마감여부 */
+				           ,CLOS_DE               /* 마감일자 */
+				           ,RM                    /* 비고 */
+				           ,RM_2                  /* 비고 */
+				           ,REGISTER_ID           /* 등록자ID */
+						   ,REGIST_DT             /* 등록일시 */
+						   ,UPDUSR_ID             /* 수정자ID */
+						   ,UPDT_DT               /* 수정일시 */
+				)
+				SELECT 
+				            SQ_TBSAL_2.NEXTVAL
+				           ,A.PYMNT_YM            /* 지급년월 */
+				           ,'2'                   /* 급여구분 */
+				           ,#PYMNT_DE#            /* 지급일자 */
+				           ,A.EMPNO               /* 사번 */
+				           ,A.EMPNM               /* 사원명 */
+				           ,A.DEPT_CODE           /* 부서코드 */
+				           ,A.CLSF_CODE           /* 직급코드 */
+				           ,'P1050'               /* 건설수당 */
+				           ,'P1050'               /* 지급상세코드 */
+				           , TRUNC((SFSAL_DAY_PERC_CALC5((SELECT B.BASS_AMOUNT  FROM TBSAL_INCRSE_SLARY_TABLE B  
+													WHERE B.EMPL_SE = A.EMPL_SE
+													AND B.CLSF_CODE = A.CLSF_CODE
+													AND B.SRCLS = A.SRCLS)
+												  , EMPNO, PYMNT_YM, PYMNT_SE)*0.3),-1) AS  PYMNT_AMOUNT          /* 지급금액 */
+				           ,0                     /* 수정금액 */
+				           ,''                    /* 과세여부 */
+				           ,'1'                   /* 수당구분  일반:1, 복리:2 */
+				           ,''                    /* 원가구분 */
+				           ,'2'                   /* 지급구분 1일:1 20일:2 */
+				           ,''                    /* 마감여부 마감:1 */
+				           ,''                    /* 마감일자 */
+				           , TRUNC((SFSAL_DAY_PERC_CALC5((SELECT B.BASS_AMOUNT  FROM TBSAL_INCRSE_SLARY_TABLE B  
+													WHERE B.EMPL_SE = A.EMPL_SE
+													AND B.CLSF_CODE = A.CLSF_CODE
+													AND B.SRCLS = A.SRCLS)
+												  , EMPNO, PYMNT_YM, PYMNT_SE)*0.3),-1) +
+							NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1050'),0)   
+						   ,NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1050'),0)   
+				           ,#S_USER_ID#           /* 등록자ID */
+						   ,SYSDATE               /* 등록일시 */
+						   ,#S_USER_ID#           /* 수정자ID */
+						   ,SYSDATE               /* 수정일시 */
+				FROM TBSAL_MT_SALARY_PYMNT A
+				WHERE A.PYMNT_YM BETWEEN #PYMNT_YM1# AND #PYMNT_YM2#
+				AND A.SALARY_SE = '1'
+				AND A.PYMNT_SE = '2'
+				AND A.ANSLRY_AT IS NULL
+				AND A.BSLRY IS NOT NULL
+				AND EXISTS ( SELECT 1 FROM TBHRM_HR_MASTR ST WHERE ST.STTUS_SE = '000' AND A.EMPNO = ST.EMPNO )
+				AND EXISTS (  SELECT 1 
+				              FROM TBSAL_MT_PYMNT_DTLS ST 
+				              WHERE ST.EMPNO= A.EMPNO
+						      AND ST.PYMNT_YM = A.PYMNT_YM
+						      AND ST.SALARY_SE = A.SALARY_SE
+						      AND ST.PYMNT_SE = A.PYMNT_SE     
+						      AND ST.PYMNT_DDC_CODE = 'P1050' )
+          ]]>
+	</insert>  
+      
+    <!-- 급여인상 연차수당 차액생성 -->
+    <insert id="SAL030107DAO.insertUpSalaryPymntC_3" parameterClass="java.util.HashMap">
+          <![CDATA[         
+          	  INSERT INTO TBSAL_MT_PYMNT_DTLS (
+				            SN                    /* 일련번호 */
+				           ,PYMNT_YM              /* 지급년월 */
+				           ,SALARY_SE             /* 급여구분 */
+				           ,PYMNT_DE              /* 지급일자 */
+				           ,EMPNO                 /* 사번 */
+				           ,EMPNM                 /* 사원명 */
+				           ,DEPT_CODE             /* 부서코드 */
+				           ,CLSF_CODE             /* 직급코드 */
+				           ,PYMNT_DDC_CODE        /* 지급공제코드 */
+				           ,PYMNT_DETAIL_CODE     /* 지급상세코드 */
+				           ,PYMNT_AMOUNT          /* 지급금액 */
+				           ,UPDT_AMOUNT           /* 수정금액 */
+				           ,TAXT_AT               /* 과세여부 */
+				           ,ALLWNC_SE             /* 수당구분 */
+				           ,PRMPC_SE              /* 원가구분 */
+				           ,PYMNT_SE              /* 지급구분 */
+				           ,CLOS_AT               /* 마감여부 */
+				           ,CLOS_DE               /* 마감일자 */
+				           ,RM                    /* 비고 */
+				           ,RM_2                  /* 비고 */
+				           ,REGISTER_ID           /* 등록자ID */
+						   ,REGIST_DT             /* 등록일시 */
+						   ,UPDUSR_ID             /* 수정자ID */
+						   ,UPDT_DT               /* 수정일시 */
+				)
+				SELECT 
+				            SQ_TBSAL_2.NEXTVAL
+				           ,A.PYMNT_YM            /* 지급년월 */
+				           ,'2'                   /* 급여구분 */
+				           ,#PYMNT_DE#            /* 지급일자 */
+				           ,A.EMPNO               /* 사번 */
+				           ,A.EMPNM               /* 사원명 */
+				           ,A.DEPT_CODE           /* 부서코드 */
+				           ,A.CLSF_CODE           /* 직급코드 */
+				           ,'P1110'               /* 연차수당 */
+				           ,'P1110'               /* 지급상세코드 */
+				           , TRUNC(NVL(
+						     (SELECT SUM(BASS_AMOUNT)*1.3
+								FROM TBSAL_MT_SALARY_PYMNT AA
+								     , TBSAL_INCRSE_SLARY_TABLE BB
+								WHERE AA.PYMNT_YM = DECODE(SUBSTR(A.PYMNT_YM, 5, 6),'01',SUBSTR(A.PYMNT_YM, 1, 4)||'02', A.PYMNT_YM)-1
+								AND AA.SALARY_SE = '1'
+								AND AA.PYMNT_SE = '2'
+								AND AA.EMPNO = A.EMPNO
+								AND BB.APPLC_DE = #PYMNT_DE2#
+								AND BB.EMPL_SE = AA.EMPL_SE
+								AND BB.CLSF_CODE = AA.CLSF_CODE
+								AND BB.SRCLS = AA.SRCLS
+						      )/209*8*
+							 (SELECT REAL_PYMNT_DAYCNT
+							   FROM TBSAL_YRYC_ALLWNC AA
+							   WHERE AA.PYMNT_YM = A.PYMNT_YM
+							   AND AA.EMPNO = A.EMPNO)
+							 ,0),-1) AS PYMNT_AMOUNT          /* 지급금액 */
+				           ,0                     /* 수정금액 */
+				           ,''                    /* 과세여부 */
+				           ,'1'                   /* 수당구분  일반:1, 복리:2 */
+				           ,''                    /* 원가구분 */
+				           ,'2'                   /* 지급구분 1일:1 20일:2 */
+				           ,''                    /* 마감여부 마감:1 */
+				           ,''                    /* 마감일자 */
+				           , TRUNC(NVL(
+						     (SELECT SUM(BASS_AMOUNT)*1.3
+								FROM TBSAL_MT_SALARY_PYMNT AA
+								     , TBSAL_INCRSE_SLARY_TABLE BB
+								WHERE AA.PYMNT_YM = DECODE(SUBSTR(A.PYMNT_YM, 5, 6),'01',SUBSTR(A.PYMNT_YM, 1, 4)||'02', A.PYMNT_YM)-1
+								AND AA.SALARY_SE = '1'
+								AND AA.PYMNT_SE = '2'
+								AND AA.EMPNO = A.EMPNO
+								AND BB.APPLC_DE = #PYMNT_DE2#
+								AND BB.EMPL_SE = AA.EMPL_SE
+								AND BB.CLSF_CODE = AA.CLSF_CODE
+								AND BB.SRCLS = AA.SRCLS
+						      )/209*8*
+							 (SELECT REAL_PYMNT_DAYCNT
+							   FROM TBSAL_YRYC_ALLWNC AA
+							   WHERE AA.PYMNT_YM = A.PYMNT_YM
+							   AND AA.EMPNO = A.EMPNO)
+							 ,0),-1) + NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1110'),0)   
+						   ,NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1110'),0)     
+				           ,#S_USER_ID#           /* 등록자ID */
+						   ,SYSDATE               /* 등록일시 */
+						   ,#S_USER_ID#           /* 수정자ID */
+						   ,SYSDATE               /* 수정일시 */
+				FROM TBSAL_MT_SALARY_PYMNT A
+				WHERE A.PYMNT_YM BETWEEN #PYMNT_YM1# AND #PYMNT_YM2#
+				AND A.SALARY_SE = '1'
+				AND A.PYMNT_SE = '2'
+				AND EXISTS ( SELECT 1 FROM TBHRM_HR_MASTR ST WHERE ST.STTUS_SE = '000' AND A.EMPNO = ST.EMPNO )
+				AND EXISTS (  SELECT 1 
+				              FROM TBSAL_MT_PYMNT_DTLS ST 
+				              WHERE ST.EMPNO= A.EMPNO
+						      AND ST.PYMNT_YM = A.PYMNT_YM
+						      AND ST.SALARY_SE = A.SALARY_SE
+						      AND ST.PYMNT_SE = A.PYMNT_SE     
+						      AND ST.PYMNT_DDC_CODE = 'P1110' )
+          ]]>
+	</insert>  
+      
+      
+	<!-- 급여인상 시간외수당 차액생성 -->
+    <insert id="SAL030107DAO.insertUpSalaryPymntC_4" parameterClass="java.util.HashMap">
+          <![CDATA[         
+              INSERT INTO TBSAL_MT_PYMNT_DTLS (
+				            SN                    /* 일련번호 */
+				           ,PYMNT_YM              /* 지급년월 */
+				           ,SALARY_SE             /* 급여구분 */
+				           ,PYMNT_DE              /* 지급일자 */
+				           ,EMPNO                 /* 사번 */
+				           ,EMPNM                 /* 사원명 */
+				           ,DEPT_CODE             /* 부서코드 */
+				           ,CLSF_CODE             /* 직급코드 */
+				           ,PYMNT_DDC_CODE        /* 지급공제코드 */
+				           ,PYMNT_DETAIL_CODE     /* 지급상세코드 */
+				           ,PYMNT_AMOUNT          /* 지급금액 */
+				           ,UPDT_AMOUNT           /* 수정금액 */
+				           ,TAXT_AT               /* 과세여부 */
+				           ,ALLWNC_SE             /* 수당구분 */
+				           ,PRMPC_SE              /* 원가구분 */
+				           ,PYMNT_SE              /* 지급구분 */
+				           ,CLOS_AT               /* 마감여부 */
+				           ,CLOS_DE               /* 마감일자 */
+				           ,RM                    /* 비고 */
+				           ,RM_2                  /* 비고 */
+				           ,REGISTER_ID           /* 등록자ID */
+						   ,REGIST_DT             /* 등록일시 */
+						   ,UPDUSR_ID             /* 수정자ID */
+						   ,UPDT_DT               /* 수정일시 */
+				)
+				SELECT 
+				            SQ_TBSAL_2.NEXTVAL
+				           ,A.PYMNT_YM-1            /* 지급년월 */
+				           ,'2'                   /* 급여구분 */
+				           ,#PYMNT_DE#            /* 지급일자 */
+				           ,A.EMPNO               /* 사번 */
+				           ,A.EMPNM               /* 사원명 */
+				           ,(SELECT AA.DEPT_CODE 
+								FROM TBSAL_MT_SALARY_PYMNT AA
+								WHERE AA.PYMNT_YM = DECODE(SUBSTR(A.PYMNT_YM, 5, 6),'01',SUBSTR(A.PYMNT_YM, 1, 4)||'02', A.PYMNT_YM)-1
+								AND AA.SALARY_SE = '1'
+								AND AA.PYMNT_SE = '2'
+								AND AA.EMPNO = A.EMPNO) AS DEPT_CODE
+						   ,(SELECT AA.CLSF_CODE
+								FROM TBSAL_MT_SALARY_PYMNT AA
+								WHERE AA.PYMNT_YM = DECODE(SUBSTR(A.PYMNT_YM, 5, 6),'01',SUBSTR(A.PYMNT_YM, 1, 4)||'02', A.PYMNT_YM)-1
+								AND AA.SALARY_SE = '1'
+								AND AA.PYMNT_SE = '2'
+								AND AA.EMPNO = A.EMPNO) AS CLSF_CODE
+				           ,'P1910'               /* 시간외수당 */
+				           ,'P1910'               /* 지급상세코드 */
+				           , TRUNC(NVL(
+						     (SELECT SUM(BASS_AMOUNT)*1.3
+								FROM TBSAL_MT_SALARY_PYMNT AA
+								     , TBSAL_INCRSE_SLARY_TABLE BB
+								WHERE AA.PYMNT_YM = DECODE(SUBSTR(A.PYMNT_YM, 5, 6),'01',SUBSTR(A.PYMNT_YM, 1, 4)||'02', A.PYMNT_YM)-1
+								AND AA.SALARY_SE = '1'
+								AND AA.PYMNT_SE = '2'
+								AND AA.EMPNO = A.EMPNO
+								AND BB.APPLC_DE = #PYMNT_DE2#
+								AND BB.EMPL_SE = AA.EMPL_SE
+								AND BB.CLSF_CODE = AA.CLSF_CODE
+								AND BB.SRCLS = AA.SRCLS
+						      )/209*
+							 (SELECT MNBY_EXCESS_TIMECNT
+								FROM TBHRM_MNBY_DCLZ_SM AA
+							   WHERE DCLZ_SE = '103'
+							   AND AA.STDR_YM = A.PYMNT_YM-1
+							   AND AA.EMPNO = A.EMPNO)*1.5
+							 ,0),-1) AS PYMNT_AMOUNT          /* 지급금액 */
+				           ,0                     /* 수정금액 */
+				           ,''                    /* 과세여부 */
+				           ,'1'                   /* 수당구분  일반:1, 복리:2 */
+				           ,''                    /* 원가구분 */
+				           ,'2'                   /* 지급구분 1일:1 20일:2 */
+				           ,''                    /* 마감여부 마감:1 */
+				           ,''                    /* 마감일자 */
+				           , TRUNC(NVL(
+						     (SELECT SUM(BASS_AMOUNT)*1.3
+								FROM TBSAL_MT_SALARY_PYMNT AA
+								     , TBSAL_INCRSE_SLARY_TABLE BB
+								WHERE AA.PYMNT_YM = DECODE(SUBSTR(A.PYMNT_YM, 5, 6),'01',SUBSTR(A.PYMNT_YM, 1, 4)||'02', A.PYMNT_YM)-1
+								AND AA.SALARY_SE = '1'
+								AND AA.PYMNT_SE = '2'
+								AND AA.EMPNO = A.EMPNO
+								AND BB.APPLC_DE = #PYMNT_DE2#
+								AND BB.EMPL_SE = AA.EMPL_SE
+								AND BB.CLSF_CODE = AA.CLSF_CODE
+								AND BB.SRCLS = AA.SRCLS
+						      )/209*
+							 (SELECT MNBY_EXCESS_TIMECNT
+								FROM TBHRM_MNBY_DCLZ_SM AA
+							   WHERE DCLZ_SE = '103'
+							   AND AA.STDR_YM = A.PYMNT_YM-1
+							   AND AA.EMPNO = A.EMPNO)*1.5
+							 ,0),-1) + NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1910'),0)   
+						   ,NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1910'),0)
+				           ,#S_USER_ID#           /* 등록자ID */
+						   ,SYSDATE               /* 등록일시 */
+						   ,#S_USER_ID#           /* 수정자ID */
+						   ,SYSDATE               /* 수정일시 */
+				FROM TBSAL_MT_SALARY_PYMNT A
+				WHERE A.PYMNT_YM-1 BETWEEN #PYMNT_YM1# AND #PYMNT_YM2#
+				AND A.SALARY_SE = '1'
+				AND A.PYMNT_SE = '1'
+				AND EXISTS ( SELECT 1 FROM TBHRM_HR_MASTR ST WHERE ST.STTUS_SE = '000' AND A.EMPNO = ST.EMPNO )
+				AND EXISTS (  SELECT 1 
+				              FROM TBSAL_MT_PYMNT_DTLS ST 
+				              WHERE ST.EMPNO= A.EMPNO
+						      AND ST.PYMNT_YM = A.PYMNT_YM
+						      AND ST.SALARY_SE = A.SALARY_SE
+						      AND ST.PYMNT_SE = A.PYMNT_SE     
+						      AND ST.PYMNT_DDC_CODE = 'P1910' )
+          ]]>
+	</insert>  
+	
+	
+	<!-- 급여인상 휴일근무시간 차액생성 -->
+    <insert id="SAL030107DAO.insertUpSalaryPymntC_4_1" parameterClass="java.util.HashMap">
+          <![CDATA[         
+              INSERT INTO TBSAL_MT_PYMNT_DTLS (
+				            SN                    /* 일련번호 */
+				           ,PYMNT_YM              /* 지급년월 */
+				           ,SALARY_SE             /* 급여구분 */
+				           ,PYMNT_DE              /* 지급일자 */
+				           ,EMPNO                 /* 사번 */
+				           ,EMPNM                 /* 사원명 */
+				           ,DEPT_CODE             /* 부서코드 */
+				           ,CLSF_CODE             /* 직급코드 */
+				           ,PYMNT_DDC_CODE        /* 지급공제코드 */
+				           ,PYMNT_DETAIL_CODE     /* 지급상세코드 */
+				           ,PYMNT_AMOUNT          /* 지급금액 */
+				           ,UPDT_AMOUNT           /* 수정금액 */
+				           ,TAXT_AT               /* 과세여부 */
+				           ,ALLWNC_SE             /* 수당구분 */
+				           ,PRMPC_SE              /* 원가구분 */
+				           ,PYMNT_SE              /* 지급구분 */
+				           ,CLOS_AT               /* 마감여부 */
+				           ,CLOS_DE               /* 마감일자 */
+				           ,RM                    /* 비고 */
+				           ,RM_2                  /* 비고 */
+				           ,REGISTER_ID           /* 등록자ID */
+						   ,REGIST_DT             /* 등록일시 */
+						   ,UPDUSR_ID             /* 수정자ID */
+						   ,UPDT_DT               /* 수정일시 */
+				)
+				SELECT 
+				            SQ_TBSAL_2.NEXTVAL
+				           ,A.PYMNT_YM            /* 지급년월 */
+				           ,'2'                   /* 급여구분 */
+				           ,#PYMNT_DE#            /* 지급일자 */
+				           ,A.EMPNO               /* 사번 */
+				           ,A.EMPNM               /* 사원명 */
+				           ,A.DEPT_CODE           /* 부서코드 */
+				           ,A.CLSF_CODE           /* 직급코드 */
+				           ,'P1920'               /* 휴일근무시간 */
+				           ,'P1920'               /* 지급상세코드 */
+				           , TRUNC(NVL(
+						     (SELECT SUM(BASS_AMOUNT)*1.3
+								FROM TBSAL_MT_SALARY_PYMNT AA
+								     , TBSAL_INCRSE_SLARY_TABLE BB
+								WHERE AA.PYMNT_YM = DECODE(SUBSTR(A.PYMNT_YM, 5, 6),'01',SUBSTR(A.PYMNT_YM, 1, 4)||'02', A.PYMNT_YM)-1
+								AND AA.SALARY_SE = '1'
+								AND AA.PYMNT_SE = '2'
+								AND AA.EMPNO = A.EMPNO
+								AND BB.APPLC_DE = #PYMNT_DE2#
+								AND BB.EMPL_SE = AA.EMPL_SE
+								AND BB.CLSF_CODE = AA.CLSF_CODE
+								AND BB.SRCLS = AA.SRCLS
+						      )/209*8*1.5
+							 ,0),-1) AS PYMNT_AMOUNT          /* 지급금액 */
+				           ,0                     /* 수정금액 */
+				           ,''                    /* 과세여부 */
+				           ,'1'                   /* 수당구분  일반:1, 복리:2 */
+				           ,''                    /* 원가구분 */
+				           ,'2'                   /* 지급구분 1일:1 20일:2 */
+				           ,''                    /* 마감여부 마감:1 */
+				           ,''                    /* 마감일자 */
+				           , TRUNC(NVL(
+						     (SELECT SUM(BASS_AMOUNT)*1.3
+								FROM TBSAL_MT_SALARY_PYMNT AA
+								     , TBSAL_INCRSE_SLARY_TABLE BB
+								WHERE AA.PYMNT_YM = DECODE(SUBSTR(A.PYMNT_YM, 5, 6),'01',SUBSTR(A.PYMNT_YM, 1, 4)||'02', A.PYMNT_YM)-1
+								AND AA.SALARY_SE = '1'
+								AND AA.PYMNT_SE = '2'
+								AND AA.EMPNO = A.EMPNO
+								AND BB.APPLC_DE = #PYMNT_DE2#
+								AND BB.EMPL_SE = AA.EMPL_SE
+								AND BB.CLSF_CODE = AA.CLSF_CODE
+								AND BB.SRCLS = AA.SRCLS
+						      )/209*8*1.5
+							 ,0),-1) + NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1920'),0)   
+						   ,NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1920'),0)
+				           ,#S_USER_ID#           /* 등록자ID */
+						   ,SYSDATE               /* 등록일시 */
+						   ,#S_USER_ID#           /* 수정자ID */
+						   ,SYSDATE               /* 수정일시 */
+				FROM TBSAL_MT_SALARY_PYMNT A
+				WHERE A.PYMNT_YM BETWEEN #PYMNT_YM1# AND #PYMNT_YM2#
+				AND A.SALARY_SE = '1'
+				AND A.PYMNT_SE = '2'
+				AND EXISTS ( SELECT 1 FROM TBHRM_HR_MASTR ST WHERE ST.STTUS_SE = '000' AND A.EMPNO = ST.EMPNO )
+				AND EXISTS (  SELECT 1 
+				              FROM TBSAL_MT_PYMNT_DTLS ST 
+				              WHERE ST.EMPNO= A.EMPNO
+						      AND ST.PYMNT_YM = A.PYMNT_YM
+						      AND ST.SALARY_SE = A.SALARY_SE
+						      AND ST.PYMNT_SE = A.PYMNT_SE     
+						      AND ST.PYMNT_DDC_CODE = 'P1920' )
+          ]]>
+	</insert>  
+      
+      
+	<!-- 급여인상 대우수당 차액생성 -->
+    <insert id="SAL030107DAO.insertUpSalaryPymntC_5" parameterClass="java.util.HashMap">
+          <![CDATA[         
+              INSERT INTO TBSAL_MT_PYMNT_DTLS (
+				            SN                    /* 일련번호 */
+				           ,PYMNT_YM              /* 지급년월 */
+				           ,SALARY_SE             /* 급여구분 */
+				           ,PYMNT_DE              /* 지급일자 */
+				           ,EMPNO                 /* 사번 */
+				           ,EMPNM                 /* 사원명 */
+				           ,DEPT_CODE             /* 부서코드 */
+				           ,CLSF_CODE             /* 직급코드 */
+				           ,PYMNT_DDC_CODE        /* 지급공제코드 */
+				           ,PYMNT_DETAIL_CODE     /* 지급상세코드 */
+				           ,PYMNT_AMOUNT          /* 지급금액 */
+				           ,UPDT_AMOUNT           /* 수정금액 */
+				           ,TAXT_AT               /* 과세여부 */
+				           ,ALLWNC_SE             /* 수당구분 */
+				           ,PRMPC_SE              /* 원가구분 */
+				           ,PYMNT_SE              /* 지급구분 */
+				           ,CLOS_AT               /* 마감여부 */
+				           ,CLOS_DE               /* 마감일자 */
+				           ,RM                    /* 비고 */
+				           ,RM_2                  /* 비고 */
+				           ,REGISTER_ID           /* 등록자ID */
+						   ,REGIST_DT             /* 등록일시 */
+						   ,UPDUSR_ID             /* 수정자ID */
+						   ,UPDT_DT               /* 수정일시 */
+				)
+				SELECT 
+				            SQ_TBSAL_2.NEXTVAL
+				           ,A.PYMNT_YM            /* 지급년월 */
+				           ,'2'                   /* 급여구분 */
+				           ,#PYMNT_DE#            /* 지급일자 */
+				           ,A.EMPNO               /* 사번 */
+				           ,A.EMPNM               /* 사원명 */
+				           ,A.DEPT_CODE           /* 부서코드 */
+				           ,A.CLSF_CODE           /* 직급코드 */
+				           ,'P1220'               /* 대우수당 */
+				           ,'P1220'               /* 지급상세코드 */
+				           , TRUNC((SFSAL_DAY_PERC_CALC5((	SELECT B.BASS_AMOUNT  FROM TBSAL_INCRSE_SLARY_TABLE B  
+															WHERE B.EMPL_SE = A.EMPL_SE
+															AND B.CLSF_CODE = A.CLSF_CODE
+															AND B.SRCLS = A.SRCLS)
+														  , EMPNO, PYMNT_YM, PYMNT_SE)
+														  *(SELECT SE_1/100 FROM TBSAL_PYMNT_DETAIL_CODE WHERE PYMNT_DETAIL_CODE = 'P1220001')
+														  ),-1) AS  PYMNT_AMOUNT          /* 지급금액 */
+				           ,0                     /* 수정금액 */
+				           ,''                    /* 과세여부 */
+				           ,'1'                   /* 수당구분  일반:1, 복리:2 */
+				           ,''                    /* 원가구분 */
+				           ,'2'                   /* 지급구분 1일:1 20일:2 */
+				           ,''                    /* 마감여부 마감:1 */
+				           ,''                    /* 마감일자 */
+				           , TRUNC((SFSAL_DAY_PERC_CALC5((	SELECT B.BASS_AMOUNT  FROM TBSAL_INCRSE_SLARY_TABLE B  
+															WHERE B.EMPL_SE = A.EMPL_SE
+															AND B.CLSF_CODE = A.CLSF_CODE
+															AND B.SRCLS = A.SRCLS)
+														  , EMPNO, PYMNT_YM, PYMNT_SE)
+														  *(SELECT SE_1/100 FROM TBSAL_PYMNT_DETAIL_CODE WHERE PYMNT_DETAIL_CODE = 'P1220001')
+														  ),-1)
+														   +
+							NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1220'),0)   
+						   ,NVL((SELECT C.PYMNT_AMOUNT  FROM TBSAL_MT_PYMNT_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1220'),0)   
+				           ,#S_USER_ID#           /* 등록자ID */
+						   ,SYSDATE               /* 등록일시 */
+						   ,#S_USER_ID#           /* 수정자ID */
+						   ,SYSDATE               /* 수정일시 */
+				FROM TBSAL_MT_SALARY_PYMNT A
+				WHERE A.PYMNT_YM BETWEEN #PYMNT_YM1# AND #PYMNT_YM2#
+				AND A.SALARY_SE = '1'
+				AND A.PYMNT_SE = '2'
+				AND A.EMPNO IN (SELECT EMPNO FROM TBSAL_MT_PYMNT_DTLS WHERE PYMNT_YM = A.PYMNT_YM AND PYMNT_DDC_CODE = 'P1220' AND PYMNT_AMOUNT > 0)
+				AND A.ANSLRY_AT IS NULL
+				AND A.BSLRY IS NOT NULL
+				AND EXISTS ( SELECT 1 FROM TBHRM_HR_MASTR ST WHERE ST.STTUS_SE = '000' AND A.EMPNO = ST.EMPNO )
+				AND EXISTS (  SELECT 1 
+				              FROM TBSAL_MT_PYMNT_DTLS ST 
+				              WHERE ST.EMPNO= A.EMPNO
+						      AND ST.PYMNT_YM = A.PYMNT_YM
+						      AND ST.SALARY_SE = A.SALARY_SE
+						      AND ST.PYMNT_SE = A.PYMNT_SE     
+						      AND ST.PYMNT_DDC_CODE = 'P1220' )
+          ]]>
+	</insert>  
+      
+      <!-- 급여인상 임금피크제 생성 -->
+    <insert id="SAL030107DAO.insertUpDdcPymntC_1" parameterClass="java.util.HashMap">
+          <![CDATA[         
+              INSERT INTO TBSAL_MT_DDC_DTLS (
+				            SN						/*일련번호*/
+							,PYMNT_YM				/*지급년월*/
+							,SALARY_SE				/*급여구분*/
+							,PYMNT_DE				/*지급일자*/
+							,EMPNO					/*사번*/
+							,EMPNM					/*사원명*/
+							,DEPT_CODE				/*부서코드*/
+							,CLSF_CODE				/*직급코드*/
+							,PYMNT_DDC_CODE			/*지급공제코드*/
+							,DDC_DETAIL_CODE		/*공제상세코드*/
+							,DDC_AMOUNT				/*공제금액*/
+							,UPDT_DDC_AMOUNT		/*수정공제금액*/
+							,CLOS_AT				/*마감여부*/
+							,CLOS_DE				/*마감일자*/
+							,RM						/*비고*/
+							,REGISTER_ID			/*등록자ID*/
+							,REGIST_DT				/*등록일시*/
+							,UPDUSR_ID				/*수정자ID*/
+							,UPDT_DT				/*수정일시*/
+							,PYMNT_SE				/*PYMNT_SE*/
+				)
+				SELECT 
+				            SQ_TBSAL_2.NEXTVAL
+				           ,A.PYMNT_YM            /* 지급년월 */
+				           ,'2'                   /* 급여구분 */
+				           ,#PYMNT_DE#            /* 지급일자 */
+				           ,A.EMPNO               /* 사번 */
+				           ,A.EMPNM               /* 사원명 */
+				           ,A.DEPT_CODE           /* 부서코드 */
+				           ,A.CLSF_CODE           /* 직급코드 */
+				           ,'S2221'               /* 임금피크제코드 */
+				           ,'S2221'               /* 지급상세코드 */
+				           , TRUNC(NVL(
+						     (SELECT SUM(PYMNT_AMOUNT)
+								FROM TBSAL_MT_PYMNT_DTLS AA
+								WHERE PYMNT_DDC_CODE IN ('P1010','P1050')
+								AND AA.PYMNT_YM = A.PYMNT_YM
+								AND AA.SALARY_SE = '2'
+								AND AA.PYMNT_SE = '2'
+								AND AA.EMPNO = A.EMPNO
+						      )*
+							 (SELECT RDCAMT_RT/100
+							   FROM TBSAL_WAGE_PEAK_STDR AA
+							   WHERE AA.YY_ODR = B.YY_ODR
+							   AND AA.STDR_YEAR = SUBSTR(A.PYMNT_YM, 1, 4))
+							 ,0),-1) AS PYMNT_AMOUNT          /* 지급금액 */
+				           ,0                     /* 수정금액 */
+				           ,''                    /* 마감여부 마감:1 */
+				           ,''                    /* 마감일자 */
+				           ,NVL((SELECT C.DDC_AMOUNT  FROM TBSAL_MT_DDC_DTLS C  WHERE C.EMPNO= A.EMPNO
+						      AND C.PYMNT_YM = A.PYMNT_YM
+						      AND C.SALARY_SE = A.SALARY_SE
+						      AND C.PYMNT_SE = A.PYMNT_SE     
+						      AND C.PYMNT_DDC_CODE = 'P1220'),0) 
+				           ,#S_USER_ID#           /* 등록자ID */
+						   ,SYSDATE               /* 등록일시 */
+						   ,#S_USER_ID#           /* 수정자ID */
+						   ,SYSDATE               /* 수정일시 */
+						   ,'2'                   /* 지급구분 1일:1 20일:2 */
+				FROM TBSAL_MT_SALARY_PYMNT A
+					, TBSAL_WAGE_PEAK B
+				WHERE A.EMPNO = B.EMPNO
+				AND A.PYMNT_YM BETWEEN SUBSTR(B.BGNDE, 1, 6) AND SUBSTR(B.ENDDE, 1, 6)
+				AND A.PYMNT_YM BETWEEN #PYMNT_YM1# AND #PYMNT_YM2#
+				AND A.SALARY_SE = '1'
+				AND A.PYMNT_SE = '2'
+				AND EXISTS ( SELECT 1 FROM TBHRM_HR_MASTR ST WHERE ST.STTUS_SE = '000' AND A.EMPNO = ST.EMPNO ) 
+				AND EXISTS (  SELECT 1 
+				              FROM TBSAL_MT_PYMNT_DTLS ST 
+				              WHERE ST.EMPNO= A.EMPNO
+						      AND ST.PYMNT_YM = A.PYMNT_YM
+						      AND ST.SALARY_SE = A.SALARY_SE
+						      AND ST.PYMNT_SE = A.PYMNT_SE     
+						      AND ST.PYMNT_DDC_CODE = 'P1010' )
+          ]]>
+	</insert>  
+	
+    <!-- 급여인상 생성내역 -->
+    <insert id="SAL030107DAO.insertUpSalaryPymntC_6" parameterClass="java.util.HashMap">
+        <![CDATA[
+              INSERT INTO TBSAL_MT_SALARY_CREAT (
+				            PYMNT_YM              /* 지급년월 */ 
+				           ,SALARY_SE             /* 급여구분 */
+				           ,PYMNT_SE              /* 지급구분 */
+				           ,PYMNT_DE              /* 지급일자 */
+				           ,PYMNT_NMPR            /* 지급인원 */
+				           ,DCSN_AT               /* 확정여부 */
+				           ,DCSN_DE               /* 확정일자 */
+				           ,CALC_TOTAMT           /* 계산총액 */
+				           ,DDC_TOTAMT            /* 공제총액 */
+				           ,RL_RECPT_AMOUNT       /* 실수령액 */
+				           ,OPERTOR               /* 작업자   */				                      
+				           ,REGISTER_ID           /* 등록자ID */
+						   ,REGIST_DT             /* 등록일시 */
+						   ,UPDUSR_ID             /* 수정자ID */
+						   ,UPDT_DT               /* 수정일시 */
+				) 
+				 SELECT 
+						    SUBSTR(#PYMNT_DE#,1,6)     /* 지급년월 */ 
+				           ,'2'                        /* 급여구분 */
+				           ,'2'
+				           ,#PYMNT_DE#                 /* 지급일자 */				           
+				           ,(SELECT COUNT(*)
+							 FROM TBSAL_MT_SALARY_PYMNT
+							 WHERE PYMNT_YM = SUBSTR(#PYMNT_DE#,1,6)
+							 AND SALARY_SE ='2'
+							 AND PYMNT_SE ='2')  AS PYMNT_NMPR         /* 지급인원 */
+						   ,'0'                        /* 확정여부 */
+				           ,''                         /* 확정일자 */
+				           ,(SELECT  NVL(SUM(B.PYMNT_AMOUNT),0)
+							 FROM TBSAL_MT_SALARY_PYMNT A
+							     ,TBSAL_MT_PYMNT_DTLS B
+							 WHERE A.PYMNT_YM = SUBSTR(#PYMNT_DE#,1,6)
+							 AND A.SALARY_SE = '2'
+							 AND A.PYMNT_DE = #PYMNT_DE#
+							 AND A.PYMNT_SE = '2'
+							 AND A.SALARY_SE = B.SALARY_SE
+							 AND A.PYMNT_DE = B.PYMNT_DE
+							 AND A.PYMNT_SE = B.PYMNT_SE
+							 AND A.EMPNO = B.EMPNO) 	        AS CALC_TOTAMT           /* 계산총액 */
+							 
+				           ,(SELECT  NVL(SUM(B.DDC_AMOUNT),0)
+							 FROM TBSAL_MT_SALARY_PYMNT A
+							     ,TBSAL_MT_DDC_DTLS B
+							 WHERE A.PYMNT_YM = SUBSTR(#PYMNT_DE#,1,6)
+							 AND A.SALARY_SE = '2'
+							 AND A.PYMNT_DE = #PYMNT_DE#
+							 AND A.PYMNT_SE = '2'
+							 AND A.SALARY_SE = B.SALARY_SE
+							 AND A.PYMNT_DE = B.PYMNT_DE
+							 AND A.PYMNT_SE = B.PYMNT_SE
+							 AND A.EMPNO = B.EMPNO) 	        AS DDC_TOTAMT            /* 공제총액 */
+							 
+				           ,(SELECT  NVL(SUM(B.PYMNT_AMOUNT),0)
+							 FROM TBSAL_MT_SALARY_PYMNT A
+							     ,TBSAL_MT_PYMNT_DTLS B
+							 WHERE A.PYMNT_YM = SUBSTR(#PYMNT_DE#,1,6)
+							 AND A.SALARY_SE = '2'
+							 AND A.PYMNT_DE = #PYMNT_DE#
+							 AND A.PYMNT_SE = '2'
+							 AND A.SALARY_SE = B.SALARY_SE
+							 AND A.PYMNT_DE = B.PYMNT_DE
+							 AND A.PYMNT_SE = B.PYMNT_SE
+							 AND A.EMPNO = B.EMPNO)
+							 -
+							 (SELECT  NVL(SUM(B.DDC_AMOUNT),0)
+							 FROM TBSAL_MT_SALARY_PYMNT A
+							     ,TBSAL_MT_DDC_DTLS B
+							 WHERE A.PYMNT_YM = SUBSTR(#PYMNT_DE#,1,6)
+							 AND A.SALARY_SE = '2'
+							 AND A.PYMNT_DE = #PYMNT_DE#
+							 AND A.PYMNT_SE = '2'
+							 AND A.SALARY_SE = B.SALARY_SE
+							 AND A.PYMNT_DE = B.PYMNT_DE
+							 AND A.PYMNT_SE = B.PYMNT_SE
+							 AND A.EMPNO = B.EMPNO)   AS  RL_RECPT_AMOUNT       /* 실수령액 */
+				           ,#S_USER_ID#           /* 작업자   */				         				           
+				           ,#S_USER_ID#           /* 등록자ID */
+						   ,SYSDATE               /* 등록일시 */
+						   ,#S_USER_ID#           /* 수정자ID */
+						   ,SYSDATE               /* 수정일시 */
+				FROM DUAL
+				
+				   
+        ]]>
+    </insert> 
+    
+    <!-- 기본급테이블 입력 -->
+    <insert id="SAL030107DAO.insertUpSalaryTableList" parameterClass="java.util.HashMap">
+        <![CDATA[
+              INSERT INTO TBSAL_SLARY_TABLE (
+				             APPLC_DE
+							,EMPL_SE
+							,CLSF_CODE
+							,SRCLS
+							,BASS_AMOUNT
+							,RM			                      
+				            ,REGISTER_ID           /* 등록자ID */
+						    ,REGIST_DT             /* 등록일시 */
+						    ,UPDUSR_ID             /* 수정자ID */
+						    ,UPDT_DT               /* 수정일시 */
+				) 
+				 SELECT 
+						     #APPLC_DE#
+							,A.EMPL_SE
+							,A.CLSF_CODE
+							,A.SRCLS
+							,A.BASS_AMOUNT
+							,A.RM			  			           
+				            ,#S_USER_ID#           /* 등록자ID */
+						    ,SYSDATE               /* 등록일시 */
+						    ,#S_USER_ID#           /* 수정자ID */
+						    ,SYSDATE               /* 수정일시 */
+				FROM TBSAL_INCRSE_SLARY_TABLE A
+				   
+        ]]>
+    </insert> 
+
+	<!-- 급여인상 마스터정보 삭제 -->
+    <delete id="SAL030107DAO.deleteUpSalaryPymntD_1" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_MT_SALARY_PYMNT
+		 WHERE PYMNT_YM  = SUBSTR(#PYMNT_DE#, 1, 6)
+		   AND SALARY_SE = '2'
+		   AND PYMNT_SE  = '2'
+		   AND PYMNT_DE  = #PYMNT_DE#
+    </delete> 
+    
+    <!-- 급여인상 지급상세정보 삭제 -->
+    <delete id="SAL030107DAO.deleteUpSalaryPymntD_2" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_MT_PYMNT_DTLS
+		 WHERE SALARY_SE = '2'
+		   AND PYMNT_SE  = '2'
+		   AND PYMNT_DE  = #PYMNT_DE#        
+    </delete>  
+    
+    <!-- 급여인상 생성정보 삭제 -->
+    <delete id="SAL030107DAO.deleteUpSalaryPymntD_3" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_MT_SALARY_CREAT
+		 WHERE SALARY_SE = '2'
+		   AND PYMNT_SE  = '2'
+		   AND PYMNT_DE  = #PYMNT_DE#
+    </delete> 
+    
+    <!-- 급여인상 지급상세정보 삭제 -->
+    <delete id="SAL030107DAO.deleteUpDdcPymntD_1" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_MT_DDC_DTLS
+		 WHERE SALARY_SE = '2'
+		   AND PYMNT_SE  = '2'
+		   AND PYMNT_DE  = #PYMNT_DE#
+    </delete>  
+    
+    <!-- 기본급테이블 입력 삭제 -->
+    <delete id="SAL030107DAO.deleteUpSalaryTableList" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_SLARY_TABLE
+		 WHERE APPLC_DE = #APPLC_DE#
+    </delete>  
+
+    <!-- 직급별 평균 인상율 계산 (과년도 직급별 임금) -->
+    <select id="SAL030107DAO.clsfAvgIncDtls2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    <![CDATA[
+			WITH YR_SAL_T AS
+			(
+	           SELECT EMPNO 																													/* 사번 */
+	                , MAX(EMPNM) 																					   	AS EMPNM				/* 사원명 */
+	                , MIN(EMPL_SE)                                                                                     	AS EMPL_SE 				/* 사원구분 */
+	                , PKG_SAL_UTIL.FN_GET_GNFD_CLSF_SE2(T1.EMPNO, (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'1231', T1.EMPL_SE) 	AS CLSF_CODE 			/* 전년도말기준 직급 */
+	                , PKG_SAL_UTIL.FN_GET_SRCLS2(T1.EMPNO, (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'1231', T1.EMPL_SE)			AS SRCLS 				/* 전년도말기준 호봉 */
+                    , NVL(SUM(BSLRY), 0)                                                                               	AS BSLRY 				/* 기본급 */
+                    , NVL(SUM(CNSTRC_ALLWNC), 0)                                                                       	AS CNSTRC_ALLWNC 		/* 건설수당 */
+                    , NVL(SUM(YRYC_ALLWNC), 0)                                                                         	AS YRYC_ALLWNC 			/* 연차수당 */
+                    , NVL(SUM(TRTMNT_ALLWNC), 0)                                                                       	AS TRTMNT_ALLWNC 		/* 대우수당 */
+                    , NVL(SUM(TIME__ELSE_ALLWNC), 0)                                                                   	AS TIME__ELSE_ALLWNC	/* 시간외수당 */
+                    , NVL(SUM(RESTDE_ALLWNC), 0)                                                                       	AS RESTDE_ALLWNC 		/* 휴일수당 */
+                    , NVL(SUM(INORG_CNWK_ALLWNC), 0)                                                                   	AS INORG_CNWK_ALLWNC 	/* 장기근속수당 */
+                    , NVL(SUM(TCHNLGY_ALLWNC), 0)                                                                      	AS TCHNLGY_ALLWNC 		/* 기술수당 */
+                    , NVL(SUM(MLSV_SBSIDY), 0)                                                                         	AS MLSV_SBSIDY 			/* 급식보조비 */
+                    , NVL(SUM(RSPOFC_SBSIDY), 0)                                                                       	AS RSPOFC_SBSIDY 		/* 직책보조비 */
+                    , NVL(SUM(TRNSPORT_SBSIDY), 0)                                                                     	AS TRNSPORT_SBSIDY 		/* 교통보조비 */
+                    , NVL(SUM(SPCIFY_JOB_EXC), 0)                                                                      	AS SPCIFY_JOB_EXC 		/* 특정업무 */
+                    , NVL(SUM(SPCL_JOB_ALLWNC), 0)                                                                     	AS SPCL_JOB_ALLWNC 		/* 특수업무 */
+                    , NVL(SUM(DRV_ALLWNC), 0)                                                                          	AS DRV_ALLWNC 			/* 운전수당 */
+                    , NVL(SUM(RISK_ALLWNC), 0)                                                                         	AS RISK_ALLWNC 			/* 위험수당 */
+	             FROM TBSAL_MT_SALARY_PYMNT T1
+	            WHERE PYMNT_DE LIKE (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'%' 	/* 전년도 */
+	              AND CLOS_AT     = '1'
+	         GROUP BY EMPNO
+	                , EMPL_SE
+	         ORDER BY EMPL_SE
+			)
+             SELECT MIN(T1.EMPL_SE) 																					AS EMPL_SE 				/* 사원구분 */
+                  , T1.CLSF_CODE 																						AS CLSF_CODE			/* 직급코드 */
+                  , COUNT(1)                           																	AS CNT 					/* 인원수 */
+                  , ROUND(AVG(TO_NUMBER(T1.SRCLS)), 1) 																	AS SRCLS 				/* 평균호봉(과년도) */
+    		      
+                  , NVL(SUM(T1.BSLRY), 0)                                                                               AS BSLRY 				/* 기본급 */
+                  , NVL(SUM(T1.CNSTRC_ALLWNC), 0)                                                                       AS CNSTRC_ALLWNC 		/* 건설수당 */
+                  , NVL(SUM(T1.YRYC_ALLWNC), 0)                                                                         AS YRYC_ALLWNC 			/* 연차수당 */
+                  , NVL(SUM(T1.TRTMNT_ALLWNC), 0)                                                                       AS TRTMNT_ALLWNC 		/* 대우수당 */
+                  , NVL(SUM(T1.TIME__ELSE_ALLWNC), 0)                                                                   AS TIME__ELSE_ALLWNC 	/* 시간외수당 */
+                  , NVL(SUM(T1.RESTDE_ALLWNC), 0)                                                                       AS RESTDE_ALLWNC 		/* 휴일수당 */
+                  , NVL(SUM(T1.INORG_CNWK_ALLWNC), 0)                                                                   AS INORG_CNWK_ALLWNC 	/* 장기근속수당 */
+                  , NVL(SUM(T1.TCHNLGY_ALLWNC), 0)                                                                      AS TCHNLGY_ALLWNC 		/* 기술수당 */
+                  , NVL(SUM(T1.MLSV_SBSIDY), 0)                                                                         AS MLSV_SBSIDY 			/* 급식보조비 */
+                  , NVL(SUM(T1.RSPOFC_SBSIDY), 0)                                                                       AS RSPOFC_SBSIDY 		/* 직책보조비 */
+                  , NVL(SUM(T1.TRNSPORT_SBSIDY), 0)                                                                     AS TRNSPORT_SBSIDY 		/* 교통보조비 */
+                  , NVL(SUM(T1.SPCIFY_JOB_EXC), 0)                                                                      AS SPCIFY_JOB_EXC 		/* 특정업무 */
+                  , NVL(SUM(T1.SPCL_JOB_ALLWNC), 0) + NVL(SUM(T1.DRV_ALLWNC), 0)		+ NVL(SUM(T1.RISK_ALLWNC), 0)   AS SPCL_JOB_ALLWNC 		/* 특수업무, 운전수당, 위험수당 */
+                  , NVL(SUM(T1.BSLRY), 0) 			+ NVL(SUM(T1.CNSTRC_ALLWNC), 0) 	+ NVL(SUM(T1.YRYC_ALLWNC), 0) + 
+                    NVL(SUM(T1.TRTMNT_ALLWNC), 0) 	+ NVL(SUM(T1.TIME__ELSE_ALLWNC), 0)	+ NVL(SUM(T1.RESTDE_ALLWNC), 0) + 
+                    NVL(SUM(T1.INORG_CNWK_ALLWNC),0)+ NVL(SUM(T1.TCHNLGY_ALLWNC), 0) 	+ NVL(SUM(T1.MLSV_SBSIDY), 0) +
+                    NVL(SUM(T1.RSPOFC_SBSIDY), 0) 	+ NVL(SUM(T1.TRNSPORT_SBSIDY), 0) 	+ NVL(SUM(T1.SPCIFY_JOB_EXC), 0) +
+                    NVL(SUM(T1.SPCL_JOB_ALLWNC), 0) + NVL(SUM(T1.DRV_ALLWNC), 0) 		+ NVL(SUM(T1.RISK_ALLWNC), 0) 	AS TOT_AMT 				/* 총임금(과년도) */
+
+					/* 6급직원은 신입사원 임금이므로 곱하기 2를 함 */
+                  , ROUND(AVG(TO_NUMBER(T1.SRCLS) + 1), 0)                                                              AS AFT_SRCLS 			/* 평균호봉(당해년도) */
+                  , NVL(DECODE(T1.CLSF_CODE, 	'06', SUM(T1.BSLRY)*2,				SUM(T1.BSLRY)), 0)              	AS BSLRY2 				/* 기본급 */
+                  , NVL(DECODE(T1.CLSF_CODE, 	'06', SUM(T1.CNSTRC_ALLWNC)*2, 		SUM(T1.CNSTRC_ALLWNC)), 0)      	AS CNSTRC_ALLWNC2 		/* 건설수당 */
+                  , NVL(SUM(T1.YRYC_ALLWNC), 0)         																AS YRYC_ALLWNC2 		/* 연차수당 */
+                  , NVL(DECODE(T1.CLSF_CODE, 	'06', SUM(T1.TRTMNT_ALLWNC)*2, 		SUM(T1.TRTMNT_ALLWNC)), 0)      	AS TRTMNT_ALLWNC2 		/* 대우수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.TIME__ELSE_ALLWNC)*2,	SUM(T1.TIME__ELSE_ALLWNC)), 0) 		AS TIME__ELSE_ALLWNC2 	/* 시간외수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.RESTDE_ALLWNC)*2, 		SUM(T1.RESTDE_ALLWNC)), 0) 			AS RESTDE_ALLWNC2 		/* 휴일수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.INORG_CNWK_ALLWNC)*2, 	SUM(T1.INORG_CNWK_ALLWNC)), 0) 		AS INORG_CNWK_ALLWNC2 	/* 장기근속수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.TCHNLGY_ALLWNC)*2, 	SUM(T1.TCHNLGY_ALLWNC)), 0) 		AS TCHNLGY_ALLWNC2 		/* 기술수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.MLSV_SBSIDY)*2, 		SUM(T1.MLSV_SBSIDY)), 0) 			AS MLSV_SBSIDY2			/* 급식보조비 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.RSPOFC_SBSIDY)*2, 		SUM(T1.RSPOFC_SBSIDY)), 0) 			AS RSPOFC_SBSIDY2 		/* 직책보조비 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.TRNSPORT_SBSIDY)*2, 	SUM(T1.TRNSPORT_SBSIDY)), 0) 		AS TRNSPORT_SBSIDY2		/* 교통보조비 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.SPCIFY_JOB_EXC)*2, 	SUM(T1.SPCIFY_JOB_EXC)), 0) 		AS SPCIFY_JOB_EXC2 		/* 특정업무 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', (SUM(T1.SPCL_JOB_ALLWNC)*2 	+ SUM(T1.DRV_ALLWNC)*2			+ SUM(T1.RISK_ALLWNC)*2),
+                  									  (SUM(T1.SPCIFY_JOB_EXC)		+ SUM(T1.DRV_ALLWNC) 			+ SUM(T1.RISK_ALLWNC))), 0) AS SPCL_JOB_ALLWNC2		/* 특수업무, 운전수당, 위험수당 */
+                  , NVL(DECODE(T1.CLSF_CODE, 	'06', (SUM(T1.BSLRY)*2 				+ SUM(T1.CNSTRC_ALLWNC)*2 		+ SUM(T1.YRYC_ALLWNC) 	+ 
+                  									   SUM(T1.TRTMNT_ALLWNC)*2 		+ SUM(T1.TIME__ELSE_ALLWNC)*2	+ SUM(T1.RESTDE_ALLWNC)*2 + 
+                    								   SUM(T1.INORG_CNWK_ALLWNC)*2	+ SUM(T1.TCHNLGY_ALLWNC)*2 		+ SUM(T1.MLSV_SBSIDY)*2	+
+                    								   SUM(T1.RSPOFC_SBSIDY)*2 		+ SUM(T1.TRNSPORT_SBSIDY)*2 	+ SUM(T1.SPCIFY_JOB_EXC)*2+
+                    								   SUM(T1.SPCL_JOB_ALLWNC)*2	+ SUM(T1.DRV_ALLWNC)*2 			+ SUM(T1.RISK_ALLWNC)*2),
+                                                      (SUM(T1.BSLRY) 				+ SUM(T1.CNSTRC_ALLWNC) 	+ SUM(T1.YRYC_ALLWNC) 	+ 
+                                                       SUM(T1.TRTMNT_ALLWNC) 		+ SUM(T1.TIME__ELSE_ALLWNC)	+ SUM(T1.RESTDE_ALLWNC) + 
+                                                       SUM(T1.INORG_CNWK_ALLWNC)	+ SUM(T1.TCHNLGY_ALLWNC) 	+ SUM(T1.MLSV_SBSIDY)	+
+                                                       SUM(T1.RSPOFC_SBSIDY) 		+ SUM(T1.TRNSPORT_SBSIDY) 	+ SUM(T1.SPCIFY_JOB_EXC)+
+                                                       SUM(T1.SPCL_JOB_ALLWNC) 		+ SUM(T1.DRV_ALLWNC) 		+ SUM(T1.RISK_ALLWNC))), 0) 	AS TOT_AMT2				/* 총임금(과년도) */
+               FROM YR_SAL_T T1
+                  INNER JOIN TBHRM_HR_MASTR T2
+                          ON T1.EMPNO = T2.EMPNO
+              WHERE (
+                         T2.RETIRE_DE IS NULL
+                      OR T2.RETIRE_DE      >= (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'1231'
+                    )
+                    /* 퇴사자제외 */
+                AND T1.EMPL_SE IN ('001', '002', '003')
+           GROUP BY T1.CLSF_CODE
+           ORDER BY T1.CLSF_CODE
+		]]>
+    </select>
+
+    <!-- 직급별 평균 인상율 계산 (과년도 직급별 임금 상세) -->
+    <select id="SAL030107DAO.clsfAvgIncDtls2_DTL" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    <![CDATA[
+		  SELECT RANK() OVER(PARTITION BY CLSF_CODE ORDER BY CLSF_CODE, EMPL_SE, EMPNM) AS SEQ
+		       , EMPNO 						/* 사번 */
+		       , EMPNM 						/* 사원명 */
+		       , EMPL_SE 					/* 사원구분 */
+		       , CLSF_CODE 					/* 전년도말기준 직급 */
+		       , SRCLS 						/* 전년도말기준 호봉 */
+		       , BSLRY 						/* 기본급 */
+		       , CNSTRC_ALLWNC 				/* 건설수당 */
+		       , YRYC_ALLWNC 				/* 연차수당 */
+		       , TRTMNT_ALLWNC 				/* 대우수당 */
+		       , TIME__ELSE_ALLWNC 			/* 시간외수당 */
+		       , RESTDE_ALLWNC 				/* 휴일수당 */
+		       , INORG_CNWK_ALLWNC 			/* 장기근속수당 */
+		       , TCHNLGY_ALLWNC 			/* 기술수당 */
+		       , MLSV_SBSIDY 				/* 급식보조비 */
+		       , RSPOFC_SBSIDY 				/* 직책보조비 */
+		       , TRNSPORT_SBSIDY 			/* 교통보조비 */
+		       , SPCIFY_JOB_EXC 			/* 특정업무 */
+		       , SPCL_JOB_ALLWNC 			/* 특수업무 */
+		       , TOT_AMT 					/* 총임금(과년도) */
+		    FROM (
+		            SELECT T1.EMPNO 																					   	AS EMPNO				/* 사번 */
+		                 , MAX(T1.EMPNM) 																				  	AS EMPNM 				/* 사원명 */
+		                 , DECODE(T1.EMPL_SE, '003', '001', T1.EMPL_SE)                                                    	AS EMPL_SE 				/* 사원구분 */
+		                 , PKG_SAL_UTIL.FN_GET_GNFD_CLSF_SE2(T1.EMPNO, (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'1231', T1.EMPL_SE)	AS CLSF_CODE 			/* 전년도말기준 직급 */
+		                 , PKG_SAL_UTIL.FN_GET_SRCLS2(T1.EMPNO, (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'1231', T1.EMPL_SE)       	AS SRCLS 				/* 전년도말기준 호봉 */
+		                 , NVL(SUM(T1.BSLRY), 0)                                                                           	AS BSLRY 				/* 기본급 */
+		                 , NVL(SUM(T1.CNSTRC_ALLWNC), 0)                                                                   	AS CNSTRC_ALLWNC 		/* 건설수당 */
+		                 , NVL(SUM(T1.YRYC_ALLWNC), 0)                                                                     	AS YRYC_ALLWNC 			/* 연차수당 */
+		                 , NVL(SUM(T1.TRTMNT_ALLWNC), 0)                                                                   	AS TRTMNT_ALLWNC 		/* 대우수당 */
+		                 , NVL(SUM(T1.TIME__ELSE_ALLWNC), 0)                                                               	AS TIME__ELSE_ALLWNC 	/* 시간외수당 */
+		                 , NVL(SUM(T1.RESTDE_ALLWNC), 0)                                                                   	AS RESTDE_ALLWNC 		/* 휴일수당 */
+		                 , NVL(SUM(T1.INORG_CNWK_ALLWNC), 0)                                                               	AS INORG_CNWK_ALLWNC 	/* 장기근속수당 */
+		                 , NVL(SUM(T1.TCHNLGY_ALLWNC), 0)                                                                  	AS TCHNLGY_ALLWNC 		/* 기술수당 */
+		                 , NVL(SUM(T1.MLSV_SBSIDY), 0)                                                                     	AS MLSV_SBSIDY 			/* 급식보조비 */
+		                 , NVL(SUM(T1.RSPOFC_SBSIDY), 0)                                                                   	AS RSPOFC_SBSIDY 		/* 직책보조비 */
+		                 , NVL(SUM(T1.TRNSPORT_SBSIDY), 0)                                                                 	AS TRNSPORT_SBSIDY 		/* 교통보조비 */
+		                 , NVL(SUM(T1.SPCIFY_JOB_EXC), 0)                                                                  	AS SPCIFY_JOB_EXC 		/* 특정업무 */
+		                 , NVL(SUM(T1.SPCL_JOB_ALLWNC), 0) 	+ NVL(SUM(T1.DRV_ALLWNC), 0)		+ NVL(SUM(T1.RISK_ALLWNC), 0)   AS SPCL_JOB_ALLWNC 	/* 특수업무, 운전수당, 위험수당 */
+		                 , NVL(SUM(T1.BSLRY), 0) 			+ NVL(SUM(T1.CNSTRC_ALLWNC), 0) 	+ NVL(SUM(T1.YRYC_ALLWNC), 0) + 
+		                   NVL(SUM(T1.TRTMNT_ALLWNC), 0) 	+ NVL(SUM(T1.TIME__ELSE_ALLWNC), 0)	+ NVL(SUM(T1.RESTDE_ALLWNC), 0) + 
+		                   NVL(SUM(T1.INORG_CNWK_ALLWNC),0)	+ NVL(SUM(T1.TCHNLGY_ALLWNC), 0) 	+ NVL(SUM(T1.MLSV_SBSIDY), 0) +
+		                   NVL(SUM(T1.RSPOFC_SBSIDY), 0) 	+ NVL(SUM(T1.TRNSPORT_SBSIDY), 0) 	+ NVL(SUM(T1.SPCIFY_JOB_EXC), 0) +
+		                   NVL(SUM(T1.SPCL_JOB_ALLWNC), 0) 	+ NVL(SUM(T1.DRV_ALLWNC), 0) 		+ NVL(SUM(T1.RISK_ALLWNC), 0) 	AS TOT_AMT 			/* 총임금(과년도) */
+		              FROM TBSAL_MT_SALARY_PYMNT T1
+		                 , TBHRM_HR_MASTR T2
+		             WHERE T1.PYMNT_DE LIKE (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'%' /* 전년도 */
+		               AND T1.CLOS_AT     = '1'
+		               AND T1.EMPNO       = T2.EMPNO
+		               AND T1.EMPL_SE IN ('001', '002', '003')
+		               AND
+		                   (
+		                        T2.RETIRE_DE IS NULL
+		                     OR T2.RETIRE_DE      >= (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'1231'
+		                   )
+		          GROUP BY T1.EMPNO
+		                 , T1.EMPL_SE
+		         )
+		ORDER BY CLSF_CODE
+		       , EMPL_SE
+		       , EMPNM
+		]]>
+    </select>
+
+    <!-- 직급별 평균 인상율 계산 (자연증가분, 인상분) -->
+    <select id="SAL030107DAO.clsfAvgIncDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    <![CDATA[
+		WITH YR_SAL_T AS
+		(
+           SELECT EMPNO 																													/* 사번 */
+                , MAX(EMPNM) 																					   	AS EMPNM				/* 사원명 */
+                , MIN(EMPL_SE)                                                                                     	AS EMPL_SE 				/* 사원구분 */
+                , PKG_SAL_UTIL.FN_GET_GNFD_CLSF_SE2(T1.EMPNO, (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'1231', T1.EMPL_SE)  AS CLSF_CODE 			/* 전년도말기준 직급 */
+                , PKG_SAL_UTIL.FN_GET_SRCLS2(T1.EMPNO, (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'1231', T1.EMPL_SE)			AS SRCLS 				/* 전년도말기준 호봉 */
+                , NVL(SUM(BSLRY), 0)                                                                               	AS BSLRY 				/* 기본급 */
+                , NVL(SUM(CNSTRC_ALLWNC), 0)                                                                       	AS CNSTRC_ALLWNC 		/* 건설수당 */
+                , NVL(SUM(YRYC_ALLWNC), 0)                                                                         	AS YRYC_ALLWNC 			/* 연차수당 */
+                , NVL(SUM(TRTMNT_ALLWNC), 0)                                                                       	AS TRTMNT_ALLWNC 		/* 대우수당 */
+                , NVL(SUM(TIME__ELSE_ALLWNC), 0)                                                                   	AS TIME__ELSE_ALLWNC	/* 시간외수당 */
+                , NVL(SUM(RESTDE_ALLWNC), 0)                                                                       	AS RESTDE_ALLWNC 		/* 휴일수당 */
+                , NVL(SUM(INORG_CNWK_ALLWNC), 0)                                                                   	AS INORG_CNWK_ALLWNC 	/* 장기근속수당 */
+                , NVL(SUM(TCHNLGY_ALLWNC), 0)                                                                      	AS TCHNLGY_ALLWNC 		/* 기술수당 */
+                , NVL(SUM(MLSV_SBSIDY), 0)                                                                         	AS MLSV_SBSIDY 			/* 급식보조비 */
+                , NVL(SUM(RSPOFC_SBSIDY), 0)                                                                       	AS RSPOFC_SBSIDY 		/* 직책보조비 */
+                , NVL(SUM(TRNSPORT_SBSIDY), 0)                                                                     	AS TRNSPORT_SBSIDY 		/* 교통보조비 */
+                , NVL(SUM(SPCIFY_JOB_EXC), 0)                                                                      	AS SPCIFY_JOB_EXC 		/* 특정업무 */
+                , NVL(SUM(SPCL_JOB_ALLWNC), 0)                                                                     	AS SPCL_JOB_ALLWNC 		/* 특수업무 */
+                , NVL(SUM(DRV_ALLWNC), 0)                                                                          	AS DRV_ALLWNC 			/* 운전수당 */
+                , NVL(SUM(RISK_ALLWNC), 0)                                                                         	AS RISK_ALLWNC 			/* 위험수당 */
+             FROM TBSAL_MT_SALARY_PYMNT T1
+            WHERE PYMNT_DE LIKE (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'%' 	/* 전년도 */
+              AND CLOS_AT     = '1'
+         GROUP BY EMPNO
+                , EMPL_SE
+         ORDER BY EMPL_SE
+		)
+		, YR_SAL_T2 AS
+		(
+           SELECT MIN(T1.EMPL_SE) 																						AS EMPL_SE 				/* 사원구분 */
+                  , T1.CLSF_CODE 																						AS CLSF_CODE			/* 직급코드 */
+                  , COUNT(1)                           																	AS CNT 					/* 인원수 */
+                  , TRUNC(AVG(TO_NUMBER(T1.SRCLS)), 0)		 															AS SRCLS 				/* 평균호봉(과년도) */
+                  , TRUNC(AVG(TO_NUMBER(T1.SRCLS)), 0) + 1                                                              AS AFT_SRCLS 			/* 평균호봉(당해년도) */
+
+					/* 6급직원은 신입사원 임금이므로 곱하기 2를 함 */
+                  , NVL(DECODE(T1.CLSF_CODE, 	'06', SUM(T1.BSLRY)*2,				SUM(T1.BSLRY)), 0)              	AS BSLRY 				/* 기본급 */
+                  , NVL(DECODE(T1.CLSF_CODE, 	'06', SUM(T1.CNSTRC_ALLWNC)*2, 		SUM(T1.CNSTRC_ALLWNC)), 0)      	AS CNSTRC_ALLWNC 		/* 건설수당 */
+                  , NVL(SUM(T1.YRYC_ALLWNC), 0)         																AS YRYC_ALLWNC 			/* 연차수당 */
+                  , NVL(DECODE(T1.CLSF_CODE, 	'06', SUM(T1.TRTMNT_ALLWNC)*2, 		SUM(T1.TRTMNT_ALLWNC)), 0)      	AS TRTMNT_ALLWNC 		/* 대우수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.TIME__ELSE_ALLWNC)*2,	SUM(T1.TIME__ELSE_ALLWNC)), 0) 		AS TIME__ELSE_ALLWNC 	/* 시간외수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.RESTDE_ALLWNC)*2, 		SUM(T1.RESTDE_ALLWNC)), 0) 			AS RESTDE_ALLWNC 		/* 휴일수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.INORG_CNWK_ALLWNC)*2, 	SUM(T1.INORG_CNWK_ALLWNC)), 0) 		AS INORG_CNWK_ALLWNC 	/* 장기근속수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.TCHNLGY_ALLWNC)*2, 	SUM(T1.TCHNLGY_ALLWNC)), 0) 		AS TCHNLGY_ALLWNC 		/* 기술수당 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.MLSV_SBSIDY)*2, 		SUM(T1.MLSV_SBSIDY)), 0) 			AS MLSV_SBSIDY			/* 급식보조비 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.RSPOFC_SBSIDY)*2, 		SUM(T1.RSPOFC_SBSIDY)), 0) 			AS RSPOFC_SBSIDY 		/* 직책보조비 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.TRNSPORT_SBSIDY)*2, 	SUM(T1.TRNSPORT_SBSIDY)), 0) 		AS TRNSPORT_SBSIDY		/* 교통보조비 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', SUM(T1.SPCIFY_JOB_EXC)*2, 	SUM(T1.SPCIFY_JOB_EXC)), 0) 		AS SPCIFY_JOB_EXC 		/* 특정업무 */
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', (SUM(T1.SPCL_JOB_ALLWNC)*2 	+ SUM(T1.DRV_ALLWNC)*2			+ SUM(T1.RISK_ALLWNC)*2),
+                  									  (SUM(T1.SPCIFY_JOB_EXC)		+ SUM(T1.DRV_ALLWNC) 			+ SUM(T1.RISK_ALLWNC))), 0) 	AS SPCL_JOB_ALLWNC	/* 특수업무, 운전수당, 위험수당 */
+                  , NVL(DECODE(T1.CLSF_CODE, 	'06', (SUM(T1.BSLRY)*2 				+ SUM(T1.CNSTRC_ALLWNC)*2 		+ SUM(T1.YRYC_ALLWNC) 		+ 
+                  									   SUM(T1.TRTMNT_ALLWNC)*2 		+ SUM(T1.TIME__ELSE_ALLWNC)*2	+ SUM(T1.RESTDE_ALLWNC)*2 	+ 
+                    								   SUM(T1.INORG_CNWK_ALLWNC)*2	+ SUM(T1.TCHNLGY_ALLWNC)*2 		+ SUM(T1.MLSV_SBSIDY)*2		+
+                    								   SUM(T1.RSPOFC_SBSIDY)*2 		+ SUM(T1.TRNSPORT_SBSIDY)*2 	+ SUM(T1.SPCIFY_JOB_EXC)*2	+
+                    								   SUM(T1.SPCL_JOB_ALLWNC)*2	+ SUM(T1.DRV_ALLWNC)*2 			+ SUM(T1.RISK_ALLWNC)*2),
+                                                      (SUM(T1.BSLRY) 				+ SUM(T1.CNSTRC_ALLWNC) 		+ SUM(T1.YRYC_ALLWNC) 		+ 
+                                                       SUM(T1.TRTMNT_ALLWNC) 		+ SUM(T1.TIME__ELSE_ALLWNC)		+ SUM(T1.RESTDE_ALLWNC) 	+ 
+                                                       SUM(T1.INORG_CNWK_ALLWNC)	+ SUM(T1.TCHNLGY_ALLWNC) 		+ SUM(T1.MLSV_SBSIDY)		+
+                                                       SUM(T1.RSPOFC_SBSIDY) 		+ SUM(T1.TRNSPORT_SBSIDY) 		+ SUM(T1.SPCIFY_JOB_EXC)	+
+                                                       SUM(T1.SPCL_JOB_ALLWNC) 		+ SUM(T1.DRV_ALLWNC) 			+ SUM(T1.RISK_ALLWNC))), 0)		AS TOT_AMT			/* 총임금(과년도) */
+
+                  , NVL(DECODE(T1.CLSF_CODE,	'06', (SUM(T1.INORG_CNWK_ALLWNC)*2	+ SUM(T1.TCHNLGY_ALLWNC)*2 		+ SUM(T1.MLSV_SBSIDY)*2		+
+                     								   SUM(T1.RSPOFC_SBSIDY)*2 		+ SUM(T1.TRNSPORT_SBSIDY)*2 	+ SUM(T1.SPCIFY_JOB_EXC)*2	+
+                     								   SUM(T1.SPCL_JOB_ALLWNC)*2 	+ SUM(T1.DRV_ALLWNC)*2 			+ SUM(T1.RISK_ALLWNC)*2),
+                     								  (SUM(T1.INORG_CNWK_ALLWNC)	+ SUM(T1.TCHNLGY_ALLWNC) 		+ SUM(T1.MLSV_SBSIDY) 		+
+                     								   SUM(T1.RSPOFC_SBSIDY) 		+ SUM(T1.TRNSPORT_SBSIDY) 		+ SUM(T1.SPCIFY_JOB_EXC) 	+
+                     								   SUM(T1.SPCL_JOB_ALLWNC) 		+ SUM(T1.DRV_ALLWNC) 			+ SUM(T1.RISK_ALLWNC))), 0) 	AS ETC_AMT 				/* 기타고정급 */
+                  	/* 기타고정급 = 장기근속수당 + 기술수당 + 급식보조비 + 직책보조비 + 교통보조비 + 특정업무 + 특수업무 + 운전수당 + 위험수당 */
+             FROM YR_SAL_T T1
+                INNER JOIN TBHRM_HR_MASTR T2
+                        ON T1.EMPNO = T2.EMPNO
+            WHERE (
+                          T2.RETIRE_DE IS NULL
+                       OR T2.RETIRE_DE      > #PYMNT_DE2#
+                  )
+                  /* 퇴사자제외 */
+              AND T1.EMPL_SE IN ('001', '002', '003')
+         GROUP BY T1.CLSF_CODE
+         ORDER BY T1.CLSF_CODE
+		)
+		, YR_SAL_T3 AS
+		(
+           SELECT T1.EMPL_SE 			/* 사원구분 */
+                , T1.CLSF_CODE 			/* 직급코드 */
+                , T1.CNT 				/* 인원수 */
+                , T1.SRCLS 				/* 평균호봉(과년도) */
+                , T1.AFT_SRCLS 			/* 평규호봉(당해년도) */
+                , T1.BSLRY 				/* 기본급 */
+                , T1.CNSTRC_ALLWNC 		/* 건설수당 */
+                , T1.TIME__ELSE_ALLWNC 	/* 시간외수당 */
+                , T1.YRYC_ALLWNC 		/* 연차수당 */
+                , T1.TRTMNT_ALLWNC 		/* 대우수당 */
+                , T1.RESTDE_ALLWNC 		/* 휴일수당 */
+                , T1.INORG_CNWK_ALLWNC	/* 장기근속수당 */
+                , T1.TCHNLGY_ALLWNC 	/* 기술수당 */
+                , T1.MLSV_SBSIDY 		/* 급식보조비 */
+                , T1.RSPOFC_SBSIDY 		/* 직책보조비 */
+                , T1.TRNSPORT_SBSIDY 	/* 교통보조비 */
+                , T1.SPCIFY_JOB_EXC 	/* 특정업무 */
+                , T1.SPCL_JOB_ALLWNC 	/* 특수업무 */
+                , T1.TOT_AMT			/* 총임금(과년도) */
+                , T1.ETC_AMT			/* 기타고정급 */
+                , (T2.BASS_AMOUNT - T3.BASS_AMOUNT) * 12 * T1.CNT                                           	AS INC_BSLRY 				/* 기본급증가액 */
+                , TRUNC(((T2.BASS_AMOUNT - T3.BASS_AMOUNT) * 12 * T1.CNT) * 0.3, 0)     						AS INC_CNSTRC_ALLWNC 		/* 건설수당증가액 */
+                , TRUNC(((T2.BASS_AMOUNT - T3.BASS_AMOUNT) * 12 * T1.CNT) * T1.TIME__ELSE_ALLWNC / T1.BSLRY, 0) AS INC_TIME__ELSE_ALLWNC 	/* 시간외수당증가액 */
+                , TRUNC(((T2.BASS_AMOUNT - T3.BASS_AMOUNT) * 12 * T1.CNT) * T1.YRYC_ALLWNC / T1.BSLRY, 0)       AS INC_YRYC_ALLWNC 			/* 연차수당증가액 */
+             FROM YR_SAL_T2 T1
+                INNER JOIN
+                           (
+                              SELECT EMPL_SE
+                                   , CLSF_CODE
+                                   , SRCLS
+                                   , BASS_AMOUNT
+                                FROM TBSAL_SLARY_TABLE
+                               WHERE APPLC_DE =
+                                     (
+                                        SELECT MAX(APPLC_DE)
+                                          FROM TBSAL_SLARY_TABLE
+                                         WHERE APPLC_DE LIKE (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'%' 	/* 작년봉급테이블 */
+                                     )
+                           )
+                           T2
+                        ON T1.EMPL_SE   = T2.EMPL_SE
+                       AND T1.CLSF_CODE = T2.CLSF_CODE
+                       AND T1.AFT_SRCLS = T2.SRCLS
+                INNER JOIN
+                           (
+                              SELECT EMPL_SE
+                                   , CLSF_CODE
+                                   , SRCLS
+                                   , BASS_AMOUNT
+                                FROM TBSAL_SLARY_TABLE
+                               WHERE APPLC_DE =
+                                     (
+                                        SELECT MAX(APPLC_DE)
+                                          FROM TBSAL_SLARY_TABLE
+                                         WHERE APPLC_DE LIKE (SUBSTR(#PYMNT_DE2#, 1, 4) - 1)||'%' 	/* 작년봉급테이블 */
+                                     )
+                           )
+                           T3
+                        ON T1.EMPL_SE   = T3.EMPL_SE
+                       AND T1.CLSF_CODE = T3.CLSF_CODE
+                       AND T1.SRCLS     = T3.SRCLS
+         ORDER BY T1.EMPL_SE
+                , T1.CLSF_CODE
+		)
+           SELECT CLSF_CODE 				/* 직급코드 */
+                , CNT 						/* 인원수 */
+                , SRCLS 					/* 평균호봉(과년도) */
+                , AFT_SRCLS 				/* 평균호봉(당해년도) */
+                , TOT_AMT 					/* 총임금(과년도) */
+                , BSLRY 					/* 기본급 */
+                , CNSTRC_ALLWNC 			/* 건설수당 */
+                , TIME__ELSE_ALLWNC 		/* 시간외수당 */
+                , YRYC_ALLWNC 				/* 연차수당 */
+                , ETC_AMT 					/* 기타고정급 */
+                , RESTDE_ALLWNC 			/* 휴일수당 */
+                , INORG_CNWK_ALLWNC 		/* 장기근속수당 */
+                , TCHNLGY_ALLWNC 			/* 기술수당 */
+                , MLSV_SBSIDY 				/* 급식보조비 */
+                , RSPOFC_SBSIDY 			/* 직책보조비 */
+                , TRNSPORT_SBSIDY 			/* 교통보조비 */
+                , SPCIFY_JOB_EXC 			/* 특정업무 */
+                , SPCL_JOB_ALLWNC 			/* 특수업무 */
+                , INC_BSLRY 				/* 기본급증가액 */
+                , INC_CNSTRC_ALLWNC 		/* 건설수당증가액 */
+                , INC_TIME__ELSE_ALLWNC 	/* 시간외수당증가액 */
+                , INC_YRYC_ALLWNC 			/* 연차수당증가액 */
+                , INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC 									AS INC_SRCLS_AMT 			/* 승급인상범위액 */
+                  /* 승급인상범위액 = 기본급증가액 + 건설수당증가액 + 시간외수당증가액 + 연차수당증가액 */
+                , ROUND((INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC) / TOT_AMT * 100, 2)  		AS INC_SRCLS_RT 			/* 승급인상률 */
+                  /* 승급인상률 = ROUND(승급인상범위액 = 기본급증가액 + 건설수당증가액 + 시간외수당증가액 + 연차수당증가액 / 총임금(과년도) * 100, 2) */
+                , BSLRY 				+ INC_BSLRY                                                                         AS SUM_BSLRY 				/* 기본급(과년도+증가액) */
+                , CNSTRC_ALLWNC 		+ INC_CNSTRC_ALLWNC                                                                 AS SUM_CNSTRC_ALLWNC 		/* 건설수당(과년도+증가액) */
+                , TIME__ELSE_ALLWNC 	+ INC_TIME__ELSE_ALLWNC                                                             AS SUM_TIME__ELSE_ALLWNC 	/* 시간외수당(과년도+증가액) */
+                , YRYC_ALLWNC 			+ INC_YRYC_ALLWNC                                                                   AS SUM_YRYC_ALLWNC 			/* 연차수당(과년도+증가액) */
+                , ROUND(TOT_AMT * NVL(#UP_RATE#, 0) / 100, 0)                                                            	AS INC_AMT 					/* 인상률범위액 */
+                , ROUND( ROUND(TOT_AMT * NVL(#UP_RATE#, 0) / 100, 0) / 
+                              (BSLRY + INC_BSLRY + CNSTRC_ALLWNC + INC_CNSTRC_ALLWNC + TIME__ELSE_ALLWNC + 
+                               INC_TIME__ELSE_ALLWNC + YRYC_ALLWNC + INC_YRYC_ALLWNC) * 100, 2) 							AS BASE_INC_RT 				/* 기본급 인상률 */
+                               
+                , INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC + 
+                  ROUND(TOT_AMT * NVL(#UP_RATE#, 0) / 100, 0)                                 								AS INC_TOT_AMT 				/* 인상총계 */
+                  /* 인상총계 = 승급인상범위액 + 인상율범위액 */
+                  
+                , ROUND((INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC) / 
+                		  TOT_AMT * 100, 2) + NVL(#UP_RATE#, 0)     														AS INC_TOT_RT 				/* 직급별인상률(승급+인상) */
+                        
+                , INC_BSLRY + INC_CNSTRC_ALLWNC + INC_TIME__ELSE_ALLWNC + INC_YRYC_ALLWNC + 
+                  ROUND(TOT_AMT * NVL(#UP_RATE#, 0) / 100, 0) + TOT_AMT                       								AS AMT 						/* 당해년도 임금총예상 */
+                  /* 당해년도 임금총예상 = 총임금(과년도) + 인상총계 */
+                  
+                , NVL(#UP_RATE#, 0)                                                                                     	AS UP_RATE 					/* 임금 인상률 */
+             FROM YR_SAL_T3
+         ORDER BY CLSF_CODE
+		]]>
+    </select>
+
+	<!-- 인상봉급테이블 삭제 -->
+    <delete id="SAL030107DAO.deleteUpIncrse_Salary_Table" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_INCRSE_SLARY_TABLE
+		 WHERE APPLC_DE = #PYMNT_DE2#
+    </delete> 
+    
+	<!-- 인상연봉정보 삭제 -->
+    <delete id="SAL030107DAO.deleteUpIncrse_Anslry_Info" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_INCRSE_ANSLRY_INFO
+		 WHERE APPLC_DE = #PYMNT_DE2#
+    </delete> 
+    
+    <!-- 인상봉급테이블 생성 -->
+    <insert id="SAL030107DAO.insertUpIncrse_Salary_Table" parameterClass="java.util.HashMap">
+	    <![CDATA[
+			INSERT
+			  INTO TBSAL_INCRSE_SLARY_TABLE
+			       (
+			              APPLC_DE
+			            , EMPL_SE
+			            , CLSF_CODE
+			            , SRCLS
+			            , BASS_AMOUNT
+			            , REGISTER_ID
+			            , REGIST_DT
+			            , UPDUSR_ID
+			            , UPDT_DT
+			       )
+			       WITH SLARY_T1 AS
+			       (
+		              SELECT *
+		                FROM TBSAL_SLARY_TABLE
+		               WHERE APPLC_DE = #PYMNT_DE2#
+			       )
+			     , SLARY_T2 AS
+			       (
+		              SELECT *
+		                FROM TBSAL_SLARY_TABLE
+		               WHERE APPLC_DE =
+		                     (
+	                            SELECT MAX(T2.APPLC_DE)
+	                              FROM SLARY_T1 T1
+	                                 , TBSAL_SLARY_TABLE T2
+	                             WHERE T2.APPLC_DE < T1.APPLC_DE
+		                     )
+			       )
+			  SELECT T1.APPLC_DE
+			       , T1.EMPL_SE
+			       , T1.CLSF_CODE
+			       , T1.SRCLS
+			       , NVL((T1.BASS_AMOUNT - T2.BASS_AMOUNT), 0) AS BASS_AMOUNT
+			       , #S_USER_ID# 	/* 등록자ID */
+			       , SYSDATE 		/* 등록일시 */
+			       , #S_USER_ID# 	/* 수정자ID */
+			       , SYSDATE 		/* 수정일시 */
+			    FROM SLARY_T1 T1
+			       , SLARY_T2 T2
+			   WHERE T1.EMPL_SE   = T2.EMPL_SE(+)
+			     AND T1.CLSF_CODE = T2.CLSF_CODE(+)
+			     AND T1.SRCLS     = T2.SRCLS(+)
+			ORDER BY T1.EMPL_SE
+			       , T1.CLSF_CODE
+			       , T1.SRCLS
+		]]>
+    </insert>
+
+	<!-- 인상연봉정보 생성 -->
+    <insert id="SAL030107DAO.insertUpIncrse_Anslry_Info" parameterClass="java.util.HashMap">
+    	<![CDATA[
+			INSERT
+			  INTO TBSAL_INCRSE_ANSLRY_INFO
+			       (
+			              APPLC_DE
+			            , EMPNO
+			            , DEPT_CODE
+			            , EMPNM
+			            , CLSF_CODE
+			            , BASS_AMOUNT
+			            , ANSLRY_AMOUNT
+			            , PYMNT_SE
+			            , RM
+			            , REGISTER_ID
+			            , REGIST_DT
+			            , UPDUSR_ID
+			            , UPDT_DT
+			       )
+			       WITH SLARY_T1 AS
+			       (
+		              SELECT *
+		                FROM TBSAL_ANSLRY_INFO
+		               WHERE APPLC_DE = #PYMNT_DE2#
+			       )
+			     , SLARY_T2 AS
+			       (
+		              SELECT *
+		                FROM TBSAL_ANSLRY_INFO
+		               WHERE APPLC_DE =
+		                     (
+	                            SELECT MAX(T2.APPLC_DE)
+	                              FROM SLARY_T1 T1
+	                                 , TBSAL_ANSLRY_INFO T2
+	                             WHERE T2.APPLC_DE < T1.APPLC_DE
+		                     )
+			       )
+			  SELECT T1.APPLC_DE
+			       , T1.EMPNO
+			       , T1.DEPT_CODE
+			       , T1.EMPNM
+			       , T1.CLSF_CODE
+			       , T1.BASS_AMOUNT
+			       , TRUNC(NVL((T1.ANSLRY_AMOUNT - T2.ANSLRY_AMOUNT), 0)/12, -1) AS ANSLRY_AMOUNT
+			       , T1.PYMNT_SE
+			       , T1.RM
+			       , #S_USER_ID# 	/* 등록자ID */
+			       , SYSDATE 		/* 등록일시 */
+			       , #S_USER_ID# 	/* 수정자ID */
+			       , SYSDATE 		/* 수정일시 */
+			    FROM SLARY_T1 T1
+			       , SLARY_T2 T2
+			   WHERE T1.EMPNO = T2.EMPNO(+)
+			ORDER BY T1.EMPNO
+		]]>
+    </insert>
+    
+    
+    <!-- 급여인상 지급상세정보 0원 삭제 -->
+    <delete id="SAL030107DAO.deleteUpSalaryPymntD_2_1" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_MT_SALARY_PYMNT
+		 WHERE SALARY_SE = '2'
+		   AND PYMNT_SE  = '2'
+		   AND PYMNT_DE  = #PYMNT_DE#
+		   <![CDATA[
+		   AND RL_RECPT_AMOUNT <= 0
+		   ]]>
+    </delete>  
+    
+    <!-- 급여인상 생성정보 0원 삭제 -->
+    <delete id="SAL030107DAO.deleteUpSalaryPymntD_2_2" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_MT_PYMNT_DTLS
+		 WHERE SALARY_SE = '2'
+		   AND PYMNT_SE  = '2'
+		   AND PYMNT_DE  = #PYMNT_DE#
+		   <![CDATA[
+		   AND PYMNT_AMOUNT <= 0
+		   ]]>
+    </delete> 
+    
+    <!-- 급여인상 공제상세정보 0원 삭제 -->
+    <delete id="SAL030107DAO.deleteUpDdcPymntD_2_1" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_MT_DDC_DTLS
+		 WHERE SALARY_SE = '2'
+		   AND PYMNT_SE  = '2'
+		   AND PYMNT_DE  = #PYMNT_DE#
+		   <![CDATA[
+		   AND DDC_AMOUNT <= 0
+		   ]]>
+    </delete>  
+    
+    
+    <!-- 설명  : 월급여 지급/공제 집계처리 프로시저 (전체) -->
+	<parameterMap id="sp_sal_mt_salary_pymnt_all_param2" class="java.util.HashMap">
+		<parameter property="PYMNT_YM"     		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="SALARY_SE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="PYMNT_DE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="PYMNT_SE"  		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+
+		<parameter property="S_USER_ID"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="OUT_RESULT_CD"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"	jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+	</parameterMap>
+	<procedure id="SAL030107DAO.SPSAL_MT_SALARY_PYMNT_ALL_U2" parameterMap="sp_sal_mt_salary_pymnt_all_param2">
+		{ call SPSAL_MT_SALARY_PYMNT_ALL_U2(?,?,?,?,  ?,?,?) }
+	</procedure>
+</sqlMap>

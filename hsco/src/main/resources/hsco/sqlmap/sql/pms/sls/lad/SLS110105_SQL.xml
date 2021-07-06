@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS110105DAO">	
+	
+    <!-- 쿼리명 : 동적 그리드 해드 날짜 조회
+	설명 : 동적 그리드 해드 날짜 조회 쿼리
+	수정일              수정자  수정내용
+    2016-01-26  이광원  1.시작일부터 종요일까지 전체 월별 일짜 출력으로 변경
+	작성자 : 변승우
+	최초작성일 : 2015.10.16
+	-->
+	<select id="SLS110105DAO.selectHeadDateList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+     <![CDATA[
+		SELECT TO_CHAR(ADD_MONTHS(TO_DATE(#DAY01#, 'YYYYMM'), LEVEL - 1) , 'YYYYMM') AS RQEST_YM
+		FROM DUAL 
+		CONNECT BY MONTHS_BETWEEN(TO_DATE(#DAY02#, 'YYYYMM'), TO_DATE(#DAY01#, 'YYYYMM')) + 1 >= LEVEL 	
+	 ]]> 
+ 	
+ 	<!-- 
+ 	 SELECT 
+				  DISTINCT
+				  TO_CHAR(TO_DATE(RQEST_YM, 'YYYYMM'),'YYYY-MM') RQEST_YM
+		 FROM TBSLS_LAD_DETAIL_INFO T1
+				     , TBSLS_LCNTRCTR T2
+				     , TBSLS_LCNTRCTR_PAY T3
+		 WHERE T1.LAD_CODE = T2.LAD_CODE
+				   AND T1.BLCK = T2.BLCK
+				   AND T1.LOT = T2.LOT
+				   AND T1.LOT_TY = T2.LOT_TY
+				   AND T2.CNTRCTR_NO = T3.CNTRCTR_NO
+				   AND T1.LAD_CODE = #LAD_CODE#
+				   AND TO_CHAR(TO_DATE(DECODE(RQEST_YM,'000000', NULL, RQEST_YM), 'YYYYMM'),'YYYY-MM') BETWEEN #DAY01# AND #DAY02#
+		 ORDER BY RQEST_YM
+ 	-->		 
+    </select>	
+    
+    <!-- 쿼리명 : 토지수납현황 조회
+	설명 : 기간(월)별 토지수납현황 조회
+	  수정일          수정자  수정내용
+	2016-01-26  이광원  1.합계 추가
+	2016-02-01  이상준  1.쿼리수정
+	작성자 : 변승우
+	최초작성일 : 2015.10.16
+	-->
+	<!-- 로우 조회용 -->
+    <select id="SLS110105DAO.selectLadReceiveList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+	<!-- 
+		WITH VI_LN_VOTE_REC
+		  AS (
+		      SELECT x.CNTRCTR_NO		/* 계약자번호 */
+		           , x.PAY_TMLMT		/* 납부기한일 */
+		           , TO_CHAR(TO_DATE(y.RCIV_DE ,'YYYYMMDD'), 'YYYYMM') AS PAY_MONTH   /*  수납일자, 납부기한일 */
+		           , x.PAY_CODE			/* 납부코드 */
+		           , x.PAYAMT			/* 납부금액 */
+		           , y.RCIV_DE			/* 수납일자 */
+		           , DECODE(y.RCIV_DE, NULL, '2', '1') AS RCIV_SE	/*   1:수납,  2:미납 */
+		        FROM TBSLS_LCNTRCTR_PAY x	/* 토지계약자납부 */
+		           , TBSLS_LAD_RCIV_PSTMRK y		/* 토지수납 */
+		       WHERE 1 = 1
+		         AND x.CNTRCTR_NO = y.CNTRCTR_NO(+)
+		         AND x.PAY_NO = y.PAY_NO(+))
+		SELECT a.LAD_CODE
+		     , a.BLCK
+		     , a.LOT
+		     , a.LOT_TY
+			 , a.BLCK || '-' || a.LOT || '-' || a.LOT_TY AS BLT_ALL
+		     , (SELECT LAD_NM
+		          FROM TBSLS_LAD_INFO
+		         WHERE LAD_CODE = a.LAD_CODE
+		       ) AS LAD_NM
+		     , b.PRPOS_SE
+		     , (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE
+		         WHERE GRP_CODE = 'LAD003'
+		           AND CODE = b.PRPOS_SE
+		       ) AS PRPOS_SE_NM
+
+		     , SUM(CASE WHEN c.PAY_MONTH IS NULL THEN c.PAYAMT_NULL ELSE 0 END) AS PAYAMT_NULL
+		  FROM TBSLS_LCNTRCTR a			/* 토지계약자 */
+		     , TBSLS_LAD_DETAIL_INFO b	/* 토지상세정보 */
+		     , (SELECT CNTRCTR_NO
+		             , PAY_MONTH
+		             , SUM(CASE WHEN PAY_MONTH IS NULL THEN 0 ELSE PAYAMT END) AS PAYAMT_MONTH
+		             , SUM(CASE WHEN PAY_TMLMT IS NULL THEN PAYAMT ELSE 0 END) AS PAYAMT_NULL
+		          FROM VI_LN_VOTE_REC	/* 토지계약자납부/토지수납 */
+		         WHERE 1 = 1
+		         <isNotEmpty property="RCIV_SE">
+		           AND RCIV_SE = #RCIV_SE#
+		         </isNotEmpty>
+		           AND (PAY_MONTH BETWEEN #DAY01# AND #DAY02# OR PAY_MONTH IS NULL)
+		         GROUP BY CNTRCTR_NO
+		                , PAY_MONTH
+		       ) c
+		 WHERE 1 = 1
+		   AND a.CNTRCTR_NO = c.CNTRCTR_NO
+		   AND a.LAD_CODE = b.LAD_CODE
+		   AND a.BLCK = b.BLCK
+		   AND a.LOT = b.LOT
+		   AND a.LOT_TY = b.LOT_TY
+		   /* 조회조건 */
+		 <isNotEmpty property="LAD_CODE">
+		   AND a.LAD_CODE = #LAD_CODE#
+		 </isNotEmpty>
+		 <isNotEmpty property="BLCK">
+		   AND a.BLCK = #BLCK#
+		 </isNotEmpty>
+		 <isNotEmpty property="LOT">
+		   AND a.LOT = #LOT#
+		 </isNotEmpty>
+		 <isNotEmpty property="LOT_TY">
+		   AND a.LOT_TY = #LOT_TY#
+		 </isNotEmpty>
+	   <isNotEmpty property="PRPOS_SE_LIST">
+		 <iterate property="PRPOS_SE_LIST" open="AND b.PRPOS_SE IN (" close=")" conjunction=",">
+		   #PRPOS_SE_LIST[]#
+		 </iterate>
+	   </isNotEmpty>
+		 GROUP BY a.LAD_CODE
+		        , a.BLCK
+		        , a.LOT
+		        , a.LOT_TY
+		        , b.PRPOS_SE
+		 ORDER BY a.LAD_CODE
+		        , a.BLCK
+		        , a.LOT
+		        , a.LOT_TY
+ 	-->		        
+ 	
+WITH VI_LN_VOTE_REC
+       AS (  SELECT   x.CNTRCTR_NO,        /* 계약자번호 */                                                      
+                      x.PAY_TMLMT,         /* 납부기한일 */                                                     
+                      TO_CHAR (TO_DATE (nvl(x.RCIV_DE,x.pay_tmlmt), 'YYYYMMDD'), 'YYYYMM') AS PAY_MONTH, /*  수납일자, 납부기한일 */
+                      x.PAY_CODE,            /* 납부코드 */
+                      x.PAYAMT 
+                      <isNotEmpty property="DCAmt">
+	                      <isEqual property="DCAmt" compareValue="1"> <!-- 선납할인포함-->                      
+	                         + NVL(x.PREPAY_DSCNT_AMOUNT,0)
+	                      </isEqual> 
+                      </isNotEmpty>
+                      <isNotEmpty property="ADDAmt">
+	                      <isEqual property="ADDAmt" compareValue="1"> <!-- 연체이자포함-->
+	                           + NVL(x.ARRRG_AMOUNT,0) 
+	                      </isEqual>
+                      </isNotEmpty>
+                      as PAYAMT,              /* 납부금액 */
+                      x.RCIV_DE,             /* 수납일자 */                                                   
+                      DECODE (x.RCIV_DE, NULL, '2', '1') AS RCIV_SE /*   1:수납,  2:미납 */
+               FROM   TBSLS_LCNTRCTR_PAY x /* 토지계약자납부 */                                                              
+              WHERE       1 = 1
+           )                                                               
+                 SELECT   a.CNTRCTR_NO,
+                          a.LAD_CODE,
+                          a.BLCK,
+                          a.LOT,
+                          a.LOT_TY,
+                          a.BLCK || '-' || a.LOT || '-' || a.LOT_TY AS BLT_ALL,
+                          m.LAD_NM,
+                          b.PRPOS_SE,
+                          d.CODE_NM AS PRPOS_SE_NM,
+                          NVL(C1.PAYAMT_NULL,0) PAYAMT_NULL
+                   FROM   TBSLS_LCNTRCTR a,                    /* 토지계약자 */    
+                          TBSLS_LAD_INFO m,                                      
+                          TBSLS_LAD_DETAIL_INFO b,           /* 토지상세정보 */                                                                           
+                          (SELECT CODE, CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAD003') d,
+                          (SELECT distinct CNTRCTR_NO
+                             FROM VI_LN_VOTE_REC /* 토지계약자납부/토지수납 */
+                            WHERE 1 = 1
+                              AND (PAY_MONTH BETWEEN #DAY01# AND #DAY02# OR PAY_MONTH IS NULL)
+					        <isNotEmpty property="RCIV_SE">
+  				              AND RCIV_SE = #RCIV_SE#
+					        </isNotEmpty>
+                          ) c,
+                          (SELECT CNTRCTR_NO, SUM (nvl(PAYAMT,0)) AS PAYAMT_NULL
+                             FROM VI_LN_VOTE_REC /* 토지계약자납부 , 토지수납 */
+                            WHERE 1 = 1
+                              AND PAY_MONTH IS NULL
+					        <isNotEmpty property="RCIV_SE">
+  				              AND RCIV_SE = #RCIV_SE#
+					        </isNotEmpty>
+                            GROUP BY CNTRCTR_NO
+                          ) c1
+                  WHERE   1 = 1
+                          AND a.CNTRCTR_NO = c.CNTRCTR_NO                    
+                          AND a.LAD_CODE = m.LAD_CODE
+                          AND a.LAD_CODE = b.LAD_CODE
+                          AND a.BLCK = b.BLCK
+                          AND a.LOT = b.LOT
+                          AND a.LOT_TY = b.LOT_TY               /* 조회조건 */
+                          AND b.LAD_CODE like #LAD_CODE# || '%'
+				           /* 조회조건 */
+				         <isNotEmpty property="BLCK">
+				          AND a.BLCK = #BLCK#
+				         </isNotEmpty>
+				         <isNotEmpty property="LOT">
+				          AND a.LOT = #LOT#
+				         </isNotEmpty>
+				         <isNotEmpty property="LOT_TY">
+				          AND a.LOT_TY = #LOT_TY#
+				         </isNotEmpty>                          
+					   <isNotEmpty property="PRPOS_SE_LIST">
+						 <iterate property="PRPOS_SE_LIST" open="AND b.PRPOS_SE IN (" close=")" conjunction=",">
+						   #PRPOS_SE_LIST[]#
+						 </iterate>
+					   </isNotEmpty>
+                          AND b.PRPOS_SE = d.CODE(+)
+                          AND a.CNTRCTR_NO = c1.CNTRCTR_NO(+)      
+                          AND a.CANCL_DE IS NULL                                              
+               ORDER BY   a.LAD_CODE,
+                          a.BLCK,
+                          a.LOT,
+                          a.LOT_TY 	
+ 	
+    </select>
+    
+    <!-- 동적컬럼값 조회용 -->
+    <select id="SLS110105DAO.selectLadReceiveList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+    <!-- 
+		WITH VI_LN_VOTE_REC
+		  AS (
+		      SELECT x.CNTRCTR_NO		/* 계약자번호 */
+		           , x.PAY_TMLMT		/* 납부기한일 */
+		           , TO_CHAR(TO_DATE(y.RCIV_DE ,'YYYYMMDD'), 'YYYYMM') AS PAY_MONTH   /*  수납일자, 납부기한일 */
+		           , x.PAY_CODE			/* 납부코드 */
+		           , x.PAYAMT			/* 납부금액 */
+		           , y.RCIV_DE			/* 수납일자 */
+		           , DECODE(y.RCIV_DE, NULL, '2', '1') AS RCIV_SE	/*  1:수납,  2:미납 */
+		        FROM TBSLS_LCNTRCTR_PAY x	/* 토지계약자납부 */
+		           , TBSLS_LAD_RCIV_PSTMRK y		/* 토지수납 */
+		       WHERE 1 = 1
+		         AND x.CNTRCTR_NO = y.CNTRCTR_NO(+)
+		         AND x.PAY_NO = y.PAY_NO(+))
+		SELECT a.LAD_CODE
+		     , a.BLCK
+		     , a.LOT
+		     , a.LOT_TY
+			 , a.BLCK || '-' || a.LOT || '-' || a.LOT_TY AS BLT_ALL
+		     , (SELECT LAD_NM
+		          FROM TBSLS_LAD_INFO
+		         WHERE LAD_CODE = a.LAD_CODE
+		       ) AS LAD_NM
+		     , b.PRPOS_SE
+		     , (SELECT CODE_NM
+		          FROM TBCOM_CMMN_CODE
+		         WHERE GRP_CODE = 'LAD003'
+		           AND CODE = b.PRPOS_SE
+		       ) AS PRPOS_SE_NM
+		   	 , SUM (CASE WHEN TO_CHAR (TO_DATE (c.PAY_TMLMT, 'YYYYMMDD'), 'YYYYMM') = #RQEST_YM# THEN c.PAYAMT_MONTH ELSE 0 END) AS PAY_MONTH_PAYAMT		   	 
+		     , SUM(CASE WHEN c.PAY_TMLMT IS NULL THEN c.PAYAMT_NULL ELSE 0 END) AS PAYAMT_NULL    
+		  FROM TBSLS_LCNTRCTR a			/* 토지계약자 */
+		     , TBSLS_LAD_DETAIL_INFO b	/* 토지상세정보 */
+		     , (SELECT CNTRCTR_NO
+		             , PAY_MONTH
+		             , PAY_TMLMT
+		             , SUM (CASE WHEN PAY_TMLMT IS NULL THEN 0 ELSE PAYAMT END) AS PAYAMT_MONTH
+                     , SUM (CASE WHEN PAY_TMLMT IS NULL THEN PAYAMT ELSE 0 END) AS PAYAMT_NULL
+		          FROM VI_LN_VOTE_REC	/* 토지계약자납부/토지수납 */
+		         WHERE 1 = 1
+		         <isNotEmpty property="RCIV_SE">
+		           AND RCIV_SE = #RCIV_SE#
+		         </isNotEmpty>
+		           AND (PAY_TMLMT BETWEEN #DAY01# AND #DAY02# OR PAY_MONTH IS NULL)
+		         GROUP BY CNTRCTR_NO
+		                , PAY_MONTH
+		                , PAY_TMLMT
+		       ) c
+		 WHERE 1 = 1
+		   AND a.CNTRCTR_NO = c.CNTRCTR_NO
+		   AND a.LAD_CODE = b.LAD_CODE
+		   AND a.BLCK = b.BLCK
+		   AND a.LOT = b.LOT
+		   AND a.LOT_TY = b.LOT_TY
+		   /* 조회조건 */
+		 <isNotEmpty property="LAD_CODE">
+		   AND a.LAD_CODE = #LAD_CODE#
+		 </isNotEmpty>
+		 <isNotEmpty property="BLCK">
+		   AND a.BLCK = #BLCK#
+		 </isNotEmpty>
+		 <isNotEmpty property="LOT">
+		   AND a.LOT = #LOT#
+		 </isNotEmpty>
+		 <isNotEmpty property="LOT_TY">
+		   AND a.LOT_TY = #LOT_TY#
+		 </isNotEmpty>
+	   <isNotEmpty property="PRPOS_SE_LIST">
+		 <iterate property="PRPOS_SE_LIST" open="AND b.PRPOS_SE IN (" close=")" conjunction=",">
+		   #PRPOS_SE_LIST[]#
+		 </iterate>
+	   </isNotEmpty>
+		 GROUP BY a.LAD_CODE
+		        , a.BLCK
+		        , a.LOT
+		        , a.LOT_TY
+		        , b.PRPOS_SE
+		 ORDER BY a.LAD_CODE
+		        , a.BLCK
+		        , a.LOT
+		        , a.LOT_TY
+ -->
+ 
+ 
+WITH VI_LN_VOTE_REC
+       AS (  SELECT   x.CNTRCTR_NO,        /* 계약자번호 */                                                      
+                      x.PAY_TMLMT,         /* 납부기한일 */                                                     
+                      TO_CHAR (TO_DATE (nvl(x.RCIV_DE,x.pay_tmlmt), 'YYYYMMDD'), 'YYYYMM') AS PAY_MONTH, /*  수납일자, 납부기한일 */
+                      x.PAY_CODE,            /* 납부코드 */
+                      x.PAYAMT 
+                      <isNotEmpty property="DCAmt">
+	                      <isEqual property="DCAmt" compareValue="1"> <!-- 선납할인포함-->                      
+	                         + NVL(x.PREPAY_DSCNT_AMOUNT,0)
+	                      </isEqual> 
+                      </isNotEmpty>
+                      <isNotEmpty property="ADDAmt">
+	                      <isEqual property="ADDAmt" compareValue="1"> <!-- 연체이자포함-->
+	                           + NVL(x.ARRRG_AMOUNT,0) 
+	                      </isEqual>
+                      </isNotEmpty>
+                      as PAYAMT,              /* 납부금액 */
+                      x.RCIV_DE,             /* 수납일자 */                                                   
+                      DECODE (x.RCIV_DE, NULL, '2', '1') AS RCIV_SE /*   1:수납,  2:미납 */
+               FROM   TBSLS_LCNTRCTR_PAY x /* 토지계약자납부 */                                                              
+              WHERE       1 = 1
+           )      
+        SELECT SUM(NVL(PAYAMT,0)) AS PAY_MONTH_PAYAMT                      
+          FROM VI_LN_VOTE_REC a            /* 토지계약자 */
+         WHERE CNTRCTR_NO = #CNTRCTR_NO#
+           AND PAY_MONTH = #RQEST_YM#
+           <isNotEmpty property="RCIV_SE">
+           AND RCIV_SE = #RCIV_SE#
+ 		   </isNotEmpty>     
+    </select>
+    
+    <!-- 쿼리명 : 용도구분 조회
+	설명 : 용도구분 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 변승우
+	최초작성일 : 2015.10.16
+	-->
+    <select id="SLS110105DAO.selectPrposSeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+          SELECT
+        		'0' AS CHK 
+        		,CODE AS CODE
+                ,'['||CODE||']'||CODE_NM AS DATA
+                FROM TBCOM_CMMN_CODE
+                WHERE GRP_CODE = 'LAD003'  
+                ORDER BY CODE     
+    </select>	
+    
+    
+    <!-- 쿼리명 : 해당조건 날짜 조회
+	설명 : 해당조건 날짜 조회 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 변승우
+	최초작성일 : 2015.10.16
+	-->
+    <select id="SLS110105DAO.selectDateQueryList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT 
+				  DISTINCT
+				  TO_CHAR(TO_DATE(RQEST_YM, 'YYYYMM'),'YYYY-MM') RQEST_YM
+		 FROM TBSLS_LAD_DETAIL_INFO T1
+				     , TBSLS_LCNTRCTR T2
+				     , TBSLS_LCNTRCTR_PAY T3
+		 WHERE T1.LAD_CODE = T2.LAD_CODE
+				   AND T1.BLCK = T2.BLCK
+				   AND T1.LOT = T2.LOT
+				   AND T1.LOT_TY = T2.LOT_TY
+				   AND T2.CNTRCTR_NO = T3.CNTRCTR_NO
+				   AND T1.LAD_CODE = #LAD_CODE#
+				   AND DECODE(RQEST_YM,'000000', NULL, RQEST_YM) BETWEEN #DAY01# AND #DAY02#
+		 ORDER BY RQEST_YM
+    </select>
+	    	
+</sqlMap>

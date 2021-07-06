@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS020306_SQL">	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   	 
+	  
+	  <!-- 쿼리명     : 국민주택기금상환내역
+           설명       : 국민주택기금상환내역 리스트 조회
+	       작성자     : 이광원
+	       최초작성일 : 2016.08.18
+
+	       수정일  수정자  수정내용 
+	   -->        
+      <select id="SLS020306DAO.selectKjfRpayList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT KJF_GB
+		     , PBNCD_NO               /* 공사채번호 */
+		     , BRRW_ACNUT_NM          /* 차입계좌명 */
+		     , FNNC_INSTT_SPOT_CODE   /* 금융기관코드 */
+		     , FNNC_INSTT_SPOT_NM     /* 금융기관명 */
+		     , BRRW_AMOUNT            /* 차입금액 */
+		     , ACNUTNO                /* 계좌번호 */
+		     , ENDW_PRNCPAL           /* 원금 */  
+		     , ENDW_INTR              /* 이자 */
+		     , RCPT_DE                /* 영수일자 */
+		  FROM
+		  (
+		    SELECT  DISTINCT A.PBNCD_NO                     /* 공사채 번호*/
+		    	  , '상환' AS KJF_GB
+		          , B.BRRW_ACNUT_NM /* 차입계좌명 */
+		          , B.FNNC_INSTT_SPOT_CODE /* 금융기관코드 */
+		          , SFCOM_CODE_NM('COM021' , B.FNNC_INSTT_SPOT_CODE , 'CODE_NM') AS  FNNC_INSTT_SPOT_NM /* 금융기관명 */
+		          , B.BRRW_AMOUNT /* 차입금액 */
+		          , B.ACNUTNO /* 계좌번호 */
+		          , NVL(C.ENDW_PRNCPAL , 0) AS ENDW_PRNCPAL/* 결의금액 - 원금 합계*/  
+		          , NVL(C.ENDW_INTR , 0) AS ENDW_INTR /* 결의금액 - 이자 합계 */
+		          , C.RCPT_DE     /* 영수일자 */
+		      FROM  TBSLS_HOUSE_TY A
+		          , TBFUN_PBNCD B 
+		          , (SELECT Z.RCPT_DE
+		                  , Z.PBNCD_NO
+		                  , SUM(DECODE(NVL(ENDW_INTR_AT,0) , 0 , DECSN_AMOUNT)) AS ENDW_PRNCPAL
+		                  , SUM(DECODE(NVL(ENDW_INTR_AT,0) , 1 , DECSN_AMOUNT)) AS ENDW_INTR
+		               FROM TBACC_EXP_DSN_DETAIL Z 
+		              WHERE 1=1
+				        <isNotEmpty property="RCPT_DEF" >
+				            <isNotEmpty property="RCPT_DET" >
+				                AND Z.RCPT_DE BETWEEN #RCPT_DEF# AND #RCPT_DET#
+				            </isNotEmpty>
+				        </isNotEmpty>		                
+		                AND PBNCD_NO IS NOT NULL 
+		              GROUP BY Z.RCPT_DE , Z.PBNCD_NO) C 
+		     WHERE 1 = 1
+		       AND A.PBNCD_NO = B.PBNCD_NO
+		       AND A.PBNCD_NO = C.PBNCD_NO
+		       <!-- AND A.PBNCD_NO LIKE :PBNCD_NO -->   
+            <isNotEmpty property="PBNCD_NO" >
+                AND C.PBNCD_NO = #PBNCD_NO#
+            </isNotEmpty>		       
+		    UNION ALL
+		    SELECT  
+		            A.PBNCD_NO                     /* 공사채 번호*/
+		          , '대환' AS KJF_GB
+		          , B.BRRW_ACNUT_NM /* 차입계좌명 */
+		          , B.FNNC_INSTT_SPOT_CODE /* 금융기관코드 */
+		          , SFCOM_CODE_NM('COM021' , B.FNNC_INSTT_SPOT_CODE , 'CODE_NM') AS  FNNC_INSTT_SPOT_NM /* 금융기관명 */
+		          , B.BRRW_AMOUNT /* 차입금액 */
+		          , B.ACNUTNO /* 계좌번호 */
+		          , A.ENDW_PRNCPAL /* 결의금액 - 원금 합계*/  
+		          , 0 AS ENDW_INTR /* 결의금액 - 이자 합계 */
+		          , A.RCPT_DE     /* 영수일자 */
+		      FROM (SELECT Z.ALTRV_LON_DE AS RCPT_DE
+		                 , Z.PBNCD_NO
+		                 , SUM(KJF) AS ENDW_PRNCPAL
+		              FROM TBSLS_HCNTRCTR_KJF_PAY_CNFIRM Z              
+		             WHERE 1=1 
+				        <isNotEmpty property="RCPT_DEF" >
+				            <isNotEmpty property="RCPT_DET" >
+				                AND Z.ALTRV_LON_DE BETWEEN #RCPT_DEF# AND #RCPT_DET#
+				            </isNotEmpty>
+				        </isNotEmpty>			               
+		             GROUP BY Z.ALTRV_LON_DE , Z.PBNCD_NO ) A
+		         , TBFUN_PBNCD B
+		     WHERE 1 = 1
+		       AND A.PBNCD_NO = B.PBNCD_NO       
+		       <!-- AND A.PBNCD_NO LIKE :PBNCD_NO -->
+            <isNotEmpty property="PBNCD_NO" >
+                AND A.PBNCD_NO = #PBNCD_NO#
+            </isNotEmpty>			       
+		   )
+		ORDER BY BRRW_ACNUT_NM, RCPT_DE   
+	  </select>
+	
+</sqlMap>

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010102_P01_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+    <!--기타고객 테이블 고객정보 조회-->
+    <select id="CUS010102_P01DAO.selectCstmrInfo" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+		<![CDATA[	
+			SELECT A.CSTMR_NM  AS CSTMR_NM ,
+			       A.MBTLNO         AS MBTLNO ,
+			       A.EMAIL          AS EMAIL ,
+			       A.CSTMR_GRAD     AS CSTMR_GRAD ,
+			       A.ZIP            AS ZIP,
+			       A.ADRES          AS ADRES ,
+			       A.GNRL_TLPHON    AS GNRL_TLPHON ,
+			       A.RM             AS RM
+			FROM TBCUS_HMPG_CSTMR_INFO A
+		   WHERE A.CSTMR_NM = #CSTMR_NM#
+			 AND A.MBTLNO = #MBTLNO#
+		]]>
+    </select>
+    
+    <!--홈페이지 회원 테이블고객 조회-->
+    <select id="CUS010102_P01DAO.selectCstmrInfo01" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+		<![CDATA[	
+			SELECT MEMBER_NAME AS CSTMR_NM
+                 , SFCOM_DEC_ALL(MEMBER_HP1)||SFCOM_DEC_ALL(MEMBER_HP2)||SFCOM_DEC_ALL(MEMBER_HP3) AS MBTLNO
+                 , SFCOM_DEC_ALL(MEMBER_EMAIL) 	AS EMAIL
+                 , '02'          				AS CSTMR_GRAD
+                 , ZIP_CODE      				AS ZIP
+                 , SFCOM_DEC_ALL(MEMBER_ADDR1)  AS ADRES 
+                 , SFCOM_DEC_ALL(MEMBER_TEL1)||SFCOM_DEC_ALL(MEMBER_TEL2)||SFCOM_DEC_ALL(MEMBER_TEL3)   AS GNRL_TLPHON
+                 , ''            				AS RM
+            FROM  TBHPM_MEMBER
+           WHERE  MEMBER_NAME = #CSTMR_NM#
+             AND  SFCOM_DEC_ALL(MEMBER_HP1)||SFCOM_DEC_ALL(MEMBER_HP2)||SFCOM_DEC_ALL(MEMBER_HP3) = #MBTLNO#
+		]]>
+    </select>    
+   
+   <!--고객이 신청한 민원 목록 조회 -->
+    <select id="CUS010102_P01DAO.selectCvplList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			
+		  SELECT
+				 A.CSTMR_REGIST_DT                 AS CSTMR_REGIST_DT
+				,A.SJ                              AS SJ
+				,B.CVPL_STTUS                      AS CVPL_STTUS      /*민원상태*/
+				,DECODE(B.DELETE_DE, NULL,'2','1') AS DELETE_AT
+				,SUBSTR(A.CVPL_NO,1,1)             AS RCEPT_COURS     /*접수경로*/
+			FROM TBCUS_HMPG_CSTMR_CVPL A
+      INNER JOIN TBCUS_HMPG_CVPL_DSTB B
+      		  ON A.CVPL_NO = B.CVPL_NO
+      		 AND B.DELETE_DE IS NULL
+		   WHERE A.NM = #CSTMR_NM#
+		     AND SUBSTR(A.CVPL_NO,1,1) <![CDATA[<>]]> 'C'
+		   <isNotEmpty property ="TELNO">
+			 AND REPLACE(A.MBTLNO,'-','')  = trim(#TELNO#)
+		   </isNotEmpty>
+		   <isEmpty property ="TELNO">
+			 AND A.MBTLNO IS NULL
+		   </isEmpty>
+		
+    </select>
+    
+ 	<!--고객등급 수정-->
+    <update id="CUS010102_P01DAO.cstmrInfoU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			UPDATE TBCUS_HMPG_CSTMR_CVPL SET
+					 CSTMR_GRAD     = #CSTMR_GRAD#
+			WHERE   NM = #NM#
+			  AND   REPLACE(MBTLNO,'-','') = #MBTLNO# 
+		]]>
+    </update>
+    
+	<!--고객 목록조회 -->
+	<select id="CUS010102_P01DAO.selectCstmrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT 
+				 CSTMR_SE               AS CSTMR_SE        		/* 고객구분 */
+				,NM                     AS NM                   /* 성명 */
+				,BIRTH_DAY              AS BIRTH_DAY            /* 생년월일 */
+				,EMAIL                  AS EMAIL                /* 이메일 */
+				,REPLACE(TELNO,'-','')  AS TELNO                /* 전화번호 원본 값 */
+				,REPLACE(MBTLNO,'-','') AS MBTLNO               /* 핸드폰번호 원본 값 */
+				,ZIP                    AS ZIP                  /* 고객기본 우편번호 */
+			  ,ADRES                    AS ADRES                /* 고객기본 주소 */
+			  FROM (
+					/* 기타 고객 정보*/
+					SELECT 
+                           '01'                                    AS CSTMR_SE          /*고객구분*/
+                          , TRIM(REPLACE(A.CSTMR_NM,'　',''))      AS NM
+                          , MAX(A.BRTHDY)                          AS BIRTH_DAY
+                          , MAX(A.GNRL_TLPHON)                     AS TELNO             /*전화번호*/
+                          , A.MBTLNO                               AS MBTLNO            /*휴대폰번호*/
+                          , MAX(A.EMAIL)                           AS EMAIL
+                          , MAX(A.ZIP)                             AS ZIP               /*우편번호*/
+                          , MAX(A.ADRES)                           AS ADRES             /*주소*/
+					FROM TBCUS_HMPG_CSTMR_INFO A
+					WHERE 1=1
+					GROUP BY A.CSTMR_NM, A.MBTLNO
+					
+					UNION ALL
+					
+					/* 홈페이지 고객 정보*/
+		            SELECT 
+                           '09'                                                           AS CSTMR_SE       /*고객구분*/
+                          , TRIM(REPLACE(MAX(A.MEMBER_NAME),'　',''))                      AS NM
+                          , SFCOM_DEC_ALL(MAX(A.BIRTH_YEAR)) || SFCOM_DEC_ALL(MAX(A.BIRTH_MONTH)) || SFCOM_DEC_ALL(MAX(A.BIRTH_DAY))    AS BIRTH_DAY      /*생년월일*/
+                          , SFCOM_DEC_ALL(MAX(A.MEMBER_TEL1)) || SFCOM_DEC_ALL(MAX(A.MEMBER_TEL2)) || SFCOM_DEC_ALL(MAX(A.MEMBER_TEL3)) AS TELNO          /*전화번호*/
+                          , SFCOM_DEC_ALL(MAX(A.MEMBER_HP1)) || SFCOM_DEC_ALL(MAX(A.MEMBER_HP2)) || SFCOM_DEC_ALL(MAX(A.MEMBER_HP3))    AS MBTLNO         /*휴대폰번호*/
+                          , SFCOM_DEC_ALL(MAX(A.MEMBER_EMAIL))                             AS EMAIL
+                          , MAX(A.ZIP_CODE)                                                AS ZIP            /*우편번호*/
+                          , SFCOM_DEC_ALL(MAX(A.MEMBER_ADDR1)) || ' ' || SFCOM_DEC_ALL(MAX(A.MEMBER_ADDR2))              				AS ADRES          /*주소*/
+                    FROM  TBHPM_MEMBER A
+                    WHERE 1=1
+                    GROUP BY A.MEMBER_ID        		            
+				)
+			 WHERE 1=1
+               AND NM = #CSTMR_NM#
+			 <isNotEmpty property ="TELNO">
+			   AND REPLACE(MBTLNO,'-','') = trim(#TELNO#)
+			 </isNotEmpty>
+			 <isEmpty property ="TELNO">
+			   AND MBTLNO IS NULL
+			 </isEmpty>     
+			ORDER BY CSTMR_SE, NM
+	</select>
+	
+	<!--고객 등급 조회 -->
+	<select id="CUS010102_P01DAO.selectCstmrGrad" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT 
+				 NM                         AS NM                   /* 성명 */
+				,REPLACE(MBTLNO,'-','')     AS MBTLNO               /* 핸드폰번호 원본 값 */
+				,NVL(MAX(CSTMR_GRAD), '02') AS CSTMR_GRAD           /* 고객등급 */
+			  FROM TBCUS_HMPG_CSTMR_CVPL
+			 WHERE 1=1
+               AND NM = #CSTMR_NM#
+			 <isNotEmpty property ="TELNO">
+			   AND REPLACE(MBTLNO,'-','') = trim(#TELNO#)
+			 </isNotEmpty>
+			 <isEmpty property ="TELNO">
+			   AND MBTLNO IS NULL
+			 </isEmpty>     
+			GROUP BY NM, MBTLNO
+	</select>    	
+</sqlMap>

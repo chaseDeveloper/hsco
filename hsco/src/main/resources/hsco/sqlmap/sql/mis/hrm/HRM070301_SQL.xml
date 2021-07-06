@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070301_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 쿼리명 : 당직순번관리
+	설명 : 당직순번관리 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이혜선
+	최초작성일 : 2015.10.20
+	-->
+	<select id="HRM070301DAO.selectEmpnoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[
+				SELECT A.EMPNO                           AS EMPNO
+				      ,A.SEXDSTN                         AS SEXDSTN
+				      ,A.RSPOFC_SE                       AS RSPOFC_SE
+				      ,A.DEPT_CODE                       AS DEPT_CODE
+				      ,SFSAL_GETEMPNO_01(A.EMPNO)        AS EMPNM
+				      ,NVL(SFSAL_GETDEPTNM_01(A.DEPT_CODE), SFHRM_GET_DEPTNM(A.DEPT_CODE, '0'))    AS DEPT_NM
+				      ,NVL(B.EMPNO,'NONE')               AS BNDT_EMPNO
+				FROM   TBHRM_HR_MASTR A
+				       LEFT OUTER JOIN TBHRM_BNDT_SN B
+				            ON A.EMPNO = B.EMPNO
+				           AND B.BNDT_SE = #BNDT_SE#
+				WHERE  1=1
+				AND    A.STTUS_SE ='000'
+				AND    A.JSSFC_SE IN (001,002,003)
+			  ]]>
+			<isEqual property="BNDT_SE" compareValue="001"> 
+				AND    A.SEXDSTN = '1'
+			</isEqual>
+			<isNotEmpty property="EMPNO">
+				AND    A.EMPNO = #EMPNO#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNM">
+				AND    A.EMPNM = #EMPNM#
+			</isNotEmpty>
+			<![CDATA[
+				ORDER BY A.EMPNO
+			]]>
+			</select>  
+
+	<select id="HRM070301DAO.bndtSnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+				SELECT A.EMPNO                         AS EMPNO
+				      ,A.BNDT_SE                       AS BNDT_SE
+				      ,A.TRGET_AT                      AS TRGET_AT
+				      ,A.LAST_BNDT_DE                  AS LAST_BNDT_DE
+				      ,A.RM                            AS RM
+				      ,SFSAL_GETEMPNO_01(A.EMPNO)      AS EMPNM
+				      ,NVL(SFSAL_GETDEPTNM_01(B.DEPT_CODE), SFHRM_GET_DEPTNM(B.DEPT_CODE, '0'))  AS DEPT_NM
+				      ,B.DEPT_CODE                     AS DEPT_CODE
+		              ,B.RSPOFC_SE                     AS RSPOFC_SE
+		              ,B.SEXDSTN                       AS SEXDSTN
+		              ,'0'                             AS CHK
+		              ,B.JSSFC_SE					   AS JSSFC_SE
+		              ,NVL(C.CHILD3_AT,'0')			   AS CHILD3_AT	/*3자녀여부*/
+				FROM TBHRM_BNDT_SN A
+					 LEFT OUTER JOIN TBHRM_HR_MASTR B
+					 ON A.EMPNO = B.EMPNO
+					 LEFT OUTER JOIN
+					 (SELECT EMPNO, CASE WHEN COUNT(EMPNO) >= 3 THEN '1' ELSE '0' END AS CHILD3_AT
+					  FROM TBHRM_HR_FAMILY
+					  WHERE FAMILY_RELATE_SE = '007' 
+					  GROUP BY EMPNO
+					 ) C
+					 ON A.EMPNO = C.EMPNO
+				WHERE 1=1
+				AND B.STTUS_SE ='000'
+				AND B.JSSFC_SE IN (001,002,003)
+       		  ]]>
+       		  
+			<isNotEmpty property="BNDT_SE">
+				AND  A.BNDT_SE = #BNDT_SE#
+			</isNotEmpty>
+			<isNotEmpty property="SEXDSTN">
+				AND  B.SEXDSTN = #SEXDSTN#
+			</isNotEmpty>
+			<isNotEmpty property="TRGET_AT">
+				AND  A.TRGET_AT = #TRGET_AT#
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE">
+				AND  B.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNM">
+				AND  SFSAL_GETEMPNO_01(A.EMPNO) LIKE '%' || #EMPNM# || '%'
+			</isNotEmpty>
+			<![CDATA[
+				ORDER BY A.LAST_BNDT_DE, A.EMPNO
+			]]>
+			</select>  
+			
+	<!-- 당직순번관리 입력	-->
+     <insert id="HRM070301DAO.bndtSnC" parameterClass="java.util.HashMap">
+        <![CDATA[
+      INSERT INTO TBHRM_BNDT_SN (
+      					 EMPNO
+						,BNDT_SE
+						,TRGET_AT
+						,LAST_BNDT_DE
+						,RM
+      					,REGISTER_ID
+      					,REGIST_DT
+      					,UPDUSR_ID
+      					,UPDT_DT
+				   
+				             ) VALUES (
+			      					 #EMPNO#
+									,#BNDT_SE#
+									,#TRGET_AT#
+									,#LAST_BNDT_DE#
+									,#RM#
+		      					 	,#S_USER_ID#
+		      					 	,SYSDATE
+		      					 	,#S_USER_ID#
+		      			 		 	,SYSDATE
+		           				 )
+        ]]>
+    </insert>	
+    
+	 <!--당직순번관리 수정	-->		
+    <update id="HRM070301DAO.bndtSnU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			  UPDATE TBHRM_BNDT_SN
+			  SET	
+				TRGET_AT                      =    #TRGET_AT#
+				,RM                           =    #RM#
+    			,UPDUSR_ID                    =    #S_USER_ID#
+    			,UPDT_DT                      =    SYSDATE
+			  
+		      WHERE 	EMPNO = #EMPNO#
+			  AND 		BNDT_SE = #BNDT_SE#
+        ]]>
+    </update>
+    
+	<!-- 당직순번관리 삭제-->		
+      <delete id="HRM070301DAO.bndtSnD" parameterClass="java.util.HashMap">
+        <![CDATA[
+            DELETE FROM TBHRM_BNDT_SN 
+		      WHERE 	EMPNO = #EMPNO#
+			  AND 		BNDT_SE = #BNDT_SE#
+        ]]>
+    </delete> 
+ 
+	<select id="HRM070301DAO.autoBndtSnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[		
+				SELECT A.EMPNO             AS EMPNO
+				      ,A.SEXDSTN           AS SEXDSTN
+				      ,A.RSPOFC_SE         AS RSPOFC_SE
+				      ,A.DEPT_CODE
+				      ,SFSAL_GETEMPNO_01(A.EMPNO) AS EMPNM
+				      ,NVL(SFSAL_GETDEPTNM_01(A.DEPT_CODE), SFHRM_GET_DEPTNM(A.DEPT_CODE, '0'))  AS DEPT_NM
+				      ,'1'                  AS TRGET_AT
+				FROM (
+				        Select * From TBHRM_HR_MASTR
+				        Where
+				            STTUS_SE ='000'
+				            AND JSSFC_SE IN (001,002,003)
+				            AND (
+				            	#BNDT_SE# = '000'
+				            	Or
+				            	( #BNDT_SE# = '001' And SEXDSTN = '1')
+				            )
+				    ) A,
+					(
+				        Select * From TBHRM_BNDT_SN
+				        Where
+				            BNDT_SE = #BNDT_SE#
+				    )  B
+				WHERE A.EMPNO = B.EMPNO(+)
+				AND B.EMPNO Is Null
+				ORDER BY A.EMPNO
+			]]>
+			</select>
+			
+  </sqlMap>

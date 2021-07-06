@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070203_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 개인별 출장순번 획득 -->
+	<select id="HRM070203DAO.selectBsrpSeq" parameterClass="java.util.HashMap" resultClass="java.lang.Integer">
+		<![CDATA[ /* HRM070203DAO.selectBsrpIndvdl */ ]]>
+		<![CDATA[
+			SELECT NVL(MAX(BSRP_SEQ),0) + 1 AS BSRP_SEQ
+			FROM TBHRM_BSRP_INDVDL
+			WHERE EMPNO = #EMPNO#
+		]]>
+	</select>
+	
+	<!-- ====================== 개인별 출장 sql 영역 =========================== -->
+	
+	<!-- 개인별 출장내역 조회 -->
+	<select id="HRM070203DAO.selectBsrpIndvdl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /* HRM070203DAO.selectBsrpIndvdl */ ]]>
+		<![CDATA[
+			SELECT t1.EMPNO                           AS EMPNO
+			     , t2.EMPNM                           AS EMPNM
+			     , t1.BSRP_SEQ                        AS BSRP_SEQ
+			     , SFHRM_GET_EMPL_INFO(t1.EMPNO, 'JSSFC_SE', t1.BSRP_BGNDE) AS JSSFC_SE
+			     , SFHRM_GET_EMPL_INFO(t1.EMPNO, 'JSSFC_NM', t1.BSRP_BGNDE) AS JSSFC_NM
+			     , SFHRM_GET_EMPL_INFO(t1.EMPNO, 'CLSF_NM', t1.BSRP_BGNDE)  AS CLSF_NM
+			     , t1.DEPT_CODE                       AS DEPT_CODE
+			     , t4.DEPT_NM                         AS DEPT_NM
+			     , t1.BSRP_PURPS                      AS BSRP_PURPS
+			     , t1.MVMN_COURS                      AS MVMN_COURS
+			     , t1.DSTN_NM                         AS DSTN_NM
+			     , t1.NATION_NM                       AS NATION_NM
+			     , t1.BSRP_BGNDE                      AS BSRP_BGNDE
+			     , t1.BSRP_BEGIN_TM                   AS BSRP_BEGIN_TM
+			     , t1.BSRP_ENDDE                      AS BSRP_ENDDE
+			     , t1.BSRP_END_TM                     AS BSRP_END_TM
+			     , t1.BSRP_DAYCNT                     AS BSRP_DAYCNT
+			     , t1.STAYNG_DAYCNT                   AS STAYNG_DAYCNT
+			     , t1.TRNSPORT_CT                     AS TRNSPORT_CT
+			     , t1.STAYNG_CT                       AS STAYNG_CT
+			     , t1.MEAL_CT                         AS MEAL_CT
+			     , t1.DAIL_CT                         AS DAIL_CT
+			     , t1.ACPLC_ACT_CT                    AS ACPLC_ACT_CT
+			     , t1.ETC_EXPENS                      AS ETC_EXPENS
+			     , t1.TRVCT_TOTAMT                    AS TRVCT_TOTAMT
+			     , t1.EXCCLC_AMOUNT                   AS EXCCLC_AMOUNT
+			     , t1.FILE_SN                         AS FILE_SN
+			     , DECODE(SFCOM_GET_SANCTN_KND(t1.SANCTN_NO),'5','1','1','1','4','1','0') AS CONFM_AT
+			     , t1.SANCTN_NO                       AS SANCTN_NO
+			     , SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) AS SANCTN_STS
+			     , t1.BUDGET_DEPT_CODE                AS BUDGET_DEPT_CODE
+			     , t3.DEPT_NM                         AS BUDGET_DEPT_NM
+			     , t1.DECSN_YEAR                      AS DECSN_YEAR
+			     , t1.DECSN_NO                        AS DECSN_NO
+			     , TO_CHAR(t1.REGIST_DT,'YYYYMMDD')   AS REGIST_DT
+			     , t1.PRPARE_CT                       AS PRPARE_CT
+			     , CASE WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '1' THEN '0'      /* 결재상태 - 1:기안 */
+			            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '4' THEN '0'      /* 결재상태 - 4:중간결재 */
+			            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5' THEN '0'      /* 결재상태 - 5:결재완료 */
+			            ELSE '1'
+			            END                           AS UPDATE_POSBL_AT  /* 수정가능여부판단변수 */
+			     , t5.EXPENS_LIST
+			FROM TBHRM_BSRP_INDVDL t1
+			LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON t1.EMPNO = t2.EMPNO
+			LEFT OUTER JOIN VWHRM_DEPT t3
+			        ON t1.BUDGET_DEPT_CODE = t3.DEPT_CODE
+			LEFT OUTER JOIN VWHRM_DEPT t4
+			        ON t1.DEPT_CODE = t4.DEPT_CODE
+			LEFT OUTER JOIN ( SELECT t1.EMPNO
+			                        ,t1.BSRP_SEQ
+			                        ,LISTAGG(t2.CODE_NM || ' ' || TO_CHAR(t1.USE_EXPENS, 'FM999,999,990'), ' ') WITHIN GROUP (ORDER BY t1.EMPNO, t1.BSRP_SEQ) AS EXPENS_LIST
+			                  FROM TBHRM_BSRP_EXPENS t1
+			                      LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+			                        ON t1.EXPENS_SE = t2.CODE
+			                       AND t2.GRP_CODE = 'HRM027'
+			                  GROUP BY EMPNO, BSRP_SEQ) t5
+			        ON t1.EMPNO = t5.EMPNO
+			       AND t1.BSRP_SEQ = t5.BSRP_SEQ
+			WHERE 1=1
+			AND NVL(t1.OVSEA_AT, '0') = '1'
+			AND ( #BGNDE# BETWEEN t1.BSRP_BGNDE AND t1.BSRP_ENDDE 
+			      OR #ENDDE# BETWEEN t1.BSRP_BGNDE AND t1.BSRP_ENDDE
+			      OR t1.BSRP_BGNDE BETWEEN #BGNDE# AND #ENDDE# 
+			      OR t1.BSRP_ENDDE BETWEEN #BGNDE# AND #ENDDE#
+			    )
+		]]>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="BSRP_NM" prepend="AND">
+				t2.EMPNM LIKE '%' || #BSRP_NM# || '%'
+			</isNotEmpty>
+		<![CDATA[
+			ORDER BY TO_DATE(t1.BSRP_BGNDE||t1.BSRP_BEGIN_TM, 'YYYYMMDDHH24MI'), TO_DATE(t1.BSRP_ENDDE||t1.BSRP_END_TM, 'YYYYMMDDHH24MI'), t2.EMPNM
+		]]>
+	</select>
+
+	<!-- 개인별 출장내역 등록-->
+	<insert id="HRM070203DAO.tbhrmBsrpIndvdlC" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_BSRP_INDVDL (
+		     EMPNO
+		    ,BSRP_SEQ
+		    ,DEPT_CODE
+		    ,OVSEA_AT
+		    ,BSRP_PURPS
+		    ,MVMN_COURS
+		    ,DSTN_NM
+		    ,NATION_NM
+		    ,TFCMN_SE
+		    ,BSRP_BGNDE
+		    ,BSRP_BEGIN_TM
+		    ,BSRP_ENDDE
+		    ,BSRP_END_TM
+		    ,BSRP_DAYCNT
+		    ,STAYNG_DAYCNT
+		    ,TRNSPORT_CT
+		    ,STAYNG_CT
+		    ,MEAL_CT
+		    ,DAIL_CT
+		    ,ACPLC_ACT_CT
+		    ,ETC_EXPENS
+		    ,TRVCT_TOTAMT
+		    ,EXCCLC_AMOUNT
+		    ,FILE_SN
+		    ,CONFM_AT
+		    ,SANCTN_NO
+		    ,BUDGET_DEPT_CODE
+		    ,PRPARE_CT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		) VALUES (
+		     #EMPNO#
+		    ,#BSRP_SEQ#
+		    ,#DEPT_CODE#
+		    ,'1'
+		    ,#BSRP_PURPS#
+		    ,#MVMN_COURS#
+		    ,#DSTN_NM#
+		    ,#NATION_NM#
+		    ,#TFCMN_SE#
+		    ,#BSRP_BGNDE#
+		    ,#BSRP_BEGIN_TM#
+		    ,#BSRP_ENDDE#
+		    ,#BSRP_END_TM#
+		    ,#BSRP_DAYCNT#
+		    ,#STAYNG_DAYCNT#
+		    ,NVL(#TRNSPORT_CT#,0)
+		    ,NVL(#STAYNG_CT#,0)
+		    ,NVL(#MEAL_CT#,0)
+		    ,NVL(#DAIL_CT#,0)
+		    ,NVL(#ACPLC_ACT_CT#,0)
+		    ,NVL(#ETC_EXPENS#,0)
+		    ,NVL(#TRVCT_TOTAMT#,0)
+		    ,NVL(#EXCCLC_AMOUNT#,0)
+		    ,#FILE_SN#
+		    ,#CONFM_AT#
+		    ,#SANCTN_NO#
+		    ,#BUDGET_DEPT_CODE#
+		    ,#PRPARE_CT#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+
+	<!-- 개인별 출장내역 수정-->
+	<update id="HRM070203DAO.tbhrmBsrpIndvdlU" parameterClass="java.util.HashMap">
+	<![CDATA[
+		UPDATE TBHRM_BSRP_INDVDL
+		SET    DEPT_CODE        = #DEPT_CODE#
+		      ,BSRP_PURPS       = #BSRP_PURPS#        
+		      ,MVMN_COURS       = #MVMN_COURS#        
+		      ,DSTN_NM          = #DSTN_NM#           
+		      ,NATION_NM        = #NATION_NM#         
+		      ,BSRP_BGNDE       = #BSRP_BGNDE#        
+		      ,BSRP_BEGIN_TM    = #BSRP_BEGIN_TM#     
+		      ,BSRP_ENDDE       = #BSRP_ENDDE#        
+		      ,BSRP_END_TM      = #BSRP_END_TM#       
+		      ,BSRP_DAYCNT      = #BSRP_DAYCNT#       
+		      ,STAYNG_DAYCNT    = #STAYNG_DAYCNT#     
+		      ,TRNSPORT_CT      = NVL(#TRNSPORT_CT#,0)
+		      ,STAYNG_CT        = NVL(#STAYNG_CT#,0)
+		      ,MEAL_CT          = NVL(#MEAL_CT#,0)
+		      ,DAIL_CT          = NVL(#DAIL_CT#,0)
+		      ,ACPLC_ACT_CT     = NVL(#ACPLC_ACT_CT#,0)
+		      ,ETC_EXPENS       = NVL(#ETC_EXPENS#,0)
+		      ,TRVCT_TOTAMT     = NVL(#TRVCT_TOTAMT#,0)
+		      ,EXCCLC_AMOUNT    = NVL(#EXCCLC_AMOUNT#,0)
+		      ,FILE_SN          = #FILE_SN#           
+		      ,CONFM_AT         = #CONFM_AT#          
+		      ,SANCTN_NO        = #SANCTN_NO#         
+		      ,BUDGET_DEPT_CODE = #BUDGET_DEPT_CODE#  
+		      ,PRPARE_CT        = #PRPARE_CT#
+		      ,UPDUSR_ID        = #S_USER_ID#         
+		      ,UPDT_DT          = SYSDATE             
+		WHERE  EMPNO            = #EMPNO#             
+		AND    BSRP_SEQ         = #BSRP_SEQ#          
+	]]>
+	</update>
+
+	<!-- 개인별 출장내역 삭제-->
+	<delete id="HRM070203DAO.tbhrmBsrpIndvdlD" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_BSRP_INDVDL 
+		WHERE  EMPNO     = #EMPNO#
+		AND    BSRP_SEQ  = #BSRP_SEQ#
+	]]>
+	</delete>
+
+	<!-- ====================== 출장비관련 sql 영역 =========================== -->
+
+	<!-- 출장비상세 조회 -->
+	<select id="HRM070203DAO.selectIndvdlExpens" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT EMPNO
+		      ,BSRP_SEQ
+		      ,SEQ
+		      ,EXPENS_SE
+		      ,DTLS_NM
+		      ,USE_EXPENS
+		FROM   TBHRM_BSRP_EXPENS
+		WHERE  EMPNO     = #EMPNO#
+		AND    BSRP_SEQ  = #BSRP_SEQ#
+	]]>
+	</select>
+	
+	<!-- 출장비 상세내역 등록-->
+	<insert id="HRM070203DAO.tbhrmIndvdlExpensC" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_BSRP_EXPENS (
+		     EMPNO
+		    ,BSRP_SEQ
+		    ,SEQ
+		    ,EXPENS_SE
+		    ,DTLS_NM
+		    ,USE_EXPENS
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		) VALUES (
+		     #EMPNO#
+		    ,#BSRP_SEQ#
+		    ,(SELECT NVL(MAX(SEQ),0)+1 FROM TBHRM_BSRP_EXPENS WHERE EMPNO = #EMPNO# AND BSRP_SEQ = #BSRP_SEQ#)
+		    ,#EXPENS_SE#
+		    ,#DTLS_NM#
+		    ,#USE_EXPENS#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+
+	<!-- 출장비 상세내역 수정-->
+	<update id="HRM070203DAO.tbhrmIndvdlExpensU" parameterClass="java.util.HashMap">
+	<![CDATA[/*HRM070203DAO.tbhrmIndvdlExpensU*/]]>
+		UPDATE TBHRM_BSRP_EXPENS
+		SET    EXPENS_SE      = #EXPENS_SE#
+		      ,DTLS_NM        = #DTLS_NM#
+		      ,USE_EXPENS     = #USE_EXPENS#
+		      ,UPDUSR_ID      = #S_USER_ID#
+		      ,UPDT_DT        = SYSDATE
+		WHERE  EMPNO          = #EMPNO#
+		AND    BSRP_SEQ       = #BSRP_SEQ#
+		AND    SEQ            = #SEQ#
+	</update>
+
+
+	<!-- 출장비 상세내역 삭제-->
+	<delete id="HRM070203DAO.tbhrmIndvdlExpensD" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_BSRP_EXPENS 
+		WHERE EMPNO     = #EMPNO#
+		  AND BSRP_SEQ  = #BSRP_SEQ#
+	]]>
+	<isNotEmpty property="SEQ">
+		AND    SEQ       = #SEQ#
+	</isNotEmpty>
+	</delete>
+
+	<!-- ====================== 근무상황부 sql 영역 =========================== -->
+
+ 	<!-- 근무상황부등록 입력	-->
+    <insert id="HRM070203DAO.tbhrmWrkcpC" parameterClass="java.util.HashMap">
+        <![CDATA[
+		INSERT INTO TBHRM_WRKCP (
+				  EMPNO
+				, SEQ
+				, BSRP_SEQ
+				, DEPT_CODE
+				, ASORT_CODE
+				, BGNDE
+				, BEGIN_TM
+				, ENDDE
+				, END_TM
+				, DAYCNT
+				, TIME
+				, PRVONSH
+				, FILE_SN
+				, SANCTN_NO
+				, CNFIRM_AT
+				, REGISTER_ID
+				, REGIST_DT
+				, UPDUSR_ID
+				, UPDT_DT
+		) VALUES (
+				  #EMPNO#
+				, (SELECT NVL(MAX(SEQ),0)+1 AS SEQ FROM TBHRM_WRKCP WHERE EMPNO = #EMPNO#)
+				, #BSRP_SEQ#
+				, #DEPT_CODE#
+				, '005'
+				, #BSRP_BGNDE#
+				, #BSRP_BEGIN_TM#
+				, #BSRP_ENDDE#
+				, #BSRP_END_TM#
+				, #BSRP_DAYCNT#
+				, '0000'
+				, #BSRP_PURPS#
+				, #FILE_SN#
+				, #SANCTN_NO#
+				, #CONFM_AT#
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+		)
+        ]]>
+    </insert>
+    
+	<!--  근무상황부 수정-->			
+    <update id="HRM070203DAO.tbhrmWrkcpU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			  UPDATE TBHRM_WRKCP
+			    SET	  DEPT_CODE   = #DEPT_CODE#
+					 ,ASORT_CODE  = '005'
+					 ,BGNDE       = #BSRP_BGNDE#
+					 ,BEGIN_TM    = #BSRP_BEGIN_TM#
+					 ,ENDDE       = #BSRP_ENDDE#
+					 ,END_TM      = #BSRP_END_TM#
+					 ,DAYCNT      = #BSRP_DAYCNT#
+					 ,TIME        = '0000'
+					 ,PRVONSH     = #BSRP_PURPS#
+					 ,FILE_SN     = #FILE_SN#
+					 ,SANCTN_NO   = #SANCTN_NO#
+					 ,CNFIRM_AT   = #CONFM_AT#
+					 ,UPDUSR_ID   = #S_USER_ID#
+					 ,UPDT_DT     = SYSDATE
+		      WHERE  EMPNO = #EMPNO#
+			  AND 	 BSRP_SEQ = #BSRP_SEQ#
+
+        ]]>
+    </update>
+    
+	<!--  근무상황부 삭제-->		
+    <delete id="HRM070203DAO.tbhrmWrkcpD" parameterClass="java.util.HashMap">
+        <![CDATA[
+            DELETE FROM TBHRM_WRKCP 
+             WHERE EMPNO = #EMPNO#
+			   AND BSRP_SEQ = #BSRP_SEQ#
+        ]]>
+    </delete>
+</sqlMap>

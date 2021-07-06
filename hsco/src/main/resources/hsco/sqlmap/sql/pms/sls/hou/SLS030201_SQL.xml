@@ -1,0 +1,879 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS030201_SQL">
+
+    <!-- 쿼리명 : 분양금납부대상자 조회
+	설명 : 분양금납부대상자 조회 쿼리
+	수정일  		수정자  	수정내용
+	2015.11.06	최승락	최초생성
+	작성자 : 최승락
+	최초작성일 : 2015.11.06
+	
+	수정 2016.11.25 손연옥: TAB_01 조건 삭제 AND T1.RCIV_DE IS NOT NULL
+	-->
+	<select id="SLS030201DAO.selectHouseLttotPayList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH
+			TAB_01 AS
+			(
+			SELECT DISTINCT T1.CNTRCTR_NO
+				FROM TBSLS_HOUSE_LTTOT_PAY T1
+				WHERE 1 = 1				
+					AND T1.PAY_CODE IN ('R0','S0')					
+			)
+			SELECT
+				  T2.HOUSE_CODE
+			    , T1.CNTRCTR_NO	  
+				, SFSLS_HOUSE_NM(T2.HOUSE_CODE, 'ALL_HOUSE_NM') AS HOUSE_NM
+				, T2.DONG
+				, T2.HO
+				, T4.CSTMR_NM
+				, T1.PAY_CODE
+				, SFCOM_CODE_NM('HOU0A1', T1.PAY_CODE, 'ALL_CODE_NM') AS PAY_CODE_NM
+				, T1.PAY_TMLMT
+				, T1.PAYAMT
+				, T1.ARRRG_AMOUNT
+	            , (CASE WHEN NVL(T1.ARRRG_AMOUNT,0) > 0 THEN T1.ARRRG_AMOUNT ELSE 0 END) AS ARRRG_AMT
+	            , (CASE WHEN NVL(T1.ARRRG_DSCNT_AMOUNT,0) < 0 THEN T1.ARRRG_DSCNT_AMOUNT ELSE 0 END) AS PREPAY_DSCNT_AMT
+	            , T1.PAYAMT + NVL (T1.ARRRG_AMOUNT, 0) + NVL(T1.ARRRG_DSCNT_AMOUNT ,0 ) AS TOTAL_AMT
+				, T1.YRINS_SALE_INTR
+				, T1.MDAT_DE
+				, T1.RCIV_DE
+ 	            , T1.PAY_SN
+		        , T1.PAY_SE
+		        , T1.PAY_NO				
+			  FROM TBSLS_HOUSE_LTTOT_PAY t1
+				, TBSLS_HCNTRCTR t2
+				, TAB_01 T3
+				, TBSLS_HOUSE_CSTMR T4
+			 WHERE 1 = 1
+			   AND T1.CNTRCTR_NO = T2.CNTRCTR_NO
+			   AND T1.CNTRCTR_NO = T3.CNTRCTR_NO
+			   AND T2.HOUSE_CSTMR_NO = T4.HOUSE_CSTMR_NO
+			   AND T2.CNTRCTR_STTUS_CODE = '01'
+			   AND (
+				    (
+						SUBSTR(T1.PAY_TMLMT,1,6) = SUBSTR(#PAY_TMLMT#,1,6)
+						]]>						
+						AND (
+							SUBSTR(T1.MDAT_DE, 1, 6) = SUBSTR(#PAY_TMLMT#,1,6)
+							OR T1.MDAT_DE IS NULL
+						    )
+					    )
+				  	OR SUBSTR(T1.MDAT_DE, 1, 6) = SUBSTR(#PAY_TMLMT#,1,6)
+				    )
+			   AND T2.HOUSE_CODE LIKE #HOUSE_CODE_FR# || '%'
+			   AND T2.DONG LIKE decode(#DONG_FR#,'','',lpad(#DONG_FR#,4,'0')) || '%'
+			   AND T2.HO LIKE decode(#HO_FR#,'','',lpad(#HO_FR#,4,'0'))|| '%'
+			   AND T1.RCIV_DE IS NULL
+			   AND T1.PAYAMT > 0
+			   <isEqual property="LON_AT" compareValue="1">
+			   AND NOT EXISTS (SELECT 1 FROM TBSLS_HCNTRCTR_LON Z WHERE T1.CNTRCTR_NO = Z.CNTRCTR_NO AND Z.RELIS_DE IS NULL)
+			   </isEqual>
+			   /*AND T1.PAY_CODE LIKE 'S%'*/
+			 ORDER BY T2.HOUSE_CODE, T2.DONG, T2.HO
+	</select>
+
+
+	<parameterMap id="spsls_house_lttot_pay_u_param" class="java.util.HashMap">
+		<parameter property="IN_PAY_TMLMT"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_MDAT_DE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAY_SN"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HOUSE_CODE_FR"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HOUSE_CODE_TO"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="DONG_FR"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_DONG_TO"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="HO_FR"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HO_TO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_OPETR_ID"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="OUT_RESULT_CD"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"	jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+	</parameterMap>
+
+	<!-- 쿼리명 : 분양금납부대상자 저장(조정파일생성)
+	설명 : 분양금납부대상자 저장(조정파일생성) 프로시저
+	수정일  		수정자  	수정내용
+	2015.11.09	최승락	최초생성
+	작성자 : 최승락
+	최초작성일 : 2015.11.09
+	-->
+	<procedure id="SLS030201DAO.SPSLS_HOUSE_LTTOT_PAY_U" parameterMap="spsls_house_lttot_pay_u_param">
+		{ call SPSLS_HOUSE_LTTOT_PAY_U(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+	</procedure>
+
+
+    <!-- 쿼리명 : 임대료납부대상자 조회
+	설명 : 임대료납부대상자 조회 쿼리
+	수정일  		수정자  	수정내용
+	2015.11.10	최승락	최초생성
+	작성자 : 최승락
+	최초작성일 : 2015.11.10
+	-->
+	<select id="SLS030201DAO.selectHouseRentPayList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH
+			TAB_01 AS
+			(
+			SELECT
+				  T1.CNTRCTR_NO
+				, SUM(NVL(T1.MT_RNTCHRG,0)) + SUM(NVL(T1.DFNNT_AMOUNT,0)) AS MT_RNTCHRG
+				, SUM(NVL(T1.ARRRG_AMOUNT,0)) AS ARRRG_AMOUNT
+			  FROM TBSLS_HOUSE_RENT_PAY T1
+			 WHERE 1 = 1
+			   AND T1.RQEST_YM < SUBSTR(#PAY_TMLMT#,1,6)
+			   AND T1.RCIV_DE IS NULL			   
+			  GROUP BY T1.CNTRCTR_NO
+			)
+			SELECT
+				  SFSLS_HOUSE_NM(T2.HOUSE_CODE, 'ALL_HOUSE_NM') AS HOUSE_NM
+				, T2.HOUSE_CODE				  
+				, T2.DONG				
+				, T2.HO
+				, T2.CNTRCTR_NO
+				, T4.CSTMR_NM
+				, T1.RQEST_YM
+				, MAX(T1.PAY_TMLMT) AS PAY_TMLMT
+				, SUM(NVL(T1.MT_RNTCHRG,0)) AS MT_RNTCHRG
+				, SUM(NVL(T3.MT_RNTCHRG,0)) AS DEL_MT_RNTCHRG
+				, SUM(NVL(T1.ARRRG_AMOUNT,0) + NVL(T3.ARRRG_AMOUNT,0)) AS ARRRG_AMOUNT
+				, SUM(NVL(T1.DFNNT_AMOUNT,0)) AS DFNNT_AMOUNT
+				, SUM(NVL(T1.RCIV_AMOUNT,0)) AS RCIV_AMOUNT
+				, MAX(T1.RCIV_DE) AS RCIV_DE
+				, MAX(T1.MDAT_DE) AS MDAT_DE
+				, MAX(T1.CANCL_DE) AS CANCL_DE
+			  FROM TBSLS_HOUSE_RENT_PAY T1
+				, TBSLS_HCNTRCTR T2
+				, TAB_01 T3
+				, TBSLS_HOUSE_CSTMR T4
+			 WHERE 1 = 1
+		]]>
+			   AND T1.CNTRCTR_NO = T2.CNTRCTR_NO
+			   AND T1.CNTRCTR_NO = T3.CNTRCTR_NO(+)
+			   AND T2.HOUSE_CSTMR_NO = T4.HOUSE_CSTMR_NO
+			   AND T1.RQEST_YM = SUBSTR(#PAY_TMLMT#,1,6)
+			   AND T2.HOUSE_CODE LIKE #HOUSE_CODE_FR# || '%'
+			   AND T2.DONG LIKE #DONG_FR# || '%'
+			   AND T2.HO LIKE #HO_FR# || '%'			   
+			   AND SUBSTR(T1.MDAT_DE,1,6) = SUBSTR(#PAY_TMLMT#,1,6)	<!-- MOD -->
+			   AND T2.RENT_LTTOT_CNVRS_DE IS NULL
+           	   AND T2.CANCL_DE IS NULL
+			   AND T2.HOUSE_CODE IN (
+								 SELECT S1.HOUSE_CODE
+								   FROM TBSLS_HOUSE_INFO S1
+								  WHERE 1 = 1
+								    AND S1.HOUSE_SE IN ('S2', 'S4')
+								    AND S1.USE_AT = '1'
+								    AND NVL(S1.LTTOT_CNVRS_SE, '01') != '02'
+							    )
+			 GROUP BY T2.CNTRCTR_NO, T4.CSTMR_NM, T2.HOUSE_CODE, T2.DONG, T2.HO, T1.RQEST_YM
+			 ORDER BY HOUSE_CODE, DONG, HO
+	</select>
+
+
+    <!-- 쿼리명 : 임대료납부대상자 저장(체납파일생성)
+	설명 : 임대료납부대상자 저장(체납파일생성) 쿼리
+	수정일  		수정자  	수정내용
+	2015.11.11	최승락	최초생성
+	작성자 : 최승락
+	최초작성일 : 2015.11.11
+	-->
+	<update id="SLS030201DAO.saveNpymHouseRentPayList" parameterClass="java.util.Map">
+		UPDATE TBSLS_HOUSE_RENT_PAY T1
+		   SET T1.ARRRG_AMOUNT = SFRNT_LFSTS_DELAY_RATE('HOU'
+												, (SELECT L1.HOUSE_CODE FROM TBSLS_HCNTRCTR L1 WHERE L1.CNTRCTR_NO = T1.CNTRCTR_NO)
+												, T1.PAY_TMLMT
+												, #PAY_TMLMT#
+												, NVL(T1.MT_RNTCHRG,0) + NVL(T1.DFNNT_AMOUNT,0)
+												)
+			, T1.UPDUSR_ID = #S_USER_ID#
+			, T1.UPDT_DT = SYSDATE
+		 WHERE 1 = 1
+		   AND T1.RCIV_DE IS NULL
+		 <![CDATA[
+		   AND T1.PAY_TMLMT < #PAY_TMLMT#
+		 ]]>
+		   AND T1.CNTRCTR_NO IN (
+							 SELECT S1.CNTRCTR_NO
+							   FROM TBSLS_HCNTRCTR S1
+							  WHERE 1 = 1
+  							    AND S1.HOUSE_CODE LIKE #HOUSE_CODE_FR# || '%'
+							    AND S1.DONG LIKE #DONG_FR# || '%'
+							    AND S1.HO LIKE #HO_FR# || '%'
+						    )
+	</update>
+
+
+    <!-- 쿼리명 : 임대료조정파일 생성 여부 체크
+	설명 : 임대료조정파일 생성 여부 체크 쿼리
+	수정일  		수정자  	수정내용
+	2015.11.11	최승락	최초생성
+	작성자 : 최승락
+	최초작성일 : 2015.11.11
+	-->
+	<select id="SLS030201DAO.selectMdatFileCreatYn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT COUNT(*) AS CNT
+			  FROM TBSLS_HOUSE_RENT_PAY T1
+				, TBSLS_HCNTRCTR T2
+			 WHERE 1 = 1
+		]]>
+			   AND T1.CNTRCTR_NO = T2.CNTRCTR_NO
+			   AND T1.RQEST_YM = SUBSTR(#PAY_TMLMT#, 1, 6)
+			   AND T1.OPERT_SE = 'A'
+			   AND T2.HOUSE_CODE LIKE #HOUSE_CODE_FR# || '%'
+			   AND T2.DONG LIKE #DONG_FR# || '%'
+			   AND T2.HO LIKE #HO_FR# || '%'
+	</select>
+
+
+	<parameterMap id="spsls_house_rent_pay_ui_param" class="java.util.HashMap">
+		<parameter property="IN_RQEST_YM"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAY_TMLMT"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_MDAT_DE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HOUSE_CODE_FR"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HOUSE_CODE_TO"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="DONG_FR"	     	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_DONG_TO"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="HO_FR"			    jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HO_TO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_OPETR_ID"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="OUT_RESULT_CD"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"	jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+	</parameterMap>
+
+	<!-- 쿼리명 : 임대료납부대상자 저장(조정파일생성)
+	설명 : 임대료납부대상자 저장(조정파일생성) 프로시저
+	수정일  		수정자  	수정내용
+	2015.11.12	최승락	최초생성
+	작성자 : 최승락
+	최초작성일 : 2015.11.12
+	-->
+	<procedure id="SLS030201DAO.SPSLS_HOUSE_RENT_PAY_UI" parameterMap="spsls_house_rent_pay_ui_param">
+		{ call SPSLS_HOUSE_RENT_PAY_UI(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+	</procedure>
+	
+	
+    <!-- 쿼리명 : 임대료전월비교
+	설명 : 임대료납부대상자 조회 쿼리
+	수정일  		수정자  	수정내용
+	2015.11.13	최승락	최초생성
+	작성자 : 최승락
+	최초작성일 : 2015.11.13
+	-->
+	<select id="SLS030201DAO.selectHouseRentPayLsmthCmpr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+SELECT RNUM
+       ,DECODE(B.RNUM,3,NULL, A.HOUSE_NM) AS HOUSE_NM
+       ,DECODE(B.RNUM,3,NULL,A.HOUSE_CODE) AS HOUSE_CODE 
+       ,DECODE(B.RNUM,1,A.DONG,2,'',3,'') AS DONG
+       ,DECODE(B.RNUM,1,A.HO,2,'소계',3,'총계') AS HO 
+       ,DECODE(B.RNUM,1,A.CSTMR_NM,'') AS CSTMR_NM
+       ,DECODE(B.RNUM,1,A.CNTRCT_DE,NULL) AS CNTRCT_DE
+       ,DECODE(B.RNUM,1,A.RENT_BGNDE,NULL) AS RENT_BGNDE
+       ,SUM(DECODE(B.RNUM,1,NULL,1)) AS CNT
+       ,SUM(BASE_SEC_AMT) AS BASE_SEC_AMT
+       ,SUM(CORT_AMT) AS CORT_AMT
+       ,SUM(ADD_AMT) AS ADD_AMT
+       ,SUM(BASE_RENT_AMT) AS BASE_RENT_AMT
+       ,SUM(RENT_AMT) AS RENT_AMT
+       ,SUM(RENT_AMT1) AS RENT_AMT1
+       ,SUM( DECODE(B.RNUM,1,RENT_AMT1 - RENT_AMT,NULL) ) AS CHA_AMT  
+FROM (             
+        SELECT A.HOUSE_CODE, A.DONG, A.HO, A.HOUSE_NM,
+               C.CSTMR_NM, C.CNTRCT_DE, C.RENT_BGNDE,
+               A.TOT_AMT AS BASE_SEC_AMT, C.CORT_AMT, C.CORT_AMT - A.TOT_AMT AS ADD_AMT,
+               A.RENT_AMT AS BASE_RENT_AMT, NVL(C.RENT_AMT,A.RENT_AMT) AS RENT_AMT,
+               CASE WHEN MOD (( C.CORT_AMT - A.TOT_AMT ), 1000000) = 0 THEN 
+                         CEIL(TRUNC(A.RENT_AMT - ( (C.CORT_AMT - A.TOT_AMT) * (5.5 / 100) / 12)) * 0.1) / 0.1 
+                    ELSE A.RENT_AMT END AS RENT_AMT1                            
+          FROM (SELECT B.HOUSE_CODE, A.HOUSE_NM, B.DONG, B.HO
+                       ,CASE WHEN C.MAX_DATE IS NULL THEN BASS_RNTCHRG ELSE RNTCHRG END AS RENT_AMT
+                       ,CASE WHEN C.MAX_DATE IS NULL THEN BASS_LTTOT_AMOUNT ELSE GTN END AS TOT_AMT
+                  FROM TBSLS_HOUSE_INFO A, TBSLS_HOUSE_DONG_HO B,
+                     (SELECT MAX(APPLC_DE) AS MAX_DATE 
+                         FROM TBPMS_INTRT_INFO WHERE APPLC_DE >= TO_CHAR(SYSDATE,'YYYYMMDD') AND JOB_SE = 'HOU') C 
+                 WHERE A.HOUSE_SE IN ('S2', 'S4' )
+                   AND NVL(A.LTTOT_CNVRS_SE,'01') <> '02'
+                   AND A.HOUSE_CODE NOT IN( '548', '772' )
+                   AND A.USE_AT = '1'
+                   AND A.HOUSE_CODE = B.HOUSE_CODE    
+               ) A,            
+               (               
+               SELECT A.HOUSE_CODE, A.DONG, A.HO, B.CSTMR_NM, A.CNTRCT_DE, A.RENT_BGNDE, A.RENT_ENDDE,
+                       (SELECT RNTCHRG
+                          FROM TBSLS_HOUSE_RNTCHRG R
+                         WHERE R.CNTRCTR_NO = A.CNTRCTR_NO
+                           AND APPLC_DE = (SELECT MAX (B.APPLC_DE)
+                                               FROM TBSLS_HOUSE_RNTCHRG B
+                                              WHERE R.CNTRCTR_NO = B.CNTRCTR_NO
+                                                AND B.APPLC_DE <= TO_CHAR(SYSDATE,'YYYYMMDD'))
+                        ) AS RENT_AMT,
+                       (SELECT SUM(PAYAMT) AS CORT_AMT FROM TBSLS_HOUSE_LTTOT_PAY V WHERE V.CNTRCTR_NO = A.CNTRCTR_NO AND PAY_CODE LIKE 'R%'
+                           AND PAY_TMLMT <
+                            NVL( (SELECT MAX(APPLC_DE) -1
+                                  FROM TBPMS_INTRT_INFO B WHERE B.JOB_SE = 'HOU' 
+                                   AND B.APPLC_DE >= TO_CHAR(SYSDATE,'YYYYMMDD')
+                            ), '99991231')
+                       ) AS CORT_AMT
+                  FROM TBSLS_HCNTRCTR A
+                  JOIN TBSLS_HOUSE_CSTMR B ON A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+                 WHERE A.CNTRCTR_STTUS_CODE = '01' 
+                   AND A.RENT_LTTOT_CNVRS_DE IS NULL  
+               ) C           
+         WHERE A.HOUSE_CODE LIKE #HOUSE_CODE_FR#
+           AND A.DONG LIKE #DONG_FR# || '%'
+           AND A.HO LIKE #HO_FR# || '%'
+           AND A.HOUSE_CODE = C.HOUSE_CODE(+)
+           AND A.DONG = C.DONG(+)
+           AND A.HO = C.HO(+)
+           AND NOT EXISTS(SELECT 1 FROM TBSLS_HCNTRCTR AA
+                           WHERE AA.HOUSE_CODE = A.HOUSE_CODE
+                             AND AA.DONG = A.DONG
+                             AND AA.HO = A.HO
+                             AND AA.CNTRCTR_STTUS_CODE = '01'
+                             AND AA.RENT_LTTOT_CNVRS_DE IS NOT NULL
+                      )
+       ) A,               
+       (SELECT ROWNUM AS RNUM FROM USER_TABLES WHERE ROWNUM <= 3) B          
+ GROUP BY RNUM
+       ,DECODE(B.RNUM,3,NULL, A.HOUSE_NM) 
+       ,DECODE(B.RNUM,3,NULL,A.HOUSE_CODE) 
+       ,DECODE(B.RNUM,1,A.DONG,2,'',3,'')
+       ,DECODE(B.RNUM,1,A.HO,2,'소계',3,'총계')
+       ,DECODE(B.RNUM,1,A.CSTMR_NM,'')
+       ,DECODE(B.RNUM,1,A.CNTRCT_DE,NULL)
+       ,DECODE(B.RNUM,1,A.RENT_BGNDE,NULL)
+ ORDER BY HOUSE_CODE,RNUM,DONG, HO          
+		]]>
+	</select>
+	
+    <!-- 쿼리명 : 분양금납부내역 조회
+	설명 : 분양금납부내역[임의수납용] 조회 쿼리
+	-->
+	<select id="SLS030201DAO.selectHouseLttotPayListP01" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH TAB_01 AS 
+		       (SELECT DISTINCT T1.CNTRCTR_NO 
+		         FROM TBSLS_HOUSE_LTTOT_PAY T1 
+		        WHERE 1 = 1 
+		              AND T1.PAY_CODE IN ('R0','S0') <!-- 계약금 -->
+		              AND T1.RCIV_DE IS NOT NULL 
+		       ) 
+		SELECT T1.CNTRCTR_NO,
+       		   T1.PAY_NO,
+               T2.HOUSE_CODE , 
+		       SFSLS_HOUSE_NM(T2.HOUSE_CODE, 'ALL_HOUSE_NM') AS HOUSE_NM , 
+		       T2.DONG , 
+		       T2.HO , 
+		       T4.CSTMR_NM , 
+		       T1.PAY_CODE , 
+		       SFCOM_CODE_NM('HOU0A1', T1.PAY_CODE, 'ALL_CODE_NM') AS PAY_CODE_NM , 
+		       T1.PAY_TMLMT , 
+		       T1.PAYAMT , 
+		       T1.ARRRG_AMOUNT , 
+		       T1.YRINS_SALE_INTR , 
+		       T1.MDAT_DE , 
+		       T1.RCIV_DE ,
+		       T1.RCIV_AMOUNT
+		  FROM TBSLS_HOUSE_LTTOT_PAY T1 , 
+		       TBSLS_HCNTRCTR T2 , 
+		       TAB_01 T3 , 
+		       TBSLS_HOUSE_CSTMR T4 
+		 WHERE 1 = 1 
+	       AND T1.CNTRCTR_NO = T2.CNTRCTR_NO 
+	       AND T1.CNTRCTR_NO = T3.CNTRCTR_NO 
+	       AND T2.HOUSE_CSTMR_NO = T4.HOUSE_CSTMR_NO 
+	       AND T2.CNTRCTR_STTUS_CODE = '01' 
+	       AND ( ( SUBSTR(T1.PAY_TMLMT,1,6) = SUBSTR(#PAY_TMLMT#,1,6)  AND SUBSTR(T1.MDAT_DE,1,6) = SUBSTR(#PAY_TMLMT#,1,6) ) 
+	           OR SUBSTR(T1.MDAT_DE,1,6) = SUBSTR(#PAY_TMLMT#,1,6) )
+           AND ( T1.RCIV_DE IS NULL OR T1.TMPR_RCIV_NO = -100 )	<!-- 임의수납처리 : -100 ,감액처리 : -200 -->	           
+		   AND T2.HOUSE_CODE LIKE #HOUSE_CODE_FR# || '%'
+		   AND T2.DONG LIKE #DONG_FR# || '%'
+		   AND T2.HO LIKE #HO_FR# || '%'
+	       AND T1.PAY_CODE LIKE 'S%'
+	</select>
+	
+    <!-- 쿼리명 : 임대료납부내역 조회
+	설명 : 임대료납부내역[임의수납용]조회 쿼리
+	-->	
+	<select id="SLS030201DAO.selectHouseRentPayListP01" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH
+			TAB_01 AS
+			(
+			SELECT
+				  T1.CNTRCTR_NO
+       		     ,T1.PAY_NO				  
+				 ,SUM(NVL(T1.MT_RNTCHRG,0)) + SUM(NVL(T1.DFNNT_AMOUNT,0)) AS MT_RNTCHRG
+				 ,SUM(NVL(T1.ARRRG_AMOUNT,0)) AS ARRRG_AMOUNT
+			  FROM TBSLS_HOUSE_RENT_PAY T1
+			 WHERE 1 = 1
+			   AND T1.RQEST_YM < SUBSTR(#PAY_TMLMT#,1,6)
+			   AND T1.RCIV_DE IS NULL			   
+			  GROUP BY T1.CNTRCTR_NO
+			          ,T1.PAY_NO
+			)
+			SELECT
+			      T2.CNTRCTR_NO
+			    , T1.PAY_NO			
+				, SFSLS_HOUSE_NM(T2.HOUSE_CODE, 'ALL_HOUSE_NM') AS HOUSE_NM
+				, T2.HOUSE_CODE				  
+				, T2.DONG				
+				, T2.HO
+				, T2.CNTRCTR_NO
+				, T4.CSTMR_NM
+				, T1.RQEST_YM
+				, MAX(T1.PAY_TMLMT) AS PAY_TMLMT
+				, SUM(NVL(T1.MT_RNTCHRG,0)) AS MT_RNTCHRG
+				, SUM(NVL(T3.MT_RNTCHRG,0)) AS DEL_MT_RNTCHRG
+				, SUM(NVL(T1.ARRRG_AMOUNT,0) + NVL(T3.ARRRG_AMOUNT,0)) AS ARRRG_AMOUNT
+				, SUM(NVL(T1.DFNNT_AMOUNT,0)) AS DFNNT_AMOUNT
+				, SUM(NVL(T1.RCIV_AMOUNT,0)) AS RCIV_AMOUNT
+				, MAX(T1.RCIV_DE) AS RCIV_DE
+				, MAX(T1.MDAT_DE) AS MDAT_DE
+				, MAX(T1.CANCL_DE) AS CANCL_DE
+			  FROM TBSLS_HOUSE_RENT_PAY T1
+				, TBSLS_HCNTRCTR T2
+				, TAB_01 T3
+				, TBSLS_HOUSE_CSTMR T4
+			 WHERE 1 = 1
+		]]>
+			   AND T1.CNTRCTR_NO = T2.CNTRCTR_NO
+			   AND T1.CNTRCTR_NO = T3.CNTRCTR_NO(+)
+			   AND T2.HOUSE_CSTMR_NO = T4.HOUSE_CSTMR_NO
+			   AND T1.RQEST_YM = SUBSTR(#PAY_TMLMT#,1,6)
+			   AND T2.HOUSE_CODE LIKE #HOUSE_CODE_FR# || '%'
+			   AND T2.DONG LIKE #DONG_FR# || '%'
+			   AND T2.HO LIKE #HO_FR# || '%'
+			   AND SUBSTR(T1.MDAT_DE,1,6) = SUBSTR(#PAY_TMLMT#,1,6)
+               AND ( T1.RCIV_DE IS NULL OR T1.TMPR_RCIV_NO = -100 )	<!-- 임의수납처리 : -100 ,감액처리 : -200 -->			   		   
+			   AND T2.HOUSE_CODE IN (
+								 SELECT S1.HOUSE_CODE
+								   FROM TBSLS_HOUSE_INFO S1
+								  WHERE 1 = 1
+								    AND S1.HOUSE_SE IN ('S2', 'S4')
+								    AND S1.USE_AT = '1'
+								    AND NVL(S1.LTTOT_CNVRS_SE, '01') != '02'
+							    )
+			 GROUP BY T2.CNTRCTR_NO, T1.PAY_NO	,T4.CSTMR_NM, T2.HOUSE_CODE, T2.DONG, T2.HO, T1.RQEST_YM
+	</select>
+	
+	<!-- 쿼리명 : 임의수납 저장
+	설명 : 임의수납 저장[분양금] 쿼리
+	-->
+	<update id="SLS030201DAO.updateHouseLttotPayP01" parameterClass="java.util.Map">
+		UPDATE TBSLS_HOUSE_LTTOT_PAY SET
+			   RCIV_DE 			= #RCIV_DE#			<!-- 수납일자 -->
+			  ,RCIV_AMOUNT 		= #RCIV_AMOUNT#		<!-- 수납금액 -->
+			  ,TMPR_RCIV_AMOUNT = #TMPR_RCIV_AMOUNT#<!-- 임시수납금액 -->
+			  ,TMPR_RCIV_NO 	= -100				<!-- 임시수납번호-->
+			  ,UPDUSR_ID   		= #S_USER_ID#
+			  ,UPDT_DT     		= SYSDATE
+		WHERE 1=1
+		  AND CNTRCTR_NO = #CNTRCTR_NO#
+		  AND PAY_NO = #PAY_NO#
+    </update> 
+    
+	<!-- 쿼리명 : 임의수납 저장
+	설명 : 임의수납 저장[임대료] 쿼리
+	-->
+	<update id="SLS030201DAO.updateHouseRentPayP01" parameterClass="java.util.Map">
+		UPDATE TBSLS_HOUSE_RENT_PAY SET
+			   RCIV_DE 			= #RCIV_DE#  		<!-- 수납일자 -->
+			  ,RCIV_AMOUNT 		= #RCIV_AMOUNT#		<!-- 수납금액 -->
+			  ,TMPR_RCIV_AMOUNT = #TMPR_RCIV_AMOUNT#<!-- 임시수납금액 -->
+			  ,TMPR_RCIV_NO 	= -100				<!-- 임시수납번호-->
+			  ,UPDUSR_ID   		= #S_USER_ID#
+			  ,UPDT_DT     		= SYSDATE
+		WHERE 1=1
+		  AND CNTRCTR_NO = #CNTRCTR_NO#
+		  AND PAY_NO = #PAY_NO#
+    </update>
+    
+	
+    <!-- 쿼리명 : 고지서정보 조회
+	설명 : 조정년월기준 고지서정보 조회 쿼리
+	-->
+	<select id="SLS030201DAO.selectHouseRentPayListP02" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT a.NHT_SE AS F_TYPE,           
+		       b.HOUSE_CODE AS F_APT_CODE,   
+		       b.DONG AS F_DONG,             
+		       b.HO AS F_HO,                 
+		       a.CNTRCTR_NO AS F_CRT_ID,     
+		       c.CSTMR_NM AS F_CNAME,        
+		       a.RNTCHRG AS F_RENT_AMT,      
+		       a.ARRS AS F_APAY_AMT,         
+		       a.NPYM_AMOUNT AS F_A_RENT_AMT,
+		       a.NPYM_ARRS AS F_A_APAY_AMT,  
+		       a.PAY_TMLMT AS F_PANEND_DATE, 
+		       LPAD(a.ATCNG_SE,2,'0') AS F_ST_MEANS,     <!-- TEMP -->
+		       a.ACNUTNO AS F_PASS_BOOK_NO,  
+		       a.DPSTR AS F_DEPOSIT_NAME,    
+		       c.ZIP AS F_POSTNO,            
+		       c.ADRES AS F_ADDR1,           
+		       c.ADRES_DETAIL AS F_ADDR2 ,   
+		       a.NHT_NO,                     
+		       a.DECSN_DE	 
+		  FROM TBSLS_HOUSE_NHT_PBLICTE a
+		      ,TBSLS_HCNTRCTR b
+		      ,TBSLS_HOUSE_CSTMR c
+		WHERE 1=1
+		  AND a.CNTRCTR_NO = b.CNTRCTR_NO
+		  AND b.HOUSE_CSTMR_NO = c.HOUSE_CSTMR_NO
+		  AND b.HOUSE_CODE LIKE #HOUSE_CODE_FROM# || '%'		  
+		  AND a.OUTPT_YM = SUBSTR(#PAY_TMLMT#,1,6)
+		ORDER BY b.HOUSE_CODE, b.DONG, B.HO
+	</select> 
+	
+	
+    <!-- 쿼리명 : 출력용파일정보 조회
+	설명 : 조정년월기준 출력용파일정보 쿼리
+	-->
+	<select id="SLS030201DAO.selectHouseRentPayListPrintP02" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT b.HOUSE_CODE,
+		       b.DONG,
+		       b.HO,
+		       k.CSTMR_NM,
+		       CASE WHEN d.HOUSE_SE in('S2','S4') AND nvl(b.RENT_BGNDE,'99991231')<![CDATA[	 < ]]> to_char(sysdate,'yyyymmdd') THEN    
+                 DECODE (NVL (b.rqest_estbs_dm, '0'), '0', d.locplc_zip, b.zip_dm )
+		            ELSE DECODE (NVL (b.rqest_estbs_dm, '0'), '0', d.locplc_zip, k.zip ) 
+		       END AS postno,
+		       CASE WHEN d.HOUSE_SE in('S2','S4') AND nvl(b.RENT_BGNDE,'99991231')<![CDATA[	 < ]]> to_char(sysdate,'yyyymmdd') THEN
+		               DECODE (NVL (b.rqest_estbs_dm, '0'),
+		                       '0', TRIM (d.locplc_bass_adres || ' ' || d.locplc_detail_adres),
+		                       TRIM (b.bass_adres_dm || ' ' || b.detail_adres_dm)
+		                      ) 
+		            ELSE 
+		              DECODE (NVL (b.rqest_estbs_dm, '0'),
+		                       '0', TRIM (k.adres || ' ' || k.adres_detail),
+		                       TRIM (b.bass_adres_dm || ' ' || b.detail_adres_dm)
+		                      ) 
+		       END AS addr1,
+		       CASE WHEN d.HOUSE_SE in('S2','S4') AND nvl(b.RENT_BGNDE,'99991231') <![CDATA[	 < ]]> to_char(sysdate,'yyyymmdd') THEN
+				             DECODE (NVL (b.rqest_estbs_dm, '0'),
+				                   '0', d.house_nm
+				                    || ' '
+				                    || TRIM (TO_NUMBER (b.dong) || '-' || TO_NUMBER (b.ho)),
+				                   '')
+				            ELSE '' END
+		        AS addr2,
+		       a.OUTPT_YM BILL_YM,
+		       TO_CHAR(TO_DATE(SFCOM_GET_TREDATE( a.PAY_TMLMT)),'YYYY-MM-DD') PAYEND_DATE,
+		       '주택(아파트)' AS C_TITLE1,
+		       d.HOUSE_NM AS C_CONT1,
+		       '동   호   수' AS C_TITLE2,
+		       trim(TO_CHAR(to_number(b.DONG)) ||'-'|| TO_CHAR(to_number(b.HO))) AS C_CONT2,
+		       '납   부   자' AS C_TITLE3,
+		       k.CSTMR_NM AS C_CONT3,
+		       '  ' AS C_TITLE4,
+		       '  ' AS C_CONT4,
+		       '납부대상금액' AS A_TITLE1,
+		       C.RENT_AMT AS A_AMT1,
+		       '차감금액' AS A_TITLE2,
+		       C.CHA_AMT AS A_AMT2,
+		       '연체금액' AS A_TITLE3,
+		       C.APAY_AMT AS A_AMT3,
+		       '  ' AS A_TITLE4,
+		       0 AS A_AMT4,
+		       C.RENT_AMT + C.CHA_AMT + C.APAY_AMT AS A_AMT5,
+		       e.MIN_RATIO,
+		       e.MAX_RATIO,
+		       f.OPOST_NO,
+		       f.OADDR1,
+		       f.OADDR2,
+		       f.OTEL_NO,
+		       f.OFAX_NO,
+		       decode(s.CNTRCTR_NO,'',v.BANK1,'') AS BANK1,
+		       decode(s.CNTRCTR_NO,'',v.ACCT_NO1,'') AS ACCT_NO1,
+		       decode(s.CNTRCTR_NO,'',v.BANK2,'') AS BANK2,
+		       decode(s.CNTRCTR_NO,'',v.ACCT_NO2,'') AS ACCT_NO2,
+		       decode(s.CNTRCTR_NO,'',v.BANK3,'') AS BANK3,
+		       decode(s.CNTRCTR_NO,'',v.ACCT_NO3,'') AS ACCT_NO3,
+		       decode(s.CNTRCTR_NO,'',v.BANK4,'') AS BANK4,
+		       decode(s.CNTRCTR_NO,'',v.ACCT_NO4,'') AS ACCT_NO4,
+		       decode(s.CNTRCTR_NO,'',v.BANK5,'') AS BANK5,
+		       decode(s.CNTRCTR_NO,'',v.ACCT_NO5,'') AS ACCT_NO5,
+		       decode(s.CNTRCTR_NO,'',v.BANK6,'') AS BANK6,
+		       decode(s.CNTRCTR_NO,'',v.ACCT_NO6,'') AS ACCT_NO6  ,
+		       r.REC_DATE,
+		       r.REC_AMT,
+		       s.BANK_NM,
+		       s.ACNUTNO,
+		       s.DPSTR,
+		       c.*,
+		       (SELECT CHRCTR_PREPAR_VALUE_2 AS AUTO_NO
+                      FROM TBCOM_CMMN_CODE
+                     WHERE GRP_CODE = 'PCOM05'
+                       AND CODE = '06'
+		       ) AS AUTO_NO
+		  FROM TBSLS_HOUSE_NHT_PBLICTE a,
+		       TBSLS_HCNTRCTR b,
+		       TBSLS_HOUSE_CSTMR k,
+		       TBSLS_HOUSE_INFO d,
+		       (SELECT a.CNTRCTR_NO,
+		              TO_CHAR(MAX(TO_DATE(a.RCIV_DE,'YYYYMMDD')),'YYYY-MM-DD') AS REC_DATE,
+		              SUM(a.RCIV_AMOUNT) AS REC_AMT
+		         FROM TBSLS_HOUSE_RCIV_PSTMRK a  <!-- 수납소인정보 -->
+		        WHERE 1=1
+		          AND a.RCIV_DE = SFCOM_GET_TREDATE(#BEF_OUTDE#)   <!-- 전월출금일 #BEF_OUTDE# -->
+				<![CDATA[		          
+		          AND a.RCIV_AMOUNT > 0
+		        ]]>
+		          AND a.PAY_SE = '2'
+		        GROUP BY a.CNTRCTR_NO
+		       ) r,
+		       (SELECT 
+                     CNTRCTR_NO AS CNTRCTR_NO
+                    ,(
+                        SELECT CODE_NM
+                        FROM TBCOM_CMMN_CODE 
+                        WHERE GRP_CODE = 'COM021' 
+                        AND CODE = BANK_CODE
+                     ) AS BANK_NM
+                    ,ACNUTNO
+                    , DPSTR
+                   FROM TBPMS_ATCNG
+                   WHERE JOB_SE = 'HOU'
+                   AND PAY_SE = '06'
+                   AND ATCNG_CANCL_DE IS NULL   
+		       ) s,
+		       (SELECT CNTRCTR_NO,
+		              SUM(RENT_AMT) AS RENT_AMT,
+		              SUM(CHA_AMT) 	AS CHA_AMT,
+		              SUM(APAY_AMT) AS APAY_AMT,
+		              SUM(TOT_AMT) 	AS TOT_AMT,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE1,'yyyymmdd')),'YYYY-MM') AS MONTH1,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE1,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE1,
+		              SUM(RENT_AMT1) 	AS RNET_AMT1,
+		              SUM(CHA_AMT1) 	AS CHA_AMT1,
+		              SUM(APAY_AMT1) 	AS APAY_AMT1,
+		              SUM(RENT_AMT1+CHA_AMT1+APAY_AMT1) AS TOT_ATM1,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE2,'yyyymmdd')),'YYYY-MM') AS MONTH2,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE2,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE2,
+		              SUM(RENT_AMT2) 	AS RNET_AMT2,
+		              SUM(CHA_AMT2) 	AS CHA_AMT2,
+		              SUM(APAY_AMT2) 	AS APAY_AMT2,
+		              SUM(RENT_AMT2+CHA_AMT2+APAY_AMT2) AS TOT_ATM2,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE3,'yyyymmdd')),'YYYY-MM') AS MONTH3,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE3,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE3,
+		              SUM(RENT_AMT3) 	AS RNET_AMT3,
+		              SUM(CHA_AMT3) 	AS CHA_AMT3,
+		              SUM(APAY_AMT3) 	AS APAY_AMT3,
+		              SUM(RENT_AMT3+CHA_AMT3+APAY_AMT3) AS TOT_ATM3,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE4,'yyyymmdd')),'YYYY-MM') AS MONTH4,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE4,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE4,
+		              SUM(RENT_AMT4) 	AS RNET_AMT4,
+		              SUM(CHA_AMT4) 	AS CHA_AMT4,
+		              SUM(APAY_AMT4) 	AS APAY_AMT4,
+		              SUM(RENT_AMT4+CHA_AMT4+APAY_AMT4) AS TOT_ATM4,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE5,'yyyymmdd')),'YYYY-MM') AS MONTH5,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE5,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE5,
+		              SUM(RENT_AMT5) 	AS RNET_AMT5,
+		              SUM(CHA_AMT5) 	AS CHA_AMT5,
+		              SUM(APAY_AMT5) 	AS APAY_AMT5,
+		              SUM(RENT_AMT5+CHA_AMT5+APAY_AMT5) AS TOT_ATM5,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE6,'yyyymmdd')),'YYYY-MM') AS MONTH6,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE6,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE6,
+		              SUM(RENT_AMT6) 	AS RNET_AMT6,
+		              SUM(CHA_AMT6) 	AS CHA_AMT6,
+		              SUM(APAY_AMT6) 	AS APAY_AMT6,
+		              SUM(RENT_AMT6+CHA_AMT6+APAY_AMT6) AS TOT_ATM6,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE7,'yyyymmdd')),'YYYY-MM') AS MONTH7,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE7,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE7,
+		              SUM(RENT_AMT7) 	AS RNET_AMT7,
+		              SUM(CHA_AMT7) 	AS CHA_AMT7,
+		              SUM(APAY_AMT7) 	AS APAY_AMT7,
+		              SUM(RENT_AMT7+CHA_AMT7+APAY_AMT7) AS TOT_ATM7,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE8,'yyyymmdd')),'YYYY-MM') AS MONTH8,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE8,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE8,
+		              SUM(RENT_AMT8) 	AS RNET_AMT8,
+		              SUM(CHA_AMT8) 	AS CHA_AMT8,
+		              SUM(APAY_AMT8) 	AS APAY_AMT8,
+		              SUM(RENT_AMT8+CHA_AMT8+APAY_AMT8) AS TOT_ATM8,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE9,'yyyymmdd')),'YYYY-MM') AS MONTH9,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE9,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE9,
+		              SUM(RENT_AMT9) 	AS RNET_AMT9,
+		              SUM(CHA_AMT9) 	AS CHA_AMT9,
+		              SUM(APAY_AMT9) 	AS APAY_AMT9,
+		              SUM(RENT_AMT9+CHA_AMT9+APAY_AMT9) AS TOT_ATM9,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE10,'yyyymmdd')),'YYYY-MM') AS MONTH10,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE10,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE10,
+		              SUM(RENT_AMT10) 	AS RNET_AMT10,
+		              SUM(CHA_AMT10) 	AS CHA_AMT10,
+		              SUM(APAY_AMT10) 	AS APAY_AMT10,
+		              SUM(RENT_AMT10+CHA_AMT10+APAY_AMT10) AS TOT_ATM10,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE11,'yyyymmdd')),'YYYY-MM') AS MONTH11,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE11,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE11,
+		              SUM(RENT_AMT11) 	 AS RNET_AMT11,
+		              SUM(CHA_AMT11) 	 AS CHA_AMT11,
+		              SUM(APAY_AMT11)    AS APAY_AMT11,
+		              SUM(RENT_AMT11+CHA_AMT11+APAY_AMT11) AS TOT_ATM11,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE12,'yyyymmdd')),'YYYY-MM') AS MONTH12,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE12,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE12,
+		              SUM(RENT_AMT12) 	AS RNET_AMT12,
+		              SUM(CHA_AMT12) 	AS CHA_AMT12,
+		              SUM(APAY_AMT12) 	AS APAY_AMT12,
+		              SUM(RENT_AMT12+CHA_AMT12+APAY_AMT12) AS TOT_ATM12,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE13,'yyyymmdd')),'YYYY-MM') AS MONTH13,
+		              TO_CHAR(MAX(TO_DATE(PAYEND_DATE13,'yyyymmdd')),'YYYY-MM-DD') AS PAYEND_DATE13,
+		              SUM(RENT_AMT13) 	AS RNET_AMT13,
+		              SUM(CHA_AMT13) 	AS CHA_AMT13,
+		              SUM(APAY_AMT13) 	AS APAY_AMT13,
+		              SUM(RENT_AMT13+CHA_AMT13+APAY_AMT13) AS TOT_ATM13
+		         FROM
+		              (
+		              SELECT c.CNTRCTR_NO,
+		                     c.MT_RNTCHRG AS RENT_AMT,
+		                     c.DFNNT_AMOUNT AS CHA_AMT ,
+		                     c.ARRRG_AMOUNT AS APAY_AMT,
+		                     c.MT_RNTCHRG + c.DFNNT_AMOUNT + c.ARRRG_AMOUNT AS TOT_AMT,
+		                     decode(c.RQEST_YM,#OUTPT_YM#,c.PAY_TMLMT,NULL) AS PAYEND_DATE1,
+		                     decode(c.RQEST_YM,#OUTPT_YM#,c.MT_RNTCHRG,0) AS RENT_AMT1,
+		                     decode(c.RQEST_YM,#OUTPT_YM#,c.DFNNT_AMOUNT,0) AS CHA_AMT1,
+		                     decode(c.RQEST_YM,#OUTPT_YM#,c.ARRRG_AMOUNT,0) AS APAY_AMT1,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM#||'01','yyyymmdd'),-1),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE2,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-1),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT2,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-1),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT2,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-1),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT2,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-2),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE3,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-2),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT3,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-2),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT3,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-2),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT3,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-3),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE4,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-3),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT4,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-3),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT4,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-3),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT4,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-4),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE5,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-4),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT5,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-4),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT5,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-4),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT5,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-5),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE6,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-5),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT6,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-5),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT6,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-5),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT6,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-6),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE7,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-6),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT7,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-6),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT7,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-6),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT7,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-7),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE8,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-7),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT8,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-7),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT8,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-7),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT8,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-8),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE9,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-8),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT9,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-8),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT9,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-8),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT9,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-9),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE10,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-9),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT10,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-9),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT10,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-9),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT10,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-10),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE11,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-10),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT11,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-10),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT11,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-10),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT11,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-11),'yyyymm') ,c.PAY_TMLMT,NULL) AS PAYEND_DATE12,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-11),'yyyymm') ,c.MT_RNTCHRG,0) AS RENT_AMT12,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-11),'yyyymm') ,c.DFNNT_AMOUNT,0) AS CHA_AMT12,
+		                     decode(c.RQEST_YM,to_char(add_months(to_date( #OUTPT_YM# ||'01','yyyymmdd'),-11),'yyyymm') ,c.ARRRG_AMOUNT,0) AS APAY_AMT12,
+		                     <![CDATA[
+		                     CASE
+		                         WHEN c.RQEST_YM <= to_char(add_months(to_date(#OUTPT_YM# ||'01','yyyymmdd'),-12),'yyyymm')
+		                         THEN PAY_TMLMT
+		                     END AS PAYEND_DATE13,
+		                     CASE
+		                         WHEN c.RQEST_YM <= to_char(add_months(to_date(#OUTPT_YM# ||'01','yyyymmdd'),-12),'yyyymm')
+		                         THEN MT_RNTCHRG
+		                         ELSE 0
+		                     END AS RENT_AMT13,
+		                     CASE
+		                         WHEN c.RQEST_YM <= to_char(add_months(to_date(#OUTPT_YM# ||'01','yyyymmdd'),-12),'yyyymm')
+		                         THEN DFNNT_AMOUNT
+		                         ELSE 0
+		                     END AS CHA_AMT13,
+		                     CASE
+		                         WHEN c.RQEST_YM <= to_char(add_months(to_date(#OUTPT_YM# ||'01','yyyymmdd'),-12),'yyyymm')
+		                         THEN ARRRG_AMOUNT
+		                         ELSE 0
+		                     END AS APAY_AMT13
+		                     
+		                FROM TBSLS_HOUSE_RENT_PAY c
+		               WHERE c.RQEST_YM <= #OUTPT_YM#
+		                 AND c.RCIV_DE IS NULL
+		                 AND EXISTS
+		                 (SELECT 1
+		                   FROM VA_BILL v
+		                  WHERE v.CRT_DIV = 'SL'
+		                    AND v.BILL_DIV = 'A'
+		                    AND v.CRT_ID = c.CNTRCTR_NO
+		                 )
+		                 ]]>
+		                 
+		              )
+		        GROUP BY CNTRCTR_NO
+		       ) c,
+		       ( SELECT a.JOB_SE
+		              ,a.INTRT_KND  AS HOUSE_CODE
+		              ,a.INTRT_SE
+		              ,a.APPLC_DE
+		              ,NVL(SFSLS_HOUSE_GET_INTRT(a.JOB_SE,a.INTRT_KND,a.INTRT_SE,a.APPLC_DE,MIN(a.INTRT_SN)),0) AS MIN_RATIO
+		              ,NVL(SFSLS_HOUSE_GET_INTRT(a.JOB_SE,a.INTRT_KND,a.INTRT_SE,a.APPLC_DE,MAX(a.INTRT_SN)),0) AS MAX_RATIO
+		         FROM TBPMS_INTRT_INFO a
+		        WHERE 1=1
+		          AND a.JOB_SE = 'HOU'
+		          AND a.INTRT_SE = 'A1'
+		          AND a.APPLC_DE = 
+		              (SELECT MAX(APPLC_DE)
+		                 FROM TBPMS_INTRT_INFO b
+		                WHERE 1=1
+		                  AND a.JOB_SE = b.JOB_SE
+		                  AND a.INTRT_SE = b.INTRT_SE 
+		                  AND a.INTRT_KND = b.INTRT_KND
+		              )
+		       GROUP BY JOB_SE, INTRT_KND, INTRT_SE, APPLC_DE
+		       ) e,
+		       (SELECT a.CHRCTR_PREPAR_VALUE_0 AS opost_no,
+		               a.CHRCTR_PREPAR_VALUE_1 AS oaddr1,
+		               a.CHRCTR_PREPAR_VALUE_2  AS oaddr2,
+		              '전화:' ||
+		              (SELECT CHRCTR_PREPAR_VALUE_0 
+		                 FROM TBCOM_CMMN_CODE
+		                WHERE 1=1
+		                  AND GRP_CODE = 'COM027'
+		                  AND CODE_NM = 'SL'  
+		              ) AS OTEL_NO,
+		              'FAX :' ||
+		              (SELECT CHRCTR_PREPAR_VALUE_1 
+		                 FROM TBCOM_CMMN_CODE
+		                WHERE 1=1
+		                  AND GRP_CODE = 'COM027'
+		                  AND CODE_NM = 'SL' 
+		              ) AS OFAX_NO
+		         FROM TBCOM_CMMN_CODE a
+		        WHERE 1=1
+		          AND a.GRP_CODE = 'COM027'
+		          AND a.CODE = 'SL'
+		       ) f,
+		       VI_VA_MAST v 
+		 WHERE 1=1
+		   AND a.OUTPT_YM = #OUTPT_YM#
+		   AND a.CNTRCTR_NO = b.CNTRCTR_NO
+		   AND a.CNTRCTR_NO = c.CNTRCTR_NO
+		   AND b.HOUSE_CSTMR_NO = k.HOUSE_CSTMR_NO(+)
+		   AND b.HOUSE_CODE = d.HOUSE_CODE
+		   AND b.HOUSE_CODE = e.HOUSE_CODE(+)
+		   AND b.HOUSE_CODE LIKE #HOUSE_CODE_FROM#		   
+		   AND EXISTS
+		             (SELECT 1
+		               FROM VA_BILL v
+		              WHERE CRT_DIV = 'SL'
+		                    AND BILL_DIV = 'A'
+		                    AND v.CRT_ID = a.CNTRCTR_NO
+		             )
+		   AND v.CRT_DIV = 'SL'
+		   AND v.OPT1 = '1'
+		   AND a.CNTRCTR_NO = v.CRT_ID
+		   AND a.CNTRCTR_NO = r.CNTRCTR_NO(+)
+		   AND a.CNTRCTR_NO = s.CNTRCTR_NO(+)
+		ORDER BY 1, 2, 3 
+	</select>    	          			
+
+</sqlMap>

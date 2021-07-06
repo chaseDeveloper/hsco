@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+
+<sqlMap namespace="SYM020500_SQL">
+	<!-- 사용자권한변경이력 ================================================== -->
+
+	<!-- 사용자권한변경이력 조회 -->
+	<select id="SYM020500DAO.UserAuthChghstList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+    		A.USER_ID
+    		,AAA.USER_NM AS USER_NM
+    		,A.CHG_SN
+    		,to_CHAR(A.CHANGE_DT,'YYYY-MM-DD HH24:MI:SS') CHANGE_DT
+    		,A.BFCHG_GRP_ID AS BF_AUTH_GRP_CD
+          	,B.AUTH_GRP_NM AS BF_AUTH_GRP_NM
+       		,DECODE(B.AUTH_CODE,':','',B.AUTH_CODE) AS BF_AUTH_CODE
+          	,A.AFTCH_GRP_ID AS AF_AUTH_GRP_CD
+     		,C.AUTH_GRP_NM AS AF_AUTH_GRP_NM		
+			,DECODE(C.AUTH_CODE,':','',C.AUTH_CODE) AS AF_AUTH_CODE
+            ,(SELECT BB.USER_NM ||'('||BB.USER_ID||')' FROM TBCOM_USER BB WHERE BB.USER_ID = A.UPDUSR_ID) AS UPDUSR_NM
+            ,(SELECT AA.USER_NM ||'('||AA.USER_ID||')' FROM TBCOM_USER AA WHERE AA.USER_ID = A.TRANSFER_ID) AS TRANSFER_NM
+            FROM 
+            	TBCOM_USER_CHGDTL A,
+            	TBCOM_USER AAA,
+            (SELECT 
+    			AA.AUTH_GRP_NM,
+                AA.AUTH_GRP_ID 
+    			,BB.CODE||':'||BB.CODE_NM AS AUTH_CODE   
+                FROM TBCOM_AUTH_GRP AA, TBCOM_CMMN_CODE BB
+                WHERE AA.AUTH_CODE = BB.CODE(+)
+                AND BB.GRP_CODE(+) = 'COM056' ) B,
+            (SELECT 
+    			AA.AUTH_GRP_NM,
+                AA.AUTH_GRP_ID 
+       			,BB.CODE||':'||BB.CODE_NM AS AUTH_CODE  
+                FROM TBCOM_AUTH_GRP AA, TBCOM_CMMN_CODE BB
+                WHERE AA.AUTH_CODE = BB.CODE(+)
+                AND BB.GRP_CODE(+) = 'COM056'  ) C
+              WHERE 1=1
+              	AND A.USER_ID = AAA.USER_ID
+                AND A.BFCHG_GRP_ID = B.AUTH_GRP_ID(+)
+                AND A.AFTCH_GRP_ID = C.AUTH_GRP_ID (+)    
+        <isNotEmpty property="BGNDT" >
+            <isNotEmpty property="ENDDT" >
+                AND A.REGIST_DT BETWEEN TO_DATE(#BGNDT# || '000000', 'YYYYMMDD HH24MISS') AND TO_DATE(#ENDDT# || '235959', 'YYYYMMDD HH24MISS')
+            </isNotEmpty>
+        </isNotEmpty>
+        <isNotEmpty property="USER_ID" >
+            AND A.USER_ID = #USER_ID#
+        </isNotEmpty>
+        <isNotEmpty property="USER_NM" >
+            AND AAA.USER_NM LIKE #USER_NM# || '%'
+        </isNotEmpty>
+        <isNotEmpty property="AUTH_NM" >
+            AND (B.AUTH_GRP_NM like '%'||#AUTH_NM#||'%'
+            	OR C.AUTH_GRP_NM like  '%'||#AUTH_NM#||'%' )
+        </isNotEmpty> 
+        ORDER BY A.CHANGE_DT DESC, A.CHG_SN DESC
+	</select>
+<!--         SELECT
+        	
+        	 A.AUTH_CHANGE_SN			/** 권한변경일련번호 */
+        	,A.USER_ID					/** 사용자ID */
+        	, B.USER_NM         		/** 사용자명 */
+        	,A.CHANGE_AUTH_KND_CODE			/** 변경권한종류코드 */
+        	,C.CODE_NM AS CHANGE_AUTH_KND_CODE_NM
+        	,A.CHANG_AUTH_TRGET_ID				/** 변경권한대상ID */
+        	,A.BFCHG_AUTH_STTUS_CODE			/** 변경전권한상태코드 */
+        	,D.CODE_NM AS BFCHG_AUTH_STTUS_CODE_NM
+        	,A.AFTCH_AUTH_STTUS_CODE			/** 변경후권한상태코드 */
+        	,E.CODE_NM AS AFTCH_AUTH_STTUS_CODE_NM
+        	,A.EVENT_FNCT AS EVENT_FNCT				/** 이벤트기능 */
+        	,A.REGISTER_ID
+        	,A.REGIST_DT
+        	,A.UPDUSR_ID
+        	, NVL(F.USER_NM, A.UPDUSR_ID) AS UPDUSR_NM
+        	,TO_CHAR(A.UPDT_DT, 'YYYYMMDD HH24MISS') AS UPDT_DT
+        	,TO_CHAR(A.UPDT_DT, 'YYYYMMDD') AS CHANGE_DT
+			,DECODE (
+			            A.CHANGE_AUTH_KND_CODE,
+			            'GA', (SELECT AUTH_GRP_NM FROM TBCOM_AUTH_GRP G WHERE G.AUTH_GRP_ID = A.CHANG_AUTH_TRGET_ID AND ROWNUM = 1),
+			            DECODE (
+			               A.CHANGE_AUTH_KND_CODE,
+			               'MA',  (SELECT H.MENU_NM  FROM TBCOM_MENU H WHERE H.MENU_ID= A.CHANG_AUTH_TRGET_ID AND ROWNUM = 1) ,
+			               DECODE (A.CHANGE_AUTH_KND_CODE,
+			                       'SA', (SELECT I.OPRTIN_NM  FROM TBCOM_OPRTIN I WHERE I.OPRTIN_NM = A.CHANG_AUTH_TRGET_ID AND ROWNUM = 1),
+			                       DECODE (A.CHANGE_AUTH_KND_CODE, 'BA',  (SELECT K.BUTTON_NM  FROM TBCOM_SCRIN_BUTTON K WHERE K.BUTTON_ID = A.CHANG_AUTH_TRGET_ID AND ROWNUM = 1) , ''))))
+			            AS CHANG_AUTH_TRGET_NM
+		    , A.PAGE_ID
+		    , (SELECT P.PAGE_NM FROM TBCOM_PAGE P WHERE P.PAGE_ID=A.PAGE_ID AND ROWNUM=1) AS PAGE_NM
+		    , A.SVC_ID
+		    , (SELECT S.SVC_NM FROM TBCOM_SVC S WHERE S.SVC_ID=A.SVC_ID AND ROWNUM=1) AS SVC_NM
+			, DECODE(A.CHANGE_AUTH_KND_CODE, 'BA', A.PAGE_ID, 'SA', A.SVC_ID, '') AS PAGE_SVC_ID
+			, DECODE(A.CHANGE_AUTH_KND_CODE, 'BA', (SELECT P.PAGE_NM FROM TBCOM_PAGE P WHERE P.PAGE_ID=A.PAGE_ID AND ROWNUM=1), 'SA', (SELECT S.SVC_NM FROM TBCOM_SVC S WHERE S.SVC_ID=A.SVC_ID AND ROWNUM=1), '') AS PAGE_SVC_NM
+        FROM TBCOM_USER_AUTH_CHGHST A			/** 사용자권한변경이력 */
+          , TBCOM_USER B
+          , (SELECT * FROM TBCOM_CMMN_CODE WHERE GRP_CODE='COM041') C  /** 공통코드 */
+          , (SELECT * FROM TBCOM_CMMN_CODE WHERE GRP_CODE='COM042') D  /** 공통코드 */
+          , (SELECT * FROM TBCOM_CMMN_CODE WHERE GRP_CODE='COM042') E  /** 공통코드 */
+          , TBCOM_USER F
+        WHERE 1=1
+          AND A.USER_ID = B.USER_ID
+          AND A.CHANGE_AUTH_KND_CODE = C.CODE(+)
+          AND A.BFCHG_AUTH_STTUS_CODE = D.CODE(+)
+          AND A.AFTCH_AUTH_STTUS_CODE = E.CODE(+)
+          AND A.UPDUSR_ID = F.USER_ID(+)
+        <isNotEmpty property="BGNDT" >
+            <isNotEmpty property="ENDDT" >
+                AND A.REGIST_DT BETWEEN TO_DATE(#BGNDT# || '000000', 'YYYYMMDD HH24MISS') AND TO_DATE(#ENDDT# || '235959', 'YYYYMMDD HH24MISS')
+            </isNotEmpty>
+        </isNotEmpty>
+        
+        <isNotEmpty property="USER_ID" >
+            AND A.USER_ID = #USER_ID#
+        </isNotEmpty>
+        <isNotEmpty property="USER_NM" >
+            AND B.USER_NM LIKE #USER_NM# || '%'
+        </isNotEmpty>
+        <isNotEmpty property="AUTH_NM" >
+            AND (A.CHANGE_AUTH_KND_CODE like %#AUTH_NM#%
+            	OR A.CHANG_AUTH_TRGET_ID like  %#AUTH_NM#%
+        </isNotEmpty>
+        ORDER BY 1,2,3
+	</select>
+ -->
+	<!-- 사용자권한변경이력 추가 -->
+	<insert id="SYM020500DAO.UserAuthChghstC" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_USER_AUTH_CHGHST (			/** 사용자권한변경이력 */
+        	 AUTH_CHANGE_SN			/** 권한변경일련번호 */
+        	,USER_ID			/** 사용자ID */
+        	,CHANGE_AUTH_KND_CODE			/** 변경권한종류코드 */
+        	,CHANG_AUTH_TRGET_ID			/** 변경권한대상ID */
+        	,BFCHG_AUTH_STTUS_CODE			/** 변경전권한상태코드 */
+        	,AFTCH_AUTH_STTUS_CODE			/** 변경후권한상태코드 */
+        	,EVENT_FNCT			/** 이벤트기능 */
+        	,REGISTER_ID			/** 등록자ID */
+        	,REGIST_DT			/** 등록일시 */
+        	,UPDUSR_ID			/** 수정자ID */
+        	,UPDT_DT			/** 수정일시 */
+        ) VALUES (
+        	 SQ_COM_USER_AUTH_CHGHST_1.NEXTVAL			/** 권한변경일련번호 */
+        	,#S_USER_ID#			/** 사용자ID */
+        	,#CHANGE_AUTH_KND_CODE#			/** 변경권한종류코드 */
+        	,#CHANG_AUTH_TRGET_ID#			/** 변경권한대상ID */
+        	,#BFCHG_AUTH_STTUS_CODE#			/** 변경전권한상태코드 */
+        	,#AFTCH_AUTH_STTUS_CODE#			/** 변경후권한상태코드 */
+        	,#EVENT_FNCT#			/** 이벤트기능 */
+        	,#S_USER_ID#			/** 등록자ID */
+        	,SYSDATE			/** 등록일시 */
+        	,#S_USER_ID#			/** 수정자ID */
+        	,SYSDATE			/** 수정일시 */
+        )
+	</insert>
+
+	<!-- 사용자권한변경이력 수정 -->
+	<update id="SYM020500DAO.UserAuthChghstU" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_USER_AUTH_CHGHST			/** 사용자권한변경이력 */
+          SET
+        	 USER_ID = #S_USER_ID#			/** 사용자ID */
+        	,CHANGE_AUTH_KND_CODE = #CHANGE_AUTH_KND_CODE#			/** 변경권한종류코드 */
+        	,CHANG_AUTH_TRGET_ID = #CHANG_AUTH_TRGET_ID#			/** 변경권한대상ID */
+        	,BFCHG_AUTH_STTUS_CODE = #BFCHG_AUTH_STTUS_CODE#			/** 변경전권한상태코드 */
+        	,AFTCH_AUTH_STTUS_CODE = #AFTCH_AUTH_STTUS_CODE#			/** 변경후권한상태코드 */
+        	,EVENT_FNCT = #EVENT_FNCT#			/** 이벤트기능 */
+        	,UPDUSR_ID = #S_USER_ID#			/** 수정자ID */
+        	,UPDT_DT = SYSDATE			/** 수정일시 */
+        WHERE AUTH_CHANGE_SN = #AUTH_CHANGE_SN#			/** 권한변경일련번호 */
+	</update>
+
+	<!-- 사용자권한변경이력 삭제 -->
+	<delete id="SYM020500DAO.UserAuthChghstD" parameterClass="java.util.HashMap">
+        DELETE FROM TBCOM_USER_AUTH_CHGHST			/** 사용자권한변경이력 */
+        WHERE AUTH_CHANGE_SN = #AUTH_CHANGE_SN#			/** 권한변경일련번호 */
+	</delete>
+</sqlMap>

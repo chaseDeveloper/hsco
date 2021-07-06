@@ -1,0 +1,1343 @@
+package hsco.pms.rnt.prm.RNT02030100;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.annotation.Resource;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.nexacro.xapi.data.DataSet;
+
+import hsco.cmm.exception.NexaServiceException;
+import hsco.cmm.file.FileUploadServiceImpl;
+import hsco.cmm.ria.nexacro.NexacroConstant;
+import hsco.cmm.ria.nexacro.map.DataSetMap;
+import hsco.cmm.ria.nexacro.map.NexacroMapDTO;
+import hsco.cmm.service.BaseService;
+import hsco.cmm.util.ObjectUtil;
+
+/**
+ * <pre>
+ * @Project Name 	: 화성도시공사 차세대정보시스템
+ * @Class Name   		: RNT02030100ServiceImpl.java
+ * @Description  		: 계약정보관리 조회
+ * @author       			: 변승우
+ * @since        			: 2015. 10. 30.
+ * @version      			: 1.0
+ * @see          			: 
+ * @COPYRIGHT (c) 2015 나눔아이씨티, Inc. All Right Reserved.
+ * <pre>
+ * ------------------------------------------------------------------
+ * Modification Information 
+ * ------------------------------------------------------------------
+ *   작성일                        작성자                내용
+ * ------------------------------------------------------------------
+ *  2015. 10. 30.					변승우				최초생성
+ * </pre>  
+ */
+
+@Service("RNT02030100Service")
+public class RNT02030100ServiceImpl extends BaseService{
+	protected Logger log = LoggerFactory.getLogger(this.getClass());
+
+	@Resource(name = "FileUploadService")
+    protected FileUploadServiceImpl fileUploadService;  
+	
+	/**
+	 * 매입임대 고객 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentCntrctList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentCntrctList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 
+
+	
+	/**
+	 * 매입임대 고객 정보 상세사항
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentCntrctDetailList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentCntrctDetailList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 
+
+	
+	/**
+	 * 매입임대 고객 정보 상세사항(수정)
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */	
+	@SuppressWarnings({ "rawtypes" })
+	
+	public void savePuchasRentCntrctCUD(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		
+		
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			
+			// 세션정보 설정
+			try {
+				ObjectUtil.setUserToMap(map);
+			}catch( Exception e) {
+				throw new NexaServiceException(e); 
+			}
+						
+			int rowType = ((Integer) map.get(NexacroConstant.DATASET_ROW_TYPE)).intValue(); 
+			
+			if(rowType == DataSet.ROW_TYPE_UPDATED ){
+				baseDao.update("RNT02030100DAO.savePuchasRentCntrctU", map);
+				baseDao.update("RNT02030100DAO.savePuchasCstmrtU", map);				
+			}
+		}	
+		
+		
+		list = (DataSetMap) inDataset.get("input2");	
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			
+			// 세션정보 설정
+			try {
+				ObjectUtil.setUserToMap(map);
+			}catch( Exception e) {
+				throw new NexaServiceException(e); 
+			}
+						
+			int rowType = ((Integer) map.get(NexacroConstant.DATASET_ROW_TYPE)).intValue(); 
+			
+			if ( rowType == DataSet.ROW_TYPE_INSERTED ){
+				baseDao.insert("RNT02030100DAO.savePuchasRentLwstC", map);
+			}else if(rowType == DataSet.ROW_TYPE_UPDATED ){
+				baseDao.update("RNT02030100DAO.savePuchasRentLwstU", map);
+			}else if(rowType == DataSet.ROW_TYPE_DELETED ){
+				baseDao.update("RNT02030100DAO.savePuchasRentLwstD", map);
+			}
+		}	
+	}
+	
+	
+	/**
+	 * 매입임대 가족사항 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentCstmrFamilyList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentCstmrFamilyList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 
+	
+	
+	/**
+	 * 매입임대 임대료 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentMtRntchrgList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentMtRntchrgList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 	
+	
+		
+	/**
+	 * 매입임대 임대료 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasNpymList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasNpymList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 	
+	
+	
+	/**
+	 * 매입임대 압류 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentGtnSeizrList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentGtnSeizrList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 	
+	
+	
+	/**
+	 * 매입임대 압류 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentNmchangeList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentNmchangeList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 
+	
+	
+	/**
+	 * 매입임대 자격 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentQualfChangeList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentQualfChangeList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 
+	
+	
+	/**
+	 * 매입임대 해약 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentResciList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentResciList", inMap);
+		List <Map> records2 = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentCntrctDetailList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		DataSetMap outDsMap2 = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+		outDsMap2.setRowMaps(records2);
+		outDataset.put("output2", outDsMap2);
+	} 	
+	
+	
+	/**
+	 * 매입임대 해약 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentGtnList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentGtnList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 	
+	
+	
+	/**
+	 * 매입임대 자동이체 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectAtcngList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectAtcngList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	}
+	
+	
+	/**
+	 * 매입임대 관리비 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentManageCostList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentManageCostList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	}
+	
+	
+	/**
+	 * 매입임대 소유물건 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentPosesnThingList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentPosesnThingList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	}
+	
+	
+	/**
+	 * 매입임대 소송 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentLwstList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentLwstList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	}
+	
+	
+	/**
+	 * 매입임대 재계약 정보
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectPuchasRentReCntrctList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectPuchasRentReCntrctList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	}
+	
+	/**
+	 * 재계약 CUD
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	
+	public void puchasReCntrctCUD(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap inDsMap = (DataSetMap) inDataset.get("input1");
+		Map inMap = null;
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		
+		if(inMap.get("CNTRCTR_NO_YN").equals("계약가능") || "계약가능" == inMap.get("CNTRCTR_NO_YN")){
+			//저장되어 있는 임대재계약 정보 조회
+			Map tempMap = new HashMap<String, Object>();
+			tempMap.put("CNTRCTR_NO", inMap.get("CNTRCTR_NO"));
+			tempMap.put("RENT_ENDDE_BFCHG", inMap.get("RENT_ENDDE_BFCHG"));
+			List <Map> records;
+			records = (List<Map>)baseDao.list("RNT02030100DAO.rentReCntrctR2", tempMap);
+			
+			//재계약생성시 생성된 보증금 순번 조회
+			String gtnSn = (String) baseDao.select("RNT02030700DAO.selectGtnSn", records.get(0));
+			
+			//재계약생성시 생성된 보증금 삭제 
+			inMap.put("GTN_SN", gtnSn);
+			baseDao.insert("RNT02030700DAO.rentGtnD", inMap);
+			
+			baseDao.update("RNT02030100DAO.puchasCntrctDeU", inMap);
+			baseDao.update("RNT02030100DAO.puchasReCntrctU", inMap);
+			
+			int gtnDfnnt = Integer.parseInt((String)inMap.get("GTN")) - Integer.parseInt((String)inMap.get("GTN_BFCHG"));		// 보증금 차액
+			
+			//증액보증금 등록
+			if(gtnDfnnt > 0){
+				Map tempMap2 = new HashMap<String, Object>();
+				tempMap2.put("CNTRCTR_NO", inMap.get("CNTRCTR_NO"));
+				tempMap2.put("GTN_SN", gtnSn);
+				
+				int chkGtn = Integer.parseInt((String) baseDao.select("RNT02030700DAO.checkGtn", tempMap2));
+				
+				if(chkGtn < 1){
+					inMap.put("GTN_DFNNT", gtnDfnnt);
+					inMap.put("CHANGE_DE", inMap.get("CNTRCT_DE"));
+					baseDao.insert("RNT02030700DAO.rentGtnC", inMap);
+				}
+			}
+		}else {
+			Map tempMap = new HashMap<String, Object>();
+			tempMap.put("CNTRCTR_NO", inMap.get("CNTRCTR_NO"));
+			tempMap.put("RENT_ENDDE_BFCHG", inMap.get("RENT_ENDDE_BFCHG"));
+			tempMap.put("FILE_SN", inMap.get("FILE_SN"));
+			
+			baseDao.update("RNT02030100DAO.puchasReCntrctU", tempMap);
+		}
+		
+	}
+	
+	/**
+	 * 재계약 CUD
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	
+	public void puchasReCntrctRevert(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x); 
+			
+			Map tempMap = new HashMap<String, Object>();
+			
+			tempMap.put("CNTRCTR_NO", map.get("CNTRCTR_NO"));
+			tempMap.put("CNTRCT_DE", map.get("CNTRCT_DE_BFCHG"));
+			tempMap.put("QUALF_SE", map.get("QUALF_SE_BFCHG"));
+			tempMap.put("RENT_BGNDE", map.get("RENT_BGNDE_BFCHG"));
+			tempMap.put("RENT_ENDDE", map.get("RENT_ENDDE_BFCHG"));
+			tempMap.put("GTN", map.get("GTN_BFCHG"));
+			tempMap.put("RNTCHRG", map.get("RNTCHRG_BFCHG"));
+			
+			baseDao.update("RNT02030100DAO.puchasCntrctDeU", tempMap);
+			baseDao.update("RNT02030100DAO.puchasReCntrctU", map);
+		}
+	}
+	
+	/**
+	 * 매입임대 재계약 고지서 출력
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectReCntrctTax( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+	
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectReCntrctTax01", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+		
+		
+		List <Map> records1 = (List<Map>)baseDao.list("RNT02030100DAO.selectReCntrctTax02", inMap);
+		DataSetMap outDsMap1 = new DataSetMap();
+		outDsMap1.setRowMaps(records1);
+		outDataset.put("output2", outDsMap1);
+	} 
+	
+	/**
+	 * 매입임대 가족사항(저장,수정,삭제)
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */	
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	
+	public void savePuchasRentCstmrFamilyCUD(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			
+			// 세션정보 설정
+			try {
+				ObjectUtil.setUserToMap(map);
+			}catch( Exception e) {
+				throw new NexaServiceException(e); 
+			}
+			
+			int rowType = ((Integer) map.get(NexacroConstant.DATASET_ROW_TYPE)).intValue(); 
+			
+			if ( rowType == DataSet.ROW_TYPE_INSERTED ){
+				//해당 데이터가 영구임대고객 테이블에 저장되어있는지 확인
+				String puchasCstmrNo = (String) baseDao.select("RNT02030100DAO.puchasRentCstmr", map);
+				//데이터 없을경우 영구임대고객 테이블에 insert
+				if("".equals(puchasCstmrNo) || null==puchasCstmrNo){
+					baseDao.insert("RNT02030100DAO.puchasRentCstmrC", map);
+					puchasCstmrNo = (String) baseDao.select("RNT02030100DAO.puchasRentCstmr", map);
+					map.put("PUCHAS_CSTMR_NO", puchasCstmrNo);
+				}else{
+					map.put("PUCHAS_CSTMR_NO", puchasCstmrNo);
+					baseDao.update("RNT02030100DAO.puchasRentCstmrU", map);
+				}
+				
+				baseDao.insert("RNT02030100DAO.rentCstmrFamilyC", map);
+			}else if(rowType == DataSet.ROW_TYPE_DELETED ){
+				baseDao.update("puchasRentCstmrDAO.savePuchasRentCstmrFamilyD", map);
+			}
+			
+		}
+	}
+	
+	/**
+	 * 압류 CUD
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes" })
+	
+	public void puchasGtnSeizrCUD(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			//int rowType = ((Integer) map.get(NexacroConstant.DATASET_ROW_TYPE)).intValue(); 
+			
+			String Flag = (String)map.get("FLAG");
+			
+			if ( Flag == "C" || Flag.equals("C")){
+				System.out.println("Insert");
+				baseDao.insert("RNT02040103DAO.rentGtnSeizrC", map);
+			}else if( Flag == "U" || Flag.equals("U")){
+				System.out.println("Update");
+				baseDao.update("RNT02040103DAO.rentGtnSeizrU", map);
+			}else if( Flag == "D" || Flag.equals("D")){
+				System.out.println("Delete");
+				baseDao.delete("RNT02040103DAO.rentGtnSeizrD", map);
+			}
+		}
+	} 
+	
+	// 파일 저장
+	@SuppressWarnings({ "rawtypes", "unchecked", "null" })
+	
+	public void atchCUD( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		
+    	// 파일 첨부확인
+    	DataSetMap fileInfo = (DataSetMap)inDataset.get("inputFile");
+    	DataSetMap targetInfo = (DataSetMap)inDataset.get("input1");
+		Map targetMap = targetInfo.get(0);  // 계약관리 테이블 파일번호를 업데이트하기 위한 조건 데이터셋
+		Map fileInfoMap = fileInfo.get(0);  // 파일업로드 할 데이터 셋
+		
+    	Object fileSn = targetMap.get("FILE_SN");
+    	
+    	Map<String, Object> upResult = null;
+    	if(fileInfo != null){
+    		
+    		// 계약관리테이블에 file_sn이 존재시 , inputFile 데이터셋에 file_sn을 설정
+    		// file_sn 없으면 새로 생성
+    		if(fileSn != null){			
+    			fileInfoMap.put("FILE_SN" , fileSn);
+    		}
+    		NexacroMapDTO xpDto = getXpDto();
+    		fileUploadService.setFileLocation(getFileLocation());
+    		upResult = (Map<String, Object>)fileUploadService.uploadSingleFileinfo(xpDto);
+    		
+    	}
+    	
+		List<Map> failList = new ArrayList<Map>();
+		List<Map> successFileSn = new ArrayList<Map>();
+		
+		try
+		{
+			if(upResult != null){				
+
+				String resFileSn = String.valueOf(upResult.get("FILE_SN"));
+				targetMap.put("FILE_SN", resFileSn);
+				baseDao.insert("RNT02030100DAO.atchCUD", targetMap);
+				successFileSn.add(targetMap);
+			}
+
+		}
+		catch(Exception ex)
+		{
+			if(ex.getMessage().indexOf("ORA-00001") != -1){
+				targetMap.put("EX_COUSE", "중복");
+			}else{
+				targetMap.put("EX_COUSE", ex.getMessage());
+			}
+			
+			failList.add(targetMap);
+		}
+
+		DataSetMap failMap = new DataSetMap();
+		failMap.setRowMaps(failList);
+		
+		DataSetMap successMap = new DataSetMap();
+		successMap.setRowMaps(successFileSn);
+		
+		outDataset.put("failList", failMap);
+		outDataset.put("successList", successMap);
+	}
+	
+	/**
+	 * 파일순번 삭제
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes" })
+	
+	public void fileSnU(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			
+			baseDao.update("RNT02030100DAO.fileSnU", map);
+			
+		}
+	}  
+
+	/**
+	 * 매입임대 재계약 파일 저장
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	
+	public void reCntrctAtchCUD( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		
+    	// 파일 첨부확인
+    	DataSetMap fileInfo = (DataSetMap)inDataset.get("inputFile");
+    	DataSetMap targetInfo = (DataSetMap)inDataset.get("input1");
+		Map targetMap = targetInfo.get(0);  // 계약관리 테이블 파일번호를 업데이트하기 위한 조건 데이터셋
+		Map fileInfoMap = fileInfo.get(0);  // 파일업로드 할 데이터 셋
+		
+    	Object fileSn = targetMap.get("FILE_SN");
+    	
+    	Map<String, Object> upResult = null;
+    	if(fileInfo != null){
+    		
+    		// 계약관리테이블에 file_sn이 존재시 , inputFile 데이터셋에 file_sn을 설정
+    		// file_sn 없으면 새로 생성
+    		if(fileSn != null){			
+    			fileInfoMap.put("FILE_SN" , fileSn);
+    		}
+    		NexacroMapDTO xpDto = getXpDto();
+    		fileUploadService.setFileLocation(getFileLocation());
+    		upResult = (Map<String, Object>)fileUploadService.uploadSingleFileinfo(xpDto);
+    		
+    	}
+    	
+		List<Map> failList = new ArrayList<Map>();
+		List<Map> successFileSn = new ArrayList<Map>();
+		
+		try
+		{
+			if(upResult != null){				
+
+				String resFileSn = String.valueOf(upResult.get("FILE_SN"));
+				targetMap.put("FILE_SN", resFileSn);
+				baseDao.insert("RNT02030100DAO.reCntrctAtchCUD", targetMap);
+				successFileSn.add(targetMap);
+			}
+
+		}
+		catch(Exception ex)
+		{
+			if(ex.getMessage().indexOf("ORA-00001") != -1){
+				targetMap.put("EX_COUSE", "중복");
+			}else{
+				targetMap.put("EX_COUSE", ex.getMessage());
+			}
+			
+			failList.add(targetMap);
+		}
+
+		DataSetMap failMap = new DataSetMap();
+		failMap.setRowMaps(failList);
+		
+		DataSetMap successMap = new DataSetMap();
+		successMap.setRowMaps(successFileSn);
+		
+		outDataset.put("failList", failMap);
+		outDataset.put("successList", successMap);
+	}
+	
+	//
+	/**
+	 * 매입임대 재계약 파일순번 삭제
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes" })
+	
+	public void reCntrctFileSnU(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			
+			baseDao.update("RNT02030100DAO.reCntrctAtchCUD", map);
+			
+		}
+	}
+	
+	/**
+	 * 매입임대 자격변경 파일 저장
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	
+	public void qualfChangeAtchCUD( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		
+    	// 파일 첨부확인
+    	DataSetMap fileInfo = (DataSetMap)inDataset.get("inputFile");
+    	DataSetMap targetInfo = (DataSetMap)inDataset.get("input1");
+		Map targetMap = targetInfo.get(0);  // 계약관리 테이블 파일번호를 업데이트하기 위한 조건 데이터셋
+		Map fileInfoMap = fileInfo.get(0);  // 파일업로드 할 데이터 셋
+		
+    	Object fileSn = targetMap.get("FILE_SN");
+    	
+    	Map<String, Object> upResult = null;
+    	if(fileInfo != null){
+    		
+    		// 계약관리테이블에 file_sn이 존재시 , inputFile 데이터셋에 file_sn을 설정
+    		// file_sn 없으면 새로 생성
+    		if(fileSn != null){			
+    			fileInfoMap.put("FILE_SN" , fileSn);
+    		}
+    		NexacroMapDTO xpDto = getXpDto();
+    		fileUploadService.setFileLocation(getFileLocation());
+    		upResult = (Map<String, Object>)fileUploadService.uploadSingleFileinfo(xpDto);
+    		
+    	}
+    	
+		List<Map> failList = new ArrayList<Map>();
+		List<Map> successFileSn = new ArrayList<Map>();
+		
+		try
+		{
+			if(upResult != null){				
+
+				String resFileSn = String.valueOf(upResult.get("FILE_SN"));
+				targetMap.put("FILE_SN", resFileSn);
+				baseDao.insert("RNT02030100DAO.qualfChangeAtchCUD", targetMap);
+				successFileSn.add(targetMap);
+			}
+
+		}
+		catch(Exception ex)
+		{
+			if(ex.getMessage().indexOf("ORA-00001") != -1){
+				targetMap.put("EX_COUSE", "중복");
+			}else{
+				targetMap.put("EX_COUSE", ex.getMessage());
+			}
+			
+			failList.add(targetMap);
+		}
+
+		DataSetMap failMap = new DataSetMap();
+		failMap.setRowMaps(failList);
+		
+		DataSetMap successMap = new DataSetMap();
+		successMap.setRowMaps(successFileSn);
+		
+		outDataset.put("failList", failMap);
+		outDataset.put("successList", successMap);
+	}
+	
+	//
+	/**
+	 * 매입임대 자격변경 파일순번 삭제
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes" })
+	
+	public void qualfChangeFileSnU(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			
+			baseDao.update("RNT02030100DAO.qualfChangeAtchCUD", map);
+			
+		}
+	}
+	
+	/**
+	 * 매입임대 명의변경 파일 저장
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	
+	public void nmChangeAtchCUD( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		
+    	// 파일 첨부확인
+    	DataSetMap fileInfo = (DataSetMap)inDataset.get("inputFile");
+    	DataSetMap targetInfo = (DataSetMap)inDataset.get("input1");
+		Map targetMap = targetInfo.get(0);  // 계약관리 테이블 파일번호를 업데이트하기 위한 조건 데이터셋
+		Map fileInfoMap = fileInfo.get(0);  // 파일업로드 할 데이터 셋
+		
+    	Object fileSn = targetMap.get("FILE_SN");
+    	
+    	Map<String, Object> upResult = null;
+    	if(fileInfo != null){
+    		
+    		// 계약관리테이블에 file_sn이 존재시 , inputFile 데이터셋에 file_sn을 설정
+    		// file_sn 없으면 새로 생성
+    		if(fileSn != null){			
+    			fileInfoMap.put("FILE_SN" , fileSn);
+    		}
+    		NexacroMapDTO xpDto = getXpDto();
+    		fileUploadService.setFileLocation(getFileLocation());
+    		upResult = (Map<String, Object>)fileUploadService.uploadSingleFileinfo(xpDto);
+    		
+    	}
+    	
+		List<Map> failList = new ArrayList<Map>();
+		List<Map> successFileSn = new ArrayList<Map>();
+		
+		try
+		{
+			if(upResult != null){				
+
+				String resFileSn = String.valueOf(upResult.get("FILE_SN"));
+				targetMap.put("FILE_SN", resFileSn);
+				baseDao.insert("RNT02030100DAO.nmChangeAtchCUD", targetMap);
+				successFileSn.add(targetMap);
+			}
+
+		}
+		catch(Exception ex)
+		{
+			if(ex.getMessage().indexOf("ORA-00001") != -1){
+				targetMap.put("EX_COUSE", "중복");
+			}else{
+				targetMap.put("EX_COUSE", ex.getMessage());
+			}
+			
+			failList.add(targetMap);
+		}
+
+		DataSetMap failMap = new DataSetMap();
+		failMap.setRowMaps(failList);
+		
+		DataSetMap successMap = new DataSetMap();
+		successMap.setRowMaps(successFileSn);
+		
+		outDataset.put("failList", failMap);
+		outDataset.put("successList", successMap);
+	}
+	
+	//
+	/**
+	 * 매입임대 명의변경 파일순번 삭제
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes" })
+	
+	public void nmChangeFileSnU(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			
+			baseDao.update("RNT02030100DAO.nmChangeAtchCUD", map);
+			
+		}
+	}
+	
+	/**
+	 * 매입임대 동호변경 파일 저장
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	
+	public void houseChangeAtchCUD( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		
+    	// 파일 첨부확인
+    	DataSetMap fileInfo = (DataSetMap)inDataset.get("inputFile");
+    	DataSetMap targetInfo = (DataSetMap)inDataset.get("input1");
+		Map targetMap = targetInfo.get(0);  // 계약관리 테이블 파일번호를 업데이트하기 위한 조건 데이터셋
+		Map fileInfoMap = fileInfo.get(0);  // 파일업로드 할 데이터 셋
+		
+    	Object fileSn = targetMap.get("FILE_SN");
+    	
+    	Map<String, Object> upResult = null;
+    	if(fileInfo != null){
+    		
+    		// 계약관리테이블에 file_sn이 존재시 , inputFile 데이터셋에 file_sn을 설정
+    		// file_sn 없으면 새로 생성
+    		if(fileSn != null){			
+    			fileInfoMap.put("FILE_SN" , fileSn);
+    		}
+    		NexacroMapDTO xpDto = getXpDto();
+    		fileUploadService.setFileLocation(getFileLocation());
+    		upResult = (Map<String, Object>)fileUploadService.uploadSingleFileinfo(xpDto);
+    		
+    	}
+    	
+		List<Map> failList = new ArrayList<Map>();
+		List<Map> successFileSn = new ArrayList<Map>();
+		
+		try
+		{
+			if(upResult != null){				
+
+				String resFileSn = String.valueOf(upResult.get("FILE_SN"));
+				targetMap.put("FILE_SN", resFileSn);
+				baseDao.insert("RNT02030100DAO.houseChangeAtchCUD", targetMap);
+				successFileSn.add(targetMap);
+			}
+
+		}
+		catch(Exception ex)
+		{
+			if(ex.getMessage().indexOf("ORA-00001") != -1){
+				targetMap.put("EX_COUSE", "중복");
+			}else{
+				targetMap.put("EX_COUSE", ex.getMessage());
+			}
+			
+			failList.add(targetMap);
+		}
+
+		DataSetMap failMap = new DataSetMap();
+		failMap.setRowMaps(failList);
+		
+		DataSetMap successMap = new DataSetMap();
+		successMap.setRowMaps(successFileSn);
+		
+		outDataset.put("failList", failMap);
+		outDataset.put("successList", successMap);
+	}
+	
+	//
+	/**
+	 * 매입임대 동호변경 파일순번 삭제
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes" })
+	
+	public void houseChangeFileSnU(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			
+			baseDao.update("RNT02030100DAO.houseChangeAtchCUD", map);
+			
+		}
+	}
+	
+	/**
+	 * 매입임대 동호변경 파일 저장
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	
+	public void resciAtchCUD( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		
+    	// 파일 첨부확인
+    	DataSetMap fileInfo = (DataSetMap)inDataset.get("inputFile");
+    	DataSetMap targetInfo = (DataSetMap)inDataset.get("input1");
+		Map targetMap = targetInfo.get(0);  // 계약관리 테이블 파일번호를 업데이트하기 위한 조건 데이터셋
+		Map fileInfoMap = fileInfo.get(0);  // 파일업로드 할 데이터 셋
+		
+    	Object fileSn = targetMap.get("FILE_SN");
+    	
+    	Map<String, Object> upResult = null;
+    	if(fileInfo != null){
+    		
+    		// 계약관리테이블에 file_sn이 존재시 , inputFile 데이터셋에 file_sn을 설정
+    		// file_sn 없으면 새로 생성
+    		if(fileSn != null){			
+    			fileInfoMap.put("FILE_SN" , fileSn);
+    		}
+    		NexacroMapDTO xpDto = getXpDto();
+    		fileUploadService.setFileLocation(getFileLocation());
+    		upResult = (Map<String, Object>)fileUploadService.uploadSingleFileinfo(xpDto);
+    		
+    	}
+    	
+		List<Map> failList = new ArrayList<Map>();
+		List<Map> successFileSn = new ArrayList<Map>();
+		
+		try
+		{
+			if(upResult != null){				
+
+				String resFileSn = String.valueOf(upResult.get("FILE_SN"));
+				targetMap.put("FILE_SN", resFileSn);
+				baseDao.insert("RNT02030100DAO.resciAtchCUD", targetMap);
+				successFileSn.add(targetMap);
+			}
+
+		}
+		catch(Exception ex)
+		{
+			if(ex.getMessage().indexOf("ORA-00001") != -1){
+				targetMap.put("EX_COUSE", "중복");
+			}else{
+				targetMap.put("EX_COUSE", ex.getMessage());
+			}
+			
+			failList.add(targetMap);
+		}
+
+		DataSetMap failMap = new DataSetMap();
+		failMap.setRowMaps(failList);
+		
+		DataSetMap successMap = new DataSetMap();
+		successMap.setRowMaps(successFileSn);
+		
+		outDataset.put("failList", failMap);
+		outDataset.put("successList", successMap);
+	}
+	
+	//
+	/**
+	 * 매입임대 해약처리 파일순번 삭제
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes" })
+	
+	public void resciFileSnU(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		
+		for (int x = 0; x < list.size(); x++) {
+			Map map = list.get(x);
+			
+			baseDao.update("RNT02030100DAO.resciAtchCUD", map);
+			
+		}
+	}
+	
+	/**
+	 * 미납금액 목록(공제액)
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void selectNonPaymentList( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.selectNonPaymentList", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 
+	
+	/**
+	 * 계약취소 확인(수납건 확인)
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 * @throws NexaServiceException
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public void puchasRentCntrctCancelCheck( DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) throws NexaServiceException {
+		DataSetMap inDsMap = (DataSetMap)inDataset.get("input1");
+		Map inMap = null;
+		
+		if (inDsMap != null)
+			inMap = inDsMap.get(0);
+		List <Map> records = (List<Map>)baseDao.list("RNT02030100DAO.puchasRentCntrctCancelCheck", inMap);
+		DataSetMap outDsMap = new DataSetMap();
+		outDsMap.setRowMaps(records);
+		outDataset.put("output1", outDsMap);
+	} 
+	
+	/**
+	 * 계약취소
+	 * @param tranInfo
+	 * @param inVar
+	 * @param inDataset
+	 * @param outVar
+	 * @param outDataset
+	 */
+	@SuppressWarnings({ "rawtypes" })
+	
+	public void puchasRentCntrctCancel(DataSetMap tranInfo, Map<String, Object> inVar,
+			Map<String, DataSetMap> inDataset, Map<String, Object> outVar,
+			Map<String, DataSetMap> outDataset) {
+		DataSetMap list = (DataSetMap) inDataset.get("input1");
+		
+		Map map = list.get(0);
+		
+		//보증금 삭제
+		baseDao.delete("RNT02030100DAO.rentGtnD", map);
+		//건축물정보 변경(계약자번호, 공급가능여부)
+		baseDao.update("RNT02030100DAO.rentHouseBildU", map);
+		//가족정보 변경(계약자번호)
+		baseDao.update("RNT02030100DAO.rentFamilyMatterU", map);
+		//소유물건 정보 변경(계약자번호)TBRNT_RENT_POSESN_THING
+		baseDao.update("RNT02030100DAO.rentPosesnThingU", map);
+		//입주대기자정보 변경(동, 호, 계약자번호)
+		baseDao.update("RNT02030100DAO.mvnWaitrU", map);
+		//계약삭제
+		baseDao.delete("RNT02030100DAO.rentCntrctD", map);
+		//가상계좌 변경
+		baseDao.update("RNT02030100DAO.vaMastU", map);
+	}
+}

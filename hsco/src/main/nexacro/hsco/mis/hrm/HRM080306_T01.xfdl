@@ -1,0 +1,250 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.5">
+  <TypeDefinition url="..\..\default_typedef.xml"/>
+  <Form id="HRM080306_T01" classname="HRM080306_T01" left="0" top="0" width="1024" height="514" titletext="법인카드사용내역">
+    <Layouts>
+      <Layout>
+        <Static id="Static09" taborder="4" text="10" visible="false" left="0" top="0" right="0" height="10" style="background:#dc143c3c;align:center middle;"/>
+        <Static id="sta_cprCardUseDtls" taborder="5" text="법인카드사용내역" cssclass="sta_WF_Title02" left="0" top="10" width="120" height="19"/>
+        <Static id="Static07" taborder="6" text="5" visible="false" left="0" top="29" right="0" height="5" style="background:#dc143c3c;align:center middle;"/>
+        <Button id="btn_Delete" taborder="1" text="행삭제" onclick="btn_Delete_onclick" cssclass="btn_WF_Griddel" top="10" right="67" width="64" height="19"/>
+        <Button id="btn_Cancel" taborder="2" text="취소" onclick="btn_Cancel_onclick" cssclass="btn_WF_Gridcnl" top="10" right="0" width="64" height="19"/>
+        <Button id="btn_cprCardDtls" taborder="0" text="법인카드사용내역추가" cssclass="btn_WF_Process" enable="true" top="10" right="134" width="130" height="19" onclick="btn_cprCardDtls_onclick"/>
+        <Grid id="grd_cprCardUseDtls" taborder="3" useinputpanel="false" left="0" top="34" right="0" bottom="0" binddataset="ds_cprCardUseDtls" autoupdatetype="itemselect">
+          <Formats>
+            <Format id="default">
+              <Columns>
+                <Column size="40"/>
+                <Column size="80"/>
+                <Column size="80"/>
+                <Column size="140"/>
+                <Column size="100"/>
+                <Column size="100"/>
+                <Column size="150"/>
+                <Column size="100"/>
+                <Column size="80"/>
+                <Column size="120"/>
+                <Column size="250"/>
+              </Columns>
+              <Rows>
+                <Row size="24" band="head"/>
+                <Row size="24"/>
+              </Rows>
+              <Band id="head">
+                <Cell text="순번"/>
+                <Cell col="1" text="사원명"/>
+                <Cell col="2" text="여비구분"/>
+                <Cell col="3" text="카드번호"/>
+                <Cell col="4" text="카드명"/>
+                <Cell col="5" text="업종"/>
+                <Cell col="6" text="가맹점"/>
+                <Cell col="7" text="사용일자"/>
+                <Cell col="8" text="사용시간"/>
+                <Cell col="9" text="사용금액"/>
+                <Cell col="10" text="비고"/>
+              </Band>
+              <Band id="body">
+                <Cell text="expr:currow + 1"/>
+                <Cell col="1" style="align:left middle;padding:0 0 0 5;" text="bind:EMPNM"/>
+                <Cell col="2" displaytype="combo" edittype="expr:comp.parent.fn_getEnableAt() != '1' ? 'combo' : 'none'" style="padding:0 0 0 5;" text="bind:EDCCT_SE" combodataset="ds_hrm055" combocodecol="CODE" combodatacol="CODE_NM" combodisplay="expr:comp.parent.fn_getEnableAt() != '1' ? 'display' : 'edit'"/>
+                <Cell col="3" text="bind:CARD_NO" mask="@@@@-@@@@-@@@@-@@@@"/>
+                <Cell col="4" style="align:left middle;padding:0 0 0 5;" text="bind:CARD_NM"/>
+                <Cell col="5" style="align:left middle;padding:0 0 0 5;" text="bind:BRANCHTYPE"/>
+                <Cell col="6" style="align:left middle;padding:0 0 0 5;" text="bind:CHAIN_NM"/>
+                <Cell col="7" displaytype="date" text="bind:USE_DE" calendardisplaynulltype="none"/>
+                <Cell col="8" text="bind:APPR_TIME"/>
+                <Cell col="9" displaytype="number" style="align:right middle;padding:0 5 0 0;" text="bind:USE_AM"/>
+                <Cell col="10" edittype="expr:comp.parent.fn_getEnableAt() != '1' ? 'normal' : 'none'" style="padding:0 0 0 5;" text="bind:RM" editlimit="450" editdisplay="expr:comp.parent.fn_getEnableAt() != '1' ? 'display' : 'edit'" editlengthunit="utf8"/>
+              </Band>
+            </Format>
+          </Formats>
+        </Grid>
+      </Layout>
+    </Layouts>
+    <Objects/>
+    <Script type="xscript5.0"><![CDATA[include "lib::comInclude.xjs";
+
+/*
+ * 함수명  	: btn_cprCardDtls_onclick
+ * 설명 		: '법인카드내역' 버튼 클릭 후 이벤트 처리
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: this.btn_cprCardDtls_onclick(obj,e);
+ */
+this.btn_cprCardDtls_onclick = function(obj:Button,  e:nexacro.ClickEventInfo)
+{
+	var pRow  = this.parent.parent.ds_edcList.rowposition;
+	var enableAt  = this.parent.parent.ds_edcList.getColumn(pRow, "EXCCLC_CONFM_AT");	// 교육담당자 정산 승인여부
+	var cnfirmAt  = this.parent.parent.ds_edcList.getColumn(pRow, "CNFIRM_AT");		// 팀장 정산 승인여부
+	var exxcclcAt = this.parent.parent.ds_edcList.getColumn(pRow, "EXCCLC_AT");		// 정산 여부
+	
+	if(pRow < 0) {
+		this.gfn_message("info.처리불가", "선택된 교육이 존재하지 않습니다.");
+		return false;
+	}
+	if(enableAt == '1' || cnfirmAt == '1' || exxcclcAt == '1') {
+		this.gfn_message("info.처리불가", "승인 또는 정산이 완료된 교육은 수정할 수 없습니다.");
+		return false;
+	}
+	
+	var parm = {
+	   arg_0      : this
+	  , formId    : "HRM080306"
+	};
+	this.gfn_popup("cprCardUseDtls", 1011, 600, "", parm, "com::cprCardUseDtls.xfdl", "fn_popupCallBack", true);
+}
+
+
+/*
+ * 함수명  	: btn_Delete_onclick
+ * 설명 		: '행삭제' 버튼 클릭 후 이벤트 처리
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: this.btn_Delete_onclick(obj,e);
+ */
+this.btn_Delete_onclick = function(obj:Button,  e:nexacro.ClickEventInfo)
+{
+	var pRow  = this.parent.parent.ds_edcList.rowposition;
+	var enableAt  = this.parent.parent.ds_edcList.getColumn(pRow, "EXCCLC_CONFM_AT");	// 교육담당자 정산 승인여부
+	var cnfirmAt  = this.parent.parent.ds_edcList.getColumn(pRow, "CNFIRM_AT");		// 팀장 정산 승인여부
+	var exxcclcAt = this.parent.parent.ds_edcList.getColumn(pRow, "EXCCLC_AT");		// 정산 여부
+
+	if(enableAt == '1' || cnfirmAt == '1' || exxcclcAt == '1') {
+		this.gfn_message("info.처리불가", "승인 또는 정산이 완료된 교육은 수정할 수 없습니다.");
+		return false;
+	}
+	
+	if(!this.gfn_message("confirm.삭제여부")) {
+		return false;	// 아니오
+	}
+	
+	this.parent.parent.fn_cal_Amt(this.parent.parent.ds_cprCardUseDtls, "can");
+	this.parent.parent.ds_cprCardUseDtls.deleteRow(this.parent.parent.ds_cprCardUseDtls.rowposition);
+	this.parent.parent.fn_cal_Amt(this.parent.parent.ds_cprCardUseDtls, "on");
+}
+
+
+/*
+ * 함수명  	: btn_Cancel_onclick
+ * 설명 		: '행취소' 버튼 클릭 후 이벤트 처리
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: this.btn_Cancel_onclick(obj,e);
+ */
+this.btn_Cancel_onclick = function(obj:Button,  e:nexacro.ClickEventInfo)
+{
+	var pRow  = this.parent.parent.ds_edcList.rowposition;
+	var enableAt  = this.parent.parent.ds_edcList.getColumn(pRow, "EXCCLC_CONFM_AT");	// 교육담당자 정산 승인여부
+	var cnfirmAt  = this.parent.parent.ds_edcList.getColumn(pRow, "CNFIRM_AT");		// 팀장 정산 승인여부
+	var exxcclcAt = this.parent.parent.ds_edcList.getColumn(pRow, "EXCCLC_AT");		// 정산 여부
+
+	if(enableAt == '1' || cnfirmAt == '1' || exxcclcAt == '1') {
+		this.gfn_message("info.처리불가", "승인 또는 정산이 완료된 교육은 수정할 수 없습니다.");
+		return false;
+	}
+	
+	if(Ex.util.isUpdated(this.parent.parent.ds_cprCardUseDtls)) {
+		if(!this.gfn_message("confirm.변경.취소.여부")) {
+			return false;	// 아니오
+		}
+	}
+	
+	this.parent.parent.fn_cal_Amt(this.parent.parent.ds_cprCardUseDtls, "can");
+	this.parent.parent.ds_cprCardUseDtls.reset();
+	this.parent.parent.ds_cprCardUseDtls.applyChange();
+	this.parent.parent.fn_cal_Amt(this.parent.parent.ds_cprCardUseDtls, "on");
+}
+
+
+/*
+ * 함수명  	: fn_popupCallBack
+ * 설명 		: Popup Callback 처리
+ * params  		: sPopupId    : 팝업 ID
+ *                sReturn  : 팝업 처리 결과(dataset.saveXML())
+ * return Type 	: None
+ * 사용법		: 
+ */
+this.fn_popupCallBack = function(sPopupId, sReturn)
+{
+	// 법인카드사용내역추가
+	if(sPopupId == "cprCardUseDtls") {
+		var dsTemp = new Dataset();
+		var loadCnt = dsTemp.loadXML(sReturn);
+		
+ 		if(loadCnt) {
+			// 법인카드사용내역 정보
+			var bankCd     = dsTemp.getColumn(0, "BANK_CD");	// 금융기관코드(PK)
+			var cardNo     = dsTemp.getColumn(0, "CARD_NO");	// 카드번호(PK)
+			var apprDate   = dsTemp.getColumn(0, "APPR_DATE");	// 승인일자(PK)
+			var apprTime   = dsTemp.getColumn(0, "APPR_TIME");	// 승인시간(PK)
+			var apprNo     = dsTemp.getColumn(0, "APPR_NO");	// 승인번호(PK)
+			var apprAmt    = dsTemp.getColumn(0, "APPR_AMT");	// 승인금액(PK)
+			var cancelYn   = dsTemp.getColumn(0, "CANCEL_YN");	// 승인취소여부(PK)
+			var cardNm     = dsTemp.getColumn(0, "CARD_NM");	// 카드명
+			var chainNm    = dsTemp.getColumn(0, "CHAIN_NM");	// 가맹점
+			var branchType = dsTemp.getColumn(0, "BRANCHTYPE");	// 업종
+			
+			// 교육 정보
+			var pRow  = this.parent.parent.ds_edcList.rowposition;
+			var enableAt = this.parent.parent.ds_edcList.getColumn(pRow, "ENABLE_AT");
+			var year     = this.parent.parent.ds_edcList.getColumn(pRow, "YEAR");
+			var empno    = this.parent.parent.ds_edcList.getColumn(pRow, "EMPNO");
+			var empnm    = this.parent.parent.ds_edcList.getColumn(pRow, "EMPNM");
+			var sn       = this.parent.parent.ds_edcList.getColumn(pRow, "SN");
+			var edcTy    = this.parent.parent.ds_edcList.getColumn(pRow, "EDC_TY");
+			var excclcSe = '001';
+			var edcctSe  = this.parent.parent.ds_hrm055.getColumn(0, "CODE");
+			
+			// 법인카드사용내역 세팅
+			var nRow = this.parent.parent.ds_cprCardUseDtls.addRow();
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "YEAR"     , year);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "EMPNO"    , empno);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "EMPNM"    , empnm);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "SN"       , sn);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "EDC_TY"   , edcTy);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "EXCCLC_SE", excclcSe);
+			
+			this.parent.parent.ds_cprCardUseDtls.set_enableevent(false);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "EDCCT_SE" , edcctSe);
+			this.parent.parent.ds_cprCardUseDtls.set_enableevent(true);
+			
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "USE_DE"    , apprDate);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "USE_AM"    , apprAmt);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "BANK_CD"   , bankCd);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "CARD_NO"   , cardNo);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "APPR_TIME" , apprTime);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "APPR_NO"   , apprNo);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "CANCEL_YN" , cancelYn);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "CARD_NM"   , cardNm);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "CHAIN_NM"  , chainNm);
+			this.parent.parent.ds_cprCardUseDtls.setColumn(nRow, "BRANCHTYPE", branchType);
+ 		}
+	}
+}
+
+
+/*
+ * 함수명  	: fn_getEnableAt
+ * 설명 		: 수정가능여부확인
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: this.fn_getEnableAt();
+ */
+this.fn_getEnableAt = function()
+{
+	var result = '0';
+	
+	var pRow  = this.parent.parent.ds_edcList.rowposition;
+	var enableAt  = this.parent.parent.ds_edcList.getColumn(pRow, "EXCCLC_CONFM_AT");	// 교육담당자 정산 승인여부
+	var cnfirmAt  = this.parent.parent.ds_edcList.getColumn(pRow, "CNFIRM_AT");		// 팀장 정산 승인여부
+	var exxcclcAt = this.parent.parent.ds_edcList.getColumn(pRow, "EXCCLC_AT");		// 정산 여부
+	
+	if(enableAt == '1' || cnfirmAt == '1' || exxcclcAt == '1') {
+		result = '1';
+	}
+	
+	return result;
+}
+]]></Script>
+  </Form>
+</FDL>

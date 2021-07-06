@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS020207DAO">	
+
+    <!-- 쿼리명 : 증감율 조회
+	설명 : 증감율 조회
+	수정일  		수정자  	수정내용
+	2015.12.16   이광원	최초생성
+	작성자 : 이광원
+	최초작성일 : 2015.12.16
+	-->
+	<select id="SLS020207DAO.Intrt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+         SELECT
+              NVL(SFPMS_GET_INTRT_RATE('HOU', #HOUSE_CODE# ,'R2', #APPLC_DE#, 0), 0) AS R2    
+             ,NVL(SFPMS_GET_INTRT_RATE('HOU', #HOUSE_CODE# ,'I1', #APPLC_DE#, 0), 0) AS I1  
+             ,NVL(SFPMS_GET_INTRT_RATE('HOU', #HOUSE_CODE# ,'I2', #APPLC_DE#, 0), 0) AS I2 
+         FROM DUAL
+     <!-- R2 상호전환 , I1 보증금 , I2 임대료  -->
+    </select>
+    
+    
+    
+    <!-- 쿼리명 : 임대료,보증금 증액 조회 
+	설명 : 임대료,보증금 증액 조회 
+	수정일  		수정자  	수정내용
+	2016.08.16   최인석	최초생성
+	작성자 : 최인석
+	최초작성일 : 2016.08.16
+	-->    
+   	<select id="SLS020207DAO.RntchrgChangeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<!-- 증액처리 대상자료 -->
+	 SELECT H.HOUSE_NM      /* 주택명 */
+	      , B.CNTRCTR_NO, A.HOUSE_CODE, A.DONG, A.HO
+	      , D.CSTMR_NM   /* 계약자 */
+	      , A.BFCHG_GTN  /* 변경전 보증금 */      
+	      , A.AFTCH_GTN  /* 변경후 보증금 */    
+	      , A.AFTCH_GTN - A.BFCHG_GTN AS INC_GTN  /* 증액 보증금 */
+	      , A.BFCHG_RNTCHRG  /* 변경전 임대료 */
+	      , A.AFTCH_RNTCHRG  /* 변경후 임대료 */     
+	      , C.PAYAMT         /* 납부 보증금   */
+	      , NVL(C.PAYAMT,0) - NVL(A.BFCHG_GTN,0) AS ADD_AMT /* 개인증액 보증금 */             
+	      , (CASE WHEN NVL(C.PAYAMT,0) - NVL(A.BFCHG_GTN,0) > 0 THEN 
+	                   A.AFTCH_RNTCHRG - CEIL( (( (NVL(C.PAYAMT,0) - NVL(A.BFCHG_GTN,0)) * (#DOWN_RATIO# / 100) / 12) * 0.1)) / 0.1
+	              ELSE A.AFTCH_RNTCHRG END) AS RENTAMT   /* 상호전환임대료 */
+	       , #GUAR_RATIO# AS GUAR_RATIO   /* 보증금 증액율 */
+	       , #RENT_RATIO# AS RENT_RATIO   /* 임대료 증액율 */                        
+	       , #DOWN_RATIO# AS DOWN_RATIO   /* 상호전환이율  */                                                   
+	   FROM (SELECT HOUSE_CODE, DONG, HO, BASS_GTN AS BFCHG_GTN, BASS_RNTCHRG AS BFCHG_RNTCHRG  
+	              , DECODE(#GUAR_RATIO#, 0, BASS_GTN,
+	                TRUNC(( BASS_GTN * (#GUAR_RATIO# / 100)) + BASS_GTN,-3)   
+	                ) AS AFTCH_GTN
+	              , DECODE(#RENT_RATIO#, 0, BASS_RNTCHRG,
+	                TRUNC((BASS_RNTCHRG * (#RENT_RATIO# / 100)) + BASS_RNTCHRG,-1) 
+	                ) AS AFTCH_RNTCHRG
+	           FROM TBSLS_HOUSE_DONG_HO 
+	        ) A
+	      , TBSLS_HCNTRCTR B
+	      , TBSLS_HOUSE_CSTMR D
+	      , (SELECT CNTRCTR_NO, SUM(PAYAMT) AS PAYAMT
+	           FROM TBSLS_HOUSE_LTTOT_PAY
+	          WHERE PAY_CODE LIKE 'R%' AND RCIV_DE IS NOT NULL
+	          GROUP BY CNTRCTR_NO
+	        ) C
+	      , TBSLS_HOUSE_INFO H  
+	  WHERE A.HOUSE_CODE = #HOUSE_CODE#
+	    AND A.HOUSE_CODE = B.HOUSE_CODE
+	    AND A.DONG = B.DONG
+	    AND A.HO = B.HO
+	    AND B.CNTRCTR_STTUS_CODE = '01' 
+	    AND B.RENT_LTTOT_CNVRS_DE IS NULL
+	    AND B.CNTRCTR_NO = C.CNTRCTR_NO     
+	    AND B.HOUSE_CSTMR_NO = D.HOUSE_CSTMR_NO
+	    AND A.HOUSE_CODE = H.HOUSE_CODE
+	    
+	  UNION
+	  
+ /* 공가세대 */
+	  SELECT H.HOUSE_NM      /* 주택명 */
+	       , NULL AS CNTRCTR_NO, A.HOUSE_CODE, A.DONG, A.HO
+	       , NULL
+	       , A.BFCHG_GTN    /* 변경전 보증금  */     
+	       , A.AFTCH_GTN    /* 변경후 보증금  */
+	       , A.AFTCH_GTN - A.BFCHG_GTN AS INC_GTN  /* 증액 보증금 */
+	       , A.BFCHG_RNTCHRG  /* 변경전 임대료 */
+	       , A.AFTCH_RNTCHRG  /* 변경후 임대료 */
+	       , 0 ,0 , 0
+	       , #GUAR_RATIO# AS GUAR_RATIO  /* 보증금 증액율 */
+	       , #RENT_RATIO# AS RENT_RATIO  /* 임대료 증액율 */                     
+	       , #DOWN_RATIO# AS DOWN_RATIO  /* 상호전환이율  */
+	   FROM (SELECT HOUSE_CODE, DONG, HO, BASS_GTN AS BFCHG_GTN, BASS_RNTCHRG AS BFCHG_RNTCHRG  
+	              , DECODE(#GUAR_RATIO#, 0, BASS_GTN,
+	                TRUNC(( BASS_GTN * (#GUAR_RATIO# / 100)) + BASS_GTN,-3)   
+	                ) AS AFTCH_GTN
+	              , DECODE(#RENT_RATIO#, 0, BASS_RNTCHRG,
+	                TRUNC((BASS_RNTCHRG * (#RENT_RATIO# / 100)) + BASS_RNTCHRG,-1) 
+	                ) AS AFTCH_RNTCHRG
+	           FROM TBSLS_HOUSE_DONG_HO 
+	        ) A, TBSLS_HOUSE_INFO H 
+	  WHERE A.HOUSE_CODE = #HOUSE_CODE#
+	    AND NOT EXISTS(SELECT 1 FROM TBSLS_HCNTRCTR B 
+	                    WHERE A.HOUSE_CODE = B.HOUSE_CODE
+	                      AND A.DONG = B.DONG
+	                      AND A.HO = B.HO
+	                      AND B.CNTRCTR_STTUS_CODE = '01')    
+	   AND A.HOUSE_CODE = H.HOUSE_CODE
+	  ORDER BY DONG, HO
+    </select>	
+    
+    
+
+    
+    <!-- 쿼리명 : 임대료,보증금 증액된 내역 조회 
+	설명 : 임대료,보증금 증액된 내역 조회 
+	수정일  		수정자  	수정내용
+	2016.08.16   최인석	최초생성
+	작성자 : 최인석
+	최초작성일 : 2016.08.16
+	-->    
+   	<select id="SLS020207DAO.RntchrgAlreadyChangedList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+      SELECT H.HOUSE_NM      /* 주택명 */
+         , B.CNTRCTR_NO, F.HOUSE_CODE, F.DONG, F.HO
+         , C.CSTMR_NM     
+         , F.BFCHG_GTN   /* 변경전 보증금 */    
+         , F.AFTCH_GTN   /* 변경후 보증금 */    
+         , NVL(F.AFTCH_GTN,0) - NVL(F.BFCHG_GTN,0) AS INC_GTN  /* 증액 보증금 */
+         , F.BFCHG_RNTCHRG  /* 변경전 임대료 */
+         , F.AFTCH_RNTCHRG  /* 변경후 임대료 */   
+         , 0 PAYAMT         /* 납부 보증금   */ 
+         , F.INDVDL_ADIT_AMT AS ADD_AMT  /* 개인증액 보증금 */              
+         , F.APPLC_RENT_AMT AS RENTAMT  /* 상호전환임대료 */
+         , A.GTN_INTRT AS GUAR_RATIO    /* 보증금 증액율 */
+         , A.RNTCHRG_INTRT AS RENT_RATIO /* 임대료 증액율 */                        
+         , A.IRDS_INTRT AS DOWN_RATIO    /* 상호전환이율  */                
+      FROM TBSLS_RENTINFO_CHANGE A
+         , TBSLS_HCNTRCTR_RNTCHRG_CHANGE F                  
+         , TBSLS_HCNTRCTR B
+         , TBSLS_HOUSE_CSTMR C                   
+         , TBSLS_HOUSE_INFO H     
+     WHERE 1=1
+       AND A.HOUSE_CODE = #HOUSE_CODE#
+       AND A.CNTRCT_ODR = #CNTRCT_ODR#
+       AND A.HOUSE_CODE = F.HOUSE_CODE
+       AND A.CNTRCT_ODR = F.CNTRCT_ODR       
+       AND F.CNTRCTR_NO = B.CNTRCTR_NO
+       AND B.HOUSE_CSTMR_NO = C.HOUSE_CSTMR_NO
+       AND A.HOUSE_CODE = H.HOUSE_CODE
+     ORDER BY F.DONG, F.HO
+     </select>
+     
+     
+      <!-- 쿼리명 : 해당 재계약회차에 증액이 됐는지 확인
+	설명 : 해당 재계약회차에 증액 여부
+	수정일  		수정자  	수정내용
+	2016.08.16   최인석	최초생성
+	작성자 : 최인석
+	최초작성일 : 2016.08.16
+	-->    
+	<select id="SLS020207DAO.selectRntChrgChangeYn" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT COUNT (0) AS CNT
+		  FROM TBSLS_RENTINFO_CHANGE
+		 WHERE 1=1 
+		 	AND HOUSE_CODE = #HOUSE_CODE# 
+		 	AND CNTRCT_ODR = #CNTRCT_ODR#
+    </select>
+	
+	
+     
+     
+    
+    <!-- 쿼리명 : 임대료,보증금 증액 조회2 
+	설명 : 임대료,보증금 증액 조회 2
+	수정일  		수정자  	수정내용
+	2015.12.16   이광원	최초생성
+	작성자 : 이광원
+	최초작성일 : 2015.12.16
+	-->    
+   	<select id="SLS020207DAO.List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">    
+	SELECT A.* 
+	  FROM TBSLS_HCNTRCTR_RNTCHRG_CHANGE A
+	  JOIN TBSLS_HCNTRCTR B ON A.CNTRCTR_NO = B.CNTRCTR_NO
+	 WHERE 1=1
+	   AND B.HOUSE_CODE = #IN_HOUSE_CODE#
+	   AND A.CHANGE_SN = #IN_CHANGE_SN#
+	   AND A.PAY_CODE = #IN_PAY_CODE#    
+    </select>
+    
+	<!-- 쿼리명 : 임대료,보증금 증액 프로시저
+	설명 : 임대료,보증금 증액 프로시저
+	수정일  		수정자  	수정내용
+	2015.12.17	이광원	최초생성
+	작성자 : 이광원
+	최초작성일 : 2015.12.17
+	-->
+	<parameterMap id="spsls_house_260c_raise_param" class="java.util.HashMap">
+		<parameter property="IN_APPLY_MONTH"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_GUAR_RATIO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RENT_RATIO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_DOWN_RATIO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HOUSE_CODE"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_DONG"				jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HO"					jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_PAY_CODE"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />		
+		<parameter property="IN_CHANGE_SN"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_RN_BEGIN_DATE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />		
+		<parameter property="S_USER_ID"				jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	</parameterMap>
+
+	<procedure id="SLS020207DAO.SPSLS_HOUSE_260C_RAISE" parameterMap="spsls_house_260c_raise_param">
+		{ call SPSLS_HOUSE_260C_RAISE(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+	</procedure>    
+	
+	
+	
+		
+	<!-- 쿼리명 : 임대료,보증금 증액 프로시저
+	설명 : 임대료,보증금 증액 프로시저
+	수정일  		수정자  	수정내용
+	2015.12.17	이광원	최초생성
+	작성자 : 이광원
+	최초작성일 : 2015.12.17
+	-->
+	<parameterMap id="spsls_house_260c_raise_cancel_param" class="java.util.HashMap">
+		<parameter property="IN_APPLY_MONTH"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HOUSE_CODE"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_DONG"				jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_HO"					jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_CHANGE_SN"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="S_USER_ID"				jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	</parameterMap>
+
+	<procedure id="SLS020207DAO.SPSLS_HOUSE_260C_RAISE_CANCEL" parameterMap="spsls_house_260c_raise_cancel_param">
+		{ call SPSLS_HOUSE_260C_RAISE_CANCEL(?, ?, ?, ?, ?, ?) }
+	</procedure>    
+	
+	
+	<!-- 쿼리명 : 임대료,보증금 증액 프로시저
+	설명 : 임대료,보증금 증액 프로시저
+	수정일  		수정자  	수정내용
+	2016.08.15	최인석	최초생성
+	작성자 : 최인석
+	최초작성일 : 2016.08.15
+	-->
+	<parameterMap id="spsls_house_rentinfo_change_param" class="java.util.HashMap">
+		<parameter property="IN_HOUSE_CODE"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	    <parameter property="IN_CNTRCT_ODR"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_GUAR_RATIO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RENT_RATIO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_DOWN_RATIO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAY_CODE"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAY_TMLMT"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_APPLC_DE"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="S_USER_ID"				jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	</parameterMap>
+
+	<procedure id="SLS020207DAO.SPSLS_HOUSE_RENTINFO_CHANGE" parameterMap="spsls_house_rentinfo_change_param">
+		{ call SPSLS_HOUSE_RENTINFO_CHANGE(?, ?, ?, ?, ?, ?, ?, ?, ?) }
+	</procedure>    
+	
+	<!-- 쿼리명 : 임대료,보증금 증액 취소 프로시저
+	설명 : 임대료,보증금 증액 취소 프로시저
+	수정일  		수정자  	수정내용
+	2016.08.15	최인석	최초생성
+	작성자 : 최인석
+	최초작성일 : 2016.08.15
+	-->
+	<parameterMap id="spsls_house_rentinfo_change_d_param" class="java.util.HashMap">
+		<parameter property="IN_HOUSE_CODE"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CNTRCT_ODR"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="S_USER_ID"				jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+	</parameterMap>
+
+	<procedure id="SLS020207DAO.SPSLS_HOUSE_RENTINFO_CHANGE_D" parameterMap="spsls_house_rentinfo_change_d_param">
+		{ call SPSLS_HOUSE_RENTINFO_CHANGE_D(?, ?, ?) }
+	</procedure>  
+	
+	
+
+	
+	 <!-- 쿼리명 : 재계약차수 조회
+	설명 : 증감율 조회
+	수정일  		수정자  	수정내용
+	2015.12.16   최인석	최초생성
+	작성자 : 최인석
+	최초작성일 : 2016.08.15
+	-->
+	<select id="SLS020207DAO.reContractNum" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT (NVL(MAX (CNTRCT_ODR),0) + 1) AS reContractNum
+		  FROM TBSLS_RENTINFO_CHANGE
+		 WHERE HOUSE_CODE = #HOUSE_CODE#
+    </select>
+    
+</sqlMap>

@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01051403SQL">	
+
+	<!-- 쿼리명 : 자동이체 결과조회
+	설명 : 자동이체 결과조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.18
+	-->
+	<select id="RNT01051403DAO.selectAtcngRqestRciv" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			   SELECT ROWNUM SN,
+                           a.DTA_SE,   /* 자료구분 */
+                           a.ATCNG_SN, /* 자동이체일련번호 */
+                           a.DEFRAY_SN, /* 출금일련번호 */
+                           a.TRANSFR_FILE_SE, /* 이체파일구분 */
+                           a.DEFRAY_YM, /* 출금년월 */
+                           a.BANK_CODE, /* 은행코드 */
+                           a.ACNUTNO, /* 계좌번호 */
+                           a.DEFRAY_REQEST_AMOUNT, /* 출금의뢰금액 */
+                           a.DEFRAY_AT, /* 출금여부 */
+                           a.ERROR_CODE, /* 오류코드 */
+                           a.NEW_SE, /* 신규구분*/
+                           DECODE(a.CPTAL_SE,'2','임대료',a.CPTAL_SE) CPTAL_SE, /* 자금구분 */
+                           a.PAYER_NO, /* 납부자번호 */
+                           b.RENT_HOUSE_CODE,
+                           b.DONG,
+                           b.HO, 
+                           a.CMPNY_RELATE_INFO, /* 회사관련정보 */
+                           a.TRANSFR_RQEST_APNTDT, /* 이체청구지정일 */
+                           a.DEFRAY_RESULT, /* 출금결과 */
+                           a.TRANSFR_REQEST_DE, /* 이체의뢰일자 */
+                           a.DEFRAY_DE, /* 출금일자 */
+                           DECODE(a.TRANSFR_PROCESS_SE,'C','적용','미적용') TRANSFR_PROCESS_SE, /* 이체처리구분 */
+                           a.REGISTER_ID,
+                           TO_CHAR(a.REGIST_DT,'YYYY-MM-DD hh24:mi:ss') REGIST_DT,
+                           c.RENT_HOUSE_NM
+                     FROM  TBPMS_ATCNG_RQEST_RCIV a,
+                           TBRNT_RENT_CNTRCT b,
+                           TBRNT_RENT_HOUSE c
+                     WHERE ATCNG_JOB_SE = #atcngJobSe#
+                       AND DEFRAY_YM = #monCal#
+                       AND a.CNTRCTR_NO = b.CNTRCTR_NO(+)
+                       AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE(+)
+                       AND c.HOUSE_SE IN('R1','R3')
+	</select>
+	
+	<!--   자동이체 정보내역조회  -->
+	<select id="RNT01051403DAO.selectAtcngRqestRcivSum" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	        SELECT  #monCal# DEFRAY_YM,
+                    MAX(TRANSFR_REQEST_DE) TRANSFR_REQEST_DE,
+                    MAX(DEFRAY_DE) DEFRAY_DE,
+                    SUM(CO1) CO1,
+                    SUM(AMOUNT1) AMOUNT1,
+                    SUM(CO2) CO2,
+                    SUM(AMOUNT2) AMOUNT2,
+                    SUM(CO3) CO3,
+                    SUM(AMOUNT3) AMOUNT3
+               FROM(SELECT COUNT(1) CO1,
+                           SUM(DEFRAY_REQEST_AMOUNT) AMOUNT1,
+                           MAX(TRANSFR_REQEST_DE) TRANSFR_REQEST_DE,
+                           MAX(DEFRAY_DE) DEFRAY_DE,
+                           CASE WHEN ERROR_CODE = '0000' THEN COUNT(1) ELSE 0 END CO2,
+                           CASE WHEN ERROR_CODE = '0000' THEN SUM(DEFRAY_REQEST_AMOUNT) ELSE 0 END AMOUNT2,
+                           CASE WHEN ERROR_CODE <![CDATA[<>]]> '0000' THEN COUNT(1) ELSE 0 END CO3,
+                           CASE WHEN ERROR_CODE <![CDATA[<>]]> '0000' THEN SUM(DEFRAY_REQEST_AMOUNT) ELSE 0 END AMOUNT3
+                     FROM  TBPMS_ATCNG_RQEST_RCIV a,
+                           TBRNT_RENT_CNTRCT b,
+                           TBRNT_RENT_HOUSE c
+                     WHERE ATCNG_JOB_SE =  #atcngJobSe#
+                       AND DEFRAY_YM = #monCal#
+                       AND a.CNTRCTR_NO = b.CNTRCTR_NO(+)
+                       AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE(+)
+                       AND c.HOUSE_SE IN('R1','R3')
+                     GROUP BY ERROR_CODE)
+	</select>
+	      
+	<!--   자동이체 기정보 확인  -->
+	<select id="RNT01051403DAO.selectAtcngRqestRcivChk" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+             SELECT  count(1) CHK_CNT
+                     FROM  TBPMS_ATCNG_RQEST_RCIV a,
+                           TBRNT_RENT_CNTRCT b,
+                           TBRNT_RENT_HOUSE c
+                     WHERE ATCNG_JOB_SE = #atcngJobSe#
+                       AND DEFRAY_YM = #monCal#
+                       AND a.CNTRCTR_NO = b.CNTRCTR_NO(+)
+                       AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE(+)
+                       AND c.HOUSE_SE IN('R1','R3')
+	</select>
+	
+<!-- 쿼리명 : 월별 출금결과 내역  삭제
+설명 : 월월별 출금결과 내역 
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->	  
+	<delete id="RNT01051403DAO.deleteAtcngRcivInfo" parameterClass="java.util.HashMap">
+		DELETE 
+			   TBPMS_ATCNG_RQEST_RCIV		   
+ 		 WHERE ATCNG_JOB_SE = #ATCNG_JOB_SE#
+ 		   AND DEFRAY_YM = #DEFRAY_YM#
+ 		   AND OCCRRNC_SE = '02' 
+	</delete>
+	
+<!-- 쿼리명 : 월별 자동이체 내역 저장
+설명 : 월별 자동이체 내역 저장
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->	  
+   <insert id="RNT01051403DAO.insertAtcngReqstRcivInfo" parameterClass="java.util.HashMap">
+			INSERT 
+			  INTO TBPMS_ATCNG_RQEST_RCIV
+			  (  OCCRRNC_SE
+			   , ATCNG_JOB_SE
+			   , DEFRAY_YM
+			   , DEFRAY_SN
+			   , DTA_SE
+			   , TRANSFR_FILE_SE
+			   , BANK_CODE
+			   , ACNUTNO
+			   , DEFRAY_REQEST_AMOUNT
+			   , DEFRAY_AT
+			   , ERROR_CODE
+			   , DEFRAY_RESULT
+			   , NEW_SE
+			   , CPTAL_SE
+			   , PAYER_NO
+			   , CNTRCTR_NO /* CMPNY_RELATE_INFO 회사관련정보 --> 계약번호 */
+			   , TRANSFR_RQEST_APNTDT
+			   , TRANSFR_REQEST_DE
+			   , DEFRAY_DE
+			   , DECSN_DE
+			   , INCME_DECSN_NO
+			   , TRANSFR_PROCESS_SE
+			   , REGISTER_ID
+			   , REGIST_DT
+			   , UPDUSR_ID
+			   , UPDT_DT
+			)VALUES(
+			      '02'
+			    , #ATCNG_JOB_SE#
+			    , #DEFRAY_YM#
+			    , NVL((SELECT MAX(DEFRAY_SN) 
+			             FROM TBPMS_ATCNG_RQEST_RCIV  
+			            WHERE OCCRRNC_SE = '02'
+			              AND ATCNG_JOB_SE = #ATCNG_JOB_SE#
+			              AND DEFRAY_YM = #DEFRAY_YM#),0) + 1
+			    , #DTA_SE#
+			    , #TRANSFR_FILE_SE#
+			    , '0'||#BANK_CODE#
+			    , #ACNUTNO#
+			    , #DEFRAY_REQEST_AMOUNT#
+			    , #DEFRAY_AT#
+			    , #ERROR_CODE#
+			    , #DEFRAY_RESULT#
+			    , #NEW_SE#
+			    , #CPTAL_SE#
+			    , #PAYER_NO#
+			    , #CMPNY_RELATE_INFO#
+			    , #TRANSFR_RQEST_APNTDT#
+			    , '20' || #TRANSFR_REQEST_DE#
+			    , '20' || #DEFRAY_DE#
+			    , #DECSN_DE#
+			    , #INCME_DECSN_NO#
+			    , 'R'
+			    , #S_USER_ID#
+			    , SYSDATE
+			    , #S_USER_ID#
+			    , SYSDATE
+			)
+  </insert>
+  
+ <!-- 쿼리명 : 월별 자동이체 정구 업데이트
+설명 : 월별 자동이체 정구 업데이트
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->	  
+   <update id="RNT01051403DAO.updateAtcngRcivDemand" parameterClass="java.util.HashMap">
+	    UPDATE TBPMS_ATCNG_RQEST_RCIV a
+	       SET ERROR_CODE = (SELECT ERROR_CODE 
+	                           FROM TBPMS_ATCNG_RQEST_RCIV z
+	                           WHERE z.OCCRRNC_SE = '02'
+	                             AND z.ATCNG_JOB_SE = #atcngJobSe#
+	                             AND z.DEFRAY_YM  = a.DEFRAY_YM
+	                             AND z.CNTRCTR_NO = a.CNTRCTR_NO),
+	           TRANSFR_PROCESS_SE = 'U',
+	           UPDUSR_ID          = #S_USER_ID#,
+	           UPDT_DT            = SYSDATE
+	      WHERE a.OCCRRNC_SE   = '01'
+	        AND a.ATCNG_JOB_SE = #atcngJobSe#
+	        AND a.DEFRAY_YM    = #monCal#
+	           
+  </update>
+  
+<!-- 쿼리명 : 월별 자동이체 결과 업데이트
+설명 : 월별 자동이체 결과 업데이트
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->	  
+   <update id="RNT01051403DAO.updateAtcngRcivResult" parameterClass="java.util.HashMap">
+	    
+	    UPDATE TBPMS_ATCNG_RQEST_RCIV a
+	       SET TRANSFR_PROCESS_SE  = 'C',
+	           UPDUSR_ID           = #S_USER_ID#,
+	           UPDT_DT             = SYSDATE
+	      WHERE a.OCCRRNC_SE   = '02'
+	        AND a.ATCNG_JOB_SE = #atcngJobSe#
+	        AND a.DEFRAY_YM    = #monCal#
+	           
+  </update>
+  
+  	<!--  소인처리여부확인 -->
+  <select id="RNT01051403DAO.selectCheck" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+      SELECT NVL((SELECT COUNT(*)
+                    FROM TBPMS_ATCNG_RQEST_RCIV
+                    WHERE OCCRRNC_SE = '01'
+                      AND ATCNG_JOB_SE = #atcngJobSe#
+                      AND DEFRAY_YM = #monCal#
+                      AND TRANSFR_PROCESS_SE = 'I' ),0) CNT
+        FROM DUAL   
+  </select>
+  
+  
+  
+</sqlMap>

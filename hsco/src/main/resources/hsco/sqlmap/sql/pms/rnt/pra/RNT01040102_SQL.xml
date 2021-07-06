@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01040102_SQL">	
+   <!--  설명  : 상가보증금/임대료조정
+		작성자 : 지효정 -->
+	
+	<!-- 상가보증금/임대료목록 -->
+	<select id="RNT01040102DAO.rntchrgStdrStoreList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT ROWNUM AS RNUM,
+			   A.*
+		  FROM (
+				SELECT A.RENT_HOUSE_CODE, 
+				       C.RENT_HOUSE_NM, 
+				       A.DONG, 
+				       A.HO, 
+				       A.CMNUSE_AR,
+				       #stdrYear# AS STDR_YEAR,
+				       A.DVR_AR,
+				       NVL((SELECT RENT_GTN 
+				         FROM TBRNT_RNTCHRG_STDR_STORE A1 
+				        WHERE A1.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE 
+				              AND A1.DONG = A.DONG 
+				              AND A1.HO = A.HO 
+				              AND A1.STDR_YEAR = #stdrYear# - 1
+				       ), 0) AS BEFRYY_RENT_GTN, 
+				       NVL((SELECT MT_RNTCHRG 
+				         FROM TBRNT_RNTCHRG_STDR_STORE A1 
+				        WHERE A1.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE 
+				              AND A1.DONG = A.DONG 
+				              AND A1.HO = A.HO 
+				              AND A1.STDR_YEAR = #stdrYear# - 1
+				       ), 0) AS BEFRYY_MT_RNTCHRG , 
+				       B.RENT_GTN, 
+				       B.MT_RNTCHRG
+				  FROM TBRNT_RENT_HOUSE_BILD A 
+				   LEFT JOIN TBRNT_RNTCHRG_STDR_STORE B 
+				       ON A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE 
+				       AND A.DONG = B.DONG 
+				       AND A.HO = B.HO 
+				       AND B.STDR_YEAR = #stdrYear#
+				   LEFT JOIN TBRNT_RENT_HOUSE C 
+				       ON A.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+				   WHERE 1=1
+				        AND C.HOUSE_SE = 'R3'
+					<isNotEmpty property="rentHouseCode">
+				        AND A.RENT_HOUSE_CODE = #rentHouseCode#
+				    </isNotEmpty>
+				    <isNotEmpty property="dong">
+				        AND A.DONG = LPAD(#dong#, 4, '0')
+				    </isNotEmpty>
+				    <isNotEmpty property="ho">
+				        AND A.HO = LPAD(#ho#, 4, '0')
+				    </isNotEmpty>
+				ORDER BY A.RENT_HOUSE_CODE, 
+				       TO_NUMBER(A.DONG), 
+				       TO_NUMBER(A.HO)
+			   ) A
+	</select>
+	
+	
+	
+		<!-- 상가보증금/임대료 고지서-->
+	<select id="RNT01040102DAO.selectNoticeSheetReport" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			      a.CNTRCTR_NO
+			      ,a.RENT_HOUSE_CODE
+			      ,a.DONG
+			      ,a.HO
+			      ,b.RENT_HOUSE_NM
+			      ,c.ADRES || c.ADRES_DETAIL AS ADRES
+			      ,c.ZIP
+			      ,m.NM
+			      ,b.RENT_HOUSE_NM || ' ' || a.DONG || '동 ' || a.HO || '호' AS ADDR
+			      ,a.DONG || '동 ' || a.HO || '호' AS DONGHO
+			      ,substr(a.PAY_TMLMT, 1,4) AS YYYY_1
+			      ,substr(a.PAY_TMLMT, 5,2) AS MM_1
+			      ,substr(a.PAY_TMLMT, 1,4) AS YYYY
+			      ,substr(a.PAY_TMLMT, 5,2) AS MM
+			      ,substr(a.PAY_TMLMT, 7,8) AS DD
+			      ,0 AS RENT_AMT
+			      ,0 AS DEL_AMT
+			      ,0 AS DEL_INT
+			      ,((CNTRCT_AMOUNT + SURLUS) * 5 / 100) AS GTN
+			      ,((CNTRCT_AMOUNT + SURLUS) * 5 / 100) AS TOTAL_AMT
+			      ,('5' || a.RENT_HOUSE_CODE || a.DONG || a.HO || a.PAY_TMLMT || lpad(((CNTRCT_AMOUNT + SURLUS) * 5 / 100), 10, '0') || SFRNT_OCR_CODE_CHECK('5' || a.RENT_HOUSE_CODE || a.DONG || a.HO || a.PAY_TMLMT || lpad(nvl(((CNTRCT_AMOUNT + SURLUS) * 5 / 100), 0), 10, '0')) || '500') AS OCRBAND
+		      	  ,a.RENT_HOUSE_CODE||'-'||a.DONG||'-'||a.HO AS AUTO_CODE
+		FROM  TBRNT_RENT_CNTRCT a
+			      ,TBRNT_RENT_HOUSE b
+			      ,TBRNT_SOPSRT_BSNM v
+			      ,TBRNT_RENT_HOUSE_DONG c
+			      ,TBRNT_PRMANENT_RENT_CSTMR m
+			      ,TBRNT_RENT_RESCI r
+		WHERE a.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+		  AND b.HOUSE_SE = 'R3'
+		  AND a.CNTRCTR_NO = v.CNTRCTR_NO(+)
+		  AND a.CNTRCTR_NO = r.CNTRCTR_NO(+)
+		  AND a.PRMANENT_CSTMR_NO = m.PRMANENT_CSTMR_NO
+		  AND r.CANCL_DE IS NULL
+		  <isNotEmpty property="rentHouseCode">
+		  AND a.RENT_HOUSE_CODE LIKE #rentHouseCode#
+		  </isNotEmpty>
+		  <isNotEmpty property="dong">		  
+		  AND a.DONG = LPAD(#dong#, 4, '0')
+		  </isNotEmpty>
+		  <isNotEmpty property="ho">
+		  AND a.HO = LPAD(#ho#, 4, '0')
+		  </isNotEmpty>
+		  <isNotEmpty property="nm">
+		  AND m.NM LIKE '%' || #nm# || '%'
+		  </isNotEmpty>
+		  <isNotEmpty property="rentBgnde">
+		  AND substr(a.RENT_BGNDE, 1,4) = #rentBgnde#
+		  </isNotEmpty>
+		  AND a.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE(+)
+		  AND a.DONG = c.DONG(+)
+		  ORDER BY a.RENT_HOUSE_CODE,a.DONG,a.HO	
+	</select>
+	
+	<!-- 상가보증금/임대료 수정 -->
+	<update id="RNT01040102DAO.rntchrgStdrStoreU" parameterClass="java.util.HashMap">
+	MERGE INTO TBRNT_RNTCHRG_STDR_STORE A
+		USING DUAL
+		ON ( 	A.STDR_YEAR 		= #STDR_YEAR# 
+			AND A.RENT_HOUSE_CODE 	= #RENT_HOUSE_CODE# 
+			AND A.DONG 				= #DONG# AND A.HO = #HO#)
+		WHEN MATCHED THEN
+		UPDATE 
+			SET 
+				RENT_GTN 			= #RENT_GTN#,
+				MT_RNTCHRG 			= #MT_RNTCHRG#,
+				UPDUSR_ID 			= #S_USER_ID#,
+				UPDT_DT 			= SYSDATE
+		WHERE
+				A.STDR_YEAR 		= #STDR_YEAR# 
+		AND 	A.RENT_HOUSE_CODE 	= #RENT_HOUSE_CODE# 
+		AND 	A.DONG 				= #DONG# 
+		AND 	A.HO 				= #HO#
+		
+		WHEN NOT MATCHED THEN
+		INSERT (
+					STDR_YEAR,
+					RENT_HOUSE_CODE,
+					DONG,
+					HO,
+					RENT_GTN,
+					MT_RNTCHRG,
+					REGISTER_ID,
+					REGIST_DT,
+					UPDUSR_ID,
+					UPDT_DT
+				)
+		VALUES (
+					#STDR_YEAR#,
+					#RENT_HOUSE_CODE#,
+					#DONG#,
+					#HO#,
+					#RENT_GTN#,
+					#MT_RNTCHRG#,
+					#S_USER_ID#,
+					SYSDATE,
+					#S_USER_ID#,
+					SYSDATE
+			)
+	</update>
+</sqlMap>

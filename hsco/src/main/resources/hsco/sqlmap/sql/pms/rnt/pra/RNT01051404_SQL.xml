@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01051404SQL">	
+
+	<!-- 쿼리명 : 자동이체관련계약정보조회
+	설명 : 자동이체관련계약정보조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.17
+	-->
+	<select id="RNT01051404DAO.selectRentCntrctList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT *
+			  FROM(SELECT a.CNTRCTR_NO,
+			              a.RENT_HOUSE_CODE,
+			              a.DONG,
+			              a.HO,
+			              (SELECT NM
+			                 FROM TBRNT_PRMANENT_RENT_CSTMR z
+			                 WHERE PRMANENT_CSTMR_NO = a.PRMANENT_CSTMR_NO) NM,
+			              a.CNTRCT_DE,
+			              a.CNTRCT_SE,
+			              a.RENT_BGNDE,
+			              a.RENT_ENDDE,
+			              a.QUALF_SE,
+			              b.DVR_AR,
+			              b.FLOOR,
+			              (SELECT  CODE_NM
+			                 FROM TBCOM_CMMN_CODE z
+			                 Where GRP_CODE = 'RNT001'
+			                 and CODE = a.QUALF_SE) QUALF_SE_NM,
+			              a.REGISTER_ID,
+			              a.REGIST_DT,
+			              a.UPDUSR_ID,
+			              a.UPDT_DT,
+			              TO_CHAR(SYSDATE,'YYYY') + 1 || '-01-01' POS_CNTRCT_DE,
+			              (SELECT MAX(CANCL_DE)
+			                 FROM TBRNT_RENT_RESCI z
+			                 WHERE CNTRCTR_NO = a.CNTRCTR_NO
+			                   AND CANCL_DE > a.CNTRCT_DE) CANCL_DE,
+			              h.RENT_HOUSE_NM
+			         FROM TBRNT_RENT_CNTRCT a,
+			              TBRNT_RENT_HOUSE_BILD b,
+			              TBRNT_RENT_HOUSE      h
+			        WHERE 1 = 1
+			         <isNotEmpty property="rentHouseCode">
+				       AND a.RENT_HOUSE_CODE like #rentHouseCode#
+			         </isNotEmpty>
+			         <isNotEmpty property="dong">
+			           AND a.DONG like #dong#
+			         </isNotEmpty>
+			         <isNotEmpty property="ho">
+			           AND a.HO  like #ho#
+			         </isNotEmpty>
+			          AND a.RENT_HOUSE_CODE = h.RENT_HOUSE_CODE(+)
+			          AND a.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE(+)
+			          AND a.DONG            = b.DONG(+)
+			          AND a.HO              = B.HO(+)
+			        <isNotEmpty property="houseSe">
+			          AND #houseSe# LIKE '%' || h.HOUSE_SE || '%'           /* 주택구분 */
+			        </isNotEmpty>
+			        <isNotEmpty property="nm">
+			          AND EXISTS(SELECT 'X'
+			                       FROM TBPMS_ATCNG z
+			                       WHERE ATCNG_JOB_SE = '01'
+                                     AND CNTRCTR_NO = a.CNTRCTR_NO
+                                     AND DPSTR LIKE '%' || #nm# || '%')
+			        </isNotEmpty>
+			        <isNotEmpty property="acnutNo">
+			          AND EXISTS(SELECT 'X'
+			                       FROM TBPMS_ATCNG z
+			                       WHERE ATCNG_JOB_SE = '01'
+                                     AND CNTRCTR_NO = a.CNTRCTR_NO
+                                     AND ACNUTNO LIKE '%' || #acnutNo# || '%')
+			        </isNotEmpty>
+			    )
+			<isNotEqual property="cntractSe" compareValue="%"> 
+			WHERE DECODE(NVL(CANCL_DE,'1'),'1','1','2') = #cntractSe#
+			</isNotEqual>
+			ORDER BY RENT_HOUSE_CODE,
+			         DONG,
+			         HO
+	</select>
+	
+	<!--   자동이체 정보내역조회  -->
+	<select id="RNT01051404DAO.selectAtcngInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	          SELECT ATCNG_JOB_SE,
+	                 CNTRCTR_NO,
+	                 ATCNG_SN,
+                     ATCNG_REQST_DE,
+                     ACNUTNO,
+                     BANK_CODE,
+                     DPSTR,
+                     ATCNG_CANCL_DE,
+                     CPTAL_SE,
+                     DECODE(CPTAL_SE,'2','신규','해지') CPTAL_SE_NM,
+                     USE_AT,    
+                     DECODE(USE_AT,'1','사용','미사용') USE_AT_SE,
+                     REGISTER_ID,
+                     REGIST_DT,
+                     UPDUSR_ID,
+                     UPDT_DT
+                FROM TBPMS_ATCNG
+                WHERE CNTRCTR_NO = #CNTRCTR_NO#
+                  <isNotEmpty property="ATCNG_JOB_SE">
+                  AND ATCNG_JOB_SE = #ATCNG_JOB_SE#
+                  </isNotEmpty>
+	</select>
+	      
+		
+	<!--  자동이체정보 신규등록  -->
+	<insert id="RNT01051404DAO.InsertAtcngInfoList" parameterClass="java.util.HashMap" >
+		  INSERT INTO TBPMS_ATCNG (ATCNG_JOB_SE,
+                                   CNTRCTR_NO,
+                                   ATCNG_SN,
+                                   ATCNG_REQST_DE,
+                                   ATCNG_CANCL_DE,
+                                   CPTAL_SE,
+                                   BANK_CODE,
+                                   ACNUTNO,
+                                   DPSTR,
+                                   USE_AT,
+                                   REGISTER_ID,
+                                   REGIST_DT,
+                                   UPDUSR_ID,
+                                   UPDT_DT)
+                          VALUES (#ATCNG_JOB_SE#,
+                                  #CNTRCTR_NO#,
+                                  NVL((SELECT MAX(ATCNG_SN)
+                                         FROM TBPMS_ATCNG
+                                        WHERE ATCNG_JOB_SE = #ATCNG_JOB_SE#
+                                          AND CNTRCTR_NO = #CNTRCTR_NO#),0) + 1,
+                                  #ATCNG_REQST_DE#,
+                                  #ATCNG_CANCL_DE#,
+                                  #CPTAL_SE#,
+                                  '031',
+                                  #ACNUTNO#,
+                                  #DPSTR#,
+                                  '1',
+                                  #S_USER_ID#,
+                                  SYSDATE,
+                                  #S_USER_ID#,
+                                  SYSDATE)
+	</insert>
+	
+	<!-- 자동이체정보수정 -->
+	<update id="RNT01051404DAO.UpdateAtcngInfoList" parameterClass="java.util.HashMap" >
+	   UPDATE TBPMS_ATCNG 
+	      SET ATCNG_REQST_DE = #ATCNG_REQST_DE#,
+	          ATCNG_CANCL_DE = #ATCNG_CANCL_DE#,
+	          CPTAL_SE       = #CPTAL_SE#,
+	          BANK_CODE      = #BANK_CODE#,
+	          ACNUTNO        = #ACNUTNO#,
+	          DPSTR          = #DPSTR#,
+	          UPDUSR_ID      = #S_USER_ID#,
+	          UPDT_DT        = SYSDATE
+	    WHERE ATCNG_JOB_SE = #ATCNG_JOB_SE#
+	      AND CNTRCTR_NO   = #CNTRCTR_NO#
+	      AND ATCNG_SN     = #ATCNG_SN#
+	</update>
+	
+	<!-- 자동이체정보 삭제-->
+	<delete id="RNT01051404DAO.DeleteAtcngInfoList" parameterClass="java.util.HashMap">
+  	DELETE FROM TBPMS_ATCNG
+    WHERE ATCNG_JOB_SE     = #ATCNG_JOB_SE#
+      AND CNTRCTR_NO       = #CNTRCTR_NO#
+      AND ATCNG_SN         = #ATCNG_SN#
+	</delete>
+</sqlMap>

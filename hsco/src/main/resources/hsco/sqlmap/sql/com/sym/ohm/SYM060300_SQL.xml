@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+
+<sqlMap namespace="SYM060300_SQL">
+
+   <!-- 도움말질의응답 ================================================== -->
+
+	<!-- 도움말질의응답 조회 -->
+	<select id="SYM060300.HpcmQnaList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+             LEVEL - 1 AS QNA_LEVEL
+        	,A.QNA_SN			/** 질의응답일련번호 */
+        	,A.REFRN_QNA_SN			/** 질의응답일련번호 */
+        	,A.VER_SN			/** 버전일련번호 */
+        	,A.PAGE_ID			/** 화면ID */
+        	,(SELECT PAGE_NM FROM TBCOM_PAGE WHERE PAGE_ID = A.PAGE_ID AND USE_AT = '1') AS PAGE_NM
+            ,A.MENU_ID
+        	,A.HPCM_ID 			/** 도움말ID */
+            ,A.QNA_SJ
+        	,A.QNA_CN			/** 내용 */
+        	,A.QNA_SE_CODE			/** 질의응답구분코드 */
+        	,A.USE_AT			/** 삭제여부 */
+        	,A.FILE_SN				/** 파일일련번호 */
+            ,A.REGISTER_ID			/** 등록자ID */
+            ,NVL(B.USER_NM, A.REGISTER_ID) AS REGISTER_NM			/** 사용자명 */
+        	,A.REGIST_DT			/** 등록일시 */
+        	,A.UPDUSR_ID			/** 수정자ID */
+        	,A.UPDT_DT
+            ,C.MENU_NM
+            ,LPAD(' ', 4*(LEVEL-1)) ||  A.QNA_SJ AS QNA_SJ2  /** 제목 */
+            ,DECODE(A.QNA_SE_CODE, 'Q1', '질문 :', 'A1', '답변 :', '') || A.QNA_SJ AS QNA_SJ3 /** 제목 */
+        FROM TBCOM_HPCM_QNA A			/** 개선요청 */
+           , TBCOM_USER B
+           , TBCOM_MENU C
+        WHERE A.MENU_ID = C.MENU_ID 
+          <isNotEmpty property="MENU_ID" >
+              AND A.MENU_ID = #MENU_ID#
+          </isNotEmpty>
+          <isNotEmpty property="PAGE_ID" >
+              AND A.PAGE_ID = #PAGE_ID# 
+          </isNotEmpty>
+          <isNotEmpty property="QNA_SJ" >
+              AND A.QNA_SJ LIKE '%' || #QNA_SJ# || '%'	   /** 질의응답일련번호 */
+          </isNotEmpty>
+          <isNotEmpty property="QNA_CN" >
+              AND A.QNA_CN LIKE '%' || #QNA_CN#	|| '%'   /** 내용 */
+          </isNotEmpty>
+          <isNotEmpty property="REGISTER_ID" >
+              AND A.REGISTER_ID = #REGISTER_ID#	   /** 작성자ID */
+          </isNotEmpty>
+          AND A.REGISTER_ID = B.USER_ID(+)
+          AND A.USE_AT = '1'
+        START WITH REFRN_QNA_SN IS NULL
+        CONNECT BY PRIOR A.QNA_SN = A.REFRN_QNA_SN
+	</select>
+
+	<!-- 도움말질의응답 추가 -->
+	<insert id="SYM060300.HpcmQnaC" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_HPCM_QNA (			/** 도움말질의응답 */
+        	 QNA_SN					/** 질의응답일련번호 */
+        	,REFRN_QNA_SN			/** 질의응답일련번호 */
+        	,VER_SN					/** 버전일련번호 */
+        	,PAGE_ID				/** 화면ID */
+        	,MENU_ID				/** 메뉴ID */
+        	,HPCM_ID				/** 도움말ID */
+        	,QNA_SJ					/** 제목 */
+        	,QNA_CN					/** 내용 */
+        	,QNA_SE_CODE			/** 질의응답구분코드 */
+        	,USE_AT					/** 삭제여부 */
+        	,REGISTER_ID			/** 등록자ID */
+        	,REGIST_DT				/** 등록일시 */
+        	,UPDUSR_ID				/** 수정자ID */
+        	,UPDT_DT
+        ) VALUES (
+        	 SQ_COM_HPCM_QNA_1.NEXTVAL	/** 질의응답일련번호  */
+        	,#REFRN_QNA_SN#				/** 질의응답일련번호 */
+        	,(SELECT CASE WHEN COUNT (*) = 0 
+        				THEN
+        					'' 
+        				ELSE 
+        					NVL (MAX (VER_SN), '')
+        			  END VER_SN
+			  FROM (SELECT 
+			  				VER_SN
+			  			   ,DENSE_RANK () OVER (ORDER BY VER_SN DESC) NUM
+			          FROM TBCOM_HPCM_VER A
+			         WHERE PAGE_ID = #PAGE_ID#
+			             AND USE_AT = '1') B
+			 WHERE B.NUM = 1)				/** 버전일련번호 */
+        	,#PAGE_ID#						/** 화면ID */
+        	,#MENU_ID#
+        	,#HPCM_ID#						/** 도움말ID */
+        	,#QNA_SJ#						/** 제목 */
+        	,#QNA_CN#						/** 내용 */
+        	,#QNA_SE_CODE#					/** 질의응답구분코드 */
+        	,'1'							/** 삭제여부 */
+        	,#S_USER_ID#					/** 등록자ID */
+        	,SYSDATE						/** 등록일시 */
+        	,#S_USER_ID#					/** 수정자ID */
+        	,SYSDATE
+        )
+	</insert>
+
+	<!-- 도움말질의응답 수정 -->
+	<update id="SYM060300.HpcmQnaU" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_HPCM_QNA					
+          SET
+        	,HPCM_ID = #HPCM_ID#				/** 도움말ID */
+        	,QNA_SJ = #QNA_SJ#					/** 제목 */
+        	,QNA_CN = #QNA_CN#					/** 내용 */
+        	,QNA_SE_CODE = #QNA_SE_CODE#		/** 질의응답구분코드 */
+        	,UPDUSR_ID = #S_USER_ID#			/** 수정자ID */
+        	,UPDT_DT = SYSDATE
+        WHERE QNA_SN = #QNA_SN#
+	</update>
+
+	<!-- 도움말질의응답 삭제 -->
+	<update id="SYM060300.HpcmQnaU2" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_HPCM_QNA			
+          SET
+        	 USE_AT = '0'				/** 삭제여부 */
+        	,UPDUSR_ID = #S_USER_ID#	/** 수정자ID */
+        	,UPDT_DT = SYSDATE
+        WHERE QNA_SN = #QNA_SN#	
+	</update>
+	
+	<delete id="SYM060300.HpcmQnaD" parameterClass="java.util.HashMap">
+        DELETE FROM TBCOM_HPCM_QNA		
+        WHERE QNA_SN = #QNA_SN#			
+	</delete>
+	
+	<select id="SYM060300.HpcmQnaCnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT COUNT (*) AS CNT
+		 FROM TBCOM_HPCM_QNA
+		WHERE REFRN_QNA_SN = #QNA_SN#
+		  AND USE_AT = '1'
+	</select>
+	
+	
+</sqlMap>

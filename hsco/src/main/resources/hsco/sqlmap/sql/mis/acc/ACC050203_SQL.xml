@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050203_SQL">
+
+	<!-- 보조원장 조회 -->
+	<select id="ACC050203DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC050203DAO.select*/]]>
+		WITH TEMP_TABLE AS 
+		       (SELECT ROWNUM AS RN, 
+		              A.* 
+		         FROM 
+		              (SELECT t1.CHIT_DE , 
+		                     t2.ACCNUT_ACNT_CODE , 
+		                     t3.ACCNUT_ACNT_NM , 
+		                     t1.DECSN_NO , 
+		                     t1.CHIT_NO , 
+		                     t2.SEQ , 
+		                     t1.CHIT_SE , 
+		                     t1.BSNS_CODE,
+		                     t1.DEPT_CODE , 
+		                     SFHRM_GET_DEPTNM(t1.DEPT_CODE, '') AS DEPT_NM ,
+		                     REPLACE(REPLACE(t1.SUMRY_1,CHR(13),' '),CHR(10),' ') AS SUMRY_1 , 
+		                     t2.DEBTOR_AMOUNT AS DR_AMT , 
+		                     t2.CRDIT_AMOUNT AS CR_AMT , 
+		                     t1.ACCNUT_YEAR ,
+		                     1 AS ST,
+		                     SUBSTR(t1.CHIT_DE,0,6) AS ORDR
+		                    ,t2.ACNUTNO
+		                    ,t2.BCNC_CODE
+		                FROM TBACC_CHIT_MASTR t1 
+		                 INNER JOIN TBACC_CHIT_DETAIL t2 
+		                     ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR 
+		                     AND t1.CHIT_NO = t2.CHIT_NO
+		                     <isNotEmpty property="ACNUTNO">
+		                       AND TRIM(REPLACE(t2.ACNUTNO,'-','')) = TRIM(REPLACE(#ACNUTNO#,'-',''))
+		                     </isNotEmpty>
+		                     <isNotEmpty property="BCNC_CODE">
+		                       AND t2.BCNC_CODE = #BCNC_CODE#
+		                     </isNotEmpty>
+		                 INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t3 
+		                     ON t2.ACCNUT_YEAR = t3.ACCNUT_YEAR 
+		                     AND t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE 
+		               WHERE t1.ACCNUT_YEAR = #YEAR# 
+		                     AND t1.CHIT_DE BETWEEN #ST_DT# AND #ED_DT#  
+		                     AND t2.ACCNUT_ACNT_CODE = #ACNT_CODE#
+		                     AND t1.CHIT_CONFM_AT = '1'  /*승인*/ 
+		              UNION ALL 
+		              SELECT '' AS CHIT_DE ,
+		                     A.ACCNUT_ACNT_CODE ,
+		                     '[전기이월]' AS ACCNUT_ACNT_NM ,
+		                     '' AS DESCN_NO ,
+		                     '' AS CHIT_NO , 
+		                     0 AS SEQ ,
+		                     '' AS CHIT_SE ,
+		                     A.BSNS_CODE ,
+		                     A.DEPT_CODE ,
+		                     SFHRM_GET_DEPTNM(A.DEPT_CODE, '') AS DEPT_NM ,
+		                     '[전기이월]' AS SUMRY_1 , 
+		                     A.DEBTOR_AMOUNT AS DEBTOR_AMOUNT , 
+		                     A.CRDIT_AMOUNT  AS CRDIT_AMOUNT ,
+		                     A.ACCNUT_YEAR ,
+		                     0 AS ST,
+		                     A.ACCNUT_YEAR||'00' AS ORDR
+		                    ,A.ACNUTNO AS ACNUTNO
+		                    ,A.BCNC_CODE
+		                FROM 
+		                     (SELECT A.ACCNUT_YEAR, 
+		                            A.ACCNUT_ACNT_CODE, 
+		                            A.BSNS_CODE,
+		                            A.DEPT_CODE,
+                                	A.ACNUTNO,
+		                            NVL(SUM(A.DEBTOR_AMOUNT),0) AS DEBTOR_AMOUNT, 
+		                            NVL(SUM(A.CRDIT_AMOUNT),0) AS CRDIT_AMOUNT,
+		                            A.BCNC_CODE
+		                       FROM TBACC_ACCNUT_STACNT A 
+		                      WHERE A.ACCNUT_YEAR = #YEAR# 
+		                            AND A.ACCNUT_MT = '00' 
+		                            AND A.ACCNUT_ACNT_CODE = #ACNT_CODE# 
+		                            <isNotEmpty property="BCNC_CODE">
+		                            AND A.BCNC_CODE = #BCNC_CODE#
+		                            </isNotEmpty>
+		                      GROUP BY A.ACCNUT_YEAR,A.ACCNUT_ACNT_CODE,A.BSNS_CODE, A.DEPT_CODE, A.ACNUTNO, A.BCNC_CODE
+		                     ) A  
+		               ORDER BY ST,CHIT_DE,CHIT_NO,SEQ 
+		              ) A 
+		              <isNotEmpty property="BSNS_CODE">
+		              WHERE A.BSNS_CODE = #BSNS_CODE#
+		              </isNotEmpty>
+		              
+		       ) 
+		SELECT A.RN,
+		       A.CHIT_DE,
+		       A.ACCNUT_ACNT_CODE,
+		       A.ACCNUT_ACNT_NM,
+		       A.DECSN_NO,
+		       A.CHIT_NO,
+		       A.SEQ,
+		       A.CHIT_SE,
+		       A.DEPT_CODE,
+		       A.DEPT_NM,
+		       A.SUMRY_1,
+		       A.DR_AMT,
+		       A.CR_AMT,
+		       A.BLCE,
+		       A.DBRT_SE,
+		       A.ST,
+		       A.ORDR,
+		       A.ACNUTNO,
+		       A.BSNS_CODE,
+		       B.BSNS_NM,
+		       A.BCNC_CODE,
+		       C.BCNC_NM
+		  FROM 
+		       (SELECT A.RN,
+				       A.CHIT_DE,
+				       CASE WHEN A.CHIT_DE IS NULL THEN '' ELSE A.ACCNUT_ACNT_CODE END AS ACCNUT_ACNT_CODE,
+				       A.ACCNUT_ACNT_NM,
+				       A.DECSN_NO,
+				       A.CHIT_NO,
+				       A.SEQ,
+				       A.CHIT_SE,
+				       A.DEPT_CODE,
+				       A.DEPT_NM,
+				       A.SUMRY_1,
+				       A.DR_AMT,
+				       A.CR_AMT, 
+				       SUM(CASE C.DBRT_SE WHEN 'D' THEN B.DR_AMT - B.CR_AMT ELSE B.CR_AMT - B.DR_AMT END) AS BLCE,
+				       C.DBRT_SE, 
+		               A.ST,
+		               A.ORDR
+		              ,A.ACNUTNO
+		              ,A.BSNS_CODE
+		              ,A.BCNC_CODE
+				  FROM TEMP_TABLE A , 
+				       TEMP_TABLE B ,
+				       TBACC_ACCNUT_ACNT_SBJECT C
+				 WHERE A.RN <![CDATA[>=]]> B.RN 
+				       AND A.ACCNUT_YEAR = C.ACCNUT_YEAR 
+				       AND A.ACCNUT_ACNT_CODE = C.ACCNUT_ACNT_CODE 
+                     <isNotEmpty property="ACNUTNO">
+                       AND TRIM(REPLACE(A.ACNUTNO,'-','')) = TRIM(REPLACE(#ACNUTNO#,'-',''))
+                     </isNotEmpty>
+				 GROUP BY A.RN,
+				       A.CHIT_DE,
+				       A.ACCNUT_ACNT_CODE,
+				       A.ACCNUT_ACNT_NM,
+				       A.DECSN_NO,
+				       A.CHIT_NO,
+				       A.SEQ,
+				       A.CHIT_SE,
+				       A.DEPT_CODE,
+				       A.DEPT_NM,
+				       A.SUMRY_1,
+				       A.DR_AMT,
+				       A.CR_AMT,
+				       C.DBRT_SE,
+				       A.ST,
+				       A.ORDR
+				      ,A.ACNUTNO
+				      ,A.BSNS_CODE
+				      ,A.BCNC_CODE
+			 	 UNION ALL              
+				SELECT 
+				       888888888 RN, 
+				       '' AS CHIT_DE, 
+				       '' AS ACCNUT_ACNT_CODE, 
+				       '소계' AS ACCNUT_ACNT_NM, 
+				       '' AS DECSN_NO, 
+				       '' AS CHIT_NO, 
+				       0 AS SEQ, 
+				       '' AS CHIT_SE, 
+				       '' AS DEPT_CODE, 
+				       '' AS DEPT_NM, 
+				       '소계' AS SUMRY_1, 
+				       SUM(A.DR_AMT) AS DR_AMT, 
+				       SUM(A.CR_AMT) AS CR_AMT,
+				       0 AS BLCE, 
+				       '' AS DBRT_SE,
+				       1 AS ST,
+				       A.ORDR
+				      ,'' AS ACNUTNO
+				      ,'' AS BSNS_CODE
+				      ,'' AS BCNC_CODE
+				  FROM TEMP_TABLE A       
+				 WHERE CHIT_DE IS NOT NULL
+				 GROUP BY A.ORDR
+				 UNION ALL
+				SELECT 
+				       888888889 RN, 
+				       '' AS CHIT_DE, 
+				       '' AS ACCNUT_ACNT_CODE, 
+				       '누계' AS ACCNUT_ACNT_NM, 
+				       '' AS DECSN_NO, 
+				       '' AS CHIT_NO, 
+				       0 AS SEQ, 
+				       '' AS CHIT_SE, 
+				       '' AS DEPT_CODE, 
+				       '' AS DEPT_NM, 
+				       '누계' AS SUMRY_1, 
+				       SUM(SUM(A.DR_AMT)) OVER(ORDER BY A.ORDR) AS DR_AMT,
+				       SUM(SUM(A.CR_AMT)) OVER(ORDER BY A.ORDR) AS CR_AMT,
+		               ( 
+		                   CASE C.DBRT_SE 
+		                       WHEN 'D' 
+		                       THEN SUM(SUM(A.DR_AMT)) OVER(ORDER BY A.ORDR) - SUM(SUM(A.CR_AMT)) OVER(ORDER BY A.ORDR) 
+		                       ELSE SUM(SUM(A.CR_AMT)) OVER(ORDER BY A.ORDR) - SUM(SUM(A.DR_AMT)) OVER(ORDER BY A.ORDR) 
+		                   END 
+		               ) AS BLCE, 
+				       '' AS DBRT_SE,
+				       1 AS ST,
+				       A.ORDR
+				      ,'' AS ACNUTNO
+				      ,'' AS BSNS_CODE
+				      ,'' AS BCNC_CODE
+				  FROM TEMP_TABLE A,
+				       TBACC_ACCNUT_ACNT_SBJECT C       
+				 WHERE A.ORDR IS NOT NULL
+		               AND A.ACCNUT_YEAR = C.ACCNUT_YEAR 
+		               AND A.ACCNUT_ACNT_CODE = C.ACCNUT_ACNT_CODE 
+				 GROUP BY A.ORDR, C.DBRT_SE  
+		       ) A 
+		LEFT OUTER JOIN TBPRJ_BSNS_CODE B
+        ON  A.BSNS_CODE = B.BSNS_CODE
+        LEFT OUTER JOIN TBCTR_BCNC_MASTR C
+        ON  A.BCNC_CODE = C.BCNC_CODE
+        WHERE NOT (A.ACCNUT_ACNT_NM != '[전기이월]' AND A.ORDR = #YEAR#||'00')
+		ORDER BY A.ST,A.ORDR,A.RN
+	</select>
+</sqlMap>

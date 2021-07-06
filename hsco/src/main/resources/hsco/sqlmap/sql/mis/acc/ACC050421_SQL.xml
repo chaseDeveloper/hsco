@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050421_SQL">
+
+	 <!-- 미지급이자계산서 조회 -->
+	<select id="ACC050421DAO.unpayIntrBillList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ /*ACC050401DAO.unpayIntrBillList*/ ]]>
+		SELECT T1.PBNCD_NO
+		      ,T1.BRRW_ACNUT_NM
+		      ,T1.BSNS_CODE
+		      ,T1.BSNS_NM
+		      ,T1.BRRW_DE
+		      ,T1.BRRW_BLCE
+		      ,T1.EXPRTN_DE
+		      ,T1.INTRT
+		      ,T1.RPAY_NM	      /*상환구분 1:만기, 2:균등*/
+		      ,T1.CMPNINT_NM      /*복리구분*/
+		      ,T1.RPAY_DE         /*최종이자지급일자*/
+		      ,T1.DIFF_DAY        /*잔여일수*/
+		      ,CASE WHEN T1.RPAY_SE = '1' THEN FLOOR(T1.BRRW_BLCE*(POWER((1+T1.INTRT/100),FLOOR(T1.DIFF_DAY/365)) -1 + (T1.INTRT/100) * (T1.DIFF_DAY-FLOOR(T1.DIFF_DAY/365)*365)/365))
+		           ELSE TRUNC( (T1.BRRW_BLCE * T1.INTRT * T1.DIFF_DAY) /365 )
+		       END AS MIJIGUK_AMT /*당기 미지급이자*/
+		FROM (
+		  SELECT T1.PBNCD_NO        AS PBNCD_NO
+		         ,T1.BRRW_ACNUT_NM  AS BRRW_ACNUT_NM
+		         ,T1.BSNS_CODE      AS BSNS_CODE
+		         ,T3.BSNS_NM        AS BSNS_NM
+		         ,T1.BRRW_DE        AS BRRW_DE
+		         ,NVL(T1.BRRW_AMOUNT,0) - NVL(T2.RPAY_AMOUNT,0) AS BRRW_BLCE
+		         ,T1.EXPRTN_DE      AS EXPRTN_DE
+		         ,T1.INTRT          AS INTRT
+		         ,T1.RPAY_SE	   /*상환구분 1:만기, 2:균등*/
+		         ,T1.CMPNINT_SE    /*복리구분*/
+		         ,T4.RPAY_DE       /*최종이자지급일자*/
+		         ,DECODE(T1.CMPNINT_SE, '1', '단리', '2', '연복리', '') AS CMPNINT_NM
+		         ,DECODE(T1.RPAY_SE, '1', '만기', '2', '균등', '') AS RPAY_NM
+		         ,TRUNC(MONTHS_BETWEEN(TO_DATE(#BRRW_DE#, 'YYYYMMDD'), TO_DATE(T4.RPAY_DE, 'YYYYMMDD')),2) AS DIFF_MONTH
+		         ,NVL(TO_DATE(#BRRW_DE#, 'YYYYMMDD') - TO_DATE(T4.RPAY_DE, 'YYYYMMDD'),0)                  AS DIFF_DAY
+		  FROM   TBFUN_PBNCD T1
+		         LEFT OUTER JOIN (SELECT PBNCD_NO
+		                                 ,SUM(NVL(RPAY_AMOUNT,0)) AS RPAY_AMOUNT
+		                          FROM   TBFUN_PBNCD_PRNCPAL_RPAY_PLAN
+		                          WHERE  RPAY_DE <![CDATA[<=]]> #BRRW_DE#
+		                          GROUP BY PBNCD_NO
+		                         ) T2
+		                      ON T1.PBNCD_NO = T2.PBNCD_NO
+		         LEFT OUTER JOIN TBPRJ_BSNS_CODE T3
+		                      ON T1.BSNS_CODE = T3.BSNS_CODE
+		         LEFT OUTER JOIN (
+		            SELECT S1.PBNCD_NO, MAX(S1.RPAY_DE) AS RPAY_DE
+		            FROM TBFUN_PBNCD_INTR_RPAY_DTLS S1
+		            GROUP BY S1.PBNCD_NO
+		         ) T4
+		         ON  T1.PBNCD_NO = T4.PBNCD_NO
+		  WHERE  T1.EXPRTN_AT = '0'
+		) T1
+	</select>
+</sqlMap>

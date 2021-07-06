@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR061000_SQL">	
+	
+	<!-- 행정사무감사자료 -->
+	<select id="CTR061000DAO.auditDtaList1" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH TMP_CNTRCT_BCNC AS (
+		    SELECT DISTINCT BSNS_CODE, CNTRCT_NO
+		          ,LISTAGG(BCNC_NM, CHR(13)||CHR(10)) WITHIN GROUP(ORDER BY BCNC_NM) OVER(PARTITION BY BSNS_CODE, CNTRCT_NO) AS BCNC_NM
+		    FROM   (
+		            SELECT a.BSNS_CODE, a.CNTRCT_NO
+		                  ,ROW_NUMBER() OVER (PARTITION BY a.BSNS_CODE, a.CNTRCT_NO ORDER BY ROWNUM) || '.' || b.BCNC_NM || '[' || b.RPRSNTV || ']' AS BCNC_NM
+		            FROM   TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS a
+		                   LEFT OUTER JOIN TBCTR_BCNC_MASTR b
+		                        ON a.BCNC_CODE = b.BCNC_CODE
+		           )
+		),
+		<!-- 2016.07.05 하도급업체 추가 -->
+		TMP_CNTRCT_SUBCNTR_ENTRPS AS (
+			  SELECT DISTINCT BSNS_CODE
+			                 ,CNTRCT_NO
+			                 ,LISTAGG(SUBCNTR_ENTRPS, CHR(13) || CHR(10)) WITHIN GROUP(ORDER BY R_NUM) OVER(PARTITION BY BSNS_CODE, CNTRCT_NO) AS SUBCNTR_ENTRPS
+			    FROM (SELECT A.BSNS_CODE
+			                ,A.CNTRCT_NO
+			                ,ROW_NUMBER() OVER(PARTITION BY A.BSNS_CODE, A.CNTRCT_NO ORDER BY ROWNUM) || '.' || B.SUBCNTR_ENTRPS AS SUBCNTR_ENTRPS
+			                ,ROW_NUMBER() OVER(PARTITION BY A.BSNS_CODE, A.CNTRCT_NO ORDER BY ROWNUM) AS R_NUM
+			            FROM TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS A /*업체별계약내역*/
+			                ,TBCTR_ENTRPS_ACCTO_SUBCNTR_CNT B /*업체별하도급계약내역*/
+			           WHERE 1 = 1
+			             AND A.BSNS_CODE = B.BSNS_CODE
+			             AND A.CNTRCT_NO = B.CNTRCT_NO
+			             AND A.BCNC_CODE = B.BCNC_CODE)
+		),             
+		TMP_DSGNR_SPRVISOR AS (
+		    SELECT DISTINCT BSNS_CODE, CNTRCT_NO, DSGNR_SPRVISOR_SE /* 1: 설계, 2: 감리 */
+		          ,LISTAGG(BCNC_NM, CHR(13)||CHR(10)) WITHIN GROUP(ORDER BY BCNC_NM) OVER(PARTITION BY BSNS_CODE, CNTRCT_NO, DSGNR_SPRVISOR_SE) AS BCNC_NM
+		    FROM   (SELECT c.BSNS_CODE, c.CNTRCT_NO, c.DSGNR_SPRVISOR_SE /* 1: 설계, 2: 감리 */
+		                  ,CASE WHEN d.BCNC_NM IN ('자체설계','자체감리') THEN d.BCNC_NM
+		                        ELSE ROW_NUMBER() OVER (PARTITION BY c.BSNS_CODE, c.CNTRCT_NO, c.DSGNR_SPRVISOR_SE ORDER BY c.SEQ) || '.' || d.BCNC_NM || '[' || d.RPRSNTV || ']'
+		                   END AS BCNC_NM
+		            FROM   TBCTR_DSGNR_SPRVISOR c
+		                   LEFT OUTER JOIN TBCTR_BCNC_MASTR d
+		                        ON c.BCNC_CODE = d.BCNC_CODE
+		            WHERE c.BCNC_CODE IS NOT NULL
+		           )
+		),
+		TMP_AFTCH_CNTRCT_AMOUNT AS (
+		    SELECT BSNS_CODE, CNTRCT_NO, MAX(AFTCH_CNTRCT_AMOUNT) KEEP(DENSE_RANK FIRST ORDER BY CNTRCT_CHANGE_ODR DESC) AS AFTCH_CNTRCT_AMOUNT
+		    FROM   TBCTR_CNTRCT_CHANGE
+		    WHERE  AFTCH_CNTRCT_AMOUNT IS NOT NULL
+		    GROUP BY BSNS_CODE,CNTRCT_NO
+		),
+		TMP_AFTCH_COMPET_DE AS (
+		    SELECT BSNS_CODE, CNTRCT_NO, MAX(AFTCH_COMPET_DE) KEEP(DENSE_RANK FIRST ORDER BY CNTRCT_CHANGE_ODR DESC) AS AFTCH_COMPET_DE
+		    FROM   TBCTR_CNTRCT_CHANGE
+		    WHERE  AFTCH_COMPET_DE IS NOT NULL
+		    GROUP BY BSNS_CODE,CNTRCT_NO
+		),
+		TMP_PXCOND_AMOUNT AS (
+		    SELECT BSNS_CODE, CNTRCT_NO, MAX(EXPNDTR_DE) AS EXPNDTR_DE /* 지출일자 */ 
+		    	 , SUM(PXCOND_AMOUNT - NVL(ADVAN_EXCCLC_AMOUNT,0)) AS PXCOND_AMOUNT /* 지급액 */
+		      FROM   TBPRJ_PXCOND_DTLS /* 기성내역 */
+		     WHERE 1 = 1 <!-- 2016.07.05 조회조건 지출일자 추가 -->
+		     <isNotEmpty property="EXPNDTR_DE">
+     		   AND EXPNDTR_DE <![CDATA[<=]]> #EXPNDTR_DE# /* 지출일자 */ 
+     		 </isNotEmpty>
+		    GROUP BY BSNS_CODE, CNTRCT_NO
+		)
+		SELECT t1.BSNS_CODE                                                                  /* 사업코드 */
+		      ,t1.CNTRCT_NO                                                                  /* 계약번호 */
+		      ,t2.BSNS_NM                                                                    /* 사업명 */
+		      ,t1.CNTRCT_NM                                                                  /* 계약명 */
+		      ,t9.TOT_WCT                                                                    /* 총사업비 */
+		      ,CASE WHEN T1.INORG_CNTRWK_SE = '1' 			THEN NVL(t1.DSGN_AMOUNT, 0)
+		            WHEN T1.INORG_CNTRWK_SE IN ('2', '3')	THEN NVL(t1.CNTRCT_AMOUNT, 0)
+					END TOT_AMOUNT	/* 총사업비 (단기공사 : 설계금액, 장기/계속비 : 계약금액) */
+		      ,CASE WHEN T1.INORG_CNTRWK_SE = '1' 			THEN NVL(t1.DSGN_AMOUNT, 0)
+		            WHEN T1.INORG_CNTRWK_SE IN ('2', '3')	THEN (SELECT SUM(NVL(CNTRCT_AMOUNT, 0))
+																 FROM TBCTR_INORG_CTNU_CNTRWK ST
+																 WHERE ST.CNTRCT_NO = t1.CNTRCT_NO
+																 AND ST.BSNS_CODE = t1.BSNS_CODE
+																 AND YEAR BETWEEN SUBSTR(#CNTRCT_FROM_DE#, 1, 4) AND SUBSTR(#CNTRCT_TO_DE#, 1, 4))
+					END BUDGET_AMOUNT	/* 예산금액 (단기공사 : 설계금액, 장기/계속비 : 조회 년도의 예산) */
+			  ,NVL(t1.DSGN_AMOUNT, 0) AS DSGN_AMOUNT										 /* 설계금액 */
+		      ,NVL(t1.PREARNGE_PC, 0) AS PREARNGE_PC                                         /* 예정가격 */
+		      ,TRIM(TO_CHAR(NVL(t1.DSGN_AMOUNT, 0),'999,999,999,999'))|| CHR(13)||CHR(10) ||'('||TRIM(TO_CHAR(NVL(t1.PREARNGE_PC, 0),'999,999,999,999'))||')'      AS DSGN_AMOUNT2  /* 설계금액(예정가격) */
+		      
+		      ,NVL(t1.CNTRCT_AMOUNT, 0) AS CNTRCT_AMOUNT                             /* 계약금액(최초계약금액) */
+		      ,TRIM(TO_CHAR(NVL(t1.CNTRCT_AMOUNT, 0),'999,999,999,999'))|| CHR(13)||CHR(10) ||'('||T1.SCSBID_RT||'%)'      AS CNTRCT_AMOUNT2  /* 계약금액(최초계약금액) */
+		      ,t1.SCSBID_RT                                                                  /* 낙찰률 */
+		      ,NVL(t7.AFTCH_CNTRCT_AMOUNT,t1.CNTRCT_AMOUNT)      AS AFTCH_CNTRCT_AMOUNT  /* 계약금액(변경) */
+		      ,CASE WHEN T1.INORG_CNTRWK_SE = '1' 			THEN NVL(t10.PXCOND_AMOUNT,0)
+		            WHEN T1.INORG_CNTRWK_SE IN ('2', '3')	THEN NVL((SELECT SUM(PXCOND_AMOUNT - NVL(ADVAN_EXCCLC_AMOUNT,0))
+																 FROM TBPRJ_PXCOND_DTLS ST
+																 WHERE ST.CNTRCT_NO = t1.CNTRCT_NO
+																 AND ST.BSNS_CODE = t1.BSNS_CODE
+																 AND SUBSTR(EXPNDTR_DE, 1, 4) BETWEEN SUBSTR(#CNTRCT_FROM_DE#, 1, 4) AND SUBSTR(#CNTRCT_TO_DE#, 1, 4)
+																 <isNotEmpty property="EXPNDTR_DE">
+													     		   AND EXPNDTR_DE <![CDATA[<=]]> #EXPNDTR_DE# /* 지출일자 */ 
+													     		 </isNotEmpty>
+													     		 ), 0)
+					END PXCOND_AMOUNT	/* 지급액 (단기공사 : 전체 지급액, 장기/계속비 : 조회 년도의 지급액) */
+		      ,CASE WHEN T1.INORG_CNTRWK_SE = '1' 			THEN t10.EXPNDTR_DE
+		            WHEN T1.INORG_CNTRWK_SE IN ('2', '3')	THEN (SELECT MAX(EXPNDTR_DE)
+																 FROM TBPRJ_PXCOND_DTLS ST
+																 WHERE ST.CNTRCT_NO = t1.CNTRCT_NO
+																 AND ST.BSNS_CODE = t1.BSNS_CODE
+																 AND SUBSTR(EXPNDTR_DE, 1, 4) BETWEEN SUBSTR(#CNTRCT_FROM_DE#, 1, 4) AND SUBSTR(#CNTRCT_TO_DE#, 1, 4)
+																 <isNotEmpty property="EXPNDTR_DE">
+													     		   AND EXPNDTR_DE <![CDATA[<=]]> #EXPNDTR_DE# /* 지출일자 */ 
+													     		 </isNotEmpty>
+													     		 )
+					END EXPNDTR_DE	/* 지급일자 (단기공사 : 최종지급일자, 장기/계속비 : 조회 년도의 최종지급일자) */
+		      ,CASE WHEN NVL(t10.PXCOND_AMOUNT,0) = 0 OR NVL(t7.AFTCH_CNTRCT_AMOUNT,t1.CNTRCT_AMOUNT) IN (0, NULL) THEN 0
+		            ELSE ROUND(NVL(t10.PXCOND_AMOUNT,0)/ NVL(t7.AFTCH_CNTRCT_AMOUNT,t1.CNTRCT_AMOUNT)*100,2)
+		       END                                                   AS PXCOND_RT			 /* 실적 */
+		      ,t1.CNTRCT_DE                                                                  /* 계약일자 */
+		      ,t1.COMPET_DE                                                                  /* 준공일자(최초) */
+		      ,NVL(t8.AFTCH_COMPET_DE,t1.COMPET_DE)                  AS AFTCH_COMPET_DE      /* 준공일자(변경) */
+		      ,t3.BCNC_NM                                                                    /* 계약자 */
+		      ,t1.PRVCNTR_PRVONSH                                                            /* 수의계약사유 */
+		      ,t13.SUBCNTR_ENTRPS 															 /* 하도급업체 */
+		      ,t5.BCNC_NM                                            AS DSGN_ENTRPS          /* 설계업체 */
+		      ,t6.BCNC_NM                                            AS SPRVISN_ENTRPS       /* 감리업체 */
+		      ,NVL2(t7.AFTCH_CNTRCT_AMOUNT
+		                                 ,'변경계약'||CHR(13)||CHR(10)||CASE WHEN t7.AFTCH_CNTRCT_AMOUNT>t1.CNTRCT_AMOUNT THEN '증 '
+		                                                                      WHEN t7.AFTCH_CNTRCT_AMOUNT<![CDATA[<]]>t1.CNTRCT_AMOUNT THEN '감 ' END ||TRIM(TO_CHAR(TRUNC( (t7.AFTCH_CNTRCT_AMOUNT-t1.CNTRCT_AMOUNT) / 1000000 ),'999,999,999,999'))||'백만원'
+		                                 , '') AS ETC
+		FROM   TBCTR_CNTRCT t1
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE t2
+		            ON t1.BSNS_CODE = t2.BSNS_CODE
+		       LEFT OUTER JOIN TMP_CNTRCT_BCNC t3
+		            ON t1.BSNS_CODE = t3.BSNS_CODE
+		           AND t1.CNTRCT_NO = t3.CNTRCT_NO
+		       
+		       <!-- 2016.07.05 하도급업체 추가 -->    
+		       LEFT OUTER JOIN TMP_CNTRCT_SUBCNTR_ENTRPS t13
+				    ON t1.BSNS_CODE = t13.BSNS_CODE
+				   AND t1.CNTRCT_NO = t13.CNTRCT_NO
+		       LEFT OUTER JOIN TMP_DSGNR_SPRVISOR t5
+		            ON t1.BSNS_CODE = t5.BSNS_CODE
+		           AND t1.CNTRCT_NO = t5.CNTRCT_NO
+		           AND t5.DSGNR_SPRVISOR_SE = '1' /* 설계자 */
+		       LEFT OUTER JOIN TMP_DSGNR_SPRVISOR t6
+		            ON t1.BSNS_CODE = t6.BSNS_CODE
+		           AND t1.CNTRCT_NO = t6.CNTRCT_NO
+		           AND t6.DSGNR_SPRVISOR_SE = '2' /* 감리자 */
+		           
+		       LEFT OUTER JOIN TMP_AFTCH_CNTRCT_AMOUNT t7
+		            ON t1.BSNS_CODE = t7.BSNS_CODE
+		           AND t1.CNTRCT_NO = t7.CNTRCT_NO
+		           
+		       LEFT OUTER JOIN TMP_AFTCH_COMPET_DE t8
+		            ON t1.BSNS_CODE = t8.BSNS_CODE
+		           AND t1.CNTRCT_NO = t8.CNTRCT_NO
+		       LEFT OUTER JOIN TBPRJ_BSNS_SUMRY t9
+		            ON t1.BSNS_CODE = t9.BSNS_CODE
+		            
+		       LEFT OUTER JOIN TMP_PXCOND_AMOUNT t10
+		            ON t1.BSNS_CODE = t10.BSNS_CODE
+		           AND t1.CNTRCT_NO = t10.CNTRCT_NO
+		           
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t11
+		            ON t1.CNTRCT_SE = t11.CODE
+		           AND t11.GRP_CODE = 'CTR001'
+		WHERE  1=1
+		
+		AND		t1.CNTRCT_DE BETWEEN #CNTRCT_FROM_DE# AND #CNTRCT_TO_DE#
+		AND    t11.CHRCTR_PREPAR_VALUE_2 = #CHRCTR_PREPAR_VALUE_2# /* 공사:1, 용역:2, 기타:9*/
+		<isNotEmpty property="CNTRCT_FROM_AMT">
+		AND    NVL(t7.AFTCH_CNTRCT_AMOUNT,t1.CNTRCT_AMOUNT) <![CDATA[>=]]> #CNTRCT_FROM_AMT# /*계약금액*/
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_TO_AMT">
+		AND    NVL(t7.AFTCH_CNTRCT_AMOUNT,t1.CNTRCT_AMOUNT) <![CDATA[<=]]> #CNTRCT_TO_AMT# 	 /*계약금액*/
+		</isNotEmpty>
+		<isNotEmpty property="BCNC_NM">
+		AND t3.BCNC_NM LIKE '%'||#BCNC_NM#||'%' 
+		</isNotEmpty>
+		ORDER BY t1.BSNS_CODE, t1.CNTRCT_NO
+	</select>
+
+
+	<!-- 행정사무감사자료 -->
+	<select id="CTR061000DAO.auditDtaList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT T1.DECSN_YEAR									/* 결의년도 */
+		       , T1.DECSN_NO									/* 결의번호 */
+		       , T1.SUMRY										/* 적요 > 사업명 */
+		       , DECODE(T1.ANACT_KND, '06', T2.CNTRCT_DE, (SELECT CAUSE_ACTION_DE FROM TBACC_CA_ACT_MASTR ST WHERE ST.CAUSE_ACTION_NO = T1.CAUSE_ACTION_NO) ) AS START_DE /* 공사:계약일자, 나머지:원인행위일자 > 시작일자 */
+		       , 100 AS PXCOND_RT								/* 실적 */
+		       , T1.DET_DCSN_DE									/* 채무확정일자 > 준공일, 종료일자 */
+			   , T1.PYMNT_ITNC_DE								/* 지급발의일자 > 최종지출일자 */
+		       , NVL(T1.DECSN_AMOUNT, 0) AS DECSN_AMOUNT		/* 결의금액 > 총사업비, 지출액, 계약금액 */
+		       , NVL(T2.DSGN_AMOUNT, 0) AS DSGN_AMOUNT			/* 설계금액 > 설계금액, 예산액 */
+		       , TRIM(TO_CHAR(NVL(T2.DSGN_AMOUNT, 0),'999,999,999,999'))|| CHR(13)||CHR(10) ||'('||TRIM(TO_CHAR(NVL(T2.DSGN_AMOUNT, 0),'999,999,999,999'))||')'      AS DSGN_AMOUNT2  /* 설계금액(예정가격) */
+		       , TRIM(TO_CHAR(T1.DECSN_AMOUNT,'999,999,999,999'))
+		         ||CHR(13)||CHR(10)||'('||DECODE(NVL(T2.DSGN_AMOUNT, 0), 0, 0, ROUND(T1.DECSN_AMOUNT/T2.DSGN_AMOUNT*100, 2))||'%)'	AS DECSN_AMOUNT2							/* 계약금액 */
+		       , DECODE(T1.ANACT_KND, '06', T2.CNTRCT_DE, T1.ITNC_DE ) AS ITNC_DE	/* 공사:계약일자, 나머지:발의일자 > 계약일자 */
+		       , T3.BCNC_NM										/* 거래처명 > 계약자 */
+		       , '수의계약'	AS CNTRCT_MTH_NM				/* 계약방법 */
+		       , '자체설계'	AS DSGN_ENTRPS					/* 설계업체 */
+			   , '자체감독'	AS SPRVISN_ENTRPS				/* 감리업체 */
+		FROM TBACC_EXP_DSN_MASTR T1
+		     , TBACC_EXP_DSN_MTR_DET T2
+		     , (SELECT DISTINCT DECSN_YEAR, DECSN_NO
+				       ,LISTAGG(BCNC_NM, CHR(13)||CHR(10)) WITHIN GROUP(ORDER BY BCNC_NM) OVER(PARTITION BY DECSN_YEAR, DECSN_NO)||CASE WHEN R_CNT > 10 THEN CHR(13)||CHR(10)||'외 '||(R_CNT-10)||'개' END BCNC_NM
+		        FROM   (
+		               SELECT DECSN_YEAR
+		                      , DECSN_NO
+		                      , SEQ
+		                      , R_NUM
+		                      , R_CNT
+				              , CASE WHEN R_NUM <= 10 THEN NVL2(BCNC_NM||NM, R_NUM || '.' || BCNC_NM ||NVL2(NM, '[' || NM || ']', ''), '')
+		                             END BCNC_NM
+		               FROM  (
+		                      SELECT DECSN_YEAR, DECSN_NO, SEQ, BCNC_NM, NM
+		                            , ROW_NUMBER() OVER (PARTITION BY DECSN_YEAR, DECSN_NO ORDER BY DECSN_YEAR, DECSN_NO, SEQ) R_NUM
+		                            , COUNT(BCNC_NM||NM) OVER (PARTITION BY DECSN_YEAR, DECSN_NO) R_CNT
+		                      FROM  TBACC_EXP_DSN_DETAIL
+		                     )
+		               )
+		        ) T3    /* 거래처명 한줄로 */
+		WHERE T1.DECSN_YEAR = T2.DECSN_YEAR
+		AND   T1.DECSN_NO = T2.DECSN_NO
+		AND   T1.DECSN_YEAR = T3.DECSN_YEAR
+		AND   T1.DECSN_NO = T3.DECSN_NO
+		AND   T1.ANACT_KND = #ANACT_KND#			/* 08 : 용역과지출결의서, 06 : 공사와집행결의서, 02 : 구입과지출결의서 */
+		AND   T1.ITNC_DE BETWEEN #CNTRCT_FROM_DE# AND #CNTRCT_TO_DE#
+	]]>
+		<isNotEmpty property="CNTRCT_FROM_AMT">
+		AND    T1.DECSN_AMOUNT <![CDATA[>=]]> #CNTRCT_FROM_AMT# /*계약금액*/
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_TO_AMT">
+		AND    T1.DECSN_AMOUNT <![CDATA[<=]]> #CNTRCT_TO_AMT# 	 /*계약금액*/
+		</isNotEmpty>
+		<isNotEmpty property="BPLC_SE">
+		AND    T1.DEPT_CODE IN (SELECT DEPT_CODE FROM VWHRM_DEPT WHERE BPLC_SE = #BPLC_SE#)	 /*사업장코드*/
+		</isNotEmpty>
+		<isNotEmpty property="BCNC_NM">
+		AND t3.BCNC_NM LIKE '%'||#BCNC_NM#||'%' 
+		</isNotEmpty>
+		ORDER BY t1.DECSN_YEAR, T1.DET_DCSN_DE
+	</select>
+
+</sqlMap>

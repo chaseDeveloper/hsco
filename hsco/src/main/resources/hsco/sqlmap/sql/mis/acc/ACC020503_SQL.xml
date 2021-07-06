@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020503_SQL">	
+	
+	<!-- 지출내역통보 목록 -->
+	<select id="ACC020503DAO.incExpElseCashMastrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 t1.SN
+			,t1.BPLC_SE
+			,t1.BCNC_CODE
+			,t1.BCNC_NM
+			,t1.CREDTR
+			,t1.BALC_SE
+			,t1.INCME_AMOUNT
+			,t1.EXPNDTR_AMOUNT
+			,t1.SUMRY
+			,t1.EXPNDTR_CONFM
+			,t1.INCME_EXPNDTR_CECK_AT
+			,t1.OPERT_DE
+			,t1.REGISTER_ID
+			<!-- ,t1.REGIST_DT -->
+			, TO_CHAR(T1.REGIST_DT,'YYYYMMDD') AS REGIST_DT
+			,t1.UPDUSR_ID
+			,t1.UPDT_DT
+			,t1.CHECK_NO
+			
+			,t1.SANCTN_NO2 AS SANCTN_NO
+			,NVL(t1.SANCTN_SE2,'00') AS SANCTN_SE
+			/*,t2.LAST_SANCTN_STTUS           /*내부결재상태*/
+			
+			,SFCOM_GET_IN_SANCTNSTS('MIS', 'ACC', 'ACC-100039' || '^' || SUBSTR(T1.OPERT_DE,0,4) || '^' || T1.SN , T1.REGIST_DT) AS LAST_SANCTN_STTUS
+	        ,SFCOM_GET_IN_SANCTNSTS_IMG('MIS', 'ACC', 'ACC-100039' || '^' || SUBSTR(T1.OPERT_DE,0,4) || '^' || T1.SN , T1.REGIST_DT) AS LAST_SANCTNSTS_IMG
+	        
+		FROM TBACC_INC_EXP_ELSE_CASH_MASTR t1
+		
+		LEFT OUTER JOIN TBCOM_INNER_SANCTN_MASTR t2
+		  ON  t1.SANCTN_NO2 = t2.INNER_SANCTN_ID
+		
+		WHERE t1.BALC_SE = '2' /*수지구분: 고정*/
+		
+		<isNotEmpty property="SRCH_ST_DT">		
+		  AND t1.OPERT_DE >= #SRCH_ST_DT#
+		</isNotEmpty>
+		
+		<isNotEmpty property="SRCH_ED_DT">		
+		  AND t1.OPERT_DE <![CDATA[ <= ]]> #SRCH_ED_DT#
+		</isNotEmpty>
+		
+		<isNotEmpty property="EXPNDTR_CONFM">
+		  AND t1.EXPNDTR_CONFM = #EXPNDTR_CONFM#
+		</isNotEmpty>
+		
+		ORDER BY SN
+	</select>
+	
+	<!-- 지출내역통보 출력 -->
+	<select id="ACC020503DAO.incExpElseCashPrintList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 t2.CREDTR
+			,t2.EXPNDTR_AMOUNT
+			,t1.CHECK_NO
+			,t3.FNNC_INSTT_CODE_NM
+			,t2.INC_EXP_ACNUTNO AS ACNUTNO
+			,t1.SN
+		FROM TBACC_INC_EXP_ELSE_CASH_MASTR t1,
+        	 TBACC_INC_EXP_ELSE_CASH_DETAIL t2
+        	 LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t3
+        	 ON T2.BANK = T3.FNNC_INSTT_CODE
+		WHERE t1.SN = T2.SN
+     	  AND t1.BALC_SE = '2' /*수지구분: 고정*/
+	  	  AND t1.OPERT_DE = #SRCH_DT#
+		  <!-- AND ( t1.EXPNDTR_CONFM = '1' OR (T1.BPLC_SE = '02' AND SFCOM_GET_IN_SANCTNSTS('MIS', 'ACC', 'ACC-100039' || '^' || SUBSTR(T1.OPERT_DE,0,4) || '^' || T1.SN , T1.REGIST_DT) = 'S01')) -->
+		ORDER BY t1.SN, t2.SEQ
+	</select>
+	
+    
+    <!-- 수입지출외현금 지출 업데이트 -->
+	<update id="ACC020503DAO.expndtrConfmU" parameterClass="java.util.HashMap">
+	<![CDATA[/*ACC020503DAO.expndtrConfmU*/]]>
+		UPDATE TBACC_INC_EXP_ELSE_CASH_MASTR
+		   SET 
+			   EXPNDTR_CONFM              = '1'
+			   ,UPDUSR_ID                  = #S_USER_ID#
+			   ,UPDT_DT	                = SYSDATE
+		 WHERE 1 = 1
+		<isNotEmpty property="SN">
+		   AND	SN                  = #SN#	
+		</isNotEmpty>
+		<isEmpty property="INNER_SANCTN_ID">
+		   AND	SANCTN_NO2           = #INNER_SANCTN_ID#	
+		</isEmpty>
+	</update>
+</sqlMap>

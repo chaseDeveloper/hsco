@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070114_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 휴직내역 조회 -->
+	<select id="HRM070114DAO.selectLayoffList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+			SELECT '0'                                                         AS CHK
+                 , T.DEPT_CODE
+                 , NVL(SFSAL_GETDEPTNM_01(T.DEPT_CODE), SFHRM_GET_DEPTNM(T.DEPT_CODE, '0')) AS DEPT_NM
+                 , TMDD.EMPNO
+                 , THM.EMPNM
+                 , T.DEPT_CODE || TMDD.EMPNO                                   AS GRP_KEY
+                 , T.RSPOFC_SE
+                 , TO_CHAR(TMDD.BGNDT, 'YYYYMMDD')                             AS BGNDT
+                 , TO_CHAR(TMDD.ENDDT, 'YYYYMMDD')                             AS ENDDT
+                 , TMDD.WORK_DAYCNT AS DCLZ_DAYCNT
+              FROM TBHRM_WRKCP TMDD
+                 , (
+                    SELECT A.EMPNO
+                         , A.DEPT_CODE
+                         , A.RSPOFC_SE
+                         , A.BGN_DE, TO_CHAR(TO_DATE(A.END_DE, 'YYYYMMDD')-1, 'YYYYMMDD') AS END_DE
+                      FROM (
+		                    SELECT EMPNO
+		                         , DEPT_CODE
+		                         , RSPOFC_SE
+		                         , ROW_NUMBER () OVER (PARTITION BY EMPNO ORDER BY GNFD_DE) RNUM
+		                         , GNFD_DE AS BGN_DE
+		                         , DECODE(EMPNO, LEAD(EMPNO) OVER (ORDER BY EMPNO), LEAD((GNFD_DE)) OVER (ORDER BY EMPNO, (GNFD_DE)), #END_DE#) AS END_DE
+		                      FROM TBHRM_GNFD
+		                   ) A
+		          GROUP BY A.EMPNO, A.DEPT_CODE, A.RSPOFC_SE, A.BGN_DE, A.END_DE
+                   ) T
+                 , TBHRM_HR_MASTR THM
+             WHERE 1=1
+               AND SFCOM_GET_APPRSTS(TMDD.SANCTN_NO,TMDD.REGIST_DT)   = '256'
+			   AND TMDD.CANCEL_SE IS NULL
+               AND TMDD.EMPNO = T.EMPNO
+               AND TMDD.EMPNO = THM.EMPNO
+               AND TMDD.DCLZ_SE = '216'
+               AND (TMDD.BGNDT BETWEEN TO_DATE(T.BGN_DE || '000000', 'YYYYMMDD HH24MISS') AND TO_DATE(T.END_DE || '235959', 'YYYYMMDD HH24MISS'))
+		]]>
+		<isNotEmpty property="BGN_DE">
+			<isNotEmpty property="END_DE" prepend="AND">
+			<![CDATA[	
+			      ((TMDD.BGNDT <= TO_DATE(#BGN_DE# || '000000','YYYYMMDD HH24MISS') AND TMDD.ENDDT >= TO_DATE(#BGN_DE# || '235959','YYYYMMDD HH24MISS'))
+                OR (TMDD.BGNDT <= TO_DATE(#END_DE# || '000000','YYYYMMDD HH24MISS') AND TMDD.ENDDT >= TO_DATE(#END_DE# || '235959','YYYYMMDD HH24MISS'))
+                OR (TMDD.BGNDT >= TO_DATE(#BGN_DE# || '000000','YYYYMMDD HH24MISS') AND TMDD.ENDDT <= TO_DATE(#END_DE# || '235959','YYYYMMDD HH24MISS'))
+                OR (TO_DATE(#BGN_DE# || '000000','YYYYMMDD HH24MISS') >= TMDD.BGNDT AND TO_DATE(#END_DE# || '235959','YYYYMMDD HH24MISS') <= TMDD.ENDDT))
+			]]>
+			</isNotEmpty>
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE" prepend="AND">
+		           T.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="EMPNM" prepend="AND">
+		           THM.EMPNM LIKE '%' || #EMPNM# || '%'
+		</isNotEmpty>
+		<![CDATA[	
+          ORDER BY T.DEPT_CODE, TMDD.EMPNO, T.RSPOFC_SE, TMDD.BGNDT, TMDD.ENDDT
+		]]>
+    </select>
+	
+</sqlMap>

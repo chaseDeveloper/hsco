@@ -1,0 +1,449 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG030305_SQL">
+
+    <typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+    <!-- 예산요구등록 조회 -->
+    <select id="BDG030305DAO.selectDemandBudget" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    <![CDATA[/*BDG030305DAO.selectDemandBudget*/]]>
+        SELECT T1.YEAR
+             , T1.BUDGET_SE
+             , T1.BSNS_SE
+             , T1.BSNS_CODE
+             , T3.BSNS_NM
+             , T1.DEPT_CODE
+             , T4.DEPT_NM
+             , T1.DEMAND_NO
+             , T1.BUDGET_ACNT_CODE
+             , T2.BUDGET_ACNT_NM
+             , T1.BALC_SE
+             , T1.SN
+             , T1.CONFM_AT
+             , T1.BUKIP_CODE
+             , T5.BUKIP_NM
+             , CASE WHEN T1.YEAR <![CDATA[<]]> 2018 THEN T1.DEMAND_BUDGET_DCSN_AM
+                    ELSE T1.PART_SM_AM_DEMAND
+               END AS DEMAND_BUDGET_DCSN_AM
+             , CASE WHEN T1.YEAR <![CDATA[<]]> 2018 THEN T1.FRST_DEMAND_BUDGET_AM
+                    ELSE T1.PART_SM_AM_DCSN
+               END AS FRST_DEMAND_BUDGET_AM 
+             , CASE WHEN T1.YEAR <![CDATA[<]]> 2018 THEN T1.DEMAND_BUDGET_DCSN_AM - T1.FRST_DEMAND_BUDGET_AM
+                    ELSE T1.PART_SM_AM_DEMAND - T1.PART_SM_AM_DCSN
+               END AS DFNNT
+             , T1.OUTPT_LEVEL
+             , T1.DCSN_AT
+        FROM   TBBDG_DEMAND_BUDGET T1
+               LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE T2
+                    ON T1.YEAR = T2.YEAR
+                   AND T1.BSNS_SE = T2.BSNS_SE
+                   AND T1.BALC_SE = T2.BALC_SE
+                   AND T1.BUDGET_ACNT_CODE = T2.BUDGET_ACNT_CODE
+               LEFT OUTER JOIN TBPRJ_BSNS_CODE T3
+                    ON T1.BSNS_CODE = T3.BSNS_CODE
+               LEFT OUTER JOIN VWHRM_DEPT T4
+                    ON T1.DEPT_CODE = T4.DEPT_CODE
+               LEFT OUTER JOIN TBBDG_BUKIP_CODE T5
+                    ON T1.BUKIP_CODE = T5.BUKIP_CODE
+        WHERE  1=1
+        AND    T1.OUTPT_LEVEL = '1'
+        <isNotEmpty property="YEAR"             prepend="AND    ">T1.YEAR = #YEAR#</isNotEmpty>
+        <isNotEmpty property="BSNS_SE"          prepend="AND    ">T1.BSNS_SE = #BSNS_SE#</isNotEmpty>
+        <isNotEmpty property="BALC_SE"          prepend="AND    ">T1.BALC_SE = #BALC_SE#</isNotEmpty>
+        <isNotEmpty property="BUDGET_SE"        prepend="AND    ">T1.BUDGET_SE = #BUDGET_SE#</isNotEmpty>
+        ORDER BY T1.SN
+    </select>
+
+
+    <!-- 현재 검색조건에 부합하는 실행예산 금액 0으로 변경(재편성 시, 중간에 요구예산을 지웠을 경우) -->
+    <update id="BDG030305DAO.updateExecutBudgetZero" parameterClass="java.util.HashMap">
+    <![CDATA[/*BDG030305DAO.updateExecutBudgetZero*/]]>
+        UPDATE TBBDG_EXECUT_BUDGET
+        SET    UPDUSR_ID     = #S_USER_ID#
+              ,UPDT_DT       = SYSDATE
+               <isEqual property="BUDGET_SE" compareValue="0" prepend=",">ORIBDGT       = 0</isEqual>
+               <isEqual property="BUDGET_SE" compareValue="1" prepend=",">RVSPBGT_1_ODR = 0</isEqual>
+               <isEqual property="BUDGET_SE" compareValue="2" prepend=",">RVSPBGT_2_ODR = 0</isEqual>
+               <isEqual property="BUDGET_SE" compareValue="3" prepend=",">RVSPBGT_3_ODR = 0</isEqual>
+               <isEqual property="BUDGET_SE" compareValue="4" prepend=",">RVSPBGT_4_ODR = 0</isEqual>
+               <isEqual property="BUDGET_SE" compareValue="5" prepend=",">RVSPBGT_5_ODR = 0</isEqual>
+               <isEqual property="BUDGET_SE" compareValue="6" prepend=",">RVSPBGT_6_ODR = 0</isEqual>
+               <isEqual property="BUDGET_SE" compareValue="7" prepend=",">RVSPBGT_7_ODR = 0</isEqual>
+        WHERE  YEAR      = #YEAR#       /*연도*/
+        <!-- <isNotEmpty property="DEPT_CODE"><isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">DEPT_CODE = #DEPT_CODE#</isNotEqual></isNotEmpty> -->
+        <isNotEmpty property="BSNS_SE"   prepend="AND    ">BSNS_SE   = #BSNS_SE#</isNotEmpty>
+        <isNotEmpty property="BALC_SE"   prepend="AND    ">BALC_SE   = #BALC_SE#</isNotEmpty>
+    </update>
+
+
+    <!-- 편성금액으로 덮어쓰기 -->
+    <insert id="BDG030305DAO.insertFrmtnToExecut" parameterClass="java.util.HashMap">
+    <![CDATA[/*BDG030305DAO.insertFrmtnToExecut*/]]>
+        MERGE INTO TBBDG_EXECUT_BUDGET t1
+        USING (
+              SELECT A1.YEAR
+                    ,A1.BSNS_SE
+                    ,A1.BALC_SE
+                    ,A1.BSNS_CODE                                               AS DETAIL_BSNS_CODE
+                    ,#BUDGET_SE#                                                AS BUDGET_SE
+                    ,A1.DEPT_CODE
+                    ,A1.BUDGET_ACNT_CODE
+                    ,NVL(A1.BUKIP_CODE, '0000')                                 AS EXPNDTR_UNIT_CODE
+                    ,NVL(A3.BUKIP_NM, '기타')                                   AS EXPNDTR_UNIT_NM
+                    ,NULL                                                       AS ELPD_EXCUT_AT
+                    ,NULL                                                       AS SE_ACCNUT_ACNT_CODE
+                    ,SUM(DECODE(BUDGET_SE,'0', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_0_AM
+                    ,SUM(DECODE(BUDGET_SE,'1', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_1_AM
+                    ,SUM(DECODE(BUDGET_SE,'2', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_2_AM
+                    ,SUM(DECODE(BUDGET_SE,'3', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_3_AM
+                    ,SUM(DECODE(BUDGET_SE,'4', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_4_AM
+                    ,SUM(DECODE(BUDGET_SE,'5', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_5_AM
+                    ,SUM(DECODE(BUDGET_SE,'6', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_6_AM
+                    ,SUM(DECODE(BUDGET_SE,'7', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_7_AM
+                    ,SUM(DECODE(BUDGET_SE,'8', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_8_AM
+                    ,SUM(DECODE(BUDGET_SE,'9', A1.PART_SM_AM_DCSN, 0))          AS BUDGET_9_AM
+               FROM  TBBDG_DEMAND_BUDGET A1
+                     LEFT OUTER JOIN TBBDG_BUDGET_BUKIP_MAPPING A2
+                          ON A1.YEAR = A2.YEAR
+                         AND A1.BUDGET_ACNT_CODE = A2.BUDGET_ACNT_CODE
+                         AND A1.BUKIP_CODE       = A2.BUKIP_CODE
+                     LEFT OUTER JOIN TBBDG_BUKIP_CODE A3
+                          ON A1.BUKIP_CODE = A3.BUKIP_CODE
+               WHERE A1.YEAR      = #YEAR#       /*연도*/
+               AND   A1.OUTPT_LEVEL = '1'
+               <isNotEmpty property="BSNS_SE"   prepend="AND    ">A1.BSNS_SE   = #BSNS_SE#</isNotEmpty>
+               <isNotEmpty property="BALC_SE"   prepend="AND    ">A1.BALC_SE   = #BALC_SE#</isNotEmpty>
+               GROUP BY A1.YEAR
+                       ,A1.BSNS_SE
+                       ,A1.BALC_SE
+                       ,A1.BSNS_CODE
+                       ,A1.DEPT_CODE
+                       ,A1.BUDGET_ACNT_CODE
+                       ,A1.BUKIP_CODE
+                       ,A3.BUKIP_NM
+              ) t2
+              ON (
+                      t1.YEAR = t2.YEAR
+                  AND t1.BSNS_SE = t2.BSNS_SE
+                  AND t1.BALC_SE = t2.BALC_SE
+                  AND t1.DETAIL_BSNS_CODE = t2.DETAIL_BSNS_CODE
+                  AND t1.DEPT_CODE = t2.DEPT_CODE
+                  AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+                  AND t1.EXPNDTR_UNIT_CODE = t2.EXPNDTR_UNIT_CODE
+                 )
+            WHEN MATCHED THEN
+                UPDATE
+                SET    t1.SE_ACCNUT_ACNT_CODE  = DECODE(t2.BUDGET_SE, '0', t2.SE_ACCNUT_ACNT_CODE,NULL)
+                      ,t1.ORIBDGT              = DECODE(t2.BUDGET_SE, '0', t2.BUDGET_0_AM, t1.ORIBDGT)
+                      ,t1.RVSPBGT_1_ODR        = DECODE(t2.BUDGET_SE, '1', t2.BUDGET_1_AM, t1.RVSPBGT_1_ODR)
+                      ,t1.RVSPBGT_2_ODR        = DECODE(t2.BUDGET_SE, '2', t2.BUDGET_2_AM, t1.RVSPBGT_2_ODR)
+                      ,t1.RVSPBGT_3_ODR        = DECODE(t2.BUDGET_SE, '3', t2.BUDGET_3_AM, t1.RVSPBGT_3_ODR)
+                      ,t1.RVSPBGT_4_ODR        = DECODE(t2.BUDGET_SE, '4', t2.BUDGET_4_AM, t1.RVSPBGT_4_ODR)
+                      ,t1.RVSPBGT_5_ODR        = DECODE(t2.BUDGET_SE, '5', t2.BUDGET_5_AM, t1.RVSPBGT_5_ODR)
+                      ,t1.RVSPBGT_6_ODR        = DECODE(t2.BUDGET_SE, '6', t2.BUDGET_6_AM, t1.RVSPBGT_6_ODR)
+                      ,t1.RVSPBGT_7_ODR        = DECODE(t2.BUDGET_SE, '7', t2.BUDGET_7_AM, t1.RVSPBGT_7_ODR)
+                      ,t1.FORMATN_BFE_1_ODR    = DECODE(t2.BUDGET_SE, '8', t2.BUDGET_8_AM, t1.FORMATN_BFE_1_ODR)
+                      ,t1.FORMATN_BFE_2_ODR    = DECODE(t2.BUDGET_SE, '9', t2.BUDGET_9_AM, t1.FORMATN_BFE_2_ODR)
+                      <isEqual property="BUDGET_SE" compareValue="1">
+                      ,t1.RVSPBGT_1_YM         = #YEAR#||#RVSPBGT_YM#
+                      </isEqual>
+                      <isEqual property="BUDGET_SE" compareValue="2">
+                      ,t1.RVSPBGT_2_YM         = #YEAR#||#RVSPBGT_YM#
+                      </isEqual>
+                      <isEqual property="BUDGET_SE" compareValue="3">
+                      ,t1.RVSPBGT_3_YM         = #YEAR#||#RVSPBGT_YM#
+                      </isEqual>
+                      <isEqual property="BUDGET_SE" compareValue="4">
+                      ,t1.RVSPBGT_4_YM         = #YEAR#||#RVSPBGT_YM#
+                      </isEqual>
+                      <isEqual property="BUDGET_SE" compareValue="5">
+                      ,t1.RVSPBGT_5_YM         = #YEAR#||#RVSPBGT_YM#
+                      </isEqual>
+                      <isEqual property="BUDGET_SE" compareValue="6">
+                      ,t1.RVSPBGT_6_YM         = #YEAR#||#RVSPBGT_YM#
+                      </isEqual>
+                      <isEqual property="BUDGET_SE" compareValue="7">
+                      ,t1.RVSPBGT_7_YM         = #YEAR#||#RVSPBGT_YM#
+                      </isEqual>
+            WHEN NOT MATCHED THEN
+            
+                INSERT (
+                     t1.YEAR
+                    ,t1.BSNS_SE
+                    ,t1.BALC_SE
+                    ,t1.DETAIL_BSNS_CODE
+                    ,t1.DEPT_CODE
+                    ,t1.BUDGET_ACNT_CODE
+                    ,t1.EXPNDTR_UNIT_CODE
+                    ,t1.EXPNDTR_UNIT_NM
+                    ,t1.ELPD_EXCUT_AT
+                    ,t1.SE_ACCNUT_ACNT_CODE
+                    ,t1.ORIBDGT
+                    ,t1.RVSPBGT_1_ODR
+                    ,t1.RVSPBGT_2_ODR
+                    ,t1.RVSPBGT_3_ODR
+                    ,t1.RVSPBGT_4_ODR
+                    ,t1.RVSPBGT_5_ODR
+                    ,t1.RVSPBGT_6_ODR
+                    ,t1.RVSPBGT_7_ODR
+                    ,t1.FORMATN_BFE_1_ODR
+                    ,t1.FORMATN_BFE_2_ODR
+                    <isEqual property="BUDGET_SE" compareValue="1">
+                    ,t1.RVSPBGT_1_YM    
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="2">
+                    ,t1.RVSPBGT_2_YM    
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="3">
+                    ,t1.RVSPBGT_3_YM
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="4">
+                    ,t1.RVSPBGT_4_YM
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="5">
+                    ,t1.RVSPBGT_5_YM
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="6">
+                    ,t1.RVSPBGT_6_YM
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="7">
+                    ,t1.RVSPBGT_7_YM
+                    </isEqual>
+                    ,t1.REGISTER_ID
+                    ,t1.REGIST_DT
+                    ,t1.UPDUSR_ID
+                    ,t1.UPDT_DT
+                )
+                VALUES (
+                     t2.YEAR
+                    ,t2.BSNS_SE
+                    ,t2.BALC_SE
+                    ,t2.DETAIL_BSNS_CODE
+                    ,t2.DEPT_CODE
+                    ,t2.BUDGET_ACNT_CODE
+                    ,t2.EXPNDTR_UNIT_CODE
+                    ,t2.EXPNDTR_UNIT_NM
+                    ,t2.ELPD_EXCUT_AT
+                    ,t2.SE_ACCNUT_ACNT_CODE
+                    ,DECODE(t2.BUDGET_SE, '0', t2.BUDGET_0_AM, 0)
+                    ,DECODE(t2.BUDGET_SE, '1', t2.BUDGET_1_AM, 0)
+                    ,DECODE(t2.BUDGET_SE, '2', t2.BUDGET_2_AM, 0)
+                    ,DECODE(t2.BUDGET_SE, '3', t2.BUDGET_3_AM, 0)
+                    ,DECODE(t2.BUDGET_SE, '4', t2.BUDGET_4_AM, 0)
+                    ,DECODE(t2.BUDGET_SE, '5', t2.BUDGET_5_AM, 0)
+                    ,DECODE(t2.BUDGET_SE, '6', t2.BUDGET_6_AM, 0)
+                    ,DECODE(t2.BUDGET_SE, '7', t2.BUDGET_7_AM, 0)
+                    ,DECODE(t2.BUDGET_SE, '8', t2.BUDGET_8_AM, 0)
+                    ,DECODE(t2.BUDGET_SE, '9', t2.BUDGET_9_AM, 0)
+                    <isEqual property="BUDGET_SE" compareValue="1">
+                    ,#YEAR#||#RVSPBGT_YM#
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="2">
+                    ,#YEAR#||#RVSPBGT_YM#
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="3">
+                    ,#YEAR#||#RVSPBGT_YM#
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="4">
+                    ,#YEAR#||#RVSPBGT_YM#
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="5">
+                    ,#YEAR#||#RVSPBGT_YM#
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="6">
+                    ,#YEAR#||#RVSPBGT_YM#
+                    </isEqual>
+                    <isEqual property="BUDGET_SE" compareValue="7">
+                    ,#YEAR#||#RVSPBGT_YM#
+                    </isEqual>
+                    ,#S_USER_ID#
+                    ,SYSDATE
+                    ,#S_USER_ID#
+                    ,SYSDATE
+                )
+    </insert>
+
+
+    <!-- 확정여부 1 입력 -->
+    <update id="BDG030305DAO.updateExecutConfirmAt1" parameterClass="java.util.HashMap">
+    <![CDATA[/*BDG030305DAO.updateExecutConfirmAt1*/]]>
+        UPDATE TBBDG_DEMAND_BUDGET SET DCSN_AT = '1'
+        WHERE YEAR = #YEAR#
+        <isNotEmpty property="BSNS_SE"   prepend="AND    ">BSNS_SE   = #BSNS_SE#</isNotEmpty>
+        <isNotEmpty property="BALC_SE"   prepend="AND    ">BALC_SE   = #BALC_SE#</isNotEmpty>
+        AND BUDGET_SE = #BUDGET_SE#
+    </update>
+
+
+    <!-- 예산요구등록 삭제 -->
+    <delete id="BDG030305DAO.deleteExcutBudgetZero" parameterClass="java.util.HashMap">
+    <![CDATA[/*BDG030305DAO.deleteExcutBudgetZero*/]]>
+        DELETE
+        FROM   TBBDG_EXECUT_BUDGET
+        WHERE  YEAR             = #YEAR#
+          AND ORIBDGT           = 0
+          AND RVSPBGT_1_ODR     = 0
+          AND RVSPBGT_2_ODR     = 0
+          AND RVSPBGT_3_ODR     = 0
+          AND RVSPBGT_4_ODR     = 0
+          AND RVSPBGT_5_ODR     = 0
+          AND RVSPBGT_6_ODR     = 0
+          AND RVSPBGT_7_ODR     = 0
+          AND CYFD_BUDGET       = 0
+          AND MVMN_AM           = 0
+          AND BUKIP_MVMN_AM     = 0
+          AND DVR_AM            = 0
+          AND RSVFND_REQST_AM   = 0
+          AND TRSF_AM           = 0
+          AND FORMATN_BFE_1_ODR = 0
+          AND FORMATN_BFE_2_ODR = 0
+    </delete>
+
+
+    <!-- 백업테이블에 데이터 입력 -->
+    <insert id="BDG030305DAO.insertBackUpTable" parameterClass="java.util.HashMap">
+    <![CDATA[/*BDG030305DAO.insertBackUpTable*/]]>
+        INSERT INTO TBBDG_EXECUT_BUDGET_BACKUP (
+               BACKUP_DT
+             , YEAR
+             , BSNS_SE
+             , BALC_SE
+             , DETAIL_BSNS_CODE
+             , DEPT_CODE
+             , BUDGET_ACNT_CODE
+             , EXPNDTR_UNIT_CODE
+             , SE_ACCNUT_ACNT_CODE
+             , EXPNDTR_UNIT_NM
+             , ELPD_EXCUT_AT
+             , ORIBDGT
+             , RVSPBGT_1_ODR
+             , RVSPBGT_2_ODR
+             , RVSPBGT_3_ODR
+             , RVSPBGT_4_ODR
+             , RVSPBGT_5_ODR
+             , RVSPBGT_6_ODR
+             , RVSPBGT_7_ODR
+             , FORMATN_BFE_1_ODR
+             , FORMATN_BFE_2_ODR
+             , CYFD_BUDGET
+             , TRSF_AM
+             , DVR_AM
+             , MVMN_AM
+             , BUKIP_MVMN_AM
+             , RSVFND_REQST_AM
+             , EXPNDTR_POSBL_AT
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+             , RVSPBGT_1_YM
+             , RVSPBGT_2_YM
+             , RVSPBGT_3_YM
+             , RVSPBGT_4_YM
+             , RVSPBGT_5_YM
+             , RVSPBGT_6_YM
+             , RVSPBGT_7_YM
+        )
+        SELECT SYSDATE
+             , YEAR
+             , BSNS_SE
+             , BALC_SE
+             , DETAIL_BSNS_CODE
+             , DEPT_CODE
+             , BUDGET_ACNT_CODE
+             , EXPNDTR_UNIT_CODE
+             , SE_ACCNUT_ACNT_CODE
+             , EXPNDTR_UNIT_NM
+             , ELPD_EXCUT_AT
+             , ORIBDGT
+             , RVSPBGT_1_ODR
+             , RVSPBGT_2_ODR
+             , RVSPBGT_3_ODR
+             , RVSPBGT_4_ODR
+             , RVSPBGT_5_ODR
+             , RVSPBGT_6_ODR
+             , RVSPBGT_7_ODR
+             , FORMATN_BFE_1_ODR
+             , FORMATN_BFE_2_ODR
+             , CYFD_BUDGET
+             , TRSF_AM
+             , DVR_AM
+             , MVMN_AM
+             , BUKIP_MVMN_AM
+             , RSVFND_REQST_AM
+             , EXPNDTR_POSBL_AT
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+             , RVSPBGT_1_YM
+             , RVSPBGT_2_YM
+             , RVSPBGT_3_YM
+             , RVSPBGT_4_YM
+             , RVSPBGT_5_YM
+             , RVSPBGT_6_YM
+             , RVSPBGT_7_YM
+          FROM TBBDG_EXECUT_BUDGET
+         WHERE YEAR      = #YEAR#
+        <isNotEmpty property="BSNS_SE"   prepend="AND    ">BSNS_SE   = #BSNS_SE#</isNotEmpty>
+        <isNotEmpty property="BALC_SE"   prepend="AND    ">BALC_SE   = #BALC_SE#</isNotEmpty>
+    </insert>
+
+
+    <!-- 요구내역 조회 -->
+    <select id="BDG030305DAO.selectDemandBudgetDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    <![CDATA[/*BDG030305DAO.selectDemandBudgetDtls*/]]>
+        SELECT T1.YEAR
+             , T1.BSNS_SE
+             , T1.BSNS_CODE
+             , T3.BSNS_NM
+             , T1.BSNS_CODE || '. ' || T3.BSNS_NM                  AS BSNS_CODE_NM
+             , T1.BALC_SE
+             , T1.BUDGET_SE
+             , T1.DEPT_CODE
+             , T6.DEPT_NM
+             , T1.DEPT_CODE || '. ' || T6.DEPT_NM                  AS DEPT_CODE_NM
+             , T1.BUDGET_ACNT_CODE
+             , T4.BUDGET_ACNT_NM
+             , SUBSTR(T1.BUDGET_ACNT_CODE, 1, 3) || '-' || SUBSTR(T1.BUDGET_ACNT_CODE, 4) || '. ' || T4.BUDGET_ACNT_NM    AS BUDGET_ACNT_CODE_NM
+             , T1.BUKIP_CODE
+             , T8.BUKIP_NM
+             , T1.BUKIP_CODE || '. ' || T8.BUKIP_NM                AS BUKIP_CODE_NM
+             , NVL(t1.COMPUT_OFCL_BUKIP_ACCNUT, t1.COMPUT_OFCL)    AS COMPUT_BSIS_DTLS
+             , T1.DEMAND_BUDGET_DCSN_AM
+             , T1.OUTPT_LEVEL
+        FROM   TBBDG_DEMAND_BUDGET T1
+               LEFT OUTER JOIN TBPRJ_BSNS_CODE T3
+                    ON T1.BSNS_CODE = T3.BSNS_CODE
+               LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE T4
+                    ON T1.YEAR             = T4.YEAR
+                   AND T1.BSNS_SE          = T4.BSNS_SE
+                   AND T1.BALC_SE          = T4.BALC_SE
+                   AND T1.BUDGET_ACNT_CODE = T4.BUDGET_ACNT_CODE
+               LEFT OUTER JOIN VWHRM_DEPT T6
+                    ON T1.DEPT_CODE = T6.DEPT_CODE
+               LEFT OUTER JOIN TBBDG_BUDGET_BUKIP_MAPPING T7
+                    ON T1.YEAR             = T7.YEAR
+                   AND T1.BUDGET_ACNT_CODE = T7.BUDGET_ACNT_CODE
+                   AND T1.BUKIP_CODE       = T7.BUKIP_CODE
+               LEFT OUTER JOIN TBBDG_BUKIP_CODE T8
+                    ON T1.BUKIP_CODE = T8.BUKIP_CODE
+        WHERE  T1.YEAR             = #YEAR#
+          AND  T1.BSNS_SE          = #BSNS_SE#
+          AND  T1.BALC_SE          = #BALC_SE#
+          AND  T1.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+          AND  T1.BUDGET_SE        = #BUDGET_SE#
+          AND  T1.DEPT_CODE        = #DEPT_CODE#
+        ORDER BY T1.YEAR
+               , T1.BSNS_SE
+               , T1.BSNS_CODE
+               , T1.BALC_SE
+               , T1.BUDGET_SE
+               , T1.DEPT_CODE
+               , T1.BUDGET_ACNT_CODE
+               , T1.BUKIP_CODE
+               , T1.OUTPT_LEVEL
+    </select>
+
+
+</sqlMap>

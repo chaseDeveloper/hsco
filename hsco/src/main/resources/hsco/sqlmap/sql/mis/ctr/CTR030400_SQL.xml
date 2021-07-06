@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR030400_SQL">
+	
+	<select id="CTR030400DAO.selectAcmsltProofIssuList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 t1.ISSU_YEAR						/*발급년도*/
+			,t1.SN								/*일련번호*/
+		    ,CASE
+		          WHEN t1.ISSU_AT = '1'
+		          THEN t1.ISSU_YEAR
+		              || '-'
+		              || ROW_NUMBER() OVER (PARTITION BY t1.ISSU_AT ORDER BY t1.SN)
+		     END AS SN2
+			,t1.ISSUER_EMPNO					/*발급자사번*/
+			,t3.EMPNM AS ISSUER_EMPNM			/*발급자명*/
+			,t1.REQST_TY_SE						/*신청유형구분*/
+			,t1.REQST_DE						/*신청일*/
+			,t1.ISSU_DE							/*발급일*/
+			,t1.OUTSRC_STLE_SE					/*도급형태*/
+			,t1.BCNC_CODE						/*거래처코드*/
+			,t2.BCNC_NM							/*거래처명*/
+			,t2.RPRSNTV							/*대표자*/
+			,H_DECRYPT(t2.BIZRNO)  AS BIZRNO	/*사업자등록번호*/
+			,t2.ZIP								/*우편번호*/
+			,DECODE(t2.RN, NULL, t2.ADRES || ' ' || t2.DETAIL_ADRES, t2.RN || ' ' || t2.DETAIL_RDNMADR) AS ADRES
+			,t2.TELNO							/*전화번호*/
+			,H_DECRYPT(t2.MBTLNUM)  AS MBTLNUM							/*휴대폰번호*/
+			,t1.CNTRCT_NO						/*계약번호*/
+			,t4.CNTRCT_NM						/*계약명*/
+			,t5.BSNS_CODE
+			,t5.BSNS_NM
+			,t1.ACMSLT_AMOUNT					/*실적금액*/
+			,t1.ISSU_NBFPS						/*발급부수*/
+			,NVL(t1.ISSU_AT, 0)	AS ISSU_AT		/*발급여부*/
+			,t1.FILE_SN							/*첨부파일번호*/
+		FROM TBCTR_ACMSLT_PROOF_ISSU t1
+			LEFT OUTER JOIN TBCTR_BCNC_MASTR t2
+			  ON t1.BCNC_CODE = t2.BCNC_CODE
+			LEFT OUTER JOIN TBHRM_HR_MASTR t3
+			  ON t1.ISSUER_EMPNO = t3.EMPNO
+			LEFT OUTER JOIN TBCTR_CNTRCT t4
+			  ON t1.CNTRCT_NO = t4.CNTRCT_NO
+			LEFT OUTER JOIN TBPRJ_BSNS_CODE t5
+			  ON t4.BSNS_CODE = t5.BSNS_CODE
+		WHERE t1.ISSU_YEAR = #ISSU_YEAR#
+		<isNotEmpty prepend="AND" property="ISSU_AT">
+			t1.ISSU_AT = #ISSU_AT#
+		</isNotEmpty>
+		ORDER BY t1.ISSU_DE, t1.REQST_DE, t1.SN
+	</select>
+	
+	<insert id="CTR030400DAO.acmsltProofIssuC" parameterClass="java.util.HashMap" >
+		INSERT
+		INTO TBCTR_ACMSLT_PROOF_ISSU
+		(
+			 ISSU_YEAR
+			,SN
+			,CNTRCT_NO
+			,BCNC_CODE
+			,REQST_TY_SE
+			,REQST_DE
+			,OUTSRC_STLE_SE
+			,ACMSLT_AMOUNT
+			,ISSU_NBFPS
+			,ISSUER_EMPNO
+			,ISSU_AT
+			,ISSU_DE
+			,FILE_SN
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)
+		VALUES
+		(
+			 #ISSU_YEAR#     
+			,(SELECT NVL(MAX(SN), 0)+1 FROM TBCTR_ACMSLT_PROOF_ISSU WHERE ISSU_YEAR = #ISSU_YEAR#)
+			,#CNTRCT_NO#     
+			,#BCNC_CODE#     
+			,#REQST_TY_SE#   
+			,#REQST_DE#      
+			,#OUTSRC_STLE_SE#
+			,#ACMSLT_AMOUNT# 
+			,#ISSU_NBFPS#    
+			,#ISSUER_EMPNO#  
+			,NVL2(#ISSU_DE#, 1, 0)       
+			,#ISSU_DE#       
+			,#FILE_SN#       
+			,#S_USER_ID#
+			,SYSDATE	
+			,#S_USER_ID#
+			,SYSDATE         		
+		)
+	</insert>
+	
+	<update id="CTR030400DAO.acmsltProofIssuU" parameterClass="java.util.HashMap" >
+		UPDATE TBCTR_ACMSLT_PROOF_ISSU
+		SET  CNTRCT_NO      = #CNTRCT_NO#     
+			,BCNC_CODE      = #BCNC_CODE#     
+			,REQST_TY_SE    = #REQST_TY_SE#   
+			,REQST_DE       = #REQST_DE#      
+			,OUTSRC_STLE_SE = #OUTSRC_STLE_SE#
+			,ACMSLT_AMOUNT  = #ACMSLT_AMOUNT# 
+			,ISSU_NBFPS     = #ISSU_NBFPS#    
+			,ISSUER_EMPNO   = #ISSUER_EMPNO#  
+			,ISSU_AT        = NVL2(#ISSU_DE#, 1, 0)    
+			,ISSU_DE        = #ISSU_DE#       
+			,FILE_SN        = #FILE_SN#       
+			,UPDUSR_ID      = #S_USER_ID# 
+			,UPDT_DT        = SYSDATE
+		WHERE ISSU_YEAR      = #ISSU_YEAR#     
+		  AND SN             = #SN#               
+	</update>
+
+	<delete id="CTR030400DAO.acmsltProofIssuD" parameterClass="java.util.HashMap" >
+		DELETE
+		FROM TBCTR_ACMSLT_PROOF_ISSU
+		WHERE ISSU_YEAR      = #ISSU_YEAR#     
+		  AND SN             = #SN#  
+	</delete>
+
+</sqlMap>

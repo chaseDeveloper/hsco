@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ASS030100_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 불용품관리(마스터) 조회 -->
+	<select id="ASS030100DAO.atldManageList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[	
+		SELECT 
+		     t1.REQST_YEAR                                AS REQST_YEAR          /* 신청년도 */
+		    ,t1.ODR                                       AS ODR                 /* 차수 */
+		    ,t1.DISUSE_PLAN_DE                            AS DISUSE_PLAN_DE      /* 불용계획일자 */
+		    ,t1.REQUST_DEPT                               AS REQUST_DEPT         /* 요청부서 */
+		    ,t2.DEPT_NM                                   AS DEPT_NM             /* 요청부서 명 */
+		    ,NVL(t3.ACQS_AMOUNT,0)                        AS ACQS_AMOUNT         /* 취득금액합계 */
+		    ,NVL(t3.DPRC_ACMTL_AMOUNT,0)                  AS DPRC_ACMTL_AMOUNT   /* 상각누계액합계 */
+		    ,NVL(t3.DISUSE_AMOUNT,0)                      AS DISUSE_AMOUNT       /* 불용금액합계 */
+		    ,NVL(t3.DISUSE_CONFM_AT, '0')                 AS DISUSE_CONFM_AT
+		FROM TBASS_ATLD_MANAGE t1
+		  LEFT OUTER JOIN VWHRM_DEPT t2
+		    ON t1.REQUST_DEPT = t2.DEPT_CODE
+		  LEFT OUTER JOIN (SELECT   t1.REQST_YEAR
+		                           ,t1.ODR
+		                           ,SUM(NVL(t1.DISUSE_AMOUNT,0)) AS DISUSE_AMOUNT 
+		                           ,SUM(NVL(t2.DPRC_ACMTL_AMOUNT,0)) AS DPRC_ACMTL_AMOUNT
+		                           ,SUM(NVL(t2.GOVSUBY_DPRC_ACMTL_AMOUNT,0)) AS GOVSUBY_DPRC_ACMTL_AMOUNT
+		                           ,SUM(NVL(t3.ACQS_AMOUNT,0)) AS ACQS_AMOUNT
+		                           ,MAX(NVL(t1.DISUSE_CONFM_AT, 0))   AS DISUSE_CONFM_AT
+		                           ,MAX(NVL(t1.DISUSE_PROCESS_AT, 0)) AS DISUSE_PROCESS_AT_MAX
+		                           ,MIN(NVL(t1.DISUSE_PROCESS_AT, 0)) AS DISUSE_PROCESS_AT_MIN
+		                    FROM   TBASS_ATLD_MANAGE_DETAIL t1
+		                           LEFT OUTER JOIN (SELECT ASSETS_NO
+		                                                  ,MIN(DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS DPRC_ACMTL_AMOUNT
+		                                                  ,MIN(GOVSUBY_DPRC_ACMTL_AMOUNT) KEEP(DENSE_RANK FIRST  ORDER BY DPRC_YM DESC) AS GOVSUBY_DPRC_ACMTL_AMOUNT
+		                                             FROM TBASS_DPRC
+		                                             GROUP BY ASSETS_NO) t2
+		                             ON t1.ASSETS_NO = t2.ASSETS_NO
+		                           ,TBASS_ASSETS_MASTR t3
+		                     WHERE t1.ASSETS_NO = t3.ASSETS_NO
+		                     GROUP BY t1.REQST_YEAR, t1.ODR
+		                   ) t3	/*합계금액*/
+		    ON t1.REQST_YEAR = t3.REQST_YEAR
+		   AND t1.ODR = t3.ODR        
+		WHERE 1=1
+		  AND T1.DISUSE_PLAN_DE BETWEEN #FDATE# AND #TDATE#
+		  AND NVL(t3.DISUSE_CONFM_AT, '0') = '1'	/*승인된 계획만*/
+		]]>	
+		<isNotEmpty property="REQUST_DEPT">
+		  <isNotEqual property="REQUST_DEPT" compareValue="000000">
+		    AND T1.REQUST_DEPT = #REQUST_DEPT#
+		  </isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="DISUSE_PROCESS_AT">
+		    AND NVL(DECODE(#DISUSE_PROCESS_AT#, '1', t3.DISUSE_PROCESS_AT_MAX, '0', t3.DISUSE_PROCESS_AT_MIN), '0') = #DISUSE_PROCESS_AT#
+		</isNotEmpty>
+		ORDER BY T1.REQST_YEAR, T1.ODR
+    </select>
+    
+    <!-- 불용품회계계정 조회 -->
+	<select id="ASS030100DAO.atldAccnutAcntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT  T2.REQST_YEAR                                AS REQST_YEAR          /* 신청년도 */
+			       ,T2.ODR                                       AS ODR                 /* 차수 */
+			       ,T2.ASSETS_NO                                 AS ASSETS_NO
+			       ,T2.SEQ                                       AS SEQ                 /* 일련번호 */
+			       ,T2.ACCNUT_YEAR                               AS ACCNUT_YEAR         /* 회계년도 */
+			       ,T2.ACCNUT_ACNT_CODE                          AS ACCNUT_ACNT_CODE    /* 차변계정코드 */
+			       ,T3.ACCNUT_ACNT_NM                            AS ACCNUT_ACNT_NM      /* 차변계정코드 명 */
+			       ,NVL(T2.DEBTOR_AMOUNT,0)                      AS DEBTOR_AMOUNT       /* 차변금액 */
+			       ,NVL(T2.CRDIT_AMOUNT,0)                       AS CRDIT_AMOUNT        /* 대변금액 */
+			FROM   TBASS_ATLD_ACCNUT_ACNT T2
+			       LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT T3
+			                    ON T2.REQST_YEAR       = T3.ACCNUT_YEAR
+			                   AND T2.ACCNUT_ACNT_CODE = T3.ACCNUT_ACNT_CODE
+			WHERE  1=1
+			  AND T2.REQST_YEAR = #REQST_YEAR#
+			  AND T2.ODR = #ODR#
+			  AND T2.ASSETS_NO = #ASSETS_NO#
+		    ORDER BY T2.SEQ
+		]]>		
+    </select>
+    
+	<!-- 불용품관리상세(디테일) 조회 -->
+	<select id="ASS030100DAO.atldManageDetail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		SELECT
+		        t1.REQST_YEAR
+		       ,t1.ODR                                
+		       ,t1.ASSETS_NO                                                          /* 자산번호 */                                                     
+		       ,t2.ASSETS_CL_CODE                                                     /* 자산분류코드 */
+		       ,t3.ASSETS_CL_NM                                                       /* 자산분류명 */
+		       ,t2.ASSETS_SE                                                          /* 자산구분 */
+		       ,t2.ASSETS_NM                                                          /* 자산명 */
+		       ,NVL(t1.DISUSE_AMOUNT,0) AS DISUSE_AMOUNT                              /* 불용금액 */
+		       ,t1.DISUSE_SE_CODE                                                     /* 불용구분코드 */
+		       ,t1.DISUSE_PRVONSH                                                     /* 불용사유 */
+		       ,t2.UNTPC                                                              /* 단가 */
+		       ,t2.QY                                                                 /* 수량 */
+		       ,t2.UNIT                                                               /* 단위 */
+		       ,t2.STNDRD                                                             /* 규격 */
+		       ,NVL(t2.ACQS_AMOUNT,0)                   AS ACQS_AMOUNT                /* 취득금액 */
+		       ,NVL(t2.GOVSUBY_ACQS_AMOUNT,0)           AS GOVSUBY_ACQS_AMOUNT        /* 국고보조금취득가액 */
+		       ,NVL(t1.DISUSE_PROCESS_AT,'0')           AS DISUSE_PROCESS_AT
+		       ,t1.DISUSE_PROCESS_DE
+		       ,t1.CHIT_NO
+		FROM TBASS_ATLD_MANAGE_DETAIL t1
+		    LEFT OUTER JOIN TBASS_ASSETS_MASTR t2
+		      ON t1.ASSETS_NO = t2.ASSETS_NO
+		    LEFT OUTER JOIN TBASS_ASSETS_CL t3
+		      ON t2.ASSETS_CL_CODE = t3.ASSETS_CL_CODE
+		WHERE 1=1
+		  AND NVL(t1.DISUSE_CONFM_AT, '0') = '1'	/*승인된 계획만*/
+		]]>	
+		<isNotEmpty property="DISUSE_PROCESS_AT">
+		  AND NVL(t1.DISUSE_PROCESS_AT, '0') = #DISUSE_PROCESS_AT#
+		</isNotEmpty>
+		  AND t1.REQST_YEAR = #REQST_YEAR#
+		  AND t1.ODR = #ODR#
+		ORDER BY T1.ASSETS_NO
+	</select>
+    
+	<!-- 불용품관리상세 수정-->
+	<update id="ASS030100DAO.atldManageDetailU" parameterClass="java.util.HashMap">
+        <![CDATA[
+          UPDATE    TBASS_ATLD_MANAGE_DETAIL
+          SET       DISUSE_SE_CODE       = #DISUSE_SE_CODE#
+                   ,DISUSE_PROCESS_AT    = NVL(#DISUSE_PROCESS_AT#,'0')
+                   ,DISUSE_PROCESS_DE    = #DISUSE_PROCESS_DE#
+                   ,CHIT_NO              = #CHIT_NO#     
+                   ,UPDUSR_ID            = #S_USER_ID#
+                   ,UPDT_DT              = SYSDATE                  
+          WHERE  	REQST_YEAR 	  = #REQST_YEAR#
+          AND       ODR           = #ODR#
+          AND       ASSETS_NO     = #ASSETS_NO#      
+        ]]>
+	</update>
+    
+	<!-- 불용품회계계정 등록 -->
+	<insert id="ASS030100DAO.atldAccnutAcntC" parameterClass="java.util.HashMap">
+		INSERT INTO TBASS_ATLD_ACCNUT_ACNT (
+			 REQST_YEAR
+			,ODR
+			,ASSETS_NO
+			,SEQ
+			,ACCNUT_YEAR
+			,ACCNUT_ACNT_CODE
+			,DEBTOR_AMOUNT
+			,CRDIT_AMOUNT
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		) VALUES (
+			 #REQST_YEAR#
+			,#ODR#
+			,#ASSETS_NO#
+			,(SELECT NVL(MAX(SEQ),0)+1 AS SEQ FROM   TBASS_ATLD_ACCNUT_ACNT WHERE  REQST_YEAR = #REQST_YEAR# AND  ODR = #ODR# AND  ASSETS_NO = #ASSETS_NO#)
+			,#ACCNUT_YEAR#
+			,#ACCNUT_ACNT_CODE#
+			,#DEBTOR_AMOUNT#
+			,#CRDIT_AMOUNT#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+	
+	<!-- 불용품회계계정 수정 -->
+	<update id="ASS030100DAO.atldAccnutAcntU" parameterClass="java.util.HashMap">
+		UPDATE TBASS_ATLD_ACCNUT_ACNT
+		SET
+			 ACCNUT_YEAR            = #ACCNUT_YEAR#      
+			,ACCNUT_ACNT_CODE       = #ACCNUT_ACNT_CODE#
+			,DEBTOR_AMOUNT          = #DEBTOR_AMOUNT#         
+			,CRDIT_AMOUNT           = #CRDIT_AMOUNT#         
+			,UPDUSR_ID              = #S_USER_ID#       
+			,UPDT_DT                = SYSDATE           
+		WHERE REQST_YEAR 		= #REQST_YEAR#
+		  AND ODR				= #ODR#
+		  AND ASSETS_NO         = #ASSETS_NO#
+		  AND SEQ				= #SEQ#	
+	</update>
+	
+	<!-- 불용품회계계정 삭제 -->
+	<delete id="ASS030100DAO.atldAccnutAcntD" parameterClass="java.util.HashMap">
+		DELETE FROM TBASS_ATLD_ACCNUT_ACNT
+		WHERE REQST_YEAR 		= #REQST_YEAR#
+		  AND ODR				= #ODR#
+		  AND ASSETS_NO         = #ASSETS_NO#
+		  AND SEQ				= #SEQ#	
+	</delete>
+
+    <!-- 전표번호 채번 -->
+	<select id="ASS030100DAO.chitNo" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT SFACC_CHIT_NO(#DISUSE_PROCESS_DE#, #S_USER_ID#) AS CHIT_NO
+		FROM DUAL
+	</select>
+	
+	<!-- 전표마스터 등록 -->
+	<insert id="ASS030100DAO.chitMastrC" parameterClass="java.util.HashMap">
+		INSERT INTO TBACC_CHIT_MASTR
+		(
+			 ACCNUT_YEAR
+			,CHIT_NO
+			,DECSN_YEAR
+			,DECSN_NO
+			,CHIT_DE
+			,CHIT_SE
+			,CHIT_KND
+			,CPTAL_EXPNDTR_DE
+			,SUMRY_1
+			,SUMRY_2
+			,CHIT_CONFM_AT
+			,CHIT_TY
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		) VALUES (
+			 #REQST_YEAR#
+			,#CHIT_NO#
+			,NULL
+			,NULL
+			,#DISUSE_PROCESS_DE#
+			,'3'
+			,NULL
+			,#DISUSE_PROCESS_DE#
+			,#SUMRY_1#
+			,NULL
+			,'0'
+			,NULL
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+	
+	<!-- 전표상세 등록 -->
+	<insert id="ASS030100DAO.chitDetailC" parameterClass="java.util.HashMap">
+		INSERT INTO TBACC_CHIT_DETAIL
+		(
+		     ACCNUT_YEAR
+		    ,CHIT_NO
+		    ,SEQ
+		    ,ACCNUT_ACNT_CODE
+		    ,DEBTOR_AMOUNT
+		    ,CRDIT_AMOUNT
+		    ,BCNC_CODE
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		    ,FNNC_INSTT_CODE
+		    ,ACNUTNO
+		    ,RVS_JRNLZ_CHIT_NO
+		    ,RVS_JRNLZ_CHIT_SEQ
+		) VALUES (
+			 #ACCNUT_YEAR#
+			,#CHIT_NO#
+			,(SELECT NVL(MAX(SEQ),0)+1 FROM TBACC_CHIT_DETAIL WHERE ACCNUT_YEAR = #ACCNUT_YEAR# AND CHIT_NO = #CHIT_NO#)
+			,#ACCNUT_ACNT_CODE#
+			,#DEBTOR_AMOUNT#
+			,#CRDIT_AMOUNT#
+			,NULL
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID# 
+			,SYSDATE 
+			,NULL
+			,NULL
+			,NULL
+			,NULL
+		)
+	</insert>
+	
+	<delete id="ASS030100DAO.chitMastrD" parameterClass="java.util.HashMap">
+		DELETE FROM TBACC_CHIT_MASTR
+		WHERE 1=1
+		  AND ACCNUT_YEAR = #ACCNUT_YEAR#
+		  AND CHIT_NO = #CHIT_NO#
+	</delete>
+	
+	<delete id="ASS030100DAO.chitDetailD" parameterClass="java.util.HashMap">
+		DELETE FROM TBACC_CHIT_DETAIL
+		WHERE 1=1
+		  AND ACCNUT_YEAR = #ACCNUT_YEAR#
+		  AND CHIT_NO = #CHIT_NO#
+		  AND SEQ = #SEQ#
+	</delete>
+</sqlMap>

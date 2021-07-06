@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN040302_SQL">	
+	
+	<!-- 브랜치 일자별 최종잔액 내역조회 -->
+	<select id="FUN040302DAO.selectCb2CmstraList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*FUN040302DAO.selectCb2CmstraList*/ ]]>
+        <![CDATA[
+            WITH TEMP1 AS(
+                    SELECT  ACCT_NO
+                          , MAX(ACCT_TXDAY) as ACCT_TXDAY
+                    FROM    NH_ACCT_HIS
+                    WHERE ACCT_TXDAY <= #SEARCH_DAY#
+                    GROUP BY ACCT_NO
+            )
+            , TEMP2 AS(
+		            SELECT  T1.ACCT_NO
+		                  , T1.ACCT_TXDAY
+		                  , max(ACCT_TXDAY_SEQ) as ACCT_TXDAY_SEQ
+		            FROM    NH_ACCT_HIS T1
+		                  ,TEMP1 T2
+		            WHERE T1.ACCT_NO = T2.ACCT_NO
+		              AND T1.ACCT_TXDAY = T2.ACCT_TXDAY
+		            GROUP BY T1.ACCT_NO, T1.ACCT_TXDAY
+            )
+			SELECT TO_CHAR(TO_DATE(T3.ACCT_TXDAY, 'YYYYMMDD'),'YYYY-MM-DD') AS REMIT_DATETIME
+			     , T5.ACNUTNO                                                     AS OUT_ACCTNO
+			     , T3.TX_CUR_BAL                                                  AS REMIT_CURBAL
+			     , T5.ACNUT_NM                                                    AS ACNUT_NM
+			     , T5.ACNUT_SE                                                    AS SE
+			     , T6.FNNC_INSTT_CODE_NM                                          AS BANK_NM
+			     , T7.DEPT_NM
+			FROM NH_ACCT_HIS T3
+			   , TEMP2 T4
+			   , TBFUN_BRANCH_ACNUT T5
+			LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE T6
+			        ON T5.BANK_CODE       = T6.FNNC_INSTT_CODE
+			LEFT OUTER JOIN VWHRM_DEPT T7
+			        ON T5.DEPT_CODE = T7.DEPT_CODE
+			WHERE 1=1
+			AND T3.ACCT_NO      = T4.ACCT_NO
+			AND T3.ACCT_TXDAY     = T4.ACCT_TXDAY
+			AND T3.ACCT_TXDAY_SEQ = T4.ACCT_TXDAY_SEQ
+			AND TRIM(REPLACE(T3.ACCT_NO, '-', ''))  = TRIM(REPLACE(T5.ACNUTNO, '-', ''))
+			AND T5.USE_AT = '1'
+	    ]]>
+		<isNotEmpty property="DEPT_CODE">
+		       AND T5.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="BANK_CD">
+		       AND T5.BANK_CODE = #BANK_CD#
+		</isNotEmpty>
+		<isNotEmpty property="ACNUT_SE">			/* 계좌구분 	*/
+		  	  AND T5.ACNUT_SE = #ACNUT_SE#
+		</isNotEmpty>
+		<![CDATA[
+			 ORDER BY T5.BANK_CODE, T3.ACCT_TXDAY, T3.ACCT_NO
+		]]>
+	</select>
+	
+	<!-- 브랜치 자금집금 내역조회 -->
+	<select id="FUN040302DAO.selectCb2CmstraList1" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*FUN040302DAO.selectCb2CmstraList1*/ ]]>
+        <![CDATA[
+			SELECT A.REMIT_DAY         AS REMIT_DAY
+			       ,A.SEQ              AS SEQ
+			       ,B.BANK_NM          AS BANK_NM
+			       ,CASE
+			          WHEN B.SE = '01' THEN '수입원'
+			          WHEN B.SE = '02' THEN '지출원'
+			          WHEN B.SE = '03' THEN '국비'
+			          WHEN B.SE = '04' THEN '기타'
+			          ELSE NULL
+			        END                AS SE
+			       ,TRIM(A.OUT_ACCTNO) AS OUT_ACCTNO
+			       ,B.ACNUT_NM         AS ACNUT_NM
+			       ,A.REMIT_AMT        AS REMIT_AMT
+			       ,A.REMIT_CURBAL     AS REMIT_CURBAL
+			       ,A.FEE              AS FEE
+			       ,TO_CHAR(TO_DATE(A.REMIT_DATETIME, 'YYYYMMDDHH24MISS'),'YYYY-MM-DD HH24:MI:SS') AS REMIT_DATETIME
+			  FROM CB2_CMSTRA A
+			       ,TBFUN_BRANCH_ACNUT B
+			 WHERE TRIM(A.OUT_ACCTNO) = REPLACE(B.ACNUTNO, '-', '')
+			   AND A.REMIT_DAY = #SEARCH_DAY#
+	    ]]>
+		<isNotEmpty property="ACNUT_SE">			/* 계좌구분 	*/
+		  	   AND B.SE = #ACNUT_SE#
+		</isNotEmpty>
+		<![CDATA[
+			 ORDER BY A.REMIT_DAY
+			          ,B.ACNUTNO
+			          ,A.SEQ 
+		]]>
+	</select>	
+	
+</sqlMap>

@@ -1,0 +1,995 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP050300_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 설  명  : 중토위자료생성
+		  작성자 : 변승우 -->
+
+	<!-- 중토위자료 세부 데이터 내역 조회 -->
+	<select id="CMP050300DAO.selectDetailDataList"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+	    SELECT
+	        DETAIL_DATA.*
+	        ,BSNS_TYPE.DATA AS BSNS_TY_NM
+	    FROM
+	    (SELECT
+	        A.EMPNM AS CHARGER
+	        ,'053-350-'||A.LXTN_NO AS TELNO
+	        ,A.TELNO_2 AS MBTLNO
+	        ,A.EMAIL
+	        ,SUBSTR(B.BSNS_AREA_CODE, 6, 2) AS BSNS_TYPE_CODE
+	    FROM TBHRM_HR_MASTR A, TBCMP_REWARD_BSNS_DSTRC B
+	    WHERE B.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+	    AND A.EMPNO(+) = B.EMPNO_1
+	    )DETAIL_DATA,(
+			SELECT 
+				 t1.CODE
+				,DECODE(t1.SE_ACC_CODE,'2',t2.BSNS_NM,t1.CODE_NM) AS DATA
+			FROM TBACC_SE_ACCNUT_ACNT_TY_MANAGE t1
+			     LEFT OUTER JOIN TBPRJ_BSNS_CODE t2
+			     ON t1.CODE = t2.BSNS_CODE
+			WHERE SE_ACC_CODE = 4 
+
+	    )BSNS_TYPE
+	    WHERE DETAIL_DATA.BSNS_TYPE_CODE = BSNS_TYPE.CODE
+	</select>
+
+	<select id="CMP050300DAO.aceptncAdjdcCnt" resultClass="int" parameterClass="java.util.Map">
+		SELECT COUNT(*)
+		FROM TBCMP_ACEPTNC_ADJDC
+		WHERE  BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND REWARD_ODR = #REWARD_ODR#
+	</select>
+
+	<insert id="CMP050300DAO.aceptncAdjdcC" parameterClass="java.util.Map">
+		<![CDATA[
+		INSERT INTO TBCMP_ACEPTNC_ADJDC(
+			BSNS_AREA_CODE
+			,REWARD_ODR
+			,BSNS_TY_NM
+			,SN
+			,OPERTN_INSTT_NO
+			,MOGAHA_INSTT_NO
+			,CHARGER
+			,EMAIL
+			,TELNO
+			,MBTLNO
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)VALUES(
+			#BSNS_AREA_CODE#
+			,#REWARD_ODR#
+			,#BSNS_TY_NM#
+			,#SN#
+			,#OPERTN_INSTT_NO#
+			,#MOGAHA_INSTT_NO#
+			,#CHARGER#
+			,#EMAIL#
+			,#TELNO#
+			,#MBTLNO#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+		]]>
+	</insert>
+
+
+	<!-- 사용자 사업지구 수정 -->
+	<update id="CMP050300DAO.aceptncAdjdcU" parameterClass="java.util.Map">
+		<![CDATA[
+		UPDATE TBCMP_ACEPTNC_ADJDC
+	  		SET
+			 BSNS_TY_NM=#BSNS_TY_NM#
+			,SN=#SN#
+			,OPERTN_INSTT_NO=#OPERTN_INSTT_NO#
+			,MOGAHA_INSTT_NO=#MOGAHA_INSTT_NO#
+			,CHARGER=#CHARGER#
+			,EMAIL=#EMAIL#
+			,TELNO=#TELNO#
+			,MBTLNO=#MBTLNO#
+			,UPDT_DT = SYSDATE
+		WHERE  BSNS_AREA_CODE = #BSNS_AREA_CODE#
+		AND REWARD_ODR = #REWARD_ODR#
+		]]>
+	</update>
+
+
+	<!-- 접수메인 -->
+	<select id="CMP050300DAO.tab01List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+		SELECT
+			SUBSTR(#sn#, 1, 4) AS SEQ,
+			CASE WHEN #bsnsAreaCode# = '1061111' THEN TO_CHAR(SYSDATE, 'yyyymmddhhss')
+			     ELSE #mogahaInsttNo# || TO_CHAR(SYSDATE, 'yyyy') || LPAD(#sn#, 4, '0') || RTRIM(TO_CHAR(0 + SUBSTR(TO_CHAR(SYSDATE, 'yyyy'), 4, 1) + SUBSTR(LPAD(#sn#, 4, '0'), 1, 1) ), 1)
+			END CertNo,
+			#opertnInsttNo# AS CustKey,
+			#bsnsAreaNm# AS Title,
+			'10' AS CATEGORY,
+			CASE WHEN #bsnsAreaCode# = '1061111' THEN '00' ELSE '4' END AS WorkInfo,
+			#bsnsTypeNm# AS Material,
+			'화성' AS Region,
+			d.BSNS_CONFM_DE AS Approval,
+			d.BSNS_BGNDE AS ApprovalBegin,
+			d.CONFM_DE ApprovalEnd,
+			'화성도시공사' AS CustName,
+			CASE WHEN d.BSNS_AREA_CODE = '1461111' THEN '사이언스파크사업단' ELSE d.BSNS_AREA_NM END CustDocID,
+			#charger# AS ChargeName,
+			#telNo# AS ChargeTel,
+			#mbtlno# AS ChargeHP,
+			#email# AS ChargeEMail,
+			SUM(b.RWMNY) AS CustPrice,
+			SUM( CASE WHEN std.THING_CL = '00' THEN 1 ELSE 0 END ) AS LandCount,
+			SUM( CASE WHEN std.THING_CL = '00' THEN b.AR ELSE 0 END ) AS LandArea,
+			COUNT( DISTINCT CASE WHEN std.THING_CL = '00' THEN b.OWNER_NO ELSE NULL END ) AS LandOwners,
+			SUM(CASE WHEN std.THING_CL = '00' THEN
+			                     ( SELECT COUNT (1)
+			                         FROM TBCMP_THING_PARTCPNT r
+			                        WHERE r.BSNS_AREA_CODE = std.BSNS_AREA_CODE
+			                          AND r.THING_SN = std.THING_SN )
+			    	 ELSE 0
+			   	END) LandRights,
+	       SUM( CASE WHEN std.THING_CL = '00' THEN b.RWMNY ELSE 0 END ) AS LandPrice,
+	       ' ' AS JudgmentDate,
+	       ' ' Bigo
+		FROM TBCMP_THING_WTNNC std,
+		     TBCMP_THING_OWNER b,
+		     TBCMP_OWNER c,
+		     TBCMP_REWARD_BSNS_DSTRC d
+		WHERE std.BSNS_AREA_CODE = d.BSNS_AREA_CODE
+	      AND std.BSNS_AREA_CODE = b.BSNS_AREA_CODE
+	      AND std.THING_SN = b.THING_SN
+	      AND b.BSNS_AREA_CODE = c.BSNS_AREA_CODE
+	      AND b.OWNER_NO = c.OWNER_NO
+	      AND NVL (b.RQEST_SE, '0') = '0'
+	      AND std.BSNS_AREA_CODE = #bsnsAreaCode#
+	      <isNotEmpty property="locplcCode">
+	      AND std.LOCPLC_CODE = #locplcCode#
+	      </isNotEmpty>
+	      <isNotEmpty property="lnm">
+	      AND std.LNM = #lnm#
+	      </isNotEmpty>
+	      <isNotEmpty property="slno">
+	      AND std.SLNO = #slno#
+	      </isNotEmpty>
+	      <isNotEmpty property="nm">
+	      AND c.OWNER_NM LIKE '%' || #nm# || '%'
+	      </isNotEmpty>
+	      <isNotEmpty property="thingCl">
+	      AND INSTR(#thingCl#, std.THING_CL) > 0
+	      </isNotEmpty>
+	      <isNotEmpty property="aceptncAdjdcOdr">
+	      AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(b.ACEPTNC_ADJDC_ODR,0) END LIKE #aceptncAdjdcOdr#
+	      </isNotEmpty>
+		GROUP BY d.BSNS_AREA_CODE, d.BSNS_AREA_NM, d.BSNS_CONFM_DE, d.BSNS_BGNDE, d.CONFM_DE
+	 </select>
+
+ 	 <!-- 소유자 -->
+	<select id="CMP050300DAO.tab02List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+		SELECT owner_id AS ID,
+			#sn# AS MasterID,
+			#opertnInsttNo# AS CustKey,
+			owner_name AS NAME,
+			ZipCode,
+			Addr1,
+			Addr2,
+			SilZipCode,
+			SilAddr1,
+			SilAddr2,
+			' ' AS Bigo
+		FROM (
+			SELECT DISTINCT
+				c.OWNER_NO OWNER_ID,
+				c.OWNER_NM AS OWNER_NAME,
+				c.ZIP ZipCode,
+				c.ADRES ADDR1,
+				c.ADRES_DETAIL ADDR2,
+				CASE WHEN c.ZIP_DM_1 IS NULL THEN
+				          CASE WHEN c.ZIP_DM_2 IS NULL THEN c.ZIP ELSE c.ZIP_DM_2 END
+				     ELSE c.ZIP_DM_1
+				END SilZipCode,
+				CASE WHEN c.ADRES_DM_1 IS NULL THEN
+				          CASE WHEN c.ADRES_DM_2 IS NULL THEN c.ADRES ELSE c.ADRES_DM_2 END
+				     ELSE c.ADRES_DM_1
+				END SilAddr1,
+				CASE WHEN c.ADRES_DETAIL_DM_1 IS NULL THEN
+				          CASE WHEN c.ADRES_DETAIL_DM_2 IS NULL THEN c.ADRES_DETAIL ELSE c.ADRES_DETAIL_DM_2 END
+				     ELSE c.ADRES_DETAIL_DM_1
+				END SilAddr2
+			FROM TBCMP_THING_WTNNC A,
+			     TBCMP_THING_OWNER b,
+			     TBCMP_OWNER c
+			WHERE A.BSNS_AREA_CODE = b.BSNS_AREA_CODE
+            AND A.THING_SN = b.THING_SN
+            AND b.BSNS_AREA_CODE = c.BSNS_AREA_CODE
+            AND b.OWNER_NO = c.OWNER_NO
+            AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+            <isNotEmpty property="locplcCode">
+            AND A.LOCPLC_CODE = #locplcCode#
+            </isNotEmpty>
+			<isNotEmpty property="lnm">
+			AND A.LNM = #lnm#
+			</isNotEmpty>
+	      	<isNotEmpty property="slno">
+	      	AND A.SLNO = #slno#
+	      	</isNotEmpty>
+	      	<isNotEmpty property="nm">
+	      	AND c.OWNER_NM LIKE '%' || #nm# || '%'
+	      	</isNotEmpty>
+            AND NVL (b.RQEST_SE, '0') = '0'
+            <isNotEmpty property="thingCl">
+            AND INSTR(#thingCl#, A.THING_CL) > 0
+            </isNotEmpty>
+           	<isNotEmpty property="aceptncAdjdcOdr">
+           	AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(b.ACEPTNC_ADJDC_ODR,0) END LIKE #aceptncAdjdcOdr#
+           	</isNotEmpty>
+			)
+		ORDER BY owner_name
+	</select>
+
+
+ 	<!-- 관계인 -->
+	<select id="CMP050300DAO.tab03List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+		SELECT
+			rel_id AS ID,
+			#sn# AS MasterID,
+			#opertnInsttNo# AS CustKey,
+			rel_name AS NAME,
+			' ' gkr,
+			ZipCode,
+			Addr1,
+			Addr2,
+			SilZipCode,
+			SilAddr1,
+			SilAddr2,
+			' ' Bigo
+		FROM (
+			SELECT DISTINCT
+				c.OWNER_NO rel_id,
+				c.OWNER_NM AS rel_name,
+				c.ZIP ZipCode,
+				c.ADRES Addr1,
+				c.ADRES_DETAIL Addr2,
+				CASE WHEN c.ZIP_DM_1 IS NULL THEN
+				          CASE WHEN c.ZIP_DM_2 IS NULL THEN c.ZIP ELSE c.ZIP_DM_2 END
+				     ELSE c.ZIP_DM_1
+				END SilZipCode,
+				CASE WHEN c.ADRES_DM_1 IS NULL THEN
+				          CASE WHEN c.ADRES_DM_2 IS NULL THEN c.ADRES ELSE c.ADRES_DM_2 END
+				     ELSE c.ADRES_DM_1
+				END SilAddr1,
+				CASE WHEN c.ADRES_DETAIL_DM_1 IS NULL THEN
+				          CASE WHEN c.ADRES_DETAIL_DM_2 IS NULL THEN c.ADRES_DETAIL ELSE c.ADRES_DETAIL_DM_2 END
+				     ELSE c.ADRES_DETAIL_DM_1
+				END SilAddr2
+			FROM TBCMP_THING_WTNNC A,
+			     TBCMP_THING_OWNER b,
+			     TBCMP_OWNER c,
+			     TBCMP_THING_PARTCPNT r
+			WHERE A.BSNS_AREA_CODE = b.BSNS_AREA_CODE
+			  AND A.THING_SN = b.THING_SN
+			  AND A.BSNS_AREA_CODE = c.BSNS_AREA_CODE
+			  AND A.BSNS_AREA_CODE = r.BSNS_AREA_CODE
+			  AND A.THING_SN = r.THING_SN
+			  AND b.OWNER_SN = r.OWNER_SN
+			  AND r.BSNS_AREA_CODE = c.BSNS_AREA_CODE
+			  AND r.PARTCPNT_NO = c.OWNER_NO
+			  AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+			<isNotEmpty property="locplcCode">
+			  AND A.LOCPLC_CODE = #locplcCode#
+			</isNotEmpty>
+			<isNotEmpty property="lnm">
+			AND A.LNM = #lnm#
+			</isNotEmpty>
+			<isNotEmpty property="slno">
+			AND A.SLNO = #slno#
+			</isNotEmpty>
+			<isNotEmpty property="nm">
+			AND c.OWNER_NM LIKE '%' || #nm# || '%'
+			</isNotEmpty>
+			AND NVL (b.RQEST_SE, '0') = '0'
+			<isNotEmpty property="thingCl">
+			AND INSTR(#thingCl#, A.THING_CL) > 0
+			</isNotEmpty>
+			<isNotEmpty property="aceptncAdjdcOdr">
+			AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(b.ACEPTNC_ADJDC_ODR,0) END LIKE #aceptncAdjdcOdr#
+			</isNotEmpty>
+			GROUP BY c.OWNER_NO, c.OWNER_NM, c.ZIP, c.ADRES, c.ADRES_DETAIL, c.ZIP_DM_1, c.ADRES_DM_1, c.ADRES_DETAIL_DM_1, c.ZIP_DM_2, c.ADRES_DM_2, c.ADRES_DETAIL_DM_2
+			)
+			ORDER BY rel_name, rel_id
+		</select>
+
+		<!-- 토지 -->
+		<select id="CMP050300DAO.tab04List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+			SELECT
+				ID,
+				#sn# MasterID,
+				ROWNUM AS seq,
+				#opertnInsttNo# AS CustKey,
+				SUBSTR(LEGALDONG_CODE, 1, 5) REG,
+				SUBSTR(LEGALDONG_CODE, 6, 5) EUB,
+				san,
+				bun1,
+				bun2,
+				'' bun3,
+				addr,
+				gm1,
+				gm2,
+				area,
+				PriceK
+			FROM (
+				SELECT DISTINCT
+					A.THING_SN AS ID,
+					CASE WHEN NVL(A.LNM_SE, '00') = '00' THEN '1' ELSE '2' END SAN,
+					LPAD(A.LNM, 4, '0') AS BUN1,
+					LPAD(A.SLNO, 4, '0') AS BUN2,
+					A.STRCT_STNDRD AS GM1,
+					A.NOW_USE_STTUS AS GM2,
+					A.AR_INCRPR area,
+					A.THING_UNTPC AS PriceK,
+					d.LEGALDONG_CODE,
+					d.addr
+				FROM TBCMP_THING_WTNNC A,
+				     TBCMP_THING_OWNER b,
+				     TBCMP_OWNER c,
+					( SELECT bb.BSNS_AREA_CODE,
+					         bb.LEGALDONG_CODE,
+					         bb.LOCPLC_CODE,
+					         CC.LOCPLC_NM addr
+					    FROM TBCMP_LOCPLC_INFO bb,
+					         TBCMP_LEGALDONG_CODE CC
+					   WHERE bb.LEGALDONG_CODE = CC.LEGALDONG_CODE
+					     AND bb.BSNS_AREA_CODE = #bsnsAreaCode#
+					) d
+				WHERE A.BSNS_AREA_CODE = b.BSNS_AREA_CODE
+				AND A.THING_SN = b.THING_SN
+				AND A.BSNS_AREA_CODE = c.BSNS_AREA_CODE
+				AND b.OWNER_NO = c.OWNER_NO
+				AND A.BSNS_AREA_CODE = d.BSNS_AREA_CODE
+				AND A.LOCPLC_CODE = d.LOCPLC_CODE
+				AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+				<isNotEmpty property="locplcCode">
+				AND A.LOCPLC_CODE = #locplcCode#
+				</isNotEmpty>
+				<isNotEmpty property="lnm">
+				AND A.LNM = #lnm#
+				</isNotEmpty>
+				<isNotEmpty property="slno">
+				AND A.SLNO = #slno#
+				</isNotEmpty>
+				<isNotEmpty property="nm">
+				AND c.OWNER_NM LIKE '%' || #nm# || '%'
+				</isNotEmpty>
+				AND A.THING_CL = '00'
+				<isNotEmpty property="aceptncAdjdcOdr">
+				AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(b.ACEPTNC_ADJDC_ODR,0) END LIKE #aceptncAdjdcOdr#
+				</isNotEmpty>
+				AND NVL (b.RQEST_SE, '0') = '0'
+			) zz
+			ORDER BY addr || ' ' || bun1 || '-' || bun2
+		</select>
+
+ 		<!-- 토지소유자&관계인관계 -->
+		<select id="CMP050300DAO.tab05List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+				SELECT LANDID AS ID,
+				       #sn# AS MASTERID,
+				       LANDID,
+				       GUBUN,
+				       #opertnInsttNo# AS CUSTKEY,
+				       PID,
+				       PNAME,
+				       RID,
+				       RNAME,
+				       RIGHTS,
+				       INTERESTS,
+				       KUMK,
+				       ' ' BUBINANAME,
+				       ' ' BUBINACODE,
+				       0 PRICEA,
+				       0 KUMA,
+				       ' ' BUBINBNAME,
+				       ' ' BUBINBCODE,
+				       0 PRICEB,
+				       0 KUMB,
+				       0 PRICEM,
+				       0 KUMM
+				  FROM ( SELECT DISTINCT
+				               A.THING_SN LANDID,
+				               'O' AS GUBUN,
+				               B.OWNER_NO PID,
+				               C.OWNER_NM AS PNAME,
+				               NULL RID,
+				               NULL RNAME,
+				               NULL RIGHTS,
+				               DECODE (NVL (TRIM (B.POSESN_QOTA), '1'), '1', '1/1', B.POSESN_QOTA) INTERESTS,
+				               B.RWMNY KUMK
+				          FROM TBCMP_THING_WTNNC A,
+				               TBCMP_THING_OWNER B,
+				               TBCMP_OWNER C
+				         WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				           AND A.THING_SN = B.THING_SN
+				           AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+				           AND B.OWNER_NO = C.OWNER_NO
+				           AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+				           AND A.THING_CL = '00'
+				         <isNotEmpty property="locplcCode">
+				         AND A.LOCPLC_CODE = #locplcCode#
+				         </isNotEmpty>
+						<isNotEmpty property="lnm">
+						AND A.LNM = #lnm#
+						</isNotEmpty>
+						<isNotEmpty property="slno">
+						AND A.SLNO  = #slno#
+						</isNotEmpty>
+						<isNotEmpty property="nm">
+						AND C.OWNER_NM LIKE '%' || #nm# || '%'
+						</isNotEmpty>
+						<isNotEmpty property="aceptncAdjdcOdr">
+						AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(b.ACEPTNC_ADJDC_ODR, 0) END LIKE #aceptncAdjdcOdr#
+						</isNotEmpty>
+				           AND NVL (B.RQEST_SE, '0') = '0'
+				         UNION ALL
+				        SELECT DISTINCT
+				               A.THING_SN LANDID,
+				               'R' AS GUBUN,
+				               C.OWNER_NO PID,
+				               C.OWNER_NM AS PNAME,
+				               D.PARTCPNT_SN RID,
+				               E.OWNER_NM AS RNAME,
+				               ( SELECT CODE_NM
+				                   FROM TBCOM_CMMN_CODE
+				                  WHERE GRP_CODE = 'CMP003'
+				                    AND CODE = RELATE_KND
+				               ) AS RIGHTS,
+				               DECODE (NVL (TRIM (B.POSESN_QOTA), '1'), '1', '1/1', B.POSESN_QOTA) INTERESTS,
+				               NULL AS KUMK
+				          FROM TBCMP_THING_WTNNC A,
+				               TBCMP_THING_OWNER B,
+				               TBCMP_OWNER C,
+				               TBCMP_THING_PARTCPNT D,
+				               TBCMP_OWNER E
+				         WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				           AND A.THING_SN = B.THING_SN
+				           AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+				           AND B.OWNER_NO = C.OWNER_NO
+				           AND B.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+				           AND B.THING_SN = D.THING_SN
+				           AND B.OWNER_SN = D.OWNER_SN
+				           AND D.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+				           AND D.PARTCPNT_NO = E.OWNER_NO
+				           AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+				           AND A.THING_CL = '00'
+				         <isNotEmpty property="locplcCode">
+				         AND A.LOCPLC_CODE = #locplcCode#
+				         </isNotEmpty>
+						<isNotEmpty property="lnm">
+						AND A.LNM = #lnm#
+						</isNotEmpty>
+						<isNotEmpty property="slno">
+						AND A.SLNO  = #slno#
+						</isNotEmpty>
+						<isNotEmpty property="nm">
+						AND C.OWNER_NM LIKE '%' || #nm# || '%'
+						</isNotEmpty>
+						<isNotEmpty property="aceptncAdjdcOdr">
+						AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(b.ACEPTNC_ADJDC_ODR, 0) END LIKE #aceptncAdjdcOdr#
+						</isNotEmpty>
+				           AND NVL (B.RQEST_SE, '0') = '0'
+				       ) AA
+				 ORDER BY LANDID, PID, GUBUN, RID
+			</select>
+
+
+	<!-- 지장물 -->
+		<select id="CMP050300DAO.tab06List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+			<![CDATA[
+                SELECT ID,
+                       ROWNUM AS SEQ,
+                       #sn# AS MASTERID,
+                       #opertnInsttNo# AS CUSTKEY,
+                       SUBSTR(LEGALDONG_CODE, 1, 5) REG,
+                       SUBSTR(LEGALDONG_CODE, 6, 5) EUB,
+                       SAN,
+                       BUN1,
+                       BUN2,
+                       ' ' BUN3,
+                       ADDR,
+                       AREA1,
+                       KIND,
+                       GUJO,
+                       CODEK,
+                       UNITK,
+                       PRICEK,
+                       LOT_ORD,
+                       GROUP_NO
+                  FROM ( SELECT DISTINCT
+                                A.THING_SN AS ID,
+                                CASE WHEN NVL(A.LNM_SE, '00') = '00' THEN '1' ELSE '2' END SAN,
+                                LPAD(A.LNM, 4, '0') AS BUN1,
+                                LPAD(A.SLNO, 4, '0') AS BUN2,
+                                D.ADDR,
+                                (CASE WHEN A.AR_LGSTR < 1 THEN '0' END ) || A.AR_LGSTR ||
+                                 (SELECT CODE_NM
+                                     FROM TBCOM_CMMN_CODE
+                                     WHERE GRP_CODE = 'CMP002'
+                                     AND CODE = A.UNIT)  AS AREA1,
+                                A.THING_NM AS KIND,
+                                A.STRCT_STNDRD AS GUJO,
+                                CASE A.REWARD_STLE
+                                     WHEN '0' THEN 'Z'
+                                     WHEN 'G' THEN 'I'
+                                     WHEN 'B' THEN ( CASE WHEN A.THING_UNTPC > 0 THEN 'I' ELSE 'U' END)
+                                     ELSE A.REWARD_STLE
+                                END CODEK,
+                                CASE A.REWARD_STLE
+                                     WHEN '0' THEN '계산(단가)'
+                                     WHEN 'G' THEN '일괄'
+                                     WHEN 'B' THEN (CASE WHEN A.THING_UNTPC > 0 THEN '일괄' ELSE '↑' END)
+                                     ELSE ( SELECT CODE_NM
+                                              FROM TBCOM_CMMN_CODE
+                                             WHERE GRP_CODE = 'CMP007'
+                                               AND CODE = A.REWARD_STLE )
+                                END UNITK,
+                                CASE WHEN A.REWARD_STLE = '0' THEN A.THING_UNTPC ELSE A.RWMNY END PRICEK,
+                                D.ADDR || ' ' || LPAD (A.LNM, 4, '0') || '-' || LPAD (A.SLNO, 4, '0') AS LOT_ORD,
+                                (SELECT MSTK_PREPAR_VALUE
+                                   FROM TBCOM_CMMN_CODE
+                                  WHERE GRP_CODE = 'CMP001'
+                                    AND CODE = A.THING_CL
+                                ) AS OBJ_ORD,
+                                A.BNDE_APPLC_GROUP GROUP_NO,
+                                A.THING_NM OBJ_NAME,
+                                A.RWMNY AMT,
+                                A.REWARD_STLE DIV,
+                                D.LEGALDONG_CODE
+                          FROM TBCMP_THING_WTNNC A,
+                               TBCMP_THING_OWNER b,
+                               TBCMP_OWNER c,
+                                ( SELECT BB.BSNS_AREA_CODE,
+                                         BB.LEGALDONG_CODE,
+                                         BB.LOCPLC_CODE,
+                                         CC.LOCPLC_NM ADDR
+                                    FROM TBCMP_LOCPLC_INFO BB,
+                                         TBCMP_LEGALDONG_CODE CC
+                                   WHERE BB.LEGALDONG_CODE = CC.LEGALDONG_CODE
+                                     AND BB.BSNS_AREA_CODE = #bsnsAreaCode#
+                                ) D
+                          WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+                            AND A.THING_SN = B.THING_SN
+                            AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+                            AND B.OWNER_NO = C.OWNER_NO
+                            AND A.LOCPLC_CODE = D.LOCPLC_CODE
+                            AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+                            AND NVL (B.RQEST_SE, '0') = '0'
+                    ]]>
+                            <isNotEmpty property="locplcCode">
+                            AND A.LOCPLC_CODE = #locplcCode#
+                            </isNotEmpty>
+                            <isNotEmpty property="lnm">
+                            AND A.LNM = #lnm#
+                            </isNotEmpty>
+                            <isNotEmpty property="slno">
+                            AND A.SLNO  = #slno#
+                            </isNotEmpty>
+                            <isNotEmpty property="nm">
+                            AND C.OWNER_NM LIKE '%' || #nm# || '%'
+                            </isNotEmpty>
+                            <isNotEmpty property="aceptncAdjdcOdr">
+                            AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(b.ACEPTNC_ADJDC_ODR,0) END LIKE #aceptncAdjdcOdr#
+                            </isNotEmpty>
+                            <isNotEmpty property="thingCl">
+                            AND INSTR(#thingCl#, A.THING_CL) > 0
+                            </isNotEmpty>
+                        <![CDATA[
+                             AND A.THING_CL <> '00'
+                          ORDER BY LOT_ORD, DIV, GROUP_NO, AMT DESC, OBJ_ORD, OBJ_NAME
+                       )
+					]]>
+		</select>
+
+
+				<!-- 지장물 소유자&관계인 관계 -->
+		<select id="CMP050300DAO.tab07List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+			<![CDATA[
+				SELECT OBJECTID AS ID,
+				       #sn# AS MASTERID,
+				       OBJECTID,
+				       GUBUN,
+				       #opertnInsttNo# AS CUSTKEY,
+				       PID,
+				       PNAME,
+				       RID,
+				       RNAME,
+				       RIGHTS,
+				       INTERESTS,
+				       KUMK,
+				       ' ' BUBINANAME,
+				       ' ' BUBINACODE,
+				       0 PRICEA,
+				       0 KUMA,
+				       ' ' BUBINBNAME,
+				       ' ' BUBINBCODE,
+				       0 PRICEB,
+				       0 KUMB,
+				       0 PRICEM,
+				       0 KUMM
+				  FROM ( SELECT DISTINCT
+				                A.THING_SN AS OBJECTID,
+				                'O' AS GUBUN,
+				                B.OWNER_NO AS PID,
+				                C.OWNER_NM AS PNAME,
+				                NULL RID,
+				                NULL RNAME,
+				                NULL RIGHTS,
+				                B.POSESN_QOTA AS INTERESTS,
+				                B.RWMNY AS KUMK
+				           FROM TBCMP_THING_WTNNC A,
+				                TBCMP_THING_OWNER B,
+				                TBCMP_OWNER C
+				          WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				            AND A.THING_SN = B.THING_SN
+				            AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+				            AND B.OWNER_NO = C.OWNER_NO
+				            AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+				            AND A.THING_CL <> '00'
+				            AND NVL (B.RQEST_SE, '0') = '0'
+				    ]]>
+				            <isNotEmpty property="locplcCode">
+				            AND A.LOCPLC_CODE = #locplcCode#</isNotEmpty>
+							<isNotEmpty property="lnm">
+							AND A.LNM = #lnm#
+							</isNotEmpty>
+							<isNotEmpty property="slno">
+							AND A.SLNO  = #slno#
+							</isNotEmpty>
+							<isNotEmpty property="nm">
+							AND C.OWNER_NM LIKE '%' || #nm# || '%'
+							</isNotEmpty>
+							<isNotEmpty property="aceptncAdjdcOdr">
+							AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(B.ACEPTNC_ADJDC_ODR, 0) END LIKE #aceptncAdjdcOdr#
+							</isNotEmpty>
+				   			<isNotEmpty property="thingCl">
+				   			AND INSTR(#thingCl#, A.THING_CL) <![CDATA[>]]> 0
+				   			</isNotEmpty>
+					<![CDATA[
+				          UNION ALL
+				         SELECT A.THING_SN AS OBJECTID,
+				                'R' AS GUBUN,
+				                B.OWNER_NO OWNER_ID,
+				                C.OWNER_NM AS OWNER_NAME,
+				                D.PARTCPNT_NO RID,
+				                E.OWNER_NM RNAME,
+				                ( SELECT CODE_NM
+				                    FROM TBCOM_CMMN_CODE
+				                   WHERE GRP_CODE = 'CMP003'
+				                     AND CODE = D.RELATE_KND
+				                ) AS RIGHTS,
+				                NULL AS INTERESTS,
+				                NULL AS KUMK
+				           FROM TBCMP_THING_WTNNC A,
+				                TBCMP_THING_OWNER B,
+				                TBCMP_OWNER C,
+				                TBCMP_THING_PARTCPNT D,
+				                TBCMP_OWNER E
+				          WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				            AND A.THING_SN = B.THING_SN
+				            AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+				            AND B.OWNER_NO = C.OWNER_NO
+				            AND B.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+				            AND B.THING_SN = D.THING_SN
+				            AND B.OWNER_SN = D.OWNER_SN
+				            AND A.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+				            AND D.PARTCPNT_NO = E.OWNER_NO
+				            AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+				            AND A.THING_CL <> '00'
+				            AND NVL (B.RQEST_SE, '0') = '0'
+				           ]]>
+				            <isNotEmpty property="locplcCode">
+				            AND A.LOCPLC_CODE = #locplcCode#
+				            </isNotEmpty>
+							<isNotEmpty property="lnm">
+							AND A.LNM = #lnm#
+							</isNotEmpty>
+							<isNotEmpty property="slno">
+							AND A.SLNO  = #slno#
+							</isNotEmpty>
+							<isNotEmpty property="nm">
+							AND C.OWNER_NM LIKE '%' || #nm# || '%'
+							</isNotEmpty>
+							<isNotEmpty property="aceptncAdjdcOdr">
+							AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(B.ACEPTNC_ADJDC_ODR, 0) END LIKE #aceptncAdjdcOdr#
+							</isNotEmpty>
+				            <isNotEmpty property="thingCl">
+				            AND INSTR(#thingCl#, A.THING_CL) <![CDATA[>]]>  0
+				            </isNotEmpty>
+                         ORDER BY OBJECTID, PID, GUBUN DESC, RID
+				       ) AA
+		</select>
+
+
+	<!-- 소유권이외의권리 -->
+		<select id="CMP050300DAO.tab08List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+			<![CDATA[
+				SELECT DISTINCT
+				       ID,
+				       #sn# AS MASTERID,
+				       ROWNUM AS SEQ,
+				       #opertnInsttNo# AS CUSTKEY,
+				       SUBSTR(LEGALDONG_CODE, 1, 4) REG,
+				       SUBSTR(LEGALDONG_CODE, 5, 4) EUB,
+				       SAN,
+				       BUN1,
+				       BUN2,
+				       ' ' BUN3,
+				       ADDR,
+				       AREA1,
+				       KIND,
+				       GUJO,
+				       ' ' CODEK,
+				       ' ' UNITK,
+				       PRICEK,
+				       0 AS PRICEA,
+				       0 AS PRICEB,
+				       0 AS PRICEM
+				  FROM ( SELECT DISTINCT
+				                A.THING_SN AS ID,
+				                A.LNM_SE AS SAN,
+				                LPAD(A.LNM, 4, '0') AS BUN1,
+				                LPAD(A.SLNO, 4, '0') AS BUN2,
+				                DD.ADDR AS ADDR,
+				                DD.LEGALDONG_CODE,
+				                B.AR AS AREA1,
+				                A.THING_NM AS KIND,
+				                A.STRCT_STNDRD AS GUJO,
+				                A.THING_UNTPC AS PRICEK,
+				                DD.ADDR || ' ' || LPAD (A.LNM, 4, '0') || '-' || LPAD (A.SLNO, 4, '0') AS LOT_ORD,
+				                A.REWARD_STLE,
+				                A.BNDE_APPLC_GROUP,
+				                A.RWMNY,
+				                (SELECT CODE_NM
+				                   FROM TBCOM_CMMN_CODE
+				                  WHERE GRP_CODE = 'CMP001'
+				                    AND CODE = A.THING_CL
+				                ) AS OBJ_ORD
+				           FROM TBCMP_THING_WTNNC A,
+				                TBCMP_THING_OWNER B,
+				                TBCMP_OWNER C,
+				                ( SELECT BB.BSNS_AREA_CODE,
+				                         BB.LEGALDONG_CODE,
+				                         BB.LOCPLC_CODE,
+				                         CC.LOCPLC_NM ADDR
+				                    FROM TBCMP_LOCPLC_INFO BB,
+				                        	 TBCMP_LEGALDONG_CODE CC
+				                   WHERE BB.LEGALDONG_CODE = CC.LEGALDONG_CODE
+				                     AND BB.BSNS_AREA_CODE = #bsnsAreaCode#
+				                ) DD
+				          WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				            AND A.THING_SN = B.THING_SN
+				            AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+				            AND B.OWNER_NO = C.OWNER_NO
+				            AND A.BSNS_AREA_CODE = DD.BSNS_AREA_CODE
+				            AND A.LOCPLC_CODE = DD.LOCPLC_CODE
+				            AND NVL (B.RQEST_SE, '0') = '0'
+				            AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+				             ]]>
+							<isNotEmpty property="locplcCode">
+							AND A.LOCPLC_CODE = #locplcCode#
+							</isNotEmpty>
+							<isNotEmpty property="lnm">
+							AND A.LNM = #lnm#
+							</isNotEmpty>
+							<isNotEmpty property="slno">
+							AND A.SLNO  = #slno#
+							</isNotEmpty>
+							<isNotEmpty property="nm">
+							AND C.OWNER_NM LIKE '%' || #nm# || '%'
+							</isNotEmpty>
+				            <isNotEmpty property="aceptncAdjdcOdr">
+				            AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(B.ACEPTNC_ADJDC_ODR, 0) END LIKE #aceptncAdjdcOdr#
+				            </isNotEmpty>
+				        	<isNotEmpty property="thingCl">
+				        	AND INSTR(#thingCl#, A.THING_CL) <![CDATA[>]]> 0
+				        	</isNotEmpty>
+				        <![CDATA[
+				            AND A.THING_CL <> '00'
+							 ORDER BY LOT_ORD, REWARD_STLE, BNDE_APPLC_GROUP, RWMNY DESC, OBJ_ORD, KIND
+				       ) AA
+				    ]]>
+		</select>
+
+
+	  	<!-- 소유권이외의 권리소유자 관계인관계 -->
+		<select id="CMP050300DAO.tab09List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+				<![CDATA[
+				 SELECT ROWNUM AS ID,
+				       #sn# AS MASTERID,
+				       BEYONDRIGHTID,
+				       GUBUN,
+				       #opertnInsttNo# AS CUSTKEY,
+				       PID,
+				       PNAME,
+				       RID,
+				       RNAME,
+				       RIGHTS,
+				       INTERESTS,
+				       KUMK,
+				       ' ' BUBINANAME,
+				       ' ' BUBINACODE,
+				       0 PRICEA,
+				       0 KUMA,
+				       ' ' BUBINBNAME,
+				       ' ' BUBINBCODE,
+				       0 PRICEB,
+				       0 KUMB,
+				       0 PRICEM,
+				       0 KUMM
+				  FROM ( SELECT DISTINCT
+				                ROWNUM AS BEYONDRIGHTID,
+				                'O' AS GUBUN,
+				                B.OWNER_NO AS PID,
+				                C.OWNER_NM AS PNAME,
+				                NULL RID,
+				                NULL RNAME,
+				                NULL RIGHTS,
+				                CASE WHEN TO_CHAR(B.AR) IS NULL THEN B.POSESN_QOTA ELSE TO_CHAR(B.AR) END INTERESTS,
+				                B.RWMNY AS KUMK
+				           FROM TBCMP_THING_WTNNC A,
+				                TBCMP_THING_OWNER B,
+				                TBCMP_OWNER C
+				          WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				            AND A.THING_SN = B.THING_SN
+				            AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+				            AND B.OWNER_NO = C.OWNER_NO
+				            AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+				            AND THING_CL <> '00'
+				            AND NVL (B.RQEST_SE, '0') = '0'
+             			]]>
+                            <isNotEmpty property="locplcCode">
+                            AND A.LOCPLC_CODE = #locplcCode#
+                            </isNotEmpty>
+                            <isNotEmpty property="lnm">
+                            AND A.LNM = #lnm#
+                            </isNotEmpty>
+                            <isNotEmpty property="slno">
+                            AND A.SLNO  = #slno#
+                            </isNotEmpty>
+                            <isNotEmpty property="nm">
+                            AND AND C.OWNER_NM LIKE '%' || #nm# || '%'
+                            </isNotEmpty>
+                            <isNotEmpty property="aceptncAdjdcOdr">
+                            AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(B.ACEPTNC_ADJDC_ODR, 0) END LIKE #aceptncAdjdcOdr#
+                            </isNotEmpty>
+                            <isNotEmpty property="thingCl">
+                            AND INSTR(#thingCl#, A.THING_CL) <![CDATA[>]]>  0
+                            </isNotEmpty>
+                         <![CDATA[
+				          UNION ALL
+				         SELECT DISTINCT
+				                ROWNUM AS BEYONDRIGHTID,
+				                'R' AS GUBUN,
+				                NULL OWNER_ID,
+				                NULL OWNER_NAME,
+				                D.PARTCPNT_NO RID,
+				                E.OWNER_NM RNAME,
+				                ( SELECT CODE_NM
+				                    FROM TBCOM_CMMN_CODE
+				                   WHERE GRP_CODE = 'CMP003'
+				                     AND CODE = D.RELATE_KND
+				                ) AS RIGHTS,
+				                NULL AS INTERESTS,
+				                NULL AS KUMK
+				           FROM TBCMP_THING_WTNNC A,
+				                TBCMP_THING_OWNER B,
+				                TBCMP_OWNER C,
+				                TBCMP_THING_PARTCPNT D,
+				                TBCMP_OWNER E
+				          WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+				            AND A.THING_SN = B.THING_SN
+				            AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+				            AND B.OWNER_NO = C.OWNER_NO
+				            AND A.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+				            AND A.THING_SN = D.THING_SN
+				            AND B.OWNER_SN = D.OWNER_SN
+				            AND D.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+				            AND D.PARTCPNT_NO = E.OWNER_NO
+				            AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+				            AND A.THING_CL <> '00'
+				            AND NVL (B.RQEST_SE, '0') = '0'
+                           ]]>
+                           <isNotEmpty property="locplcCode">
+                           AND A.LOCPLC_CODE = #locplcCode#
+                           </isNotEmpty>
+                           <isNotEmpty property="lnm">
+                           AND A.LNM = #lnm#
+                           </isNotEmpty>
+                           <isNotEmpty property="slno">
+                           AND A.SLNO  = #slno#
+                           </isNotEmpty>
+                          <isNotEmpty property="nm">
+                          AND C.OWNER_NM LIKE '%' || #nm# || '%'
+                          </isNotEmpty>
+                          <isNotEmpty property="aceptncAdjdcOdr">
+                          AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(B.ACEPTNC_ADJDC_ODR, 0) END LIKE #aceptncAdjdcOdr#
+                          </isNotEmpty>
+                          <isNotEmpty property="thingCl">
+                          AND INSTR(#thingCl#, A.THING_CL) <![CDATA[    >]]> 0
+                          </isNotEmpty>
+				       ) AA
+				 ORDER BY BEYONDRIGHTID, PID, GUBUN, RID
+		</select>
+
+
+		<!-- 지상권 -->
+		<select id="CMP050300DAO.tab10List"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">
+			<![CDATA[
+				SELECT ROWNUM AS ID,
+					       #sn# AS MASTERID,
+					       LANDID,
+					       #opertnInsttNo# AS CUSTKEY,
+					       0 AS S_AREA,
+					       0 AS S_PRICEK,
+					       0 AS S_KUMK,
+					       PID,
+					       NULL PNAME,
+					       RID,
+					       RNAME,
+					       ' ' USEFLAG,
+					       ' ' BUBINANAME,
+					       ' ' BUBINACODE,
+					       0 S_PRICEA,
+					       0 S_KUMA,
+					       ' ' BUBINBNAME,
+					       ' ' BUBINBCODE,
+					       0 S_PRICEB,
+					       0 S_KUMB,
+					       0 S_PRICEM,
+					       0 S_KUMM
+					  FROM ( SELECT A.LANDID,
+					                A.BSNS_AREA_CODE,
+					                A.LOCPLC_CODE,
+					                A.THING_SN,
+					                D.OWNER_SN PID,
+					                D.PARTCPNT_SN RID,
+					                E.OWNER_NM RNAME
+					           FROM ( SELECT ROWNUM AS LANDID,
+					                         A.BSNS_AREA_CODE BSNS_AREA_CODE,
+					                         A.LOCPLC_CODE LOCPLC_CODE,
+					                         A.THING_SN THING_SN
+					                    FROM TBCMP_THING_WTNNC A,
+					                         TBCMP_THING_OWNER B,
+					                         TBCMP_OWNER C
+					                   WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+					                     AND A.THING_SN = B.THING_SN
+					                     AND B.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+					                     AND B.OWNER_NO = C.OWNER_NO
+					                     AND A.BSNS_AREA_CODE = #bsnsAreaCode#
+					                      ]]>
+					                   <isNotEmpty property="locplcCode">
+					                   AND A.LOCPLC_CODE = #locplcCode#
+					                   </isNotEmpty>
+										<isNotEmpty property="lnm">
+										AND A.LNM = #lnm#
+										</isNotEmpty>
+										<isNotEmpty property="slno">
+										AND A.SLNO  = #slno#
+										</isNotEmpty>
+										<isNotEmpty property="nm">
+										AND C.OWNER_NM LIKE '%' || #nm# || '%'
+										</isNotEmpty>
+										<isNotEmpty property="aceptncAdjdcOdr">
+										AND CASE WHEN #aceptncAdjdcOdr# = 0 THEN 0 ELSE NVL(b.ACEPTNC_ADJDC_ODR, 0) END LIKE #aceptncAdjdcOdr#
+										</isNotEmpty>
+					                     AND NVL (B.RQEST_SE, '0') = '0'
+					                     AND A.THING_CL = '00'
+					                ) A,
+					                TBCMP_THING_PARTCPNT D,
+					                TBCMP_OWNER E
+					          WHERE A.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+					            AND A.THING_SN = D.THING_SN
+					            AND A.BSNS_AREA_CODE = E.BSNS_AREA_CODE
+					            AND D.PARTCPNT_NO = E.OWNER_NO
+					       ) AA
+					 ORDER BY LANDID, PID, RID
+			</select>
+</sqlMap>

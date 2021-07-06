@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050103_SQL">	
+
+	
+	<!-- 전표리스트 -->
+	<select id="ACC050103DAO.chitList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+			 NVL(t1.CHIT_CONFM_AT,'0')	AS CHIT_CONFM_AT   	/* 전표승인여부 */
+		    ,t1.CHIT_DE         	/* 전표일자 */
+		    ,t1.ACCNUT_YEAR			/* 회계년도	*/
+		    ,t1.CHIT_NO         	/* 전표번호 */
+		    ,( SELECT DECODE( t4.CNT,'1', B2.ACCNUT_ACNT_NM, B2.ACCNUT_ACNT_NM ||' 외 ' || ( t4.CNT-1) ||'건')
+                 FROM TBACC_CHIT_DETAIL b1
+                      LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT b2
+                        ON b1.ACCNUT_YEAR      = b2.ACCNUT_YEAR
+                       AND b1.ACCNUT_ACNT_CODE = b2.ACCNUT_ACNT_CODE
+                WHERE 1=1
+                  AND B1.SEQ =  CASE WHEN T1.CHIT_SE = 1 THEN 2 ELSE 1 END
+     			  AND B1.ACCNUT_YEAR = T1.ACCNUT_YEAR
+         		  AND B1.CHIT_NO     =T1.CHIT_NO
+	         ) AS ACCNUT_ACNT_LIST	         /* 회계계정목록 */
+		    ,t1.DECSN_YEAR      	/* 결의년도 */
+		    ,t1.DECSN_NO        	/* 결의번호 */
+		    ,t1.CHIT_SE				/* 전표구분 */
+		    ,t1.CHIT_KND			/* 전표종류 */
+		    ,t1.CHIT_TY				/* 전표유형 */
+		    ,NVL(t1.CPTAL_EXPNDTR_DE, t5.CPTAL_EXPNDTR_ACNTBK_DE) AS CPTAL_EXPNDTR_DE	/* 자금지출일자 */
+		    ,t4.DEBTOR_AMOUNT   	/* 차변 */
+		    ,t4.CRDIT_AMOUNT    	/* 대변 */
+		    ,t1.SUMRY_1         	/* 적요1 */
+		    ,t1.SUMRY_2         	/* 적요2 */
+		    ,t1.BUDGET_YEAR			/* 예산년도 */      
+		    ,t1.BSNS_SE          	/* 사업구분 */
+		    ,t1.BALC_SE          	/* 수지구분 */
+		    ,t1.BUDGET_ACNT_CODE 	/* 예산코드 */
+		    ,t2.BUDGET_ACNT_NM   	/* 예산명 */
+		    ,t1.EXPNDTR_UNIT_CODE	/* 부기코드 */
+		    ,t3.BUKIP_CODE AS EXPNDTR_UNIT_NM  	/* 부기명 */
+		    ,t1.DEPT_CODE			/* 부서코드 */
+		    ,t5.ITNC_DE				/* 발의일자 */
+		    ,t5.DET_DCSN_DE			/* 채무확정일자 */
+		    ,t1.RVS_JRNLZ_CHIT_NO	/*역분개전표번호*/
+		    ,DECODE(t1.CHIT_SE,'1','VAL0','2','VAL1',NULL) AS CHIT_TY_DATACOL /* 전표유형 datacolumn */
+		FROM TBACC_CHIT_MASTR t1
+		     LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t2
+	         ON  t1.BUDGET_YEAR       = t2.YEAR
+	         AND t1.BSNS_SE           = t2.BSNS_SE
+	         AND t1.BALC_SE           = t2.BALC_SE
+	         AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+	         LEFT OUTER JOIN TBBDG_BUKIP_CODE t3
+	         ON  t1.EXPNDTR_UNIT_CODE = t3.BUKIP_CODE
+		     LEFT OUTER JOIN
+		     (SELECT 
+		          ACCNUT_YEAR
+		         ,CHIT_NO
+		         ,COUNT(*) AS CNT
+		         ,NVL(SUM(DEBTOR_AMOUNT),0) AS DEBTOR_AMOUNT
+		         ,NVL(SUM(CRDIT_AMOUNT),0) AS CRDIT_AMOUNT
+		      FROM TBACC_CHIT_DETAIL
+		      GROUP BY ACCNUT_YEAR, CHIT_NO
+		     ) t4
+		     ON t1.ACCNUT_YEAR = t4.ACCNUT_YEAR
+		     AND t1.CHIT_NO = t4.CHIT_NO
+		     LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t5
+		     ON t1.DECSN_YEAR = t5.DECSN_YEAR
+			 AND t1.DECSN_NO = t5.DECSN_NO
+		WHERE 1=1
+		  AND t1.CHIT_DE BETWEEN #CHIT_FROM_DE# AND #CHIT_TO_DE#
+		<isNotEmpty property="CHIT_SE">
+		  AND t1.CHIT_SE = #CHIT_SE#
+		</isNotEmpty>
+		<isNotEmpty property="CHIT_KND">
+		  AND t1.CHIT_KND = #CHIT_KND#
+		</isNotEmpty>
+		<isNotEmpty property="CHIT_CONFM_AT">
+		<isEqual property="CHIT_CONFM_AT" compareValue="0">
+		  AND NVL(t1.CHIT_CONFM_AT,'0') = #CHIT_CONFM_AT#
+		</isEqual>
+		<isEqual property="CHIT_CONFM_AT" compareValue="1">
+		  AND NVL(t1.CHIT_CONFM_AT,'0') = #CHIT_CONFM_AT#
+		</isEqual>
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+		  AND t1.BSNS_CODE			= #BSNS_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="BUDGET_ACNT_CODE">
+		  AND t1.BUDGET_YEAR 		= #BUDGET_YEAR#
+		  AND t1.BSNS_SE 			= #BSNS_SE#
+		  AND t1.BALC_SE 			= #BALC_SE#
+		  AND t1.BUDGET_ACNT_CODE 	= #BUDGET_ACNT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="ACCNUT_ACNT_CODE">
+		  AND EXISTS (
+		  	SELECT 1
+		  	FROM TBACC_CHIT_DETAIL t6
+		  	WHERE t1.ACCNUT_YEAR = t6.ACCNUT_YEAR
+		  	  AND t1.CHIT_NO 	 = t6.CHIT_NO
+			  AND t6.ACCNUT_ACNT_CODE 	= #ACCNUT_ACNT_CODE#
+		  )
+		</isNotEmpty>
+		<isNotEmpty property="CHIT_TY">
+		  AND t1.CHIT_TY 			= #CHIT_TY#
+		</isNotEmpty>
+		<isNotEmpty property="SUMRY">
+		  AND (t1.SUMRY_1 LIKE '%' || #SUMRY# || '%'
+		  OR t1.SUMRY_2 LIKE '%' || #SUMRY# || '%')
+		</isNotEmpty>
+		<isNotEmpty property="MIN_AM">
+		  AND (t4.DEBTOR_AMOUNT <![CDATA[>=]]> #MIN_AM#
+		  OR t4.CRDIT_AMOUNT <![CDATA[>=]]> #MIN_AM#)
+		</isNotEmpty>
+		<isNotEmpty property="MAX_AM">
+		  AND (t4.DEBTOR_AMOUNT <![CDATA[<=]]> #MAX_AM#
+		  OR t4.CRDIT_AMOUNT <![CDATA[<=]]> #MAX_AM#)
+		</isNotEmpty>
+		ORDER BY t1.CHIT_DE, t1.CHIT_NO
+	</select>
+	
+	
+	<!-- 전표확인 및 승인 처리 -->
+	<update id="ACC050103DAO.chitConfmAtU" parameterClass="java.util.HashMap">
+		UPDATE TBACC_CHIT_MASTR
+		SET
+			 CHIT_CONFM_AT          = NVL(#CHIT_CONFM_AT#,'0')   
+			,UPDUSR_ID              = #S_USER_ID#       
+			,UPDT_DT                = SYSDATE           
+		WHERE ACCNUT_YEAR 			= #ACCNUT_YEAR#
+		  AND CHIT_NO				= #CHIT_NO#
+	</update>
+	
+	<!-- 전표조회 -->
+	<select id="ACC050103DAO.chit" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+			 t1.CHIT_CONFM_AT   	/* 전표승인여부 */
+		    ,t1.CHIT_DE         	/* 전표일자 */
+		    ,t1.ACCNUT_YEAR			/* 회계년도	*/
+		    ,t1.CHIT_NO         	/* 전표번호 */
+		    ,t3.ACCNUT_ACNT_LIST  	/* 회계계정목록 */
+		    ,t1.DECSN_YEAR      	/* 결의년도 */
+		    ,t1.DECSN_NO        	/* 결의번호 */
+		    ,t1.CHIT_SE				/* 전표구분 */
+		    ,t1.CHIT_KND			/* 전표종류 */
+		    ,t1.CHIT_TY				/* 전표유형 */
+		    ,NVL(t1.CPTAL_EXPNDTR_DE, t5.CPTAL_EXPNDTR_ACNTBK_DE) AS CPTAL_EXPNDTR_DE	/* 자금지출일자 */
+		    ,t4.DEBTOR_AMOUNT   	/* 차변 */
+		    ,t4.CRDIT_AMOUNT    	/* 대변 */
+		    ,t1.SUMRY_1         	/* 적요1 */
+		    ,t1.SUMRY_2         	/* 적요2 */
+		    ,t1.BUDGET_YEAR			/* 예산년도 */      
+		    ,t1.BSNS_SE          	/* 사업구분 */
+		    ,t1.BALC_SE          	/* 수지구분 */
+		    ,t1.BUDGET_ACNT_CODE 	/* 예산코드 */
+		    ,t2.BUDGET_ACNT_NM2 AS BUDGET_ACNT_NM   	/* 예산명 */
+		    ,t1.EXPNDTR_UNIT_CODE	/* 부기코드 */
+		    ,t8.BUKIP_NM AS EXPNDTR_UNIT_NM  	/* 부기명 */
+		    ,t1.DEPT_CODE			/* 부서코드 */
+		    ,t5.ITNC_DE				/* 발의일자 */
+		    ,t5.DET_DCSN_DE			/* 채무확정일자 */
+		    ,t1.PRUF_SE_CODE		/* 지출증빙 */
+		    ,DECODE(t1.CHIT_SE,'1','VAL0','2','VAL1',NULL) AS CHIT_TY_DATACOL /* 전표유형 datacolumn */
+		    ,t1.BSNS_CODE
+		    ,t6.DEPT_NM
+		    ,t7.BSNS_NM
+		FROM TBACC_CHIT_MASTR t1
+		     LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t2
+	         ON  t1.BUDGET_YEAR       = t2.YEAR
+	         AND t1.BSNS_SE           = t2.BSNS_SE
+	         AND t1.BALC_SE           = t2.BALC_SE
+	         AND t1.BUDGET_ACNT_CODE  = t2.BUDGET_ACNT_CODE
+		     LEFT OUTER JOIN
+		     (SELECT 
+		           ACCNUT_YEAR
+		          ,CHIT_NO
+		          ,LISTAGG(ACCNUT_ACNT_NM,',') WITHIN GROUP(ORDER BY NULL) AS ACCNUT_ACNT_LIST
+		      FROM (
+		            SELECT
+		                 DISTINCT
+		                 b1.ACCNUT_YEAR
+		                ,b1.CHIT_NO
+		                ,b2.ACCNUT_ACNT_NM
+		            FROM TBACC_CHIT_DETAIL b1
+		                 LEFT OUTER JOIN
+		                 TBACC_ACCNUT_ACNT_SBJECT b2
+		                 ON  b1.ACCNUT_YEAR = b2.ACCNUT_YEAR
+		                 AND  b1.ACCNUT_ACNT_CODE = b2.ACCNUT_ACNT_CODE
+		          )
+		      GROUP BY ACCNUT_YEAR, CHIT_NO
+		     ) t3
+		     ON t1.ACCNUT_YEAR = t3.ACCNUT_YEAR
+		     AND t1.CHIT_NO = t3.CHIT_NO
+		    LEFT OUTER JOIN
+		    (SELECT 
+		         ACCNUT_YEAR
+		        ,CHIT_NO
+		        ,NVL(SUM(DEBTOR_AMOUNT),0) AS DEBTOR_AMOUNT
+		        ,NVL(SUM(CRDIT_AMOUNT),0) AS CRDIT_AMOUNT
+		     FROM TBACC_CHIT_DETAIL
+		     GROUP BY ACCNUT_YEAR, CHIT_NO
+		    ) t4
+		    ON t1.ACCNUT_YEAR = t4.ACCNUT_YEAR
+		    AND t1.CHIT_NO = t4.CHIT_NO
+		    LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t5
+		    ON t1.DECSN_YEAR = t5.DECSN_YEAR
+			AND t1.DECSN_NO = t5.DECSN_NO
+			LEFT OUTER JOIN TBHRM_DEPT t6
+			ON t1.DEPT_CODE = t6.DEPT_CODE
+			LEFT OUTER JOIN TBPRJ_BSNS_CODE t7
+			ON t1.BSNS_CODE = t7.BSNS_CODE
+			LEFT OUTER JOIN TBBDG_BUKIP_CODE t8
+	        ON  t1.EXPNDTR_UNIT_CODE = t8.BUKIP_CODE
+		WHERE 1=1
+		  AND t1.ACCNUT_YEAR = #ACCNUT_YEAR#
+		  AND t1.CHIT_NO = #CHIT_NO#
+	</select>
+	
+	<!-- 전표상세 목록 -->
+	<select id="ACC050103DAO.chitDetailList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT
+			 t1.ACCNUT_YEAR
+			,t1.CHIT_NO
+			,t1.SEQ
+			,t1.ACCNUT_ACNT_CODE
+			,t2.ACCNUT_ACNT_NM
+			,t1.DEBTOR_AMOUNT
+			,t1.CRDIT_AMOUNT
+			,t5.CHIT_DE
+			,t5.SUMRY_1
+			,t1.BCNC_CODE
+			,t1.FNNC_INSTT_CODE
+			,t1.ACNUTNO
+			,t6.BCNC_NM
+		FROM TBACC_CHIT_DETAIL t1
+			 LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+			 ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR
+			 AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+			 INNER JOIN TBACC_CHIT_MASTR t5
+			 ON t1.ACCNUT_YEAR = t5.ACCNUT_YEAR
+			 AND t1.CHIT_NO = t5.CHIT_NO
+			 LEFT OUTER JOIN TBCTR_BCNC_MASTR t6
+			 ON t1.BCNC_CODE = t6.BCNC_CODE
+		WHERE t1.ACCNUT_YEAR 	= #ACCNUT_YEAR#
+		  AND t1.CHIT_NO		= #CHIT_NO#
+		ORDER BY t1.SEQ
+	</select>
+	
+	<!-- 전표번호 채번 -->
+	<select id="ACC050103DAO.chitNo" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT SFACC_CHIT_NO(#CHIT_DE#, #S_USER_ID#) AS CHIT_NO
+		FROM DUAL
+	</select>
+	
+	<!-- 전표마스터 등록 -->
+	<insert id="ACC050103DAO.chitMastrC" parameterClass="java.util.HashMap">
+		INSERT INTO TBACC_CHIT_MASTR
+		(
+			 ACCNUT_YEAR
+			,CHIT_NO
+			,DECSN_YEAR
+			,DECSN_NO
+			,CHIT_DE
+			,CHIT_SE
+			,CHIT_KND
+			,CPTAL_EXPNDTR_DE
+			,SUMRY_1
+			,SUMRY_2
+			,CHIT_CONFM_AT
+			,CHIT_TY
+			,PRUF_SE_CODE
+			,BUDGET_YEAR
+			,BSNS_SE
+			,BALC_SE
+			,BUDGET_ACNT_CODE
+			,DEPT_CODE
+			,EXPNDTR_UNIT_CODE
+			,BSNS_CODE
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		) VALUES (
+			 #ACCNUT_YEAR#
+			,#CHIT_NO#
+			,#DECSN_YEAR#
+			,#DECSN_NO#
+			,#CHIT_DE#
+			,#CHIT_SE#
+			,#CHIT_KND#
+			,#CPTAL_EXPNDTR_DE#
+			,#SUMRY_1#
+			,#SUMRY_2#
+			,NVL(#CHIT_CONFM_AT#,'0')
+			,#CHIT_TY#
+			,#PRUF_SE_CODE#
+			,#BUDGET_YEAR#
+			,#BSNS_SE#
+			,#BALC_SE#
+			,#BUDGET_ACNT_CODE#
+			,#DEPT_CODE#
+			,#EXPNDTR_UNIT_CODE#
+			,#BSNS_CODE#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+	
+	<!-- 전표마스터 수정 -->
+	<update id="ACC050103DAO.chitMastrU" parameterClass="java.util.HashMap">
+		UPDATE TBACC_CHIT_MASTR
+		SET
+			 DECSN_YEAR             = #DECSN_YEAR#      
+			,DECSN_NO               = #DECSN_NO#
+			,CHIT_DE                = #CHIT_DE#         
+			,CHIT_SE                = #CHIT_SE#         
+			,CHIT_KND               = #CHIT_KND#        
+			,CPTAL_EXPNDTR_DE       = #CPTAL_EXPNDTR_DE#
+			,SUMRY_1                = #SUMRY_1#         
+			,SUMRY_2                = #SUMRY_2#   
+			,CHIT_CONFM_AT          = NVL(#CHIT_CONFM_AT#,'0')   
+			,CHIT_TY                = #CHIT_TY#        
+			,PRUF_SE_CODE			= #PRUF_SE_CODE#
+			,BUDGET_YEAR			= #BUDGET_YEAR#       
+			,BSNS_SE                = #BSNS_SE#          
+			,BALC_SE                = #BALC_SE#          
+			,BUDGET_ACNT_CODE       = #BUDGET_ACNT_CODE# 
+			,DEPT_CODE              = #DEPT_CODE#        
+			,EXPNDTR_UNIT_CODE      = #EXPNDTR_UNIT_CODE#
+			,BSNS_CODE              = #BSNS_CODE#        
+			,UPDUSR_ID              = #S_USER_ID#       
+			,UPDT_DT                = SYSDATE           
+		WHERE ACCNUT_YEAR 			= #ACCNUT_YEAR#
+		  AND CHIT_NO				= #CHIT_NO#
+	</update>
+	
+	<!-- 전표마스터 삭제 -->
+	<delete id="ACC050103DAO.chitMastrD" parameterClass="java.util.HashMap">
+		DECLARE
+		BEGIN
+		
+			DELETE FROM TBACC_CHIT_DETAIL
+			WHERE ACCNUT_YEAR 			= #ACCNUT_YEAR#
+			  AND CHIT_NO				= #CHIT_NO#
+			;
+			
+			DELETE FROM TBACC_CHIT_MASTR
+			WHERE ACCNUT_YEAR 			= #ACCNUT_YEAR#
+			  AND CHIT_NO				= #CHIT_NO#
+		   	;
+		   	
+		END;	
+	</delete>
+	
+	<!-- 전표상세 등록 -->
+	<insert id="ACC050103DAO.chitDetailC" parameterClass="java.util.HashMap">
+		INSERT INTO TBACC_CHIT_DETAIL
+		(
+			 ACCNUT_YEAR
+			,CHIT_NO
+			,SEQ
+			,ACCNUT_ACNT_CODE
+			,DEBTOR_AMOUNT
+			,CRDIT_AMOUNT
+			,BCNC_CODE
+			,FNNC_INSTT_CODE
+			,ACNUTNO
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		) VALUES (
+			 #ACCNUT_YEAR#
+			,#CHIT_NO#
+			,(SELECT NVL(MAX(SEQ),0)+1 FROM TBACC_CHIT_DETAIL WHERE ACCNUT_YEAR = #ACCNUT_YEAR# AND CHIT_NO = #CHIT_NO#)
+			,#ACCNUT_ACNT_CODE#
+			,NVL(#DEBTOR_AMOUNT#,0)
+			,NVL(#CRDIT_AMOUNT#,0)
+			,#BCNC_CODE#
+			,#FNNC_INSTT_CODE#
+			,#ACNUTNO#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</insert>
+	
+	<!-- 전표상세 수정 -->
+	<update id="ACC050103DAO.chitDetailU" parameterClass="java.util.HashMap">
+		UPDATE TBACC_CHIT_DETAIL
+		SET
+			 ACCNUT_ACNT_CODE		= #ACCNUT_ACNT_CODE# 
+			,DEBTOR_AMOUNT          = #DEBTOR_AMOUNT#    
+			,CRDIT_AMOUNT           = #CRDIT_AMOUNT#
+			,BCNC_CODE				= #BCNC_CODE#
+			,FNNC_INSTT_CODE		= #FNNC_INSTT_CODE#
+			,ACNUTNO     			= #ACNUTNO#
+			,UPDUSR_ID              = #S_USER_ID#        
+			,UPDT_DT                = SYSDATE            
+		WHERE ACCNUT_YEAR			= #ACCNUT_YEAR#
+		  AND CHIT_NO				= #CHIT_NO#
+		  AND SEQ					= #SEQ#
+	</update>
+	
+	<!-- 전표상세 삭제 -->
+	<delete id="ACC050103DAO.chitDetailD" parameterClass="java.util.HashMap">
+		DELETE FROM TBACC_CHIT_DETAIL
+		WHERE ACCNUT_YEAR			= #ACCNUT_YEAR#
+		  AND CHIT_NO				= #CHIT_NO#
+		  AND SEQ					= #SEQ#
+	</delete>
+	
+	<parameterMap id="ACC050103DAO.IncmeSlipMap" class="java.util.HashMap">
+		<parameter property="CHIT_FROM_DE"          jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="S_USER_ID"          	jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="OUT_RESULT_MSG"        jdbcType="VARCHAR" javaType="java.lang.String" mode="OUT" />
+	</parameterMap>
+	
+	<!-- 수입전표 삭제 -->
+	<procedure id="ACC050103DAO.spaccIncmeSlipD" parameterMap="ACC050103DAO.IncmeSlipMap">
+		{ CALL SPACC_INCME_SLIP_D(?, 'C1', ?, ?) }
+	</procedure>
+	
+	<!-- 주택수입 전표 생성 -->
+	<procedure id="ACC050103DAO.spaccHouseIncmeSlipAI" parameterMap="ACC050103DAO.IncmeSlipMap">
+		{ CALL SPACC_HOUSE_INCME_SLIP_AI(?, 'C1', ?, ?) }
+	</procedure>
+	
+	<!-- 토지수입 전표 생성 -->
+	<procedure id="ACC050103DAO.spaccLadIncmeSlipAI" parameterMap="ACC050103DAO.IncmeSlipMap">
+		{ CALL SPACC_LAD_INCME_SLIP_AI(?, 'C1', ?, ?) }
+	</procedure>
+	
+	<!-- 영구임대수입 전표 생성 -->
+	<procedure id="ACC050103DAO.spaccPrmanentRntSlipAI" parameterMap="ACC050103DAO.IncmeSlipMap">
+		{ CALL SPACC_PRMANENT_RNT_SLIP_AI(?, 'C1', ?, ?) }
+	</procedure>
+	
+	<!-- 매입임대수입 전표 생성 -->
+	<procedure id="ACC050103DAO.spaccPuchasRntSlipAI" parameterMap="ACC050103DAO.IncmeSlipMap">
+		{ CALL SPACC_PUCHAS_RNT_SLIP_AI(?, 'C1', ?, ?) }
+	</procedure>
+	
+	<!-- 기타수입 전표 생성 -->
+	<procedure id="ACC050103DAO.spaccEtcIncmeSlipAI" parameterMap="ACC050103DAO.IncmeSlipMap">
+		{ CALL SPACC_ETC_INCME_SLIP_AI(?, 'C1', ?, ?) }
+	</procedure>
+	
+</sqlMap>

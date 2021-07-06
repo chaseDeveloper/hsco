@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02050400SQL">
+
+
+	<!-- 쿼리명 : 매입임대 소송내역 조회
+		   설명 : 매입임대 소송내역 조회 쿼리
+		 수정일 : 수정자  수정내용
+		 작성자 : 변승우
+	 최초작성일 : 2015.11.18
+	-->
+	<select id="RNT02050400DAO.selectLawsuitDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT C.RENT_HOUSE_NM, 										/* 주택명 */
+			   B.DONG,													/* 동 */
+			   B.HO, 													/* 호 */
+			   G.NM,													/* 계약자 */
+			   G.TELNO,													/* 전화번호 */
+			   G.MBTLNO, 												/* 휴대전화 */
+			   A.LWST_DE,												/* 소송의뢰일자 */
+			   A.SEIZR_INCDNT_NO,										/* 사건번호 */
+			   A.LWST_AMOUNT,											/* 소송비 */
+			   A.JUDMN_DE,												/* 판결일자 */
+			   A.WTHDRW_DE,												/* 취하일자 */
+			   A.WTHDRW_PRVONSH,										/* 취하사유 */
+			   A.LWST_SE,												/* 소송구분 */
+			   A.RM,													/* 비고 */
+			   A.RCIV_DE, 												/* 수납일자 */
+			   A.RCIV_AMOUNT,											/* 수납금액 */
+			   NVL(A.LWST_AMOUNT,0) - NVL(A.RCIV_AMOUNT,0) AS MINAB,	/* 미납금액 */
+			   B.RENT_HOUSE_CODE,										/* 주택코드 */
+			   E.RENT_MCNT,												/* 임대료체납개월 */
+			   E.RENT_MAMT,												/* 임대료체납액 */
+			   COUNT(1) OVER(PARTITION BY A.CNTRCTR_NO) AS LAW_CNT		/* 소송건수 */
+		  FROM TBRNT_PUCHAS_LWST A,
+			   TBRNT_PUCHAS_CNTRCT B,
+			   TBRNT_PUCHAS_HOUSE C,
+			   (SELECT CNTRCTR_NO,
+					   COUNT(1) AS RENT_MCNT,
+					   SUM (NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) - NVL(RCIV_AMOUNT, 0)) AS RENT_MAMT
+				  FROM TBRNT_PUCHAS_MT_RNTCHRG
+				 WHERE RCIV_DE IS NULL
+					   AND NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0) > 0
+				 GROUP BY CNTRCTR_NO
+			   ) E,
+			   TBRNT_PUCHAS_RENT_CSTMR G
+		 WHERE A.CNTRCTR_NO 			= B.CNTRCTR_NO
+			   AND B.RENT_HOUSE_CODE 	= C.RENT_HOUSE_CODE
+			   AND A.CNTRCTR_NO 		= E.CNTRCTR_NO(+)
+			   AND B.PUCHAS_CSTMR_NO 	= G.PUCHAS_CSTMR_NO
+			   AND B.CANCL_DE IS NULL
+			   AND NVL(A.LWST_DE, '19000101') BETWEEN #lwstFromDe# AND #lwstToDe#
+			   AND NVL(A.JUDMN_DE, '19000101') BETWEEN #judmnFromDe# AND #judmnToDe#
+			   AND DECODE(SIGN(NVL(A.LWST_AMOUNT, 0) - NVL(A.RCIV_AMOUNT, 0)), 1, '2', '1') LIKE #rcivMiGb#
+		<isNotEmpty property="rentHouseCode">
+			   AND C.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="lwstSeList">
+			   AND A.LWST_SE = #lwstSeList#
+		</isNotEmpty>
+		ORDER BY B.RENT_HOUSE_CODE, B.DONG, B.HO
+	</select>
+</sqlMap>

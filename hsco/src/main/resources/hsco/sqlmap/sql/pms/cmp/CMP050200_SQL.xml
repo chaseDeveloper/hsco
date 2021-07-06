@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP050200_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 설  명  : 재결자료 내역
+		  작성자 : 변승우 -->
+		  
+	<!-- 재결자료 내역 조회 -->
+	<select id="CMP050200DAO.selectAdjdcDataList"  resultClass="java.util.HashMap"  parameterClass="java.util.Map">  
+	    SELECT
+	    	'0' AS CHK						/* 체크유무 */
+	    	,WTNNC.BSNS_AREA_CODE			/* 사업지역코드 */
+	    	,OWNER.OWNER_SN					/* 소유자 일련번호 */
+	  		,WTNNC.THING_SN					/* 물건일련번호 */
+	        ,WTNNC.AR_LGSTR					/* 면적공부 */
+	        ,WTNNC.AR_INCRPR				/* 면적편입 */
+	        ,WTNNC.UNTPC					/* 단가 */
+	        ,WTNNC.RWMNY					/* 보상금 */
+	        ,WTNNC.REAL_LNDCGR				/* 실제지목 */
+	        ,WTNNC.LNDCGR_INCRPR			/* 지목편입 */
+	        ,WTNNC.THING_CL					/* 물건분류 */
+	        ,WTNNC.THING_NM					/* 물건명 */
+	  		,WTNNC.FULL_LOCPLC_CODE_NM		/* 소재지코드명 */
+	        ,WTNNC.LOCPLC_CODE				/* 소재지코드 */
+	        ,OWNER.NM						/* 성명 */
+	        ,OWNER.ADRES					/* 주소 */
+	        ,OWNER.RM						/* 비고 */
+	        ,OWNER.AR						/* 면적 */
+	        ,OWNER.RQEST_SE					/* 청구구분 */
+	        ,OWNER.ACEPTNC_ADJDC_ODR		/* 수용재결차수 */
+	        ,OWNER.ACEPTNC_ADJDC_DE			/* 수용재결일자 */
+	        ,OWNER.MAX_ODR					/* 최고 차수 */
+	        FROM
+	            (SELECT
+	                BSNS_AREA_CODE			/* 사업지역코드 */
+	                ,THING_SN 				/* 물건일련번호 */
+	                ,AR_LGSTR				/* 면적공부 */
+	                ,AR_INCRPR				/* 면적편입 */	
+	                ,THING_UNTPC AS UNTPC	/* 단가 */
+	                ,RWMNY					/* 보상금 */
+	                ,REAL_LNDCGR			/* 지목면적 */
+	                ,LNDCGR_INCRPR			/* 지목편입 */
+	                ,TRIM(THING_CL) AS THING_CL			/* 물건분류 */
+	                ,THING_NM   			/* 물건명 */
+	                ,LOCPLC_CODE       		/* 소재지코드 */
+	                ,SFCMP_GET_LOCPLC(BSNS_AREA_CODE, LOCPLC_CODE) || ' ' || 
+            	 	 DECODE(SLNO, NULL, LNM, LNM || '-' || SLNO) AS FULL_LOCPLC_CODE_NM
+	            FROM TBCMP_THING_WTNNC
+	            WHERE BSNS_AREA_CODE = #bsnsAreaCode#
+	            <isNotEmpty property="locplcCode">
+	            AND   LOCPLC_CODE = #locplcCode#
+	            </isNotEmpty>
+	            <isEqual property="ALL" compareValue="0">
+				<isNotEmpty property="THING_CL">
+				AND	  TRIM(THING_CL) IN 
+				<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+				#ARR_THING_CL[]#
+				</iterate>				
+				</isNotEmpty>
+				</isEqual>
+	            )WTNNC,(
+	             SELECT
+                    AAA.*
+                    ,BBB.MAX_ODR
+                FROM
+		            (SELECT 
+		                A.BSNS_AREA_CODE			/* 사업지역코드 */
+		                ,B.THING_SN					/* 물건일련번호 */
+		                ,A.OWNER_NM AS NM			/* 성명 */
+		                ,A.ADRES || A.ADRES_DETAIL AS ADRES		/* 주소 */
+		                ,B.RM						/* 비고 */
+		                ,B.AR						/* 면적 */
+		                ,NVL(B.RQEST_SE,'0') AS RQEST_SE /* 청구구분 */
+		                ,B.OWNER_SN					/* 소유자일련번호 */
+		                ,B.ACEPTNC_ADJDC_ODR		/* 수용재결차수 */	
+		                ,B.ACEPTNC_ADJDC_DE			/* 수용재결일자 */
+		            FROM TBCMP_OWNER A, TBCMP_THING_OWNER B			
+		            WHERE A.BSNS_AREA_CODE = #bsnsAreaCode#
+		            AND   B.BSNS_AREA_CODE  = A.BSNS_AREA_CODE
+		            AND   A.OWNER_NO = B.OWNER_NO	          
+		            <isNotEmpty property="nm">
+		            AND   A.OWNER_NM LIKE '%' || #nm# || '%'
+		            </isNotEmpty>
+		            <isNotEmpty property="aceptncAdjdcOdr">
+		            AND   B.ACEPTNC_ADJDC_ODR = #aceptncAdjdcOdr#
+		            </isNotEmpty>
+		            <isEqual property="rqestSe" compareValue="1">
+		            AND   (B.RQEST_SE = '0' OR B.RQEST_SE IS NULL)  
+		            </isEqual>
+		            <isEqual property="rwmnyPymntse" compareValue="1">
+	                AND   B.RQEST_SE = '1'
+		            AND   NOT EXISTS(
+                    	SELECT 1 
+                        FROM TBCMP_RWMNY_PYMNT
+                    	WHERE BSNS_AREA_CODE  = B.BSNS_AREA_CODE
+		            	AND   OWNER_NO = B.OWNER_NO 
+		            	AND   RQEST_SN = B.RQEST_SN  
+                    	AND   RWMNY_PYMNT_SE = '1' 
+                    ) 
+		            </isEqual>
+		             )AAA,(
+	                SELECT 
+	                    MAX(ACEPTNC_ADJDC_ODR) AS MAX_ODR             
+	                FROM TBCMP_THING_OWNER
+	                )BBB
+			)OWNER
+	        WHERE WTNNC.BSNS_AREA_CODE = OWNER.BSNS_AREA_CODE
+	        AND WTNNC.THING_SN = OWNER.THING_SN
+	</select>
+	
+	
+	<update id="CMP050200DAO.adjdcDataU" parameterClass="java.util.Map">
+		UPDATE TBCMP_THING_OWNER
+		SET  ACEPTNC_ADJDC_ODR = #ACEPTNC_ADJDC_ODR#	/* 수용재결차수 */	
+			,ACEPTNC_ADJDC_DE = #ACEPTNC_ADJDC_DE#      /* 수용재결일자 */
+			,UPDUSR_ID = #S_USER_ID#
+		    ,UPDT_DT = SYSDATE
+		WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE# 		/* 사업지역코드 */
+		AND   THING_SN = #THING_SN#										
+		AND   OWNER_SN = #OWNER_SN#										
+    </update>								
+</sqlMap>

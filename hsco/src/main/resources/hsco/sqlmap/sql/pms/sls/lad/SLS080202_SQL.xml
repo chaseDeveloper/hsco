@@ -1,0 +1,743 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS080202_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   
+   
+   <!-- 쿼리명 : 토지계약 목록 조회
+	설명 : 토지계약 목록 조회 쿼리
+	수정일  		수정자  	수정내용
+	2015.10.06	최승락	최초생성
+	작성자 : 최승락
+	최초작성일 : 2015.10.06
+	-->
+	<select id="SLS080202DAO.selectLadLcntrctrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			WITH
+			TAB_01 AS
+			(
+			SELECT
+				  LAD_CSTMR_NO
+				, CSTMR_NM
+				, IHIDNUM
+				, ZIP
+				, ADRES
+				, ADRES_DETAIL
+				, TELNO
+				, MBTLNO
+				, EMAIL
+			  FROM TBSLS_LAD_CSTMR
+			 WHERE 1 = 1
+			),
+			TAB_02 AS
+			(
+			SELECT
+				  T1.LAD_CODE
+				, T1.BLCK
+				, T1.LOT
+				, T1.LOT_TY
+				, T1.BLCK || '-' || T1.LOT || '-' || T1.LOT_TY AS BLCK_LOT_TY
+				, T1.LAD_SE
+				, T1.PRPOS_SE
+				, T1.CNTRCT_STTUS
+				, T2.CNTRCTR_NO
+				, (
+				    SELECT S1.LAD_NM
+					FROM TBSLS_LAD_INFO S1
+				    WHERE S1.LAD_CODE = T1.LAD_CODE
+				  ) AS LAD_NM
+				, T2.LAD_CSTMR_NO
+				, T2.CNTRCT_TY
+				, T2.SUPLY_SE
+				, T2.CANCL_DE
+			  FROM TBSLS_LAD_DETAIL_INFO T1
+				, TBSLS_LCNTRCTR T2
+			 WHERE 1 = 1
+			   AND T1.LAD_CODE = T2.LAD_CODE(+)
+			   AND T1.BLCK = T2.BLCK(+)
+			   AND T1.LOT = T2.LOT(+)
+			   AND T1.LOT_TY = T2.LOT_TY(+)
+		<isEqual property="CANCL_SE" compareValue="0">
+			   <!--  AND ( T2.CANCL_DE(+) IS NULL OR T2.CNTRCTR_NO(+) IS NULL ) -->
+		</isEqual>
+			)
+			SELECT B.LAD_CODE
+				, B.BLCK
+				, B.LOT
+				, B.LOT_TY
+				, B.BLCK_LOT_TY
+				, B.CNTRCTR_NO
+				, B.LAD_SE
+				, B.PRPOS_SE
+				, B.CNTRCT_TY
+				, SFCOM_CODE_NM('LAD0A4', B.CNTRCT_TY, 'ALL_CODE_NM') AS CNTRCT_TY_NM
+				, B.CNTRCT_STTUS
+				, B.SUPLY_SE
+				, B.LAD_NM
+				, A.LAD_CSTMR_NO
+				, A.CSTMR_NM
+				, CASE WHEN B.CNTRCTR_NO IS NULL THEN '' ELSE RPAD(A.CSTMR_NM, 10, ' ') || ' [' || B.CNTRCTR_NO || ']' END AS ALL_CNTRCTR_NO
+				, DECODE(B.CANCL_DE, NULL, 'N', 'Y') AS CANCL_YN
+			  FROM TAB_01 A
+				, TAB_02 B
+			 WHERE 1 = 1
+			   AND A.LAD_CSTMR_NO(+) = B.LAD_CSTMR_NO
+			<isNotEmpty property="LAD_CODE">
+			   AND B.LAD_CODE = #LAD_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="BLCK">
+			   AND B.BLCK = #BLCK#
+			</isNotEmpty>
+			<isNotEmpty property="LOT">
+			   AND B.LOT = #LOT#
+			</isNotEmpty>
+			<isNotEmpty property="LOT_TY">
+			   AND B.LOT_TY = #LOT_TY#
+			</isNotEmpty>
+			<isNotEmpty property="LAD_SE">
+			   AND B.LAD_SE = #LAD_SE#
+			</isNotEmpty>
+			<isNotEmpty property="PRPOS_SE">
+			   AND B.PRPOS_SE = #PRPOS_SE#
+			</isNotEmpty>
+			<isNotEmpty property="CNTRCT_STTUS">
+			   AND B.CNTRCT_STTUS = #CNTRCT_STTUS#
+			</isNotEmpty>
+			<isNotEmpty property="CNTRCT_TY">
+			   AND B.CNTRCT_TY = #CNTRCT_TY#
+			</isNotEmpty>
+			<isNotEmpty property="SUPLY_SE">
+			   AND B.SUPLY_SE = #SUPLY_SE#
+			</isNotEmpty>
+			
+			<isEqual property="CANCL_SE" compareValue="1">
+			   AND B.CANCL_DE IS NOT NULL
+			</isEqual>
+			
+			<isNotEmpty property="CSTMR_NM">
+			   AND A.CSTMR_NM LIKE '%' ||#CSTMR_NM#|| '%'
+			</isNotEmpty>
+			
+			<isNotEmpty property="CSTMR_NO">
+			   AND A.LAD_CSTMR_NO = #CSTMR_NO#
+			</isNotEmpty>
+						
+			 ORDER BY B.LAD_CODE, TO_NUMBER(B.BLCK), TO_NUMBER(B.LOT), B.LOT_TY			 
+			 
+	</select>
+	
+   	<!-- 토지계약자해약정보조회 -->
+	<select id="SLS080202DAO.selectLadLcntrctrCancl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+			SELECT '1' AS CHK
+			      ,A.CNTRCTR_NO /* 계약자번호    */
+			      ,A.CANCL_DE /* 해약일자      */
+			      ,A.RESCI_SE /* 해약구분      */
+			      ,SFCOM_CODE_NM('LAD0A6', A.RESCI_SE, 'ALL_CODE_NM') AS RESCI_SE_NM
+			      ,A.RESCI_RESN_CODE /* 해약사유      */
+			      ,SFCOM_CODE_NM('LAD008', A.RESCI_RESN_CODE, 'ALL_CODE_NM') AS RESCI_RESN_CODE_NM
+			      ,A.RM /* 비고          */
+			      ,A.LTTOT_AMOUNT /* 분양금액      */
+			      ,A.PAYAMT /* 납부금액      */
+			      ,A.OVDINTR /* 연체이자      */
+			      ,A.RETURN_INTR /* 반환이자      */
+			      ,A.PENLTY /* 위약금        */
+			      ,A.INCMTAX /* 소득세        */
+			      ,A.IHNTS /* 주민세        */
+			      ,A.PYMNTAMT /* 지급액        */
+			      ,A.PENLTY_INTRT /* 위약금이율    */
+			      ,A.PENLTY_APPLC_AT /* 위약금적용여부*/
+			      ,A.ALTRTV_LAD_CODE /* 대체토지코드  */
+			      ,SFSLS_LAD_NM(A.ALTRTV_LAD_CODE, 'ALL_LAD_NM') AS ALTRTV_LAD_NM
+			      ,A.ALTRTV_BLCK /* 대체블록      */
+			      ,A.ALTRTV_LOT /* 대체롯트      */
+			      ,A.ALTRTV_LOT_TY /* 대체롯트타입  */
+			      ,A.BANK_CODE /* 은행코드      */
+			      ,SFCOM_CODE_NM('COM021', A.BANK_CODE, 'CODE_NM') AS BANK_CODE_NM
+			      ,A.DPSTR /* 예금주        */
+			      ,A.ACNUTNO /* 계좌번호      */
+			      ,A.PAY_TMLMT /* 납부기한일    */
+			      ,A.EXCCLC_DE /* 정산일자      */
+			      ,A.PAY_NO /* 납부번호      */
+			      ,A.REGISTER_ID /* 등록자ID      */
+			      ,A.REGIST_DT /* 등록일시      */
+			      ,TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS') AS REGIST_DT2
+			      ,A.UPDUSR_ID /* 수정자ID      */
+			      ,A.UPDT_DT /* 수정일시      */
+			      ,(A.PENLTY + A.INCMTAX + A.IHNTS) AS RESCI_SUM_AMT /* 해약금액 합*/
+			      
+			      ,A.ELCTRN_SANCTN_NO
+			      ,SFCOM_GET_DRFTSTS(A.ELCTRN_SANCTN_NO, A.REGIST_DT) AS APPRSTS
+			      ,A.EXPNDTR_DECSN_DE
+			  	  ,A.DECSN_YEAR 			
+			  	  ,A.DECSN_YEAR_INTR 			
+			  	  ,A.EXPNDTR_DECSN_NO
+			  	  ,A.EXPNDTR_DECSN_NO_INTR
+			  	  ,A.SANCTN_AT  	
+			       
+			      ,SFCOM_CODE_NM('LAD0A1', B.PAY_CODE, 'ALL_CODE_NM') AS PAY_CODE_NM /* 납부코드 */ 
+			      ,(B.INCMTAX + B.IHNTS) AS SUB_SUM_AMT /* 해약금액 합*/
+			      ,B.RCIV_DE AS RCIV_DE /* 수납일자 */ 
+			      ,B.RCIV_AMOUNT AS F_S1_SUMAMT /* 수납금액 */ 
+			      ,B.OVDINTR AS ARRRG_AMOUNT /* 연체이자 */ 
+			      ,B.IDRK_CO AS F_DAY /* 기산일수 */ 
+			      ,B.COMPUT_AMOUNT AS F_INTR_AMT /* 산출금액 */ 
+			      ,B.INCMTAX AS SUB_INCMTAX /* 소득세 */ 
+			      ,B.IHNTS AS SUB_IHNTS /* 주민세 */ 
+			      ,B.RETURN_INTRT AS F_R_RATIO /* 반환이자율 */ 
+			      ,B.RETURN_INTR AS SUB_RETURN_INTR /* 반환이자 */
+			      
+			      ,C.LAD_CODE
+		          ,C.BLCK
+		          ,C.LOT
+		          ,C.LOT_TY
+		          ,C.LAD_CSTMR_NO
+			  FROM TBSLS_LCNTRCTR_CANCL        A /* 토지계약자해약 */
+			      ,TBSLS_LCNTRCTR_CANCL_DETAIL B /* 토지계약자해약상세 */
+			      ,TBSLS_LCNTRCTR 			   C /* 토지계약자 */
+			 WHERE 1 = 1
+			   AND A.CNTRCTR_NO = B.CNTRCTR_NO (+)
+			   AND A.CNTRCTR_NO = C.CNTRCTR_NO
+			   AND A.CNTRCTR_NO = #CNTRCTR_NO#
+			 ORDER BY B.CANCL_SN	
+			 
+    </select>
+    
+    
+    
+    <!-- 토지계약자납부정보조회 -->
+	<select id="SLS080202DAO.selectLadLcntrctrPayInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			
+			SELECT '1' AS CHK
+				  ,A.CNTRCTR_NO
+			      ,A.PAY_NO
+			      ,A.PAY_CODE
+			      ,SFCOM_CODE_NM('LAD0A1', A.PAY_CODE, 'ALL_CODE_NM') AS PAY_CODE_NM
+			      ,A.RCIV_DE
+			      ,(NVL(PAYAMT, 0) + NVL(INSTLMT_INTR, 0) - NVL(PREPAY_DSCNT_AMOUNT, 0)) AS F_S1_SUMAMT
+			      ,ARRRG_AMOUNT
+			      ,(NVL(PAYAMT, 0) + NVL(INSTLMT_INTR, 0)) - NVL(PREPAY_DSCNT_AMOUNT, 0) AS F_TOT_SUMAMT
+			      ,TRUNC(TO_DATE(#CANCL_DE#)) - TRUNC(TO_DATE(A.RCIV_DE, 'YYYYMMDD')) AS F_DAY /* 일자 */
+			      ,SFPMS_GET_INTRT_RATE('LAD', #LAD_CODE#, 'S1', #CANCL_DE#, 0) AS F_R_RATIO /* 이자율 */
+			      ,CASE
+			         WHEN INSTR('R0,', A.PAY_CODE) > 0 THEN
+			          0
+			         ELSE
+			          SFSLS_LAD_INTEREST_CAL(#LAD_CODE#
+			                                ,((NVL(PAYAMT, 0) + NVL(INSTLMT_INTR, 0)) - NVL(PREPAY_DSCNT_AMOUNT, 0))
+			                                ,#CANCL_DE#
+			                                ,A.RCIV_DE)
+			       END AS F_INTR_AMT /* 이자금액 */
+			      ,CASE
+			         WHEN INSTR('S0,R0,', A.PAY_CODE) > 0 THEN
+			          0
+			         ELSE
+			          SFSLS_LAD_INS_CAL('C'
+			                           ,SFSLS_LAD_INTEREST_CAL(#LAD_CODE#
+			                                                  ,((PAYAMT + INSTLMT_INTR + ARRRG_AMOUNT) - PREPAY_DSCNT_AMOUNT)
+			                                                  ,#CANCL_DE#
+			                                                  ,A.RCIV_DE))
+			       END AS F_INC_AMT /* 소득세 */
+			      ,CASE
+			         WHEN INSTR('S0,R0,', A.PAY_CODE) > 0 THEN
+			          0
+			         ELSE
+			          SFSLS_LAD_INS_CAL('S'
+			                           ,SFSLS_LAD_INTEREST_CAL(#LAD_CODE#
+			                                                  ,((PAYAMT + INSTLMT_INTR) -  PREPAY_DSCNT_AMOUNT)
+			                                                  ,#CANCL_DE#
+			                                                  ,A.RCIV_DE))
+			       END AS F_INS_AMT /* 주민세 */
+			  FROM TBSLS_LAD_RCIV_PSTMRK A /* 계약자 수납정보_징수 */, TBSLS_LCNTRCTR_PAY B /* 토지계약자납부 */
+			 WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+			   AND A.PAY_NO = B.PAY_NO
+			   AND A.CNTRCTR_NO = #CNTRCTR_NO#
+			   AND INSTR((CASE
+			               WHEN #LTTOT_RENT_SE# = 'R' THEN
+			                'R0,R1,R2,R3,R4,R5,R9,RR'
+			               ELSE
+			                'S0,S1,S2,S3,S4,S5,S9'
+			             END)
+			            ,B.PAY_CODE) > 0
+			            
+			<isEqual property="LTTOT_RENT_SE" compareValue="S">
+			   <!-- AND A.PAY_CODE LIKE  'S' || '%'  -->
+			</isEqual>
+			<isEqual property="LTTOT_RENT_SE" compareValue="R">
+			   <!-- AND A.PAY_CODE = 'R0' -->
+			</isEqual>
+			
+			 ORDER BY A.PAY_CODE, A.PAY_NO
+			 
+    </select>
+    
+    
+    <!-- 토지계약자 금액정보 조회 -->
+	<select id="SLS080202DAO.selectLadLcntrctrAmountInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			
+			SELECT SFPMS_GET_INTRT_RATE('LAD', #LAD_CODE#, 'S1', #CANCL_DE#, 0) AS F_R_RATIO /* 해약이율 */
+			      ,F_SUM /* 분양금액 */
+			      ,C_AMT AS F_CANCELAMT /* 위약금 (2009.12.2 김효선씨 요청 위약금 = 계약금) */
+			  FROM (SELECT SUM(PAYAMT + INSTLMT_INTR) AS F_SUM
+			              ,AVG((SELECT SUM(PAYAMT + INSTLMT_INTR)
+			                     FROM TBSLS_LCNTRCTR_PAY B /* 토지계약자납부 */
+			                    WHERE B.CNTRCTR_NO = A.CNTRCTR_NO
+			                      AND INSTR((CASE
+			                                  WHEN #LTTOT_RENT_SE# = 'R' THEN
+			                                   'R0'
+			                                  ELSE
+			                                   'S0'
+			                                END)
+			                               ,PAY_CODE) > 0)) AS C_AMT
+			          FROM TBSLS_LCNTRCTR_PAY A /* 토지계약자납부 */
+			         WHERE CNTRCTR_NO = #CNTRCTR_NO#
+			           AND INSTR((CASE
+			                       WHEN #LTTOT_RENT_SE# = 'R' THEN
+			                        'R0,R1,R2,R3,R4,R5,R9,RR'
+			                       ELSE
+			                        'S0,S1,S2,S3,S4,S5,S9'
+			                     END)
+			                    ,PAY_CODE) > 0) A
+			 
+    </select>
+    
+    <!-- 토지 분양해약(대체) 처리 -->
+    <parameterMap id="spsls_lad_lcntrctr_cancl_ui_param" class="java.util.HashMap">
+		<parameter property="IN_FG"				jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_LAD_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CNTRCTR_NO"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_LTTOT_AMOUNT"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAYAMT"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_OVDINTR"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RETURN_INTR"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_PENLTY"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />		
+		<parameter property="IN_INCMTAX"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_IHNTS"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_PYMNTAMT"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RESCI_SE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CANCL_DE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RESCI_RESN_CODE" jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PENLTY_INTRT"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_RM"				jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAY_TMLMT"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />		
+		<parameter property="IN_PENLTY_APPLC_AT" jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_NEW_LAD_CODE"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_NEW_BLCK"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_NEW_LOT"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_NEW_LOT_TY"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_BANK_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_DPSTR"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_ACNUTNO"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_DECSN_SE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />				
+		<parameter property="S_USER_ID"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="OUT_RESULT_CD"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"	jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+	</parameterMap>
+
+	<procedure id="SLS080202DAO.SPSLS_LAD_LCNTRCTR_CANCL_UI" parameterMap="spsls_lad_lcntrctr_cancl_ui_param">
+		{ call SPSLS_LAD_LCNTRCTR_CANCL_UI(?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?) }
+	</procedure>
+	
+	
+	<!-- 토지 분양해약(대체) 취소 처리 -->
+	<procedure id="SLS080202DAO.SPSLS_LAD_LCNTRCTR_CANCL_UI2" parameterClass="java.util.Map">
+		{ call SPSLS_LAD_LCNTRCTR_CANCL_UI2(#CNTRCTR_NO#, #S_USER_ID#) }
+	</procedure>
+	
+	
+	<!-- 토지계약자해약상세 추가  -->
+	<insert id="SLS080202DAO.insertLadLcntrctrCanclDetail" parameterClass="java.util.Map">
+	      INSERT INTO TBSLS_LCNTRCTR_CANCL_DETAIL
+		  (    
+		     CNTRCTR_NO
+			,CANCL_SN			/* 해약일련번호   */
+			,PAY_CODE			/* 납부코드       */
+			,RCIV_DE			/* 수납일자         */
+			,RCIV_AMOUNT		/* 수납금액     */
+			,OVDINTR			/* 연체이자         */
+			,IDRK_CO			/* 기산일수         */
+			,COMPUT_AMOUNT		/* 산출금액   */
+			,RETURN_INTR		/* 반환이자     */
+			,INCMTAX			/* 소득세           */
+			,IHNTS				/* 주민세           */
+			,RETURN_INTRT		/* 반환이자율 */
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT          
+			                
+		  ) VALUES (
+		  
+		  	 #CNTRCTR_NO#
+			,( SELECT NVL(MAX(CANCL_SN),0) + 1 FROM TBSLS_LCNTRCTR_CANCL_DETAIL WHERE 1 = 1 AND CNTRCTR_NO = #CNTRCTR_NO# )
+			,#PAY_CODE#
+			,#RCIV_DE#
+			,#RCIV_AMOUNT#
+			,#OVDINTR#
+			,#IDRK_CO#
+			,#COMPUT_AMOUNT#
+			,#RETURN_INTR#
+			,#INCMTAX#
+			,#IHNTS#
+			,#RETURN_INTRT#
+			,#S_USER_ID#                     /*등록자ID             */        
+			,SYSDATE       					 /*등록일시                    */
+			,#S_USER_ID#                     /*수정자ID             */          
+			,SYSDATE                         /*수정일시                    */	         	     
+		 	  
+		  )
+	  
+	</insert>
+	
+	
+	<!-- 토지계약자 금액정보 조회 -->
+	<select id="SLS080202DAO.selectLadLcntrctrCancelPs" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			
+			SELECT A.CNTRCTR_NO
+			      ,A.PAY_NO
+			      ,A.CNTRCT_DE
+			      ,A.PAY_CODE
+			      ,A.INSTLMT_SE
+			      ,A.PAYAMT
+			      ,A.INSTLMT_INTR
+			      ,A.RDCAMT_AMOUNT
+			      ,A.INSTLMT_INTRT
+			      ,A.LEV_DECSN_NO
+			      ,A.RCIV_DECSN_NO
+			      ,A.RENT_BGNDE
+			      ,A.RENT_ENDDE
+			      ,A.LAD_CODE
+			  FROM (SELECT A.CNTRCTR_NO
+			              ,A.PAY_NO
+			              ,B.CNTRCT_DE
+			              ,A.PAY_CODE
+			              ,A.INSTLMT_SE
+			              ,A.LEV_DECSN_NO
+			              ,A.RCIV_DECSN_NO
+			              ,A.PAYAMT
+			              ,A.INSTLMT_INTR
+			              ,A.RDCAMT_AMOUNT
+			              ,(SELECT S.INTRT
+			                  FROM TBPMS_INTRT_INFO S
+			                 WHERE S.JOB_SE = 'LAD'
+			                   AND S.INTRT_KND = B.LAD_CODE
+			                   AND S.INTRT_SE = 'L1'
+			                   AND S.APPLC_DE = (SELECT MAX(APPLC_DE)
+			                                       FROM TBPMS_INTRT_INFO SS
+			                                      WHERE SS.JOB_SE = 'LAD'
+			                                        AND SS.INTRT_KND = B.LAD_CODE
+			                                        AND SS.INTRT_SE = 'L1'
+			                                        AND SS.APPLC_DE <![CDATA[ <= ]]> #CANCL_DE#)) AS INSTLMT_INTRT /* 할부이율 INSTLMT_INTRT */
+			              ,A.RENT_BGNDE
+			              ,A.RENT_ENDDE
+			              ,B.LAD_CODE
+			          FROM TBSLS_LCNTRCTR_PAY A, TBSLS_LCNTRCTR B
+			         WHERE 1 = 1
+			           AND A.CNTRCTR_NO = B.CNTRCTR_NO
+			           AND A.CNTRCTR_NO = #CNTRCTR_NO#
+			           AND A.PAY_CODE = 'RN'
+			           AND A.RENT_ODR = (SELECT MAX(RENT_ODR)
+			                               FROM TBSLS_LCNTRCTR_PAY
+			                              WHERE CNTRCTR_NO = A.CNTRCTR_NO)) A
+			 WHERE #CANCL_DE# BETWEEN A.RENT_BGNDE AND A.RENT_ENDDE
+			 
+    </select>
+    
+	<!-- 토지 분양해약(대체) : 계약자 납부내역 정산 처리 -->
+    <parameterMap id="SPSLS_LAD_SL_RN_CANCEL_PS_param" class="java.util.HashMap">
+		<parameter property="IN_CANCL_DE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="S_USER_ID"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CNTRCTR_NO"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAY_NO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RENT_BGNDE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_RENT_ENDDE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CNTRCT_DE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_LAD_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />		
+		<parameter property="IN_PAY_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_INSTLMT_SE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_LEV_DECSN_NO"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RCIV_DECSN_NO"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAYAMT"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_INSTLMT_INTR" 	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RDCAMT_AMOUNT"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_INTRT"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="OUT_PRT_OK"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_CD"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"	jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+	</parameterMap>
+
+	<procedure id="SLS080202DAO.SPSLS_LAD_SL_RN_CANCEL_PS" parameterMap="SPSLS_LAD_SL_RN_CANCEL_PS_param">
+		{ call SPSLS_LAD_SL_RN_CANCEL_PS(?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?) }
+	</procedure>
+	
+	
+	
+	<!-- 임대탭 : 임대료 -->
+	<select id="SLS080202DAO.selectLcntrctrPayList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		
+		<![CDATA[
+			SELECT
+				  T1.CNTRCTR_NO
+				, T1.PAY_NO /* 납부번호 */
+				, T1.RQEST_YM
+				, T1.PAY_CODE /* 납부코드 */
+				, SFCOM_CODE_NM('LAD0A1', T1.PAY_CODE, 'ALL_CODE_NM') AS PAY_CODE_NM
+				, T1.PAY_ODR /* 납부차수(할부:순번,임대료:순번,분양:분납순번) */
+				, T1.PAY_SE /* 납부구분(0.정상,1선납,2.연체 , 3.선수금) */
+				, T1.INSTLMT_SE /* 할부구분 */
+				, T1.PAYAMT /* 납부금액 */
+				, T1.PAY_SUPLY_AMOUNT
+				, T1.PAY_VAT
+				, T1.INSTLMT_INTR /* 할부이자 */
+				, T1.INSTLMT_INTR_SUPLY_AMOUNT
+				, T1.INSTLMT_INTR_VAT
+				, T1.ARRRG_AMOUNT /* 연체금액 */
+				, T1.PREPAY_DSCNT_AMOUNT /* 선납할인금액 */
+				, T1.PAY_TMLMT /* 납부기한일 */
+				, T1.PAY_STDR_DE
+				, T1.NHT_OUTPT_DE
+				, T1.PAYMTHD
+				, T1.BANK_CODE
+				, T1.OCR_NO
+				, T1.MDAT_DE
+				, T1.OPETR_ID
+				, T1.LEV_DECSN_NO /* 징수,조정결의번호 */
+				, T1.RM
+				, T1.USE_AT
+				, T1.RCIV_DECSN_NO /* 수납결의번호 */
+				, T1.LTTOT_RENT_SE
+				, T1.TMPR_RCIV_DE
+				, T1.TMPR_RCIV_AMOUNT
+				, T1.RDCAMT_AMOUNT /* 감액금액 */
+				, T1.ARRRG_DSCNT_SE
+				, T1.ARRRG_DSCNT_AMOUNT
+				, T1.ARRRG_DSCNT_SUPLY_AMOUNT
+				, T1.ARRRG_DSCNT_VAT
+				, T1.ARRRG_DSCNT_DAYCNT
+				, T1.ARRRG_DSCNT_INTRT
+				, T1.RCIV_DE
+				, T2.RCIV_AMOUNT AS R_RCIV_AMOUNT /* 수납금액 */ 
+				, (NVL(T1.PAYAMT,0) + NVL(T1.INSTLMT_INTR,0) + NVL(T1.RDCAMT_AMOUNT, 0) ) AS TOT_PAYAMT /* 납부금액 + 할부이자금액 + 감액금액(선납제외) = 납부금액 */
+				, CASE
+					WHEN INSTLMT_SE = '3' THEN /* 할부구분 (1.납부,2.할부) */
+						NVL(T1.PAYAMT,0) + NVL(T1.INSTLMT_INTR,0) + NVL(T1.ARRRG_AMOUNT,0) + NVL(T1.RDCAMT_AMOUNT,0) /* 납부금액 + 할부이자금액 + 연체금액 + 감액금액(선납제외) */
+					ELSE
+						NVL(T1.PAYAMT,0) + NVL(T1.INSTLMT_INTR,0) + NVL(T1.ARRRG_AMOUNT,0) + NVL(T1.PREPAY_DSCNT_AMOUNT,0) + NVL(RDCAMT_AMOUNT,0) /* 납부금액 + 할부이자금액 + 연체금액 + 선납할인금액 + 감액금액(선납제외) */
+				  END AS PAYAMT_SM /* 납부합계 */
+				, CASE 
+					WHEN INSTLMT_SE = '3' THEN
+						NVL(T1.PAYAMT,0) + NVL(T1.INSTLMT_INTR,0) + NVL(T1.ARRRG_AMOUNT,0) + NVL(T1.RDCAMT_AMOUNT,0) - NVL(T2.RCIV_AMOUNT,0) /* 납부금액 + 할부이자금액 + 연체금액 + 감액금액(선납제외) - 수납금액(계약) */
+					ELSE
+						NVL(T1.PAYAMT,0) + NVL(T1.INSTLMT_INTR,0) + NVL(T1.ARRRG_AMOUNT,0) + NVL(T1.PREPAY_DSCNT_AMOUNT,0) + NVL(RDCAMT_AMOUNT,0) - NVL(T2.RCIV_AMOUNT,0) /* 납부금액 + 할부이자금액 + 연체금액 + 선납할인금액 + 감액금액(선납제외) - 수납금액(계약) */
+				  END AS UNCLAMT /* 미수금액 */
+				, T2.RCIV_DE AS R_RCIV_DE /* 수납일자 */
+				
+				, TRUNC((NVL(T1.PAYAMT, 0) - (NVL(T1.PAYAMT, 0) / ((TO_DATE(T1.RENT_ENDDE,'YYYYMMDD') - TO_DATE(T1.RENT_BGNDE,'YYYYMMDD') ) + 1) * ((TO_DATE(#CANCL_DE#,'YYYYMMDD') - TO_DATE(T1.RENT_BGNDE,'YYYYMMDD') ) + 1))) * -1 ,-1) AS CHA_AMT /* 감액 */
+			    , T1.RENT_BGNDE
+			    , T1.RENT_ENDDE
+			    
+			    , C.LAD_CODE
+			    , C.CNTRCT_DE			      
+			    , C.RENT_BGNDE AS RENT_BGNDE_ORG
+			    , C.RENT_ENDDE AS RENT_ENDDE_ORG 
+			    , SFPMS_GET_INTRT_RATE('LAD', #LAD_CODE#, 'L1', #CANCL_DE#, 0) AS INSTLMT_INTRT /* 할부이율 */
+			  FROM TBSLS_LCNTRCTR_PAY T1 /* 토지계약자납부 */
+				 , TBSLS_LAD_RCIV_PSTMRK T2  /* 계약자 수납정보_징수 */
+				 , TBSLS_LCNTRCTR C /* 토지계약자 */
+			 WHERE 1 = 1
+		]]>
+			   AND T1.CNTRCTR_NO = T2.CNTRCTR_NO(+)
+			   AND T1.CNTRCTR_NO = C.CNTRCTR_NO 
+			   AND T1.PAY_NO = T2.PAY_NO			   
+			   AND T1.PAY_CODE ='RN'
+			
+			<isNotEmpty property="CNTRCTR_NO">
+			   AND T1.CNTRCTR_NO = #CNTRCTR_NO#
+			</isNotEmpty>
+			<isNotEmpty property="LTTOT_RENT_SE">
+			   AND T1.LTTOT_RENT_SE = #LTTOT_RENT_SE#
+			</isNotEmpty>
+			<!-- 해약일자가 임대시작일과 종료일 안에 있어야 한다. -->
+			   AND #CANCL_DE# BETWEEN T1.RENT_BGNDE AND T1.RENT_ENDDE
+			
+			<!-- 토지계약자납부 MAX 한건만 가져와야 한다. -->
+			   AND NVL(T1.RENT_ODR, 0) IN (
+			   								(SELECT NVL(MAX(RENT_ODR), 0)
+									           FROM TBSLS_LCNTRCTR_PAY 
+									          WHERE CNTRCTR_NO = #CNTRCTR_NO#
+									            AND LTTOT_RENT_SE = 'R')
+									       ,(SELECT NVL(MAX(RENT_ODR), 0) - 1
+									           FROM TBSLS_LCNTRCTR_PAY
+									          WHERE CNTRCTR_NO = #CNTRCTR_NO#
+									            AND LTTOT_RENT_SE = 'R')
+									       )
+				
+			 ORDER BY T1.PAY_CODE, T1.PAY_TMLMT
+			 
+	</select>
+	
+	<!-- 토지 임대해약(대체) : 임대료 납부내역 정산 처리 -->
+    <parameterMap id="SPSLS_LAD_RN_AMOUNT_UI_param" class="java.util.HashMap">
+		<parameter property="IN_CANCL_DE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="S_USER_ID"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CNTRCTR_NO"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAY_NO"			jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RENT_BGNDE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_RENT_ENDDE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_CNTRCT_DE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_LAD_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />		
+		<parameter property="IN_PAY_CODE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />	
+		<parameter property="IN_INSTLMT_SE"		jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_LEV_DECSN_NO"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RCIV_DECSN_NO"	jdbcType="VARCHAR"	javaType="string" 	mode="IN" />
+		<parameter property="IN_PAYAMT"			jdbcType="NUMBER"	javaType="string" 	mode="IN" />
+		<parameter property="IN_INSTLMT_INTR" 	jdbcType="NUMBER"	javaType="string" 	mode="IN" />
+		<parameter property="IN_RDCAMT_AMOUNT"	jdbcType="NUMBER"	javaType="string" 	mode="IN" />
+		
+		<parameter property="IN_INSTLMT_INTRT"	jdbcType="NUMBER"	javaType="string" 	mode="IN" />
+		<parameter property="IN_MISU_AMT"		jdbcType="NUMBER"	javaType="string" 	mode="IN" />
+		
+		<parameter property="OUT_RESULT_CD"		jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"	jdbcType="VARCHAR"	javaType="string"	mode="OUT" />
+	</parameterMap>
+
+	<procedure id="SLS080202DAO.SPSLS_LAD_RN_AMOUNT_UI" parameterMap="SPSLS_LAD_RN_AMOUNT_UI_param">
+		{ call SPSLS_LAD_RN_AMOUNT_UI(?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?) }
+	</procedure>
+	
+	  
+	<!-- 토지코드 입력가능여부  -->
+	<select id="SLS080202DAO.selectLadCodeInputYn" parameterClass="java.util.Map" resultClass="String">
+		
+		   SELECT DECODE(COUNT(B.CNTRCTR_NO), 0, 'Y', 'N') AS INPUT_YN 
+			  FROM TBSLS_LAD_DETAIL_INFO A, TBSLS_LCNTRCTR B
+			 WHERE 1 = 1
+			   AND A.LAD_CODE = B.LAD_CODE
+			   AND A.BLCK = B.BLCK
+			   AND A.LOT = B.LOT
+			   AND A.LOT_TY = B.LOT_TY
+			   AND B.CANCL_DE IS NULL
+			   AND A.LAD_CODE = #LAD_CODE#
+			   AND A.BLCK = #ALTRTV_BLCK#
+			   AND A.LOT = #ALTRTV_LOT#
+			   AND A.LOT_TY = #ALTRTV_LOT_TY#			   
+
+	</select>
+	
+	<!-- 블럭 롯트 상태체크  -->
+	<select id="SLS080202DAO.selectBltYn" parameterClass="java.util.Map" resultClass="String">
+		
+		   SELECT DECODE(A.LAD_SE, '01', 'Y', 'N') AS BLT_YN 
+			  FROM TBSLS_LAD_DETAIL_INFO A
+			 WHERE 1 = 1
+			   AND A.LAD_CODE = #LAD_CODE#
+			   AND A.BLCK = #BLCK#
+			   AND A.LOT = #LOT#
+			   AND A.LOT_TY = #LOT_TY#			   
+
+	</select>
+	
+	<!-- 소인처리 체크  -->
+	<select id="SLS080202DAO.selectPstmrkYn" parameterClass="java.util.Map" resultClass="String">
+		
+		   SELECT DECODE(COUNT(A.OPETR_ID), 0, 'N', 'Y') AS PSTMRK__YN 
+			  FROM TBSLS_LAD_RCIV_PSTMRK A
+			 WHERE 1 = 1
+			   AND A.LAD_CODE = #LAD_CODE#
+			   AND A.BLCK = #BLCK#
+			   AND A.LOT = #LOT#
+			   AND A.LOT_TY = #LOT_TY#
+			   AND SUBSTR(A.PAY_NO, 1, 1) = '6'
+			   
+	</select>
+	
+	<!-- 소인처리 삭제  -->
+	<delete id="SLS080202DAO.deletePstmrk" parameterClass="java.util.Map">
+		
+		    DELETE  
+		      FROM TBSLS_LAD_RCIV_PSTMRK A
+			 WHERE 1 = 1
+			   AND A.LAD_CODE = #LAD_CODE#
+			   AND A.BLCK = #BLCK#
+			   AND A.LOT = #LOT#
+			   AND A.LOT_TY = #LOT_TY#
+			   AND SUBSTR(A.PAY_NO, 1, 1) = '6'			   
+
+	</delete>
+	
+	
+	<!-- 지출결의 결의번호 업데이트 (원금)  -->
+	<update id="SLS080202DAO.updateExpndtrDecsnNo" parameterClass="java.util.Map">
+		UPDATE TBSLS_LCNTRCTR_CANCL 
+		   SET
+			   EXPNDTR_DECSN_DE  	= #EXPNDTR_DECSN_DE#
+			  ,DECSN_YEAR 			= #DSNMASTR.DECSN_YEAR#
+			  ,EXPNDTR_DECSN_NO  	= #DSNMASTR.DECSN_NO#
+			  ,UPDUSR_ID            = #S_USER_ID#
+		      ,UPDT_DT              = SYSDATE
+	  	 WHERE 1 = 1
+	       AND CNTRCTR_NO  = #CNTRCTR_NO#
+		  
+	</update>
+
+	<!-- 지출결의 결의번호 업데이트 (이자) -->
+	<update id="SLS080202DAO.updateExpndtrDecsnNoIntr" parameterClass="java.util.Map">
+		UPDATE TBSLS_LCNTRCTR_CANCL 
+		   SET
+			   DECSN_YEAR_INTR 		  = #DSNMASTR.DECSN_YEAR#
+			  ,EXPNDTR_DECSN_NO_INTR  = #DSNMASTR.DECSN_NO#
+			  ,UPDUSR_ID              = #S_USER_ID#
+		      ,UPDT_DT                = SYSDATE
+	  	 WHERE 1 = 1
+	       AND CNTRCTR_NO  = #CNTRCTR_NO#
+		  
+	</update>
+	
+	<!-- 전자결재 결재번호 업데이트  -->
+	<update id="SLS080202DAO.approveU" parameterClass="java.util.HashMap">
+		UPDATE TBSLS_LCNTRCTR_CANCL A
+		   SET ELCTRN_SANCTN_NO  = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+			  ,UPDUSR_ID  	=  #S_USER_ID#
+			  ,UPDT_DT		=  SYSDATE			  
+		 WHERE CNTRCTR_NO   = #CNTRCTR_NO#
+	</update>
+	
+	
+	<!-- 지출결의 (원금) 결의번호 업데이트  -->
+	<update id="SLS080202DAO.updateExpndtrDecsnNoOnly" parameterClass="java.util.Map">
+		UPDATE TBSLS_LCNTRCTR_CANCL 
+		   SET
+			   EXPNDTR_DECSN_DE  	= TO_CHAR(SYSDATE, 'YYYYMMDD')
+			  ,DECSN_YEAR 			= #DECSN_YEAR#
+			  ,EXPNDTR_DECSN_NO  	= #EXPNDTR_DECSN_NO#
+			  ,UPDUSR_ID            = #S_USER_ID#
+		      ,UPDT_DT              = SYSDATE
+	  	 WHERE 1 = 1
+	       AND CNTRCTR_NO  = #CNTRCTR_NO#		  
+	</update>
+
+	<!-- 지출결의 (이자) 결의번호 업데이트  -->
+	<update id="SLS080202DAO.updateExpndtrDecsnNoIntrOnly" parameterClass="java.util.Map">
+		UPDATE TBSLS_LCNTRCTR_CANCL 
+		   SET
+			   EXPNDTR_DECSN_DE  	 = TO_CHAR(SYSDATE, 'YYYYMMDD')
+			  ,DECSN_YEAR 			 = #DECSN_YEAR#
+			  ,EXPNDTR_DECSN_NO_INTR = #EXPNDTR_DECSN_NO_INTR#
+			  ,UPDUSR_ID             = #S_USER_ID#
+		      ,UPDT_DT               = SYSDATE
+	  	 WHERE 1 = 1
+	       AND CNTRCTR_NO  = #CNTRCTR_NO#		  
+	</update>
+	
+</sqlMap>

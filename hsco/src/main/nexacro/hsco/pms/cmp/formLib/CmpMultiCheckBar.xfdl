@@ -1,0 +1,299 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.5">
+  <TypeDefinition url="..\..\..\default_typedef.xml"/>
+  <Form id="form_checkArea" classname="CmpCheckArea" left="0" top="0" width="1024" height="768" titletext="멀티 체크 바" style="background:transparent;">
+    <Layouts>
+      <Layout/>
+    </Layouts>
+    <Objects>
+      <Dataset id="DS_CHECK" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="DS_ORGDATA" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+    <Script type="xscript5.0"><![CDATA[/********************************************************
+파일명 : CmpMultiCheckBar.xfdl
+설 명 : 폼에 체크박스를 생성한다
+수정일 수정자 Version Function 명
+------- -------- ---------- --------------
+2015.06.02 지효정 1.0 최초 생성
+*********************************************************/
+include "pms_lib::pmsUtilInclude.xjs";
+
+/************************************************************************
+*체크박스가 그려질 가로 갯수
+/************************************************************************/
+this.widthCnt = 0;
+
+/************************************************************************
+*체크박스가 그려질 세로 갯수
+/************************************************************************/
+this.heightCnt = 0;
+
+/************************************************************************
+*체크박스의 데이터셋과 맵핑될 Code 컬럼
+/************************************************************************/
+this.codeColumn = "CODE";
+this.dataColumn = "DATA";
+
+this.strCheckId = "chk_";
+
+/************************************************************************
+*체크박스의 이벤트 설정 정보
+/************************************************************************/
+this.eventid = null;
+this.objFunction = null;
+this.target = null;
+this.bClear = null;
+
+this.checkAllBox = null;
+
+
+
+/************************************************************************
+*설명 : 초기화, 가로에 출력될 갯수지정
+/************************************************************************/
+this.fn_init = function(widthCnt){
+	this.fn_set_widthCnt(widthCnt);
+}
+
+/************************************************************************
+*설명 : 체크박스 동적 생성
+/************************************************************************/
+this.fn_create = function(ds, bAllCheck){
+	this.fn_removeAll();
+	this.fn_copy_DS(ds);
+	this.fn_build_checkBoxBar(bAllCheck);
+	this.resetScroll();
+	this.fn_add_eventHandler();
+}
+
+/************************************************************************
+설 명 : 체크박스의 가로에 그려질 갯수 지정
+/************************************************************************/
+this.fn_set_widthCnt = function(widthCnt){
+	this.widthCnt = widthCnt;
+}
+
+/************************************************************************
+설 명 : 데이터셋 카피
+/************************************************************************/
+this.fn_copy_DS = function(dataSet){
+	this.DS_CHECK.clear();
+	this.DS_CHECK.appendData(dataSet);
+}
+
+/************************************************************************
+설 명 : bind될 code, data의 컬럼을 지정한후 DS_CHECK 데이터셋에 해당 컬럼을 생성한다.
+/************************************************************************/
+this.fn_set_DSColumn = function(code, data){
+	this.codeColumn = code;
+	this.dataColumn = data;
+}
+
+this.fn_set_checkAll = function(checkBox){
+	this.checkAllBox = checkBox;
+	this.fn_set_eventHandler("onclick", this.multi_chk_onclick, this, true);
+	this.checkAllBox.addEventHandler("onclick", this.chk_all_onclick, this);
+}
+
+/************************************************************************
+설 명 : bind될 code, data의 컬럼을 지정한후 DS_CHECK 데이터셋에 해당 컬럼을 설정한다.
+/************************************************************************/
+this.fn_make_DSColumn = function(){
+	this.DS_CHECK.addColumn(this.codeColumn, "string", 120);
+	this.DS_CHECK.addColumn(this.dataColumn, "string", 120);
+}
+
+/************************************************************************
+설 명 : 체크박스 모두 생성
+/************************************************************************/
+this.fn_build_checkBoxBar = function(bAllCheck){
+	var CONST_SCROLL_WIDTH = 20;
+	var CONST_LEFT_MARGIN = 3;
+	var objCheckBox = null;
+	var nLeft = 0;
+	var nTop = 0;
+	var nWidth = (this.width-CONST_SCROLL_WIDTH-CONST_LEFT_MARGIN) / (this.widthCnt == 0 ? 1 : this.widthCnt); //세로 스크롤바, 왼쪽 여백 영역 미리 빼줌..
+	var nHeight = 20;
+	var heightCnt = Math.ceil(this.DS_CHECK.getRowCount()/this.widthCnt);
+	var widthCnt = this.widthCnt;
+	var maxCnt = this.DS_CHECK.getRowCount();
+	var id = "";
+	var text = "";
+	var cnt = 0;
+
+	if(this.checkAllBox != null){
+		this.checkAllBox.set_value(bAllCheck==true?true:false);
+	}
+	
+	for(var i=0; i<heightCnt; i++){
+		for(var j=0; j<widthCnt; j++){
+			if(cnt >= maxCnt){
+				return;
+			}
+			
+			id = this.strCheckId + this.DS_CHECK.getColumn(cnt, this.codeColumn);
+			text = this.DS_CHECK.getColumn(cnt, this.dataColumn);
+	
+			nLeft = j * nWidth + CONST_LEFT_MARGIN; //왼쪽 여백 영역 3
+			nTop = i * nHeight;
+
+			this.fn_create_checkbox(id, nLeft, nTop, nWidth, nHeight, text, bAllCheck);
+			
+			cnt++;
+		}
+	}
+}
+
+/************************************************************************
+설 명 : 체크박스 생성
+/************************************************************************/
+this.fn_create_checkbox = function(id, nLeft, nTop, nWidth, nHeight, text, bAllCheck){
+	var objCheckBox = new CheckBox();
+	objCheckBox.init(id, "absolute", nLeft, nTop, nWidth, nHeight, null, null);
+	this.addChild(id,objCheckBox);
+	objCheckBox.show();
+	objCheckBox.set_text(text);
+	objCheckBox.set_tooltiptext(text);
+	objCheckBox.set_value(bAllCheck==true?true:false);
+}
+
+/************************************************************************
+설 명 : 체크박스 전체 선택, 전체 선택 해제
+/************************************************************************/
+this.fn_checkAll = function(bCheck){
+	var maxCnt = this.DS_CHECK.getRowCount();
+	var id = "";
+	
+	for(var i=0; i<maxCnt; i++){
+		id = this.fn_get_checkBoxId(i);
+		this[id].set_value(bCheck);
+	}
+}
+
+/************************************************************************
+설 명 : 체크박스 전체 선택 여부 확인
+/************************************************************************/
+this.fn_isAllCheck = function(){
+	var maxCnt = this.DS_CHECK.getRowCount();
+	
+	for(var i=0; i<maxCnt; i++){
+		id = this.fn_get_checkBoxId(i);
+		if(this[id].value == false){
+			return false;
+		}
+	}
+	
+	return true;
+}
+
+/************************************************************************
+설 명 : 체크박스에서 사용될 이벤트 핸들러를 설정한다.
+/************************************************************************/
+this.fn_set_eventHandler = function(eventid, objFunction, target, bClear){
+	this.eventid = eventid;
+	this.objFunction = objFunction;
+	this.target = target;
+	this.bClear = bClear;
+}
+
+/************************************************************************
+설 명 : 체크박스에서 사용될 이벤트 핸들러를 등록한다.
+/************************************************************************/
+this.fn_add_eventHandler = function(){
+	var maxCnt = this.DS_CHECK.getRowCount();
+	var id = "";
+	
+	for(var i=0; i<maxCnt; i++){
+		id = this.fn_get_checkBoxId(i);
+		
+		/*******************************************************************************
+		*이미 등록된 이벤트핸들러 삭제
+		********************************************************************************/
+		if(this.bClear == true){
+			this[id].clearEventHandler(this.eventid);
+		}
+		
+		/*******************************************************************************
+		*새로운 이벤트핸들러 등록
+		********************************************************************************/
+		this[id].addEventHandler(this.eventid, this.objFunction, this.target);
+	}
+}
+
+/************************************************************************
+설 명 : 모든 체크박스 컴포넌트 삭제
+/************************************************************************/
+this.fn_removeAll = function(){
+	var maxCnt = this.DS_CHECK.getRowCount();
+	var id = "";
+	
+	for(var i=0; i<maxCnt; i++){
+		id = this.fn_get_checkBoxId(i);
+		this.removeChild(id);
+	}
+}
+
+/************************************************************************
+설 명 : 체크박스의 id를 설정한다.
+/************************************************************************/
+this.fn_set_checkBoxId = function(strCheckId){
+	this.strCheckId += strCheckId;
+}
+
+/************************************************************************
+설 명 : 체크박스의 id를 반환한다.
+/************************************************************************/
+this.fn_get_checkBoxId = function(idx){
+	return this.strCheckId + this.DS_CHECK.getColumn(idx, this.codeColumn);
+}
+
+this.fn_get_value = function(toArray){
+	var resultArray = toArray ? toArray : false;
+	var valueArr = [];
+	
+	var maxCnt = this.DS_CHECK.getRowCount();
+	var id = "";
+	
+	for(var i=0; i<maxCnt; i++){
+		id = this.fn_get_checkBoxId(i);
+		if(this[id].value == true){
+			var value = this.DS_CHECK.getColumn(i, this.codeColumn);
+			//var resValue = resultArray ? value : "'" + value + "'";
+			var resValue = resultArray ? value : value ;
+			valueArr.push(resValue);
+		}
+	}
+	
+	return toArray ? valueArr : valueArr.toString();
+}
+
+this.fn_get_valueStr = function(){
+	var valueArr = this.fn_get_value(true);
+	return valueArr.toString();
+}
+
+/*
+ * 함수명  	: div_search_div_THING_CL_onclick
+ * 설명 		: 물건 전체선택, 해제할때 물건분류 콤보박스 변경
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: 
+ */
+this.multi_chk_onclick = function(obj:CheckBox, e:nexacro.ClickEventInfo)
+{
+	this.checkAllBox.set_value(this.fn_isAllCheck());
+}
+
+/*
+ * 함수명  	: div_search_chk_SELECT_onclick
+ * 설명 		: 물건분류 콤보박스 전체 선택, 해제
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: 
+ */
+this.chk_all_onclick = function(obj:CheckBox, e:nexacro.ClickEventInfo)
+{
+	this.fn_checkAll(obj.value);
+}]]></Script>
+  </Form>
+</FDL>

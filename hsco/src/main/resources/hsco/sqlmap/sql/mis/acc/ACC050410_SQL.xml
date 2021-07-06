@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050410_SQL">
+
+	 <!-- 미지급금 조회 -->
+	<select id="ACC050410DAO.unpayIntrBillList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ /*ACC050401DAO.unpayIntrBillList*/ ]]>
+		WITH MIJIGUK_AMT_T AS 
+		       (SELECT '2' AS MIJIGUK_TYPE , 
+		              t1.ACCNUT_YEAR , 
+		              t2.BSNS_CODE , 
+		              MAX(t4.BSNS_NM) AS BSNS_NM , /* TODO : 전표작성시 레포츠센터 사업코드를 미등록하여 임시로 처리함 향후변경필요(2017년도  ~) */ 
+		              t2.ACCNUT_ACNT_CODE , 
+		              t1.CHIT_NO , 
+		              replace(replace(MAX(t1.SUMRY_1), Chr(13),' '),Chr(10), '') AS SUMRY, 
+		              NVL(SUM(t2.CRDIT_AMOUNT),0) AS CR_AMT , 
+		              NVL(SUM(t2.DEBTOR_AMOUNT),0) AS DR_AMT , 
+		              NVL(SUM(DECODE(t3.DBRT_SE, 'D', t2.DEBTOR_AMOUNT - t2.CRDIT_AMOUNT, 'C', t2.CRDIT_AMOUNT - t2.DEBTOR_AMOUNT ,t2.DEBTOR_AMOUNT - t2.CRDIT_AMOUNT)), 0) AS JAN_AMT , 
+		              0 AS PRE_AMT 
+		         FROM TBACC_CHIT_MASTR t1 
+		              INNER JOIN TBACC_CHIT_DETAIL t2 
+		              ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR 
+		              AND t1.CHIT_NO = t2.CHIT_NO 
+		              INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t3 
+		              ON t2.ACCNUT_YEAR = t3.ACCNUT_YEAR 
+		              AND t2.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE 
+		              LEFT OUTER JOIN TBPRJ_BSNS_CODE t4 
+		              ON t2.BSNS_CODE = t4.BSNS_CODE 
+		        WHERE SUBSTR(t1.CHIT_DE,1,6) BETWEEN SUBSTR(#YYYYMM#,0,4)||'01' AND #YYYYMM#
+					  <isLessThan property="ACCNUT_YEAR" compareValue="2016">
+					  AND t2.ACCNUT_ACNT_CODE      = '2101000'
+					  </isLessThan>
+					  <isGreaterEqual property="ACCNUT_YEAR" compareValue="2016">
+					  AND t2.ACCNUT_ACNT_CODE      LIKE '2101001%'
+					  </isGreaterEqual>
+		              AND t1.CHIT_CONFM_AT = '1' 
+		              /*결산구분 C1: IFRS 일반회계, C2: 구분회계*/ 
+		        GROUP BY t1.ACCNUT_YEAR, t2.BSNS_CODE, t1.CHIT_NO, t2.ACCNUT_ACNT_CODE 
+		       ) , 
+		       MIJIGUK_BSNS_SUM_T AS 
+		       (SELECT '1' AS MIJIGUK_TYPE , 
+		              NVL(t1.ACCNUT_YEAR, t2.ACCNUT_YEAR) AS ACCNUT_YEAR , 
+		              NVL(t1.BSNS_CODE, t2.BSNS_CODE) AS BSNS_CODE , 
+		              NVL(t1.BSNS_NM, t3.BSNS_NM) AS BSNS_NM , 
+		              '' AS ACCNUT_ACNT_CODE , 
+		              '' AS CHIT_NO , 
+		              '' AS SUMRY , 
+		              NVL(t1.CR_AMT, 0) AS CR_AMT , 
+		              NVL(t1.DR_AMT, 0) AS DR_AMT , 
+		              t1.JAN_AMT , 
+		              t2.CRDIT_AMOUNT - t2.DEBTOR_AMOUNT AS PRE_AMT 
+		         FROM 
+		              (SELECT ACCNUT_YEAR , 
+		                     BSNS_CODE , 
+		                     BSNS_NM , 
+		                     NVL(SUM(CR_AMT),0) AS CR_AMT , 
+		                     NVL(SUM(DR_AMT),0) AS DR_AMT , 
+		                     NVL(SUM(JAN_AMT),0) AS JAN_AMT 
+		                FROM MIJIGUK_AMT_T 
+		               WHERE ACCNUT_YEAR = '2016' 
+		               GROUP BY ACCNUT_YEAR , 
+		                     BSNS_CODE , 
+		                     BSNS_NM 
+		              ) t1 
+		              FULL OUTER JOIN 
+		              (SELECT ACCNUT_YEAR, 
+		                     BSNS_CODE, 
+		                     NVL(SUM(CRDIT_AMOUNT),0) AS CRDIT_AMOUNT, 
+		                     NVL(SUM(DEBTOR_AMOUNT),0) AS DEBTOR_AMOUNT 
+		                FROM TBACC_ACCNUT_STACNT 
+		               WHERE ACCNUT_YEAR = #ACCNUT_YEAR# 
+		                     AND ACCNUT_MT = '00' 
+				 		     <isLessThan property="ACCNUT_YEAR" compareValue="2016">
+				 		     AND ACCNUT_ACNT_CODE      = '2101000'
+						     </isLessThan>
+						     <isGreaterEqual property="ACCNUT_YEAR" compareValue="2016">
+						     AND ACCNUT_ACNT_CODE      LIKE '2101001%'
+						     </isGreaterEqual>
+		               GROUP BY ACCNUT_YEAR, BSNS_CODE 
+		              ) t2 
+		              ON t1.ACCNUT_YEAR = t2.ACCNUT_YEAR 
+		              AND t1.BSNS_CODE = t2.BSNS_CODE  
+		              LEFT OUTER JOIN TBPRJ_BSNS_CODE t3 
+		              ON t2.BSNS_CODE = t3.BSNS_CODE 
+		       ) 
+		SELECT t1.ACCNUT_YEAR , 
+		       t1.BSNS_CODE , 
+		       t1.BSNS_NM , 
+		       t1.MIJIGUK_TYPE AS LVL , 
+		       t1.ACCNUT_ACNT_CODE , 
+		       t1.CHIT_NO , 
+		       replace(replace(t1.SUMRY, Chr(13),' '),Chr(10), '') AS SUMRY, 
+		       NVL(t1.PRE_AMT,0) AS PRE_AMT , 
+		       NVL(t1.CR_AMT,0) AS PLUS_AMT , 
+		       NVL(t1.DR_AMT,0) AS MINUS_AMT , 
+		       NVL(t1.PRE_AMT,0) + NVL(t1.CR_AMT,0) - NVL(t1.DR_AMT,0) AS JAN_AMT 
+		  FROM 
+		       (SELECT * 
+		         FROM MIJIGUK_BSNS_SUM_T s1 
+		        UNION ALL 
+		        SELECT * 
+		         FROM MIJIGUK_AMT_T s2 
+		       ) t1 
+		ORDER BY t1.BSNS_CODE,t1.MIJIGUK_TYPE
+	</select>
+</sqlMap>

@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01081000SQL">	
+
+	<!-- 쿼리명 : 해약현황
+	설명 : 해약현황
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.02
+	-->
+	<select id="RNT01081000DAO.selectCanclList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT a.CANCL_DE, 												/* 해약일자 */
+	          c.FRST_CNTRCT_DE, 										/* 최초계약일자 */
+	          b.RENT_HOUSE_NM,
+	          c.DONG,
+	          C.HO,
+	          d.AEA,
+	          v.NM,
+	          SFCOM_DEC_ALL(v.IHIDNUM) AS IHIDNUM,
+	          (SELECT CODE_NM
+	             FROM TBCOM_CMMN_CODE z
+	            WHERE GRP_CODE 	= 'RNT001'
+	              AND CODE 		= c.QUALF_SE) AS QUALF_NM, 				/* 자격구분 */
+	          (SELECT CODE_NM
+	             FROM TBCOM_CMMN_CODE z
+	            WHERE GRP_CODE 	= 'RNT005'
+	              AND CODE 		= a.RESCI_RESN_CODE) AS RESCI_RESN_NM, 	/* 해약사유 */
+	          c.FAMILY_CO,
+	          NVL(c.CNTRCT_AMOUNT, 0) + NVL (c.SURLUS, 0) AS SEC_AMT, 	/* 보증금 */
+	          NVL(c.RNTCHRG,0) AS RNTCHRG, 								/* 임대료 */
+	          NVL(t.CNT,0) AS CNT, 										/* 체납개월 */
+	          NVL(t.NPYM_AMT,0) AS NPYM_AMT, 							/* 체납임대료 */
+	          NVL(t.OVDINTR,0) AS OVDINTR,  							/* 체납연체료 */
+	          NVL(t.NPYM_AMT,0) + NVL(t.OVDINTR,0) AS TOT_AMT, 			/* 체납임대료계 */
+	          a.ADRES, 													/* 주소 */
+	          (SELECT MIN(FRST_CNTRCT_DE)
+	             FROM TBRNT_RENT_CNTRCT z
+	            WHERE RENT_HOUSE_CODE 	= c.RENT_HOUSE_CODE
+	              AND DONG 				= c.DONG
+	              AND HO 				= c.HO
+	              AND FRST_CNTRCT_DE <![CDATA[>=]]> a.CANCL_DE ) AS CONT_DATE, 		/* 재공급일 */
+	          (SELECT NVL(CNTRCT_AMOUNT,0) + NVL(SURLUS,0)
+	             FROM TBRNT_RENT_CNTRCT z
+	            WHERE RENT_HOUSE_CODE 	= c.RENT_HOUSE_CODE
+	              AND DONG 				= c.DONG
+	              AND HO 				= c.HO
+	              AND FRST_CNTRCT_DE = (SELECT MIN(FRST_CNTRCT_DE)
+	                                      FROM TBRNT_RENT_CNTRCT y
+	                                     WHERE RENT_HOUSE_CODE 	= Z.RENT_HOUSE_CODE
+	                                       AND DONG 			= z.DONG
+	                                       AND HO 				= z.HO
+	                                       AND FRST_CNTRCT_DE <![CDATA[>=]]> a.CANCL_DE)) AS NSEC_AMT,  /* 재공급보증금 */
+	          (SELECT USER_NM FROM TBCOM_USER WHERE USER_ID = a.REGISTER_ID) AS REGISTER_ID, 			/* 최초등록자 */
+	          TO_CHAR(a.REGIST_DT, 'YYYY-MM-DD HH24:MI:SS') AS REGIST_DT, 								/* 최초등록일시 */
+	          l.LWST_DE,  						/* 소송일자 */
+	          (SELECT MAX(SEIZR_INCDNT_NO) 
+	          	 FROM TBRNT_RENT_LWST z 
+	          	WHERE CNTRCTR_NO 	= l.CNTRCTR_NO 
+	          	  AND LWST_DE 		= l.LWST_DE) AS SEIZR_INCDNT_NO	/* 사건 번호 */
+	     FROM TBRNT_RENT_RESCI a, 				/* 임대해약 */
+	          TBRNT_RENT_HOUSE b,
+	          TBRNT_RENT_CNTRCT c,
+	          TBRNT_RENT_HOUSE_BILD d,
+	          TBRNT_PRMANENT_RENT_CSTMR V,
+	          (SELECT CNTRCTR_NO,
+	                  SUM(NVL(RNTCHRG,0) + NVL(RDCAMT_AMOUNT,0)) AS NPYM_AMT,
+	                  SUM(NVL(OVDINTR,0)) OVDINTR,
+	                  COUNT(1) CNT
+	             FROM TBRNT_RENT_MT_RNTCHRG 	/* 임대월임대료 */
+	            WHERE RCIV_DE IS NULL
+	            GROUP BY CNTRCTR_NO) t,
+	          (SELECT CNTRCTR_NO,
+	                  MAX(LWST_DE) LWST_DE
+	             FROM TBRNT_RENT_LWST
+	             WHERE JUDMN_DE IS NULL
+	           GROUP BY CNTRCTR_NO) l
+	     WHERE a.CNTRCTR_NO 		= c.CNTRCTR_NO(+)
+	       AND a.CNTRCTR_NO 		= t.CNTRCTR_NO(+)
+	       AND a.CNTRCTR_NO 		= l.CNTRCTR_NO(+)
+	       AND c.RENT_HOUSE_CODE 	= b.RENT_HOUSE_CODE
+	       AND c.PRMANENT_CSTMR_NO 	= v.PRMANENT_CSTMR_NO(+)
+	       AND c.RENT_HOUSE_CODE	= d.RENT_HOUSE_CODE(+)
+	       AND c.DONG 				= d.DONG(+)
+	       AND c.HO 				= d.HO(+)
+	       AND a.CANCL_DE BETWEEN #canclFromDe# AND #canclToDe#
+		<isNotEmpty property="houseSe">
+	       AND #houseSe# LIKE '%' || b.HOUSE_SE || '%'           /* 주택구분 */
+		</isNotEmpty>
+		<isNotEmpty property="rentHouseCode">
+		   AND b.RENT_HOUSE_CODE like #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+	       AND v.NM LIKE '%' || #nm#  || '%'
+		</isNotEmpty>
+	      ORDER BY c.RENT_HOUSE_CODE,
+	               c.DONG,
+	               c.HO
+	</select>
+	
+	<!-- 쿼리명 : 유보금처리내역
+	설명 : 유보금처리내역
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.02
+	-->
+	<select id="RNT01081000DAO.selectResrveProcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	       SELECT b.RENT_HOUSE_NM,
+	              c.DONG,
+	              c.HO,
+	              v.NM,
+	              v.TELNO || ',' || v.MBTLNO AS TEL_NO,
+	              NVL(e.RESRVE_AMOUNT,0) AS RESRVE_AMOUNT, 	/* 유보금 */
+	              NVL(e.ELCTY_CHRGE,0) + NVL(e.GAS_CHRGE,0) + NVL(e.FCLTS_AMOUNT,0) + NVL(e.ETC_AMOUNT,0) SUM_AMT,
+	              NVL(e.ELCTY_CHRGE,0) AS ELCTY_CHRGE,   	/* 전기요금 */
+	              NVL(e.GAS_CHRGE,0) AS GAS_CHRGE,     		/* 가스요금 */
+	              NVL(e.FCLTS_AMOUNT,0) AS FCLTS_AMOUNT,  	/* 시설물금액 */
+	              NVL(e.ETC_AMOUNT,0) AS ETC_AMOUNT,    	/* 기타금액 */
+	              NVL(RESRVE_AMOUNT,0) - (NVL(ELCTY_CHRGE,0) + NVL(GAS_CHRGE,0) + NVL(FCLTS_AMOUNT,0) + NVL(ETC_AMOUNT,0)) as EXR_AMR, /* 실지급액 */
+	              /* TOTAL 관리비 미납금  영구임대에서는 제외*/
+	              (SELECT SUM(NVL(RNTCHRG,0) + NVL(OVDINTR,0) + NVL(RDCAMT_AMOUNT,0)) 
+	                 FROM TBRNT_RENT_MT_RNTCHRG r 
+	                WHERE r.CNTRCTR_NO = c.CNTRCTR_NO AND r.RCIV_DE IS NULL) AS MRENT_AMT, /* 임대료 미납금 */
+	              a.CANCL_DE,   							/* 해약일자 */
+	              e.CNFIRM_DE,  							/* 확인일 */
+	              e.CHCK_DE,    							/* 세대점검일 */
+	              e.EXPNDTR_DE, 							/* 지출일자 */
+	              (SELECT CODE_NM
+	                 FROM TBCOM_CMMN_CODE z
+	                 WHERE GRP_CODE = 'COM021'
+	                   AND CODE = e.BANK_CODE) as BANK_NAME, /* 은행명 */
+	              e.ACNUTNO, 				/* 계좌번호 */
+	              e.DPSTR,   				/* 예금주 */
+	              c.RM
+	         FROM TBRNT_RENT_RESCI  a, 		/* 임대해약 */
+	              TBRNT_RENT_HOUSE  b,
+	              TBRNT_RENT_CNTRCT c,
+	              TBRNT_RENT_HOUSE_BILD d,
+	              TBRNT_RESRVE_AMOUNT e, 	/* 유보금 */
+	              TBRNT_PRMANENT_RENT_CSTMR v
+	       WHERE  a.CNTRCTR_NO 			= e.CNTRCTR_NO(+)
+	         AND  a.CNTRCTR_NO 			= c.CNTRCTR_NO(+)
+	         AND  c.RENT_HOUSE_CODE 	= b.RENT_HOUSE_CODE(+)
+	         AND  c.PRMANENT_CSTMR_NO 	= v.PRMANENT_CSTMR_NO(+)
+	         AND  c.RENT_HOUSE_CODE 	= d.RENT_HOUSE_CODE(+)
+	         AND  c.DONG 				= d.DONG(+)
+	         AND  c.HO 					= d.HO(+)
+	         AND  a.CANCL_DE BETWEEN #canclFromDe# AND #canclToDe#
+		<isNotEmpty property="houseSe">
+	         AND #houseSe# LIKE '%' || b.HOUSE_SE || '%'           /* 주택구분 */
+	    </isNotEmpty>
+	    <isNotEmpty property="rentHouseCode">
+	         AND b.RENT_HOUSE_CODE LIKE #rentHouseCode#
+	    </isNotEmpty>
+	    <isNotEmpty property="nm">
+	         AND v.NM LIKE '%' || #nm#  || '%'
+	    </isNotEmpty>
+	        ORDER BY c.RENT_HOUSE_CODE,
+	                 c.DONG,
+	                 c.HO
+	</select>
+</sqlMap>

@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020302_SQL">	
+	
+	<!-- 대량이체 -->
+	<select id="ACC020302DAO.lqttTransfrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   <![CDATA[ /*ACC020302DAO.lqttTransfrList*/ ]]>
+	    SELECT t1.*, t2.EMPNM AS ERP_USER_NM
+		FROM (
+		        SELECT 
+		             SITE_NO
+		            ,FL_DATE
+		            ,FL_TIME
+		            ,MAX(SEND_GB)														AS SEND_GB
+		            ,COUNT(1)                                                           AS SUM_CNT
+		            ,SUM(TRAN_AMT)                                                      AS SUM_AMT
+		            ,MAX(ERP_USER_ID)                                                   AS ERP_USER_ID
+		            ,SUM(CASE WHEN EB_STS_CD IN ('1') THEN 1 ELSE 0 END)                AS ENT_NOR_CNT  /*정상 건수*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('1') THEN TRAN_AMT ELSE 0 END)         AS ENT_NOR_AMT	/*정상 금액*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('6','8','9') THEN 1 ELSE 0 END)        AS ENT_ERR_CNT  /*오류 건수*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('6','8','9') THEN TRAN_AMT ELSE 0 END) AS ENT_ERR_AMT  /*오류 금액*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('4','5','6') THEN 1 ELSE 0 END)        AS ENT_BUL_CNT  /*뱅킹오류 건수*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('4','5','6') THEN TRAN_AMT ELSE 0 END) AS ENT_BUL_AMT  /*뱅킹오류 금액*/
+		        FROM NH_FILE_SND_RTN
+		        WHERE SEND_GB = 'E2' /*대량이체*/
+		          AND FL_DATE = #SRCH_DT#
+		        GROUP BY SITE_NO, FL_DATE, FL_TIME
+		     ) t1
+		     LEFT OUTER JOIN TBHRM_HR_MASTR t2 
+		     ON t1.ERP_USER_ID = t2.EMPNO
+		ORDER BY t1.SITE_NO, t1.FL_DATE, t1.FL_TIME
+	</select>
+	
+	<!-- 대량이체상세 -->
+	<select id="ACC020302DAO.lqttTransfrDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   <![CDATA[ /*ACC020302DAO.lqttTransfrDetailList*/ ]]>
+		SELECT
+			 t1.SITE_NO
+            ,t1.FL_DATE
+            ,t1.FL_TIME
+		    ,t1.FL_SEQ
+		    ,t1.SEND_GB
+		    ,t1.IN_BANK_CD
+		    ,t2.FNNC_INSTT_CODE_NM
+		    ,t1.IN_ACCT_NO
+		    ,t1.TRAN_AMT
+		    ,t1.PRE_RECI_MAN
+		    ,t1.BIGO
+		    ,t1.PROC_YN
+		    ,DECODE(t1.PROC_YN,'Y','정상','N','에러','') AS PROC_NM
+		    ,t1.PROC_DATE
+		    ,t1.EB_STS_CD
+		    ,CASE WHEN t1.EB_STS_CD = '3' THEN '정상'
+		          WHEN t1.EB_STS_CD IN ('6','8','9') THEN '예금주/계좌오류'
+		          WHEN t1.EB_STS_CD IN ('4','5','6') THEN '뱅킹오류'
+		     END AS EB_STS_NM
+		    ,t1.ERR_MSG
+		    ,t1.FL_DATE || t1.FL_TIME || LPAD(TO_CHAR(t1.FL_SEQ),4,'0') AS CMPNSP_NO
+		    ,CASE WHEN t3.CMPNSP_NO IS NOT NULL THEN '수입지출외현금'
+		           WHEN t4.CMPNSP_NO IS NOT NULL THEN '지출결의서'
+				     	 WHEN t5.CMPNSP_NO IS NOT NULL THEN '지출결의서'
+		           ELSE ''
+		     END AS INCME_EXPNDTR
+		FROM NH_FILE_SND_RTN t1
+		     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t2
+		     ON  TRIM(t1.IN_BANK_CD) = t2.FNNC_INSTT_CODE
+				 AND t2.USE_AT = '1'
+		     LEFT OUTER JOIN TBACC_INC_EXP_ELSE_CASH_DETAIL t3
+		     ON  t1.JEOKYO1 = t3.CMPNSP_NO
+		     LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t4
+				 ON  t1.JEOKYO1 = t4.CMPNSP_NO
+				 LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL_TRVCT t5
+				 ON  t1.JEOKYO1 = t5.CMPNSP_NO
+		WHERE t1.SITE_NO = #SITE_NO#
+		  AND t1.FL_DATE = #FL_DATE#
+		  AND t1.FL_TIME = #FL_TIME#
+		  AND t1.SEND_GB = 'E2' /*대량이체*/
+	    <isEqual property="ERR_YN" compareValue="1">
+		  AND t1.PROC_YN = 'N'
+		</isEqual>
+		ORDER BY t1.FL_SEQ
+	</select>
+	
+	
+	<!-- 급여이체 -->
+	<select id="ACC020302DAO.salaryTransfrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   <![CDATA[ /*ACC020302DAO.salaryTransfrList*/ ]]>
+	    SELECT t1.*, t2.EMPNM AS ERP_USER_NM
+		FROM (
+		        SELECT 
+		             SITE_NO
+		            ,FL_DATE
+		            ,FL_TIME
+		            ,MAX(SEND_GB)														AS SEND_GB
+		            ,COUNT(1)                                                           AS SUM_CNT
+		            ,SUM(TRAN_AMT)                                                      AS SUM_AMT
+		            ,MAX(ERP_USER_ID)                                                   AS ERP_USER_ID
+		            ,SUM(CASE WHEN EB_STS_CD IN ('1') THEN 1 ELSE 0 END)                AS ENT_NOR_CNT  /*정상 건수*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('1') THEN TRAN_AMT ELSE 0 END)         AS ENT_NOR_AMT	/*정상 금액*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('6','8','9') THEN 1 ELSE 0 END)        AS ENT_ERR_CNT  /*오류 건수*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('6','8','9') THEN TRAN_AMT ELSE 0 END) AS ENT_ERR_AMT  /*오류 금액*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('4','5','6') THEN 1 ELSE 0 END)        AS ENT_BUL_CNT  /*뱅킹오류 건수*/
+		            ,SUM(CASE WHEN EB_STS_CD IN ('4','5','6') THEN TRAN_AMT ELSE 0 END) AS ENT_BUL_AMT  /*뱅킹오류 금액*/
+		        FROM NH_FILE_SND_RTN
+		        WHERE SEND_GB = 'E3' /*대량급여*/
+		          AND FL_DATE = #SRCH_DT#
+		        GROUP BY SITE_NO, FL_DATE, FL_TIME
+		     ) t1
+		     LEFT OUTER JOIN TBHRM_HR_MASTR t2 
+		     ON t1.ERP_USER_ID = t2.EMPNO
+		ORDER BY t1.SITE_NO, t1.FL_DATE, t1.FL_TIME
+	</select>
+	
+	<!-- 급여이체상세 -->
+	<select id="ACC020302DAO.salaryTransfrDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   <![CDATA[ /*ACC020302DAO.salaryTransfrDetailList*/ ]]>
+		SELECT
+		     t1.SITE_NO
+            ,t1.FL_DATE
+            ,t1.FL_TIME
+		    ,t1.FL_SEQ
+		    ,t1.SEND_GB
+		    ,t1.IN_BANK_CD
+		    ,t2.FNNC_INSTT_CODE_NM
+		    ,t1.IN_ACCT_NO
+		    ,t1.TRAN_AMT
+		    ,t1.PRE_RECI_MAN
+		    ,t1.BIGO
+		    ,t1.PROC_YN
+		    ,DECODE(t1.PROC_YN,'Y','정상','N','에러','') AS PROC_NM
+		    ,t1.PROC_DATE
+		    ,t1.EB_STS_CD
+		    ,CASE WHEN t1.EB_STS_CD = '3' THEN '정상'
+		          WHEN t1.EB_STS_CD IN ('6','8','9') THEN '예금주/계좌오류'
+		          WHEN t1.EB_STS_CD IN ('4','5','6') THEN '뱅킹오류'
+		     END AS EB_STS_NM
+		    ,t1.ERR_MSG
+		    ,t1.FL_DATE || t1.FL_TIME || LPAD(TO_CHAR(t1.FL_SEQ),4,'0') AS CMPNSP_NO
+		FROM NH_FILE_SND_RTN t1
+		     LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t2
+		     ON  TRIM(t1.IN_BANK_CD) = t2.FNNC_INSTT_CODE
+				 AND t2.USE_AT = '1'
+		WHERE t1.SITE_NO = #SITE_NO#
+		  AND t1.FL_DATE = #FL_DATE#
+		  AND t1.FL_TIME = #FL_TIME#
+		  AND t1.SEND_GB = 'E3' /*대량급여*/
+	    <isEqual property="ERR_YN" compareValue="1">
+		  AND t1.PROC_YN = 'N'
+		</isEqual>
+		ORDER BY t1.FL_SEQ
+	</select>
+	
+	<!-- 오류처리 -->
+	<update id="ACC020302DAO.errorPorcessU" parameterClass="java.util.HashMap">
+		DECLARE
+		BEGIN
+			/* 지출결의세부 */
+			UPDATE TBACC_EXP_DSN_DETAIL
+			SET CMPNSP_NO = NULL
+			    ,ERROR_AT = '1'
+			    ,TRNS_AT  = '0'
+			WHERE TRIM(CMPNSP_NO) = TRIM(#ERP_REC_NO#)
+		   	;
+		   	
+			/* 지출결의세부여비 */
+			UPDATE TBACC_EXP_DSN_DETAIL_TRVCT
+			SET CMPNSP_NO = NULL
+			    ,ERROR_AT = '1'
+			    ,TRNS_AT  = '0'
+			WHERE TRIM(CMPNSP_NO) = TRIM(#ERP_REC_NO#)
+		   	;
+		   	
+		   	/* 급여상세내역 */
+		   	UPDATE TBACC_EXPNDTR_SLARY_DETAIL
+		   	SET CMPNSP_NO = NULL
+		   		,ERROR_AT = '1'
+			WHERE TRIM(CMPNSP_NO) = TRIM(#ERP_REC_NO#)
+		   	;
+		   	
+		   	/* 수입지출외현금상세 */
+		   	UPDATE TBACC_INC_EXP_ELSE_CASH_DETAIL
+		   	SET CMPNSP_NO = NULL
+		   		,ERROR_AT = '1'
+		   		,TRNS_AT  = '0'
+			WHERE TRIM(CMPNSP_NO) = TRIM(#ERP_REC_NO#)
+			; 
+		END;	
+	</update>
+	
+	<!-- 대량이체 삭제(미사용) -->
+	<delete id="ACC020302DAO.lqttTransfrD" parameterClass="java.util.HashMap">
+		DECLARE
+		BEGIN
+		
+			/* ERP번호삭제:지출결의세부 */
+			UPDATE TBACC_EXP_DSN_DETAIL
+			SET CMPNSP_NO = NULL
+			WHERE TRIM(CMPNSP_NO) IN (
+				SELECT TRIM(ERP_REC_NO)
+				FROM PAY_FILE_REQ_D t1
+				WHERE t1.SITE_CD			= #SITE_CD#
+				AND   TRIM(t1.FILE_GB)		= #FILE_GB#
+				AND   TRIM(t1.FILE_DATE)	= #FILE_DATE#
+				AND	  t1.FILE_CNT			= #FILE_CNT#
+				AND EXISTS (
+					SELECT 1 
+					FROM PAY_FILE_H t2
+					WHERE t1.SITE_CD   = t2.SITE_CD
+			  		AND   t1.FILE_GB   = t2.FILE_GB
+			  		AND   t1.FILE_DATE = t2.FILE_DATE
+			  		AND   t1.FILE_CNT  = t2.FILE_CNT
+			  		AND   TRIM(FLAG) <![CDATA[<>]]> 'EE'
+				)
+				AND	  TRIM(t1.ERP_REC_NO) IS NOT NULL
+			)
+			;
+			
+			/* ERP번호삭제:지출결의세부여비 */
+			UPDATE TBACC_EXP_DSN_DETAIL_TRVCT
+			SET CMPNSP_NO = NULL
+			WHERE TRIM(CMPNSP_NO) IN (
+				SELECT TRIM(ERP_REC_NO)
+				FROM PAY_FILE_REQ_D t1
+				WHERE t1.SITE_CD			= #SITE_CD#
+				AND   TRIM(t1.FILE_GB)		= #FILE_GB#
+				AND   TRIM(t1.FILE_DATE)	= #FILE_DATE#
+				AND	  t1.FILE_CNT			= #FILE_CNT#
+				AND EXISTS (
+					SELECT 1 
+					FROM PAY_FILE_H t2
+					WHERE t1.SITE_CD   = t2.SITE_CD
+			  		AND   t1.FILE_GB   = t2.FILE_GB
+			  		AND   t1.FILE_DATE = t2.FILE_DATE
+			  		AND   t1.FILE_CNT  = t2.FILE_CNT
+			  		AND   TRIM(FLAG) <![CDATA[<>]]> 'EE'
+				)
+				AND	  TRIM(t1.ERP_REC_NO) IS NOT NULL
+			)
+			;
+			
+			/* ERP번호삭제: 급여상세내역 */
+			UPDATE TBACC_EXPNDTR_SLARY_DETAIL
+		   	SET CMPNSP_NO = NULL
+			WHERE TRIM(CMPNSP_NO) IN (
+				SELECT TRIM(ERP_REC_NO)
+				FROM PAY_FILE_REQ_D t1
+				WHERE t1.SITE_CD			= #SITE_CD#
+				AND   TRIM(t1.FILE_GB)		= #FILE_GB#
+				AND   TRIM(t1.FILE_DATE)	= #FILE_DATE#
+				AND	  t1.FILE_CNT			= #FILE_CNT#
+				AND EXISTS (
+					SELECT 1 
+					FROM PAY_FILE_H t2
+					WHERE t1.SITE_CD   = t2.SITE_CD
+			  		AND   t1.FILE_GB   = t2.FILE_GB
+			  		AND   t1.FILE_DATE = t2.FILE_DATE
+			  		AND   t1.FILE_CNT  = t2.FILE_CNT
+			  		AND   TRIM(FLAG) <![CDATA[<>]]> 'EE'
+				)
+				AND	  TRIM(t1.ERP_REC_NO) IS NOT NULL
+			)
+			;
+			
+			/* 대량이체 요청상세 삭제 */
+			DELETE FROM PAY_FILE_REQ_D t1
+			WHERE t1.SITE_CD			= #SITE_CD#
+			AND   TRIM(t1.FILE_GB)		= #FILE_GB#
+			AND   TRIM(t1.FILE_DATE)	= #FILE_DATE#
+			AND	  t1.FILE_CNT			= #FILE_CNT#
+			AND EXISTS (
+				SELECT 1 
+				FROM PAY_FILE_H t2
+				WHERE t1.SITE_CD   = t2.SITE_CD
+		  		AND   t1.FILE_GB   = t2.FILE_GB
+		  		AND   t1.FILE_DATE = t2.FILE_DATE
+		  		AND   t1.FILE_CNT  = t2.FILE_CNT
+		  		AND   TRIM(FLAG) <![CDATA[<>]]> 'EE'
+			)
+			;
+			
+			/* 대량이체 집계 삭제 */
+			DELETE FROM PAY_FILE_H
+	     	WHERE SITE_CD			= #SITE_CD#
+			AND   TRIM(FILE_GB)		= #FILE_GB#
+			AND   TRIM(FILE_DATE)	= #FILE_DATE#
+			AND	  FILE_CNT			= #FILE_CNT#
+			AND   TRIM(FLAG) <![CDATA[<>]]> 'EE'
+			;
+		END;
+		
+	</delete>
+	
+	
+	<!-- 급여이체 삭제(미사용) -->
+	<delete id="ACC020302DAO.salaryTransfrD" parameterClass="java.util.HashMap">
+		DECLARE
+		BEGIN
+			
+			/* ERP번호삭제:지출결의세부 */
+			UPDATE TBACC_EXP_DSN_DETAIL
+			SET CMPNSP_NO = NULL
+			WHERE TRIM(CMPNSP_NO) IN (
+				SELECT TRIM(ERP_REC_NO)
+				FROM PAY_PAY_REQ_D t1
+				WHERE t1.SITE_CD			= #SITE_CD#
+				AND   TRIM(t1.FILE_GB)		= #FILE_GB#
+				AND   TRIM(t1.FILE_DATE)	= #FILE_DATE#
+				AND	  t1.FILE_CNT			= #FILE_CNT#
+				AND EXISTS (
+					SELECT 1
+					FROM PAY_PAY_H t2
+					WHERE t1.SITE_CD		= t2.SITE_CD	
+					AND   t1.FILE_GB		= t2.FILE_GB	
+					AND	  t1.FILE_DATE		= t2.FILE_DATE	
+					AND   t1.FILE_CNT		= t2.FILE_CNT	
+					AND   TRIM(t2.FLAG) <![CDATA[<>]]> 'EE'
+				)
+				AND	  TRIM(t1.ERP_REC_NO) IS NOT NULL
+			)
+			;
+			
+			/* ERP번호삭제:지출결의세부여비 */
+			UPDATE TBACC_EXP_DSN_DETAIL_TRVCT
+			SET CMPNSP_NO = NULL
+			WHERE TRIM(CMPNSP_NO) IN (
+				SELECT TRIM(ERP_REC_NO)
+				FROM PAY_PAY_REQ_D t1
+				WHERE t1.SITE_CD			= #SITE_CD#
+				AND   TRIM(t1.FILE_GB)		= #FILE_GB#
+				AND   TRIM(t1.FILE_DATE)	= #FILE_DATE#
+				AND	  t1.FILE_CNT			= #FILE_CNT#
+				AND EXISTS (
+					SELECT 1
+					FROM PAY_PAY_H t2
+					WHERE t1.SITE_CD		= t2.SITE_CD	
+					AND   t1.FILE_GB		= t2.FILE_GB	
+					AND	  t1.FILE_DATE		= t2.FILE_DATE	
+					AND   t1.FILE_CNT		= t2.FILE_CNT	
+					AND   TRIM(t2.FLAG) <![CDATA[<>]]> 'EE'
+				)
+				AND	  TRIM(t1.ERP_REC_NO) IS NOT NULL
+			)
+			;
+			
+			/* ERP번호삭제: 급여상세내역 */
+			UPDATE TBACC_EXPNDTR_SLARY_DETAIL
+		   	SET CMPNSP_NO = NULL
+			WHERE TRIM(CMPNSP_NO) IN (
+				SELECT TRIM(ERP_REC_NO)
+				FROM PAY_PAY_REQ_D t1
+				WHERE t1.SITE_CD			= #SITE_CD#
+				AND   TRIM(t1.FILE_GB)		= #FILE_GB#
+				AND   TRIM(t1.FILE_DATE)	= #FILE_DATE#
+				AND	  t1.FILE_CNT			= #FILE_CNT#
+				AND EXISTS (
+					SELECT 1
+					FROM PAY_PAY_H t2
+					WHERE t1.SITE_CD		= t2.SITE_CD	
+					AND   t1.FILE_GB		= t2.FILE_GB	
+					AND	  t1.FILE_DATE		= t2.FILE_DATE	
+					AND   t1.FILE_CNT		= t2.FILE_CNT	
+					AND   TRIM(t2.FLAG) <![CDATA[<>]]> 'EE'
+				)
+				AND	  TRIM(t1.ERP_REC_NO) IS NOT NULL
+			)
+			;
+		
+			/* 급여이체요청상세 삭제 */ 
+			DELETE FROM PAY_PAY_REQ_D t1
+			WHERE t1.SITE_CD			= #SITE_CD#
+			AND   TRIM(t1.FILE_GB)		= #FILE_GB#
+			AND   TRIM(t1.FILE_DATE)	= #FILE_DATE#
+			AND	  t1.FILE_CNT			= #FILE_CNT#
+			AND EXISTS (
+				SELECT 1
+				FROM PAY_PAY_H t2
+				WHERE t1.SITE_CD		= t2.SITE_CD	
+				AND   t1.FILE_GB		= t2.FILE_GB	
+				AND	  t1.FILE_DATE		= t2.FILE_DATE	
+				AND   t1.FILE_CNT		= t2.FILE_CNT	
+				AND   TRIM(t2.FLAG) <![CDATA[<>]]> 'EE'
+			)
+			;
+	
+			/* 급여이체집계 삭제 */
+			DELETE FROM PAY_PAY_H
+			WHERE SITE_CD			= #SITE_CD#
+			AND   TRIM(FILE_GB)		= #FILE_GB#
+			AND   TRIM(FILE_DATE)	= #FILE_DATE#
+			AND	  FILE_CNT			= #FILE_CNT#
+			AND   TRIM(FLAG) <![CDATA[<>]]> 'EE'
+			
+		END;
+	</delete>
+	
+</sqlMap>

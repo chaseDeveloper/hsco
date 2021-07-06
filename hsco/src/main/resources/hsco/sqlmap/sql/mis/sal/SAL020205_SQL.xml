@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL020205_SQL">	
+	
+	<!-- 년도별 임금피크 대상자 조회 -->
+	<select id="SAL020205DAO.selectCheckBrthdy" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+	<![CDATA[
+		SELECT COUNT(1) AS CNT
+		  FROM TBHRM_HR_MASTR
+		 WHERE BRTHDY LIKE '0000%'
+	]]>
+	</select>
+	
+	<!-- 년도별 임금피크 대상자 조회 -->
+	<select id="SAL020205DAO.selectWagePeakTrgList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH PEAK_T AS (
+		      SELECT 
+		           EMPNO
+		          ,BRTHDY
+		          ,'1' AS YY_ODR
+		          ,TO_CHAR(ADD_MONTHS(TO_DATE(BRTHDY,'YYYYMMDD'),12*58),'YYYY') AS PEAK_YEAR
+		          ,TO_CHAR(ADD_MONTHS(TO_DATE(BRTHDY,'YYYYMMDD'),12*58),'YYYY')||'0101' AS BGNDE
+		          ,TO_CHAR(ADD_MONTHS(TO_DATE(BRTHDY,'YYYYMMDD'),12*58),'YYYY')||'1231' AS ENDDE
+		      FROM TBHRM_HR_MASTR
+		      UNION ALL
+		      SELECT 
+		           EMPNO
+		          ,BRTHDY
+		          ,'2' AS YY_ODR
+		          ,TO_CHAR(ADD_MONTHS(TO_DATE(BRTHDY,'YYYYMMDD'),12*59),'YYYY') AS PEAK_YEAR
+		          ,TO_CHAR(ADD_MONTHS(TO_DATE(BRTHDY,'YYYYMMDD'),12*59),'YYYY')||'0101' AS BGNDE
+		          ,TO_CHAR(ADD_MONTHS(TO_DATE(BRTHDY,'YYYYMMDD'),12*59),'YYYY')||'1231' AS ENDDE
+		      FROM TBHRM_HR_MASTR
+		      UNION ALL
+		      SELECT 
+		           EMPNO
+		          ,BRTHDY
+		          ,'3' AS YY_ODR
+		          ,TO_CHAR(ADD_MONTHS(TO_DATE(BRTHDY,'YYYYMMDD'),12*60),'YYYY') AS PEAK_YEAR
+		          ,TO_CHAR(ADD_MONTHS(TO_DATE(BRTHDY,'YYYYMMDD'),12*60),'YYYY')||'0101' AS BGNDE
+		          ,TO_CHAR(ADD_MONTHS(TO_DATE(BRTHDY,'YYYYMMDD'),12*60),'YYYY')||'1231' AS ENDDE
+		      FROM TBHRM_HR_MASTR
+		)
+		SELECT
+		     t2.DEPT_CODE
+		    ,t3.DEPT_NM
+		    ,t1.EMPNO
+		    ,t2.EMPNM
+		    ,t2.JSSFC_SE
+		    ,t4.CODE_NM AS JSSFC_NM
+		    ,t2.HR_CLSF_SE
+		    ,t5.CODE_NM AS CLSF_NM
+		    ,t1.BRTHDY
+		    ,t1.YY_ODR
+		    ,t1.PEAK_YEAR
+		    ,NVL(TRIM(t6.BGNDE),t1.BGNDE) AS BGNDE
+		    ,NVL(TRIM(t6.ENDDE),t1.ENDDE) AS ENDDE
+		    ,NVL(t6.USE_AT,'0') AS USE_AT
+		    ,t6.RETIRE_YM
+		    ,t6.RM
+		FROM PEAK_T t1
+		     INNER JOIN TBHRM_HR_MASTR t2
+		     ON  t1.EMPNO = t2.EMPNO
+		     LEFT OUTER JOIN TBHRM_DEPT t3
+		     ON  t2.DEPT_CODE = t3.DEPT_CODE
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		     ON  t2.JSSFC_SE = t4.CODE
+		     AND t4.GRP_CODE = 'HRM001'
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		     ON  t2.HR_CLSF_SE = t5.CODE
+		     AND t5.GRP_CODE = 'HRM002'
+		     LEFT OUTER JOIN TBSAL_WAGE_PEAK t6
+		     ON  t1.EMPNO   = t6.EMPNO
+		     AND t1.YY_ODR  = t6.YY_ODR
+		WHERE t1.BGNDE <= NVL(t2.RETIRE_DE,'99991231')
+		  AND t1.PEAK_YEAR = #YEAR#
+		ORDER BY t1.YY_ODR, t3.SORT_ORDR, t5.CODE_ORDR
+	]]>
+	</select>
+	
+	
+	<update id="SAL020205DAO.mergeWagePeak" parameterClass="java.util.HashMap">
+		MERGE INTO TBSAL_WAGE_PEAK
+		USING DUAL
+		ON (
+				EMPNO 	= #EMPNO# 
+			AND YY_ODR 	= #YY_ODR#
+		)
+		WHEN MATCHED THEN
+			UPDATE
+			SET
+				 EMPNM		= #EMPNM#
+				,BGNDE      = #BGNDE#
+				,ENDDE      = #ENDDE#
+				,DDC_SE     = '1'
+				,RETIRE_YM  = #RETIRE_YM#
+				,USE_AT     = #USE_AT#
+				,RM         = #RM#
+				,UPDUSR_ID  = #S_USER_ID#
+				,UPDT_DT    = SYSDATE
+		WHEN NOT MATCHED THEN
+			INSERT
+			(
+				 EMPNO
+				,YY_ODR
+				,EMPNM
+				,BGNDE
+				,ENDDE
+				,DDC_SE
+				,RETIRE_YM
+				,USE_AT
+				,RM
+				,REGISTER_ID
+				,REGIST_DT
+				,UPDUSR_ID
+				,UPDT_DT
+			) VALUES (
+				 #EMPNO#
+				,#YY_ODR#
+				,#EMPNM#
+				,#BGNDE#
+				,#ENDDE#
+				,'1'
+				,#RETIRE_YM#
+				,#USE_AT#
+				,#RM#
+				,#S_USER_ID#
+				,SYSDATE
+				,#S_USER_ID#
+				,SYSDATE
+			)
+	</update>	
+	
+	
+	
+	<!-- 미사용 -->
+	
+	<!-- 임크피크제정보 목록조회 -->
+	<select id="SAL020205DAO.selectWagePeakList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.EMPNO                                                     AS EMPNO			/* 사번 */
+		     ,C.EMPNM                                                      AS EMPNM			/* 사원명 */
+		     ,C.DEPT_CODE                                                  AS DEPT_CODE		/* 부서코드 */
+		     ,SFSAL_GETDEPTNM_01(C.DEPT_CODE)                              AS DEPT_NAME		/* 부서명 */
+		     ,C.PAY_CLSF_SE                                                AS CLSF_CODE		/* 보수직급구분 */
+		     ,SFHRM_GET_OFCPSCD(A.EMPNO,C.JSSFC_SE,C.HR_CLSF_SE,C.ECNY_DE) AS OFCPS			/* 직위 */
+		     ,C.RSPOFC_SE                                                  AS RSPOFC_SE		/* 직책구분 */
+		     ,C.SRCLS                                                      AS SRCLS			/* 호봉 */
+		     ,A.YY_ODR                                                     AS YY_ODR		/* 년차수 */
+		     ,A.BGNDE                                                      AS BGNDE			/* 시작일자 */
+		     ,A.ENDDE                                                      AS ENDDE			/* 종료일자 */
+		     ,A.DDC_SE                                                     AS DDC_SE		/* 공제구분 */
+		     ,A.RETIRE_YM                                                  AS RETIRE_YM		/* 퇴직년월 */
+		     ,A.RM                                                         AS RM			/* 비고 */
+		  FROM TBSAL_WAGE_PEAK A
+		     ,VWHRM_DEPT B
+		     ,TBHRM_HR_MASTR C
+		 WHERE 1 = 1
+		   AND A.EMPNO = C.EMPNO
+		   AND C.DEPT_CODE = B.DEPT_CODE
+		   /* AND B.USE_AT = '1' */
+		<isNotEmpty property="EMPNO">
+			AND A.EMPNO = #EMPNO#
+		</isNotEmpty>			
+		ORDER BY NVL(B.OUTPT_ORDR,0)
+		       ,C.RSPOFC_SE
+		       , SFHRM_GET_OFCPSCD(A.EMPNO,C.JSSFC_SE,C.HR_CLSF_SE,C.ECNY_DE)
+		       , C.PAY_CLSF_SE
+		       , C.JSSFC_SE
+		       , A.EMPNO
+		       , A.YY_ODR
+		       , A.BGNDE
+    </select>
+    
+    <!-- 임크피크제기준정보 목록조회 -->
+	<select id="SAL020205DAO.selectwagepeakstdrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			   STDR_YEAR
+			  ,YY_ODR
+			  ,RDCAMT_RT
+			  ,RM
+		FROM TBSAL_WAGE_PEAK_STDR A	
+		WHERE 1=1
+		AND A.STDR_YEAR = #STDR_YEAR#	 
+		ORDER BY YY_ODR 	    
+    </select>
+  
+    <!-- 임크피크제정보 입력 -->
+    <insert id="SAL020205DAO.WagePeakC" parameterClass="java.util.HashMap">
+            INSERT INTO TBSAL_WAGE_PEAK (
+                       EMPNO
+					  ,EMPNM
+					  ,YY_ODR
+					  ,BGNDE
+					  ,ENDDE
+					  ,DDC_SE
+					  ,RETIRE_YM
+					  ,RM		  		                   
+                      ,REGISTER_ID
+                      ,REGIST_DT
+                      ,UPDUSR_ID
+                      ,UPDT_DT
+             ) VALUES (
+	                   #EMPNO#	                 
+	                  ,#EMPNM#
+	                  ,#YY_ODR#
+	                  ,#BGNDE#
+	                  ,#ENDDE#
+	                  ,#DDC_SE#
+	                  ,#RETIRE_YM#
+	                  ,#RM#                     
+	                  ,#S_USER_ID#
+	                  ,SYSDATE
+	                  ,#S_USER_ID#              
+	                  ,SYSDATE
+             )
+    </insert>
+    
+    <!-- 임크피크제정보 수정 -->
+    <update id="SAL020205DAO.WagePeakU" parameterClass="java.util.HashMap">
+            UPDATE TBSAL_WAGE_PEAK SET
+                 BGNDE              = #BGNDE#
+                ,ENDDE              = #ENDDE# 
+                ,DDC_SE             = #DDC_SE#
+                ,RETIRE_YM          = #RETIRE_YM#
+                ,RM                 = #RM# 
+                ,UPDUSR_ID		    = #S_USER_ID#
+                ,UPDT_DT		    = SYSDATE
+            WHERE  EMPNO = #EMPNO#  
+            AND YY_ODR = #YY_ODR#          
+    </update>
+
+    <!-- 임크피크제정보 삭제 -->
+    <delete id="SAL020205DAO.WagePeakD" parameterClass="java.util.HashMap">
+            DELETE FROM TBSAL_WAGE_PEAK
+            WHERE EMPNO = #EMPNO# 
+            AND YY_ODR = #YY_ODR# 
+    </delete> 
+    
+    <!-- 임크피크제정보기준 입력 -->
+    <insert id="SAL020205DAO.wagepeakstdrC" parameterClass="java.util.HashMap">
+            INSERT INTO TBSAL_WAGE_PEAK_STDR (
+                       STDR_YEAR
+					  ,YY_ODR
+					  ,RDCAMT_RT
+					  ,RM  		                   
+                      ,REGISTER_ID
+                      ,REGIST_DT
+                      ,UPDUSR_ID
+                      ,UPDT_DT
+             ) VALUES (
+	                   #STDR_YEAR#	                 
+	                  ,#YY_ODR#
+	                  ,#RDCAMT_RT#
+	                  ,#RM#           
+	                  ,#S_USER_ID#
+	                  ,SYSDATE
+	                  ,#S_USER_ID#              
+	                  ,SYSDATE
+             )
+    </insert>
+
+    <!-- 임크피크제정보기준 수정 -->
+    <update id="SAL020205DAO.wagepeakstdrU" parameterClass="java.util.HashMap">
+            UPDATE TBSAL_WAGE_PEAK_STDR  SET
+                 RDCAMT_RT      = #RDCAMT_RT# 
+                ,RM             = #RM# 
+                ,UPDUSR_ID		= #S_USER_ID#
+                ,UPDT_DT		= SYSDATE
+            WHERE  STDR_YEAR 	= #STDR_YEAR#  
+            AND YY_ODR 			= #YY_ODR#          
+    </update>
+
+    <!-- 임크피크제정보기준 삭제 -->
+    <delete id="SAL020205DAO.wagepeakstdrD" parameterClass="java.util.HashMap">
+            DELETE FROM TBSAL_WAGE_PEAK_STDR
+            WHERE  STDR_YEAR 	= #STDR_YEAR#  
+            AND YY_ODR 			= #YY_ODR# 
+    </delete>   
+   
+</sqlMap>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM010202_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 조직도목록 조회 -->
+	<select id="HRM010202DAO.selectOrgcht" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	SELECT *
+	FROM (SELECT ORGCHT_CODE
+		      ,ORGCHT_NM
+		      ,APPLC_DE
+		      ,RM
+		      ,REGISTER_ID
+		      ,REGIST_DT
+		      ,UPDUSR_ID
+		      ,UPDT_DT
+		      ,DECODE(RANK() OVER(ORDER BY NVL(APPLC_DE,0) DESC), '1', '1', '0') AS APPLC_AT
+		FROM   TBHRM_ORGCHT
+	) t1
+	  WHERE 1=1
+	<isNotEmpty property="APPLC_AT">
+		AND    t1.APPLC_AT = #APPLC_AT#
+	</isNotEmpty>
+	<isNotEmpty property="ORGCHT_CNM">
+		AND    ( t1.ORGCHT_CODE LIKE '%' || #ORGCHT_CNM# || '%'  OR  t1.ORGCHT_NM LIKE '%' || #ORGCHT_CNM# || '%' )
+	</isNotEmpty>
+		ORDER BY  NVL(t1.APPLC_DE,0) DESC
+	</select>
+
+
+	<!-- 조직도별 부서내역 조회 -->
+	<select id="HRM010202DAO.selectOrgchtDept" parameterClass="java.util.HashMap"  resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.ORGCHT_CODE
+		      ,t1.DEPT_CODE
+		      ,t1.DEPT_NM
+		      ,'['||t1.DEPT_CODE||'] '||t1.DEPT_NM     AS DEPT_CNM
+		      ,t1.UPPER_DEPT_CODE
+		      ,LEVEL              AS DEPT_LEVEL
+		      ,t1.SORT_ORDR
+		      ,t1.REGISTER_ID
+		      ,t1.REGIST_DT
+		      ,t1.UPDUSR_ID
+		      ,t1.UPDT_DT
+		FROM   (
+		        SELECT *
+		        FROM   TBHRM_ORGCHT_DEPT
+		        WHERE  ORGCHT_CODE = #ORGCHT_CODE#
+		       ) t1
+		START WITH t1.UPPER_DEPT_CODE IS NULL
+		CONNECT BY PRIOR t1.DEPT_CODE = t1.UPPER_DEPT_CODE
+		ORDER SIBLINGS BY t1.SORT_ORDR
+	]]>
+	</select>
+
+
+	<!-- 부서별인원 조회 -->
+	<select id="HRM010202DAO.selectEmpList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t1.EMPNO
+		      ,t1.EMPNM
+		      ,t1.JSSFC_SE
+		      ,t2.CODE_NM           AS JSSFC_SE_NM
+		      ,t1.HR_CLSF_SE
+		      ,t3.CODE_NM           AS HR_CLSF_SE_NM
+		      ,t1.ECNY_DE
+		      ,t1.TELNO_1
+		      ,H_DECRYPT(t1.TELNO_2)  AS TELNO_2
+		      ,t1.LXTN_NO
+		      ,SFHRM_GET_EMPL_INFO(t1.EMPNO, 'DEPT_CODE' , DECODE('0', '1', SYSDATE, NULL)) AS DEPT_CODE
+		      ,SFHRM_GET_EMPL_INFO(t1.EMPNO, 'DEPT_NM' , DECODE('0', '1', SYSDATE, NULL))   AS DEPT_NM
+		FROM   TBHRM_HR_MASTR t1
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		            ON t2.GRP_CODE = 'HRM001'
+		           AND t1.JSSFC_SE = t2.CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		            ON t3.GRP_CODE = 'HRM002'
+		           AND t1.HR_CLSF_SE = t3.CODE
+	]]>
+	<isNotEmpty property="DEPT_CODE">
+			WHERE  SFHRM_GET_EMPL_INFO(t1.EMPNO, 'DEPT_CODE' , DECODE(#APPLC_AT#, '1', SYSDATE, #APPLC_DE#)) IN (SELECT DEPT_CODE FROM TABLE(SFHRM_DEPT_TREE(#DEPT_CODE#)))
+	</isNotEmpty>
+	<![CDATA[
+		ORDER BY t1.DEPT_CODE, t1.JSSFC_SE, t1.HR_CLSF_SE, t1.EMPNO
+	]]>
+	</select>
+
+
+</sqlMap>

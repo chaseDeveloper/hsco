@@ -1,0 +1,1056 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02040303_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 관리비 당월부과내역
+			 설명 : 매입임대 관리비 당월부과내역 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		2016.07.20  이광원  쿼리변경
+	-->	
+	<select id="RNT02040303DAO.selectThisMonthLevyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+					 *
+		FROM (SELECT 
+							substr(#mdatYm#, 1, 4) || '년 ' || substr(#mdatYm#, 5, 2) || '월분' AS yyyymmT
+							,to_char(to_date(#mdatYm# || '01') - 1, 'yyyy') || '년 ' || to_char(to_date(#mdatYm# || '01') - 1, 'mm') || '월분' AS yyyymmP
+							,a.CNTRCTR_NO
+							,j.NM
+							,b.RENT_HOUSE_CODE
+							,c.RENT_HOUSE_NM
+							,b.DONG
+							,b.HO
+							,b.FAMILY_CO
+							,SUBSTR(f.ZIP, 1, 3) || '-' || SUBSTR(f.ZIP, 4, 3) AS ZIP
+							,RTRIM(f.ADRES || ' ' || f.ADRES_DETAIL) AS ADRES
+							,max(a.PAY_TMLMT) AS PAY_TMLMT
+							,sum(nvl(a.MANAGECT, 0)) AS MANAGECT
+							,sum(nvl(a.OVDINTR, 0)) AS OVDINTR
+							,sum(nvl(a.RDCAMT_AMOUNT, 0)) AS RDCAMT_AMOUNT
+							,sum(nvl(a.TOTAL, 0)) AS TOTAL
+							,sum(nvl(TRUNC_AMT, 0)) AS TRUNC_AMT
+							,sum(MANAGECT01) AS MANAGECT01
+							,sum(MANAGECT02) AS MANAGECT02
+							,sum(MANAGECT03) AS MANAGECT03
+							,sum(MANAGECT04) AS MANAGECT04
+							,sum(MANAGECT05) AS MANAGECT05
+							,sum(MANAGECT06) AS MANAGECT06
+							,sum(MANAGECT_ETC) AS MANAGECT_ETC
+							,sum(NPYM_AMOUNT) AS NPYM_AMOUNT
+							,sum(nvl(a.TOTAL, 0)) - sum(nvl(a.NPYM_AMOUNT, 0)) AS NOW_AMT
+							,sum(RDCAMT_AMOUNT_06) AS RDCAMT_AMOUNT_06
+							,max(m.LEVY_AMOUNT) AS LEVY_AMOUNT
+							,max(m.USGQTY) AS USGQTY
+							,max(m.TOT_HSHLD_NMPR_CO) AS TOT_HSHLD_NMPR_CO
+							,max(m.TOT_HSHLD_CO) AS TOT_HSHLD_CO
+							,max(m.TOT_DVR_AR) AS TOT_DVR_AR
+							,(SELECT 
+										sum(nvl(RDCAMT_AMOUNT, 0))
+							FROM TBRNT_MT_MANAGECT d
+							WHERE A.CNTRCTR_NO = D.CNTRCTR_NO
+							AND d.OCCRRNC_YM = #mdatYm#
+							AND d.MANAGECT_CODE = '06'
+							) AS TRDCAMT_AMOUNT_06
+							,a.CNTRCTR_NO || max(a.PAY_TMLMT) || lpad(trunc(sum(nvl(a.MANAGECT, 0) + nvl(a.OVDINTR, 0)), - 1), 11, '0') AS BARCODE_INFO
+							,(SELECT 
+										sum(RCIV_AMOUNT)
+							FROM TBRNT_PUCHAS_RCIV r
+							WHERE r.CNTRCTR_NO = a.CNTRCTR_NO
+							AND r.NTIC_SE = '2'
+							AND r.RCIV_DE = #lastMonth#
+							) AS RCIV_AMOUNT
+							,decode(d.ACNUTNO, '', '', substr(d.ACNUTNO, 1, 3) || '**********') AS ACNUTNO
+							,d.DPSTR
+				FROM (SELECT 
+									CNTRCTR_NO
+									,PAY_TMLMT
+									,sum(MANAGECT01) AS MANAGECT01
+									,sum(MANAGECT02) AS MANAGECT02
+									,sum(MANAGECT03) AS MANAGECT03
+									,sum(MANAGECT04) AS MANAGECT04
+									,sum(MANAGECT05) AS MANAGECT05
+									,sum(MANAGECT06) AS MANAGECT06
+									,sum(RDCAMT_AMOUNT_06) AS RDCAMT_AMOUNT_06
+									,sum(MANAGECT_ETC) AS MANAGECT_ETC
+									,trunc(sum(NPYM_AMOUNT), - 1) AS NPYM_AMOUNT
+									,sum(RDCAMT_AMOUNT) AS RDCAMT_AMOUNT
+									,sum(MANAGECT) AS MANAGECT
+									,sum(OVDINTR) AS OVDINTR
+									,trunc(sum(TOTAL), - 1) AS TOTAL
+									,decode(OCCRRNC_YM, #mdatYm# , sum(nvl(TOTAL, 0)) - trunc(sum(nvl(TOTAL, 0)), - 1), 0) AS TRUNC_AMT
+						FROM (SELECT 
+											CNTRCTR_NO
+											,PAY_TMLMT
+											,OCCRRNC_YM
+											,0 AS MANAGECT01
+											,0 AS RDCAMT_AMOUNT_06
+											,0 AS MANAGECT02
+											,0 AS MANAGECT03
+											,0 AS MANAGECT04
+											,0 AS MANAGECT05
+											,0 AS MANAGECT06
+											,0 AS MANAGECT_ETC
+											,NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0) AS NPYM_AMOUNT
+											,0 AS RDCAMT_AMOUNT
+											,NVL(MANAGECT, 0) AS MANAGECT
+											,NVL(OVDINTR, 0) AS OVDINTR
+											,NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0) AS TOTAL
+									FROM TBRNT_MT_MANAGECT
+									WHERE OCCRRNC_YM <![CDATA[ < ]]>#mdatYm#
+									AND RCIV_DE IS NULL
+			
+			UNION ALL
+			
+		SELECT 
+					CNTRCTR_NO
+					,PAY_TMLMT
+					,OCCRRNC_YM
+					,(
+						CASE 
+							WHEN OCCRRNC_YM = #mdatYm#
+								AND MANAGECT_CODE = '06'
+								THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+							ELSE 0
+							END
+						) AS MANAGECT01
+					,(
+						CASE 
+							WHEN OCCRRNC_YM = #mdatYm#
+								AND MANAGECT_CODE = '06'
+								THEN nvl(RDCAMT_AMOUNT, 0)
+							ELSE 0
+							END
+						) AS RDCAMT_AMOUNT_06
+					,(
+						CASE 
+							WHEN OCCRRNC_YM = #mdatYm#
+								AND MANAGECT_CODE = '05'
+								THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+							ELSE 0
+							END
+						) AS MANAGECT02
+					,0 AS MANAGECT03
+					,(
+						CASE 
+							WHEN OCCRRNC_YM = #mdatYm#
+								AND MANAGECT_CODE = '10'
+								THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+							ELSE 0
+							END
+						) AS MANAGECT04
+					,(
+						CASE 
+							WHEN OCCRRNC_YM = #mdatYm#
+								AND MANAGECT_CODE = '02'
+								THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+							ELSE 0
+							END
+						) AS MANAGECT05
+					,(
+						CASE 
+							WHEN OCCRRNC_YM = #mdatYm#
+								AND MANAGECT_CODE = '04'
+								THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+							ELSE 0
+							END
+						) AS MANAGECT06
+					,(
+						CASE 
+							WHEN OCCRRNC_YM = #mdatYm#
+								AND MANAGECT_CODE NOT IN (
+									'06'
+									,'05'
+									,'10'
+									,'02'
+									,'04'
+									)
+								THEN NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0)
+							ELSE 0
+							END
+						) AS MANAGECT_ETC
+					,0 AS NPYM_AMOUNT
+					,nvl(RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT
+					,NVL(MANAGECT, 0) AS MANAGECT
+					,NVL(OVDINTR, 0) AS OVDINTR
+					,NVL(MANAGECT, 0) + NVL(OVDINTR, 0) + nvl(RDCAMT_AMOUNT, 0) AS total
+					FROM TBRNT_MT_MANAGECT
+					WHERE OCCRRNC_YM = #mdatYm#
+					AND RCIV_DE IS NULL
+					)
+					GROUP BY CNTRCTR_NO
+						,PAY_TMLMT
+						,OCCRRNC_YM
+					) a
+					,TBRNT_PUCHAS_CNTRCT b
+					,TBRNT_PUCHAS_HOUSE c
+					,TBRNT_PUCHAS_HOUSE_DONG f
+					,(SELECT 
+								*
+					FROM TBRNT_MANAGECT_UNTPC
+					WHERE OCCRRNC_YM = #mdatYm#
+					AND MANAGECT_CODE = '06') m
+					,(SELECT
+								 *
+					FROM TBPMS_ATCNG
+					WHERE JOB_SE = 'RN2'
+					  AND PAY_SE = '04') d
+			 	    ,TBRNT_PUCHAS_RENT_CSTMR j
+			    	,TBRNT_PUCHAS_RESCI i    	
+					WHERE 1 =1
+					<isNotEmpty property="houseCode">
+					AND b.RENT_HOUSE_CODE LIKE #houseCode#
+					</isNotEmpty>
+					<isNotEmpty property="dong">
+					AND b.DONG LIKE #dong#
+					</isNotEmpty>
+					<isNotEmpty property="ho">
+					AND b.HO LIKE #ho#
+					</isNotEmpty>
+					AND a.CNTRCTR_NO = b.CNTRCTR_NO
+			    AND b.PUCHAS_CSTMR_NO = j.PUCHAS_CSTMR_NO(+)
+			    AND b.CNTRCTR_NO = i.CNTRCTR_NO(+)
+					AND i.CANCL_DE IS NULL
+					AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+					AND b.RENT_HOUSE_CODE = f.RENT_HOUSE_CODE(+)
+					AND b.DONG = f.DONG(+)
+					AND b.RENT_HOUSE_CODE = m.RENT_HOUSE_CODE(+)
+					AND b.DONG = m.DONG(+)
+					AND a.CNTRCTR_NO = d.CNTRCTR_NO(+)
+					AND EXISTS (
+						SELECT 1
+						FROM TBRNT_MT_MANAGECT cc
+						WHERE cc.CNTRCTR_NO = b.CNTRCTR_NO
+							AND cc.OCCRRNC_YM = #mdatYm#
+						)
+				GROUP BY a.CNTRCTR_NO
+					,j.NM
+					,b.RENT_HOUSE_CODE
+					,c.RENT_HOUSE_NM
+					,b.DONG
+					,b.HO
+					,b.FAMILY_CO
+					,f.ZIP
+					,f.ADRES
+					,f.ADRES_DETAIL
+					,d.ACNUTNO
+					,d.DPSTR					
+				<isEqual property="CheckBox00" compareValue="0">	
+				HAVING sum(nvl(a.TOTAL, 0)) - sum(nvl(a.NPYM_AMOUNT, 0)) <![CDATA[ > ]]> 0
+				</isEqual>
+				<isEqual property="CheckBox00" compareValue="1">
+				HAVING sum(nvl(a.TOTAL, 0)) - sum(nvl(a.NPYM_AMOUNT, 0)) <![CDATA[ <= ]]> 0
+				</isEqual>
+				)
+			WHERE 1=1
+			ORDER BY RENT_HOUSE_CODE, DONG, HO 	
+	</select>
+	
+	
+	<!-- 쿼리명 : 매입임대 일괄납부요청  프로시저 호출
+			 설명 : 매입임대 일괄납부요청  프로시저 호출
+		  수정일 : 수정자  수정내용	
+		2016.07.20  이광원  쿼리변경
+	-->		 
+	<parameterMap id="in_param" class="java.util.HashMap">
+		<parameter property="CRT_DIV" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="CORT_DIV" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="APT_CLASS" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="BANK_CD" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="CUST_ID" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="BILLYM" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="DEC_DATE" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="TR_DATE" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+		<parameter property="TR_SDATE" jdbcType="VARCHAR" javaType="string" mode="IN"  />	
+		<parameter property="TR_EDATE" jdbcType="VARCHAR" javaType="string" mode="IN"  />							
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN"  />
+	</parameterMap>	
+	
+	<procedure id="RNT02040303DAO.SP_VA_BILL_UID_ALL" parameterMap="in_param">
+		{ CALL SP_VA_BILL_UID_ALL( ? , ? , ? , ? , ? , ? , ? , ? , ? , ? , ?)}
+	</procedure>	
+	
+
+	<!-- 쿼리명 : 매입임대 관리비 출력용파일정보
+			 설명 : 매입임대 관리비 출력용파일정보 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2016.01.05
+	-->	
+	<select id="RNT02040303DAO.selectInputFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<!-- 
+		SELECT DISTINCT
+					b.RENT_HOUSE_CODE
+					,b.DONG
+					,b.HO
+					,g.NM
+					,SUBSTR(replace(f.ZIP, '-', ''), 1, 3) || '-' || SUBSTR(replace(f.ZIP, '-', ''), 4, 3) AS ZIP
+					,RTRIM(f.ADRES || ' ' || f.ADRES_DETAIL) AS ADRES
+					,c.RENT_HOUSE_CODE || ' ' || trim(to_number(b.DONG) || '-' || to_number(b.HO)) AS ADRES_DETAIL
+					,#mdatYm# AS BILL_YM
+					,SFCOM_GET_TREDATE(#payTmlmt#) AS  PAY_TMLMT
+					,'주택(아파트)' AS C_TITLE1
+					,c.RENT_HOUSE_CODE AS C_CONT1
+					,'동   호   수' AS C_TITLE2
+					,trim(to_number(b.DONG) || '-' || to_number(b.HO)) AS C_CONT2
+					,'납   부   자' AS C_TITLE3
+					,g.NM AS C_CONT3
+					,'  ' AS C_TITLE4
+					,'  ' AS C_CONT4
+					,'관리비' AS A_TITLE1
+					,a.TOT_AMT AS A_AMT1
+					,'' AS A_TITLE2
+					,0 AS A_AMT2
+					,'' AS A_TITLE3
+					,0 AS A_AMT3
+					,'  ' AS A_TITLE4
+					,0 AS A_AMT4
+					,a.TOT_AMT AS A_AMT5
+					,'' MIN_RATIO
+					,'' MAX_RATIO
+					,x.OPOST_NO
+					,x.OADDR1
+					,x.OADDR2
+					,x.OTEL_NO
+					,X.OFAX_NO
+					,decode(s.CNTRCTR_NO, '', v.bank1, '') AS BANK1
+					,decode(s.CNTRCTR_NO, '', v.acct_no1, '') AS ACCT_NO1
+					,decode(s.CNTRCTR_NO, '', v.bank2, '') AS BANK2
+					,decode(s.CNTRCTR_NO, '', v.acct_no2, '') AS ACCT_NO2
+					,decode(s.CNTRCTR_NO, '', v.bank3, '') AS BANK3
+					,decode(s.CNTRCTR_NO, '', v.acct_no3, '') AS ACCT_NO3
+					,decode(s.CNTRCTR_NO, '', v.bank4, '') AS BANK4
+					,decode(s.CNTRCTR_NO, '', v.acct_no4, '') AS ACCT_NO4
+					,decode(s.CNTRCTR_NO, '', v.bank5, '') AS BANK5
+					,decode(s.CNTRCTR_NO, '', v.acct_no5, '') AS ACCT_NO5
+					,decode(s.CNTRCTR_NO, '', v.bank6, '') AS BANK6
+					,decode(s.CNTRCTR_NO, '', v.acct_no6, '') AS ACCT_NO6
+					,MANAGECT AS MANAGECT
+					,RDCAMT_AMOUNT
+					,AMANAGECT
+					,TOT_AMT
+					,MONTH1
+					,PAY_TMLMT1
+					,MANAGECT1
+					,RDCAMT_AMOUNT1
+					,AMANAGECT1
+					,TOT_AMT1
+					,MONTH2
+					,PAY_TMLMT2
+					,MANAGECT2
+					,RDCAMT_AMOUNT2
+					,AMANAGECT2
+					,TOT_AMT2
+					,MONTH3
+					,PAY_TMLMT3
+					,MANAGECT3
+					,RDCAMT_AMOUNT3
+					,AMANAGECT3
+					,TOT_AMT3
+					,MONTH4
+					,PAY_TMLMT4
+					,MANAGECT4
+					,RDCAMT_AMOUNT4
+					,AMANAGECT4
+					,TOT_AMT4
+					,MONTH5
+					,PAY_TMLMT5
+					,MANAGECT5
+					,RDCAMT_AMOUNT5
+					,AMANAGECT5
+					,TOT_AMT5
+					,MONTH6
+					,PAY_TMLMT6
+					,MANAGECT6
+					,RDCAMT_AMOUNT6
+					,AMANAGECT6
+					,TOT_AMT6
+					,MONTH7
+					,PAY_TMLMT7
+					,MANAGECT7
+					,RDCAMT_AMOUNT7
+					,AMANAGECT7
+					,TOT_AMT7
+					,MONTH8
+					,PAY_TMLMT8
+					,MANAGECT8
+					,RDCAMT_AMOUNT8
+					,AMANAGECT8
+					,TOT_AMT8
+					,MONTH9
+					,PAY_TMLMT9
+					,MANAGECT9
+					,RDCAMT_AMOUNT9
+					,AMANAGECT9
+					,TOT_AMT9
+					,MONTH10
+					,PAY_TMLMT10
+					,MANAGECT10
+					,RDCAMT_AMOUNT10
+					,AMANAGECT10
+					,TOT_AMT10
+					,MONTH11
+					,PAY_TMLMT11
+					,MANAGECT11
+					,RDCAMT_AMOUNT11
+					,AMANAGECT11
+					,TOT_AMT11
+					,MONTH12
+					,PAY_TMLMT12
+					,MANAGECT12
+					,RDCAMT_AMOUNT12
+					,AMANAGECT12
+					,TOT_AMT12
+					,MONTH13
+					,PAY_TMLMT13
+					,MANAGECT13
+					,RDCAMT_AMOUNT13
+					,AMANAGECT13
+					,TOT_AMT13
+					,r.RCIV_DE
+					,r.RCIV_AMOUNT
+					,s.BANK_NM
+					,s.ACNUTNO
+					,s.DPSTR
+					,a.CNTRCTR_NO
+					,(
+						SELECT MSTK_PREPAR_VALUE
+						FROM TBCOM_CMMN_CODE
+						WHERE GRP_CODE = 'COM027'
+						AND CODE = 'MA'
+						) AS AUTO_NO
+					,(
+						SELECT USGQTY
+						FROM TBRNT_MANAGECT_UNTPC w
+						WHERE w.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+							AND w.DONG = b.DONG
+							AND w.OCCRRNC_YM = #mdatYm#
+							AND MANAGECT_CODE = '06'
+						) AS USGQTY
+					,(
+						SELECT LEVY_AMOUNT
+						FROM TBRNT_MANAGECT_UNTPC w
+						WHERE w.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+							AND w.DONG = b.DONG
+							AND w.OCCRRNC_YM = #mdatYm#
+							AND MANAGECT_CODE = '06'
+						) AS LEVY_AMOUNT
+					,(
+						SELECT TOT_HSHLD_NMPR_CO
+						FROM TBRNT_MANAGECT_UNTPC w
+						WHERE w.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+							AND w.DONG = b.DONG
+							AND w.OCCRRNC_YM = #mdatYm#
+							AND MANAGECT_CODE = '06'
+						) AS TOT_HSHLD_NMPR_CO
+					,(
+						SELECT sum(nvl(RDCAMT_AMOUNT, 0))
+						FROM TBRNT_MT_MANAGECT w
+						WHERE w.CNTRCTR_NO = b.CNTRCTR_NO
+							AND w.OCCRRNC_YM = #mdatYm#
+							AND w.MANAGECT_CODE = '06'
+						) AS TRDCAMT_AMOUNT_06
+					,(
+						SELECT sum(nvl(RDCAMT_AMOUNT, 0))
+						FROM TBRNT_MT_MANAGECT w
+						WHERE w.CNTRCTR_NO = b.CNTRCTR_NO
+							AND w.OCCRRNC_YM = #mdatYm#
+							AND w.MANAGECT_CODE = '06'
+						) AS RDCAMT_AMOUNT_06
+		FROM (
+					SELECT DISTINCT
+							 CNTRCTR_NO
+							,sum(MANAGECT) AS MANAGECT
+							,sum(RDCAMT_AMOUNT - TRUNC_AMT) AS RDCAMT_AMOUNT
+							,0 AS aMANAGECT
+							,sum(MANAGECT + RDCAMT_AMOUNT - TRUNC_AMT) AS TOT_AMT
+							,'수도료' AS MONTH1
+							,max(PAY_TMLMT1) AS PAY_TMLMT1
+							,sum(MANAGECT1) AS MANAGECT1
+							,sum(RDCAMT_AMOUNT1) AS RDCAMT_AMOUNT1
+							,0 AS aMANAGECT1
+							,sum(MANAGECT1 + RDCAMT_AMOUNT1) AS TOT_AMT1
+							,'공용전기' AS MONTH2
+							,max(PAY_TMLMT2) AS PAY_TMLMT2
+							,sum(MANAGECT2) AS MANAGECT2
+							,sum(RDCAMT_AMOUNT2) AS RDCAMT_AMOUNT2
+							,0 AS aMANAGECT2
+							,sum(MANAGECT2 + RDCAMT_AMOUNT2) AS TOT_AMT2
+							,'청소비' AS MONTH3
+							,max(PAY_TMLMT3) AS PAY_TMLMT3
+							,sum(MANAGECT3) AS MANAGECT3
+							,sum(RDCAMT_AMOUNT3) AS RDCAMT_AMOUNT3
+							,0 AS AMANAGECT3
+							,sum(MANAGECT3 + RDCAMT_AMOUNT3) AS TOT_AMT3
+							,'정화조' AS MONTH4
+							,max(PAY_TMLMT4) AS PAY_TMLMT4
+							,sum(MANAGECT4) AS MANAGECT4
+							,sum(RDCAMT_AMOUNT4) AS RDCAMT_AMOUNT4
+							,0 AS aMANAGECT4
+							,sum(MANAGECT4 + RDCAMT_AMOUNT4) AS TOT_AMT4
+							,'감액' AS MONTH5
+							,max(PAY_TMLMT5) AS PAY_TMLMT5
+							,sum(MANAGECT5) AS MANAGECT5
+							,sum(RDCAMT_AMOUNT5) AS RDCAMT_AMOUNT5
+							,0 AS AMANAGECT5
+							,sum(MANAGECT5 + RDCAMT_AMOUNT5) AS TOT_AMT5
+							,'기타요금' AS MONTH6
+							,max(PAY_TMLMT6) AS PAY_TMLMT6
+							,sum(MANAGECT6) AS MANAGECT6
+							,sum(RDCAMT_AMOUNT6) AS RDCAMT_AMOUNT6
+							,0 AS AMANAGECT6
+							,sum(MANAGECT6 + RDCAMT_AMOUNT6) AS TOT_AMT6
+							,' ' AS MONTH7
+							,CASE 
+								WHEN sum(MANAGECT7 + RDCAMT_AMOUNT7)  <![CDATA[ <>]]> 0
+									THEN max(PAY_TMLMT7)
+								ELSE NULL
+								END AS PAY_TMLMT7
+							,sum(MANAGECT7) AS MANAGECT7
+							,sum(RDCAMT_AMOUNT7) AS RDCAMT_AMOUNT7
+							,0 AS AMANAGECT7
+							,sum(MANAGECT7 + RDCAMT_AMOUNT7) AS TOT_AMT7
+							,max(PAY_TMLMT8) AS MONTH8
+							,max(PAY_TMLMT8) AS PAY_TMLMT8
+							,sum(MANAGECT8) AS MANAGECT8
+							,sum(RDCAMT_AMOUNT8) AS RDCAMT_AMOUNT8
+							,0 AS AMANAGECT8
+							,sum(MANAGECT8 + RDCAMT_AMOUNT8) AS TOT_AMT8
+							,max(PAY_TMLMT9) AS MONTH9
+							,max(PAY_TMLMT9) AS PAY_TMLMT9
+							,sum(MANAGECT9) AS MANAGECT9
+							,sum(RDCAMT_AMOUNT9) AS RDCAMT_AMOUNT9
+							,0 AS AMANAGECT9
+							,sum(MANAGECT9 + RDCAMT_AMOUNT9) AS TOT_AMT9
+							,max(PAY_TMLMT10) AS MONTH10
+							,max(PAY_TMLMT10) AS PAY_TMLMT10
+							,sum(MANAGECT10) AS MANAGECT10
+							,sum(RDCAMT_AMOUNT10) AS RDCAMT_AMOUNT10
+							,0 AS AMANAGECT10
+							,sum(MANAGECT10 + RDCAMT_AMOUNT10) AS TOT_AMT10
+							,max(PAY_TMLMT11) AS MONTH11
+							,max(PAY_TMLMT11) AS PAY_TMLMT11
+							,sum(MANAGECT11) AS MANAGECT11
+							,sum(RDCAMT_AMOUNT11) AS RDCAMT_AMOUNT11
+							,0 AS AMANAGECT11
+							,sum(MANAGECT11 + RDCAMT_AMOUNT11) AS TOT_AMT11
+							,max(PAY_TMLMT12) AS MONTH12
+							,max(PAY_TMLMT12) AS PAY_TMLMT12
+							,sum(MANAGECT12) AS MANAGECT12
+							,sum(RDCAMT_AMOUNT12) AS RDCAMT_AMOUNT12
+							,0 AS AMANAGECT12
+							,sum(MANAGECT12 + nvl(RDCAMT_AMOUNT12, 0)) AS TOT_AMT12
+							,'절사금액' AS MONTH13
+							,'' AS PAY_TMLMT13
+							,sum(MANAGECT13) AS MANAGECT13
+							,sum(RDCAMT_AMOUNT13) * - 1 AS RDCAMT_AMOUNT13
+							,0 AS AMANAGECT13
+							,sum(MANAGECT13 + RDCAMT_AMOUNT13) * - 1 AS TOT_AMT13
+				FROM (
+							SELECT DISTINCT
+									CNTRCTR_NO
+									,MANAGECT
+									,RDCAMT_AMOUNT
+									,TRUNC_AMT
+									,decode(OCCRRNC_YM, #mdatYm#, MANAGECT + RDCAMT_AMOUNT, 0) AS MANAGECT0
+									,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT1
+									,decode(OCCRRNC_YM, #mdatYm#, MANAGECT01, 0) AS MANAGECT1
+									,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT01, 0) AS RDCAMT_AMOUNT1
+									,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT2
+									,decode(OCCRRNC_YM, #mdatYm#, MANAGECT02, 0) AS MANAGECT2
+									,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT02, 0) AS RDCAMT_AMOUNT2
+									,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT3
+									,decode(OCCRRNC_YM, #mdatYm#, MANAGECT03, 0) AS MANAGECT3
+									,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT03, 0) AS RDCAMT_AMOUNT3
+									,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT4
+									,decode(OCCRRNC_YM, #mdatYm#, MANAGECT04, 0) AS MANAGECT4
+									,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT04, 0) AS RDCAMT_AMOUNT4
+									,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT5
+									,decode(OCCRRNC_YM, #mdatYm#, MANAGECT05, 0) AS MANAGECT5
+									,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT05, 0) AS RDCAMT_AMOUNT5
+									,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT6
+									,decode(OCCRRNC_YM, #mdatYm#, MANAGECT06, 0) AS MANAGECT6
+									,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT06, 0) AS RDCAMT_AMOUNT6
+									,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT7
+									,decode(OCCRRNC_YM, #mdatYm#, MANAGECT_etc, 0) AS MANAGECT7
+									,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT_ETC, 0) AS RDCAMT_AMOUNT7
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 1), 'yyyymm'), PAY_TMLMT, NULL) AS PAY_TMLMT8
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 1), 'yyyymm'), MANAGECT, 0) AS MANAGECT8
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 1), 'yyyymm'), RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT8
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 2), 'yyyymm'), PAY_TMLMT, NULL) AS PAY_TMLMT9
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 2), 'yyyymm'), MANAGECT, 0) AS MANAGECT9
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 2), 'yyyymm'), RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT9
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 3), 'yyyymm'), PAY_TMLMT, NULL) AS PAY_TMLMT10
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 3), 'yyyymm'), MANAGECT, 0) AS MANAGECT10
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 3), 'yyyymm'), RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT10
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 4), 'yyyymm'), PAY_TMLMT, NULL) AS PAY_TMLMT11
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 4), 'yyyymm'), MANAGECT, 0) AS MANAGECT11
+									,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 4), 'yyyymm'), RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT11
+									,CASE 
+										WHEN OCCRRNC_YM  <![CDATA[<= ]]> to_char(add_months(to_date(#mdatYm# || '01'), - 5), 'yyyymm')
+											THEN PAY_TMLMT
+										END AS PAY_TMLMT12
+									,CASE 
+										WHEN OCCRRNC_YM  <![CDATA[<= ]]> to_char(add_months(to_date(#mdatYm# || '01'), - 5), 'yyyymm')
+											THEN MANAGECT
+										ELSE 0
+										END AS MANAGECT12
+									,CASE 
+										WHEN OCCRRNC_YM  <![CDATA[<= ]]> to_char(add_months(to_date(#mdatYm# || '01'), - 5), 'yyyymm')
+											THEN RDCAMT_AMOUNT
+										ELSE 0
+										END AS RDCAMT_AMOUNT12
+									,NULL AS PAY_TMLMT13
+									,0 AS MANAGECT13
+									,TRUNC_AMT RDCAMT_AMOUNT13
+								FROM VWRNT_PUCHAS_MANAGECT
+								WHERE OCCRRNC_YM <![CDATA[<= ]]>  #mdatYm#
+									AND RCIV_DE IS NULL
+									AND MANAGECT + RDCAMT_AMOUNT<![CDATA[ > ]]> 0
+									)
+				GROUP BY CNTRCTR_NO
+				HAVING sum(MANAGECT + RDCAMT_AMOUNT - TRUNC_AMT)  <![CDATA[ > ]]>0
+				) a
+				,TBRNT_PUCHAS_CNTRCT b
+				,TBRNT_PUCHAS_HOUSE c
+				,TBRNT_PUCHAS_HOUSE_DONG f
+				,TBRNT_PUCHAS_RENT_CSTMR g
+				,TBRNT_PUCHAS_RESCI k
+				,(
+					SELECT DISTINCT CNTRCTR_NO
+						,(
+							SELECT CODE_NM
+							FROM TBCOM_CMMN_CODE
+							WHERE GRP_CODE = 'COM021'
+							AND CODE = BANK_CODE) BANK_NM
+						,ACNUTNO
+						,DPSTR
+					FROM TBPMS_ATCNG
+					WHERE JOB_SE = 'RN2'
+					  AND PAY_SE = '04'
+					) s
+				,(
+					SELECT DISTINCT
+                a.CNTRCTR_NO
+                ,max(RCIV_DE) AS RCIV_DE
+                ,sum(RCIV_AMOUNT) AS RCIV_AMOUNT
+					FROM TBRNT_PUCHAS_RCIV a
+					WHERE a.RCIV_DE = SFCOM_GET_TREDATE(#cal_reivDt#)
+						AND a.RCIV_AMOUNT > 0
+					GROUP BY CNTRCTR_NO
+					) r
+				,(
+					SELECT DISTINCT
+						CHRCTR_PREPAR_VALUE_0 AS OPOST_NO
+						,CHRCTR_PREPAR_VALUE_1 AS OADDR1
+						,CHRCTR_PREPAR_VALUE_2	AS OADDR2		
+						,'전화:' || (
+							SELECT CHRCTR_PREPAR_VALUE_0
+							FROM TBCOM_CMMN_CODE
+							WHERE GRP_CODE = 'COM027'
+							AND CODE_NM = 'RN'
+							) AS OTEL_NO
+						,'FAX :' || (
+							SELECT CHRCTR_PREPAR_VALUE_1
+							FROM TBCOM_CMMN_CODE
+							WHERE GRP_CODE = 'COM027'
+							AND CODE_NM = 'RN'
+							) AS OFAX_NO
+					FROM TBCOM_CMMN_CODE
+					WHERE GRP_CODE = 'COM027'
+					AND CODE_NM = 'RN'
+					) x
+				,vi_va_mast v
+				,(
+					SELECT DISTINCT crt_id
+					FROM va_bill_detail
+					WHERE crt_div = 'MA'
+						AND substr(tr_date, 1, 6) = #mdatYm#
+					) v1
+			WHERE b.CNTRCTR_NO = a.CNTRCTR_NO
+         AND b.CNTRCTR_NO = k.CNTRCTR_NO(+)
+        AND k.CANCL_DE IS NULL
+				AND b.PUCHAS_CSTMR_NO = g.PUCHAS_CSTMR_NO
+				AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+				AND b.RENT_HOUSE_CODE = f.RENT_HOUSE_CODE(+)
+				AND b.DONG = f.DONG(+)
+				AND b.CNTRCTR_NO = v.crt_id
+				AND v.crt_div = 'MA'
+				AND b.CNTRCTR_NO = r.CNTRCTR_NO(+)
+				AND b.CNTRCTR_NO = s.CNTRCTR_NO(+)
+       			 AND b.CNTRCTR_NO = v1.crt_id(+)
+			ORDER BY b.RENT_HOUSE_CODE,b.DONG,b.HO
+	-->
+	
+        SELECT DISTINCT
+                    b.RENT_HOUSE_CODE
+                    ,b.DONG
+                    ,b.HO
+                    ,g.NM
+                    ,f.ZIP AS ZIP
+                    ,RTRIM(f.ADRES || ' ' || f.ADRES_DETAIL) AS ADRES
+                    ,c.RENT_HOUSE_NM || ' ' || to_number(b.HO) || '호' AS ADRES_DETAIL                    
+                    ,#mdatYm#  AS MDAT_YM                       /*청구년월*/
+                    ,PE.PAY_TMLMT
+                    ,'주택(아파트)' AS C_TITLE1
+                    ,c.RENT_HOUSE_NM AS C_CONT1
+                    ,'동   호   수' AS C_TITLE2
+                    ,to_number(b.DONG)||'-'|| to_number(b.HO) || '호' AS C_CONT2
+                    ,'납   부   자' AS C_TITLE3
+                    ,g.NM AS C_CONT3
+                    ,'  ' AS C_TITLE4
+                    ,'  ' AS C_CONT4
+                    ,'관리비' AS A_TITLE1
+                    ,a.TOT_AMT AS A_AMT1
+                    ,'' AS A_TITLE2
+                    ,0 AS A_AMT2
+                    ,'' AS A_TITLE3
+                    ,0 AS A_AMT3
+                    ,'  ' AS A_TITLE4
+                    ,0 AS A_AMT4
+                    ,a.TOT_AMT AS A_AMT5
+                    ,'' MIN_RATIO
+                    ,'' MAX_RATIO
+                    ,x.OPOST_NO
+                    ,x.OADDR1
+                    ,x.OADDR2
+                    ,x.OTEL_NO
+                    ,X.OFAX_NO
+                    ,decode(s.CNTRCTR_NO, '', v.bank1, '') AS BANK1
+                    ,decode(s.CNTRCTR_NO, '', v.acct_no1, '') AS ACCT_NO1
+                    ,decode(s.CNTRCTR_NO, '', v.bank2, '') AS BANK2
+                    ,decode(s.CNTRCTR_NO, '', v.acct_no2, '') AS ACCT_NO2
+                    ,decode(s.CNTRCTR_NO, '', v.bank3, '') AS BANK3
+                    ,decode(s.CNTRCTR_NO, '', v.acct_no3, '') AS ACCT_NO3
+                    ,decode(s.CNTRCTR_NO, '', v.bank4, '') AS BANK4
+                    ,decode(s.CNTRCTR_NO, '', v.acct_no4, '') AS ACCT_NO4
+                    ,decode(s.CNTRCTR_NO, '', v.bank5, '') AS BANK5
+                    ,decode(s.CNTRCTR_NO, '', v.acct_no5, '') AS ACCT_NO5
+                    ,decode(s.CNTRCTR_NO, '', v.bank6, '') AS BANK6
+                    ,decode(s.CNTRCTR_NO, '', v.acct_no6, '') AS ACCT_NO6
+                    ,MANAGECT AS MANAGECT
+                    ,A.RDCAMT_AMOUNT
+                    ,AMANAGECT
+                    ,TOT_AMT
+                    ,MONTH1
+                    ,PAY_TMLMT1
+                    ,MANAGECT1
+                    ,RDCAMT_AMOUNT1
+                    ,AMANAGECT1
+                    ,TOT_AMT1
+                    ,MONTH2
+                    ,PAY_TMLMT2
+                    ,MANAGECT2
+                    ,RDCAMT_AMOUNT2
+                    ,AMANAGECT2
+                    ,TOT_AMT2
+                    ,MONTH3
+                    ,PAY_TMLMT3
+                    ,MANAGECT3
+                    ,RDCAMT_AMOUNT3
+                    ,AMANAGECT3
+                    ,TOT_AMT3
+                    ,MONTH4
+                    ,PAY_TMLMT4
+                    ,MANAGECT4
+                    ,RDCAMT_AMOUNT4
+                    ,AMANAGECT4
+                    ,TOT_AMT4
+                    ,MONTH5
+                    ,PAY_TMLMT5
+                    ,MANAGECT5
+                    ,RDCAMT_AMOUNT5
+                    ,AMANAGECT5
+                    ,TOT_AMT5
+                    ,MONTH6
+                    ,PAY_TMLMT6
+                    ,MANAGECT6
+                    ,RDCAMT_AMOUNT6
+                    ,AMANAGECT6
+                    ,TOT_AMT6
+                    ,MONTH7
+                    ,PAY_TMLMT7
+                    ,MANAGECT7
+                    ,RDCAMT_AMOUNT7
+                    ,AMANAGECT7
+                    ,TOT_AMT7
+                    ,MONTH8
+                    ,PAY_TMLMT8
+                    ,MANAGECT8
+                    ,RDCAMT_AMOUNT8
+                    ,AMANAGECT8
+                    ,TOT_AMT8
+                    ,MONTH9
+                    ,PAY_TMLMT9
+                    ,MANAGECT9
+                    ,RDCAMT_AMOUNT9
+                    ,AMANAGECT9
+                    ,TOT_AMT9
+                    ,MONTH10
+                    ,PAY_TMLMT10
+                    ,MANAGECT10
+                    ,RDCAMT_AMOUNT10
+                    ,AMANAGECT10
+                    ,TOT_AMT10
+                    ,MONTH11
+                    ,PAY_TMLMT11
+                    ,MANAGECT11
+                    ,RDCAMT_AMOUNT11
+                    ,AMANAGECT11
+                    ,TOT_AMT11
+                    ,MONTH12
+                    ,PAY_TMLMT12
+                    ,MANAGECT12
+                    ,RDCAMT_AMOUNT12
+                    ,AMANAGECT12
+                    ,TOT_AMT12
+                    ,MONTH13
+                    ,PAY_TMLMT13
+                    ,MANAGECT13
+                    ,RDCAMT_AMOUNT13
+                    ,AMANAGECT13
+                    ,TOT_AMT13
+                    ,r.RCIV_DE
+                    ,r.RCIV_AMOUNT
+                    ,s.BANK_NM
+                    ,s.ACNUTNO
+                    ,s.DPSTR
+                    ,a.CNTRCTR_NO
+                    ,X1.AUTO_NO
+                    ,X2.USGQTY
+                    ,X2.LEVY_AMOUNT
+                    ,X2.TOT_HSHLD_NMPR_CO
+                    ,NVL(X3.RDCAMT_AMOUNT,0) AS TRDCAMT_AMOUNT_06
+                    ,NVL(X3.RDCAMT_AMOUNT,0) AS RDCAMT_AMOUNT_06
+        FROM (
+                    SELECT DISTINCT
+                             CNTRCTR_NO
+                            ,sum(MANAGECT) AS MANAGECT
+                            ,sum(RDCAMT_AMOUNT - TRUNC_AMT) AS RDCAMT_AMOUNT
+                            ,0 AS aMANAGECT
+                            ,sum(MANAGECT + RDCAMT_AMOUNT - TRUNC_AMT) AS TOT_AMT
+                            ,'수도료' AS MONTH1
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT1)),'YYYY-MM-DD') AS PAY_TMLMT1
+                            ,sum(MANAGECT1) AS MANAGECT1
+                            ,sum(RDCAMT_AMOUNT1) AS RDCAMT_AMOUNT1
+                            ,0 AS aMANAGECT1
+                            ,sum(MANAGECT1 + RDCAMT_AMOUNT1) AS TOT_AMT1
+                            ,'공용전기' AS MONTH2
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT2)),'YYYY-MM-DD') AS PAY_TMLMT2
+                            ,sum(MANAGECT2) AS MANAGECT2
+                            ,sum(RDCAMT_AMOUNT2) AS RDCAMT_AMOUNT2
+                            ,0 AS aMANAGECT2
+                            ,sum(MANAGECT2 + RDCAMT_AMOUNT2) AS TOT_AMT2
+                            ,'청소비' AS MONTH3
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT3)),'YYYY-MM-DD') AS PAY_TMLMT3
+                            ,sum(MANAGECT3) AS MANAGECT3
+                            ,sum(RDCAMT_AMOUNT3) AS RDCAMT_AMOUNT3
+                            ,0 AS AMANAGECT3
+                            ,sum(MANAGECT3 + RDCAMT_AMOUNT3) AS TOT_AMT3
+                            ,'정화조' AS MONTH4
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT4)),'YYYY-MM-DD') AS PAY_TMLMT4
+                            ,sum(MANAGECT4) AS MANAGECT4
+                            ,sum(RDCAMT_AMOUNT4) AS RDCAMT_AMOUNT4
+                            ,0 AS aMANAGECT4
+                            ,sum(MANAGECT4 + RDCAMT_AMOUNT4) AS TOT_AMT4
+                            ,'감액' AS MONTH5
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT5)),'YYYY-MM-DD') AS PAY_TMLMT5
+                            ,sum(MANAGECT5) AS MANAGECT5
+                            ,sum(RDCAMT_AMOUNT5) AS RDCAMT_AMOUNT5
+                            ,0 AS AMANAGECT5
+                            ,sum(MANAGECT5 + RDCAMT_AMOUNT5) AS TOT_AMT5
+                            ,'기타요금' AS MONTH6
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT6)),'YYYY-MM-DD') AS PAY_TMLMT6
+                            ,sum(MANAGECT6) AS MANAGECT6
+                            ,sum(RDCAMT_AMOUNT6) AS RDCAMT_AMOUNT6
+                            ,0 AS AMANAGECT6
+                            ,sum(MANAGECT6 + RDCAMT_AMOUNT6) AS TOT_AMT6
+                            ,' ' AS MONTH7
+                            ,CASE 
+                                WHEN sum(MANAGECT7 + RDCAMT_AMOUNT7) <![CDATA[ <>]]> 0
+                                    THEN TO_CHAR(TO_DATE(max(PAY_TMLMT7)),'YYYY-MM-DD')
+                                ELSE NULL
+                                END AS PAY_TMLMT7
+                            ,sum(MANAGECT7) AS MANAGECT7
+                            ,sum(RDCAMT_AMOUNT7) AS RDCAMT_AMOUNT7
+                            ,0 AS AMANAGECT7
+                            ,sum(MANAGECT7 + RDCAMT_AMOUNT7) AS TOT_AMT7
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT8)),'YYYY-MM') AS MONTH8
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT8)),'YYYY-MM-DD') AS PAY_TMLMT8
+                            ,sum(MANAGECT8) AS MANAGECT8
+                            ,sum(RDCAMT_AMOUNT8) AS RDCAMT_AMOUNT8
+                            ,0 AS AMANAGECT8
+                            ,sum(MANAGECT8 + RDCAMT_AMOUNT8) AS TOT_AMT8
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT9)),'YYYY-MM') AS MONTH9
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT9)),'YYYY-MM-DD') AS PAY_TMLMT9
+                            ,sum(MANAGECT9) AS MANAGECT9
+                            ,sum(RDCAMT_AMOUNT9) AS RDCAMT_AMOUNT9
+                            ,0 AS AMANAGECT9
+                            ,sum(MANAGECT9 + RDCAMT_AMOUNT9) AS TOT_AMT9
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT10)),'YYYY-MM') AS MONTH10
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT10)),'YYYY-MM-DD') AS PAY_TMLMT10
+                            ,sum(MANAGECT10) AS MANAGECT10
+                            ,sum(RDCAMT_AMOUNT10) AS RDCAMT_AMOUNT10
+                            ,0 AS AMANAGECT10
+                            ,sum(MANAGECT10 + RDCAMT_AMOUNT10) AS TOT_AMT10
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT11)),'YYYY-MM') AS MONTH11
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT11)),'YYYY-MM-DD') AS PAY_TMLMT11
+                            ,sum(MANAGECT11) AS MANAGECT11
+                            ,sum(RDCAMT_AMOUNT11) AS RDCAMT_AMOUNT11
+                            ,0 AS AMANAGECT11
+                            ,sum(MANAGECT11 + RDCAMT_AMOUNT11) AS TOT_AMT11
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT12)),'YYYY-MM') AS MONTH12
+                            ,TO_CHAR(TO_DATE(max(PAY_TMLMT12)),'YYYY-MM-DD') AS PAY_TMLMT12
+                            ,sum(MANAGECT12) AS MANAGECT12
+                            ,sum(RDCAMT_AMOUNT12) AS RDCAMT_AMOUNT12
+                            ,0 AS AMANAGECT12
+                            ,sum(MANAGECT12 + nvl(RDCAMT_AMOUNT12, 0)) AS TOT_AMT12
+                            ,'절사금액' AS MONTH13
+                            ,'' AS PAY_TMLMT13
+                            ,sum(MANAGECT13) AS MANAGECT13
+                            ,sum(RDCAMT_AMOUNT13) * - 1 AS RDCAMT_AMOUNT13
+                            ,0 AS AMANAGECT13
+                            ,sum(MANAGECT13 + RDCAMT_AMOUNT13) * - 1 AS TOT_AMT13
+                FROM (
+                            SELECT DISTINCT
+                                    CNTRCTR_NO
+                                    ,MANAGECT
+                                    ,RDCAMT_AMOUNT
+                                    ,TRUNC_AMT
+                                    ,decode(OCCRRNC_YM, #mdatYm#, MANAGECT + RDCAMT_AMOUNT, 0) AS MANAGECT0
+                                    ,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT1
+                                    ,decode(OCCRRNC_YM, #mdatYm#, MANAGECT01, 0) AS MANAGECT1
+                                    ,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT01, 0) AS RDCAMT_AMOUNT1
+                                    ,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT2
+                                    ,decode(OCCRRNC_YM, #mdatYm#, MANAGECT02, 0) AS MANAGECT2
+                                    ,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT02, 0) AS RDCAMT_AMOUNT2
+                                    ,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT3
+                                    ,decode(OCCRRNC_YM, #mdatYm#, MANAGECT03, 0) AS MANAGECT3
+                                    ,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT03, 0) AS RDCAMT_AMOUNT3
+                                    ,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT4
+                                    ,decode(OCCRRNC_YM, #mdatYm#, MANAGECT04, 0) AS MANAGECT4
+                                    ,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT04, 0) AS RDCAMT_AMOUNT4
+                                    ,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT5
+                                    ,decode(OCCRRNC_YM, #mdatYm#, MANAGECT05, 0) AS MANAGECT5
+                                    ,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT05, 0) AS RDCAMT_AMOUNT5
+                                    ,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT6
+                                    ,decode(OCCRRNC_YM, #mdatYm#, MANAGECT06, 0) AS MANAGECT6
+                                    ,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT06, 0) AS RDCAMT_AMOUNT6
+                                    ,decode(OCCRRNC_YM, #mdatYm#, PAY_TMLMT, NULL) AS PAY_TMLMT7
+                                    ,decode(OCCRRNC_YM, #mdatYm#, MANAGECT_etc, 0) AS MANAGECT7
+                                    ,decode(OCCRRNC_YM, #mdatYm#, RDCAMT_AMOUNT_ETC, 0) AS RDCAMT_AMOUNT7
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 1), 'yyyymm'), PAY_TMLMT, NULL) AS PAY_TMLMT8
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 1), 'yyyymm'), MANAGECT, 0) AS MANAGECT8
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 1), 'yyyymm'), RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT8
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 2), 'yyyymm'), PAY_TMLMT, NULL) AS PAY_TMLMT9
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 2), 'yyyymm'), MANAGECT, 0) AS MANAGECT9
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 2), 'yyyymm'), RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT9
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 3), 'yyyymm'), PAY_TMLMT, NULL) AS PAY_TMLMT10
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 3), 'yyyymm'), MANAGECT, 0) AS MANAGECT10
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 3), 'yyyymm'), RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT10
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 4), 'yyyymm'), PAY_TMLMT, NULL) AS PAY_TMLMT11
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 4), 'yyyymm'), MANAGECT, 0) AS MANAGECT11
+                                    ,decode(OCCRRNC_YM, to_char(add_months(to_date(#mdatYm# || '01'), - 4), 'yyyymm'), RDCAMT_AMOUNT, 0) AS RDCAMT_AMOUNT11
+                                    ,CASE 
+                                        WHEN OCCRRNC_YM <![CDATA[<= ]]>  to_char(add_months(to_date(#mdatYm# || '01'), - 5), 'yyyymm')
+                                            THEN PAY_TMLMT
+                                        END AS PAY_TMLMT12
+                                    ,CASE 
+                                        WHEN OCCRRNC_YM  <![CDATA[<= ]]>   to_char(add_months(to_date(#mdatYm# || '01'), - 5), 'yyyymm')
+                                            THEN MANAGECT
+                                        ELSE 0
+                                        END AS MANAGECT12
+                                    ,CASE 
+                                        WHEN OCCRRNC_YM  <![CDATA[<= ]]>   to_char(add_months(to_date(#mdatYm# || '01'), - 5), 'yyyymm')
+                                            THEN RDCAMT_AMOUNT
+                                        ELSE 0
+                                        END AS RDCAMT_AMOUNT12
+                                    ,NULL AS PAY_TMLMT13
+                                    ,0 AS MANAGECT13
+                                    ,TRUNC_AMT RDCAMT_AMOUNT13
+                                FROM VWRNT_PUCHAS_MANAGECT
+                                WHERE OCCRRNC_YM <![CDATA[<= ]]>   #mdatYm#
+                                    AND RCIV_DE IS NULL
+                                    AND MANAGECT + RDCAMT_AMOUNT <![CDATA[ > ]]>  0
+                                    )
+                GROUP BY CNTRCTR_NO
+                HAVING sum(MANAGECT + RDCAMT_AMOUNT - TRUNC_AMT) <![CDATA[ > ]]>  0
+                ) a
+                ,TBRNT_PUCHAS_CNTRCT b
+                ,TBRNT_PUCHAS_HOUSE c
+                ,TBRNT_PUCHAS_HOUSE_DONG f
+                ,TBRNT_PUCHAS_RENT_CSTMR g
+                ,TBRNT_PUCHAS_RESCI k
+                ,( SELECT TO_CHAR(TO_DATE(SFCOM_GET_TREDATE(#payTmlmt#)),'YYYY-MM-DD') AS  PAY_TMLMT  FROM DUAL ) PE      /*납입기한*/
+                ,(
+                    SELECT DISTINCT CNTRCTR_NO, CODE_NM BANK_NM, ACNUTNO, DPSTR
+                    FROM TBPMS_ATCNG A
+                       , (SELECT CODE, CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'COM021') B  
+                    WHERE A.JOB_SE = 'RN2'
+                      AND A.PAY_SE = '04'
+                      AND A.BANK_CODE = B.CODE(+)
+                      AND A.ATCNG_CANCL_DE IS NULL
+                 ) S
+                ,(
+                    SELECT a.CNTRCTR_NO, max(RCIV_DE) AS RCIV_DE, sum(RCIV_AMOUNT) AS RCIV_AMOUNT
+                      FROM TBRNT_PUCHAS_RCIV a
+                     WHERE A.NTIC_SE = '2'
+                       AND a.RCIV_DE = SFCOM_GET_TREDATE(#reivDt#)                        
+                     GROUP BY CNTRCTR_NO
+                 ) R
+                ,(
+		    SELECT CHRCTR_PREPAR_VALUE_0 AS OPOST_NO
+                 , CHRCTR_PREPAR_VALUE_1 AS OADDR1
+                 , CHRCTR_PREPAR_VALUE_2 AS OADDR2
+                 , '전화 : ' || CHRCTR_PREPAR_VALUE_3 AS OTEL_NO
+                 , '팩스 : ' || CHRCTR_PREPAR_VALUE_4 AS OFAX_NO
+              FROM TBCOM_CMMN_CODE
+             WHERE GRP_CODE = 'PCOM07'
+               AND CODE = 'RN0002'
+                    ) x
+                ,vi_va_mast v
+                ,(
+                    SELECT DISTINCT crt_id
+                    FROM va_bill
+                    WHERE crt_div = 'MA'
+                      AND BILL_DIV = 'A'
+                      AND substr(tr_date, 1, 6) = #mdatYm#
+                  ) v1
+                 ,(
+                    SELECT CHRCTR_PREPAR_VALUE_2 as AUTO_NO
+                      FROM TBCOM_CMMN_CODE
+                     WHERE GRP_CODE = 'PCOM05'
+                       AND CODE = '04'                    
+                  ) X1
+                  ,(SELECT RENT_HOUSE_CODE, DONG, OCCRRNC_YM, USGQTY, LEVY_AMOUNT, TOT_HSHLD_NMPR_CO
+                        FROM TBRNT_MANAGECT_UNTPC w
+                        WHERE w.OCCRRNC_YM = #mdatYm#
+                          AND w.MANAGECT_CODE = '06'
+                    ) X2
+                   ,(
+					SELECT   a.rent_house_code, a.dong,
+                          SUM (NVL (rdcamt_amount, 0)) rdcamt_amount
+                     FROM tbrnt_puchas_cntrct a, tbrnt_mt_managect w
+                    WHERE a.cntrctr_no = w.cntrctr_no 
+                      and w.occrrnc_ym = #mdatYm# 
+                      AND w.managect_code = '06'
+                 GROUP BY a.rent_house_code, a.dong) x3  
+              WHERE b.CNTRCTR_NO = a.CNTRCTR_NO
+                AND b.CNTRCTR_NO = k.CNTRCTR_NO(+)
+                AND k.CANCL_DE IS NULL
+                AND b.PUCHAS_CSTMR_NO = g.PUCHAS_CSTMR_NO
+                AND b.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+                AND b.RENT_HOUSE_CODE = f.RENT_HOUSE_CODE(+)
+                AND b.DONG = f.DONG(+)
+                AND b.CNTRCTR_NO = v.crt_id
+                AND v.crt_div = 'MA'
+                AND b.CNTRCTR_NO = r.CNTRCTR_NO(+)
+                AND b.CNTRCTR_NO = s.CNTRCTR_NO(+)
+                AND b.CNTRCTR_NO = v1.crt_id(+)
+                AND b.RENT_HOUSE_CODE = x2.RENT_HOUSE_CODE(+)
+                AND b.DONG = x2.DONG(+)
+                AND b.rent_house_code = x3.rent_house_code(+)
+            	AND b.dong = x3.dong(+)
+              ORDER BY b.RENT_HOUSE_CODE,b.DONG,b.HO	
+			
+	</select>
+</sqlMap>

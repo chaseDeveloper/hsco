@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM090302_SQL">
+
+    <typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+    
+    <!-- 계약정보 조회 -->
+    <select id="HRM090302DAO.getCntrctInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+        SELECT RENT_CNTRCT_NO
+             , LPAD(LESSEE_NO, 3, '0')                AS LESSEE_NO
+             , MT_RNTCHRG
+             , ROUND(MT_RNTCHRG / 10)                 AS VAT
+             , MT_RNTCHRG + ROUND(MT_RNTCHRG / 10)    AS RNTCHRG_SM
+             , SUBSTR(CNTRCT_BGNDE, 1, 6)             AS CNTRCT_BGNYM
+             , SUBSTR(CNTRCT_ENDDE, 1, 6)             AS CNTRCT_ENDYM
+             , CNTRCT_ENDDE
+          FROM TBHRM_RENT_CNTRCT
+         WHERE 1=1
+           AND #STDR_YM# BETWEEN SUBSTR(CNTRCT_BGNDE, 1, 6) AND SUBSTR(CNTRCT_ENDDE, 1, 6)
+    </select>
+
+    <!-- 임대료관리 조회 -->
+    <select id="HRM090302DAO.selectRentRqestList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+        <![CDATA[
+        SELECT '0'                               AS CHK
+             , STDR_YM
+             , RQEST_DE
+             , RENT_CNTRCT_NO
+             , LPAD(LESSEE_NO, 3, '0')           AS LESSEE_NO
+             , RQEST_AMOUNT
+             , VAT
+             , RQEST_AMOUNT_SM
+             , RCPT_AT
+             , RCPT_DE
+             , SANCTN_NO
+          FROM TBHRM_RENT_RQEST_DTLS
+         WHERE 1=1
+           AND TY_SE = '000'
+        ]]>
+        <isNotEmpty property="STDR_YM" prepend="AND">
+               STDR_YM = #STDR_YM#
+        </isNotEmpty>
+    </select>
+    
+    <!-- 임대료관리 정보 추가 -->
+    <insert id="HRM090302DAO.insertRntChrg" parameterClass="java.util.HashMap">
+        INSERT INTO TBHRM_RENT_RQEST_DTLS (
+               STDR_YM
+             , RQEST_DE
+             , RENT_CNTRCT_NO
+             , LESSEE_NO
+             , TY_SE
+             , RQEST_AMOUNT
+             , VAT
+             , RQEST_AMOUNT_SM
+             , RCPT_AT
+             , RCPT_DE
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+        )
+        SELECT #STDR_YM#
+             , #RQEST_DE#
+             , #RENT_CNTRCT_NO#
+             , #LESSEE_NO#
+             , '000'
+             , #RQEST_AMOUNT_SM2# - ROUND(#RQEST_AMOUNT_SM2# / 11)
+             , ROUND(#RQEST_AMOUNT_SM2# / 11)
+             , #RQEST_AMOUNT_SM2#
+             , #RCPT_AT#
+             , DECODE(#RCPT_AT#, NULL, NULL, TO_CHAR(SYSDATE, 'YYYYMMDD'))
+             , #S_USER_ID#
+             , SYSDATE
+             , #S_USER_ID#
+             , SYSDATE
+          FROM DUAL
+         WHERE NOT EXISTS
+               (
+                SELECT *
+                  FROM TBHRM_RENT_RQEST_DTLS
+                 WHERE STDR_YM        = #STDR_YM#
+                   AND RENT_CNTRCT_NO = #RENT_CNTRCT_NO#
+                   AND LESSEE_NO      = #LESSEE_NO#
+                   AND TY_SE          = '000'
+               )
+    </insert>
+    
+    <!-- 임대료관리 존재유무 확인 -->
+    <select id="HRM090302DAO.chkData" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+        SELECT COUNT(*)                     AS EXIST_AT
+          FROM TBHRM_RENT_RQEST_DTLS
+         WHERE 1=1
+           AND STDR_YM        = #STDR_YM#
+           AND TY_SE          = '000'
+    </select>
+    
+    <!-- 임대료관리 청구자료 생성 -->
+    <update id="HRM090302DAO.createData" parameterClass="java.util.HashMap">
+        INSERT INTO TBHRM_RENT_RQEST_DTLS (
+               STDR_YM
+             , RQEST_DE
+             , RENT_CNTRCT_NO
+             , LESSEE_NO
+             , TY_SE
+             , RQEST_AMOUNT
+             , VAT
+             , RQEST_AMOUNT_SM
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+        )
+        SELECT #STDR_YM#
+             , TO_CHAR(SYSDATE, 'YYYYMMDD')
+             , RENT_CNTRCT_NO
+             , LESSEE_NO
+             , '000'
+             , MT_RNTCHRG
+             , ROUND(MT_RNTCHRG / 10) AS VAT
+             , MT_RNTCHRG + ROUND(MT_RNTCHRG / 10) AS RQEST_AMOUNT_SM
+             , #S_USER_ID#
+             , SYSDATE
+             , #S_USER_ID#
+             , SYSDATE
+          FROM TBHRM_RENT_CNTRCT
+         WHERE NOT EXISTS
+               (
+                SELECT *
+                  FROM TBHRM_RENT_RQEST_DTLS
+                 WHERE STDR_YM        = #STDR_YM#
+                   AND TY_SE          = '000'
+               )
+           AND #STDR_YM# BETWEEN SUBSTR(CNTRCT_BGNDE, 1, 6) AND SUBSTR(CNTRCT_ENDDE, 1, 6)
+        <isEqual property="BANK_AT" compareValue="0" prepend="AND">
+               LESSEE_NO != '1'
+        </isEqual>
+        <isEqual property="BANK_AT" compareValue="2" prepend="AND">
+               LESSEE_NO != '1'
+        </isEqual>
+    </update>
+    
+    <!-- 임대료관리 정보 수정 -->
+    <update id="HRM090302DAO.updateRntChrg" parameterClass="java.util.HashMap">
+        UPDATE TBHRM_RENT_RQEST_DTLS
+           SET RCPT_AT                        = #RCPT_AT#
+             , RCPT_DE                        = #RCPT_DE#
+             , UPDUSR_ID                      = #S_USER_ID#
+             , UPDT_DT                        = SYSDATE
+         WHERE STDR_YM                        = #STDR_YM#
+           AND RQEST_DE                       = #RQEST_DE#
+           AND RENT_CNTRCT_NO                 = #RENT_CNTRCT_NO#
+           AND LESSEE_NO                      = #LESSEE_NO#
+           AND TY_SE                          = '000'
+    </update>
+    
+    <!-- 임대계약관리 정보 수정 -->
+    <update id="HRM090302DAO.updateRntChrgSM" parameterClass="java.util.HashMap">
+        UPDATE TBHRM_RENT_CNTRCT t1
+           SET RNTCHRG_SM                     = (
+                                                 SELECT SUM(RQEST_AMOUNT_SM)
+                                                   FROM TBHRM_RENT_RQEST_DTLS
+                                                  WHERE RENT_CNTRCT_NO = #RENT_CNTRCT_NO#
+                                                    AND LESSEE_NO      = #LESSEE_NO#
+                                                    AND RCPT_AT        = '1'
+                                                    AND TY_SE          = '000'
+                                                )
+             , UPDUSR_ID                      = #S_USER_ID#
+             , UPDT_DT                        = SYSDATE
+         WHERE RENT_CNTRCT_NO                 = #RENT_CNTRCT_NO#
+    </update>
+    
+    <!-- 임대료관리 정보 삭제 -->
+    <delete id="HRM090302DAO.deleteRntChrg" parameterClass="java.util.HashMap">
+        DELETE
+          FROM TBHRM_RENT_RQEST_DTLS
+         WHERE STDR_YM                        = #STDR_YM#
+           AND RQEST_DE                       = #RQEST_DE#
+           AND RENT_CNTRCT_NO                 = #RENT_CNTRCT_NO#
+           AND LESSEE_NO                      = #LESSEE_NO#
+           AND TY_SE                          = '000'
+    </delete>
+    
+    <!-- 임대료관리 수정(결재번호) -->
+    <update id="HRM090302DAO.approveU" parameterClass="java.util.HashMap">
+        UPDATE TBHRM_RENT_RQEST_DTLS
+           SET SANCTN_NO                      = #SANCTN_NO#
+         WHERE STDR_YM                        = #STDR_YM#
+           AND RQEST_DE                       = #RQEST_DE#
+           AND RENT_CNTRCT_NO                 = #RENT_CNTRCT_NO#
+           AND LESSEE_NO                      = #LESSEE_NO#
+           AND TY_SE                          = '000'
+    </update>
+    
+    <!-- 전자결재번호 조회 -->
+	<select id="HRM090302DAO.selectSanctnNO" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+        SELECT SANCTN_NO
+          FROM TBCOM_ELCTRN_SANCTN_MASTR
+         WHERE INTRLCK_IDNTFR       = #KEY#
+    </select>
+</sqlMap>

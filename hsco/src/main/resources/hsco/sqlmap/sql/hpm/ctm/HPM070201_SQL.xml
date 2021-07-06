@@ -1,0 +1,825 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HPM070201_SQL">	
+
+ 
+	<parameterMap id="HPM070201DAO.procedureMap" class="java.util.HashMap">
+		<parameter property="DEPT_CODE"          jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="BIZPLC_CODE"        jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="BGNDE"              jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="ENDDE"              jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="SETLE_STTUS"        jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+		<parameter property="S_USER_ID"          jdbcType="VARCHAR" javaType="java.lang.String" mode="IN" />
+	</parameterMap>
+	
+	<!-- 계좌정합성여부 판단 프로시저호출 -->
+    <procedure id="HPM070201DAO.callProcedure" parameterMap="HPM070201DAO.procedureMap">
+		{ CALL SPHPM_REFND_ACNUT_STBLT('1', ?, ?, ?, ?, ?, ?) }
+    </procedure>
+    
+	<!-- 대관신청관리 목록 조회  -->
+	<select id="HPM070201DAO.selectRentReqstManageList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT 
+			 A.DEPT_CODE			/*부서코드*/
+			,A.MBER_ID				/*회원ID*/
+			,A.FCLTS_SN			/*시설물순번*/
+			,A.FCLTS_NM
+			,A.REQST_SN		/*임대신청순번*/
+			,A.RCPMNY_DTLS_SN		/*입금내역순번*/
+			,A.MBER_NM
+			,A.GRP_NM
+			,A.ADRES
+			,A.TELNO
+			,A.MBTLNUM
+			,A.USE_DE				/*사용일자*/
+			,A.BEGIN_TIME			/*시작시간*/
+			,A.END_TIME			/*종료시간*/
+			,A.USE_TIME_FOM /*(구간)*/
+			,A.USE_TIME		/*사용시간*/
+			,A.USE_TIME2	/*사용시간(시간)*/
+			,A.MUMM_RESVE_TIME
+			,A.USE_PRPOS_SE		/*사용용도구분*/
+			,A.USE_CN				/*사용내용*/
+			,A.USE_NMPR			/*사용인원*/
+			,A.RM					/*비고*/
+			,A.SETLE_SE			/*결제구분*/
+			,A.SETLE_NM
+			,A.SETLE_AM			/*결제액*/
+			,A.SETLE_STTUS			/*결제상태*/
+			,A.SETLE_STTUS_NM
+			,A.REQST_DE			/*신청일자*/
+			,A.REQST_DT			/*신청일시*/
+			,A.JDGMN_COMPT_DE		/*심사완료일자*/
+			,A.SETLE_COMPT_DE		/*결제완료일*/
+			,A.ORDER_NO			/*주문번호*/
+			,A.REFND_REQST_DE		/*환불요청일시*/
+			,A.REFND_ACNUTNO		/*환불계좌번호*/
+			,A.REFND_DPSTR			/*환불예금주*/
+			,A.RCPMNY_BANK_CODE	/*입금은행코드*/
+			,A.RCPMNY_BANK_NM		/*입금은행명*/
+			,A.RCPMNY_ACNUTNO		/*입금계좌번호*/
+			,A.RCPMNYER			/*입금자*/
+			,A.RENT_CANCL_AT
+			,A.DELETE_AT
+			,A.MNGR_REGIST_AT
+			,A.REFND_AM
+			,NVL2(A.REFND_BANK_CODE, B.CODE_NM, A.REFND_BANK_NM) AS REFND_BANK_NM
+			,A.REFND_BANK_CODE
+			,A.SETLE_AT
+			,A.BIZPLC_CODE
+		    ,A.DECSN_YEAR
+		    ,A.DECSN_NO
+		    ,A.SEQ
+		    ,A.BCNC_CODE
+		    ,A.SANCTN_KND
+		    ,A.SUMRY
+		    ,A.CMPNSP_NO
+		    ,CASE WHEN A.CMPNSP_NO IS NULL THEN '0'
+		          WHEN C.EB_STS_CD IS NULL THEN '1'
+		          ELSE C.EB_STS_CD END                    AS ACNUT_STBLT_AT
+		    ,A.REFND_GRP_CPR_NM
+		    ,DECODE(A.INDVDL_CPR_SE, '001', A.REFND_DPSTR, '002', A.REFND_GRP_CPR_NM) AS REFND_INDVDL_CPR_NM
+		    ,A.INDVDL_CPR_SE
+		FROM (
+		    SELECT 
+		       t1.DEPT_CODE
+		      ,t1.MBER_ID
+		      ,t1.FCLTS_SN
+		      ,t2.FCLTS_NM
+		      ,t1.REQST_SN
+		      ,t1.RCPMNY_DTLS_SN
+		      ,t1.MBER_NM
+		      ,t1.GRP_NM
+		      ,t1.ADRES
+		      ,t1.TELNO
+		      ,H_DECRYPT(t1.MBTLNUM)  AS MBTLNUM
+		      ,t1.USE_DE
+		      ,t1.BEGIN_TIME
+		      ,t1.END_TIME
+		      ,SFHPM_GET_USE_TIME(t1.USE_TIME,t5.CODE_ETC_1) AS USE_TIME_FOM
+		        /*(구간)*/
+		      ,t1.USE_TIME
+		        /*사용시간*/
+		      ,CASE
+		            WHEN INSTR(t1.USE_TIME, '-') > 0
+		            THEN TO_CHAR(((LENGTH(t1.USE_TIME) - LENGTH(REPLACE(t1.USE_TIME, '-' , '')))+1)*t5.CODE_ETC_2)
+		            ELSE t5.CODE_ETC_2
+		        END USE_TIME2
+		        /*사용시간(시간)*/
+		      ,t5.CODE_ETC_1 AS MUMM_RESVE_TIME
+		      ,t1.USE_PRPOS_SE
+		      ,t1.USE_CN
+		      ,t1.USE_NMPR
+		      ,t1.RM
+		      ,t1.SETLE_SE
+		      ,t4.CODE_NM AS SETLE_NM
+		      ,t1.SETLE_AM
+		      ,t1.SETLE_STTUS
+		      ,t3.CODE_NM                AS SETLE_STTUS_NM
+		      ,SUBSTR(t1.REQST_DT, 0, 8) AS REQST_DE
+		      ,t1.REQST_DT
+		      ,t1.JDGMN_COMPT_DE
+		      ,t1.SETLE_COMPT_DE
+		      ,t1.ORDER_NO
+		      ,SUBSTR(t1.REFND_REQST_DT,0, 8) AS REFND_REQST_DE
+		      ,t1.REFND_BANK_CODE
+		      ,t1.REFND_BANK_NM
+		      ,t1.REFND_ACNUTNO
+		      ,t1.REFND_DPSTR
+		      ,t1.RCPMNY_BANK_CODE
+		      ,t1.RCPMNY_BANK_NM
+		      ,t1.RCPMNY_ACNUTNO
+		      ,t1.RCPMNYER
+		      ,t1.REFND_AM
+		      ,NVL(t1.RENT_CANCL_AT, 0)  AS RENT_CANCL_AT
+		      ,NVL(t1.DELETE_AT, 0)      AS DELETE_AT
+		      ,NVL(t1.MNGR_REGIST_AT, 0) AS MNGR_REGIST_AT
+		      ,NVL2(t6.RCPMNY_DTLS_NO, 1, 0) AS SETLE_AT
+		      ,t2.BIZPLC_CODE
+		      ,t1.DECSN_YEAR
+		      ,t1.DECSN_NO
+		      ,t8.SUMRY
+		      ,t1.SEQ
+		      ,t7.BCNC_CODE
+			  ,SFCOM_GET_SANCTN_KND(t8.SANCTN_NO) AS SANCTN_KND
+			  ,t1.CMPNSP_NO
+			  ,t1.REFND_GRP_CPR_NM
+			  ,t1.INDVDL_CPR_SE
+		    FROM TBHPM_RENT_FCLTS_REQST_MANAGE t1
+		    LEFT OUTER JOIN TBHPM_RENT_FCLTS_MANAGE t2
+		    ON  t1.FCLTS_SN = t2.FCLTS_SN
+		    LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		    ON  t1.SETLE_STTUS = t3.CODE
+		    AND t3.GRP_CODE    = 'HPM008'
+		    LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		    ON  t1.SETLE_SE = t4.CODE
+		    AND t4.GRP_CODE = 'HPM009'
+		    LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		    ON  t1.MUMM_RESVE_TIME_SE = t5.CODE
+		    AND t5.GRP_CODE           = 'HPM006'
+			LEFT OUTER JOIN TBHPM_RCPMNY_DTLS_MANAGE t6
+			ON  t1.RCPMNY_DTLS_SN = t6.RCPMNY_DTLS_SN
+			LEFT OUTER JOIN TBCTR_BCNC_MASTR t7
+			  ON  t1.MBER_ID    = t7.SUMRY
+			  AND t1.MBER_NM    = t7.BCNC_NM
+			  AND t1.DEPT_CODE  = t7.INPUT_DEPT
+			LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t8
+			  ON  t1.DECSN_YEAR    = t8.DECSN_YEAR
+			  AND t1.DECSN_NO      = t8.DECSN_NO
+			WHERE NVL(t1.DELETE_AT, '0') = '0'
+			  AND NVL(t1.RENT_CANCL_AT, '0') = '0'
+			) A
+		   LEFT OUTER JOIN TBCOM_CMMN_CODE B
+		     ON  A.REFND_BANK_CODE = B.CODE
+		     AND B.GRP_CODE = 'COM021'
+		   LEFT OUTER JOIN NH_FILE_SND_RTN C
+		     ON  SUBSTR(A.CMPNSP_NO, 0,8) = C.FL_DATE
+		     AND SUBSTR(A.CMPNSP_NO, 9,6) = C.FL_TIME
+		     AND TO_NUMBER(SUBSTR(A.CMPNSP_NO, 16, 4)) = C.FL_SEQ
+		WHERE 1=1
+		]]>
+			AND A.DEPT_CODE = #DEPT_CODE#
+			AND A.BIZPLC_CODE = #BIZPLC_CODE#
+		<isNotEmpty prepend="AND" property="FCLTS_SN">
+			A.FCLTS_SN = #FCLTS_SN#
+		</isNotEmpty>
+		<isEqual prepend="AND" property="SEARCH_CND" compareValue="001">
+			A.USE_DE BETWEEN #BGNDE# AND #ENDDE#
+		</isEqual>
+		<isEqual prepend="AND" property="SEARCH_CND" compareValue="002">
+			SUBSTR(A.REQST_DT, 0, 8) BETWEEN #BGNDE# AND #ENDDE#
+		</isEqual>
+		<isEmpty property="SEARCH_CND2">
+			<isNotEmpty prepend="AND" property="SEARCH_VAL">
+				(	 A.MBER_ID   LIKE '%' || #SEARCH_VAL# || '%'
+				  OR A.RCPMNYER  LIKE '%' || #SEARCH_VAL# || '%'
+				  OR A.GRP_NM    LIKE '%' || #SEARCH_VAL# || '%' )
+			</isNotEmpty>
+		</isEmpty>
+		<isNotEmpty property="SEARCH_CND2">
+			<isEqual property="SEARCH_CND2" compareValue="001">
+				<isNotEmpty prepend="AND"  property="SEARCH_VAL">
+					A.MBER_ID	LIKE '%' || #SEARCH_VAL# || '%'
+				</isNotEmpty>
+			</isEqual>
+			<isEqual  property="SEARCH_CND2" compareValue="002">
+				<isNotEmpty prepend="AND"  property="SEARCH_VAL">
+					A.RCPMNYER LIKE '%' || #SEARCH_VAL# || '%'
+				</isNotEmpty>
+			</isEqual>
+			<isEqual  property="SEARCH_CND2" compareValue="003">
+				<isNotEmpty prepend="AND"  property="SEARCH_VAL">
+					A.GRP_NM LIKE '%' || #SEARCH_VAL# || '%'
+				</isNotEmpty>
+			</isEqual>
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="SETLE_STTUS">
+			A.SETLE_STTUS = #SETLE_STTUS#
+		</isNotEmpty>
+		ORDER BY A.USE_DE DESC
+
+	</select>
+	
+	
+	
+	<!-- 거래처코드생성 -->
+	<select id="HPM070201DAO.selectBcncCode" resultClass="java.lang.String">
+	<![CDATA[
+		SELECT LPAD(MAX(TO_NUMBER(NVL(BCNC_CODE,0)))+1, 6, '0') FROM TBCTR_BCNC_MASTR WHERE BCNC_CODE <> '999999'
+	]]>
+	</select>
+	
+	
+	<!-- 거래처마스타 입력 -->
+	<insert id="HPM070201DAO.insertBcncZ1" parameterClass="java.util.HashMap">
+	<![CDATA[
+		    INSERT INTO TBCTR_BCNC_MASTR
+		    (
+		         BCNC_CODE                                 /*  거래처코드 */
+		        ,BCNC_SE                                   /*  거래처구분 */
+		        ,BCNC_NM                                   /*  거래처명   */
+		        ,INPUT_DEPT
+		        ,SUMRY
+		        ,REGISTER_ID                               /*  등록자ID   */
+		        ,REGIST_DT                                 /*  등록일시   */
+		        ,UPDUSR_ID                                 /*  수정자ID   */
+		        ,UPDT_DT                                   /*  수정일시   */
+		    ) VALUES (
+		         #BCNC_CODE#
+		        ,'Z1'
+		        ,#NM#
+		        ,#DEPT_CODE#
+		        ,#SUMRY#
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		     )
+	]]>
+	</insert>
+	
+	
+	<!-- 대관신청관리 수정 -->
+	<update id="HPM070201DAO.rentReqstManageU" parameterClass="java.util.HashMap">
+		UPDATE TBHPM_RENT_FCLTS_REQST_MANAGE
+		SET  MBER_ID          = #MBER_ID# 
+		    ,FCLTS_SN         = #FCLTS_SN#
+			,RCPMNY_DTLS_SN   = #RCPMNY_DTLS_SN#
+			,MBER_NM          = #MBER_NM#
+			,GRP_NM           = #GRP_NM# 
+			,ADRES            = #ADRES#  
+			,TELNO            = #TELNO#  
+			,MBTLNUM          = H_ENCRYPT(#MBTLNUM#)
+			,USE_DE           = #USE_DE#
+			,BEGIN_TIME       = #BEGIN_TIME#
+			,END_TIME         = #END_TIME#
+			,USE_TIME         = #USE_TIME#
+			,USE_PRPOS_SE     = #USE_PRPOS_SE#
+			,USE_CN           = #USE_CN#
+			,USE_NMPR         = #USE_NMPR#
+			,RM               = #RM#
+			,SETLE_SE         = #SETLE_SE#
+			,SETLE_AM         = #SETLE_AM#
+			,SETLE_STTUS      = #SETLE_STTUS#
+			,JDGMN_COMPT_DE   = #JDGMN_COMPT_DE#
+			,SETLE_COMPT_DE   = #SETLE_COMPT_DE#
+			,ORDER_NO		  = #ORDER_NO#
+			,REFND_REQST_DT	  = #REFND_REQST_DE#
+			,REFND_BANK_CODE  = #REFND_BANK_CODE#
+			,REFND_BANK_NM    = #REFND_BANK_NM#
+			,REFND_ACNUTNO    = #REFND_ACNUTNO#
+			,REFND_DPSTR      = #REFND_DPSTR#
+			,RCPMNY_BANK_CODE = #RCPMNY_BANK_CODE#
+			,RCPMNY_BANK_NM   = #RCPMNY_BANK_NM#
+			,RCPMNY_ACNUTNO   = #RCPMNY_ACNUTNO#
+			,RCPMNYER         = #RCPMNYER#
+			,DELETE_AT		  = #DELETE_AT#
+			,RENT_CANCL_AT    = #RENT_CANCL_AT#
+			,SETLE_TMLMT_DE   = #SETLE_TMLMT_DE#
+			,REFND_AM		  = #REFND_AM#
+			,UPDUSR_ID		  = #S_USER_ID#
+			,UPDT_DT		  = SYSDATE
+			,DECSN_YEAR       = #DECSN_YEAR#
+			,DECSN_NO         = #DECSN_NO#
+			,SEQ              = #SEQ#
+		WHERE REQST_SN = #REQST_SN#
+	</update>
+	
+	<!-- 대관신청관리 삭제 -->
+	<delete id="HPM070201DAO.rentReqstManageD" parameterClass="java.util.HashMap">
+		DELETE
+		FROM TBHPM_RENT_FCLTS_REQST_MANAGE
+		WHERE REQST_SN    = #REQST_SN#
+	</delete>
+	
+	<!-- 대관신청관리 삭제2 -->
+	<delete id="HPM070201DAO.rentReqstManageAllD" parameterClass="java.util.HashMap">
+		DELETE
+		FROM TBHPM_RENT_FCLTS_REQST_MANAGE
+		WHERE DEPT_CODE        = #DEPT_CODE#
+		<isNotEmpty property="BGNDE">
+			<isEqual property="SEARCH_CND" compareValue="001">
+				<isNotEmpty property="BGNDE">
+					<isNotEmpty prepend="AND" property="ENDDE">
+						USE_DE BETWEEN #BGNDE# AND #ENDDE#
+					</isNotEmpty>
+				</isNotEmpty>
+			</isEqual>
+			<isEqual  property="SEARCH_CND" compareValue="002">
+				<isNotEmpty property="BGNDE">
+					<isNotEmpty prepend="AND" property="ENDDE">
+						SUBSTRING(REQST_DT, 1, 8) BETWEEN #BGNDE# AND #ENDDE#
+					</isNotEmpty>
+				</isNotEmpty>
+			</isEqual>
+		</isNotEmpty>
+	</delete>
+	
+	<!-- 대사관리(입금내역) 목록 조회 -->
+	<select id="HPM070201DAO.selectRcpmnyDtlsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		   t1.BANK_CD     						   /*금융기관코드*/
+		  ,t3.CODE_NM 					AS BANK_NM /*금융기관명*/
+		  ,REPLACE(t1.ACCT_NO, '-', '') AS ACCT_NO /*은행계좌번호*/
+		  ,t1.CURR_UNIT
+		  ,t1.INQNO
+		  ,t1.ACCT_TXDAY   /*거래일*/
+		  ,t1.ACCT_TXDAY_SEQ
+		  ,t1.INOUT_GUBUN  /*입출구분*/
+		  ,t1.TX_AMT       /*거래금액*/
+		  ,t1.TX_CUR_BAL   /*잔액*/  
+		  ,t1.REMARK1	   /*적요1*/
+		  ,t1.REMARK2      /*적요2*/
+		FROM NH_ACCT_HIS t1
+			LEFT OUTER JOIN TBFUN_BRANCH_ACNUT t2 
+			  ON  t1.ACCT_NO  = REPLACE(t2.ACNUTNO, '-', '')
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+			  ON t1.BANK_CD   = t3.CODE
+		 	 AND t3.GRP_CODE = 'COM021'
+		WHERE 1=1
+         <isNotEmpty prepend="AND" property="DEPT_CODE">
+            t2.DEPT_CODE = #DEPT_CODE#
+         </isNotEmpty>
+		  AND t1.INOUT_GUBUN = 2	/*입금*/
+		  AND t1.TX_AMT = #SETLE_AM#
+		  AND t1.ACCT_TXDAY <![CDATA[ >= ]]> #REQST_DE#
+		  AND NOT EXISTS (SELECT 1 
+		  			      FROM TBHPM_RCPMNY_DTLS_MANAGE t3
+			              WHERE t3.RCPMNY_DTLS_NO  = t1.BANK_CD ||'-'|| REPLACE(t1.ACCT_NO, '-', '') ||'-'|| t1.CURR_UNIT ||'-'|| t1.INQNO ||'-'|| t1.ACCT_TXDAY ||'-'|| t1.ACCT_TXDAY_SEQ )
+		ORDER BY ACCT_TXDAY
+	</select>
+	
+	
+	<delete id="HPM070201DAO.rcpmnyDtlsManageD" parameterClass="java.util.HashMap">
+		DELETE
+		FROM TBHPM_RCPMNY_DTLS_MANAGE
+		WHERE RCPMNY_DTLS_SN = #RCPMNY_DTLS_SN#
+	</delete>
+	
+	<delete id="HPM070201DAO.rcpmnyDtlsManageAllD" parameterClass="java.util.HashMap">
+		DELETE
+		FROM TBHPM_RCPMNY_DTLS_MANAGE
+		WHERE DEPT_CODE = #DEPT_CODE#
+		  AND RCPMNY_DTLS_SN = #RCPMNY_DTLS_SN#
+	</delete>
+	
+	<!-- 예약가능시간 조회 -->
+	<select id="HPM070201DAO.selectResveTimeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH RENT_RESERVE_TM AS
+		  (
+		  SELECT t1.USE_DE
+		      , t2.BEGIN_TIME
+		      , t1.MEMER_NM
+		    FROM
+		        (SELECT USE_DE
+		          , USE_TIME
+		          , MBER_NM
+		            ||'|'
+		            ||GRP_NM AS MEMER_NM
+		        FROM TBHPM_RENT_FCLTS_REQST_MANAGE
+		        WHERE FCLTS_SN = #FCLTS_SN#
+		        AND USE_DE = #USE_DE#
+		        AND SETLE_STTUS NOT       IN ('002', '006', '007')
+		        AND NVL(DELETE_AT, 0)     <> '1'
+		        AND NVL(RENT_CANCL_AT, 0) <> '1'
+		        ) t1
+		    INNER JOIN
+		        (SELECT LPAD(TO_CHAR(TRUNC(LEVEL/60)),2,'0')
+		            ||LPAD(TO_CHAR(MOD(LEVEL,60)),2,'0') AS BEGIN_TIME
+		        FROM DUAL
+		            CONNECT BY LEVEL <= 1440
+		        ) t2
+		    ON  t1.USE_TIME LIKE '%'
+		        ||t2.BEGIN_TIME
+		        ||'%'
+		    ORDER BY t1.USE_DE
+		      , t2.BEGIN_TIME
+    
+		  ),
+		  T_CANLENDAR AS (
+				    SELECT t1.RESERVE_DE
+				          ,CASE WHEN t2.HVOF_AT = '1' THEN 9  /* 휴관 */
+				                WHEN t2.HVOF_AT = '0' THEN 1  /* 휴일 */
+				                WHEN TO_CHAR(t1.RESERVE_DE,'D') IN (1,7) THEN 1 /* 휴일 */
+				                ELSE 0 /* 평일 */
+				           END HOLYDAY
+				    FROM (
+		                  SELECT TO_DATE(#USE_DE#,'YYYYMMDD') AS RESERVE_DE
+		                  FROM DUAL
+				         ) t1
+				         LEFT OUTER JOIN TBHPM_FCLTS_HVOF_INFO t2
+				         ON TO_CHAR(t1.RESERVE_DE,'YYYYMMDD') = t2.HVOF_DE
+		    ),
+		T_FCLTS_TIME AS (
+		    SELECT HOLIDAY
+		         , REPLACE(BEGIN_TIME, ':', '') AS BEGIN_TIME
+		         , TIME_TABLES AS USE_TIME_FOM
+		         , USE_CHRGE
+		    FROM(
+		          (SELECT 
+		              0 AS HOLIDAY
+		            , BEGIN_TIME
+		            , CASE
+		                  WHEN LEAD(BEGIN_TIME) OVER(ORDER BY BEGIN_TIME) IS NOT NULL
+		                  THEN TO_CHAR(TO_DATE(BEGIN_TIME, 'HH24MI'), 'HH24:MI')||'~'||LEAD(TO_CHAR(TO_DATE(BEGIN_TIME, 'HH24MI'), 'HH24:MI')) OVER(ORDER BY BEGIN_TIME)
+		                  ELSE NULL
+		              END AS TIME_TABLES
+		           	, CASE WHEN DEPT_CODE = '040100' 
+		                   THEN CASE WHEN BEGIN_TIME >= 1800 THEN DECODE(#USE_PRPOS_SE#, '1', WD_NI_CH_PRE, WD_NI_CH)
+		                       ELSE DECODE(#USE_PRPOS_SE#, '1', WD_DAY_CH_PRE, WD_DAY_CH)
+		                   END
+		                   ELSE CASE WHEN BEGIN_TIME >= 1800 THEN WD_NI_CH
+		                       ELSE WD_DAY_CH
+		                   END
+                      END AS USE_CHRGE	/*경기타운일 경우 사용목적에 따라 사용요금이 상이함(체육 : 0, 일반 : 1)*/
+		           FROM
+		              (SELECT TO_CHAR(TO_DATE(WD_BEGIN_TM, 'HH24MI') + (((LEVEL*DIFF_TM)-DIFF_TM)/24), 'HH24MI') BEGIN_TIME
+		                     ,WD_DAY_CH
+		                     ,WD_NI_CH
+		                     ,WD_DAY_CH_PRE
+		                     ,WD_NI_CH_PRE
+		                     ,DEPT_CODE
+		              FROM
+		                  (SELECT DECODE(MUMM_RESVE_TIME_SE, '001', 0.5 , '002', 1 , '003', 2 , '004', 3 , 2
+		                      /*디폴트 2시간*/
+		                      ) AS DIFF_TM
+		                    , WKDAY_RESVE_POSBL_BEGIN_TIME|| '00'	AS WD_BEGIN_TM
+		                    , WKDAY_RESVE_POSBL_END_TIME|| '00' 	AS WD_EMD_TM
+		                    , WKDAY_DAYTM_USE_CHRGE 				AS WD_DAY_CH
+		                    , WKDAY_NIGHT_USE_CHRGE					AS WD_NI_CH
+		                    , WKDAY_DAYTM_USE_CHRGE_PREPAR			AS WD_DAY_CH_PRE
+		                    , WKDAY_NIGHT_USE_CHRGE_PREPAR 			AS WD_NI_CH_PRE
+		                    , DEPT_CODE
+		                  FROM TBHPM_RENT_FCLTS_MANAGE t1
+		                  WHERE t1.FCLTS_SN 	 = #FCLTS_SN# /*시설번호*/
+		                      /*[변수]*/
+		                  )
+		                  CONNECT BY TO_DATE(WD_BEGIN_TM, 'HH24MI') + (((LEVEL * DIFF_TM)-DIFF_TM)/24) <= TO_DATE(WD_EMD_TM, 'HH24MI')
+		              )
+		          ) 
+		          UNION ALL
+		         (SELECT 
+		              1 AS HOLIDAY
+		            , BEGIN_TIME
+		            , CASE
+		                WHEN LEAD(BEGIN_TIME) OVER(ORDER BY BEGIN_TIME) IS NOT NULL
+		                THEN TO_CHAR(TO_DATE(BEGIN_TIME, 'HH24MI'), 'HH24:MI')||'~'||LEAD(TO_CHAR(TO_DATE(BEGIN_TIME, 'HH24MI'), 'HH24:MI')) OVER(ORDER BY BEGIN_TIME)
+		                ELSE NULL
+		              END AS TIME_TABLES
+		            , CASE WHEN DEPT_CODE = '040100' 
+		                   THEN CASE WHEN BEGIN_TIME >= 1800 THEN DECODE(#USE_PRPOS_SE#, '1', HD_NI_CH_PRE, HD_NI_CH)
+		                       ELSE DECODE(#USE_PRPOS_SE#, '1', HD_DAY_CH_PRE, HD_DAY_CH)
+		                   END
+		                   ELSE CASE WHEN BEGIN_TIME >= 1800 THEN HD_NI_CH
+		                       ELSE HD_DAY_CH
+		                   END
+                      END AS USE_CHRGE
+		          FROM
+		              (SELECT TO_CHAR(TO_DATE(HD_BEGIN_TM, 'HH24MI') + (((LEVEL*DIFF_TM)-DIFF_TM)/24), 'HH24MI') BEGIN_TIME
+		                     ,HD_DAY_CH
+		                     ,HD_NI_CH
+		                     ,HD_DAY_CH_PRE
+		                     ,HD_NI_CH_PRE
+		                     ,DEPT_CODE
+		              FROM
+		                  (SELECT DECODE(MUMM_RESVE_TIME_SE, '001', 0.5 , '002', 1 , '003', 2 , '004', 3 , 2
+		                      /*디폴트 2시간*/
+		                      ) AS DIFF_TM
+		                    , RESTDE_RESVE_POSBL_BEGIN_TIME|| '00' 	AS HD_BEGIN_TM
+		                    , RESTDE_RESVE_POSBL_END_TIME|| '00' 	AS HD_EMD_TM
+		                    , RESTDE_DAYTM_USE_CHRGE 				AS HD_DAY_CH
+		                    , RESTDE_NIGHT_USE_CHRGE 				AS HD_NI_CH
+		                    , RESTDE_DAYTM_USE_CHRGE_PREPAR			AS HD_DAY_CH_PRE
+		                    , RESTDE_NIGHT_USE_CHRGE_PREPAR 		AS HD_NI_CH_PRE
+		                    , DEPT_CODE
+		                  FROM TBHPM_RENT_FCLTS_MANAGE
+		                  WHERE FCLTS_SN 	 = #FCLTS_SN# /*시설번호*/
+		                      /*[변수]*/
+		                  )
+		                  CONNECT BY TO_DATE(HD_BEGIN_TM, 'HH24MI') + (((LEVEL * DIFF_TM)-DIFF_TM)/24) <= TO_DATE(HD_EMD_TM, 'HH24MI')
+		              )
+		          )
+		        )
+		    WHERE TIME_TABLES IS NOT NULL
+		)
+		SELECT 
+		     t1.BEGIN_TIME
+		    ,t1.USE_TIME_FOM
+		    ,t1.USE_CHRGE
+		FROM T_FCLTS_TIME t1
+		     INNER JOIN T_CANLENDAR t2
+		     ON t1.HOLIDAY = t2.HOLYDAY
+		WHERE NOT EXISTS (
+		    SELECT 1
+		    FROM RENT_RESERVE_TM t3
+		    WHERE t1.BEGIN_TIME = t3.BEGIN_TIME
+		)
+		ORDER BY t1.BEGIN_TIME
+		]]>
+	</select>
+	
+	
+	<select id="HPM070201DAO.selectExcelRentReqstManageList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[	
+		WITH TMP_T AS (SELECT 
+		      ROWNUM AS RNUM 
+		      ,A.DEPT_CODE
+		      ,A.MBER_ID
+		      ,A.FCLTS_SN
+		      ,A.FCLTS_NM
+		      ,A.REQST_SN
+		      ,A.RCPMNY_DTLS_SN
+		      ,A.MBER_NM
+		      ,A.GRP_NM
+		      ,A.ADRES
+		      ,A.TELNO
+		      ,A.MBTLNUM
+		      ,A.USE_DE
+		      ,A.BEGIN_TIME
+		      ,A.END_TIME
+		      ,A.USE_TIME_FOM
+		      ,A.USE_TIME
+		      ,A.USE_PRPOS_SE
+		      ,A.USE_CN
+		      ,A.USE_NMPR
+		      ,A.RM
+		      ,A.SETLE_SE
+		      ,A.SETLE_NM
+		      ,A.SETLE_AM
+		      ,A.SETLE_STTUS
+		      ,A.SETLE_STTUS_NM
+		      ,A.REQST_DE
+		      ,A.REQST_DT
+		      ,A.JDGMN_COMPT_DE
+		      ,A.SETLE_COMPT_DE
+		      ,A.ORDER_NO
+		      ,A.REFND_REQST_DE
+		      ,A.REFND_BANK_CODE
+		      ,A.REFND_BANK_NM
+		      ,A.REFND_ACNUTNO
+		      ,A.REFND_DPSTR
+		      ,A.RCPMNY_BANK_CODE
+		      ,A.RCPMNY_BANK_NM
+		      ,A.RCPMNY_ACNUTNO
+		      ,A.RCPMNYER
+		      ,A.RENT_CANCL_AT
+		      ,A.DELETE_AT
+		      ,A.MNGR_REGIST_AT
+		      ,A.MUMM_RESVE_TIME_SE
+		    FROM
+		        (SELECT t1.DEPT_CODE
+		          ,t1.MBER_ID
+		          ,t1.FCLTS_SN
+		          ,t2.FCLTS_NM
+		          ,t1.REQST_SN
+		          ,t1.RCPMNY_DTLS_SN
+		          ,t1.MBER_NM
+		          ,t1.GRP_NM
+		          ,t1.ADRES
+		          ,t1.TELNO
+		          ,H_DECRYPT(t1.MBTLNUM)  AS MBTLNUM
+		          ,t1.USE_DE
+		          ,t1.BEGIN_TIME
+		          ,t1.END_TIME
+		          ,t1.MUMM_RESVE_TIME_SE
+		          ,SFHPM_GET_USE_TIME(t1.USE_TIME, t3.CODE_ETC_1) AS USE_TIME_FOM
+		            /*(구간)*/
+		          ,t1.USE_TIME
+		            /*사용시간*/
+		          ,t1.USE_PRPOS_SE
+		          ,t1.USE_CN
+		          ,t1.USE_NMPR
+		          ,t1.RM
+		          ,t1.SETLE_SE
+		          ,t4.CODE_NM AS SETLE_NM
+		          ,t1.SETLE_AM
+		          ,t1.SETLE_STTUS
+		          ,t3.CODE_NM                AS SETLE_STTUS_NM
+		          ,SUBSTR(t1.REQST_DT, 0, 8) AS REQST_DE
+		          ,t1.REQST_DT
+		          ,t1.JDGMN_COMPT_DE
+		          ,t1.SETLE_COMPT_DE
+		          ,t1.ORDER_NO
+		          ,SUBSTR(t1.REFND_REQST_DT,0, 8) AS REFND_REQST_DE
+		          ,t1.REFND_BANK_CODE
+		          ,t1.REFND_BANK_NM
+		          ,t1.REFND_ACNUTNO
+		          ,t1.REFND_DPSTR
+		          ,t1.RCPMNY_BANK_CODE
+		          ,t1.RCPMNY_BANK_NM
+		          ,t1.RCPMNY_ACNUTNO
+		          ,t1.RCPMNYER
+		          ,NVL(t1.RENT_CANCL_AT, 0)  AS RENT_CANCL_AT
+		          ,NVL(t1.DELETE_AT, 0)      AS DELETE_AT
+		          ,NVL(t1.MNGR_REGIST_AT, 0) AS MNGR_REGIST_AT
+		        FROM TBHPM_RENT_FCLTS_REQST_MANAGE t1
+		        LEFT OUTER JOIN TBHPM_RENT_FCLTS_MANAGE t2
+		        ON  t1.FCLTS_SN = t2.FCLTS_SN
+		        LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		        ON  t1.SETLE_STTUS = t3.CODE
+		        AND t3.GRP_CODE    = 'HPM008'
+		        LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		        ON  t1.SETLE_SE = t4.CODE
+		        AND t4.GRP_CODE = 'HPM009'
+		        UNION ALL
+		        SELECT '040100'    AS DEPT_CODE
+		          ,NULL            AS MBER_ID
+		          ,t1.FCLTS_SN     AS FCLTS_SN
+		          ,t2.FCLTS_NM     AS FCLTS_NM
+		          ,NULL            AS REQST_SN
+		          ,NULL            AS RCPMNY_DTLS_SN
+		          ,t1.APPLCNT      AS MBER_NM
+		          ,t1.APPLCNT      AS GRP_NM
+		          ,NULL            AS ADRES
+		          ,NULL            AS TELNO
+		          ,NULL            AS MBTLNUM
+		          ,t1.USE_DE       AS USE_DE
+		          ,t1.USE_BEGIN_TM AS BEGIN_TIME
+		            /*시작시간*/
+		          ,t1.USE_END_TM AS END_TIME
+		            /*종료시간*/
+		          ,null AS MUMM_RESVE_TIME_SE
+		          ,TO_CHAR(TO_DATE(t1.USE_BEGIN_TM, 'HH24MI'), 'HH24:MI')
+		            || '~'
+		            || TO_CHAR(TO_DATE(t1.USE_END_TM, 'HH24MI'), 'HH24:MI') AS USE_TIME_FOM
+		            /*(구간)*/
+		          ,NULL AS USE_TIME
+		            /*사용시간*/
+		          ,NULL                                                                                                                                            AS USE_PRPOS_SE
+		          ,t1.USE_PURPS                                                                                                                                    AS USE_CN
+		          ,t1.USE_NMPR                                                                                                                                     AS USE_NMPR
+		          ,t1.RM                                                                                                                                           AS RM
+		          ,NULL                                                                                                                                            AS SETLE_SE
+		          ,NULL                                                                                                                                            AS SETLE_NM
+		          ,NVL(t1.FCLTY_RNTFEE, 0)+NVL(t1.PBLDUS, 0)+NVL(t1.CMRC_RNTFEE, 0)+NVL(t1.RLAY_BRDCST_CHRGE, 0)+NVL(t1.ATACH_RNTFEE, 0)+NVL(t1.ADTM_TCKET_FEE, 0) AS SETLE_AM
+		          ,'005'                                                                                                                                           AS SETLE_STTUS
+		          ,'결제완료'                                                                                                                                             AS SETLE_STTUS_NM
+		          ,NULL                                                                                                                                            AS REQST_DE
+		          ,NULL                                                                                                                                            AS REQST_DT
+		          ,NULL                                                                                                                                            AS JDGMN_COMPT_DE
+		          ,NULL                                                                                                                                            AS SETLE_COMPT_DE
+		          ,NULL                                                                                                                                            AS ORDER_NO
+		          ,NULL                                                                                                                                            AS REFND_REQST_DE
+		          ,NULL                                                                                                                                            AS REFND_BANK_CODE
+		          ,NULL                                                                                                                                            AS REFND_BANK_NM
+		          ,NULL                                                                                                                                            AS REFND_ACNUTNO
+		          ,NULL                                                                                                                                            AS REFND_DPSTR
+		          ,NULL                                                                                                                                            AS RCPMNY_BANK_CODE
+		          ,NULL                                                                                                                                            AS RCPMNY_BANK_NM
+		          ,NULL                                                                                                                                            AS RCPMNY_ACNUTNO
+		          ,NULL                                                                                                                                            AS RCPMNYER
+		          ,NULL                                                                                                                                            AS RENT_CANCL_AT
+		          ,NULL                                                                                                                                            AS DELETE_AT
+		          ,'1'                                                                                                                                             AS MNGR_REGIST_AT
+		        FROM TBHPM_HSC_RENT_MANAGE t1
+		        LEFT OUTER JOIN TBHPM_RENT_FCLTS_MANAGE t2
+		        ON  t1.FCLTS_SN = t2.FCLTS_SN
+		        ) A
+		    WHERE 1         =1
+		]]>
+		<isNotEmpty property="DEPT_CODE">
+			AND A.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="FCLTS_SN">
+			A.FCLTS_SN = #FCLTS_SN#
+		</isNotEmpty>
+		<isEqual prepend="AND" property="SEARCH_CND" compareValue="001">
+			A.USE_DE BETWEEN #BGNDE# AND #ENDDE#
+		</isEqual>
+		<isEqual prepend="AND" property="SEARCH_CND" compareValue="002">
+			SUBSTR(A.REQST_DT, 0, 8) BETWEEN #BGNDE# AND #ENDDE#
+		</isEqual>
+		<isEmpty property="SEARCH_CND2">
+			<isNotEmpty prepend="AND" property="SEARCH_VAL">
+				(	 A.MBER_ID   LIKE '%' || #SEARCH_VAL# || '%'
+				  OR A.RCPMNYER  LIKE '%' || #SEARCH_VAL# || '%' )
+			</isNotEmpty>
+		</isEmpty>
+		<isNotEmpty property="SEARCH_CND2">
+			<isEqual property="SEARCH_CND2" compareValue="001">
+				<isNotEmpty prepend="AND"  property="SEARCH_VAL">
+					A.MBER_ID	LIKE '%' || #SEARCH_VAL# || '%'
+				</isNotEmpty>
+			</isEqual>
+			<isEqual  property="SEARCH_CND2" compareValue="002">
+				<isNotEmpty prepend="AND"  property="SEARCH_VAL">
+					A.RCPMNYER LIKE '%' || #SEARCH_VAL# || '%'
+				</isNotEmpty>
+			</isEqual>
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="SETLE_STTUS">
+			A.SETLE_STTUS = #SETLE_STTUS#
+		</isNotEmpty>
+		<![CDATA[	
+		    ), TMP2_T AS (
+		    SELECT t1.*
+		          ,NVL(REGEXP_COUNT(t1.USE_TIME, '-'), 0)+1  AS LVL_CNT
+		    FROM   TMP_T t1
+		)
+		
+		
+		SELECT t1.DEPT_CODE
+		      ,t1.MBER_ID
+		      ,t1.FCLTS_SN
+		      ,t1.FCLTS_NM
+		      ,t1.REQST_SN
+		      ,t1.RCPMNY_DTLS_SN
+		      ,t1.MBER_NM
+		      ,t1.GRP_NM
+		      ,t1.ADRES
+		      ,t1.TELNO
+		      ,t1.MBTLNUM
+		      ,t1.USE_DE
+		      ,NVL2(t1.REQST_SN, TO_CHAR(TO_DATE(REGEXP_SUBSTR(t1.USE_TIME, '[^-]+', 1, t2.LVL), 'HH24MI'), 'HH24MI'), t1.BEGIN_TIME) AS BEGIN_TIME
+		      ,NVL2(t1.REQST_SN, TO_CHAR(TO_DATE(REGEXP_SUBSTR(t1.USE_TIME, '[^-]+', 1, t2.LVL), 'HH24MI') + t3.CODE_ETC_2/24, 'HH24:MI'), t1.END_TIME) AS END_TIME
+		      ,t1.USE_PRPOS_SE
+		      ,t1.USE_CN
+		      ,t1.USE_NMPR
+		      ,t1.RM
+		      ,t1.SETLE_SE
+		      ,t1.SETLE_NM
+		      ,t1.SETLE_STTUS
+		      ,t1.REQST_DE
+		      ,SUBSTR(t1.REQST_DT, 0, 8) AS REQST_DE
+		      ,t1.JDGMN_COMPT_DE
+		      ,t1.SETLE_COMPT_DE
+		      ,t1.ORDER_NO
+		      ,t1.REFND_REQST_DE
+		      ,t1.REFND_BANK_CODE
+		      ,t1.REFND_BANK_NM
+		      ,t1.REFND_ACNUTNO
+		      ,t1.REFND_DPSTR
+		      ,t1.RCPMNY_BANK_CODE
+		      ,t1.RCPMNY_BANK_NM
+		      ,t1.RCPMNY_ACNUTNO
+		      ,t1.RCPMNYER
+		      ,t1.RENT_CANCL_AT
+		      ,t1.DELETE_AT
+		      ,t1.MNGR_REGIST_AT
+		      ,NVL2(t1.REQST_SN, t3.CODE_ETC_2, TO_CHAR((ROUND(((TO_DATE(NVL(t1.END_TIME, '2359'), 'HH24MI')-TO_DATE(t1.BEGIN_TIME, 'HH24MI'))*24*60)/30, 1)/2)))        AS USE_TIME
+		      ,NVL2(t1.REQST_SN, TO_CHAR(TO_DATE(REGEXP_SUBSTR(t1.USE_TIME, '[^-]+', 1, t2.LVL), 'HH24MI'), 'HH24:MI')
+		      ||'~'||TO_CHAR(TO_DATE(REGEXP_SUBSTR(t1.USE_TIME, '[^-]+', 1, t2.LVL), 'HH24MI') + t3.CODE_ETC_2/24, 'HH24:MI'), t1.USE_TIME_FOM) AS USE_TIME_FOM
+		      ,ROUND(t1.SETLE_AM/t1.LVL_CNT, 3) AS SETLE_AM
+		FROM   TMP2_T t1
+		       LEFT OUTER JOIN (
+		                        SELECT LEVEL        AS LVL
+		                        FROM   DUAL
+		                        CONNECT BY LEVEL < 99
+		                       ) t2
+		       ON t1.LVL_CNT >= t2.LVL
+		        LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		        ON  t1.MUMM_RESVE_TIME_SE = t3.CODE
+		        AND t3.GRP_CODE           = 'HPM006'
+		WHERE t1.LVL_CNT > 0
+		ORDER BY t1.USE_DE DESC, t1.RNUM, t2.LVL
+	]]>
+	</select>
+	
+	<!-- 결의번호 업데이트 -->
+	<update id="HPM070201DAO.hpmRentFcltsReqstManageU" parameterClass="java.util.HashMap">
+		UPDATE TBHPM_RENT_FCLTS_REQST_MANAGE
+		SET	 DECSN_YEAR = #DECSN_YEAR#
+			,DECSN_NO	= #DECSN_NO#
+			,SEQ		= #SEQ#
+	        ,REGISTER_ID  = #S_USER_ID#
+	        ,REGIST_DT    = SYSDATE
+	        ,UPDUSR_ID    = #S_USER_ID#
+	        ,UPDT_DT      = SYSDATE
+		WHERE REQST_SN  = #REQST_SN#
+		  AND MBER_ID   = #MBER_ID#
+		  AND FCLTS_SN  = #FCLTS_SN#
+	</update>
+	
+	
+	<!-- 거래처 존재 여부 -->
+	<select id="HPM070201DAO.selectBcncMastr" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT COUNT(*)
+		FROM TBCTR_BCNC_MASTR
+		WHERE 1=1
+		  AND SUMRY      = #SUMRY#
+		  AND BCNC_NM    = #NM#
+		  AND INPUT_DEPT = #DEPT_CODE#
+	</select>
+</sqlMap>

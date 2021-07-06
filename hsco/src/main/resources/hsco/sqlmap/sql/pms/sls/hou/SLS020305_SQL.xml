@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS020305_SQL">	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   
+	<!-- 쿼리명 : 주택별 공가정보 조회
+	설명 : 주택별 공가정보 조회 쿼리
+	수정일  수정자  수정내용
+
+	작성자 : 최승락
+	최초작성일 : 2015.09.08
+	-->
+	<select id="SLS020305DAO.selectUninhbhousList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		SELECT Z.* FROM (
+			WITH
+			TAB_01 AS
+			(
+				SELECT
+					   T2.HOUSE_CODE
+					 , T2.DONG
+					 , T2.HO
+					 , T2.CNTRCTR_NO
+					 , T1.CSTMR_NM AS CNTRCTR_NM
+					 , T2.CNTRCTR_STTUS_CODE
+					 , T2.CNTRCT_DE
+					 , T2.RENT_MVN_PRARNDE
+				  FROM TBSLS_HOUSE_CSTMR T1
+					 , TBSLS_HCNTRCTR T2
+				 WHERE 1 = 1
+				   AND T1.HOUSE_CSTMR_NO = T2.HOUSE_CSTMR_NO
+			),
+			TAB_02 AS
+			(
+				SELECT
+					   T3.HOUSE_CODE
+					 , T3.DONG
+					 , T3.HO
+					 , '['||T1.HOUSE_CODE||'] '||HOUSE_NM AS HOUSE_CODE_NM
+					 , T3.DONG||'동 '||T3.HO||'호' AS DO_HO
+					 , T2.AEA
+					 , T2.TY_AEA
+					 , T1.USE_AT
+					 , (
+						SELECT MAX(S1.CANCL_DE)
+						  FROM TBSLS_HCNTRCTR_CANCL S1
+						 WHERE 1 = 1
+						   AND S1.HOUSE_CODE = T3.HOUSE_CODE
+						   AND S1.DONG = T3.DONG
+						   AND S1.HO = T3.HO
+					   ) AS CANCL_DE
+					 , (
+						  SELECT SUM(S2.PAYAMT)
+							FROM TBSLS_HOUSE_TYBY_PAY_DETAIL S2
+						   WHERE S2.HOUSE_CODE = T3.HOUSE_CODE
+							 AND S2.DONG = T3.DONG
+							 AND S2.HO = T3.HO
+						) AS PAYAMT
+					 , T3.RM
+				  FROM TBSLS_HOUSE_INFO T1
+					 , TBSLS_HOUSE_TY T2
+					 , TBSLS_HOUSE_DONG_HO T3
+				 WHERE T1.HOUSE_CODE = T3.HOUSE_CODE
+				   AND T3.HOUSE_CODE = T2.HOUSE_CODE(+)
+				   AND T3.HOUSE_TY_CODE = T2.HOUSE_TY_CODE(+)
+			)
+			SELECT ROW_NUMBER ()
+			       OVER (
+			          PARTITION BY B.HOUSE_CODE, B.DONG, B.HO, B.AEA, B.TY_AEA, B.PAYAMT
+			          ORDER BY
+			             B.HOUSE_CODE,
+			             B.DONG,
+			             B.HO,
+			             B.AEA,
+			             B.TY_AEA,
+			             B.PAYAMT,
+			             A.CNTRCT_DE DESC) RANK
+			     , B.HOUSE_CODE_NM
+			     , B.HOUSE_CODE
+			     , B.DONG
+			     , B.HO
+				 , B.DO_HO
+				 , B.AEA
+				 , B.TY_AEA
+				 , B.CANCL_DE
+				 , B.PAYAMT
+				 , A.CNTRCT_DE
+				 , A.RENT_MVN_PRARNDE
+				 , B.RM
+			  FROM TAB_01 A
+				 , TAB_02 B
+			 WHERE 1 = 1
+		]]>
+			   AND B.HOUSE_CODE = A.HOUSE_CODE(+)
+			   AND B.DONG = A.DONG(+)
+			   AND B.HO = A.HO(+)
+			 <isNotEmpty property="HOUSE_CODE">
+			   AND B.HOUSE_CODE = #HOUSE_CODE#
+			 </isNotEmpty>
+			 <isNotEmpty property="AEA">
+			   AND B.AEA = #AEA#
+			 </isNotEmpty>
+			 <isNotEmpty property="TY_AEA">
+			   AND B.TY_AEA = #TY_AEA#
+			 </isNotEmpty>
+			   AND B.USE_AT = '1'
+			   AND NOT EXISTS ( SELECT 1
+								  FROM TBSLS_HCNTRCTR E
+								 WHERE 1 = 1
+								   AND E.CNTRCTR_STTUS_CODE = '01'
+								   AND E.HOUSE_CODE = B.HOUSE_CODE
+								   AND E.DONG = B.DONG
+								   AND E.HO = B.HO
+							   )
+			 ORDER BY B.HOUSE_CODE, B.DONG, B.HO) Z
+			 WHERE Z.RANK = 1 
+	</select>	
+	
+	<!-- 쿼리명 : 주택별 공가정보 수정
+	설명 : 주택별 공가정보 수정 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 최승락
+	최초작성일 : 2015.09.09
+	-->
+	<update id="SLS020305DAO.updateUninhbhousList" parameterClass="java.util.Map">
+		UPDATE TBSLS_HOUSE_DONG_HO
+		   SET
+			   RM = #RM#
+		 WHERE 1 = 1
+		   AND HOUSE_CODE = #HOUSE_CODE#
+		   AND DONG = #DONG#
+		   AND HO = #HO#
+	</update>
+
+</sqlMap>

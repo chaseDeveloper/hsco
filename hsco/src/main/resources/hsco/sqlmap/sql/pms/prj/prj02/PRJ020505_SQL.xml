@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_LAD_SLE_PLAN_ACMSLT		토지판매계획및실적
+		 R   : TBPRJ_HOUSE_SLE_PLAN_ACMSLT		주택판매계획실적
+		 R   : TBPRJ_LAD_LTTOT_AMOUNT			토지분양가산정
+		 R   : TBPRJ_LTTOT_PC_CALC				분양가산정
+		CRUD : TBPRJ_PRSMP_SELNG				추정매출
+	-->
+
+	<!-- 추정매출 ================================================== -->
+
+	<!-- 추정매출 -->
+<sql id="v_prj_prsmp_selng1">
+<isNotEqual property="DATA_SRC" compareValue="1">		<!-- 집계 -->
+	SELECT
+		 STDR_YM		/* 기준년월 */
+		,BSNS_CODE		/* 사업코드 */
+		,HOUSE_CODE		/* 주택코드 */
+		,SUPLY_TY_CODE	/* 공급유형코드 */
+		,TY_CODE		/* 타입코드 */
+		,BSNS_YEAR		/* 사업년도 */
+		,HSHLD_CO			/* 세대 */
+		,AR					/* 면적당금액 */
+		,LTTOT_UNTPC		/* 분양단가 */
+		,PRSMP_SELNG_AM		/* 추정매출액 */
+	FROM TBPRJ_PRSMP_SELNG			/* 추정매출 */
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			<!-- 원장 -->
+	<include refid="v_prj_prsmp_selng2"/>
+</isEqual>
+</sql>
+
+	<!-- 추정매출 : 원장 -->
+<sql id="v_prj_prsmp_selng2">
+	SELECT
+		 A.LTTOT_YM AS STDR_YM		/* 기준년월 */
+		,A.BSNS_CODE				/* 사업코드 */
+		,A.LAD_CODE AS HOUSE_CODE	/* 토지(주택)코드 */
+		,A.SUPLY_CODE AS SUPLY_TY_CODE	/* 공급코드 */
+		,A.BLCK AS TY_CODE				/* 블록 */
+		,SUBSTR(A.LTTOT_YM, 1,4) AS BSNS_YEAR
+		,A.LOT_CO_PLAN AS HSHLD_CO		/* LOT수_계획 */
+		,A.AR_PLAN AS AR					/* 면적_계획 */
+		,A.LTTOT_PRIC_PLAN AS LTTOT_UNTPC	/* 분양단가 */
+		,A.PLAN_AMOUNT AS PRSMP_SELNG_AM	/* 추정매출액 */
+	FROM TBPRJ_LAD_SLE_PLAN_ACMSLT A		/* 토지판매계획및실적 */
+
+	UNION ALL
+
+	SELECT
+		 A.LTTOT_YM AS STDR_YM		/* 기준년월 */
+		,A.BSNS_CODE				/* 사업코드 */
+		,A.HOUSE_CODE				/* 토지(주택)코드 */
+		,A.SUPLY_TY_CODE			/* 공급코드 */
+		,A.TY_CODE					/* 타입코드 */
+		,SUBSTR(A.LTTOT_YM, 1,4) AS BSNS_YEAR
+		,A.HSHLD_CO_PLAN AS HSHLD_CO	/* LOT수_계획 */
+		,0 AS AR							/* 면적_계획 */
+		,A.LTTOT_PRIC_PLAN AS LTTOT_UNTPC	/* 분양단가 */
+		,A.PLAN_AMOUNT AS PRSMP_SELNG_AM	/* 추정매출액 */
+	FROM TBPRJ_HOUSE_SLE_PLAN_ACMSLT A		/* 토지판매계획및실적 */
+	JOIN TBPRJ_HOUSE_CODE HC				/* 주택코드 */
+	  ON A.BSNS_CODE = HC.BSNS_CODE
+</sql>
+
+	<!-- 추정매출 조회 -->
+	<select id="PRJ020505.mList" parameterClass="map" resultClass="hashmap">
+WITH DATA AS
+(
+	SELECT
+		 STDR_YM		/* 기준년월 */
+		,BSNS_CODE		/* 사업코드 */
+		,HOUSE_CODE		/* 주택코드 */
+		,SUPLY_TY_CODE	/* 공급유형코드 */
+		,TY_CODE		/* 타입코드 */
+		,COUNT(HSHLD_CO) AS HSHLD_CO		/* 세대 */
+		,SUM(AR) AS AR						/* 면적당금액 */
+		,AVG(LTTOT_UNTPC) AS LTTOT_UNTPC	/* 분양단가 */
+		,SUM(PRSMP_SELNG_AM) AS PRSMP_SELNG_AM	/* 추정매출액 */
+	FROM (
+	<include refid="v_prj_prsmp_selng1"/>
+	)
+	GROUP BY BSNS_CODE, HOUSE_CODE, SUPLY_TY_CODE, TY_CODE, STDR_YM
+)
+SELECT
+	 A.STDR_YM			/* 기준년월 */
+	,BC.BSNS_CODE		/* 사업코드 */
+	,A.HOUSE_CODE		/* 주택코드 */
+	,A.SUPLY_TY_CODE	/* 공급유형코드 */
+	,A.TY_CODE			/* 타입코드 */
+	,A.HSHLD_CO				/* 세대 */
+	,A.AR					/* 면적당금액 */
+	,A.LTTOT_UNTPC			/* 분양단가 */
+	,A.PRSMP_SELNG_AM		/* 추정매출액 */
+	,BC.BSNS_NM				/* 사업명 */
+	,NVL(LC.LAD_CODE_NM, HC.HOUSE_CODE_NM) AS HOUSE_NM			/* 토지(주택)명 */
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.SUPLY_TY_CODE) AS SUPLY_TY_CODE_NM		/* 공급유형 */
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.TY_CODE) AS TY_CODE_NM					/* 타입(블럭) */
+FROM TBPRJ_BSNS_CODE BC
+LEFT JOIN DATA A			/* 추정매출 */
+  ON A.BSNS_CODE = BC.BSNS_CODE
+LEFT JOIN TBPRJ_LAD_CODE LC						/* 토지코드 */
+  ON LC.BSNS_CODE = A.BSNS_CODE
+ AND LC.LAD_CODE = A.HOUSE_CODE
+LEFT JOIN TBPRJ_HOUSE_CODE HC					/* 주택코드 */
+  ON HC.BSNS_CODE = A.BSNS_CODE
+ AND HC.HOUSE_CODE = A.HOUSE_CODE
+WHERE 1=1
+<isNotEmpty property="STDR_YM" >
+  AND A.STDR_YM = #STDR_YM#						/* 기준년월 */
+</isNotEmpty>
+<isNotEmpty property="BSNS_GB" >
+  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+</isNotEmpty>
+ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 추정매출 ================================================== -->
+
+	<!-- 추정매출 조회 -->
+	<select id="PRJ020505.rList" parameterClass="map" resultClass="hashmap">
+WITH DATA AS (
+	SELECT
+		 STDR_YM		/* 기준년월 */
+		,BSNS_CODE		/* 사업코드 */
+		,HOUSE_CODE		/* 주택코드 */
+		,SUPLY_TY_CODE	/* 공급유형코드 */
+		,TY_CODE		/* 타입코드 */
+		,BSNS_YEAR		/* 사업년도 */
+		,COUNT(HSHLD_CO) AS HSHLD_CO		/* 세대 */
+		,SUM(AR) AS AR						/* 면적당금액 */
+		,AVG(LTTOT_UNTPC) AS LTTOT_UNTPC	/* 분양단가 */
+		,SUM(PRSMP_SELNG_AM) AS PRSMP_SELNG_AM	/* 추정매출액 */
+	FROM (
+	<include refid="v_prj_prsmp_selng1"/>
+	)
+	GROUP BY BSNS_CODE, HOUSE_CODE, SUPLY_TY_CODE, TY_CODE, BSNS_YEAR, STDR_YM
+)
+SELECT
+	 A.STDR_YM			/* 기준년월 */
+	,BC.BSNS_CODE		/* 사업코드 */
+	,A.HOUSE_CODE		/* 주택코드 */
+	,A.SUPLY_TY_CODE	/* 공급유형코드 */
+	,A.TY_CODE			/* 타입코드 */
+	,A.BSNS_YEAR		/* 사업년도 */
+	,A.HSHLD_CO			/* 세대 */
+	,A.AR				/* 면적당금액 */
+	,A.LTTOT_UNTPC		/* 분양단가 */
+	,A.PRSMP_SELNG_AM	/* 추정매출액 */
+
+	,BC.SLE_SE			/* 판매구분 : 1-토지,2-주택 */
+	,NVL(LC.LAD_CODE_NM, HC.HOUSE_CODE_NM) AS HOUSE_NM			/* 토지(주택)명 */
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.SUPLY_TY_CODE) AS SUPLY_TY_CODE_NM		/* 공급유형 */
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.TY_CODE) AS TY_CODE_NM					/* 타입(블럭) */
+FROM TBPRJ_BSNS_CODE BC
+LEFT JOIN DATA A								/* 추정매출액 */
+  ON A.BSNS_CODE = BC.BSNS_CODE
+LEFT JOIN TBPRJ_LAD_CODE LC						/* 토지코드 */
+  ON LC.BSNS_CODE = A.BSNS_CODE
+ AND LC.LAD_CODE = A.HOUSE_CODE
+LEFT JOIN TBPRJ_HOUSE_CODE HC					/* 주택코드 */
+  ON HC.BSNS_CODE = A.BSNS_CODE
+ AND HC.HOUSE_CODE = A.HOUSE_CODE
+WHERE 1=1
+<isNotEmpty property="STDR_YM" >
+  AND A.STDR_YM = #STDR_YM#					/* 기준년월 */
+</isNotEmpty>
+<isNotEmpty property="BSNS_CODE" >
+  AND BC.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+</isNotEmpty>
+<isNotEmpty property="BSNS_GB" >
+  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+</isNotEmpty>
+ORDER BY 1,2,3,4,5
+	</select>
+
+	<!-- 추정매출 삭제 -->
+	<delete id="PRJ020505.rD" parameterClass="map">
+DELETE FROM TBPRJ_PRSMP_SELNG			/* 추정매출 */
+WHERE STDR_YM = #STDR_YM#			/* 기준년월 */
+  AND BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND HOUSE_CODE = #HOUSE_CODE#			/* 주택코드 */
+  AND SUPLY_TY_CODE = #SUPLY_TY_CODE#			/* 공급유형코드 */
+  AND TY_CODE = #TY_CODE#			/* 타입코드 */
+  AND BSNS_YEAR = #BSNS_YEAR#			/* 사업년도 */
+	</delete>
+
+	<!-- 추정매출 생성 -->
+	<insert id="PRJ020505.make" parameterClass="map">
+INSERT INTO TBPRJ_PRSMP_SELNG (			/* 추정매출 */
+	 STDR_YM		/* 기준년월 */
+	,BSNS_CODE		/* 사업코드 */
+	,HOUSE_CODE		/* 주택코드 */
+	,SUPLY_TY_CODE	/* 공급유형코드 */
+	,TY_CODE		/* 타입코드 */
+	,BSNS_YEAR		/* 사업년도 */
+
+	,HSHLD_CO			/* 세대 */
+	,AR					/* 면적당금액 */
+	,LTTOT_UNTPC		/* 분양단가 */
+	,PRSMP_SELNG_AM		/* 추정매출액 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+)
+SELECT
+	 A.STDR_YM		/* 기준년월 */
+	,A.BSNS_CODE	/* 사업코드 */
+	,A.HOUSE_CODE	/* 주택코드 */
+	,A.SUPLY_TY_CODE	/* 공급유형코드 */
+	,A.TY_CODE		/* 타입코드 */
+	,A.BSNS_YEAR	/* 사업년도 */
+
+	,A.HSHLD_CO			/* 세대 */
+	,A.AR				/* 면적당금액 */
+	,A.LTTOT_UNTPC		/* 분양단가 */
+	,A.PRSMP_SELNG_AM	/* 추정매출액 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+FROM TBPRJ_BSNS_CODE BC
+JOIN								/* 추정매출액 */
+(
+	SELECT
+		 STDR_YM		/* 기준년월 */
+		,BSNS_CODE		/* 사업코드 */
+		,HOUSE_CODE		/* 주택코드 */
+		,SUPLY_TY_CODE	/* 공급유형코드 */
+		,TY_CODE		/* 타입코드 */
+		,BSNS_YEAR		/* 사업년도 */
+		,COUNT(HSHLD_CO) AS HSHLD_CO		/* 세대 */
+		,SUM(AR) AS AR						/* 면적당금액 */
+		,AVG(LTTOT_UNTPC) AS LTTOT_UNTPC	/* 분양단가 */
+		,SUM(PRSMP_SELNG_AM) AS PRSMP_SELNG_AM	/* 추정매출액 */
+	FROM (
+	<include refid="v_prj_prsmp_selng2"/>
+	)
+	GROUP BY BSNS_CODE, HOUSE_CODE, SUPLY_TY_CODE, TY_CODE, BSNS_YEAR, STDR_YM
+) A ON A.BSNS_CODE = BC.BSNS_CODE
+WHERE 1=1
+<isNotEmpty property="BSNS_GB" >
+  AND NVL2(BC.BSNS_END_YM, 2, 1) = #BSNS_GB#	/* 진행구분 */
+</isNotEmpty>
+<isNotEmpty property="STDR_YM" >
+  AND A.STDR_YM = #STDR_YM#					/* 기준년월 */
+</isNotEmpty>
+<isNotEmpty property="BSNS_CODE" >
+  AND BC.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+</isNotEmpty>
+ORDER BY 1,2,3,4,5
+	</insert>
+
+</sqlMap>

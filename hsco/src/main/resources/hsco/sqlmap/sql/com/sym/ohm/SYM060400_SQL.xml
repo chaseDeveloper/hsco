@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+
+<sqlMap namespace="SYM060400_SQL">
+
+   <!-- 개선요청 ================================================== -->
+
+	<!-- 개선요청 조회 -->
+	<select id="SYM060400.HpcmQnaList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+             LEVEL - 1 AS QNA_LEVEL
+        	,A.QNA_SN			/** 질의응답일련번호 */
+        	,A.REFRN_QNA_SN			/** 질의응답일련번호 */
+            ,A.QNA_SJ
+        	,A.QNA_CN			/** 내용 */
+        	,A.OPERT_SE				/** 작업구분 */
+        	,A.QNA_SE_CODE			/** 질의응답구분코드 */
+        	,A.FILE_SN				/** 파일일련번호 */
+            ,A.REGISTER_ID			/** 등록자ID */
+            ,NVL(B.USER_NM, A.REGISTER_ID) AS REGISTER_NM			/** 사용자명 */
+        	,TO_CHAR(A.REGIST_DT,'YYYY-MM-DD HH24:MI') REGIST_DT			/** 등록일시 */
+        	,A.UPDUSR_ID			/** 수정자ID */
+        	,A.UPDT_DT
+            ,DECODE(LEVEL, 1, CODE_A.CODE_NM, '답변') || ' : ' || DECODE(A.SECRET_AT, '1', '비밀글입니다.', A.QNA_SJ)  AS QNA_SJ2 /** 제목 */
+            ,A.QNA_STTUS            /* 질의응답 상태코드*/
+            ,A.SECRET_AT            /* 비밀글여부*/
+            ,A.CHARGER				/** 담당자 **/
+            ,A.COMPT_RQESTDE		/** 완료요청일 */
+            ,A.JOB_SE				/** 업무구분 */
+            ,A.PLAN_DE				/** 계획일자 */
+        FROM (
+              SELECT QNA_SN
+                   , REFRN_QNA_SN
+                   , QNA_SJ
+                   , QNA_CN
+                   , OPERT_SE
+                   , QNA_SE_CODE
+                   , REGISTER_ID
+                   , REGIST_DT
+                   , UPDUSR_ID
+                   , UPDT_DT
+                   , FILE_SN
+                   , QNA_STTUS
+                   , SECRET_AT
+                   , CHARGER
+                   , COMPT_RQESTDE
+                   , JOB_SE
+                   , PLAN_DE
+                FROM TBCOM_HPCM_QNA
+               WHERE REFRN_QNA_SN IS NULL
+                 AND TO_CHAR(REGIST_DT, 'YYYYMM') = #YYYYMM#
+              
+              UNION ALL
+              
+              SELECT B.QNA_SN
+                   , B.REFRN_QNA_SN
+                   , B.QNA_SJ
+                   , B.QNA_CN
+                   , B.OPERT_SE
+                   , B.QNA_SE_CODE
+                   , B.REGISTER_ID
+                   , B.REGIST_DT
+                   , B.UPDUSR_ID
+                   , B.UPDT_DT
+                   , B.FILE_SN
+                   , B.QNA_STTUS
+                   , B.SECRET_AT
+                   , B.CHARGER
+                   , B.COMPT_RQESTDE
+                   , B.JOB_SE
+                   , B.PLAN_DE
+                FROM TBCOM_HPCM_QNA A
+                     LEFT OUTER JOIN TBCOM_HPCM_QNA B
+                          ON A.QNA_SN = B.REFRN_QNA_SN
+               WHERE B.REFRN_QNA_SN IS NOT NULL
+                 AND TO_CHAR(A.REGIST_DT, 'YYYYMM') = #YYYYMM#
+             ) A			/** 개선요청 */
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE CODE_A
+		    ON A.QNA_SE_CODE = CODE_A.CODE
+		    AND CODE_A.GRP_CODE = 'COM054'
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE CODE_B
+		    ON A.QNA_STTUS = CODE_B.CODE
+		    AND CODE_B.GRP_CODE = 'COM055'
+		  LEFT OUTER JOIN TBCOM_USER B
+		    ON A.REGISTER_ID           = B.USER_ID
+        WHERE 1=1
+          <isNotEmpty property="QNA_STTUS" >
+              AND A.QNA_STTUS = #QNA_STTUS#
+          </isNotEmpty>
+          <isNotEmpty property="QNA_SJ" >
+              AND A.QNA_SJ LIKE '%' || #QNA_SJ# || '%'	   /** 질의응답일련번호 */
+          </isNotEmpty>
+          <isNotEmpty property="QNA_CN" >
+              AND A.QNA_CN LIKE '%' || #QNA_CN#	|| '%'   /** 내용 */
+          </isNotEmpty>
+          <isNotEmpty property="REGISTER_ID" >
+              AND A.REGISTER_ID = #REGISTER_ID#	   /** 작성자ID */
+          </isNotEmpty>
+          <isNotEmpty property="REGISTER_NM" >
+              AND B.USER_NM LIKE '%' || #REGISTER_NM# || '%'   /** 작성자ID */
+          </isNotEmpty>
+          <isNotEmpty property="OPERT_SE" >
+              AND A.OPERT_SE = #OPERT_SE#
+          </isNotEmpty>
+        START WITH REFRN_QNA_SN IS NULL
+        CONNECT BY PRIOR A.QNA_SN = A.REFRN_QNA_SN
+        ORDER SIBLINGS BY A.REGIST_DT DESC
+	</select>
+ 
+	<!-- 개선요청 추가 -->
+	<insert id="SYM060400.HpcmQnaC" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_HPCM_QNA (			/** 개선요청 */
+        	 QNA_SN					/** 질의응답일련번호 */
+        	,REFRN_QNA_SN			/** 질의응답일련번호 */
+        	,QNA_SJ					/** 제목 */
+        	,QNA_CN					/** 내용 */
+        	,OPERT_SE				/** 작업구분*/
+        	,QNA_SE_CODE			/** 질의응답구분코드 */
+        	,FILE_SN				/** 파일일련번호 **/
+        	,QNA_STTUS              /** 질의응답 상태코드 **/
+        	,SECRET_AT              /** 비밀글여부 **/
+        	,CHARGER				/** 담당자*/
+        	,COMPT_RQESTDE			/** 완료요청일 */	
+        	,REGISTER_ID			/** 등록자ID */
+        	,REGIST_DT				/** 등록일시 */
+        	,UPDUSR_ID				/** 수정자ID */
+        	,UPDT_DT
+        	,JOB_SE					/** 요청메뉴구분 */
+        	,PLAN_DE				/** 계획일자 */
+        ) VALUES (
+        	 SQ_COM_HPCM_QNA_1.NEXTVAL	/** 질의응답일련번호  */
+        	,#REFRN_QNA_SN#				/** 질의응답일련번호 */
+        	,#QNA_SJ#						/** 제목 */
+        	,#QNA_CN#						/** 내용 */
+        	,NVL(#OPERT_SE#, '01')			/** 작업구분*/
+        	,#QNA_SE_CODE#					/** 질의응답구분코드 */
+        	,#FILE_SN#						/** 파일일련번호 **/
+        	,#QNA_STTUS#	                /** 질의응답 상태코드 **/
+        	,#SECRET_AT#	                /** 비밀글여부 **/
+        	,#CHARGER#						/** 담당자*/
+        	,#COMPT_RQESTDE#				/** 완료요청일*/
+        	,#S_USER_ID#					/** 등록자ID */
+        	,SYSDATE						/** 등록일시 */
+        	,#S_USER_ID#					/** 수정자ID */
+        	,SYSDATE
+        	,#JOB_SE#						/** 요청메뉴구분*/
+        	,#PLAN_DE#						/** 계획일자*/
+        )
+	</insert>
+
+	<!-- 개선요청 수정 -->
+	<update id="SYM060400.HpcmQnaU" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_HPCM_QNA					
+          SET
+        	 QNA_SJ = #QNA_SJ#					/** 제목 */
+        	,QNA_CN = #QNA_CN#					/** 내용 */
+        	,OPERT_SE = NVL(#OPERT_SE#, '01')	/** 작업구분 */
+        	,QNA_SE_CODE = #QNA_SE_CODE#		/** 질의응답구분코드 */
+        	,QNA_STTUS   = #QNA_STTUS#          /** 질의응답 상태코드*/
+        	,SECRET_AT   = #SECRET_AT#          /** 비밀글여부*/
+        	,FILE_SN = #FILE_SN#				/** 파일일련번호 */ 
+        	,CHARGER = #CHARGER#				/** 담당자*/
+        	,COMPT_RQESTDE = #COMPT_RQESTDE#	/** 완료요청일*/
+        	,UPDUSR_ID = #S_USER_ID#			/** 수정자ID */
+        	,UPDT_DT = SYSDATE
+        	,JOB_SE  = #JOB_SE#
+        	,PLAN_DE = #PLAN_DE#                /** 계획일자 */
+        WHERE QNA_SN = #QNA_SN#
+	</update>
+
+	<!-- 개선요청 삭제 -->
+	<delete id="SYM060400.HpcmQnaD" parameterClass="java.util.HashMap">
+        DELETE FROM TBCOM_HPCM_QNA
+        WHERE QNA_SN = #QNA_SN#
+	</delete>
+	
+	
+</sqlMap>

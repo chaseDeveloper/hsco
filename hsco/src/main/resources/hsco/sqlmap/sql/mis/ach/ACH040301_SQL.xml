@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH040301_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 성과지표 목록(기본구조형) 조회 -->
+	<select id="ACH040301DAO.selectList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT * 
+		  FROM (
+                  SELECT 
+                          C.EVL_YEAR        	AS EVL_YEAR      
+                         ,C.ODR_SE          	AS ODR_SE        
+                         ,C.IX_CODE         	AS IX_CODE       
+                         ,C.IX_NM           	AS IX_NM
+                         ,'000000'              AS ORGNZT_CODE
+                         ,'' 				    AS ORGNZT_NM
+                         ,C.IX_SE               AS IX_SE
+                         ,C.UPPER_IX_CODE       AS UPPER_IX_CODE
+                    FROM TBACH_KPI C			    
+                   WHERE 1=1
+                     AND C.EVL_YEAR = #EVL_YEAR#
+                     AND C.ODR_SE = #ODR_SE#
+                     AND C.USE_AT = '1'                          
+                   UNION ALL                     
+                  SELECT 
+                          A.EVL_YEAR        	AS EVL_YEAR      
+                         ,A.ODR_SE          	AS ODR_SE        
+                         ,A.IX_CODE         	AS IX_CODE       
+                         ,A.IX_NM           	AS IX_NM 
+                         ,B.ORGNZT_CODE         AS ORGNZT_CODE
+                         ,SFACH_GET_ORGNZTNM(A.EVL_YEAR,A.ODR_SE,B.ORGNZT_CODE) AS ORGNZT_NM
+                         ,'007'                 AS IX_SE
+                         ,SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'003') AS UPPER_IX_CODE
+                    FROM TBACH_KPI A
+                        ,TBACH_WGHTVAL B			    
+                   WHERE 1=1
+                     AND A.EVL_YEAR = B.EVL_YEAR(+)
+                     AND A.ODR_SE = B.ODR_SE(+)
+                     AND A.IX_CODE = B.IX_CODE(+)
+                     AND A.EVL_YEAR = #EVL_YEAR#
+                     AND A.ODR_SE = #ODR_SE#
+		             <![CDATA[	                     
+                     AND B.STRCT_LEVEL >= 5
+                     AND ORGNZT_CODE <> '000000' 
+                     ]]>                         
+		 )
+		      WHERE 1=1
+		      START WITH IX_CODE = '00000'
+		      CONNECT BY PRIOR IX_CODE = UPPER_IX_CODE
+		      ORDER SIBLINGS BY IX_CODE, ORGNZT_CODE
+    </select>
+    
+    <!-- 주요지표 상세(조직별)조회 -->
+	<select id="ACH040301DAO.selectListDtl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH V_SETUP AS 
+		      (SELECT A.EVL_YEAR
+		             , A.ODR_SE
+		             , A.CUR_MT
+		             , B.SEQ
+		        FROM TBACH_EVL_ODR A
+		           , TBACH_EVL_SM_STDR B
+		        WHERE 1=1
+		          AND A.EVL_YEAR = B.EVL_YEAR
+		          AND A.ODR_SE   = B.ODR_SE
+		          AND B.APPLC_AT = '1'
+		          AND A.EVL_YEAR = #EVL_YEAR#
+		          AND A.ODR_SE   = #ODR_SE#
+		       )		
+		SELECT  A.EVL_YEAR 			    AS EVL_YEAR
+		       ,A.ODR_SE 				AS ODR_SE
+		       ,A.IX_CODE 				AS IX_CODE
+		       ,'[ ' || A.IX_CODE || ' ] ' || B.IX_NM AS IX_NM
+		       ,A.ORGNZT_CODE 			AS ORGNZT_CODE
+		       ,'[ ' || A.ORGNZT_CODE || ' ] ' || SFACH_GET_ORGNZTNM(A.EVL_YEAR, A.ODR_SE, A.ORGNZT_CODE ) AS ORGNZT_NM
+		       ,B.MESURE_UNIT 			AS MESURE_UNIT
+		       ,A.ACMTL_GOAL 			AS Q_GOALVAL
+		       ,A.ACMTL_ACMSLT 			AS Q_ACMSLTVAL
+		       ,A.ACMTL_ACMSLTVAL_RT 	AS Q_ACMSLTVAL_RT
+		  FROM TBACH_EVL_SM_DETAIL A
+		      ,TBACH_KPI B
+		      ,V_SETUP V
+	   WHERE 1=1
+	     AND A.EVL_YEAR = B.EVL_YEAR 
+	     AND A.ODR_SE = B.ODR_SE 
+	     AND A.IX_CODE = B.IX_CODE 
+	     AND A.EVL_YEAR = V.EVL_YEAR
+	     AND A.ODR_SE = V.ODR_SE
+	     AND A.SEQ = V.SEQ
+	     AND A.IX_CODE = #IX_CODE#
+         <isNotEmpty property="ORGNZT_CODE">
+         AND A.ORGNZT_CODE = #ORGNZT_CODE#
+         </isNotEmpty>	
+         AND A.MT_SE = V.CUR_MT
+	   ORDER BY A.ORGNZT_CODE	     
+    </select>
+
+</sqlMap>

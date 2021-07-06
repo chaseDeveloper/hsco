@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS020101_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+ 
+     <!--우리팀 민원분배 조회 -->
+    <select id="CUS020101DAO.selectTeamCvplDstbList" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+		<![CDATA[	
+			SELECT 
+				 A.INQRY_KND            AS        INQRY_KND                 /*문의종류*/
+				,A.INQRY_KND_DETAIL     AS        INQRY_KND_DETAIL          /*문의종류상세*/
+				,A.CHRG_DEPT_CODE       AS        CHRG_DEPT_CODE            /*담당부서코드*/
+				,(SELECT SFSAL_GETDEPTNM_01(A.CHRG_DEPT_CODE) FROM DUAL)
+				                        AS        CHRG_DEPT_NM              /*담당부서명*/
+				,A.APPN_CHARGER         AS        APPN_CHARGER              /*지정담당자사번*/
+				,(SELECT SFSAL_GETEMPNO_01(A.APPN_CHARGER) FROM DUAL)
+				                        AS        APPN_CHARGER_NM           /*지정담당자명*/
+				,A.HELP_DEPT_CODE       AS        HELP_DEPT_CODE            /*협조부서코드*/ 
+				,(SELECT SFSAL_GETDEPTNM_01(A.HELP_DEPT_CODE) FROM DUAL)
+				                        AS        HELP_DEPT_NM              /*협조부서명*/
+				,A.HELP_CHARGER_EMPNO   AS        HELP_CHARGER_EMPNO        /*협조담당자*/
+				,A.HELP_CHARGER_NM      AS        HELP_CHARGER_NM           /*협조담당자명*/
+				,A.HELP_APPN_CHARGER    AS        HELP_APPN_CHARGER         /*협조지정담당자*/
+				,(SELECT SFSAL_GETEMPNO_01(A.HELP_APPN_CHARGER) FROM DUAL)
+				                        AS        HELP_APPN_CHARGER_NM      /*협조지정담당자명*/
+				,A.APPN_DT              AS        APPN_DT                   /*지정일시*/
+				,A.PROCESS_TMLMT        AS        PROCESS_TMLMT             /*처리기한*/
+				,A.PROCESS_TMLMT_DETAIL AS        PROCESS_TMLMT_DETAIL      /*처리기한상세*/
+				,A.DELETE_DE            AS        DELETE_DE                 /*삭제일시*/
+				,A.DTRN                 AS        DTRN                      /*삭제사유*/
+				,A.CVPL_NO              AS        CVPL_NO                   /*민원번호*/
+				,A.CVPL_GRAD            AS        CVPL_GRAD                 /*민원등급*/
+				,A.RCEPT_NO             AS        RCEPT_NO                  /*접수번호*/
+				,A.RETURN_SE            AS        RETURN_SE                 /*반려구분*/
+				,A.RETURN_PRVONSH       AS        RETURN_PRVONSH            /*반려사유*/
+				,B.CSTMR_REGIST_DT      AS        CSTMR_REGIST_DT           /*고객등록일시*/
+				,B.RCEPT_DT             AS        RCEPT_DT                  /*접수일시*/
+				,B.RCEPT_MTH            AS        RCEPT_MTH                 /*접수방법*/
+				,B.HOPE_RICFLD_COURS    AS        HOPE_RICFLD_COURS         /*희망답변경로*/
+				,B.SJ                   AS        SJ                        /*제목*/
+				,B.CN                   AS        CN                        /*내용*/
+				,B.NM                   AS        NM                        /*고객이름*/
+				,B.MBTLNO               AS        MBTLNO                    /*휴대폰번호*/
+				,B.GNRL_TLPHON          AS        GNRL_TLPHON               /*전화번호*/
+				,B.EMAIL                AS        EMAIL                     /*이메일*/
+				,B.ADRES                AS        ADRES                     /*주소*/
+				,B.ZIP                  AS        ZIP
+				,B.MVN_AT               AS        MVN_AT                    /*입주여부*/
+				,B.ATCH_FILE            AS        ATCH_FILE                 /*첨부파일*/
+				,''                     AS        CHK                       /*체크박스 사용을 위한 변수*/
+				,A.CVPL_STTUS           AS        CVPL_STTUS				/*처리상태*/
+				,A.CVPL_STTUS           AS        OLD_CVPL_STTUS 			/*처리상태*/
+				,DECODE(A.DELETE_DE, NULL, '2', '1') AS DELETE_AT/*삭제여부*/
+				,CASE WHEN A.CHRG_DEPT_CODE = #DEPT_CODE# THEN 1
+				  	  WHEN A.HELP_DEPT_CODE = #DEPT_CODE# THEN 2
+				  	  ELSE NULL
+				  END				    AS        MAIN_HELP_SE              /*주부서/협조부서 구분*/
+				,SUBSTR(A.CVPL_NO,1,1)  AS        RCEPT_COURS      			/*접수경로*/
+				,A.CHARGER_EMPNO
+				,A.CHARGER_NM
+			  FROM TBCUS_HMPG_CVPL_DSTB A
+				   INNER JOIN TBCUS_HMPG_CSTMR_CVPL B
+				           ON  A.CVPL_NO = B.CVPL_NO
+			   	          AND SUBSTR(B.CVPL_NO,1,1) <> 'C'
+			 WHERE B.CSTMR_REGIST_DT >= TO_DATE(#RCEPT_BGN_DT#, 'YYYYMMDD')
+			   AND B.CSTMR_REGIST_DT < TO_DATE(#RCEPT_END_DT#, 'YYYYMMDD') + 1
+		]]>
+		<isNotEqual property="AUTH_CODE" compareValue="101">
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				(A.CHRG_DEPT_CODE=#DEPT_CODE# OR A.HELP_DEPT_CODE=#DEPT_CODE#)
+			</isNotEmpty>
+		</isNotEqual>
+		<isNotEmpty property="INQRY_KND">                            /*문의종류 조건 있을시*/
+			   AND A.INQRY_KND = #INQRY_KND#
+		</isNotEmpty>
+		<isNotEmpty property="INQRY_KND_DETAIL">                     /*문의종류상세 조건 있을시*/
+			   AND A.INQRY_KND_DETAIL = #INQRY_KND_DETAIL#
+		</isNotEmpty>
+		<isNotEmpty property="CVPL_STTUS">                            /*민원상태 조건 있을시*/
+			<isNotEqual property="CVPL_STTUS" compareValue="9" prepend="AND">
+				A.CVPL_STTUS = #CVPL_STTUS#
+			</isNotEqual>
+			<isEqual property="CVPL_STTUS" compareValue="9" prepend="AND">
+				A.CVPL_STTUS IN ('2', '3')
+			</isEqual>
+		</isNotEmpty>
+		<isNotEmpty property="CVPL_NO">                               /*민원번호 조건 있을시*/
+			   AND A.CVPL_NO LIKE '%' || #CVPL_NO# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="RCEPT_COURS">      /*접수경로(온/오프라인) 조건 있을시*/
+			   AND SUBSTR(B.CVPL_NO,1,1) = #RCEPT_COURS#
+		</isNotEmpty>
+		<isEqual property="DSTB_AT" compareValue="0" prepend="AND">
+			A.CVPL_STTUS IN ('2', '8')
+		</isEqual>
+		<isEqual property="DSTB_AT" compareValue="1" prepend="AND">
+			A.CVPL_STTUS IN ('3', '4', '5', '6')
+		</isEqual>
+		<![CDATA[
+		  ORDER BY CSTMR_REGIST_DT DESC, A.CVPL_NO DESC
+		]]>
+	</select>
+
+	<!--우리팀 민원분배관리 테이블  입력 -->
+	<update id="CUS020101DAO.teamCvplDstbListCUD" parameterClass="java.util.HashMap">
+		<![CDATA[
+            UPDATE TBCUS_HMPG_CVPL_DSTB SET 
+                       INQRY_KND              =       #INQRY_KND#
+                      ,INQRY_KND_DETAIL       =       #INQRY_KND_DETAIL#
+                      ,CHRG_DEPT_CODE         =       #CHRG_DEPT_CODE#
+					  ,APPN_CHARGER           =       #APPN_CHARGER#
+                      ,EXPECT_PROCESS_DT      =       /*예상처리일시(처리기한)*/  
+                          DECODE(EXPECT_PROCESS_DT,NULL,     /*EXPECT_PROCESS_DT가 NULL일 때만 계산, NULL이 아닐 경우 자기 자신 값*/
+                                        CASE 
+	                                    WHEN #PROCESS_TMLMT# = '1' THEN  /*처리기한이 '1'인 경우(온라인민원) (기본1일 금요일일경우 금토제외한 3일 후(오후일 경우 다음날 00시까지))*/
+	                                         CASE  
+	                                         WHEN TO_CHAR(SYSDATE, 'DY' ,'nls_date_language=english') = 'FRI'  /*지정일시가 금요일인경우*/ 
+	                                         THEN
+	                                             CASE 
+	                                             /*처리기한상세가 '1'인경우 (오전)*/
+	                                             WHEN #PROCESS_TMLMT_DETAIL# = '1' THEN TO_DATE(CONCAT(SUBSTR(TO_CHAR(SYSDATE + (INTERVAL '3' DAY),'YYYYMMDDHH24'),0,8),'13'),'YYYYMMDDHH24')
+	                                             /*처리기한상세가 '2'인경우 (오후)*/ 
+	                                             WHEN #PROCESS_TMLMT_DETAIL# = '2' THEN TO_DATE(CONCAT(SUBSTR(TO_CHAR(SYSDATE + (INTERVAL '4' DAY),'YYYYMMDDHH24'),0,8),'00'),'YYYYMMDDHH24')
+	                                             ELSE NULL END
+	                                         WHEN TO_CHAR(SYSDATE, 'DY' ,'nls_date_language=english') <> 'FRI' /*지정일시가 금요일이 아닌경우*/
+	                                         THEN
+	                                             CASE 
+	                                             /*처리기한상세가 '1'인경우 (오전)*/
+	                                             WHEN #PROCESS_TMLMT_DETAIL# = '1' THEN TO_DATE(CONCAT(SUBSTR(TO_CHAR(SYSDATE + (INTERVAL '1' DAY),'YYYYMMDDHH24'),0,8),'13'),'YYYYMMDDHH24')
+	                                             /*처리기한상세가 '2'인경우 (오후)*/
+	                                             WHEN #PROCESS_TMLMT_DETAIL# = '2' THEN TO_DATE(CONCAT(SUBSTR(TO_CHAR(SYSDATE + (INTERVAL '2' DAY),'YYYYMMDDHH24'),0,8),'00'),'YYYYMMDDHH24')
+	                                             ELSE NULL END
+	                                         ELSE NULL END
+	                                    WHEN #PROCESS_TMLMT# = '7' THEN    /*처리기한이 '2'인 경우(오프라인민원) (기본7일 오후일 경우 8일 후 00시까지)*/  
+	                                         CASE 
+	                                         /*처리기한상세가 '1'인경우 (오전)*/
+	                                         WHEN #PROCESS_TMLMT_DETAIL# = '1' THEN TO_DATE(CONCAT(SUBSTR(TO_CHAR(SYSDATE + (INTERVAL '7' DAY),'YYYYMMDDHH24'),0,8),'13'),'YYYYMMDDHH24')
+	                                          /*처리기한상세가 '2'인경우 (오후)*/
+	                                         WHEN #PROCESS_TMLMT_DETAIL# = '2' THEN TO_DATE(CONCAT(SUBSTR(TO_CHAR(SYSDATE + (INTERVAL '8' DAY),'YYYYMMDDHH24'),0,8),'00'),'YYYYMMDDHH24')
+	                                         ELSE NULL END
+	                                    ELSE NULL END,EXPECT_PROCESS_DT)                 
+					  ,PROCESS_TMLMT          =       #PROCESS_TMLMT#
+					  ,PROCESS_TMLMT_DETAIL   =       #PROCESS_TMLMT_DETAIL#
+					  ,CVPL_STTUS             =       #CVPL_STTUS#
+					  ,UPDUSR_ID              =       #S_USER_ID#
+					  ,UPDT_DT                =       SYSDATE
+					  ,HELP_APPN_CHARGER      =       #HELP_APPN_CHARGER#
+            WHERE      CVPL_NO = #CVPL_NO# 
+              AND      RCEPT_NO = #RCEPT_NO#
+        ]]>
+    </update>
+    
+    <!--우리팀민원분배관리에서 담당자 지정시 접수, CVPL에 접수일자 셋팅 -->
+    <update id="CUS020101DAO.teamCvplRceptDtU" parameterClass="java.util.HashMap">
+        <![CDATA[         
+            UPDATE TBCUS_HMPG_CSTMR_CVPL SET 
+                       RCEPT_DT               =       SYSDATE
+					  ,UPDUSR_ID              =       #S_USER_ID#
+					  ,UPDT_DT                =       SYSDATE
+            WHERE      CVPL_NO = #CVPL_NO# 
+              AND      RCEPT_NO = #RCEPT_NO#
+        ]]>
+    </update>
+    
+     
+    <!--접수반려 테이블  입력 -->
+    <insert id="CUS020101DAO.returnCVPLC" parameterClass="java.util.HashMap">
+        <![CDATA[
+            INSERT INTO TBCUS_RETURN (
+                     SN
+					,CVPL_NO
+					,DEPT_CODE
+					,EMPNO
+					,RETURN_SE
+					,RETURN_CN
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+             ) VALUES (
+	               (SELECT NVL(MAX(TO_NUMBER(SN)),0) +1
+	                FROM TBCUS_RETURN
+	                )
+				  ,#CVPL_NO#
+				  ,#CHRG_DEPT_CODE#
+				  ,#CHARGER_EMPNO#
+				  ,#RETURN_SE#
+				  ,#RETURN_PRVONSH#
+                  ,#S_USER_ID#
+                  ,SYSDATE
+                  ,#S_USER_ID#
+                  ,SYSDATE
+             )
+        ]]>
+    </insert>
+     
+    <!--부서별 접수반려 처리-->
+    <update id="CUS020101DAO.returnCVPLU" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+    	UPDATE TBCUS_HMPG_CVPL_DSTB SET
+				 	 CHRG_DEPT_CODE        = NULL
+					,CHARGER_EMPNO         = NULL 
+					,CHARGER_NM            = NULL
+					,HELP_DEPT_CODE        = NULL 
+					,HELP_CHARGER_EMPNO    = NULL
+					,HELP_CHARGER_NM       = NULL
+					,APPN_CHARGER          = NULL
+					,APPN_DT               = NULL
+					,RETURN_SE             = NULL
+					,RETURN_PRVONSH        = NULL
+					,PROCESS_DT            = NULL    
+					,PROCESS_RESULT        = NULL
+					,PROCESS_CN            = NULL
+					,UPDUSR_ID             = #S_USER_ID# 
+					,UPDT_DT               = SYSDATE
+					,EXPECT_PROCESS_DT     = NULL  
+					,LBRTY_OPINION         = NULL 
+					,CVPL_STTUS            = #CVPL_STTUS#
+					,PROCESS_MTH           = NULL
+		WHERE RCEPT_NO = #RCEPT_NO#
+		  AND CVPL_NO  = #CVPL_NO#
+		]]>
+    </update>
+
+    <!-- 문자발송을 위한 민원 담당자 조회 -->
+	<select id="CUS020101DAO.selectChargerAppnInfo" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+			SELECT
+			  (CASE 
+			       WHEN SUBSTR(A.TELNO_2, 0,2) = '01'
+			         THEN REPLACE(A.TELNO_2, '-', '')
+			       ELSE REPLACE(A.TELNO_1, '-', '')
+			   END) AS TELNO                       /*담당자전화번호*/
+			FROM TBHRM_HR_MASTR A
+			WHERE 1=1
+			 <isNotNull property="APPN_CHARGER" prepend="AND">
+				 A.EMPNO = #APPN_CHARGER#
+			 </isNotNull>
+			 <isNotNull property="HELP_APPN_CHARGER" prepend="AND">
+				 A.EMPNO = #HELP_APPN_CHARGER#
+			 </isNotNull>
+			 
+	</select>
+	
+    <!-- 저장시 문자발송을 위한 사원연락처 조회 -->
+	<select id="CUS020101DAO.selectEmpnoTelno" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+			SELECT
+				  (CASE 
+					   WHEN SUBSTR(A.TELNO_1, 0,2) = '01'
+					     THEN A.TELNO_1
+					   ELSE A.TELNO_2
+				   END) AS TELNO                       /*담당자전화번호*/
+			  FROM TBHRM_HR_MASTR A
+			 <isNotNull property="APPN_CHARGER">
+				 WHERE EMPNO = #APPN_CHARGER#
+			 </isNotNull>
+			 <isNull property="APPN_CHARGER">
+				 WHERE EMPNO = #HELP_APPN_CHARGER#
+			 </isNull>
+			 
+	</select>
+	
+	
+    <!-- 반려시 문자발송을 위한 고객담당자(voc) 조회 -->
+	<select id="CUS020101DAO.selectCmrCharger" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT A.USER_ID AS EMPNO                             /*담당자사번*/
+    		 , B.EMPNM                                        /*담당자명*/
+    		 , (CASE WHEN SUBSTR(B.TELNO_1, 0,2) = '01' 
+             		 THEN B.TELNO_1
+           			 ELSE B.TELNO_2
+       			END) AS TELNO                                 /*담당자전화번호*/
+		  FROM TBCOM_USER_GRP A
+    	  LEFT OUTER JOIN TBHRM_HR_MASTR B
+      		ON A.USER_ID  = B.EMPNO
+		 WHERE A.AUTH_GRP_ID = 'CUS_USER1'
+	</select>
+
+	<!-- SMS 메시지 전송 프로시저(담당부서지정) -->
+	<!-- <procedure id="CUS020101DAO.messeageProcedure" parameterClass="java.util.HashMap">
+		{ CALL SPCOM_SEND_SMS(
+							   #S_DEPT_CODE#                                                     /*전송부서*/
+							  ,'0533500350'                                                      /*회신번호*/
+							  ,#MSSAGE_CN#                                                       /*전송메세지*/
+							  ,TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')                               /*전송희망시간*/
+							  ,TO_DATE(SUBSTR(#MXTR_WRD1#,0,8))                                  /*동보단어1*/
+							  ,#MXTR_WRD2#                                                       /*동보단어2*/
+							  ,#MXTR_WRD3#                                                       /*동보단어3*/
+							  ,#MXTR_WRD4#                                                       /*동보단어4*/
+							  ,#TELNO#                                                           /*수신전화번호*/
+							  ,#SMS_EMPNM#                                                       /*수신자*/
+							  ,#OUT_RESULT_MSG#                                                  /*오류메세지*/
+							)
+		}
+	</procedure> -->
+	
+	<!-- SMS 메시지 전송 프로시저(반려) -->
+	<!-- <procedure id="CUS020101DAO.returnMesseageProcedure" parameterClass="java.util.HashMap">
+		{ CALL SPCOM_SEND_SMS(
+							   #S_DEPT_CODE#                                       /*전송부서*/
+							  ,'0533500350'                                        /*회신번호*/
+							  ,#MSSAGE_CN#                                         /*전송메세지*/
+							  ,#SEND_MSG_TIME#                                     /*전송희망시간*/
+							  ,#MXTR_WRD1#                                         /*동보단어1*/
+							  ,#MXTR_WRD2#                                         /*동보단어2*/
+							  ,#MXTR_WRD3#                                         /*동보단어3*/
+							  ,#MXTR_WRD4#                                         /*동보단어4*/
+							  ,#TELNO#                                             /*수신전화번호*/
+							  ,#SMS_EMPNM#                                         /*수신자*/
+							  ,#OUT_RESULT_MSG#                                    /*오류메세지*/
+							)
+		}
+	</procedure> -->
+	
+	
+	<!-- SMS 메시지 전송 프로시저 -->
+	<procedure id="CUS020101DAO.messeageProcedure" parameterClass="java.util.HashMap">
+		{ CALL SPCOM_SEND_UMS(
+							   #SEND_DEPT_CODE#                                 /*전송부서*/
+							  ,#ANSW_TEL#                               /*회신번호 0533500350*/
+							  ,#MSGE#                                   /*전송메세지*/
+							  ,#SEND_DT#                                /*전송희망시간(예약)*/
+							  ,#CHANG_WORD1#                            /*맞춤문자1*/
+							  ,#CHANG_WORD2#                            /*맞춤문자2*/
+							  ,#CHANG_WORD3#                            /*맞춤문자3*/
+							  ,#CHANG_WORD4#                            /*맞춤문자4*/
+							  ,#CHANG_WORD5#                            /*맞춤문자5*/
+							  ,#RECIPIENT_NUM#                          /*수신전화번호*/
+							  ,#RCVER_NM#                               /*수신자*/
+							  ,#SENDER_ID#                              /*발신자아이디*/
+							  ,#ETC1#                                   /*비고1*/
+							  ,#ETC2#                                   /*비고2*/
+							  ,#ETC3#                                   /*비고3*/
+							  ,#ETC4#                                   /*비고4*/
+							  ,#ETC5#                                   /*비고5*/
+							  ,#BROAD_MSSAGE_ID#                        /*맞춤문자메시지 일련번호*/
+							  ,#OUT_RESULT_MSG#                         /*오류메세지*/
+							)
+		}
+	</procedure>
+	
+	<!-- 반려시 부서분배담당자 전화번호 가져오기 -->
+	<select id="CUS020101DAO.selectChargerVOC" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.AUTH_GRP_ID
+		     , A.AUTH_GRP_NM
+		     , A.AUTH_CODE
+		     , B.USER_ID
+		     , C.EMPNO
+		     , C.EMPNM
+		     , (CASE
+		           WHEN SUBSTR(C.TELNO_1, 0,2) = '01' 
+		             THEN REPLACE(C.TELNO_1, '-', '')
+		           ELSE REPLACE(C.TELNO_2, '-', '')
+		       END) AS TELNO
+		  FROM TBCOM_AUTH_GRP A
+		 INNER JOIN TBCOM_USER_GRP B
+		    ON A.AUTH_GRP_ID=B.AUTH_GRP_ID
+		  LEFT OUTER JOIN TBHRM_HR_MASTR C
+		    ON B.USER_ID=C.EMPNO
+		 WHERE A.SYS_SE_CODE='MIS' 
+		   AND A.JOB_SE='CUS' 
+		   AND AUTH_CODE='101'		<!-- 부서분배담당권한 : 고객담당자(VOC) -->
+	</select>
+	
+	<!-- 메신저 전송 호출 -->
+	<procedure id="CUS020101DAO.sendMsgrProcedure" parameterClass="java.util.HashMap">
+		{ CALL PKG_MESSENGER.SP_SEND(
+									  #MSG_CODE#			/*메세지 코드*/
+									, #INS_USER_ID#			/*등록자*/
+									, #FROM_USER_ID#		/*송신자*/
+									, #TO_USER_ID#			/*수신자*/
+									, #CHANGEWORD1#
+									, #CHANGEWORD2#
+									, #CHANGEWORD3#
+									, #CHANGEWORD4#
+									, #CHANGEWORD5#
+									) 
+		}
+	</procedure>
+</sqlMap>

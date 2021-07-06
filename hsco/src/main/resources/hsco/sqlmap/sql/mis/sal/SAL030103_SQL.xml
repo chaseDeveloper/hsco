@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL030103_SQL">	
+	
+	<select id="SAL030103DAO.selectSalaryDeptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT SALARY_DEPT_CODE
+		      ,SALARY_DEPT_NM
+		      ,BSNS_TY
+		      ,USE_AT
+		      ,OUTPT_SEQ
+		FROM TBSAL_SALARY_DEPT
+		ORDER BY USE_AT DESC, BSNS_TY ASC, OUTPT_SEQ ASC
+	</select>
+	
+	<select id="SAL030103DAO.selectMtSalaryPymntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.PYMNT_YM
+		      ,t1.SN
+		      ,t1.EMPNO
+		      ,t2.EMPNM
+		      ,t1.EMPL_SE     AS JSSFC_SE
+		      ,t5.CODE_NM     AS JSSFC_NM
+		      ,t1.CLSF_CODE
+		      ,t6.CODE_NM     AS CLSF_NM
+		      ,DECODE(t2.SALARY_SE,'002',t1.SRCLS,NULL) AS SRCLS
+		      ,t1.SALARY_DEPT_CODE
+		      ,t1.SALARY_DEPT_NM
+		      ,t3.BSNS_TY
+		      ,NVL(t4.PYMNT_AMT,0) AS PYMNT_AMT
+		      ,NVL(t4.DDC_AMT,0) AS DDC_AMT
+		      ,NVL(t4.TOT_AMT,0) AS TOT_AMT
+		FROM TBSAL_MT_SALARY_PYMNT t1
+		     INNER JOIN TBHRM_HR_MASTR t2
+		     ON t1.EMPNO = t2.EMPNO
+		     LEFT OUTER JOIN TBSAL_SALARY_DEPT t3
+		     ON t1.SALARY_DEPT_CODE = t3.SALARY_DEPT_CODE
+		     LEFT OUTER JOIN (
+		          SELECT a.EMPNO
+		                ,NVL(SUM(DECODE(b.PYMNT_DDC_SE,0,a.AMOUNT,0)),0) AS PYMNT_AMT
+		                ,NVL(SUM(DECODE(b.PYMNT_DDC_SE,1,a.AMOUNT,0)),0) AS DDC_AMT
+		                ,NVL(SUM(DECODE(b.PYMNT_DDC_SE,0,1,-1) * a.AMOUNT),0) AS TOT_AMT
+		          FROM TBSAL_MT_SALARY_DTLS a
+		               INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE b
+		               ON a.PYMNT_DDC_CODE = b.PYMNT_DDC_CODE
+		          WHERE a.PYMNT_YM 	= #PYMNT_YM#
+		            AND a.SN 		= #SN#
+		          GROUP BY a.PYMNT_YM, a.SN, a.EMPNO
+		     ) t4
+		     ON t1.EMPNO = t4.EMPNO
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		     ON  t5.GRP_CODE = 'HRM001'
+		     AND t1.EMPL_SE = t5.CODE
+		     LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+		     ON  t6.GRP_CODE = 'HRM002'
+		     AND t1.CLSF_CODE = t6.CODE
+		WHERE t1.PYMNT_YM 	= #PYMNT_YM#
+		  AND t1.SN 		= #SN#
+		<isNotEmpty property="EMPNO">
+		  AND t1.EMPNO		= #EMPNO#
+		</isNotEmpty>
+		ORDER BY t3.OUTPT_SEQ, t1.EMPL_SE, t1.CLSF_CODE, t1.SRCLS
+	</select>
+	
+	<update id="SAL030103DAO.updateMtSalaryPymnt" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_MT_SALARY_PYMNT
+		SET
+			 SALARY_DEPT_CODE	 = #SALARY_DEPT_CODE#
+			,SALARY_DEPT_NM		 = #SALARY_DEPT_NM#
+		WHERE PYMNT_YM 			 = #PYMNT_YM#
+		  AND SN				 = #SN#
+		  AND EMPNO				 = #EMPNO#
+	</update>
+	
+	<update id="SAL030103DAO.updateSalaryBsdt" parameterClass="java.util.HashMap">
+		MERGE INTO TBSAL_SALARY_BSDT
+        USING DUAL
+        ON (	PYMNT_YM 		 = #PYMNT_YM# 
+        	AND SN 				 = #SN#
+        	AND EMPNO 			 = #EMPNO#
+        )
+        WHEN MATCHED THEN
+            UPDATE 
+            SET SALARY_DEPT_CODE = #SALARY_DEPT_CODE#
+               ,SALARY_DEPT_NM   = #SALARY_DEPT_NM#
+               ,UPDUSR_ID		 = #S_USER_ID#
+               ,UPDT_DT			 = SYSDATE
+        WHEN NOT MATCHED THEN
+            INSERT
+            (
+                 PYMNT_YM
+                ,SN
+                ,EMPNO
+                ,SALARY_DEPT_CODE
+                ,SALARY_DEPT_NM
+                ,REGISTER_ID
+                ,REGIST_DT
+                ,UPDUSR_ID
+                ,UPDT_DT
+            ) VALUES (
+                 #PYMNT_YM#
+                ,#SN#
+                ,#EMPNO#
+                ,#SALARY_DEPT_CODE#
+                ,#SALARY_DEPT_NM#
+                ,#S_USER_ID#
+                ,SYSDATE
+                ,#S_USER_ID#
+                ,SYSDATE
+            )
+	</update>
+
+</sqlMap>

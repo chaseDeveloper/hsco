@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+
+<sqlMap namespace="SYM020900_SQL">
+	<!-- 사용자권한변경이력 ================================================== -->
+
+	<!-- 사용자권한변경이력 조회 -->
+	<select id="SYM020900DAO.UserAuthList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">   
+	<![CDATA[
+		  SELECT
+	        A.HIS_DT AS BASE_DT,
+			    B.USER_ID, 
+			    B.USER_NM,
+			    C.EMPNO, 
+			    D.DEPT_CODE, 
+			    D.DEPT_NM,
+	            listagg(A.AUTH_GRP_ID||'('|| A.AUTH_GRP_NM ||')',',')
+	            within GROUP ( ORDER BY  B.USER_ID, B.USER_NM,
+			    C.EMPNO, D.DEPT_CODE, D.DEPT_NM, A.HIS_DT) AS AUTH_NM
+			FROM 
+			    TBCOM_USER_GRP_HIS A,
+			    TBCOM_USER B,
+			    TBHRM_HR_MASTR C,
+			    VWHRM_DEPT D
+			WHERE
+			    A.USER_ID = B.USER_ID
+	   		AND A.HIS_DT = (SELECT MAX(HIS_DT) 
+	        				FROM TBCOM_USER_GRP_HIS 
+	                        WHERE HIS_DT <= #BASE_DT#)
+			AND B.EMPNO = C.EMPNO(+)
+			AND C.DEPT_CODE = D.DEPT_CODE(+)
+		GROUP BY  B.USER_ID, B.USER_NM,
+			    C.EMPNO, D.DEPT_CODE, D.DEPT_NM, A.HIS_DT
+				]]> 
+	</select>
+
+	<!-- 사용자권한변경이력 추가 -->
+	<insert id="SYM020900DAO.UserAuthC" parameterClass="java.util.HashMap">
+	<![CDATA[
+   INSERT INTO TBCOM_USER_GRP_HIS 
+    	(HIS_DT, 
+    	USER_ID, 
+    	AUTH_GRP_ID, 
+     	DEPT_CODE,
+     	AUTH_GRP_NM,
+    	AUTH_CODE,
+    	AUTH_CODE_NM,
+    	REGISTER_ID,
+    	REGIST_DT,
+    	UPDUSR_ID,
+    	UPDT_DT)
+    	SELECT TO_CHAR(SYSDATE,'YYYYMMDD') AS HIS_DT, 
+			A.USER_ID,
+			A.AUTH_GRP_ID,
+			B.DEPT_CODE,
+			E.AUTH_GRP_NM,
+			E.AUTH_CODE,
+ 			(
+   				SELECT CODE_NM FROM TBCOM_CMMN_CODE
+       			WHERE GRP_CODE = 'COM056'
+   				AND CODE = E.AUTH_CODE
+ 			) AS AUTH_CODE_NM,
+		 #S_USER_ID# AS REGISTER_ID,
+ 		SYSDATE AS REGIST_DT,
+		 #S_USER_ID# AS UPDUSR_ID,
+ 		SYSDATE AS UPDT_DT          
+		FROM 
+			TBCOM_USER_GRP A,
+			TBCOM_USER B,
+			TBHRM_HR_MASTR C,
+			VWHRM_DEPT D,
+		    TBCOM_AUTH_GRP E
+		WHERE
+			A.USER_ID = B.USER_ID
+		AND A.AUTH_GRP_ID = E.AUTH_GRP_ID 
+		AND B.EMPNO = C.EMPNO(+)
+		AND C.DEPT_CODE = D.DEPT_CODE(+)
+				]]> 
+	</insert>
+	
+	<delete id="SYM020900DAO.UserAuthD" parameterClass="java.util.HashMap">
+	DELETE 
+	TBCOM_USER_GRP_HIS 
+    WHERE HIS_DT = TO_CHAR(SYSDATE,'YYYYMMDD')
+	</delete>
+</sqlMap>

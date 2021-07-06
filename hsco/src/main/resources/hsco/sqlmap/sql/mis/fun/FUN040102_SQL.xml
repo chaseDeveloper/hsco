@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN040102_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 자금수지 세부거래내역 조회 -->
+	<select id="FUN040102DAO.selectBalcDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH TM_INCME_MASTR AS (
+							SELECT '020800' AS DEPT_CODE
+							       ,BUDGET_YEAR
+							       ,ANACT_SE
+							       ,BSNS_SE
+							       ,MDAT_DE
+							       ,BUDGET_ACNT_CODE
+							       ,EXPNDTR_UNIT_CODE
+							       ,ANACT_AMOUNT
+							FROM TBRNT_LFSTS_ANACT
+							UNION ALL 
+							SELECT '020800' AS DEPT_CODE
+							       ,BUDGET_YEAR
+							       ,ANACT_SE
+							       ,BSNS_SE
+							       ,MDAT_DE
+							       ,BUDGET_ACNT_CODE
+							       ,EXPNDTR_UNIT_CODE
+							       ,ANACT_AMOUNT 
+							FROM TBRNT_ANACT_INFO
+							UNION ALL 
+							SELECT '020800' AS DEPT_CODE
+							       ,BUDGET_YEAR
+							       ,ANACT_SE
+							       ,BSNS_SE
+							       ,MDAT_DE
+							       ,BUDGET_ACNT_CODE
+							       ,EXPNDTR_UNIT_CODE
+							       ,ANACT_AMOUNT 
+							FROM TBRNT_PUCHAS_ANACT
+							UNION ALL
+							SELECT '020700' AS DEPT_CODE
+							       ,BUDGET_YEAR
+							       ,DECSN_SE  AS ANACT_SE
+							       ,BSNS_SE
+							       ,DECSN_DE  AS MDAT_DE
+							       ,BUDGET_ACNT_CODE
+							       ,EXPNDTR_UNIT_CODE
+							       ,DECSN_AMOUNT AS ANACT_AMOUNT
+							FROM TBSLS_HOUSE_DECSN
+							UNION ALL
+							SELECT '020700' DEPT_CODE
+							       ,BUDGET_YEAR
+							       ,DECSN_SE  AS ANACT_SE
+							       ,BSNS_SE
+							       ,DECSN_DE  AS MDAT_DE
+							       ,BUDGET_ACNT_CODE
+							       ,EXPNDTR_UNIT_CODE
+							       ,DECSN_AMOUNT AS ANACT_AMOUNT
+							FROM TBSLS_LAD_DECSN
+			)
+			SELECT T1.BUDGET_YEAR                                  AS BUDGET_YEAR
+			       ,T1.BSNS_SE || T1.BALC_SE                       AS ACCT_CLASS_CODE
+			       ,(SELECT CODE_NM 
+			         FROM   TBCOM_CMMN_CODE B 
+			         WHERE  B.GRP_CODE = 'BDG017' 
+			         AND    B.CODE = T1.BSNS_SE || T1.BALC_SE
+			        )                                              AS ACCT_CLASS_NAME
+			       ,T1.BUDGET_ACNT_CODE                            AS BUDGET_ACNT_CODE
+			       ,SFBDG_BUDGET_NAME(T1.BUDGET_YEAR, T1.BSNS_SE, T1.BALC_SE, T1.BUDGET_ACNT_CODE, null) AS BUDGET_ACNT_NM
+                   ,T1.EXPNDTR_UNIT_CODE                              AS EXPNDTR_UNIT_CODE
+			       ,SFBDG_BUDGET_NAME(T1.BUDGET_YEAR, T1.BSNS_SE, T1.BALC_SE, T1.BUDGET_ACNT_CODE, T1.EXPNDTR_UNIT_CODE) AS EXPNDTR_UNIT_NM
+                   ,T1.BALC_DE                                              AS BALC_DE
+                   ,T1.DEPT_CODE                                            AS DEPT_CODE
+                   ,(SELECT DEPT_NM
+                     FROM   VWHRM_DEPT B
+                     WHERE  B.DEPT_CODE = T1.DEPT_CODE
+                    )                                                       AS DEPT_NM 
+			       ,T1.AMOUNT                                               AS AMOUNT
+
+			FROM   (/* 지출단위코드별 일자별 수입내역 */
+                    SELECT A.BUDGET_YEAR              AS BUDGET_YEAR ,
+                           A.BSNS_SE                  AS BSNS_SE , 
+                           '1'                        AS BALC_SE , 
+                           A.BUDGET_ACNT_CODE         AS BUDGET_ACNT_CODE ,
+                           A.EXPNDTR_UNIT_CODE        AS EXPNDTR_UNIT_CODE ,
+                           A.MDAT_DE                  AS BALC_DE ,
+                           A.DEPT_CODE                AS DEPT_CODE ,
+                           SUM(NVL(A.ANACT_AMOUNT,0)) AS AMOUNT                        
+                    FROM   TM_INCME_MASTR A
+                    WHERE  1=1
+                      AND  A.ANACT_SE IN('2','4') 
+                      AND  A.BSNS_SE = '1'
+                      AND  EXISTS (SELECT 1 
+                                   FROM   TBBDG_BUDGET_ACNT_CODE B 
+                                   WHERE  B.YEAR = A.BUDGET_YEAR 
+                                   AND    B.BSNS_SE = A.BSNS_SE
+                                   AND    B.BALC_SE = '1' 
+                                   AND    B.BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE 
+                                   AND    NVL(B.PLAN_REGIST_AT,'0') = '1' )
+                    GROUP BY A.BUDGET_YEAR ,
+                             A.BSNS_SE ,
+                             A.BUDGET_ACNT_CODE , 
+                             A.EXPNDTR_UNIT_CODE ,
+                             A.MDAT_DE ,
+                             A.DEPT_CODE
+                    UNION
+                     /* 지출단위코드별 일자별 지출내역 */
+                    SELECT A.BUDGET_YEAR               AS BUDGET_YEAR
+                           ,A.BSNS_SE                  AS BSNS_SE
+                           ,A.BALC_SE                  AS BALC_SE
+                           ,A.BUDGET_ACNT_CODE         AS BUDGET_ACNT_CODE 
+                           ,A.EXPNDTR_UNIT_CODE        AS EXPNDTR_UNIT_CODE
+                           ,A.CPTAL_EXPNDTR_ACNTBK_DE  AS BALC_DE
+                           ,A.DEPT_CODE                AS DEPT_CODE
+                           ,SUM(NVL(A.DECSN_AMOUNT,0)) AS AMOUNT
+                    FROM   TBACC_EXP_DSN_MASTR A 
+                           INNER JOIN (SELECT DECSN_YEAR 
+                                              ,DECSN_NO 
+                                              ,DECSN_AMOUNT 
+                                              ,CMPNSP_NO
+                                       FROM TBACC_EXP_DSN_DETAIL 
+                                       UNION ALL 
+                                       SELECT DECSN_YEAR 
+                                              ,DECSN_NO 
+                                              ,DECSN_AMOUNT 
+                                              ,CMPNSP_NO 
+                                       FROM TBACC_EXP_DSN_DETAIL_TRVCT) B 
+                                   ON A.DECSN_YEAR = B.DECSN_YEAR 
+                                  AND A.DECSN_NO = B.DECSN_NO 
+                    WHERE 1 = 1 
+                      AND B.CMPNSP_NO IS NOT NULL 
+                      AND A.BSNS_SE || A.BALC_SE IN ( '12', '22', '31' )
+                    GROUP BY A.BUDGET_YEAR 
+                             ,A.BSNS_SE 
+                             ,A.BALC_SE 
+                             ,A.BUDGET_ACNT_CODE 
+                             ,A.EXPNDTR_UNIT_CODE
+                             ,A.CPTAL_EXPNDTR_ACNTBK_DE
+                             ,A.DEPT_CODE
+                   ) T1
+            WHERE  1=1
+              AND  T1.BALC_DE BETWEEN #FDATE# AND #TDATE#
+        ]]>
+        <isNotEmpty property="ACCT_CLASS_CODE">
+        	  AND  T1.BSNS_SE = SUBSTR(#ACCT_CLASS_CODE#,1,1)
+              AND  T1.BALC_SE = SUBSTR(#ACCT_CLASS_CODE#,2,1)
+        </isNotEmpty>
+        <isNotEmpty property="DEPT_CODE">
+        	<isNotEqual property="DEPT_CODE" compareValue="000000">
+        	  AND  T1.DEPT_CODE = #DEPT_CODE#	
+        	</isNotEqual>
+        </isNotEmpty>
+        <![CDATA[
+	  	    ORDER BY T1.BALC_DE ,
+	  	             T1.BUDGET_YEAR ,
+	  	             T1.BSNS_SE ,
+                     T1.BALC_SE ,
+	  	             T1.BUDGET_ACNT_CODE , 
+	  	             T1.EXPNDTR_UNIT_CODE ,
+                     T1.DEPT_CODE
+	    ]]>
+    </select>
+</sqlMap>

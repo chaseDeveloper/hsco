@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FRM02060300SQL">	
+
+	<!-- 쿼리명 : 손익계산서
+	설명 : 손익계산서 조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.02.25
+	-->
+	<select id="FRM02060300DAO.selectPrflosBill" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	          WITH TEMP
+                AS (SELECT a.ACCNUT_YEAR,
+                           a.ACNT_CODE,
+                           NVL(a.DR_AMT,0) DR_AMT_CUR,
+                           NVL(a.CR_AMT,0) CR_AMT_CUR,
+                           NVL(b.DR_AMT,0) DR_AMT_BEF,
+                           NVL(b.CR_AMT,0) CR_AMT_BEF
+                      FROM(SELECT  '1' GB, /* 당해 */
+                                   SUBSTR(ACCNUT_YM,1,4) ACCNUT_YEAR,
+                                   ACNT_CODE,
+                                   NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT,
+                                   NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+                              FROM TBFRM_ENDW_ACCNUT_STACNT
+                              WHERE ACCNUT_YM BETWEEN SUBSTR(#monCal#,1,4) || '00' AND #monCal#
+                            GROUP BY SUBSTR(ACCNUT_YM,1,4),
+                                     ACNT_CODE) a,
+
+                          (SELECT  '2' GB, /* 전년 */
+                                   SUBSTR(ACCNUT_YM,1,4) ACCNUT_YEAR,
+                                   ACNT_CODE,
+                                   NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT,
+                                   NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+                              FROM TBFRM_ENDW_ACCNUT_STACNT
+                              WHERE ACCNUT_YM BETWEEN SUBSTR(#monCal#,1,4) - 1 || '00' AND SUBSTR(#monCal#,1,4) - 1 || SUBSTR(#monCal#,5,2)
+                            GROUP BY SUBSTR(ACCNUT_YM,1,4),
+                                     ACNT_CODE)  b
+                        WHERE a.ACNT_CODE  = b.ACNT_CODE(+)
+                        ORDER BY ACNT_CODE)
+                     SELECT ACNT_CODE,
+                            ACNTCTGR_NM,
+                            THIS_STACNT_AMT,
+                            PRE_STACNT_AMT,
+                            THIS_STACNT_AMT - PRE_STACNT_AMT IRDS
+			           FROM(SELECT ACNT_CODE,
+			                       ACNTCTGR_NM,
+			                       NVL(CASE WHEN ACNT_CODE = '41500000' THEN SFFRM_SELNG_TOT_PROFIT(SUBSTR(#monCal#,1,4),SUBSTR(#monCal#,5,2)) /* 매출총이익 */
+			                                WHEN ACNT_CODE = '42500000' THEN SFFRM_BIZ_GAIN(SUBSTR(#monCal#,1,4),SUBSTR(#monCal#,5,2)) /* 영업이익 */
+			                                WHEN ACNT_CODE = '46000000' THEN SFFRM_CPRX_DCTN_BEF_NET_LSNG(SUBSTR(#monCal#,1,4),SUBSTR(#monCal#,5,2)) /* 법인세비용차감전순이익 */
+			                                WHEN ACNT_CODE = '47000000' THEN SFFRM_TSTR_NPRF(SUBSTR(#monCal#,1,4),SUBSTR(#monCal#,5,2)) /* 당기순이익(손실) */
+			                                ELSE THIS_STACNT_AMT
+			                             END,0) THIS_STACNT_AMT,
+			                        NVL(CASE WHEN ACNT_CODE = '41500000' THEN SFFRM_SELNG_TOT_PROFIT(SUBSTR(#monCal#,1,4) - 1,SUBSTR(#monCal#,5,2)) /* 매출총이익 */
+			                                 WHEN ACNT_CODE = '42500000' THEN SFFRM_BIZ_GAIN(SUBSTR(#monCal#,1,4) - 1,SUBSTR(#monCal#,5,2)) /* 영업이익 */
+			                                 WHEN ACNT_CODE = '46000000' THEN SFFRM_CPRX_DCTN_BEF_NET_LSNG(SUBSTR(#monCal#,1,4) - 1,SUBSTR(#monCal#,5,2)) /* 법인세비용차감전순이익 */
+			                                 WHEN ACNT_CODE = '47000000' THEN SFFRM_TSTR_NPRF(SUBSTR(#monCal#,1,4) - 1,SUBSTR(#monCal#,5,2)) /* 당기순이익(손실) */
+			                                 ELSE PRE_STACNT_AMT
+			                             END,0) PRE_STACNT_AMT
+			                  FROM(SELECT a.ACNT_CODE,
+			                          NVL(b.OUTPT_ACNTCTGR_NM,ACNTCTGR_NM) ACNTCTGR_NM,
+			                          NVL(DECODE(b.DBRT_SE, '1', a.DR_AMT_CUR - a.CR_AMT_CUR, '2', a.CR_AMT_CUR - a.DR_AMT_CUR ,a.DR_AMT_CUR - a.CR_AMT_CUR),0)   AS THIS_STACNT_AMT,
+			                          NVL(DECODE(b.DBRT_SE, '1', a.DR_AMT_BEF - a.CR_AMT_BEF, '2', a.CR_AMT_BEF - a.DR_AMT_BEF ,a.DR_AMT_BEF - a.CR_AMT_BEF),0)   AS PRE_STACNT_AMT
+			                     FROM TEMP a,
+			                          TBFRM_ENDW_ACNTCTGR b
+			                     WHERE a.ACCNUT_YEAR = b.ACCNUT_YEAR(+)
+			                       AND a.ACNT_CODE   = b.ACNT_CODE(+)
+			                       AND b.ENDW_STACNT_SE = '2'
+			                       AND b.OUTPT_AT = '1'))
+			              WHERE (THIS_STACNT_AMT <![CDATA[ <> ]]> 0 OR PRE_STACNT_AMT <![CDATA[ <> ]]> 0)
+                          ORDER BY ACNT_CODE
+	</select>
+	
+	
+</sqlMap>

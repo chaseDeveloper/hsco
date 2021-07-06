@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH040506_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 평가군별 성과 순위 조회 -->
+	<select id="ACH040506DAO.selectList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH V_SETUP AS (
+		   SELECT A.EVL_YEAR
+		        , A.ODR_SE
+		        , A.CUR_MT
+		        , B.SEQ
+		   FROM TBACH_EVL_ODR A
+		      , TBACH_EVL_SM_STDR B
+		   WHERE 1=1
+		     AND A.EVL_YEAR = B.EVL_YEAR
+		     AND A.ODR_SE   = B.ODR_SE
+		     AND B.APPLC_AT = '1'
+		     AND A.EVL_YEAR = #EVL_YEAR#
+		     AND A.ODR_SE   = #ODR_SE#
+		)
+		, V_USER AS (
+		   SELECT A.EVL_YEAR, A.ODR_SE, A.EMPNO, A.ORGNZT_CODE
+		   FROM (
+		         SELECT EVL_YEAR, ODR_SE, EMPNO, ORGNZT_CODE
+		         FROM TBACH_TLPHON_KD_DGREE A
+		       
+		         UNION 
+		       
+		         SELECT EVL_YEAR, ODR_SE, EMPNO, ORGNZT_CODE
+		         FROM TBACH_SOCTY_CNTRB A
+		         
+		         UNION 
+		         
+		         SELECT EVL_YEAR, ODR_SE, EMPNO, ORGNZT_CODE
+		         FROM TBACH_INTGTY_MLG A
+		         
+		         UNION 
+		         
+		         SELECT EVL_YEAR, ODR_SE, EMPNO, ORGNZT_CODE
+		         FROM TBACH_EDC_ABILITY_STRNGTH A
+		         
+		         UNION 
+		         
+		         SELECT EVL_YEAR, ODR_SE, EMPNO, ORGNZT_CODE
+		         FROM TBACH_PROPSE_GOAL A
+		        ) A
+		      , V_SETUP V
+		   WHERE A.EVL_YEAR = V.EVL_YEAR
+		   AND A.ODR_SE   = V.ODR_SE
+		)
+		SELECT A.*
+		FROM (
+		      SELECT B.EMPNM
+		           , SFHRM_GET_EMPL_INFO(A.EMPNO, 'JSSFC_NM', A.EVL_YEAR||'1231')  AS JSSFC_NM
+		           , SFHRM_GET_EMPL_INFO(A.EMPNO, 'CLSF_NM',  A.EVL_YEAR||'1231')  AS CLSF_NM
+		           , A.EVL_YEAR
+		           , A.ODR_SE
+		           , A.EMPNO
+		           , CASE WHEN '011' = #SE# THEN A.SCORE1
+		                  WHEN '012' = #SE# THEN A.SCORE2
+		                  WHEN '013' = #SE# THEN A.SCORE3
+		                  WHEN '014' = #SE# THEN A.SCORE4
+		                  WHEN '015' = #SE# THEN A.SCORE5
+		                  ELSE 0
+		                  END AS ACMTL_SCORE
+		           , CASE WHEN '011' = #SE# THEN RANK() OVER(PARTITION BY A.EVL_YEAR, A.ODR_SE ORDER BY A.SCORE1 DESC)
+		                  WHEN '012' = #SE# THEN RANK() OVER(PARTITION BY A.EVL_YEAR, A.ODR_SE ORDER BY A.SCORE2 DESC)
+		                  WHEN '013' = #SE# THEN RANK() OVER(PARTITION BY A.EVL_YEAR, A.ODR_SE ORDER BY A.SCORE3 DESC)
+		                  WHEN '014' = #SE# THEN RANK() OVER(PARTITION BY A.EVL_YEAR, A.ODR_SE ORDER BY A.SCORE4 DESC)
+		                  WHEN '015' = #SE# THEN RANK() OVER(PARTITION BY A.EVL_YEAR, A.ODR_SE ORDER BY A.SCORE5 DESC)
+		                  ELSE 0
+		                  END AS ACMTL_RANK
+		      FROM (
+		            SELECT VU.EVL_YEAR
+		                 , VU.ODR_SE
+		                 , VU.EMPNO
+		                 , NVL(SUM(A.CNVRSN),0) AS SCORE1
+		                 , NVL(SUM(B.CNVRSN),0) AS SCORE2
+		                 , NVL(SUM(C.CNVRSN),0) AS SCORE3
+		                 , NVL(SUM(D.CNVRSN),0) AS SCORE4
+		                 , NVL(SUM(E.CNVRSN),0) AS SCORE5
+		                 , NVL(SUM(A.CNVRSN),0) + NVL(SUM(B.CNVRSN),0) + NVL(SUM(C.CNVRSN),0) + NVL(SUM(D.CNVRSN),0) + NVL(SUM(E.CNVRSN),0) AS TOT_SCORE
+		            FROM V_USER VU
+		               INNER JOIN V_SETUP VS
+		                    ON 1=1
+		               LEFT OUTER JOIN TBACH_TLPHON_KD_DGREE A
+		                    ON VU.EVL_YEAR = A.EVL_YEAR
+		                    AND VU.ODR_SE = A.ODR_SE
+		                    AND VU.EMPNO = A.EMPNO
+		                    AND VU.ORGNZT_CODE = A.ORGNZT_CODE
+		                    AND VS.CUR_MT = A.SEQ
+		               LEFT OUTER JOIN TBACH_SOCTY_CNTRB B
+		                    ON VU.EVL_YEAR = B.EVL_YEAR
+		                    AND VU.ODR_SE = B.ODR_SE
+		                    AND VU.EMPNO = B.EMPNO
+		                    AND VU.ORGNZT_CODE = B.ORGNZT_CODE
+		                    AND VS.CUR_MT = B.SEQ
+		               LEFT OUTER JOIN TBACH_INTGTY_MLG C
+		                    ON VU.EVL_YEAR = C.EVL_YEAR
+		                    AND VU.ODR_SE = C.ODR_SE
+		                    AND VU.EMPNO = C.EMPNO
+		                    AND VU.ORGNZT_CODE = C.ORGNZT_CODE
+		                    AND VS.CUR_MT = C.SEQ
+		               LEFT OUTER JOIN TBACH_EDC_ABILITY_STRNGTH D
+		                    ON VU.EVL_YEAR = D.EVL_YEAR
+		                    AND VU.ODR_SE = D.ODR_SE
+		                    AND VU.EMPNO = D.EMPNO
+		                    AND VU.ORGNZT_CODE = D.ORGNZT_CODE
+		                    AND VS.CUR_MT = D.SEQ
+		               LEFT OUTER JOIN TBACH_PROPSE_GOAL E
+		                    ON VU.EVL_YEAR = E.EVL_YEAR
+		                    AND VU.ODR_SE = E.ODR_SE
+		                    AND VU.EMPNO = E.EMPNO
+		                    AND VU.ORGNZT_CODE = E.ORGNZT_CODE
+		                    AND VS.CUR_MT = E.SEQ
+		            WHERE 1=1
+		            GROUP BY VU.EVL_YEAR, VU.ODR_SE, VU.EMPNO
+		           ) A
+		         , TBHRM_HR_MASTR B
+		      WHERE A.EMPNO = B.EMPNO
+		     ) A
+		ORDER BY A.ACMTL_RANK
+	</select>
+
+</sqlMap>

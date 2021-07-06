@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070205_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 쿼리명 : 외국시찰연수관리
+	설명 : 외국시찰연수관리 쿼리
+	수정일  수정자  수정내용
+	
+	작성자 : 이혜선
+	최초작성일 : 2015.10.16
+	-->
+
+
+	<!-- 외국시찰연수관리 조회 -->
+ 	<select id="HRM070205DAO.tbhrmFrntnInspnSdytrnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[		
+			SELECT  	A.EMPNO            AS EMPNO
+						,SFSAL_GETEMPNO_01(A.EMPNO) AS EMPNM
+						,(SELECT RSPOFC_SE FROM TBHRM_HR_MASTR WHERE EMPNO = A.EMPNO) AS RSPOFC_SE
+
+						,SFCOM_CODE_NM('AUD009' ,(SELECT HR_CLSF_SE FROM TBHRM_HR_MASTR S  WHERE S.EMPNO = A.EMPNO) ,'CODE_NM') AS CLSF_CODE_NM/* 직급코드 */
+						
+						,(SELECT DEPT_CODE FROM TBHRM_HR_MASTR WHERE EMPNO = A.EMPNO) AS DEPT_CODE
+						,NVL(SFSAL_GETDEPTNM_01((SELECT DEPT_CODE FROM TBHRM_HR_MASTR WHERE EMPNO = A.EMPNO)), SFHRM_GET_DEPTNM((SELECT DEPT_CODE FROM TBHRM_HR_MASTR WHERE EMPNO = A.EMPNO), '0'))  AS DEPT_NM
+						,A.SEQ             AS SEQ
+						,A.BGNDE           AS BGNDE
+						,A.ENDDE           AS ENDDE
+						,A.PURPS           AS PURPS
+						,A.OPERTN_OFFIC_NM AS OPERTN_OFFIC_NM
+						,A.NATION_NM       AS NATION_NM
+						,A.RM              AS RM
+						,'0'               AS CHK
+				        ,A.FILE_SN         AS FILE_SN
+				        ,A.AIR_CMPNY_NM
+				        ,A.AIR_MLG_SCORE
+			        	,T.CNT             AS FILE_CNT
+			        	
+			        	,A.EXPNDTR_DECSN_DE  	
+				   		,A.EXPNDTR_DECSN_YEAR
+				   		,A.EXPNDTR_DECSN_NO
+				   		,(SELECT SFCOM_CODE_NM('COM021', MAX(S.FNNC_INSTT_CODE), 'CODE_NM')
+						    FROM TBACC_EXP_DSN_DETAIL S
+						   WHERE 1 = 1
+						     AND S.DECSN_YEAR = A.EXPNDTR_DECSN_YEAR
+						     AND S.DECSN_NO = A.EXPNDTR_DECSN_NO) AS FNNC_INSTT_CODE_NM
+			        	,(SELECT MAX(S.ACNUTNO)
+						    FROM TBACC_EXP_DSN_DETAIL S
+						   WHERE 1 = 1
+						     AND S.DECSN_YEAR = A.EXPNDTR_DECSN_YEAR
+						     AND S.DECSN_NO = A.EXPNDTR_DECSN_NO) AS ACNUTNO
+						     
+			        	,A.SANCTN_NO AS SANCTN_NO
+					    ,SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT) AS DRFT_STS            											/* 기안상태        */
+					    ,'theme://images/sanctn/' || 'D' || SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT) || '.png' AS DRFT_STS_IMG       /* 기안상태Img    */
+					    ,TO_CHAR(E.DRFT_DT,'YYYY-MM-DD HH24:MI:SS') AS DRFT_DT            									/* 기안일시        */
+					    ,SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT) AS SANCTN_STS        												/* 결재상태        */
+					    ,'theme://images/sanctn/' || 'A' || SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT) || '.png' AS SANCTN_STS_IMG    	/* 결재상태Img    */
+					    ,TO_CHAR(E.LAST_SANCTN_DT,'YYYY-MM-DD HH24:MI:SS') AS LAST_SANCTN_DT    							/* 최종결재일시    */	
+					    
+					    , TO_CHAR(A.REGIST_DT,'YYYYMMDD') AS REGIST_DT
+					    
+					    ,NVL(C.DECSN_AMOUNT, 0) AS DECSN_AMOUNT
+				        ,C.BUDGET_YEAR
+				        ,C.BSNS_SE
+				        ,C.BALC_SE
+				        ,C.BUDGET_ACNT_CODE
+				        ,C.EXPNDTR_UNIT_CODE       
+				        ,SFBDG_EXPNDTR_UNIT_NM(C.BUDGET_YEAR ,C.BSNS_SE ,C.BALC_SE ,C.BUDGET_ACNT_CODE ,C.EXPNDTR_UNIT_CODE) AS EXPNDTR_UNIT_NM
+					   
+			FROM 		TBHRM_HR_FRNTN_INSPN_SDYTRN A
+						LEFT OUTER JOIN (
+			                         SELECT FILE_SN, COUNT(1) AS CNT
+			                           FROM TBCOM_CMMN_ATCHMNFL
+			                       GROUP BY FILE_SN
+			                        ) T
+			            ON A.FILE_SN = T.FILE_SN
+			            
+			            LEFT OUTER JOIN TBACC_EXP_DSN_MASTR C
+						     ON A.EXPNDTR_DECSN_YEAR = C.DECSN_YEAR
+						     AND A.EXPNDTR_DECSN_NO = C.DECSN_NO
+			            
+			            LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR E
+			           		 ON A.SANCTN_NO = E.SANCTN_NO
+			WHERE 		1=1
+	  ]]>
+			<isNotEmpty property="BGNDE1">
+			 AND  A.BGNDE BETWEEN #BGNDE1# AND #BGNDE2#
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE">
+			 AND  (SELECT DEPT_CODE FROM TBHRM_HR_MASTR WHERE EMPNO = A.EMPNO) = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNM">
+			
+			 AND SFSAL_GETEMPNO_01(A.EMPNO) LIKE '%' || #EMPNM# || '%'
+			</isNotEmpty>
+			<isNotEmpty property="PURPS">
+			 AND  A.PURPS = #PURPS#
+			</isNotEmpty>
+			<isNotEmpty property="OPERTN_OFFIC_NM">
+			 AND  A.OPERTN_OFFIC_NM = #OPERTN_OFFIC_NM#
+			</isNotEmpty>
+			<isNotEmpty property="NATION_NM">
+			 AND  A.NATION_NM = #NATION_NM#
+			</isNotEmpty>
+		<![CDATA[	
+			ORDER BY A.BGNDE DESC
+		]]>
+	</select>   
+
+
+	<!-- 외국시찰연수관리 입력	-->
+     <insert id="HRM070205DAO.tbhrmFrntnInspnSdytrnC" parameterClass="java.util.HashMap">
+        <![CDATA[
+      INSERT INTO TBHRM_HR_FRNTN_INSPN_SDYTRN (
+      					 EMPNO
+						,SEQ
+						,BGNDE
+						,ENDDE
+						,PURPS
+						,OPERTN_OFFIC_NM
+						,NATION_NM
+						,RM
+						,AIR_CMPNY_NM
+						,AIR_MLG_SCORE
+      					,REGISTER_ID
+      					,REGIST_DT
+      					,UPDUSR_ID
+      					,UPDT_DT
+				   
+				             ) VALUES (
+			      					 #EMPNO#
+								     ,(SELECT NVL(MAX(SEQ),0)+1
+										FROM TBHRM_HR_FRNTN_INSPN_SDYTRN
+										WHERE EMPNO = #EMPNO# 
+						               )
+									 ,#BGNDE#
+									 ,#ENDDE#
+									 ,#PURPS#
+									 ,#OPERTN_OFFIC_NM#
+									 ,#NATION_NM#
+									 ,#RM#
+									 ,#AIR_CMPNY_NM#
+									 ,#AIR_MLG_SCORE#
+		      					 	 ,#S_USER_ID#
+		      					 	 ,SYSDATE
+		      					 	 ,#S_USER_ID#
+		      			 		 	 ,SYSDATE
+		           				 )
+        ]]>
+    </insert>	
+    
+	 <!--외국시찰연수관리 수정	-->		
+    <update id="HRM070205DAO.tbhrmFrntnInspnSdytrnU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			  UPDATE TBHRM_HR_FRNTN_INSPN_SDYTRN
+			  SET	
+				BGNDE                         =    #BGNDE#
+				,ENDDE                        =    #ENDDE#
+				,PURPS                        =    #PURPS#
+				,OPERTN_OFFIC_NM              =    #OPERTN_OFFIC_NM#
+				,NATION_NM                    =    #NATION_NM#
+				,RM                           =    #RM#
+				,AIR_CMPNY_NM                 =    #AIR_CMPNY_NM#
+				,AIR_MLG_SCORE                =    #AIR_MLG_SCORE#
+    			,UPDUSR_ID                    =    #S_USER_ID#
+    			,UPDT_DT                      =    SYSDATE
+			  
+		      WHERE 	EMPNO = #EMPNO#
+			  AND 		SEQ = #SEQ#
+        ]]>
+    </update>
+    
+	<!-- 외국시찰연수관리 삭제-->		
+      <delete id="HRM070205DAO.tbhrmFrntnInspnSdytrnD" parameterClass="java.util.HashMap">
+        <![CDATA[
+            DELETE FROM TBHRM_HR_FRNTN_INSPN_SDYTRN 
+             WHERE EMPNO = #EMPNO#
+			   AND SEQ = #SEQ#
+        ]]>
+    </delete>
+    
+    
+    <!-- 전자결재번호 수정 -->
+    <update id="HRM070205DAO.approveU" parameterClass="java.util.HashMap">
+        UPDATE TBHRM_HR_FRNTN_INSPN_SDYTRN
+           SET SANCTN_NO         = #SANCTN_NO#
+         WHERE 1=1
+           AND EMPNO             = #EMPNO#
+           AND SEQ               = #SEQ#
+    </update>
+    
+    <!-- 전자결재번호 조회 -->
+	<select id="HRM070205DAO.selectSanctnNO" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+        SELECT SANCTN_NO
+          FROM TBCOM_ELCTRN_SANCTN_MASTR
+         WHERE INTRLCK_IDNTFR       = #KEY#
+    </select>
+    
+    
+    <!--지출결의 번호 저장-->
+	<update id="HRM070205DAO.updateExpndtrDecsnNo" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			UPDATE TBHRM_HR_FRNTN_INSPN_SDYTRN
+			   SET 
+				    EXPNDTR_DECSN_DE  	= #EXPNDTR_DECSN_DE#
+				   ,EXPNDTR_DECSN_YEAR  = #DSNMASTR.DECSN_YEAR#
+				   ,EXPNDTR_DECSN_NO  	= #DSNMASTR.DECSN_NO#
+				  ,UPDUSR_ID         	= #S_USER_ID#
+				  ,UPDT_DT           	= SYSDATE     
+			 WHERE EMPNO            	= #EMPNO#			
+			   AND SEQ            	    = #SEQ#
+		]]>
+	</update>
+	 
+
+  </sqlMap>

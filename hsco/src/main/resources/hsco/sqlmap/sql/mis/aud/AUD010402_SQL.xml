@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUD010402_SQL">	
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 감사실적조회 -->
+	<select id="AUD010402DAO.selectAuditAcmsltSttus" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*AUD010402DAO.selectAuditAcmsltSttus*/]]>
+		<![CDATA[
+			SELECT T1.AUDIT_YEAR
+			     , NVL(T2.AUDIT_PLAN_CNT, 0)                                            AS AUDIT_PLAN_CNT
+			     , NVL(T3.AUDIT_PLAN_COMPT_CNT, 0)                                      AS AUDIT_PLAN_COMPT_CNT
+			     , NVL(T4.EDAY_AUDIT_CNT, 0)                                            AS EDAY_AUDIT_CNT
+			     , NVL(T5.EDAY_AUDIT_COMPT_CNT, 0)                                      AS EDAY_AUDIT_COMPT_CNT
+			     , NVL(T2.AUDIT_PLAN_CNT, 0) + NVL(T4.EDAY_AUDIT_CNT, 0)                AS TOT_PLAN_CNT
+			     , NVL(T3.AUDIT_PLAN_COMPT_CNT, 0) + NVL(T5.EDAY_AUDIT_COMPT_CNT, 0)    AS TOT_COMPT_CNT
+			     , CASE WHEN NVL(T2.AUDIT_PLAN_CNT, 0) = 0 THEN 0
+			            ELSE ROUND(NVL(T3.AUDIT_PLAN_COMPT_CNT, 0) / NVL(T2.AUDIT_PLAN_CNT, 0) * 100, 2)
+			       END || '%'    AS AUDIT_PLAN_PT
+			     , CASE WHEN NVL(T4.EDAY_AUDIT_CNT, 0) = 0 THEN 0
+			            ELSE ROUND(NVL(T5.EDAY_AUDIT_COMPT_CNT, 0) / NVL(T4.EDAY_AUDIT_CNT, 0) * 100, 2)
+			       END || '%'    AS EDAY_AUDIT_PT
+			     , CASE WHEN NVL(T2.AUDIT_PLAN_CNT, 0) + NVL(T4.EDAY_AUDIT_CNT, 0) = 0 THEN 0
+			            ELSE ROUND((NVL(T3.AUDIT_PLAN_COMPT_CNT, 0) + NVL(T5.EDAY_AUDIT_COMPT_CNT, 0)) / (NVL(T2.AUDIT_PLAN_CNT, 0) + NVL(T4.EDAY_AUDIT_CNT, 0)) * 100, 2)
+			       END || '%'    AS TOT_AUDIT_PT
+			     , NVL(T6.MANAGT_TY_CNT_01, 0)                                          AS MANAGT_TY_CNT_01
+			     , NVL(T6.MANAGT_TY_CNT_02, 0)                                          AS MANAGT_TY_CNT_02
+			     , NVL(T6.MANAGT_TY_CNT_03, 0)                                          AS MANAGT_TY_CNT_03
+			     , NVL(T6.MANAGT_TY_CNT_04, 0)                                          AS MANAGT_TY_CNT_04
+			     , NVL(T6.MANAGT_TY_CNT_05, 0)                                          AS MANAGT_TY_CNT_05
+			     , NVL(T6.MANAGT_TY_CNT_06, 0)                                          AS MANAGT_TY_CNT_06
+			     , NVL(T6.MANAGT_TY_CNT_07, 0)                                          AS MANAGT_TY_CNT_07
+			     , NVL(T6.MANAGT_TY_CNT_08, 0)                                          AS MANAGT_TY_CNT_08
+			  FROM (
+			        /*년도별세팅*/
+			        SELECT #AUDIT_BGN_YEAR# + (ROWNUM - 1)    AS AUDIT_YEAR
+			          FROM DUAL CONNECT BY LEVEL <= #AUDIT_END_YEAR# - #AUDIT_BGN_YEAR# + 1
+			       ) T1
+			       LEFT OUTER JOIN (
+			                        /*내외부감사계획*/
+			                        SELECT S1.AUDIT_PLAN_YEAR    AS AUDIT_YEAR
+			                             , COUNT(1)              AS AUDIT_PLAN_CNT
+			                          FROM TBAUD_AUDIT_PLAN S1
+			                         WHERE S1.CONFM_AT = '1'
+			                        GROUP BY S1.AUDIT_PLAN_YEAR
+			                       ) T2
+			            ON T1.AUDIT_YEAR = T2.AUDIT_YEAR
+			       LEFT OUTER JOIN (
+			                        /*내외부감사실적*/
+			                        SELECT S1.AUDIT_PLAN_YEAR    AS AUDIT_YEAR
+			                             , COUNT(1)              AS AUDIT_PLAN_COMPT_CNT
+			                          FROM TBAUD_AUDIT_PLAN S1
+			                         WHERE S1.CONFM_AT    = '1'
+			                           AND S1.CONFM_AT2   = '1'
+			                           AND S1.AUDIT_ED_AT = '2'
+			                        GROUP BY S1.AUDIT_PLAN_YEAR
+			                       ) T3
+			            ON T1.AUDIT_YEAR = T3.AUDIT_YEAR
+			       LEFT OUTER JOIN (
+			                        /*일상감사계획*/
+			                        SELECT S1.RCEPT_YEAR    AS AUDIT_YEAR
+			                             , COUNT(1)         AS EDAY_AUDIT_CNT
+			                          FROM TBAUD_EDAY_AUDIT S1
+			                               LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR S2
+			                                    ON S1.SANCTN_NO = S2.SANCTN_NO
+			                         WHERE S2.SANCTN_KND = '5'
+			                        GROUP BY S1.RCEPT_YEAR
+			                       ) T4
+			            ON T1.AUDIT_YEAR = T4.AUDIT_YEAR
+			       LEFT OUTER JOIN (
+			                        /*일상감사실적*/
+			                        SELECT S1.RCEPT_YEAR    AS AUDIT_YEAR
+			                             , COUNT(1)         AS EDAY_AUDIT_COMPT_CNT
+			                          FROM TBAUD_EDAY_AUDIT_RESULT S1
+			                               LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR S2
+			                                    ON S1.SANCTN_NO = S2.SANCTN_NO
+			                         WHERE S1.EDAY_AUDIT_RESULT IS NOT NULL
+			                           AND S2.SANCTN_KND = '5'
+			                        GROUP BY S1.RCEPT_YEAR
+			                       ) T5
+			            ON T1.AUDIT_YEAR = T5.AUDIT_YEAR
+			       LEFT OUTER JOIN (
+			                         SELECT S.AUDIT_YEAR
+			                              , SUM(DECODE(S.MANAGT_TY, '01', S.CNT, 0))    AS MANAGT_TY_CNT_01
+			                              , SUM(DECODE(S.MANAGT_TY, '02', S.CNT, 0))    AS MANAGT_TY_CNT_02
+			                              , SUM(DECODE(S.MANAGT_TY, '03', S.CNT, 0))    AS MANAGT_TY_CNT_03
+			                              , SUM(DECODE(S.MANAGT_TY, '04', S.CNT, 0))    AS MANAGT_TY_CNT_04
+			                              , SUM(DECODE(S.MANAGT_TY, '05', S.CNT, 0))    AS MANAGT_TY_CNT_05
+			                              , SUM(DECODE(S.MANAGT_TY, '06', S.CNT, 0))    AS MANAGT_TY_CNT_06
+			                              , SUM(DECODE(S.MANAGT_TY, '07', S.CNT, 0))    AS MANAGT_TY_CNT_07
+			                              , SUM(DECODE(S.MANAGT_TY, '08', S.CNT, 0))    AS MANAGT_TY_CNT_08
+			                           FROM (
+			                                 SELECT S1.AUDIT_YEAR
+			                                      , S1.MANAGT_TY
+			                                      , COUNT(1)         AS CNT
+			                                   FROM TBAUD_DSPS_DMDDOC S1
+			                                 GROUP BY S1.AUDIT_YEAR, S1.MANAGT_TY
+			                                ) S
+			                         GROUP BY S.AUDIT_YEAR
+			                       ) T6
+			     ON T1.AUDIT_YEAR = T6.AUDIT_YEAR
+			 WHERE 1=1
+			ORDER BY T1.AUDIT_YEAR
+		]]>
+	</select>
+</sqlMap>

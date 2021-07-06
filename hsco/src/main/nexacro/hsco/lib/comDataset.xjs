@@ -1,0 +1,1521 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/*****************************************************************************
+ * 프로그램명 		: 	comDataset.xjs
+ * 작  성  자  	: 	정윤원
+ * 작  성  일   	: 	2015.06.30
+ * 설      명  		:   Combo Dataset 공통함수다.
+ * 수  정  자  	: 	
+ * 수 정 이력  	: 	
+ * 사용방법	    :   
+*******************************************************************************/
+
+/**
+*@fileoverview nexacro service library 
+*@gfn_comboLoad					: 공통코드를 조회하여 콤보박스를 만든다.
+*@gfn_TransactionCallback		: gfn_comboLoad 의 Callback 함수
+*@gfn_loadCodeCombo				: Combo에 사용되는 Dataset을 Form에서 생성하지 않는 경우 사용. 함수 내부에서 dataset 명을 받아 생성함.
+*@gfn_loadCodeComboWithDs		: Combo에 사용되는 Dataset을 Form에서 생성하고 연결시킨 경우 사용. 반드시, Form에서 dataset을 생성해야 한다.
+*-----------------------------------------------------------------------------------------------
+* @memberof! comDataset
+*/
+
+/*******************************************************************************
+ * 함수명  	: gfn_delMultiRow
+ * 설명 		: 선택된 Row를 삭제한다.
+ * params  		: 1. ds    	: 삭제할 데이터를 가지고 있는 Dataset
+ * return Type 	: None
+ * 사용법		: this.gfn_delMultiRow(this.ds_sample);
+ ******************************************************************************/
+this.gfn_delMultiRow = function (ds : Dataset)
+{
+	var chkLowerField = ds.getColumnInfo("chk");
+	var chkUpperField = ds.getColumnInfo("CHK");
+	
+	var checkField = chkLowerField == null ? "CHK" : "chk";
+	var checkExprStr = checkField + "=='0' ? 0 : 1";
+	
+	if(ds.getSum(checkExprStr) == 0)
+	{
+// 		alert("선택된 행이 없습니다. 먼저 삭제할 행을 선택하십시요.");
+		this.gfn_message("comm.데이터.선택.없음");
+		return false;
+	}
+	
+	
+	if(this.gfn_message("confirm.삭제여부"))
+	{
+		for(var i = (ds.rowcount - 1); i >= 0; --i)
+		{
+			var vChk = ds.getColumn(i, checkField);
+			if(vChk == undefined || vChk == "" || vChk == null){
+        			        vChk = "0";
+        	}
+			if(vChk.toString() == "1")
+			{
+				ds.deleteRow(i);
+			}
+		}
+		
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+/*******************************************************************************
+ * 함수명  	: gfn_delMultiDsRow
+ * 설명 		: 선택된 Row를 삭제한다.(메시지 없는 버전)
+ * params  		: 1. ds    	: 삭제할 데이터를 가지고 있는 Dataset
+ * return Type 	: None
+ * 사용법		: this.gfn_delMultiDsRow(this.ds_sample);
+ ******************************************************************************/
+this.gfn_delMultiDsRow = function (ds : Dataset)
+{
+	var chkLowerField = ds.getColumnInfo("chk");
+	var chkUpperField = ds.getColumnInfo("CHK");
+	
+	var checkField = chkLowerField == null ? "CHK" : "chk";
+	var checkExprStr = checkField + "=='0' ? 0 : 1";
+	
+	if(ds.getSum(checkExprStr) == 0)
+	{
+// 		alert("선택된 행이 없습니다. 먼저 삭제할 행을 선택하십시요.");
+		this.gfn_message("comm.데이터.선택.없음");
+		return false;
+	}
+	
+	if(ds.getRowCount() > 0){
+		for(var i = (ds.rowcount - 1); i >= 0; --i)
+		{
+			var vChk = ds.getColumn(i, checkField);
+			if(vChk == undefined || vChk == "" || vChk == null){
+        			        vChk = "0";
+        	}
+			if(vChk.toString() == "1")
+			{
+				ds.deleteRow(i);
+			}
+		}
+		return true;
+	} else {
+	    return false;
+	}	
+		
+}
+
+/*******************************************************************************
+ * 함수명  	: gfn_loadCodeCombo
+ * 설명 		: 화면에 있는 Combo에 데이터를 Loading.
+ * params  		: 1. form    	: 해당 Form 객체(Object)
+                  2. combo		: 데이터를 Load할 Combo (Object)
+				  3. strDs		: InnerDataset으로 사용할 Dataset 명 (String)
+				  4. strGrpCode	: Group Code
+				  5. strOptCode	: Opt. Code
+				  6. strUseYn	: Code 사용 여부
+								  Y:사용(기본값), ""(grpCode에 속한 전체 코드)
+				  7. strVal		: Combo 박스의 Text 초기값 설정
+								  "전체", "선택" 등의 텍스트. 단, Space(" ")는 선택없는 콤보. ""은 코드값 첫번째 선택.
+				  8. strCodeView: Text에 보여주는 형태
+								  "N" : 코드명만. "Y" : 코드 + 코드값 형식
+				  9. strAfterCallback : Data Load 후, 별도 처리해야할 함수 (String)
+								  사용 예 : "fn_afterLoading"
+ * return Type 	: None
+ * 사용법		: this.gfn_loadCodeCombo(this, this.div_search.cmb_gubun00, "ds_gubun00", "COM002", "", "Y", "전체", "N", "fn_callBackAfter");
+ ******************************************************************************/
+this.gfn_loadCodeCombo = function(form:Form, combo, strDs, strGrpCode, strOptCode, strUseYn, strVal, strCodeView, strAfterCallback)
+{
+	// Default 값 정의
+// 	if(Eco.isNull(strUseYn) || Eco.isUndefined(strUseYn)) {
+// 		strUseYn = "Y";
+// 	} else {
+// 		strUseYn = "";
+// 	}
+	switch(strUseYn.toUpperCase()) {
+		case "Y" : 
+			strUseYn = "1";
+			break;
+		case "N" : 
+			strUseYn = "";
+			break;
+		case "0" : 
+			strUseYn = "";
+			break;
+	}
+
+	if(!this.comUtils.isNullEmpty(strCodeView))
+	{
+		strCodeView = "N";
+	}
+	
+	var context = this;
+	var param;
+	var sSvcID = "cmmnCodeList";
+	var sController = "hsco/cmm/cmmCode/cmmCodeList2.do";
+	var sInDatasets = "";
+	var sOutDatasets; //리턴받을 데이터셋
+	var sArgs;
+	var sCallback;
+	var ds = this._makeDataset(form, strDs);
+
+	// combo가 정의되어 있을 때만...
+	if(!this.comUtils.isNullEmpty(combo)) {
+		combo.set_innerdataset(ds.name);
+		combo.set_codecolumn("CODE");
+		
+		if(strCodeView == "N"){
+			combo.set_datacolumn("CODE_NM");
+		} else if(strCodeView == "Y"){
+			combo.set_datacolumn("ALL_CODE_NM");
+		} else {
+			combo.set_datacolumn("CODE_NM");
+		}
+	}
+	
+	sOutDatasets = ds.name + "=output1";
+// 	sArgs  = Ex.util.setParam("GRP_CODE", strGrpCode);
+// 	sArgs += Ex.util.setParam("OPT_CODE", strOptCode);
+// 	sArgs += Ex.util.setParam("USE_YN", strUseYn);
+    sArgs = "GRP_CODE=" + strGrpCode + " ";
+    sArgs += "OPT_CODE=" + strOptCode + " ";
+    sArgs += "USE_YN=" + strUseYn;
+	
+	// Combo의 Callback 함수 정의
+	//===================================================
+	var callback = function(svcId, errorCode, errorMsg){
+		var nLen = strVal.length;
+
+		if(strVal != " " && nLen > 0){
+			var nRow = ds.insertRow(0);
+			ds.setColumn(nRow, "CODE", "");
+			ds.setColumn(nRow, "CODE_NM", strVal);
+			ds.setColumn(nRow, "ALL_CODE_NM", strVal);
+			
+			if(!this.comUtils.isNullEmpty(combo)) {
+				combo.set_index(0);
+			}
+		} else {
+		  if(strVal == " "){ // 공백문자열
+			if(!this.comUtils.isNullEmpty(combo)) {
+				combo.set_index(-1);
+			}
+		  } else {
+			if(!this.comUtils.isNullEmpty(combo)) {
+				combo.set_index(0);
+			}
+		  }
+		}
+
+		if(!this.comUtils.isNullEmpty(strAfterCallback)){
+			eval("form." + strAfterCallback + "();");
+		}
+	}
+	//===================================================
+
+	if(typeof callback == "function") {
+		sCallback = sSvcID + strGrpCode + ds.name;
+		context[sCallback] = callback;
+	} else if (typeof callback == "string") {
+		sCallback = callback;
+	} else {
+		sCallback = "";
+	}
+
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, sArgs, sCallback);
+}
+
+/*******************************************************************************
+ * 함수명  	: _makeDataset
+ * 설명 		: Dataset을 만든다.
+ * params  		: 1. form    	: 해당 Form 객체(Object)
+                  2. strDs		: Dataset 명 (String)
+ * return Type 	: Dataset (object)
+ * 사용법		: var ds = this._makeDataset(form, "ds_gubun");
+ ******************************************************************************/
+this._makeDataset = function (form:Form, strDs)
+{
+	var ds = new Dataset;
+	
+	ds.addColumn("CODE", "string");
+	ds.addColumn("GRP_CODE", "string");
+	ds.addColumn("CODE_NM", "string");
+	ds.addColumn("CODE_CN", "string");
+	ds.addColumn("CODE_ORDR", "string");
+	ds.addColumn("VAL0", "string");
+	ds.addColumn("VAL1", "string");
+	ds.addColumn("VAL2", "string");
+	ds.addColumn("VAL3", "string");
+	ds.addColumn("VAL4", "string");
+	ds.addColumn("INT_VAL", "string");
+	ds.addColumn("MSTK_VAL", "string");
+	ds.addColumn("ETC1", "string");
+	ds.addColumn("ETC2", "string");
+	ds.addColumn("ETC3", "string");
+	ds.addColumn("USE_YN", "string");
+	ds.addColumn("ALL_CODE_NM", "string");
+
+	ds.set_name(strDs);
+
+	form.addChild(strDs, ds);
+
+	return eval("form." + strDs);
+}
+
+/*******************************************************************************
+ * 함수명  	: gfn_loadCodeComboWithDs
+ * 설명 		: 화면에 있는 Combo에 데이터를 Loading.
+ * params  		: 1. form    	: 해당 Form 객체(Object)
+                  2. combo		: 데이터를 Load할 Combo (Object)
+				  3. ds			: InnerDataset으로 사용할 Dataset (Object)
+				  4. strGrpCode	: Group Code
+				  5. strOptCode	: Opt. Code
+				  6. strUseYn	: Code 사용 여부
+								  Y:사용(기본값), ""(grpCode에 속한 전체 코드)
+				  7. strVal		: Combo 박스의 Text 초기값 설정
+								  "전체", "선택" 등의 텍스트. 단, Space(" ")는 선택없는 콤보. ""은 코드값 첫번째 선택.
+				  8. strCodeView: Text에 보여주는 형태
+								  "N" : 코드명만. "Y" : 코드 + 코드값 형식
+				  9. strAfterCallback : Data Load 후, 별도 처리해야할 함수 (String)
+								  사용 예 : "fn_afterLoading"
+ * return Type 	: None
+ * 사용법		: this.gfn_loadCodeComboWithDs(this, this.div_search.cmb_gubun, this.ds_gubun, "COM002", "", "A", "A", "G", "fn_callBackAfter");
+ ******************************************************************************/
+this.gfn_loadCodeComboWithDs = function(form:Form, combo, ds:Dataset, strGrpCode, strOptCode, strUseYn, strVal, strCodeView, strAfterCallback)
+{
+	// Default 값 정의
+	switch(strUseYn.toUpperCase()) {
+		case "Y" : 
+			strUseYn = "1";
+			break;
+		case "N" : 
+			strUseYn = "";
+			break;
+		case "0" : 
+			strUseYn = "";
+			break;
+	}
+
+	if(!this.comUtils.isNullEmpty(strCodeView))
+	{
+		strCodeView = "N";
+	}
+	
+	var context = this;
+	var param;
+	var sSvcID = "cmmnCodeList";
+	var sController = "hsco/cmm/cmmCode/cmmCodeList2.do";
+	var sInDatasets = "";
+	var sOutDatasets; //리턴받을 데이터셋
+	var sArgs;
+	var sCallback;
+
+	if(!(ds instanceof Dataset))
+	{
+		if(!this.comUtils.isNullEmpty(combo)) {
+			if(this.comUtils.isNullEmpty(combo.innerdataset)) {
+				alert(combo.name + "에 사용할 dataset이 없습니다. \n dataset을 정의해 주십시요.");
+				return false;
+			}
+			
+			ds = eval("form." + combo.innerdataset);
+		} else {
+			alert("정의된 dataset이 존재하지 않습니다. 올바른 dataset을 지정해 주십시요.");
+			return;
+		}
+	}
+
+	// combo가 정의되어 있을 때만...
+	if(!this.comUtils.isNullEmpty(combo)) {
+		combo.set_innerdataset(ds.name);
+		combo.set_codecolumn("CODE");
+		
+		if(strCodeView == "N"){
+			combo.set_datacolumn("CODE_NM");
+		} else if(strCodeView == "Y"){
+			combo.set_datacolumn("ALL_CODE_NM");
+		} else {
+			combo.set_datacolumn("CODE_NM");
+		}
+	}
+	
+	sOutDatasets = ds.name + "=output1";
+// 	sArgs  = Ex.util.setParam("GRP_CODE", strGrpCode);
+// 	sArgs += Ex.util.setParam("OPT_CODE", strOptCode);
+// 	sArgs += Ex.util.setParam("USE_YN", strUseYn);
+    sArgs = "GRP_CODE=" + strGrpCode + " ";
+    sArgs += "OPT_CODE=" + strOptCode + " ";
+    sArgs += "USE_YN=" + strUseYn;
+	
+	// Combo의 Callback 함수 정의
+	//===================================================
+	var callback = function(svcId, errorCode, errorMsg){
+		var nLen = strVal.length;
+
+		if(strVal != " " && nLen > 0){
+			var nRow = ds.insertRow(0);
+			ds.setColumn(nRow, "CODE", "");
+			ds.setColumn(nRow, "CODE_NM", strVal);
+			ds.setColumn(nRow, "ALL_CODE_NM", strVal);
+			
+			if(!this.comUtils.isNullEmpty(combo)) {
+				combo.set_index(0);
+			}
+		} else {
+		  if(strVal == " "){ // 공백문자열
+			if(!this.comUtils.isNullEmpty(combo)) {
+				combo.set_index(-1);
+			}
+		  } else {
+			if(!this.comUtils.isNullEmpty(combo)) {
+				combo.set_index(0);
+			}
+		  }
+		}
+
+		if(!this.comUtils.isNullEmpty(strAfterCallback)){
+			eval("form." + strAfterCallback + "();");
+		}
+	}
+	//===================================================
+
+	if(typeof callback == "function") {
+		sCallback = sSvcID + strGrpCode + ds.name;
+		context[sCallback] = callback;
+	} else if (typeof callback == "string") {
+		sCallback = callback;
+	} else {
+		sCallback = "";
+	}
+
+	Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, sArgs, sCallback);
+}
+
+/*******************************************************************************
+ * 함수명  	: gfn_comboLoad
+ * 설명 		: 공통코드를 조회하여 콤보박스를 만든다.
+ * params  		: 1. param_1    : 반환받을 DATASET 명 			(예: DS_AREA_NO_CODE)
+                  2. param_2	: 그룹코드						(예 : COM007)
+                  3. param_3	: 사용여부		    			(예 : A(전체), Y(사용), N(사용안함))
+                  4. param_4	: 콤보박스INDEX(0) 표시		(예 : A(전체), S(선택), E(공백), D(첫번째데이터부터시작) )
+                  5. param_5	: 코드+코드명					(예 : G(코드명), B(코드-코드명) )
+ * callback     : Callback Function
+ * return Type 	: Dataset Object - > ( 예 : 결과값은 "DS_YN1" 의 "CODE", "NAME" 컬럼을 참조한다.)
+ * 사용법		: gfn_comboLoad("DS_AREA_NO_CODE, COM007, A, A, G");
+ * 작성자 		: 정윤원
+ * 작성일      : 2015.06.30
+ * 수정내용    : 최초생성
+ ******************************************************************************/
+this.gv_nCnt = 0;
+this.gfn_comboLoad_OLD = function (params, callback)
+{
+	var context = this;
+	var param;
+	var sSvcID = "cmmnCodeList";
+	var sController = "hsco/cmm/cmmCode/cmmCodeList.do";
+	var sInDatasets = "";
+	var sOutDatasets; //리턴받을 데이터셋
+	var sArgs;
+	var sCallback;
+	
+	for(var i in params)
+	{
+		param = params[i];
+		
+		sOutDatasets = param[0] + "=output1";
+		sArgs  = Ex.util.setParam("GRP_CODE", param[1]);
+		sArgs += Ex.util.setParam("USE_AT", param[2]);
+		sArgs += Ex.util.setParam("CMB_MODE", param[3]);
+		sArgs += Ex.util.setParam("TEXT_MODE", param[4]);
+	
+		if(typeof callback == "function") {
+			sCallback = sSvcID + i + param[1];
+			context[sCallback] = callback;
+		} else if (typeof callback == "string") {
+			sCallback = callback;
+		} else {
+			sCallback = "";
+		}
+		
+		Ex.core.tran(this, sSvcID, sController, sInDatasets, sOutDatasets, sArgs, sCallback);
+	}
+}
+
+/*******************************************************************************
+ * 함수명  	: gfn_comboLoad_OLD
+ * 설명 		: 공통코드를 조회하여 콤보박스를 만든다.
+ * params  		: 1. param_1    : 반환받을 DATASET 명 			(예: DS_AREA_NO_CODE)
+                  2. param_2	: 그룹코드						(예 : COM007)
+                  3. param_3	: 사용여부		    			(예 : A(전체), Y(사용), N(사용안함))
+                  4. param_4	: 콤보박스INDEX(0) 표시		(예 : A(전체), S(선택), E(공백), D(첫번째데이터부터시작) )
+                  5. param_5	: 코드+코드명					(예 : G(코드명), B(코드-코드명) )
+ * return Type 	: Dataset Object - > ( 예 : 결과값은 "DS_YN1" 의 "CODE", "NAME" 컬럼을 참조한다.)
+ * 사용법		: gfn_comboLoad("DS_AREA_NO_CODE, COM007, A, A, G");
+ * 작성자 		: 정윤원
+ * 작성일      : 2015.06.30
+ * 수정내용    : 최초생성
+ ******************************************************************************/
+
+this.gfn_comboLoad_OLD_OLD = function (params) 
+{
+//(dataset, grpCode, 사용여부, (전체, 선택, 공랑, 데이터시작), 텟스트모드(일반, 코드와텍스트같이)
+    try {
+		var paramsArr = new Array();
+		
+		for(var i in params){
+			
+			var paramsArr = params[i].split(',');
+			
+				//(dataset, grpCode, 사용여부, (전체, 선택, 공랑, 데이터시작), 텟스트모드(일반, 코드와텍스트같이)
+				var sSvcID = "cmmnCodeList";
+				var sController = "hsco/cmm/cmmCode/cmmCodeList.do";
+				var sInDatasets = "";
+				var sOutDatasets = paramsArr[0]+"=output1" ; //리턴받을 데이터셋
+				var sArgs = "";
+				var sArgs = "";		
+				sArgs += Ex.util.setParam("GRP_CODE",paramsArr[1]); //그룹코드
+				sArgs += Ex.util.setParam("USE_AT",paramsArr[2]); //사용여부
+				sArgs += Ex.util.setParam("CMB_MODE",paramsArr[3]); //전체, 선택, 공랑, 데이터시작
+				sArgs += Ex.util.setParam("TEXT_MODE",paramsArr[4]); //텍스트모드
+				
+				//파라미터 검증실행
+				if(paramsArr.length !=5 && paramsArr.length <5){
+					alert("콤보박스 검색조건중" + paramsArr[0] + "인수가 부족합니다.");
+					return false;
+				}else if(paramsArr.length !=5 && paramsArr.length >5){
+					alert("콤보박스 검색조건중" + paramsArr[0] + "인수가 초과입니다..");
+					return false;
+				
+				}else{
+				Ex.core.tran(this,sSvcID, sController, sInDatasets, sOutDatasets, sArgs, "gfn_TransactionCallback"); 
+				}
+		}
+    } catch(e) {
+        return null;
+    }
+}
+
+/**
+ * Transaction Callback
+ * 
+ * @param :
+ *            strSvcID : 서비스아이디
+ * @param :
+ *            nErrorCode : 에러코드
+ * @param :
+ *            strErrorMsg : 에러메세지
+ */
+// this.gfn_TransactionCallback = function(strSvcId, nErrorCode, strErrorMsg) {
+// 
+//     if (nErrorCode < 0) 
+// 	{
+// 		return ExtNx.core.comMsg("alert",strErrorMsg);		
+// 	}
+// 	
+// }
+
+//=====================================================================================================
+//=====================================================================================================
+//=====================================================================================================
+
+/*******************************************************************************
+ * 함수명  	: gfn_comboLoad
+ * 설명 		: 화면에 있는 Combo에 데이터를 Loading.
+ * params  		: 1. params		   : Data를 불러오는데 필요한 파라미터 배열 (2차 배열)
+				  2. callbackAfter : Data Load 후, 별도 처리해야할 함수
+								     사용 예 : fn_afterLoading
+ * return Type 	: None
+ * 사용법		: this.gfn_comboLoad(params, callbackAfter);
+ ******************************************************************************/
+this.gfn_comboLoad = function (params, callbackAfter)
+{
+	var context = this;
+	var sSvcID = "cmmnCodeList";
+	var sController = "hsco/cmm/cmmCode/cmmCodeList3.do";
+	var sCallback;
+	var strInDsName;
+	var strOutDsName;
+	var objInDs;
+	var objOutDs;
+	var sArgs = "";
+
+	// Input Dataset의 이름을 정한다. ("ds_condCombo" + Form의 dataset 개수)
+	strInDsName = "ds_condCombo" + this.objects.length.toString().padLeft(2, "0");
+	objInDs = this._makeInDataset(strInDsName, params);
+
+	// Output Dataset의 이름을 정한다. ("ds_outputDs" + Form의 dataset 개수)
+	strOutDsName = "ds_outputDs" + this.objects.length.toString().padLeft(2, "0");
+	objOutDs = this._makeDataset(this, strOutDsName);
+
+	var strInDs = "input1=" + objInDs.name;
+	var strOutDs = objOutDs.name + "=output1";
+
+	// Callback 함수 정의
+	//===================================================
+	var _callback = function(svcId, errorCode, errorMsg){
+		for(var i = 0; i < params.length; i++)
+		{
+			var param = params[i];
+			var objDs = this.objects[param[0]]; // Parameter로 정의된 dataset 얻어오기
+			
+			// 해당 dataset이 존재하지 않을 경우
+			if(this.comUtils.isNullEmpty(objDs)) {
+				alert("dataset " + param[0] + "이 존재하지 않습니다. \n 해당 dataset을 먼저 생성하십시요.");
+				return;
+			}
+			
+			// 필요한 data 만 Filtering 처리
+			var strFilter = "GRP_CODE=='" + param[1] + "'";
+			objOutDs.filter("");
+			objOutDs.filter(strFilter);
+			
+			// combo의 innerdataset에 데이터를 복사.
+			objDs.copyData(objOutDs, true);
+//			trace(objDs.name + '\n' + objDs.saveCSV());
+			
+			// 기존 구분자도 적용할 수 있도록...
+			//=======================================
+			switch(param[3]) {
+				case "A" :
+					param[3] = "전체";
+					break;
+				case "S" :
+					param[3] = "선택";
+					break;
+				case "E" :
+					param[3] = " ";
+					break;
+				case "D" :
+					param[3] = "";
+					break;
+			}
+			//=======================================
+
+			// "전체", "선택" 일 때, dataset에 해당 텍스트를 insert.
+			if(!this.comUtils.isNullEmpty(param[3].trim()))
+			{
+				objDs.insertRow(0);
+				
+				objDs.setColumn(0, "CODE", "");
+				objDs.setColumn(0, "CODE_NM", param[3].trim());
+				objDs.setColumn(0, "ALL_CODE_NM", param[3].trim());
+				objDs.setColumn(0, "VAL0", param[3].trim());
+				objDs.setColumn(0, "VAL1", param[3].trim());
+				objDs.setColumn(0, "VAL2", param[3].trim());
+				objDs.setColumn(0, "VAL3", param[3].trim());
+				objDs.setColumn(0, "VAL4", param[3].trim());
+			}
+		}
+		
+		// 조건을 처리하는 Division 얻기
+		var objDiv = this.div_search;
+		if(this.comUtils.isNull(objDiv)) {
+			objDiv = this.div_SEARCH;
+		}
+		if(this.comUtils.isNull(objDiv)) {
+			objDiv = this.div_SEARCH_AREA;
+		}
+		if(this.comUtils.isNull(objDiv)) {
+			objDiv = this.div_SEARCHAREA;
+		}
+		if(this.comUtils.isNull(objDiv)) {
+			objDiv = this.div_SearchArea;
+		}
+
+		// Combo에 text 나타내기
+		for(var j in objDiv)
+		{
+			var obj = objDiv.components[j];
+			
+			if(obj instanceof Combo)
+			{
+				var strInnerDs = obj.innerdataset;
+				
+				// strInnerDs.trim() 할때 에러가 나는 경우가 있음. try catch 처리
+				try {
+					if(!this.comUtils.isNullEmpty(strInnerDs.trim())) {
+						this._setText(obj, strInnerDs, params); // 텍스트 나타내는 함수
+					}
+				} catch(e) {
+					trace("gfn_comboLoad error : " + e);
+				}
+			}
+		}
+		
+		// callback 이후에 처리할 함수 호출
+		if(typeof(callbackAfter) == "function") {
+			callbackAfter.call(this);
+		}
+	}
+	//===================================================
+
+	if(typeof _callback == "function") {
+		sCallback = sSvcID + objOutDs.name;
+		context[sCallback] = _callback;
+	} else if (typeof callback == "string") {
+		sCallback = _callback;
+	} else {
+		sCallback = "gfn_comboCallback";
+	}
+
+	// Transaction 처리
+	Ex.core.tran(this, sSvcID, sController, strInDs, strOutDs, sArgs, sCallback);
+	
+	//개별권한버튼 체크로직 삽입 -> 개발자들의 편의를 위해 가장많이 쓰는 함수내에 삽입함..ㅠㅠ
+	this.gfn_applyAuthButton();
+}
+
+this.gfn_comboCallback = function (sid, errNo, errMsg)
+{
+	// None
+}
+
+/*******************************************************************************
+ * 함수명  	: _makeInDataset
+ * 설명 		: Transaction Input용 dataset을 생성한다.
+ * params  		: 1. sDs		   : 생성할 dataset 명
+				  2. params 	   : 생성된 dataset에 입력할 data를 갖고 있는 parameters
+ * return Type 	: Dataset
+ * 사용법		: this._makeInDataset(strInDsName, params);
+ ******************************************************************************/
+this._makeInDataset = function (sDs, params)
+{
+	var objDs = this.objects[sDs];
+	var objNewDs = new Dataset;
+	var strNewDs = "";
+	
+	// 생성할 dataset 이름 정하기
+	if(this.comUtils.isNull(objDs)) {
+		strNewDs = sDs;
+	} else {
+		// dataset이 이미 form에 존재할 경우, +1 하여 이름 재정의
+		strNewDs = sDs.substr(0, 12) + (parseInt(sDs.substr(12)) + 1).toString().padLeft(2, "0");
+	}
+	
+	// 생성된 dataset에 ID 부여.
+	objNewDs.set_name(strNewDs);
+
+	// 필요한 컬럼 생성
+	objNewDs.addColumn("GRP_CODE", "string");
+	objNewDs.addColumn("USE_YN", "string");
+	objNewDs.addColumn("DS_NAME", "string");
+	
+	// form에 dataset 추가
+	this.addChild(strNewDs, objNewDs);
+	
+	// dataset에 data 추가
+	for(var i = 0; i < params.length; i++)
+	{
+		var param = params[i];
+		var nRow = objNewDs.addRow();
+
+		objNewDs.setColumn(nRow, "GRP_CODE", param[1]);
+		objNewDs.setColumn(nRow, "USE_YN", this._getValidUseYn(param[2]));	// Y,0,N(사용,미사용,전제)
+		objNewDs.setColumn(nRow, "DS_NAME", param[0]);
+//		trace(param[1] + ':' + this._getValidUseYn(param[2]));
+	}
+
+	return objNewDs; // 생성된 dataset return
+}
+
+/*******************************************************************************
+ * 함수명  	: _getValidUseYn
+ * 설명 		: 사용여부의 데이터를 정규화 한다.
+ * params  		: 1. sUseYn		   : 정규화가 필요한 문자
+ * return Type 	: String (정규화된 문자)
+ * 사용법		: this._getValidUseYn("Y");
+ ******************************************************************************/
+this._getValidUseYn = function (sUseYn)
+{
+	var rtn;
+	
+	switch (sUseYn) {
+		case "" : 
+		case "Y" : 
+			rtn = "1";
+			break;
+		case "N" : 
+			rtn = "";
+			break;
+		case "0" : 
+			rtn = "";
+			break;
+		default :
+			rtn = sUseYn;
+	}
+	
+	return rtn;
+}
+
+/*******************************************************************************
+ * 함수명  	: _setText
+ * 설명 		: combo에 텍스트를 Setting
+ * params  		: 1. obj		    : combo
+ *				  2. strInnerDs		: combo의 innerdataset 명
+ *				  3. params			: parameters (텍스트 유형을 포함하고 있다)
+ * return Type 	: none
+ * 사용법		: this._setText(obj, strInnerDs, params);
+ ******************************************************************************/
+this._setText = function (obj:Combo, strInnerDs, params)
+{
+	for(var i = 0; i < params.length; i++)
+	{
+		var param = params[i];
+		
+		if(strInnerDs == param[0]) {
+			if(param[3] == " ") {
+				obj.set_index(-1);
+			} else {
+				obj.set_index(0);
+			}
+			
+			return;
+		}
+	}
+}
+
+//=====================================================================================================
+//=====================================================================================================
+//=====================================================================================================
+
+/*******************************************************************************
+ * 함수명  	: gfn_comboLoadNonCodeTbl
+ * 설명 		: 별도의 조건이 필요한 경우, 코드 데이터를 불러오는 함수
+ * params  		: 1. params		    : Data를 불러오는데 필요한 파라미터 배열 (2차 배열)
+ *				  2. callbackAfter	: Data Load 후, 별도 처리해야할 함수
+ *								     사용 예 : fn_afterLoading
+ *				  3. strDs			: Data를 받을 dataset 명. 값이 있을 경우에는, 해당 transaction 또는
+ *									 연관된 transaction만 실행한다. 생략되면, 전체 작업을 실행한다.
+ *				  4. obj			: data 변경이 발생한 combo.
+ * return Type 	: none
+ * 사용법		: this.gfn_comboLoadNonCodeTbl(comboParams, this.fn_callbackAfter, strDs, obj);
+ ******************************************************************************/
+// strDs : 해당 dataset의 코드만 불러와야 할 경우 기술해 줌. (생략된 경우에는 전체 dataset 을 load.)
+this.gfn_comboLoadNonCodeTbl = function (params, callbackAfter, strDs, obj)
+{
+	if(!this.comUtils.isNullEmpty(strDs)) {
+		for (var j = 0; j < params.length; j++)
+		{
+			var param = params[j];
+
+			if(param[0] == strDs) {
+				var v_condVal = this.objects[param[1]].getColumn(0, "CODE_LVL_" + param[5]);
+				if(this.comUtils.isNullEmpty(v_condVal)) {
+					// TODO
+					this.objects[strDs].clearData();
+					if(param[3] != " ") {
+						this.objects[strDs].addRow();
+						
+						this.objects[strDs].setColumn(0, "CODE", "");
+						this.objects[strDs].setColumn(0, "CODE_NM", param[3]);
+						this.objects[strDs].setColumn(0, "ALL_CODE_NM", param[3]);
+						
+						obj.parent.components[obj.next].set_index(0);
+					}
+					
+					return;
+				}
+				
+				this._loadEachCmb(params, j, callbackAfter);
+				break;
+			} else {
+				continue;
+			}
+		}
+	} else {
+		for(var i = 0; i < params.length; i++)
+		{
+			var param = params[i];
+
+			if(parseInt(param[5]) <= 1) {
+				this._loadEachCmb(params, i, callbackAfter);
+			}
+		}
+	}
+}
+
+/*******************************************************************************
+ * 함수명  	: _loadEachCmb
+ * 설명 		: 각각의 개별 transaction 실행 (실제 transaction 실행 함수)
+ * params  		: 1. params		    : Data를 불러오는데 필요한 파라미터 배열 (2차 배열)
+ *				  2. no				: transaction을 실행할 배열 Index
+ *				  3. callbackAfter	: Data Load 후, 별도 처리해야할 함수
+ *								     사용 예 : fn_afterLoading
+ * return Type 	: none
+ * 사용법		: this._loadEachCmb(params, i, callbackAfter);
+ ******************************************************************************/
+this._loadEachCmb = function (params, no, callbackAfter)
+{
+	var param = params[no];
+	
+	var context = this;
+	var sSvcID = param[0];
+	var sController = param[4];
+	var sCallback;
+	var strInDsName = "";
+// 	var strOutDsName = param[0].trim() + "=output1";
+	var objInDs;
+	var sArgs = "";
+
+	if(!this.comUtils.isNullEmpty(param[1])) {
+		objInDs = this.objects[param[1]];
+		var colInfo = objInDs.getColumnInfo("USE_YN");
+		if(colInfo == null) {
+			objInDs.addColumn("USE_YN", "string");
+		}
+	} else {
+		strInDsName = "ds_condCombo" + this.objects.length.toString().padLeft(2, "0");
+		objInDs = this._makeInDataset(strInDsName, params);
+		param[1] = strInDsName;
+	}
+	if(objInDs.rowcount == 0) {
+		objInDs.addRow();
+	}
+	objInDs.setColumn(0, "USE_YN", this._getValidUseYn(param[2]));
+	
+//	strInDsName = "input1=" + objInDs.name;
+	strInDsName = objInDs.name;
+	
+	var strInDs = "input1=" + objInDs.name;
+	var strOutDs = param[0].trim() + "=output1";
+
+	// Callback 함수 정의
+	//===================================================
+	var _callback = function(svcId, errorCode, errorMsg){
+		var objDs = this.objects[param[0]]; // Parameter로 정의된 dataset 얻어오기
+		
+		// 해당 dataset이 존재하지 않을 경우
+		if(this.comUtils.isNullEmpty(objDs)) {
+			alert("dataset " + param[0] + "이 존재하지 않습니다. \n 해당 dataset을 먼저 생성하십시요.");
+			return;
+		}
+
+		// 기존 구분자도 적용할 수 있도록...
+		//=======================================
+		switch(param[3]) {
+			case "A" :
+				param[3] = "전체";
+				break;
+			case "S" :
+				param[3] = "선택";
+				break;
+			case "E" :
+				param[3] = " ";
+				break;
+			case "D" :
+				param[3] = "";
+				break;
+		}
+
+		// "전체", "선택" 일 때, dataset에 해당 텍스트를 insert.
+		if(!this.comUtils.isNullEmpty(param[3].trim()))
+		{
+			objDs.insertRow(0);
+			
+			objDs.setColumn(0, "CODE", "");
+			objDs.setColumn(0, "CODE_NM", param[3].trim());
+			objDs.setColumn(0, "ALL_CODE_NM", param[3].trim());
+		}
+		
+		// 조건을 처리하는 Division 얻기
+		var objDiv = this.div_search;
+		if(this.comUtils.isNull(objDiv)) {
+			objDiv = this.div_SEARCH;
+		}
+		if(this.comUtils.isNull(objDiv)) {
+			objDiv = this.div_SEARCH_AREA;
+		}
+		if(this.comUtils.isNull(objDiv)) {
+			objDiv = this.div_SEARCHAREA;
+		}
+		if(this.comUtils.isNull(objDiv)) {
+			objDiv = this.div_SearchArea;
+		}
+		if(this.comUtils.isNull(objDiv)) {
+			objDiv = this;
+		}
+
+		// Combo에 text 나타내기
+		var objCurCombo;
+// 		for(var j = 0; j < objDiv.components.length; j++)
+		for(var j in objDiv)
+		{
+			var obj = objDiv.components[j];
+			
+			if(obj instanceof Combo)
+			{
+				var strInnerDs = obj.innerdataset;
+
+				if(!this.comUtils.isNullEmpty(strInnerDs.trim())) {
+					this._setTextOne(obj, strInnerDs, param); // 텍스트 나타내는 함수
+				}
+				
+				if(param[0] == strInnerDs) {
+					objCurCombo = obj;
+					break;
+				}
+			}
+		}
+
+		// 계층 콤보 처리 로직
+		if(parseInt(param[5]) > 0) {
+			this._procStepCombo (params, no, objCurCombo, callbackAfter);
+		}
+		
+		// callback 이후에 처리할 함수 호출
+		if(typeof(callbackAfter) == "function") {
+			callbackAfter.call(this, svcId);
+		}
+	}
+	//===================================================
+
+	if(typeof _callback == "function") {
+		sCallback = "callback_" + sSvcID;
+		context[sCallback] = _callback;
+	} else if (typeof callback == "string") {
+		sCallback = _callback;
+	} else {
+		sCallback = "gfn_comboCallback";
+	}
+
+	// Transaction 처리
+	Ex.core.tran(this, sSvcID, sController, strInDs, strOutDs, sArgs, sCallback);
+}
+
+/*******************************************************************************
+ * 함수명  	: _setTextOne
+ * 설명 		: 해당 combo의 text setting
+ * params  		: 1. obj		    : combo component
+ *				  2. strInnerDs		: combo의 innerdataset (String)
+ *				  3. param			: Data를 불러오는데 필요한 파라미터
+ * return Type 	: none
+ * 사용법		: this._setTextOne(obj, strInnerDs, param);
+ ******************************************************************************/
+this._setTextOne = function (obj, strInnerDs, param)
+{
+	if(strInnerDs == param[0]) {			
+		if(param[3] == " ") {
+			obj.set_index(-1);
+		} else {
+			obj.set_index(0);
+		}
+		return;
+	}
+}
+
+/*******************************************************************************
+ * 함수명  	: _procStepCombo
+ * 설명 		: 연계되는 combo의 데이터를 Load
+ * params  		: 1. params		    : Data를 불러오는데 필요한 파라미터 배열 (2차 배열)
+ *				  2. no				: transaction을 실행할 배열 Index
+ *				  3. combo			: Data를 불러오는데 필요한 파라미터
+ *				  3. callbackAfter	: Data를 불러오는데 필요한 파라미터
+ * return Type 	: none
+ * 사용법		: this._procStepCombo (params, no, objCurCombo, callbackAfter);
+ ******************************************************************************/
+this._procStepCombo = function (params, no, combo, callbackAfter)
+{
+	var param = params[no];
+	var nextParam;
+	var nextCombo = combo.parent.components[combo.next];
+	
+	if(no < (params.length - 1)) {
+		nextParam = params[no + 1];
+	} else {
+		return false;
+	}
+	
+	if(param[5] > 0) {
+		var objDs = this.objects[nextParam[1]];
+		if(objDs.rowcount == 0) {
+			objDs.addRow();
+		}
+		
+		if(nextParam[5] > 0) {
+			if(this.comUtils.isNullEmpty(combo.value)) {
+				for(var i = no+1; i < params.length; i++) {
+					if(params[i][5] > param[5]) {
+						this.objects[params[i][0]].clearData();
+						if(!this.comUtils.isNullEmpty(nextParam[3])) {
+							var nRow = this.objects[params[i][0]].addRow();
+							this.objects[params[i][0]].setColumn(nRow, "CODE", "");
+							this.objects[params[i][0]].setColumn(nRow, "CODE_NM", params[i][3]);
+							this.objects[params[i][0]].setColumn(nRow, "ALL_CODE_NM", params[i][3]);
+							
+							nextCombo.set_index(0);
+							nextCombo = nextCombo.parent.components[nextCombo.next];
+							
+							this.objects[params[i][1]].setColumn(0, "CODE_LVL_" + params[i][5], "");
+						}
+					} else {
+						break;
+					}
+				}
+				return;
+			}
+			objDs.setColumn(0, "CODE_LVL_" + (parseInt(param[5]) + 1), combo.value);
+			this.gfn_comboLoadNonCodeTbl(params, callbackAfter, nextParam[0]);
+		}
+	} else {
+		return false;
+	}
+}
+
+this._procStepCombo_OLD = function (params, no, combo, callbackAfter)
+{
+	var param = params[no];
+	var nextParam;
+	
+	if(no < (params.length - 1)) {
+		nextParam = params[no + 1];
+	} else {
+		return false;
+	}
+	
+	if(param[5] > 0) {
+		var objDs = this.objects[nextParam[1]];
+		if(objDs.rowcount == 0) {
+			objDs.addRow();
+		}
+		
+		if(nextParam[5] > 0) {
+			if(this.comUtils.isNullEmpty(combo.value)) {
+				this.objects[nextParam[0]].clearData();
+				if(!this.comUtils.isNullEmpty(nextParam[3])) {
+					var nRow = this.objects[nextParam[0]].addRow();
+					this.objects[nextParam[0]].setColumn(nRow, "CODE", "");
+					this.objects[nextParam[0]].setColumn(nRow, "CODE_NM", nextParam[3]);
+					this.objects[nextParam[0]].setColumn(nRow, "ALL_CODE_NM", nextParam[3]);
+					
+					combo.parent.components[combo.next].set_index(0);
+				}
+				
+				return;
+			}
+			
+			objDs.setColumn(0, "CODE_LVL_" + (parseInt(param[5]) + 1), combo.value);
+			this.gfn_comboLoadNonCodeTbl(params, callbackAfter, nextParam[0]);
+		}
+	} else {
+		return false;
+	}
+}
+
+//=====================================================================================================
+//=====================================================================================================
+//=====================================================================================================
+
+/*******************************************************************************
+ * 함수명  	: gfn_moveCheckDataset
+ * 설명 		: Dataset 간 데이터 이동 (체크된 데이터만)
+ * params  		: 1. grdFrom		: 원본 Grid
+ *				  2. dsTo			: 데이터를 옮길 Dataset
+ *				  3. destRow		: 옮길 위치 (Row : 없으면 끝으로 이동)
+ * return Type 	: none
+ * 사용법		: this.gfn_moveCheckDataset(this.Grid00, this.Dataset01);
+ ******************************************************************************/
+this.gfn_moveCheckDataset = function (grdFrom:Grid, dsTo:Dataset, destRow)
+{
+	var strBindDataset = grdFrom.binddataset;
+
+	if(this.comUtils.isNullEmpty(strBindDataset))
+	{
+		return;
+	}
+
+	var dsFrom = this.objects[strBindDataset];
+	
+	if(this.comUtils.isNullEmpty(dsFrom))
+	{
+		return;
+	}
+	
+	if(dsFrom.rowcount == 0)
+	{
+		return;
+	}
+	
+	var strChkCol = grdFrom.getCellProperty("body", 0, "text").split("bind:")[1];
+	
+	var nRow;
+	
+	if(this.comUtils.isNullEmpty(destRow))
+	{
+		nRow = dsTo.rowcount;
+	}
+	else
+	{
+		nRow = destRow;
+	}
+	
+	for(var i = dsFrom.rowcount - 1; i >= 0; --i)
+	{
+		var vChk = dsFrom.getColumn(i, strChkCol);
+		
+		if(vChk.toString() == "1")
+		{
+			dsTo.insertRow(nRow);
+			
+			dsTo.copyRow(nRow, dsFrom, i);
+			
+			dsFrom.deleteRow(i);
+		}
+	}
+}
+
+/**
+	 * Map(Object)형 데이터를 기반으로 Dataset을 생성.
+	 * @param oDataMap 데이터 Map(Object)
+	 * @param dsName Dataset 이름
+	 * @return Boolean
+	 */
+this.gfn_createMapToDataset = function(oTargetData, dsName){
+		
+		try{
+			// 데이터 전달용 DataSet이 있는지 확인.
+			var paramDs =  this.objects[dsName];
+			var noParamDs = this.comUtils.isNull(paramDs);
+
+			if(noParamDs){
+				paramDs = new Dataset;
+				paramDs.set_name(dsName);
+			}else{
+				paramDs.clear();	// 데이터셋 초기화 - 컬럼정보 삭제
+			}
+			
+			var isArray = this.comUtils.isArray(oTargetData);
+			if(isArray){
+				var targetLeng = oTargetData.length;
+				
+				// 첫행을 기준으로 컬럼정보 설정
+				var infoMap = targetLeng > 0 ? oTargetData[0] : null;
+				if(infoMap == null){
+					return false;
+				}else{
+					for(var sKey in infoMap){
+						paramDs.addColumn(sKey, "string");
+					}
+				}
+				
+				// 전달 데이터 설정
+				for(var i = 0; i < targetLeng; i++){
+					// 행 추가
+					paramDs.addRow();
+					
+					// 데이터 추가
+					var oTargetItem = oTargetData[i];
+					for(var sKey in oTargetItem){
+						paramDs.setColumn(i, sKey, oTargetItem[sKey]);
+					}
+				}
+			
+			}else{
+				// 전달 데이터셋 컬럼정보 설정
+				for(var sKey in oTargetData){
+					paramDs.addColumn(sKey, "string");
+				}
+				
+				// 전달 데이터 설정
+				// 행 추가
+				paramDs.addRow();
+				// 데이터 추가
+				for(var sKey in oTargetData){
+					paramDs.setColumn(0, sKey, oTargetData[sKey]);
+				}
+			}
+			
+			if(noParamDs){
+				this.addChild(dsName, paramDs);
+			}
+			
+			return true;
+		}catch(ex){
+			return false;
+		}
+	}
+
+/**
+	 * 대상 Dataset을 초기화.
+	 * 단건 및 다건(Array)처리.
+	 * @param targetDsArr 대상
+	 * @return void
+	 */
+this.gfn_clearDataSet = function(targetDsArr){
+		var isArray = this.comUtils.isArray(targetDsArr);
+		if(isArray){
+			var targetLeng = targetDsArr.length;
+			for(var i = 0; i < targetLeng; i++){
+				var targetDs = targetDsArr[i];
+				this._clearDataSet(targetDs);
+			}
+		}else{
+			var targetClass = targetDsArr.toString();
+			if(targetClass == "[object Dataset]"){
+				this._clearDataSet(targetDsArr);
+			}
+		}
+	},
+	
+	// 데이터셋 초기화.
+this._clearDataSet = function(dataset){
+		dataset.reset();
+		dataset.clearData();
+		if(dataset.name.substr(0, 7).toLowerCase() == "ds_cond"){
+			if(dataset.rowcount == 0){
+				dataset.addRow();
+			}
+		}
+	}
+
+
+
+/**
+	 * Dataset의 내용을 String형태(key=value,...) 또는 Map 형태({KEY:"VALUE",...})로 변환하여 그 결과를 반환한다.
+	 * Map형태의 경우 변환 대상 데이터셋이 1행일 경우 Map, 그 이상일 경우 ArrayList 형으로 변환하여 반환한다.
+	 * 옵션값으로 행, 컬럼의 출력 유/무를 설정할 수 있다.
+	 * ex) var option = {
+					viewRow: "expr:dataset.compId='div_search'", //[0,2],
+					viewCol: ["colId","notNull","msgId"]
+				};
+	 * @param dsObj 대상 Dataset
+	 * @param option option 출력 Option
+	 * @param toMap Map형태 반환 여부 : 기본 true
+	 */
+this.gfn_datasetToObject = function(dsObj, option, toMap){
+        
+		var result = "";
+		var resultMap = null;
+		var resultList = null;
+		var resultItem = null;
+		
+		var isNullToMap = this.comUtils.isNullEmpty(toMap);
+		if(isNullToMap){
+			toMap = true;
+		}
+		var viewRow = option ? option.viewRow || null : null;
+		var viewCol = option ? option.viewCol || null : null;
+		
+		var viewAllRow = option ? (viewRow ? false : true) : true;
+		var viewAllCol = option ? (viewCol ? false : true) : true;
+		
+		var rowOptTypeIsArr = viewAllRow ? false : (this.comUtils.isArray(viewRow) ? true : false);
+		var colOptTypeIsArr = viewAllCol ? false : (this.comUtils.isArray(viewCol) ? true : false);
+		
+		var filterStr = null;
+		var filterKey = null;
+		var filterValue = null;
+		
+		if(!viewAllRow && !rowOptTypeIsArr){
+			if(viewRow.indexOf("expr") == -1){
+				viewAllRow = true;
+			}else{
+				filterStr = viewRow.replace(/expr:/gi,"");
+				var filterValArr = filterStr.split("=");
+				filterKey = filterValArr[0];
+				filterValue = filterValArr[1];
+			}
+		}
+		
+		if(!viewAllCol && !colOptTypeIsArr){
+			viewAllCol = true;
+		}
+		
+		var rowCount = dsObj.getRowCount();
+		var colCount = dsObj.getColCount();
+		
+		var isList = false;
+		if(toMap){
+			resultMap = {};
+			isList = rowOptTypeIsArr ? (viewRow.length > 1 ? true : false) : (rowCount > 1 ? true : false);
+			if(isList){
+				resultList = [];
+			}
+		}
+		
+		for(var i = 0; i < rowCount; i++){
+		
+			if(rowOptTypeIsArr){
+				var isViewRow = false;
+				var rowArrLeng = viewRow.length;
+				for(var x = 0; x < rowArrLeng; x++){
+					if(i == viewRow[x]){
+						isViewRow = true;
+						break;
+					}
+				}
+				if(!isViewRow) continue;
+			}
+			
+			if(filterStr != null){
+				var matchFilterRow = dsObj.findRowExpr(filterStr, i, i+1);
+				if(matchFilterRow < 0 || matchFilterRow != i){
+					continue;
+				}
+			}
+			/*
+			if(filterKey != null){
+				var targetValue = dsObj.getColumn(i, filterKey);
+				if(filterValue != targetValue){
+					continue;
+				}
+			}
+			*/
+		
+			if(toMap){
+				if(isList){
+					resultItem = {};
+					resultItem["DS_ROW"] = i;
+				}else{
+					resultMap["DS_ROW"] = i;
+				}
+			}else{
+				result += "ROW " + i + " : ";
+			}
+			
+			for(var j=0; j<colCount; j++){
+			
+				var columnId = dsObj.getColID(j);
+				var value = dsObj.getColumn(i, columnId);
+			
+				var addComm = false;
+				if(viewAllCol){
+					
+					if(toMap){
+						if(isList){
+							resultItem[columnId] = value;
+						}else{
+							resultMap[columnId] = value;
+						}
+					}else{
+						result += columnId + "=" + value;
+					}
+					
+					addComm = true;
+				}else{
+					var viewCollLeng = viewCol.length;
+					for(var k = 0; k < viewCollLeng; k++){
+						var viewColId = viewCol[k];
+						if(columnId == viewColId){
+							if(toMap){
+								if(isList){
+									resultItem[columnId] = value;
+								}else{
+									resultMap[columnId] = value;
+								}
+							}else{
+								result += columnId + "=" + value;
+							}
+							addComm = true;
+							break;
+						}
+					}
+				}
+				
+				if(!toMap){
+					if(j != colCount-1){
+						result += addComm ? ", " : "";
+					}else{
+						var rowType = dsObj.getRowType(i);	//dsObj._viewRecords[i]._rtype;
+						var rowTypeName = this._getDsRowTypeName(rowType);
+						result += " rowType=" +  rowType + "(" + rowTypeName + ")\n";
+					}
+				}else{
+					// 마지막 행의 경우
+					if(j == colCount-1){
+						var rowType = dsObj.getRowType(i);
+						var rowTypeNm = this._getDsRowTypeName(rowType);
+						if(isList){
+							resultItem["DS_ROW_TYPE"] = rowType;
+							resultItem["DS_ROW_TYPE_NM"] = rowTypeNm;
+						}else{
+							resultMap["DS_ROW_TYPE"] = rowType;
+							resultMap["DS_ROW_TYPE_NM"] = rowTypeNm;
+						}
+					}
+				}
+			}
+			
+			if(toMap && isList){
+				resultList.push(resultItem);
+			}
+		}
+		
+		// 반환 타입이 Map이고 dataSet의 행이 1개 이상(리스트)일 경우
+		// 반환 Map에 pmsUtil.TOMAP_LIST_NAME(RESULT_LIST)을 Key 값으로 변환한 리스트를 담는다.
+		/*
+		if(toMap && isList){
+			var listKeyName = this.TOMAP_LIST_NAME;
+			resultMap[listKeyName] = resultList;
+		}
+		*/
+		
+		return toMap ? (isList ? resultList : resultMap) : result;
+	}
+	
+	// Dataset에서 지정된 행(row)의 타입에 대한 명칭을 반환한다.
+this._getDsRowTypeName = function(type){
+		var result = "";
+		switch(type){
+			case Dataset.ROWTYPE_EMPTY :
+				result = "없음";
+				break;
+			case Dataset.ROWTYPE_NORMAL :
+				result = "초기";
+				break;
+			case Dataset.ROWTYPE_INSERT :
+				result = "추가";
+				break;
+			case Dataset.ROWTYPE_UPDATE :
+				result = "수정";
+				break;
+			case Dataset.ROWTYPE_DELETE :
+				result = "삭제";
+				break;
+			case Dataset.ROWTYPE_GROUP :
+				result = "그룹";
+				break;
+			default :
+				break;
+		}
+		return result;
+	}
+/**
+	 * Map(Object) 또는 Array(Map)형 데이터를 기준으로 Dataset을 생성하고
+	 * transaction 요청시 sInDatasets 파라메타 정보(String)을 반환한다.
+	 * @param oInData 대상 데이터
+	 * @param isList 대상 데이터의 리스트 데이터 여부(기본 false)
+	 * @return String sInDatasets 파라메타 정보(String)
+	 */
+this.gfn_setDynamicInDataset = function(oInData, isList){
+		
+		var isArray = this.comUtils.isArray(oInData);
+		var isListParam = this.comUtils.isNullEmpty(isList) ? false : isList;
+		
+		var paramDsName = null;
+		var sInDatasets = null;
+		
+		var createdDs = null;
+		if(isArray && !isListParam){
+			var targetLeng = oInData.length;
+			for(var i = 0; i < targetLeng; i++){
+				var oDsItem = oInData[i];
+				paramDsName = this.PARAM_DS_NAME + (i < 9 ? "0" + i : i);
+				createdDs = this.gfn_createMapToDataset(oDsItem, paramDsName);
+				if(createdDs){
+					if(sInDatasets == null){
+						sInDatasets = "input";
+					}else{
+						sInDatasets += " input";
+					}
+					sInDatasets += (i + 1) + "=" + paramDsName;
+				}
+			}
+		}else{
+			paramDsName = this.PARAM_DS_NAME + "00";
+			createdDs = this.gfn_createMapToDataset(oInData, paramDsName);
+			if(createdDs){
+				sInDatasets = "input1=" + paramDsName;
+			}
+		}
+		return sInDatasets;
+	}]]></Script>

@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:p="http://www.springframework.org/schema/p"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.2.xsd
+                http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-4.2.xsd
+                http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.2.xsd
+                http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-4.2.xsd
+                http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.2.xsd"  default-lazy-init="true">
+
+	<!--
+		- The controllers are autodetected POJOs labeled with the @Controller annotation.
+	-->
+	<context:component-scan base-package="hsco">
+		<context:include-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+        <context:exclude-filter type="annotation" expression="org.springframework.stereotype.Service"/>
+        <context:exclude-filter type="annotation" expression="org.springframework.stereotype.Repository"/>
+    </context:component-scan>
+	<!--
+		- The form-based controllers within this application provide @RequestMapping 
+		- annotations at the type level for path mapping URLs and @RequestMapping 
+		- at the method level for request type mappings (e.g., GET and POST). 
+		- In contrast, ClinicController - which is not form-based - provides 
+		- @RequestMapping only at the method level for path mapping URLs.
+		-
+		- DefaultAnnotationHandlerMapping is driven by these annotations and is 
+		- enabled by default with Java 5+.
+	-->
+	
+	<!--  Process Aspect -->
+	<bean id="processAspect" class="hsco.cmm.controller.ControlAspect"/>
+	
+	<aop:config>
+		<aop:pointcut id="publicMethod" expression="execution(public * *..*Controller.*(..))"/>
+		<aop:aspect id="roleAspect" ref="processAspect">
+			<aop:around pointcut-ref="publicMethod" method="controlRequest" />
+		</aop:aspect>
+	</aop:config>
+	
+	<bean id="extAnnotationMapper"
+		class="hsco.cmm.ria.support.ExtAnnotationHandlerMapping">
+		
+		
+		<property name="rule">
+			<value>select</value>
+		</property>
+		<property name="urls">
+			<list>
+				<value>/nexacroController.do</value>
+			</list>
+		</property>
+		<property name="interceptors">
+			<list>
+				<ref bean="riaHandler" />
+			</list>
+		</property>
+	</bean>	
+	
+
+	<bean id="riaHandler" class="hsco.cmm.ria.support.RiaInterceptor">
+		<property name="uiDTO">
+			<list>
+				<bean class="hsco.cmm.ria.nexacro.map.NexacroMapDTO" />
+			</list>
+		</property>
+	</bean>
+	
+	
+	<bean id="localeChangeInterceptor"
+		class="hsco.cmm.ria.support.interceptor.LocaleChangeInterceptor">
+		<property name="paramName" value="language" />
+	</bean>
+
+	<bean id="annotationMapper"
+		class="org.springframework.web.servlet.mvc.annotation.DefaultAnnotationHandlerMapping">
+		<property name="order" value="1" />
+		<property name="interceptors">
+			<list>
+				<ref bean="localeChangeInterceptor" />
+			</list>
+		</property>
+	</bean>
+	
+	<!--
+		- This bean processes annotated handler methods, applying Application-specific PropertyEditors
+		- for request parameter binding. It overrides the default AnnotationMethodHandlerAdapter.
+	-->
+<!--     <bean class="org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter"> -->
+<!--         <property name="webBindingInitializer"> -->
+<!--             <bean class="hsco.cmm.web.EgovBindingInitializer"/> -->
+<!--         </property> -->
+<!--     </bean> -->
+	<bean class="org.springframework.web.servlet.mvc.annotation.AnnotationMethodHandlerAdapter">
+		<property name="webBindingInitializer">
+			<bean class="hsco.cmm.web.EgovBindingInitializer"/>
+		</property>
+
+		<property name="customArgumentResolvers">
+			<list>
+				<bean class="hsco.cmm.ria.support.CustomRiaArgumentResolver">
+					<property name="uiAdaptor">
+						<ref bean="nexacroMapAdaptor" />
+					</property>
+				</bean>
+			</list>
+		</property>
+
+		<property name="messageConverters">
+		    <list>
+		        <bean class="hsco.cmm.download.FileHttpMessageConverter" />
+		    </list>
+		</property>
+	</bean>
+
+	
+	<bean name="nexacroMapAdaptor" class="hsco.cmm.ria.nexacro.map.NexacroAdaptorImp" />
+	<!-- bean name="xpVOAdaptor" class="hsco.cmm.ria.nexacro.vo.NexacroAdaptorVOImp" /-->
+	<!--
+		- This bean resolves specific types of exceptions to corresponding logical 
+		- view names for error views. The default behaviour of DispatcherServlet 
+		- is to propagate all exceptions to the servlet container: this will happen 
+		- here with all other types of exceptions.
+	-->
+	<bean class="org.springframework.web.servlet.handler.SimpleMappingExceptionResolver">
+		<property name="defaultErrorView" value="egovframework/cmmn/egovError"/>
+		<property name="exceptionMappings">
+			<props>
+				<prop key="org.springframework.dao.DataAccessException">cmmn/dataAccessFailure</prop>
+				<prop key="org.springframework.transaction.TransactionException">cmmn/dataAccessFailure</prop>
+				<prop key="egovframework.rte.fdl.cmmn.exception.EgovBizException">cmmn/egovBizException</prop>
+			</props>
+		</property>
+	</bean>
+    <util:properties id="fileStore" location="/WEB-INF/config/hsco/file/fileStore.xml"></util:properties>
+    <util:properties id="extUrl" location="/WEB-INF/config/hsco/refurl/extUrl.xml"></util:properties>
+    <util:properties id="properties" location="/WEB-INF/config/hsco/properties/properties.xml"></util:properties>
+
+    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+        <property name="maxUploadSize" value="100000000" />
+        <property name="maxInMemorySize" value="100000000" />
+        <property name="defaultEncoding" value="UTF-8"/>
+    </bean>
+	
+	<bean id="download" class="hsco.cmm.download.DownloadView"/>
+	
+	<bean id="excel" class="hsco.cmm.download.ExcelView"/>
+    
+	<!--
+		- This bean configures the 'prefix' and 'suffix' properties of 
+		- InternalResourceViewResolver, which resolves logical view names 
+		- returned by Controllers. For example, a logical view name of "vets" 
+		- will be mapped to "/WEB-INF/jsp/vets.jsp".
+	-->
+	<bean class="org.springframework.web.servlet.view.BeanNameViewResolver" p:order="0" />
+	
+	<bean class="org.springframework.web.servlet.view.UrlBasedViewResolver" p:order="1" 
+	p:viewClass="org.springframework.web.servlet.view.JstlView" 
+	p:prefix="/web/hsco/" p:suffix=".jsp"/>
+ 
+	<bean id="nexacroMapView" class="hsco.cmm.ria.nexacro.map.NexacroMapView" />
+		<!-- <bean id="nexacroObjectView" class="hsco.cmm.ria.nexacro.vo.NexacroObjectView" />-->
+
+	<!--
+		- Message source for this context, loaded from localized "messages_xx" files.
+		- Could also reside in the root application context, as it is generic,
+		- but is currently just used within Application's web tier.
+	-->
+	<bean id="messageSource" class="org.springframework.context.support.ResourceBundleMessageSource"
+			p:basename="messages"/>
+
+	
+    <!-- For Pagination Tag -->
+     <bean id="imageRenderer" class="hsco.cmm.web.ImagePaginationRenderer"/> 
+     <bean id="paginationManager" class="egovframework.rte.ptl.mvc.tags.ui.pagination.DefaultPaginationManager"> 
+         <property name="rendererType"> 
+             <map> 
+                 <entry key="image" value-ref="imageRenderer"/>  
+             </map> 
+         </property> 
+     </bean> 
+    
+    <!-- json start -->
+	<bean id="viewResolver"	class="org.springframework.web.servlet.view.BeanNameViewResolver"/>
+ 	<bean id="jsonReport" class="org.springframework.web.servlet.view.json.MappingJackson2JsonView"/>
+	<!-- json end -->
+	
+
+	<!-- messageConvertert start-->
+<!-- 	<mvc:annotation-driven> -->
+<!-- 		<mvc:message-converters> -->
+<!-- 			<bean class="org.springframework.http.converter.StringHttpMessageConverter"> -->
+<!-- 				<property name="supportedMediaTypes"> -->
+<!-- 					<list> -->
+<!-- 						<value>text/html; charset=UTF-8</value> -->
+<!-- 					</list> -->
+<!-- 				</property> -->
+<!-- 			</bean> -->
+<!-- 			<bean class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter"> -->
+<!-- 				<property name="supportedMediaTypes"> -->
+<!-- 					<list> -->
+<!-- 						<value>application/json; charset=UTF-8</value> -->
+<!-- 					</list> -->
+<!-- 				</property> -->
+<!-- 			</bean> -->
+<!-- 		</mvc:message-converters> -->
+<!-- 	</mvc:annotation-driven> -->
+	<!-- messageConvertert end-->
+</beans>

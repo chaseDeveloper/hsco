@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_PRSMP_PRMPC		추정원가
+		 R   : TBPRJ_PRMPC_CODE			원가코드
+		 R   : TBPRJ_HOUSE_SLE_PLAN_ACMSLT		주택판매계획실적
+		 R   : TBPRJ_LAD_SLE_PLAN_ACMSLT		토지판매계획및실적
+		 R   : TBPRJ_ACMSLT_PRMPC_SM			실적원가집계
+		 R   : TBSLS_HCNTRCTR_PAY_DETAIL		주택계약자납부상세
+		 R   : TBSLS_LCNTRCTR_PAY_DETAIL		토지계약자납부상세
+		CRUD : TBPRJ_PRFLOS_ANALS_INCME			손익분석_수입
+		CRUD : TBPRJ_PRFLOS_ANALS_EXPNDTR		손익분석_지출
+
+		 R   : TBSLS_HOUSE_LTTOT_PAY			주택분양납부(RCIV_DE	수납일자 NN)
+		 R   : TBSLS_HOUSE_RENT_PAY				주택임대납부(RCIV_DE	수납일자 NN)
+		 R   : TBSLS_LCNTRCTR_PAY				토지계약자납부(RCIV_DE	수납일자 NN)
+	-->
+
+	<!-- 손익분석_수입 조회 -->
+	<select id="PRJ020602.r1List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.HOUSE_CODE			/* 주택코드 */
+	,A.SUPLY_TY_CODE AS CD2		/* 공급유형코드 */
+
+	,A.AMT1			/* 계획금액(천원) */
+	,A.AMT2			/* 실적금액(천원) */
+	,A.AMT2 - A.AMT1 AS AMT_D		/* 차액(천원) */
+
+	,ROUND(100 * RATIO_TO_REPORT(A.AMT1) OVER (PARTITION BY A.BSNS_CODE), 2) AS RT1		/* 구성비_계획 */
+	,ROUND(100 * RATIO_TO_REPORT(A.AMT2) OVER (PARTITION BY A.BSNS_CODE), 2) AS RT2		/* 구성비_실적 */
+
+	,'3' AS CT_SE					/* 비용구분 : 1:직접비, 2:간접비, 3-수익 */
+	,BC.SLE_SE
+	,DECODE(BC.SLE_SE,'1',LC.LAD_CODE,HC.HOUSE_CODE) AS CD1
+	,DECODE(BC.SLE_SE,'1',LC.LAD_CODE_NM,HC.HOUSE_CODE_NM) AS NM1
+	,SFPRJ_GET_PMSCODENM(BC.SLE_SE, A.SUPLY_TY_CODE) AS NM2
+FROM (
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+	SELECT
+		 A.BSNS_CODE			/* 사업코드 */
+		,A.HOUSE_CODE			/* 주택코드 */
+		,A.SUPLY_TY_CODE		/* 공급유형코드 */
+
+		,ROUND(SUM(A.PLAN_AMOUNT)   /1000,2) AS AMT1	/* 계획금액(천원) */
+		,ROUND(SUM(A.ACMSLT_AMOUNT) /1000,2) AS AMT2	/* 실적금액(천원) */
+	FROM TBPRJ_PRFLOS_ANALS_INCME A			/* 손익분석_수입 */
+	GROUP BY BSNS_CODE, HOUSE_CODE, SUPLY_TY_CODE
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 원장 */
+	SELECT
+		 A.BSNS_CODE			/* 사업코드 */
+		,A.LAD_CODE AS HOUSE_CODE			/* 주택코드 */
+		,A.PRPOS_CODE AS SUPLY_TY_CODE		/* 용도코드 */
+
+		,ROUND(SUM(A.PLAN_AMOUNT)   /1000,2) AS AMT1	/* 계획금액(천원) */
+		,ROUND(SUM(A.ACMSLT_AMOUNT) /1000,2) AS AMT2	/* 실적금액(천원) */
+	FROM TBPRJ_LAD_SLE_PLAN_ACMSLT A		/* 토지판매계획및실적 */
+	GROUP BY BSNS_CODE, LAD_CODE, PRPOS_CODE
+
+	UNION ALL
+
+	SELECT
+		 A.BSNS_CODE			/* 사업코드 */
+		,A.HOUSE_CODE			/* 주택코드 */
+		,A.SUPLY_TY_CODE		/* 용도코드 */
+
+		,ROUND(SUM(A.PLAN_AMOUNT)   /1000,2) AS AMT1	/* 계획금액(천원) */
+		,ROUND(SUM(A.ACMSLT_AMOUNT) /1000,2) AS AMT2	/* 실적금액(천원) */
+	FROM TBPRJ_HOUSE_SLE_PLAN_ACMSLT A		/* 주택판매계획및실적 */
+	GROUP BY BSNS_CODE, HOUSE_CODE, SUPLY_TY_CODE
+</isEqual>
+) A
+JOIN TBPRJ_BSNS_CODE BC				/* 사업코드 */
+  ON BC.BSNS_CODE = A.BSNS_CODE
+LEFT JOIN TBPRJ_LAD_CODE LC			/* 토지코드 */
+  ON A.BSNS_CODE = LC.BSNS_CODE
+ AND A.HOUSE_CODE = LC.LAD_CODE
+LEFT JOIN TBPRJ_HOUSE_CODE HC		/* 주택코드 */
+  ON A.BSNS_CODE = HC.BSNS_CODE
+ AND A.HOUSE_CODE = HC.HOUSE_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2,3,4
+	</select>
+
+	<select id="PRJ020602.r2List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.STD_PRMPC_CODE		/* 표준원가코드 */
+
+	,A.RT1			/* 구성비_계획 */
+	,A.RT2			/* 구성비_실적 */
+	,A.AMT1			/* 계획금액(천원) */
+	,A.AMT2			/* 실적금액(천원) */
+	,A.AMT2 - A.AMT1 AS AMT_D		/* 차액(천원) */
+
+	,A.CT_SE		/* 비용구분 : 1:직접비, 2:간접비, 3-수익 */
+	,DECODE(C.CL_SE, '1', C.LCLAS_NM, '') AS NM1
+	,DECODE(C.CL_SE, '1', '', C.MLSFC_NM) AS NM2
+
+	,C.CL_SE		/* 분류구분 */
+FROM (
+	SELECT
+		 A.BSNS_CODE			/* 사업코드 */
+		,A.STD_PRMPC_CODE		/* 표준원가코드 */
+		,A.CT_SE				/* 비용구분  */
+
+		,ROUND(SUM(A.CMPNTRT_PLAN),2) AS RT1			/* 구성비_계획 */
+		,ROUND(SUM(A.CMPNTRT_ACMSLT),2) AS RT2			/* 구성비_실적 */
+		,ROUND(SUM(A.PLAN_AMOUNT) /1000,2) AS AMT1		/* 계획금액(천원) */
+		,ROUND(SUM(A.ACMSLT_AMOUNT) /1000,2) AS AMT2	/* 실적금액(천원) */
+	FROM TBPRJ_PRFLOS_ANALS_EXPNDTR A			/* 손익분석_지출 */
+	GROUP BY BSNS_CODE, STD_PRMPC_CODE, CT_SE
+) A
+JOIN TBPRJ_BSNS_CODE BC ON BC.BSNS_CODE = A.BSNS_CODE
+JOIN TBPRJ_PRMPC_CODE C						/* 원가코드 */
+  ON C.STD_PRMPC_CODE = A.STD_PRMPC_CODE AND C.CL_SE != '3' /* 대,중 분류 */
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2
+	</select>
+
+	<!-- 손익분석_수입 ================================================== -->
+
+	<!-- 손익분석_수입 추가 -->
+	<insert id="PRJ020602.r1make" parameterClass="map">
+INSERT INTO TBPRJ_PRFLOS_ANALS_INCME (			/* 손익분석_수입 */
+	 BSNS_CODE		/* 사업코드 */
+	,BSNS_YEAR		/* 사업년도 */
+	,HOUSE_CODE		/* 주택코드 */
+	,SUPLY_TY_CODE	/* 공급유형코드 */
+
+	,PLAN_AMOUNT		/* 계획금액 */
+	,ACMSLT_AMOUNT		/* 실적금액 */
+
+	,CMPNTRT_PLAN		/* 구성비_계획 */
+	,CMPNTRT_ACMSLT		/* 구성비_실적 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+)
+SELECT
+	 A.BSNS_CODE		/* 사업코드 */
+	,A.BSNS_YEAR		/* 사업년도 */
+	,A.HOUSE_CODE		/* 주택코드 */
+	,A.SUPLY_TY_CODE	/* 공급유형코드 */
+
+	,A.PLAN_AMOUNT		/* 계획금액 */
+	,A.ACMSLT_AMOUNT	/* 실적금액 */
+
+	,ROUND(100 * RATIO_TO_REPORT(A.PLAN_AMOUNT) OVER (PARTITION BY A.BSNS_CODE), 2)
+	 AS CMPNTRT_PLAN		/* 구성비_계획 */
+	,ROUND(100 * RATIO_TO_REPORT(A.ACMSLT_AMOUNT) OVER (PARTITION BY A.BSNS_CODE), 2)
+	 AS CMPNTRT_ACMSLT		/* 구성비_실적 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+FROM (
+	SELECT
+		 A.BSNS_CODE			/* 사업코드 */
+		,SUBSTR(A.LTTOT_YM, 1,4) AS BSNS_YEAR
+		,A.LAD_CODE AS HOUSE_CODE			/* 주택코드 */
+		,A.PRPOS_CODE AS SUPLY_TY_CODE		/* 용도코드 */
+
+		,SUM(A.PLAN_AMOUNT) AS PLAN_AMOUNT		/* 계획금액 */
+		,SUM(A.ACMSLT_AMOUNT) AS ACMSLT_AMOUNT	/* 실적금액 */
+	FROM TBPRJ_LAD_SLE_PLAN_ACMSLT A		/* 토지판매계획및실적 */
+	GROUP BY BSNS_CODE, LAD_CODE, PRPOS_CODE, SUBSTR(A.LTTOT_YM, 1,4)
+
+	UNION ALL
+
+	SELECT
+		 A.BSNS_CODE			/* 사업코드 */
+		,SUBSTR(A.LTTOT_YM, 1,4) AS BSNS_YEAR
+		,A.HOUSE_CODE			/* 주택코드 */
+		,A.SUPLY_TY_CODE		/* 용도코드 */
+
+		,SUM(A.PLAN_AMOUNT) AS PLAN_AMOUNT		/* 계획금액 */
+		,SUM(A.ACMSLT_AMOUNT) AS ACMSLT_AMOUNT	/* 실적금액 */
+	FROM TBPRJ_HOUSE_SLE_PLAN_ACMSLT A		/* 주택판매계획및실적 */
+	GROUP BY BSNS_CODE, HOUSE_CODE, SUPLY_TY_CODE, SUBSTR(A.LTTOT_YM, 1,4)
+) A
+JOIN TBPRJ_BSNS_CODE BC				/* 사업코드 */
+  ON BC.BSNS_CODE = A.BSNS_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2,3,4
+	</insert>
+
+	<!-- 손익분석_수입 삭제 -->
+	<delete id="PRJ020602.r1D" parameterClass="map">
+DELETE FROM TBPRJ_PRFLOS_ANALS_INCME		/* 손익분석_수입 */
+WHERE BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+	</delete>
+
+	<!-- 손익분석_지출 ================================================== -->
+
+	<!-- 손익분석_지출 추가 -->
+	<insert id="PRJ020602.r2make" parameterClass="map">
+INSERT INTO TBPRJ_PRFLOS_ANALS_EXPNDTR (			/* 손익분석_지출 */
+	 BSNS_CODE		/* 사업코드 */
+	,BSNS_YEAR		/* 사업년도 */
+	,STD_PRMPC_CODE	/* 표준원가코드 */
+	,CT_SE			/* 비용구분 : 1:직접비, 2:간접비, 3-수익 */
+
+	,PLAN_AMOUNT		/* 계획금액 */
+	,ACMSLT_AMOUNT		/* 실적금액 */
+	,CMPNTRT_PLAN		/* 구성비_계획 */
+	,CMPNTRT_ACMSLT		/* 구성비_실적 */
+
+	,REGISTER_ID	/* 등록자ID */
+	,REGIST_DT		/* 등록일시 */
+	,UPDUSR_ID		/* 수정자ID */
+	,UPDT_DT		/* 수정일시 */
+)
+SELECT
+	 A.BSNS_CODE		/* 사업코드 */
+	,A.YEAR				/* 사업년도 */
+	,A.STD_PRMPC_CODE	/* 표준원가코드 */
+	,A.CT_SE			/* 비용구분 */
+
+	,A.PLAN_AMOUNT			/* 계획금액 */
+	,A.ACMSLT_AMOUNT		/* 실적금액 : TODO */
+
+	,ROUND(100 * RATIO_TO_REPORT(A.PLAN_AMOUNT) OVER (PARTITION BY A.BSNS_CODE), 2)
+	 AS CMPNTRT_PLAN		/* 구성비_계획 */
+	,ROUND(100 * RATIO_TO_REPORT(A.ACMSLT_AMOUNT) OVER (PARTITION BY A.BSNS_CODE), 2)
+	 AS CMPNTRT_ACMSLT		/* 구성비_실적 */
+
+	,#S_USER_ID#	/* 등록자ID */
+	,SYSDATE		/* 등록일시 */
+	,#S_USER_ID#	/* 수정자ID */
+	,SYSDATE		/* 수정일시 */
+FROM (
+	SELECT
+		 B.BSNS_CODE			/* 사업코드 */
+		,B.YEAR					/* 사업년도 */
+		,B.STD_PRMPC_CODE		/* 표준원가코드 */
+		,1 AS CT_SE				/* 비용구분 : 1:직접비, 2:간접비, 3-수익 */
+		,NVL(SUM(B.AMOUNT),0) AS PLAN_AMOUNT
+		,0 AS ACMSLT_AMOUNT		/* 실적금액 : TODO */
+	FROM TBPRJ_PRSMP_PRMPC_DSTRC B		/* 추정원가년차-설계 */
+	WHERE B.BSNS_STEP = 2				/* 사업단계 : 1-개발,2-설계,3-시공,4-사후 */
+	  AND B.YEAR IS NOT NULL
+	GROUP BY B.BSNS_CODE, B.YEAR, B.STD_PRMPC_CODE
+
+	UNION ALL
+
+	SELECT
+		 B.BSNS_CODE			/* 사업코드 */
+		,B.YEAR					/* 사업년도 */
+		,B.STD_PRMPC_CODE		/* 표준원가코드 */
+		,2 AS CT_SE				/* 비용구분 : 1:직접비, 2:간접비, 3-수익 */
+		,NVL(SUM(B.EXPENS_ELSE),0) AS PLAN_AMOUNT
+		,0 AS ACMSLT_AMOUNT		/* 실적금액 : TODO */
+	FROM TBPRJ_PRSMP_PRMPC_DSTRC B		/* 추정원가년차-설계 */
+	WHERE B.BSNS_STEP = 2				/* 사업단계 : 1-개발,2-설계,3-시공,4-사후 */
+	  AND B.YEAR IS NOT NULL
+	GROUP BY B.BSNS_CODE, B.YEAR, B.STD_PRMPC_CODE
+) A
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+ORDER BY 1,2,3,4
+	</insert>
+
+	<!-- 손익분석_지출 삭제 -->
+	<delete id="PRJ020602.r2D" parameterClass="map">
+DELETE FROM TBPRJ_PRFLOS_ANALS_EXPNDTR			/* 손익분석_지출 */
+WHERE BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+	</delete>
+
+</sqlMap>

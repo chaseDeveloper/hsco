@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM140300_SQL">	
+
+	<!-- =============================== [탭1 : 문항별집계] =============================== -->
+	
+	<!-- 참여율/평균정답률 -->
+	<select id="SYM140300DAO.selectGraph" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH PARTCPTN_DE AS (
+		   SELECT TO_CHAR(TO_DATE(QUSTNR_BGNDE, 'YYYYMMDD') + LEVEL - 1, 'YYYYMMDD') AS DE
+		          ,QUSTNR_MANAGE_SN
+		          ,QUSTNR_SE
+		        FROM
+		            (SELECT QUSTNR_BGNDE
+		              ,QUSTNR_ENDDE
+		              ,QUSTNR_MANAGE_SN
+		              ,QUSTNR_SE
+		            FROM TBHRM_QUSTNR_MANAGE
+		            WHERE QUSTNR_MANAGE_SN = #QUSTNR_MANAGE_SN#
+		              AND QUSTNR_SE = #QUSTNR_SE#
+		            )
+		         CONNECT BY LEVEL <= (TO_DATE(QUSTNR_ENDDE, 'YYYYMMDD') - TO_DATE(QUSTNR_BGNDE, 'YYYYMMDD')+1)
+		     )  
+		, EMPNO AS (
+		    SELECT t1.EMPNO
+		    FROM TBHRM_HR_MASTR t1
+		    INNER JOIN PARTCPTN_DE t2
+		       ON 1=1
+		    WHERE SFHRM_GET_EMPL_INFO(t1.EMPNO, 'STTUS_SE' , t2.DE) = '000'
+		      AND t1.STTUS_SE <> '009'
+		    GROUP BY t1.EMPNO 
+		    )
+		, QUIZ AS (
+		    SELECT
+		             t1.QUSTNR_MANAGE_SN
+		            ,t1.QUSTNR_SE
+		            ,t3.EMPNO
+		            ,ROUND(SUM(CASE WHEN t3.QUSTNR_ASWPER_SN = t4.QUSTNR_ASWPER_SN THEN 1
+		                      ELSE 0
+		                 END) / COUNT(t2.QUSTNR_DTLS_SN) * 100, 2) AS CNSR_RATE
+		    FROM TBHRM_QUSTNR_MANAGE t1
+		        LEFT OUTER JOIN TBHRM_QUSTNR_DTLS_MANAGE t2
+		          ON t1.QUSTNR_MANAGE_SN = t2.QUSTNR_MANAGE_SN
+		         AND t1.QUSTNR_SE        = t2.QUSTNR_SE
+		        LEFT OUTER JOIN TBHRM_QUSTNR_PARTCPTN_MANAGE t3
+		          ON t1.QUSTNR_MANAGE_SN = t3.QUSTNR_MANAGE_SN
+		         AND t1.QUSTNR_SE        = t3.QUSTNR_SE
+		         AND t2.QUSTNR_DTLS_SN   = t3.QUSTNR_DTLS_SN
+		        LEFT OUTER JOIN TBHRM_QUSTNR_ASWPER_MANAGE t4
+		          ON t1.QUSTNR_MANAGE_SN = t4.QUSTNR_MANAGE_SN
+		         AND t1.QUSTNR_SE        = t4.QUSTNR_SE
+		         AND t2.QUSTNR_DTLS_SN   = t4.QUSTNR_DTLS_SN
+		         AND t4.CNSR_AT          = '1'  /*정답*/
+		    WHERE t1.QUSTNR_MANAGE_SN = #QUSTNR_MANAGE_SN#
+		      AND t1.QUSTNR_SE        = #QUSTNR_SE#
+		    GROUP BY t1.QUSTNR_MANAGE_SN, t1.QUSTNR_SE, t3.EMPNO
+		    )
+		    
+		SELECT
+		     ROUND(SUM(CASE WHEN t1.EMPNO = MAX(t2.EMPNO) THEN 1
+		             ELSE 0
+		          END) / COUNT(t1.EMPNO)*100, 2)                    AS PARTCPTN_RATE
+		    ,ROUND(SUM(MAX(t2.CNSR_RATE))/COUNT(t1.EMPNO * 100), 2) AS CNSR_RATE
+		FROM EMPNO t1 
+		LEFT OUTER JOIN QUIZ t2
+		  ON t1.EMPNO = t2.EMPNO
+		GROUP BY t1.EMPNO
+	]]>
+	</select>
+	
+	<!-- 문항별통계 -->
+	<select id="SYM140300DAO.selectGraph2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH PARTCPTN_DE AS (
+		   SELECT TO_CHAR(TO_DATE(QUSTNR_BGNDE, 'YYYYMMDD') + LEVEL - 1, 'YYYYMMDD') AS DE
+		          ,QUSTNR_MANAGE_SN
+		          ,QUSTNR_SE
+		        FROM
+		            (SELECT QUSTNR_BGNDE
+		              ,QUSTNR_ENDDE
+		              ,QUSTNR_MANAGE_SN
+		              ,QUSTNR_SE
+		            FROM TBHRM_QUSTNR_MANAGE
+		            WHERE QUSTNR_MANAGE_SN = #QUSTNR_MANAGE_SN#
+		              AND QUSTNR_SE = #QUSTNR_SE#
+		            )
+		         CONNECT BY LEVEL <= (TO_DATE(QUSTNR_ENDDE, 'YYYYMMDD') - TO_DATE(QUSTNR_BGNDE, 'YYYYMMDD')+1)
+		     )  
+		, EMPNO AS (
+		    SELECT t1.EMPNO
+		    FROM TBHRM_HR_MASTR t1
+		    INNER JOIN PARTCPTN_DE t2
+		       ON 1=1
+		    WHERE SFHRM_GET_EMPL_INFO(t1.EMPNO, 'STTUS_SE' , t2.DE) = '000'
+		      AND t1.STTUS_SE <> '009'
+		    GROUP BY t1.EMPNO 
+		    )
+            
+		    SELECT
+		            MAX(t2.SORT_ORDR)        AS SORT_ORDR
+                  , MAX(t2.QUEST_CN)         AS QUEST_CN
+                  , ROUND(COUNT(
+                    CASE
+                        WHEN t3.QUSTNR_ASWPER_SN = t4.QUSTNR_ASWPER_SN THEN 1
+                    END)/ COUNT(*) * 100, 2) AS CNSR_RATE
+		    FROM TBHRM_QUSTNR_MANAGE t1
+		        LEFT OUTER JOIN TBHRM_QUSTNR_DTLS_MANAGE t2
+		          ON t1.QUSTNR_MANAGE_SN = t2.QUSTNR_MANAGE_SN
+		         AND t1.QUSTNR_SE        = t2.QUSTNR_SE
+		        LEFT OUTER JOIN (SELECT t2.QUSTNR_MANAGE_SN, t2.QUSTNR_SE, t2.QUSTNR_DTLS_SN, t1.EMPNO, t3.QUSTNR_ASWPER_SN
+		                            FROM EMPNO t1
+		                                INNER JOIN TBHRM_QUSTNR_DTLS_MANAGE t2
+		                                   ON 1=1
+		                                LEFT OUTER JOIN TBHRM_QUSTNR_PARTCPTN_MANAGE t3
+		                                  ON t2.QUSTNR_MANAGE_SN = t3.QUSTNR_MANAGE_SN
+		                                 AND t2.QUSTNR_SE        = t3.QUSTNR_SE
+		                                 AND t2.QUSTNR_DTLS_SN   = t3.QUSTNR_DTLS_SN
+		                                 AND t1.EMPNO = t3.EMPNO) t3
+		          ON t1.QUSTNR_MANAGE_SN = t3.QUSTNR_MANAGE_SN
+		         AND t1.QUSTNR_SE        = t3.QUSTNR_SE
+		         AND t2.QUSTNR_DTLS_SN   = t3.QUSTNR_DTLS_SN
+		        LEFT OUTER JOIN TBHRM_QUSTNR_ASWPER_MANAGE t4
+		          ON t1.QUSTNR_MANAGE_SN = t4.QUSTNR_MANAGE_SN
+		         AND t1.QUSTNR_SE        = t4.QUSTNR_SE
+		         AND t2.QUSTNR_DTLS_SN   = t4.QUSTNR_DTLS_SN
+		         AND t4.CNSR_AT          = '1'  /*정답*/
+		    WHERE t1.QUSTNR_MANAGE_SN = #QUSTNR_MANAGE_SN#
+		      AND t1.QUSTNR_SE = #QUSTNR_SE#
+		    GROUP BY t1.QUSTNR_MANAGE_SN, t1.QUSTNR_SE, t2.QUSTNR_DTLS_SN
+            ORDER BY 1
+	]]>
+	</select>
+	
+	<!-- 사원별 문항 조회 -->
+	<select id="SYM140300DAO.selectEmpList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH QUIZ AS
+		    (SELECT t1.QUSTNR_MANAGE_SN
+		      ,t1.QUSTNR_SE
+		      ,t2.SORT_ORDR AS QUSTNR_DTLS_SN
+		      ,t3.EMPNO
+		      ,CASE
+		            WHEN t3.QUSTNR_ASWPER_SN = t4.QUSTNR_ASWPER_SN
+		            THEN 1
+		            ELSE 0
+		        END AS CNSR_AT
+		    FROM TBHRM_QUSTNR_MANAGE t1
+		    LEFT OUTER JOIN TBHRM_QUSTNR_DTLS_MANAGE t2
+		      ON t1.QUSTNR_MANAGE_SN = t2.QUSTNR_MANAGE_SN
+		     AND t1.QUSTNR_SE        = t2.QUSTNR_SE
+		    LEFT OUTER JOIN TBHRM_QUSTNR_PARTCPTN_MANAGE t3
+		      ON t1.QUSTNR_MANAGE_SN = t3.QUSTNR_MANAGE_SN
+		     AND t1.QUSTNR_SE        = t3.QUSTNR_SE
+		     AND t2.QUSTNR_DTLS_SN   = t3.QUSTNR_DTLS_SN
+		    LEFT OUTER JOIN TBHRM_QUSTNR_ASWPER_MANAGE t4
+		      ON t1.QUSTNR_MANAGE_SN = t4.QUSTNR_MANAGE_SN
+		     AND t1.QUSTNR_SE        = t4.QUSTNR_SE
+		     AND t2.QUSTNR_DTLS_SN   = t4.QUSTNR_DTLS_SN
+		     AND t4.CNSR_AT          = '1'
+		        /*정답*/
+		    WHERE t1.QUSTNR_MANAGE_SN = #QUSTNR_MANAGE_SN#
+		      AND t1.QUSTNR_SE = #QUSTNR_SE#
+		    )
+		  , QUIZ_RESULT AS
+		    (SELECT t2.*
+		      , t1.CNSR_RATE
+		    FROM
+		        (SELECT QUSTNR_MANAGE_SN
+		          , QUSTNR_SE
+		          , EMPNO
+		          , ROUND((SUM(CNSR_AT) / COUNT(QUSTNR_DTLS_SN)) * 100, 2) AS CNSR_RATE
+		        FROM QUIZ
+		        GROUP BY QUSTNR_MANAGE_SN
+		          , QUSTNR_SE
+		          , EMPNO
+		        ORDER BY QUSTNR_MANAGE_SN
+		          , EMPNO
+		        ) t1
+		    INNER JOIN
+		        (SELECT *
+		        FROM
+		            (SELECT QUSTNR_MANAGE_SN
+		              , QUSTNR_DTLS_SN
+		              , QUSTNR_SE
+		              , EMPNO
+		              , MAX(CNSR_AT) AS CNSR_AT
+		            FROM QUIZ
+		            GROUP BY QUSTNR_MANAGE_SN
+		              , QUSTNR_SE
+		              , EMPNO
+		              , QUSTNR_DTLS_SN
+		            ) PIVOT (MAX(
+		            CASE
+		                WHEN CNSR_AT = 1
+		                THEN 'O'
+		                WHEN CNSR_AT = 0
+		                THEN 'X'
+		                ELSE '-'
+		            END) AS DTLS FOR QUSTNR_DTLS_SN IN (1, 2, 3, 4 ,5) )
+		        ) t2
+		    ON  t1.EMPNO = t2.EMPNO
+		    )
+		SELECT t1.EMPNO
+		  ,CASE
+		        WHEN t1.EMPNO = t2.EMPNO
+		        THEN '참여'
+		        ELSE '미참여'
+		    END AS PARTCPTN_AT
+		  ,t2.*
+		  , t8.DEPT_NM AS DEPT_NM /*부서명*/
+		  , t4.CODE_NM AS JSSFC_NM/*직종*/
+		  , t5.CODE_NM AS HR_CLSF_NM/*직급*/
+		  , t6.CODE_NM AS OFCPS_NM /*직위*/
+		  , t3.EMPNM AS EMPNM	/*사원명*/
+		  , t3.DEPT_CODE AS DEPT_CODE
+		FROM TBHRM_HR_MASTR t1
+		LEFT OUTER JOIN QUIZ_RESULT t2
+		ON  t1.EMPNO = t2.EMPNO
+		LEFT OUTER JOIN TBHRM_HR_MASTR t3
+		ON  t1.EMPNO = t3.EMPNO
+		LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		ON  t3.JSSFC_SE = t4.CODE
+		AND t4.GRP_CODE = 'HRM001'
+		LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		ON  t3.HR_CLSF_SE = t5.CODE
+		AND t5.GRP_CODE   = 'HRM002'
+		LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+		ON  t3.OFCPS_SE = t6.CODE
+		AND t6.GRP_CODE = 'HRM003'
+		LEFT OUTER JOIN TBCOM_CMMN_CODE t7
+		ON  t3.JBLN_SE  = t7.CODE
+		AND t7.GRP_CODE = 'HRM004'
+		LEFT OUTER JOIN VWHRM_DEPT t8
+		ON  t3.DEPT_CODE = t8.DEPT_CODE
+		WHERE t1.STTUS_SE <> '009'
+		]]>
+		<isNotEmpty property="HR_CLSF_SE_201">
+			<isEqual property="HR_CLSF_SE_201" compareValue="1">
+				<![CDATA[
+				  AND t1.HR_CLSF_SE > 201	/*2급이하*/
+				]]>
+			</isEqual>
+		</isNotEmpty>
+		ORDER BY DECODE(t8.LEAF_AT, '1', t8.UPPER_DEPT_CODE, t8.DEPT_CODE), t3.DEPT_CODE , t3.JSSFC_SE , t3.HR_CLSF_SE
+	
+	</select>
+	
+	<!-- =============================== [탭2 : 부서별집계] =============================== -->
+
+</sqlMap>

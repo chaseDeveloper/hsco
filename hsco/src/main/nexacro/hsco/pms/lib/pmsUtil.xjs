@@ -1,0 +1,3405 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/*****************************************************************************
+ * 프로그램명 		: 	pmsUtil.xjs
+ * 작  성  자  	: 	이상준
+ * 작  성  일   	: 	2015.08.21
+ * 설      명  		:   PMS 공용사용 유틸 모음
+ * 수  정  자  	: 	
+ * 수 정 이력  	: 	
+ * 사용방법	    :   include "pms_lib::pmsUtil.xjs"
+						...
+						this.pmsUtil.METHOD()
+******************************************************************************/
+
+/*
+// Constant
+this.pmsUtil.WORK_FORM
+this.pmsUtil.USE_DUMP						dumper Method 사용유무
+
+this.pmsUtil.PROMPT_SELECT					콤보 Prompt Type 선택
+this.pmsUtil.PROMPT_ALL						콤보 Prompt Type 전체
+this.pmsUtil.PROMPT_SELECT_TEXT				콤보 Prompt Text 선택
+this.pmsUtil.PROMPT_ALL_TEXT				콤보 Prompt Text 전체
+
+// Method
+this.pmsUtil.clearDataSet()					대상(단건,다건) Dataset을 초기화.
+this.pmsUtil.setComboPrompt()				대상 Combo에 "전체", "선택"등의 Prompt(헤더)를 추가 한다. 
+this.pmsUtil.addComboHeader()				콤보에 "전체", "선택"등의 헤더를 추가 한다(호환성 유지)
+this.pmsUtil.getComboSelectedItem()			Combo의 innerdataset에서 선택된 ComboItem의 데이터를 Map형으로 반환한다.
+this.pmsUtil.getGridSelectedItem()			Grid innerdataset에서 선택된 Row Item의 데이터를 Map형으로 반환한다.
+this.pmsUtil.getGridSelectedItems()			Grid innerdataset에서 선택된 복수의 Row Item의 데이터를 Map형으로 반환한다.
+this.pmsUtil.getGridUpdatedItems()			Grid innerdataset에서 수정(신규,수정)된 Row Item의 데이터를 Map형으로 반환한다.
+this.pmsUtil.addListToDataset()				List(Array)형의 데이터를 Dataset에 추가한다.
+this.pmsUtil.addMapToDataset()				Map(Object)형의 데이터를 Dataset에 추가한다.
+this.pmsUtil.putMapToDataset()				Map(Object)형의 데이터를 Dataset의 특정 행에 입력한다.
+this.pmsUtil.setFocusGridBindComp()			그리드 특정 행, 특정 컬럼에 바인드된 component에 포커스 처리 및 특정행 선택처리
+this.pmsUtil.getDatasetStatus()				대상 Dataset 각 행의 Rowtype 정보를 String으로 반환.
+this.pmsUtil.isArray()						값이 Array인지 여부를 나타내는 메소드.
+this.pmsUtil.dumper()						전달한 값을 Alert 또는 nexacro Outpu trace로 출력.
+this.pmsUtil.datasetToObject()				Dataset의 내용을 String형태(key=value,...) 또는 Map 형태({KEY:"VALUE",...})로 변환하여 그 결과를 반환한다.
+
+this.pmsUtil._clearDataSet()				데이터셋 초기화.
+this.pmsUtil._getDatasetSelectedItem()		특정 Dataset의 선택 행 데이터를 Map 또는 특정컬럼의 값을 String 으로 반환한다.
+this.pmsUtil._getDsRowTypeName()			Dataset에서 지정된 행(row)의 타입에 대한 명칭을 반환한다.
+*/
+
+this.pmsUtil = {
+
+	WORK_FORM : this,
+	
+	// dump Method 사용유무
+	USE_DUMP : true,
+	
+	// Combo Prompt Constant
+	PROMPT_SELECT : "SELECT",
+	PROMPT_ALL : "ALL",
+	PROMPT_SELECT_TEXT : "선택",
+	PROMPT_ALL_TEXT : "전체",
+	NULL_TEXT_NO_LIST : "-",
+	
+	TOMAP_LIST_NAME : "RESULT_LIST",
+	
+	PARAM_DS_NAME : "ds_condTemp",
+	
+	DATE_FORMAT_TOKEN : "-",
+
+	CHECK_CHANGE_MESSAGE : "confirm.변경.취소.여부",	// 변경된 내역이 존재합니다.\\n현재 작업을 취소하신 후 계속 진행하시겠습니까?
+
+	/**
+	 * 대상 Dataset을 초기화.
+	 * 단건 및 다건(Array)처리.
+	 * @param targetDsArr 대상
+	 * @return void
+	 */
+	clearDataSet : function(targetDsArr){
+		var isArray = this.isArray(targetDsArr);
+		if(isArray){
+			var targetLeng = targetDsArr.length;
+			for(var i = 0; i < targetLeng; i++){
+				var targetDs = targetDsArr[i];
+				this._clearDataSet(targetDs);
+			}
+		}else{
+			var targetClass = targetDsArr.toString();
+			if(targetClass == "[object Dataset]"){
+				this._clearDataSet(targetDsArr);
+			}
+		}
+	},
+	
+	// 데이터셋 초기화.
+	_clearDataSet : function(dataset){
+		dataset.reset();
+		dataset.clearData();
+		if(dataset.name.substr(0, 7).toLowerCase() == "ds_cond"){
+			if(dataset.rowcount == 0){
+				dataset.addRow();
+			}
+		}
+	},
+	
+	/**
+	 * DataSet에서 수정(신규,수정,삭제(option))여부를 Boolean형으로 반환한다.
+	 * 삭제된 행의 체크틑 hasDelete 값이 true일 경우에만 수행한다.
+	 * @param dataset 대상 Dataset
+	 * @param checkDelete 삭제 행 확인여부
+	 * @return ArrayList
+	 */
+	isDsUpdated : function(targetDs:Dataset, checkDelete)
+	{
+		var hasDelete = this.WORK_FORM.comUtils.isNullEmpty(checkDelete) ? false : checkDelete;
+	
+		// 삭제 체크시 먼저 처리
+		if (hasDelete && targetDs.getDeletedRowCount() > 0)
+		{	
+			return true;
+		}
+		
+		// 4(수정), 2(추가)
+		if(targetDs.findRowExpr("dataset.getRowType(rowidx)==4||dataset.getRowType(rowidx)==2") > -1) 
+		{
+			return true;
+		}
+		
+		return false;
+	},
+	
+	getPromptText : function(promptType){
+		var result = "";
+		
+		switch(promptType){
+			case "PROMPT_SELECT" :
+				result = this.PROMPT_SELECT_TEXT;
+				break;
+			case "PROMPT_ALL" :
+				result = this.PROMPT_ALL_TEXT;
+				break;
+		}
+		
+		return result;
+	},
+	
+	/**
+	 * 대상 Combo에 "전체", "선택"등의 Prompt(헤더)를 추가 한다. 
+	 * useNullText 를 true로 설정할 경우 Combo Dataset에 Prompt정보를 추가하지 않는다.
+	 * @param combo 대상
+	 * @param option 옵션
+	   ex) var option = {
+					type: this.pmsUtil.PROMPT_SELECT,	//this.pmsUtil.PROMPT_All
+					codecolumn: "CODE",		-- 없어도 됨
+					datacolumn: "CODE_NM",	-- 없어도 됨
+					promptValue: "",
+					promptText: "선택하세요.",
+					defaultIndex: 1,
+					noNullText: "코드없음"	-- useNullText == true 이고 콤보 데이터셋의 데이터가 없을 경우 출력
+				}
+	 * @useNullText Combo의 displaynulltext property 설정여부 : 기본 false
+	 * @return void
+	 */
+	setComboPrompt : function(targetObj, option, useNullText){
+	
+		var targetClass = targetObj.toString();
+		var comboDs = null;
+		var targetIsDs = false;
+		if(targetClass == "[object Dataset]"){
+			comboDs = targetObj;
+			
+			if(!option.codecolumn || !option.datacolumn){
+				alert("Dataset을 대상으로 할 경우에는 컬럼정보를 지정하여야 합니다.");
+				return;
+			}
+			
+			targetIsDs = true;
+		}else{
+			comboDs = targetObj.getInnerDataset();	// this.WORK_FORM[targetObj.innerdataset];
+			targetIsDs = false;
+		}
+	
+		var promptType = option && option.type ? option.type.toUpperCase() : this.PROMPT_SELECT;
+		var codeColunm = option && option.codecolumn ? option.codecolumn : (targetObj.codecolumn ? targetObj.codecolumn : "CODE");
+		var dataColunm = option && option.datacolumn ? option.datacolumn : (targetObj.datacolumn ? targetObj.datacolumn : "CODE_NM");
+		var promptText = option && option.promptText ? option.promptText : null;
+		var promptValue = option && option.promptValue ? option.promptValue : "";
+		var defaultIndex = option && option.defaultIndex ? option.defaultIndex : (displayNullText ? -1 : 0);
+		
+		var noDataNullText = option && option.noNullText ? option.noNullText : null;
+		var displayNullText = useNullText ? useNullText : false;//(noDataNullText == null ? false : true);
+		
+		var viewPromptText = "";
+		if(promptText == null){
+			switch(promptType){
+				case this.PROMPT_ALL :
+					viewPromptText = this.PROMPT_ALL_TEXT;
+					break;
+				case this.PROMPT_SELECT :
+				default :
+					viewPromptText = this.PROMPT_SELECT_TEXT;
+					break;
+			}
+		}else{
+			viewPromptText = promptText;
+		}
+		
+		if(!targetIsDs && displayNullText){
+			if(noDataNullText == null){
+				targetObj.set_displaynulltext(viewPromptText);
+			}else{
+				this.setComboNullText(targetObj, viewPromptText, noDataNullText);
+			}
+		}
+
+		var comboDsCnt = comboDs.getRowCount();
+		if( comboDsCnt > 0){
+			var promptDataMap = {};
+			promptDataMap[dataColunm] = viewPromptText;
+			promptDataMap[codeColunm] = (dataColunm == codeColunm ? viewPromptText : promptValue);
+			
+			this.addMapToDataset(comboDs, promptDataMap, 0);
+		}else{
+			defaultIndex = -1;
+		}
+		
+		if(targetIsDs){
+			comboDs.set_rowposition(defaultIndex);
+		}else{
+			targetObj.set_index(defaultIndex);
+		}
+	},
+	
+	setComboNullText : function(oCombo, sType, noText){
+		var ds = oCombo.getInnerDataset();	// this.WORK_FORM[oCombo.innerdataset];
+		var leng = ds.getRowCount();
+
+		if(leng > 0){
+			// type 이 PROMPT_SELECT 또는 PROMPT_ALL 이 아니면 type 을 그대로 출력
+			var nullText = sType == this.PROMPT_SELECT ? this.PROMPT_SELECT_TEXT : (sType == this.PROMPT_ALL ? this.PROMPT_ALL_TEXT : sType);
+			oCombo.set_displaynulltext(nullText);
+		}else{
+			var noListText = noText ? noText : this.NULL_TEXT_NO_LIST;
+			oCombo.set_displaynulltext(noListText);
+		}
+	},
+	
+	/**
+	 * 콤보에 "전체", "선택"등의 헤더를 추가 한다.
+	 * 호환성 유지
+	 */
+	addComboHeader : function(form, combo, strHeader, strCodeColumn, strDataColumn){
+	
+		var ds = combo.getInnerDataset();
+		if(strCodeColumn == null) strCodeColumn = combo.codecolumn ? combo.codecolumn : "CODE";
+		if(strDataColumn == null) strDataColumn = combo.datacolumn ? combo.datacolumn : "DATA";
+		
+		var promptDataMap = {};
+		promptDataMap[strDataColumn] = strHeader;
+		promptDataMap[strCodeColumn] = "";
+		
+		this.addMapToDataset(comboDs, promptDataMap, 0);
+
+		combo.set_index(0);
+	},
+	
+	/**
+	 * Combo의 innerdataset에서 선택된 ComboItem의 데이터를 Map형으로 반환한다.
+	 * 특정컬럼을 지정할 경우 선택된 ComboItem에서 해당 컬럼의 값(String)을 반환한다.
+	 * @param combo 대상 Combo
+	 * @param columnId 대상 컬럼ID
+	 * @return Object(String/Map)
+	 */
+	getComboSelectedItem : function(combo, columnId){
+		var result = null;
+		var comBoDs = combo.getInnerDataset();
+		var selIndex = combo.index;
+				
+		result = this._getDatasetSelectedItem(comBoDs, selIndex, columnId);
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 지정한 Row Item의 데이터를 Map형으로 반환한다.
+	 * 특정컬럼을 지정할 경우 지정한 RowItem에서 해당 컬럼의 값(String)을 반환한다.
+	 * @param grid 대상 Grid
+	 * @param rowIdx 대상 RowIndex
+	 * @param columnId 대상 컬럼ID
+	 * @return Object(String/Map)
+	 */
+	getGridItem : function(grid, rowIdx, columnId){
+		var result = null;
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		
+		result = this._getDatasetSelectedItem(gridDs, rowIdx, columnId);
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 지정한 Row Item의 데이터를 Map형으로 반환한다.
+	 * 특정컬럼을 지정할 경우 지정한 RowItem에서 해당 컬럼의 값(String)을 반환한다.
+	 * @param grid 대상 Grid
+	 * @param rowIdx 대상 RowIndex 배열
+	 * @param columnId 대상 컬럼ID
+	 * @return Object(String/Map)
+	 */
+	getGridItems : function(grid, rowIdxArr, columnId){
+		var result = null;
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		
+		result = this._getDatasetSelectedItem(gridDs, rowIdxArr, columnId);
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 선택된 Row Item의 데이터를 Map형으로 반환한다.
+	 * 특정컬럼을 지정할 경우 선택된 RowItem에서 해당 컬럼의 값(String)을 반환한다.
+	 * @param grid 대상 Grid
+	 * @param columnId 대상 컬럼ID
+	 * @return Object(String/Map)
+	 */
+	getGridSelectedItem : function(grid, columnId){
+		var result = null;
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		var selIndex = gridDs.rowposition;
+		
+		result = this._getDatasetSelectedItem(gridDs, selIndex, columnId);
+		
+		return result;
+	},
+	
+	/**
+	 * 그리드의 선택행의 RowType을 반환한다.
+	 * rowposition 값이 있을 경우 해당 Row의 RowType을 반환한다.
+	 * rowposition 값이 없을 경우 선택된 Row의 RowType을 반환한다.
+	 * @param grid 대상 Grid
+	 * @param rowposition 대상 Row Index
+	 * @return Number
+	 */
+	getGridSelectedRowType : function(grid, rowposition){
+		var result = null;
+		
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		var selIndex = this.WORK_FORM.comUtils.isNullEmpty(rowposition) ? gridDs.rowposition : rowposition;
+		
+		if(selIndex > -1){
+			result = gridDs.getRowType(selIndex);
+		}
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 선택된 Row Item의 데이터 중 지정한 columnId에 value 값으로 변경한다.
+	 * @param grid 대상 Grid
+	 * @param columnId 대상 컬럼ID
+	 * @param value 변경 값
+	 * @return Boolean
+	 */
+	setGridSelectedItemValue : function(grid, columnId, value){
+		var result = null;
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		var selIndex = gridDs.rowposition;
+		
+		var result = gridDs.setColumn(selIndex, columnId, value);
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 선택된 복수의 Row Item의 데이터를 Map형으로 반환한다.
+	 * 특정컬럼을 지정할 경우 선택된 RowItem에서 해당 컬럼의 값(String)을 반환한다.
+	 * @param grid 대상 Grid
+	 * @param columnId 대상 컬럼ID
+	 * @return Object(String/Map)
+	 */
+	getGridSelectedItems : function(grid, columnId){
+		var result = null;
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		var selIdxArr = grid.getSelectedDatasetRows();
+		
+		result = this._getDatasetSelectedItem(gridDs, selIdxArr, columnId);
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 선택된 Row Item의 데이터를 삭제한다.
+	 * 삭제 결과를 Boolean 값으로 반환한다.
+	 * @param grid 대상 Grid
+	 * @return boolean
+	 */
+	deleteGridSelectedItem : function(grid){
+		var result = null;
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		var selIdxArr = grid.getSelectedDatasetRows();
+		
+		result = gridDs.deleteRow(selIdxArr);
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 수정(신규,수정)된 Row Item의 ArrayList<Map>형으로 반환한다.
+	 * 삭제된 행의 정보는 hasDelete 값이 true일 경우에만 포함한다.
+	 * @param grid 대상 Grid Component
+	 * @param hasDelete 삭제 행 포함여부
+	 * @return ArrayList
+	 */
+	getGridUpdatedItems : function(grid, hasDelete){
+		var result = null;
+		var hasDelete = this.WORK_FORM.comUtils.isNullEmpty(hasDelete) ? false : hasDelete;
+		
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		var isUpdated = this.WORK_FORM.comUtils.isDatasetUpdated(gridDs);
+		
+		if(isUpdated){
+			var rowsArr = [];
+			var dsLeng = gridDs.getRowCount();
+			for(var i = 0; i < dsLeng; i++){
+				var rowType = gridDs.getRowType(i);
+				if(rowType == Dataset.ROWTYPE_INSERT || rowType == Dataset.ROWTYPE_UPDATE){
+					rowsArr.push(i);
+				}
+				
+				if(hasDelete && rowType == Dataset.ROWTYPE_DELETE){
+					rowsArr.push(i);
+				}
+			}
+			
+			var option = {
+				viewRow : rowsArr
+			};
+			
+			var updatedInfo = this.datasetToObject(gridDs, option, true);
+			if(updatedInfo == null){
+				result = updatedInfo;
+			}else{
+				var isArrayData = this.isArray(updatedInfo);
+				result = isArrayData ? updatedInfo : [updatedInfo];
+			}
+		}
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 신규 Row Item의 데이터를 ArrayList<Map>형으로 반환한다.
+	 * @param grid 대상 Grid Component
+	 * @return ArrayList
+	 */
+	getGridInsertItems : function(grid){
+		var result = null;
+		
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		var isUpdated = this.WORK_FORM.comUtils.isDatasetUpdated(gridDs);
+		
+		if(isUpdated){
+			var rowsArr = [];
+			var dsLeng = gridDs.getRowCount();
+			for(var i = 0; i < dsLeng; i++){
+				var rowType = gridDs.getRowType(i);
+				if(rowType == Dataset.ROWTYPE_INSERT){
+					rowsArr.push(i);
+				}
+			}
+			
+			var option = {
+				viewRow : rowsArr
+			};
+			
+			var updatedInfo = this.datasetToObject(gridDs, option, true);
+			if(updatedInfo == null){
+				result = updatedInfo;
+			}else{
+				var isArrayData = this.isArray(updatedInfo);
+				result = isArrayData ? updatedInfo : [updatedInfo];
+			}
+		}
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 수정 Row Item의 데이터를 ArrayList<Map>형으로 반환한다.
+	 * @param grid 대상 Grid Component
+	 * @return ArrayList
+	 */
+	getGridModifyItems : function(grid){
+		var result = null;
+		
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		var isUpdated = this.WORK_FORM.comUtils.isDatasetUpdated(gridDs);
+		
+		if(isUpdated){
+			var rowsArr = [];
+			var dsLeng = gridDs.getRowCount();
+			for(var i = 0; i < dsLeng; i++){
+				var rowType = gridDs.getRowType(i);
+				if(rowType == Dataset.ROWTYPE_UPDATE){
+					rowsArr.push(i);
+				}
+			}
+			
+			var option = {
+				viewRow : rowsArr
+			};
+			
+			var updatedInfo = this.datasetToObject(gridDs, option, true);
+			if(updatedInfo == null){
+				result = updatedInfo;
+			}else{
+				var isArrayData = this.isArray(updatedInfo);
+				result = isArrayData ? updatedInfo : [updatedInfo];
+			}
+		}
+		
+		return result;
+	},
+	
+	/**
+	 * Grid innerdataset에서 삭제 Row Item의 데이터를 ArrayList<Map>형으로 반환한다.
+	 * @param grid 대상 Grid Component
+	 * @return ArrayList
+	 */
+	getGridDeleteItems : function(grid){
+		var result = null;
+		
+		var gridDs = this.WORK_FORM[grid.binddataset];
+		var isUpdated = this.WORK_FORM.comUtils.isDatasetUpdated(gridDs);
+		
+		if(isUpdated){
+			var rowsArr = [];
+			var dsLeng = gridDs.getRowCount();
+			for(var i = 0; i < dsLeng; i++){
+				var rowType = gridDs.getRowType(i);
+				
+				if(rowType == Dataset.ROWTYPE_DELETE){
+					rowsArr.push(i);
+				}
+			}
+			
+			var option = {
+				viewRow : rowsArr
+			};
+			result = this.datasetToObject(gridDs, option, true);
+		}
+		
+		return result;
+	},
+	
+	/**
+	 * 특정Dataset의 특정 행 데이터를 Map 또는 String으로 반환한다.
+	 */
+	getDatasetItem : function(targetDs, rowIndex, columnId){
+		return this._getDatasetSelectedItem(targetDs, rowIndex, columnId);
+	},
+	
+	/*
+	 * 특정 Dataset의 선택 행 데이터를 Map 또는 String으로 반환한다.
+	 */
+	_getDatasetSelectedItem : function(targetDs, selIndex, columnId){
+		var result = null;
+		
+		var idxIsNull = this.WORK_FORM.comUtils.isNullEmpty(selIndex);
+		var colIsNull = this.WORK_FORM.comUtils.isNullEmpty(columnId);
+		
+		var rowIndex = idxIsNull ? targetDs.rowposition : selIndex;
+		var isMultiSelect = this.isArray(rowIndex);
+		var isMultiColumn = colIsNull ? true : this.isArray(columnId);
+		
+		if(isMultiSelect || isMultiColumn){
+			var option = {};
+			if(colIsNull){
+				option["viewRow"] = isMultiSelect ? selIndex : [rowIndex];
+			}else{
+				option["viewRow"] = isMultiSelect ? selIndex : [rowIndex];
+				option["viewCol"] = columnId;
+			}
+			result = this.datasetToObject(targetDs, option, true);
+		}else{
+			result = targetDs.getColumn(selIndex, columnId);
+		}
+		
+		return result;
+	},
+	
+	/**
+	 * List(Array)형의 데이터를 Dataset에 추가한다.
+	 * @param dataset 대상 Dataset
+	 * @param addList 추가 List(Array)
+	 * @param rowIndex 추가시작 Index
+	 */
+	addListToDataset : function(dataset, addList, rowIndex){
+	
+		var dsInfoIsStr = typeof(dataset) == "string" ? true : false;
+		var targetDs = dsInfoIsStr ? this.WORK_FORM[dataset] : dataset;
+	
+		var isEnabled = this.isArray(addList);
+		if(!isEnabled){
+			alert("Array형의 데이터만 허용됩니다.");
+			return;
+		}
+		
+		var startIndex;
+		var idxIsNull = this.WORK_FORM.comUtils.isNullEmpty(rowIndex);
+		
+		// addIndex 값이 없을 경우 대상리스트에 아래에서 붙여넣기로 처리
+		startIndex = idxIsNull ? targetDs.getRowCount() : addIndex;
+		
+		var addListLeng = addList.length;
+		for(var i = 0; i < addListLeng; i++){
+			var addItem = addList[i];
+			this.addMapToDataset(targetDs, addItem, startIndex);
+			startIndex++;
+		}
+	},
+	
+	/**
+	 * List(Array)형의 데이터를 Dataset에 적용한다.
+	 * @param dataset 대상 Dataset
+	 * @param putList 적용 List(Array)
+	 * @param rowIndex 적용시작 Index 기본 0
+	 */
+	putListToDataset : function(dataset, putList, rowIndex){
+		var dsInfoIsStr = typeof(dataset) == "string" ? true : false;
+		var targetDs = dsInfoIsStr ? this.WORK_FORM[dataset] : dataset;
+	
+		var isEnabled = this.isArray(putList);
+		if(!isEnabled){
+			alert("Array형의 데이터만 허용됩니다.");
+			return;
+		}
+		
+		var startIndex;
+		var dsLastIndex = targetDs.getRowCount() - 1;
+		var idxIsNull = this.WORK_FORM.comUtils.isNullEmpty(rowIndex);
+		
+		// addIndex 값이 없을 경우 대상리스트의 처음부터 시작
+		startIndex = idxIsNull ? 0 : addIndex;
+		
+		var putListLeng = putList.length;
+		for(var i = 0; i < putListLeng; i++){
+			var putItem = putList[i];
+			
+			// 대상 Dataset의 마지막 Index보다 클 경우 추가, 아니면 입력처리
+			if(startIndex > dsLastIndex){
+				this.addMapToDataset(targetDs, putItem, startIndex);
+			}else{
+				this.putMapToDataset(targetDs, putItem, startIndex);
+			}
+			startIndex++;
+		}
+	},
+	
+	/**
+	 * Map(Object)형의 데이터를 Dataset에 추가한다.
+	 * @param targetDs 대상 Dataset
+	 * @param addMap 추가 Map(Object)
+	 * @param rowIndex 추가 Index
+	 */
+	addMapToDataset : function(dataset, addMap, rowIndex){
+	
+		var dsInfoIsStr = typeof(dataset) == "string" ? true : false;
+		var targetDs = dsInfoIsStr ? this.WORK_FORM[dataset] : dataset;
+	
+		var idxIsNull = this.WORK_FORM.comUtils.isNullEmpty(rowIndex);
+		// rowIndex 값이 없을 경우 대상리스트에 아래에서 붙여넣기로 처리
+		var addIndex = idxIsNull ? targetDs.getRowCount() : rowIndex;
+		var nRow = targetDs.insertRow(addIndex);
+		
+		for(var sKey in addMap){
+			var inValue = addMap[sKey];
+			targetDs.setColumn(nRow, sKey, inValue);
+		}
+	},
+	
+	/**
+	 * Map(Object)형의 데이터를 Dataset의 특정 행에  입력한다.
+	 * @param targetDs 대상 Dataset
+	 * @param putMap 입력 Map(Object)
+	 * @param rowIndex 입력 Index
+	 */
+	putMapToDataset : function(dataset, putMap, rowIndex){
+		var dsInfoIsStr = typeof(dataset) == "string" ? true : false;
+		var targetDs = dsInfoIsStr ? this.WORK_FORM[dataset] : dataset;
+
+		var idxIsNull = this.WORK_FORM.comUtils.isNullEmpty(rowIndex);
+		// rowIndex 값이 없을 경우 대상리스트의 첫 행에 넣기로 처리
+		var addIndex = idxIsNull ? 0 : rowIndex;
+		
+		// 만일 Dataset에 행이 없으면 추가
+		var hasRow = targetDs.getRowCount() > 0 ?  true : false;
+		if(!hasRow){
+			addIndex = targetDs.insertRow();
+		}
+		
+		for(var sKey in putMap){
+			var inValue = putMap[sKey];
+			targetDs.setColumn(addIndex, sKey, inValue);
+		}
+	},
+	
+	/**
+	 * 그리드 특정 행, 특정 컬럼에 바인드된 component에 포커스 처리 및 특정행 선택처리
+	 * @param objGrid 대상 그리드
+	 * @param nNullFindRow 대상 행
+	 * @param sChkColId 대상 컬럼ID
+	 * @return void
+	 */
+	setFocusGridBindComp : function(objGrid, nNullFindRow, sChkColId){
+		
+		var objBindDs = this.WORK_FORM[objGrid.binddataset];	// 그리드 바인드 데이터셋
+		
+		var nCell = objGrid.getBindCellIndex("body", sChkColId);
+		objBindDs.set_rowposition(nNullFindRow);
+		
+		// 그리드에 바인드 되어 있는 컬럼이 아니면 바인드 정보에서 바인드 되어 있는 component가 있는 지 확인 한다.
+		// 바인드 된 컴퍼넌트 부터 찾고 그리드의 셀을 찾는다
+		var objRetComponent = this.WORK_FORM.gfn_getBindComponent(objBindDs, sChkColId);
+			
+		if (typeof objRetComponent != "boolean"){
+			objRetComponent.setFocus();	
+			objBindDs.filter("");
+			return false;
+		}
+		
+		if (nCell == -1){
+			objBindDs.filter("");
+			return false;
+		}
+		
+		objBindDs.set_rowposition(nNullFindRow);
+		objGrid.setFocus();		         
+		objGrid.setCellPos(nCell);
+		objBindDs.filter("");
+	},
+	
+	/**
+	 * 대상 Dataset 각 행의 Rowtype 정보를 String으로 반환.
+	 * 총 00건 중
+	   추가 0건
+	   수정 0건
+	   삭제 0건
+	 * 의 형태로 반환
+	 * @param dataset 대상 Dataset
+	 * @return String
+	 */
+	getDatasetStatus : function(dataset){
+		var dsInfoIsStr = typeof(dataset) == "string" ? true : false;
+		var targetDs = dsInfoIsStr ? this.WORK_FORM[dataset] : dataset;
+		
+		var result = "";
+		var newCnt = 0;
+		var modCnt = 0;
+		var delCnt = 0;
+		
+		delCnt = targetDs.getDeletedRowCount();
+		
+		var rowCount = targetDs.getRowCount();
+		for(var i = 0; i < rowCount; i++){
+			var rowType = targetDs.getRowType(i);
+			switch(rowType){
+			
+				case Dataset.ROWTYPE_INSERT :
+					newCnt++;
+					break;
+				case Dataset.ROWTYPE_UPDATE :
+					modCnt++;
+					break;
+			
+				default :
+					break;
+			}
+		}
+		
+		result += "총  : " + rowCount + "건 중\n";
+		result += newCnt > 0 ? "추가 : " + newCnt + "건" : "";
+		result += newCnt > 0 ? "\n" : "";
+		result += modCnt > 0 ? "수정 : " + modCnt + "건" : "";
+		result += modCnt > 0 ? "\n" : "";
+		result += delCnt > 0 ? "삭제 : " + delCnt + "건" : "";
+		
+		return result;
+	},
+	
+	/**
+	 * 값이 Array인지 여부를 나타내는 메소드
+	 * @param value Object
+	 * @return Boolean
+	 */
+	isArray : function(value){
+		var ARRAY_CLASS = "[object Array]";
+		var typeClass = Object.prototype.toString.call(value);
+		return typeClass === ARRAY_CLASS;
+	},
+	
+	/**
+	 * 그리드의 Dataset에 변경이 있으나 반영이 안될 경우 처리
+	 * - 그리드를 잠시 숨겼다가 다시 출력한다.
+	 */
+	commitGridView : function(grid:Grid){
+		grid.set_visible(false);
+		grid.set_visible(true);
+	},
+	
+	// [BEGIN] Service 관련
+	SLS_TRAN_COMMON_CODE : "hsco/pms/com/COM000000/selectComCodeList.do",			// 공통코드 목록
+	SLS_TRAN_HOUSE_CODE : "hsco/pms/sls/com/SLS000000/selectHouseCodeList.do",		// 주택코드 목록
+	SLS_TRAN_HOUSE_DONG : "hsco/pms/sls/com/SLS000000/selectHouseDongList.do",		// 주택코드(별) 동 목록
+	SLS_TRAN_HOUSE_HO : "hsco/pms/sls/com/SLS000000/selectHouseHoList.do",			// 주택코드(별) 호 목록
+	SLS_TRAN_HOUSE_DONGHO : "hsco/pms/sls/com/SLS000000/selectHouseDongHoList.do",	// 주택코드(별) 동/호 목록
+	SLS_TRAN_HOUSE_AEA : "hsco/pms/sls/com/SLS000000/selectHouseAeaList.do",		// 주택코드(별) 평형 목록
+	SLS_TRAN_HOUSE_TYAEA : "hsco/pms/sls/com/SLS000000/selectHouseTyAeaList.do",	// 주택코드(별) 타입평수
+	SLS_TRAN_HCNTRCTR : "hsco/pms/sls/com/SLS000000/selectHcntrctrList.do",			// 주택계약/해약(자) 목록	
+	SLS_TRAN_LAD_CODE : "hsco/pms/sls/com/SLS000000/selectLadCodeList.do",        	// 토지코드 목록
+	SLS_TRAN_LAD_DETAIL : "hsco/pms/sls/com/SLS000000/selectLadDetailList.do",      // 토지상세정보 목록
+	SLS_TRAN_LCNTRCTR : "hsco/pms/sls/com/SLS000000/selectLcntrctrList.do",  		// 토지계약/해약(자) 목록
+	SLS_TRAN_BSNS_CODE : "hsco/pms/sls/com/SLS000000/selectBsnsCodeList.do",        // 사업코드 목록	
+	
+	getCommonCode : function(sSvcId, codeParam, sCallBack){
+	
+		var sController = this.SLS_TRAN_COMMON_CODE;
+		var createdDs = this._setDynamicInDataset(codeParam, true);
+		var sInDatasets = "";
+		var paramDsName = this.PARAM_DS_NAME + "00";
+		if(createdDs){
+			sInDatasets = "input1=" + paramDsName;
+		}
+		var sOutDatasets = this._getCommonCodeOutputName(codeParam);
+		
+		this.pmsComTran(sSvcId, sController, sInDatasets, sOutDatasets, null, sCallBack, false);
+	},
+	
+	_getCommonCodeOutputName : function(codeParam){
+		var codeLeng = codeParam.length;
+		var result = "";
+		for(var i=0; i < codeLeng; i++){
+			var codeItem = codeParam[i];
+			var targetDsName = codeItem["OUT_PUT"];
+			var targetGrpCode = codeItem["GRP_CODE"];
+			
+			result += (targetDsName + "=" + targetGrpCode + "Code");
+			if(i != codeLeng-1){
+				result +=  " ";
+			}
+		}
+		
+		return result;
+	},
+	
+	/**
+	 * 주택판매(SLS)에서 공통으로 사용되는 주택코드 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getHouseCode : function(oInDataset, sOutDataset, sCallBack){
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_HOUSE_CODE;
+		var sOutDatasets = sOutDataset + "=houseCode";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, false);
+	},
+	
+	/**
+	 * 주택판매(SLS)에서 공통으로 사용되는 주택코드의 동 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getHouseDong : function(oInDataset, sOutDataset, sCallBack){
+	
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_HOUSE_DONG;
+		var sOutDatasets = sOutDataset + "=dongCode";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, false);
+	},
+	
+	/**
+	 * 주택판매(SLS)에서 공통으로 사용되는 주택코드의 호 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getHouseHo : function(oInDataset, sOutDataset, sCallBack){
+	
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_HOUSE_HO;
+		var sOutDatasets = sOutDataset + "=hoCode";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, false);
+	},
+	
+	/**
+	 * 주택판매(SLS)에서 공통으로 사용되는 주택코드의 동-호 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getHouseDongHo : function(oInDataset, sOutDataset, sCallBack){
+	
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_HOUSE_DONGHO;
+		var sOutDatasets = sOutDataset + "=dongHoCode";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, false);
+	},
+	
+	/**
+	 * 주택판매(SLS)에서 공통으로 사용되는 주택코드의 평형 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getHouseAea : function(oInDataset, sOutDataset, sCallBack){
+	
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_HOUSE_AEA;
+		var sOutDatasets = sOutDataset + "=aeaCode";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, false);
+	},
+	
+	/**
+	 * 주택판매(SLS)에서 공통으로 사용되는 주택코드의 파입평수 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getHouseTyAea : function(oInDataset, sOutDataset, sCallBack){
+	
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_HOUSE_TYAEA;
+		var sOutDatasets = sOutDataset + "=tyAeaCode";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, false);
+	},
+	
+	/**
+	 * 주택판매(SLS)에서 공통으로 사용되는 주택코드의 동-호, 평형 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sDongHoDataset: 동-호 outDatasets 명
+	 * @param sAeaDataset	: 평형 outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getHouseDongHoAea : function(oInDataset, sDongHoDataset, sAeaDataset, sCallBack){
+		// 동호 조회
+		this.getHouseDongHo(oInDataset, sDongHoDataset, sCallBack);
+		
+		// 평형 조회
+		this.getHouseAea(oInDataset, sAeaDataset, sCallBack);
+	},
+	
+	/**
+	 * 주택판매(SLS)에서 계약(해약)목록 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getHcntrctrList : function(oInDataset, sOutDataset, sCallBack){
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_HCNTRCTR;
+		var sOutDatasets = sOutDataset + "=hcntrctrList";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, true);
+	},
+	
+	
+	/**
+	 * 토지판매(SLS)에서 공통으로 사용되는 토지코드 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getLadCodeList : function(oInDataset, sOutDataset, sCallBack){
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_LAD_CODE;
+		var sOutDatasets = sOutDataset + "=ladCode";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, true);
+	},
+		
+	/**
+	 * 토지판매(SLS)에서 공통으로 사용되는 토지상세정보 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getLadDetailList : function(oInDataset, sOutDataset, sCallBack){
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_LAD_DETAIL;
+		var sOutDatasets = sOutDataset + "=ladDetail";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, true);
+	},
+	
+	/**
+	 * 토지판매(SLS)에서 계약(해약)목록 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getLcntrctrList : function(oInDataset, sOutDataset, sCallBack){
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_LCNTRCTR;
+		var sOutDatasets = sOutDataset + "=lcntrctrList";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, true);
+	},
+	
+	/**
+	 * 토지판매(SLS)에서 공통으로 사용되는 사업코드 목록을 조회
+	 * @param sInDataset 	: 전달 파라메타 정보
+							  Object({KEY:"VALUE",...}) 또는 String("input1=ds_condCombo00")
+	 * @param sOutDataset 	: outDatasets 명
+	 * @param sCallBack 	: transaction의 결과를 돌려줄 Function의 이름
+	 * 						  null일 경우 화면의 fn_callBack
+	 */
+	getBsnsCodeList : function(oInDataset, sOutDataset, sCallBack){
+		var strSvcIdArr = sOutDataset.split("_");
+		var strSvcId = strSvcIdArr[1];
+		var sController = this.SLS_TRAN_BSNS_CODE;
+		var sOutDatasets = sOutDataset + "=bsnsCode";
+		
+		this.pmsComTran(strSvcId, sController, oInDataset, sOutDatasets, null, sCallBack, true);
+	},
+	
+	/**
+	 * PMS transaction
+	 * Dataset의 값을 갱신하기위한 서비스를 호출하고, 작업이 완료되면 콜백함수을 수행하는 메소드.
+	 * sInDatasets 값이 기존에는 String("input1=DS_NAME")형태이나 Map 또는 Array<Map>형태의 값을 받아
+	 * Dataset을 구성하고 최종적으로 Ex.core.tran Method를 호출을 위한 String("input1=DS_NAME")형태로 
+	 * 구성하여 호출한다.
+	 * @param strSvcId
+	 * @param sController
+	 * @param oInDatasets
+	 * @param sOutDatasets
+	 * @param sArgs
+	 * @param callBack
+	 */
+	pmsComTran : function(strSvcId, sController, oInDatasets, sOutDatasets, sArgs, callBack, bProgress){
+
+		var isNullSvcId = this.WORK_FORM.comUtils.isNullEmpty(strSvcId);
+		var isNullCtrlId = this.WORK_FORM.comUtils.isNullEmpty(sController);
+		var isNullOutDs = this.WORK_FORM.comUtils.isNullEmpty(sOutDatasets);
+		
+		if(isNullSvcId || isNullCtrlId){// || isNullOutDs){
+		
+			//var nullMsg = isNullSvcId ? "Service ID" : ( isNullCtrlId ? "Transaction 요청 경로" : (isNullOutDs ? "Out Datasets 명" : "요청"));
+			var nullMsg = isNullSvcId ? "Service ID" : ( isNullCtrlId ? "Transaction 요청 경로" : "요청");
+			nullMsg += " 정보가 없습니다.";
+			alert(nullMsg);
+			
+			return false;
+		}
+		
+		// 전달 데이터셋 정보
+		var sInDataType = typeof(oInDatasets);
+		var sendDs = null;
+		var sInDatasets = "";
+		if(sInDataType == "object"){
+			// Tran 정보(Dataset) 설정
+			sInDatasets = this._setDynamicInDataset(oInDatasets);
+		}else{
+			if(oInDatasets.indexOf("=") == -1){
+				var inDsArr = oInDatasets.split(" ");
+				var inDsArrLeng = inDsArr.length;
+				if(inDsArrLeng > 1){
+					for(var i = 0; i < inDsArrLeng; i++){
+						sInDatasets += "input" + (i+1) + "=" + inDsArr[i];
+						if(i != (i-1)){
+							sInDatasets += " ";
+						}
+					}
+				}else{
+					sInDatasets = "input1=" + oInDatasets;
+				}
+			}else{
+				sInDatasets = oInDatasets;
+			}
+		}
+	
+		// Tran 요청
+		Ex.core.tran(this.WORK_FORM, strSvcId, sController, sInDatasets, sOutDatasets, sArgs, callBack, bProgress);
+	},
+	
+	/**
+	 * Map(Object) 또는 Array(Map)형 데이터를 기준으로 Dataset을 생성하고
+	 * transaction 요청시 sInDatasets 파라메타 정보(String)을 반환한다.
+	 * @param oInData 대상 데이터
+	 * @param isList 대상 데이터의 리스트 데이터 여부(기본 false)
+	 * @return String sInDatasets 파라메타 정보(String)
+	 */
+	_setDynamicInDataset : function(oInData, isList){
+		
+		var isArray = this.isArray(oInData);
+		var isListParam = this.WORK_FORM.comUtils.isNullEmpty(isList) ? false : isList;
+		
+		var paramDsName = null;
+		var sInDatasets = null;
+		
+		var createdDs = null;
+		if(isArray && !isListParam){
+			var targetLeng = oInData.length;
+			for(var i = 0; i < targetLeng; i++){
+				var oDsItem = oInData[i];
+				paramDsName = this.PARAM_DS_NAME + (i < 9 ? "0" + i : i);
+				createdDs = this._createMapToDataset(oDsItem, paramDsName);
+				if(createdDs){
+					if(sInDatasets == null){
+						sInDatasets = "input";
+					}else{
+						sInDatasets += " input";
+					}
+					sInDatasets += (i + 1) + "=" + paramDsName;
+				}
+			}
+		}else{
+			paramDsName = this.PARAM_DS_NAME + "00";
+			createdDs = this._createMapToDataset(oInData, paramDsName);
+			if(createdDs){
+				sInDatasets = "input1=" + paramDsName;
+			}
+		}
+		return sInDatasets;
+	},
+	
+	/**
+	 * Map(Object)형 데이터를 기반으로 Dataset을 생성.
+	 * @param oDataMap 데이터 Map(Object)
+	 * @param dsName Dataset 이름
+	 * @return Boolean
+	 */
+	_createMapToDataset : function(oTargetData, dsName){
+		
+		try{
+			// 데이터 전달용 DataSet이 있는지 확인.
+			var paramDs =  this.WORK_FORM.objects[dsName];
+			var noParamDs = this.WORK_FORM.comUtils.isNull(paramDs);
+
+			if(noParamDs){
+				paramDs = new Dataset;
+				paramDs.set_name(dsName);
+			}else{
+				paramDs.clear();	// 데이터셋 초기화 - 컬럼정보 삭제
+			}
+			
+			var isArray = this.isArray(oTargetData);
+			if(isArray){
+				var targetLeng = oTargetData.length;
+				
+				// 첫행을 기준으로 컬럼정보 설정
+				var infoMap = targetLeng > 0 ? oTargetData[0] : null;
+				if(infoMap == null){
+					return false;
+				}else{
+					for(var sKey in infoMap){
+						paramDs.addColumn(sKey, "string");
+					}
+				}
+				
+				// 전달 데이터 설정
+				for(var i = 0; i < targetLeng; i++){
+					// 행 추가
+					paramDs.addRow();
+					
+					// 데이터 추가
+					var oTargetItem = oTargetData[i];
+					for(var sKey in oTargetItem){
+						paramDs.setColumn(i, sKey, oTargetItem[sKey]);
+					}
+				}
+			
+			}else{
+				// 전달 데이터셋 컬럼정보 설정
+				for(var sKey in oTargetData){
+					paramDs.addColumn(sKey, "string");
+				}
+				
+				// 전달 데이터 설정
+				// 행 추가
+				paramDs.addRow();
+				// 데이터 추가
+				for(var sKey in oTargetData){
+					paramDs.setColumn(0, sKey, oTargetData[sKey]);
+				}
+			}
+			
+			if(noParamDs){
+				this.WORK_FORM.addChild(dsName, paramDs);
+			}
+			
+			return true;
+		}catch(ex){
+			return false;
+		}
+	},
+	
+	// [ END ] Service 관련
+	
+	// [BEGIN] Report 관련
+	addCharToStr : function(sTarget, aChar)
+	{
+		var addChar = this.WORK_FORM.comUtils.isNullEmpty(aChar) ? " " : aChar;
+		var reStr = "";
+		var cheLeng = sTarget.length;
+		for(var i = 0; i <  cheLeng; i++)
+		{
+			var sChar = sTarget[i];
+			if(typeof(sChar) == "string"){
+				reStr += i < (cheLeng - 1) ? sChar + addChar : sChar;
+			}
+		}
+		
+		return reStr;
+	},
+	
+	/**
+	 * 레포트 팝업 출력
+	 * @param form
+	 * @param reportTitle
+	 * @param reportPath
+	 * @param datasetArr
+	 * @return Boolean
+	 */
+	popupReportView : function(form, rptOption){//reportTitle, reportPath, datasetArr){
+		
+		var reportPath = rptOption && rptOption.path ? rptOption.path : null;
+		var reportTitle = rptOption && rptOption.title ? rptOption.title : null;
+		var reportFile = rptOption && rptOption.filename ? rptOption.filename : null;
+		var datasetArr = rptOption && rptOption.dataset ? rptOption.dataset : null;
+		var callback = rptOption && rptOption.callback ? rptOption.callback : "report_callback";
+		
+		var isMultiReport = rptOption && rptOption.ismultireport ? rptOption.ismultireport : false;//setIsMultiReport
+		var multiCount = rptOption && rptOption.multicount ? rptOption.multicount : null;
+		
+		var argumentMap = rptOption && rptOption.arguments ? rptOption.arguments : null;
+		
+		if(reportPath == null){
+			alert("출력 Report의 경로가 지정되지 않았습니다.");
+			return;
+		}
+		
+		var strUserNm = application.gds_userInfo.getColumn(0, "USER_NM");	// 로그인 사용자명
+		if(reportFile == null){
+			reportFile = reportTitle;
+		}
+	
+		var opFunc = form.cf_Opts;
+		var vOpts = new opFunc();
+		vOpts.setToolbar(false);
+		vOpts.setScale(100);
+		vOpts.setReportPath(reportPath);
+		vOpts.setSaveFilename(reportFile);
+		
+		vOpts.setIsMultiReport(isMultiReport);
+		vOpts.setMultiCount(multiCount);
+		
+		// arguments 설정
+		// 기본
+		vOpts.setArgs("title", reportTitle);
+		vOpts.setArgs("user", strUserNm);
+		// 추가
+		if(argumentMap != null){
+			for(var sKey in argumentMap){
+				vOpts.setArgs(sKey, argumentMap[sKey]);
+			}
+		}
+
+		// 데이터셋 설정
+		var dsArrLeng = datasetArr == null ? 0 : datasetArr.length;
+		if(dsArrLeng > 0){
+			var arrItemIsArray = this.isArray(datasetArr[0]);
+			if(arrItemIsArray){
+				for(var i = 0; i < dsArrLeng; i++){
+					var dsItemArr = datasetArr[i];
+					vOpts.setLocalDs(dsItemArr);
+				}
+			}else{
+				vOpts.setLocalDs(datasetArr);
+			}
+		}
+	
+		var parm = {
+			arg_0 : form,  //==> 필수, 팝업을 호출하는 form을 참조할 수 있도록 팝업에 Argument로 넘겨준다. (반드시 기술해야 함.)
+			opts : vOpts
+		};
+		
+		form.gfn_popup("Popup_Report", 884, 735, reportTitle, parm, "common::frmReportPopup.xfdl", callback);
+	},
+	
+	// [ END ] Report 관련
+	
+	// [BEGIN] POPUP 관련
+	
+	/**
+	 * 주소검색 팝업 출력
+	 * @param targetDs
+	 * @param option
+	 * 	{
+			zipField:		// 우편번호
+			roadBaseField:	// 도로명주소(기본)
+			roadDetField:	// 도로명주소(상세)
+			jibunField:		// 지번주소(전체)
+			jibunBaseField:	// 지번주소(기본)
+			jibunDetField:	// 지번주소(상세)
+			schWord:		// 기본 검색어
+			callback:		// 사용자 CallBack(예비-미구현)
+	 * 	}
+	 * @param isUseMap		// 맵으로 반환여부(Dataset을 지정하더라도 Dataset에 반영하지 않음
+	 */
+	popupZipCode : function(dsTarget, option, isUseMap){
+		
+		var useMap = this.WORK_FORM.comUtils.isNullEmpty(isUseMap) ? false : isUseMap;
+		
+		var fieldZip = option && option.zipField ? option.zipField : null;
+		var fieldRoadBase = option && option.roadBaseField ? option.roadBaseField : null;
+		var fieldRoadDet = option && option.roadDetField ? option.roadDetField : null;
+		var fieldJibun = option && option.jibunField ? option.jibunField : null;
+		var fieldJibunBase = option && option.jibunBaseField ? option.jibunBaseField : null;
+		var fieldJibunDet = option && option.jibunDetField ? option.jibunDetField : null;
+		
+		var searchWord = option && option.schWord ? option.schWord : null;
+		var callbackFunc = option && option.callback ? option.callback : null;
+		
+		var noDsTarget = this.WORK_FORM.comUtils.isNullEmpty(dsTarget);
+		
+		if(noDsTarget && callbackFunc == null){
+			this.WORK_FORM.alert("대상 DataSet 또는 CallBack Function을 지정하지 않았습니다.");
+			return;
+		}
+		
+		if(useMap && callbackFunc == null){
+			this.WORK_FORM.alert("결과 데이터를 반환할 CallBack Function을 지정하지 않았습니다.");
+			return;
+		}
+		
+		if(!useMap && fieldZip == null){
+			this.WORK_FORM.alert("대상 Field를 지정하지 않았습니다.");
+			return;
+		}
+		
+		// 요청값
+		var reqParam = {};
+		
+		// 팝업 CallBack
+		var fn_cb = function(sPopupId, sReturn) {
+		
+			if(Eco.isEmpty(sReturn)) return;
+		
+			//trace('OK\n'  + sReturn);
+
+			var dsRet = new Dataset();
+			nRowCnt = dsRet.loadXML(sReturn);
+			if(nRowCnt < 1) return;
+			
+			var resultMap = {};
+
+			// 우편번호
+			var sCols = "";
+			var resultFieldNm = null;
+			if(useMap){
+				resultFieldNm = fieldZip == null ? "ZIP" : fieldZip;
+				resultMap[resultFieldNm] = dsRet.getColumn(0, "ZIPNO"); 
+			}else{
+				if(fieldZip != null){
+					sCols += fieldZip + "=ZIPNO,";
+					resultMap[fieldZip] = dsRet.getColumn(0, "ZIPNO");
+				}
+			}
+		
+			// 도로명주소(일반)
+			if(useMap){
+				resultFieldNm = fieldRoadBase == null ? "ROAD_BASE" : fieldRoadBase;
+				resultMap[resultFieldNm] = dsRet.getColumn(0, "ROADADDRPART1");
+			}else{
+				if(fieldRoadBase != null){
+					sCols += fieldRoadBase + "=ROADADDRPART1,";
+					resultMap[fieldRoadBase] = dsRet.getColumn(0, "ROADADDRPART1");
+				}
+			}
+			
+			// 도로명주소(상세)
+			if(useMap){
+				resultFieldNm = fieldRoadDet == null ? "ROAD_DETAIL" : fieldRoadDet;
+				resultMap[resultFieldNm] = dsRet.getColumn(0, "ROADADDRPART2");
+			}else{
+				if(fieldRoadDet != null){
+					sCols += fieldRoadDet + "=ROADADDRPART2,";
+					resultMap[fieldRoadDet] = dsRet.getColumn(0, "ROADADDRPART2");
+				}
+			}
+			
+			// 지번주소
+			if(useMap){
+				resultFieldNm = fieldJibun == null ? "JIBUN_ALL" : fieldJibun;
+				resultMap[resultFieldNm] = dsRet.getColumn(0, "JIBUNADDR");
+			}else{
+				if(fieldJibun != null){
+					sCols += fieldJibun + "=JIBUNADDR,";
+					resultMap[fieldJibun] = dsRet.getColumn(0, "JIBUNADDR");
+				}
+			}
+			
+			// 지번분할
+			var inJibunAddr = dsRet.getColumn(0, "JIBUNADDR");
+			var jibunArr = inJibunAddr.split("   ");
+			var jibunArrLeng = jibunArr.length;
+			
+			var spJibumBase = null;
+			var spJibunDetail = null;
+			if(jibunArrLeng > 0){
+				spJibumBase = jibunArr[0];
+				spJibunDetail = jibunArrLeng > 1 ? jibunArr[1] : "";
+			}else{
+				spJibumBase = inJibunAddr;
+				spJibunDetail = "";
+			}
+			
+			if(useMap){
+				// 지번주소(일반) 
+				resultFieldNm = fieldJibunBase == null ? "JIBUN_BASE" : fieldJibunBase;
+				resultMap[resultFieldNm] = spJibumBase;
+				
+				// 지번주소(상세)
+				resultFieldNm = fieldJibunDet == null ? "JIBUN_DETAIL" : fieldJibunDet;
+				resultMap[resultFieldNm] = spJibunDetail;
+			}else{
+				var ds = null;
+				if(!noDsTarget){
+					var ds = dsTarget;
+					ds.copyRow(ds.rowposition, dsRet, 0, sCols);
+				}
+				
+				// 지번 분할
+				if(fieldJibunBase != null){
+
+					if(!noDsTarget){
+						ds.setColumn(ds.rowposition, fieldJibunBase, spJibumBase);
+					}
+					resultMap[fieldJibunBase] = spJibumBase;
+					
+					if(fieldJibunDet != null){
+					
+						if(!noDsTarget){
+							ds.setColumn(ds.rowposition, fieldJibunDet, spJibunDetail);
+						}
+						resultMap[fieldJibunDet] = spJibunDetail;
+					}
+				}
+			}
+			
+			//trace(JSON.stringify(resultMap));
+			
+			if(callbackFunc != null){
+				if(typeof callbackFunc == "function"){
+					callbackFunc.call(this, resultMap);
+				}else{
+					this[callbackFunc](resultMap);
+				}
+			}
+		}
+		
+		reqParam["arg_addr"] = searchWord == null ? "" : searchWord;
+
+		this.WORK_FORM.gfn_popup('zipPopup', 500, 500, '', reqParam, "common::frmZipAddressPopup.xfdl", fn_cb);
+	
+	},
+	
+	// [ END ] POPUP 관련
+	
+	// [BEGIN] Formatter 관련
+	
+	formatZip : function(value){
+		var emptyStr = "";
+		
+		var isEmpty = this.WORK_FORM.comUtils.isNullEmpty(value);
+		if(isEmpty){
+			return emptyStr;
+		}
+		
+		var valStr = value.replace(/[^0-9]/g, '');
+		isEmpty = this.WORK_FORM.comUtils.isNullEmpty(valStr);
+		if(isEmpty){
+			return emptyStr;
+		}
+		var formatStr = null;
+		var ssf = new switchSymbolFormatter();
+		var valStrLeng = valStr.length;
+		if(valStrLeng == 6){
+			formatStr = "###-###";
+		}else{
+			return valStr;
+		}
+		return ssf.formatValue(formatStr, valStr);
+	},
+	
+	formatDate : function(value, useFormat){
+		
+		var emptyStr = "";
+		
+		var isEmpty = this.WORK_FORM.comUtils.isNullEmpty(value);
+		if(isEmpty){
+			return emptyStr;
+		}
+		
+		var valStr = String(value);
+		var resultStr = emptyStr;
+
+		isEmpty = this.WORK_FORM.comUtils.isNullEmpty(valStr);
+		if(isEmpty){
+			return emptyStr;
+		}
+		
+		var format = useFormat ? useFormat : null;
+		var formatStr = "";// = format == null ? "####/##/##" : format;
+		var ssf = new switchSymbolFormatter();
+		var formatToken = this.DATE_FORMAT_TOKEN;
+		
+		if(valStr.length == 17)
+		{
+			formatStr = format == null ? "####" + formatToken + "##" + formatToken + "## ##:##:##:###" : format;
+		}
+		else if(valStr.length == 16)
+		{
+			formatStr = format == null ? "####" + formatToken + "##" + formatToken + "## ##:##:##:##" : format;
+		}
+		else if(valStr.length == 15)
+		{
+			formatStr = format == null ? "####" + formatToken + "##" + formatToken + "## ##:##:##:#" : format;
+		}
+		else if(valStr.length == 14)
+		{
+			formatStr = format == null ? "####" + formatToken + "##" + formatToken + "## ##:##:##" : format;
+		}
+		else if(valStr.length == 12)
+		{
+			formatStr = format == null ? "####" + formatToken + "##" + formatToken + "## ##:##" : format;
+		}
+		else if(valStr.length == 8)
+		{
+			formatStr = format == null ? "####" + formatToken + "##" + formatToken + "##" : format;
+		}
+		else if(valStr.length == 6)
+		{
+			formatStr = format == null ? "####" + formatToken + "##" : format;
+		}
+		else
+		{
+			if(format == null)
+			{
+				return valStr;
+			}else{
+				formatStr = format;
+			}
+		}
+		return ssf.formatValue(formatStr, valStr);
+	},
+	
+	formatPhone : function(value, useBlock){
+		var emptyStr = "";
+		
+		var isEmpty = this.WORK_FORM.comUtils.isNullEmpty(value);
+		if(isEmpty){
+			return emptyStr;
+		}
+		
+		var isBlock = useBlock ? useBlock : false;
+		var valStr = value.replace(/[^0-9]/g, '');
+		
+		isEmpty = this.WORK_FORM.comUtils.isNullEmpty(valStr);
+		if(isEmpty){
+			return emptyStr;
+		}
+		
+		var formatStr = null;
+		var ssf = new switchSymbolFormatter();
+		var valStrLeng = valStr.length;
+		if(valStrLeng == 11)
+		{
+			formatStr = isBlock ? "###-****-####" : "###-####-####";
+			valStr = isBlock ? valStr.substring(0,3) + valStr.substring(7,11) : valStr;
+		}
+		else if(valStrLeng == 10)
+		{
+			if(valStr.substring(0,2) == "02")
+			{
+				formatStr = isBlock ? "##-****-####" : "##-####-####";
+				valStr = isBlock ? valStr.substring(0,2) + valStr.substring(6,10) : valStr;
+			}
+			else
+			{
+				formatStr = isBlock ? "###-***-####" : "###-###-####";
+				valStr = isBlock ? valStr.substring(0,3) + valStr.substring(6,10) : valStr;
+			}
+		}
+		else if(valStrLeng == 9)
+		{
+			if(valStr.substring(0,2) == "02")
+			{
+				formatStr = isBlock ? "##-***-####" : "##-###-####";
+				valStr = isBlock ? valStr.substring(0,2) + valStr.substring(5,9) : valStr;
+			}
+			else
+				return valStr;
+		}
+		else if(valStrLeng == 8)
+		{
+			formatStr = "####-####";
+		}
+		else if(valStrLeng == 7)
+		{
+			formatStr = "###-####";
+		}
+		else
+		{
+			return valStr;
+		}
+		return ssf.formatValue(formatStr, valStr);
+	},
+	
+	formatIhidnum : function(value, useBlock)
+	{
+		var emptyStr = "";
+		
+		var isEmpty = this.WORK_FORM.comUtils.isNullEmpty(value);
+		if(isEmpty){
+			return emptyStr;
+		}
+		
+		var isBlock = useBlock ? useBlock : false;
+		var valStr = value.replace(/-/g, '');
+		
+		isEmpty = this.WORK_FORM.comUtils.isNullEmpty(valStr);
+		if(isEmpty){
+			return emptyStr;
+		}
+		
+		var formatStr = null;
+		var ssf = new switchSymbolFormatter();
+		var valStrLeng = valStr.length;
+		if(valStrLeng > 12){
+			formatStr = isBlock ? "######-#******" : "######-#######";
+		}else{
+			return valStr;
+		}
+		return ssf.formatValue(formatStr, valStr);
+	},
+	
+	/**
+	 * 조회결과 건수 표기
+	 */
+	setListSizeStatus : function(targetDs, taegetSta, displayFormat, titleText, nullText){
+		var result = "";
+		
+		var dspSta = taegetSta ? taegetSta : null;
+		var listTitle = titleText ? titleText : "";
+		var formatStr = displayFormat ? displayFormat : "총 # 건이 조회되었습니다.";
+		var dspNullText = nullText ? nullText : "조회 결과가 없습니다.";
+		var listSize = targetDs.getRowCount();
+		
+		var lengRegExp = RegExp("#", "gi");
+		var titleRegExp = RegExp("@", "gi");
+		result = listSize > 0 ? (formatStr.replace(lengRegExp, listSize)).replace(titleRegExp, listTitle) : dspNullText;
+		
+		if(dspSta == null){
+			return result;
+		}else{
+			dspSta.set_text(result);
+		}
+	},
+	
+	/**
+	 * formatMapList에 지정된 필드와 포멧타입에 따라 데이터셋의
+	 * 정보를 변환한다.
+	 * formatMapList
+	 * [
+	 *   {FIELD: "FIELD_ID", TYPE: "TYPE", OPTION: OPTION}
+	     , {FIELD: "FIELD_ID", TYPE: "TYPE", OPTION: OPTION}
+	     , ...
+	 * ]
+	 * TYPE 설정
+	 * ZIP : 우편번호 - formatZip
+	 * PHONE : 전화번호 - formatPhone
+	 * DATE : 날짜 - formatDate
+	 * IHIDNUM : 주민등록번호/법인등록번호 - formatIhidnum
+	 * TYPE별 OPTION
+	 * ZIP : 우편번호		> 없음
+	 * PHONE : 전화번호 	> boolean : 가운데 번호 * 처리 여부
+	 * DATE : 날짜 			> string : 포멧형식(ex: "####년##월##일")
+	 * IHIDNUM : 주민등록번호/법인등록번호 > boolean 뒷 6자리 * 처리여부
+	 * @param {Dataset} targetDs
+	 * @param  (Array) formatMapList
+	 * @return {Boolean} 
+	 */
+	fn_setFormatData : function(targetDs, formatMapList, setTargerDs)
+	{
+		try
+		{
+			var dsDataList = this.datasetToObject(targetDs);
+			
+			if(dsDataList == null){
+				return true;
+			}
+			
+			var isArry = this.isArray(dsDataList);
+			var jobList = isArry ? dsDataList : [dsDataList];
+			
+			var checkFormatType = function(targetId)
+			{
+				var result = null;
+				var checkLeng = formatMapList == null ? 0 : formatMapList.length;
+				for(var j = 0; j < checkLeng; j++)
+				{
+					var checkItem = formatMapList[j];
+					var fieldId = checkItem["FIELD"];
+					var type = checkItem["TYPE"];
+					var option = checkItem.hasOwnProperty("OPTION") ? checkItem["OPTION"] : null;
+					
+					if(fieldId == targetId)
+					{
+						if(option == null)
+						{
+							result = type;
+						}else{
+							result = [type, option];
+						}
+						
+						break;
+					}
+				}
+				
+				return result;
+			}
+			
+			// 추출한 데이터 셋의 데이터를 formatMapList 의 설정값(type)에 따라 변환한다.
+			// ZIP : 우편번호 - formatZip
+			// PHONE : 전화번호 - formatPhone
+			// DATE : 날짜 - formatDate
+			// IHIDNUM : 주민등록번호/법인등록번호 - formatIhidnum
+			var jobListLeng = jobList == null ? 0 : jobList.length;
+			for(var i = 0; i < jobListLeng; i++)
+			{
+				var jobItem = jobList[i];
+				for(var sKey in jobItem)
+				{
+					var checkResult = checkFormatType(sKey);	// 해당 컬럼에 포메팅 적용여부 확인
+					
+					if(checkResult == null){
+						continue;
+					}else{
+						var inValue = jobItem[sKey];
+						var newItemValue = "";
+						
+						var isArrayReault = this.isArray(checkResult);
+						var formatType = "";
+						var formatOption = null;
+						if(isArrayReault){
+							formatType = checkResult[0];
+							formatOption = checkResult[1];
+						}else{
+							formatType = checkResult;
+						}
+						
+						switch(formatType)
+						{
+							case "ZIP" :
+								newItemValue = this.formatZip(inValue);
+								break;
+								
+							case "PHONE" :
+								newItemValue = formatOption == null ? this.formatPhone(inValue) : this.formatPhone(inValue, formatOption);
+								break;
+								
+							case "DATE" :
+								newItemValue = formatOption == null ? this.formatDate(inValue) : this.formatDate(inValue, formatOption);
+								break;
+								
+							case "IHIDNUM" :
+								newItemValue = formatOption == null ? this.formatIhidnum(inValue) : this.formatIhidnum(inValue, formatOption);
+								break;
+						
+							default :
+								break;
+						}
+						
+						// 변환값 설정
+						jobItem[sKey] = newItemValue;
+					}
+				}
+			}
+			
+			// 변환 데이터 설정 Dataset 설정여부 확인
+			var isSetOtherDs = setTargerDs ? true : false;
+			
+			// 데이터셋 초기화
+			var setChangeDs = isSetOtherDs ? setTargerDs : targetDs;
+			this.clearDataSet([setChangeDs]);
+			
+			// 변환 데이터 설정
+			this.putListToDataset(setChangeDs, jobList);
+			
+			return true;
+		}catch(ex){
+			return false;
+		}
+	},
+	
+	// [ END ] Formatter 관련
+	
+	/**
+	 * 블록,로트,구부구부을 합산하여 검색조건을 만든다.
+	 */
+	getBltSumInfo : function(infoMap){
+		
+		var result = {};
+		
+		var workForm = this.WORK_FORM;
+		var blckFm = workForm.comUtils.isNullEmpty(infoMap["BLCK_FM"]) ? "" : infoMap["BLCK_FM"];
+		var lotFm = workForm.comUtils.isNullEmpty(infoMap["LOT_FM"]) ? "" : infoMap["LOT_FM"];
+		var lotTyFm = workForm.comUtils.isNullEmpty(infoMap["LOT_TY_FM"]) ? "" : infoMap["LOT_TY_FM"];
+		var blckTo = workForm.comUtils.isNullEmpty(infoMap["BLCK_TO"]) ? "" : infoMap["BLCK_TO"];
+		var lotTo = workForm.comUtils.isNullEmpty(infoMap["LOT_TO"]) ? "" : infoMap["LOT_TO"];
+		var lotTyTo = workForm.comUtils.isNullEmpty(infoMap["LOT_TY_TO"]) ? "" : infoMap["LOT_TY_TO"];
+		
+		var bltSumFm = blckFm.padLeft(3, "0") + lotFm.padLeft(3, "0") + lotTyFm.padLeft(2, "0");
+		var bltSumTo = blckTo.padLeft(3, "0") + lotTo.padLeft(3, "0") + lotTyTo.padLeft(2, "0");
+		
+		var bltFm = null;
+		var bltTo = null;
+		if(bltSumFm == "00000000" && bltSumTo == "00000000"){
+			 bltFm = "";
+			 bltTo = "";
+		}else{
+			bltFm = bltSumFm;
+			bltTo = bltSumTo;
+		}
+		
+		result["BLT_FM"] = bltFm;
+		result["BLT_TO"] = bltTo;
+
+		return result;
+	},
+	
+	/**
+	 * 특정영역(Div)내의 입력 Component의 입력값을 추출하여 Map 형태로 반환한다.
+	 * ※ 반드시 입력 Component는 특정 Dataset에 바인딩된 정보가 있어야 한다.
+	 * @param targetDiv 대상(부모) Component
+	 * @return Object(Map)
+	 */
+	getInputMap : function(targetDiv){
+		var result = null;
+		
+		var compLeng = targetDiv.components.length;
+		for(var i = 0; i < compLeng; i++){
+			var inputComp = targetDiv.components.get_item(i);
+			var inputType = inputComp.toString();
+			var inputValue = null;
+			var inputName = null;
+			switch(inputType){
+				case "[object Edit]":
+				case "[object MaskEdit]":
+				case "[object TextArea]":
+				case "[object Spin]":
+				case "[object Calendar]":
+				case "[object Radio]":
+				case "[object CheckBox]":
+				case "[object ListBox]":
+				case "[object Combo]":
+				case "[object Div]":
+					
+					var compId = targetDiv.id + "." + inputComp.id;
+					inputName = this._getBindItemName(compId);
+					
+					if(inputName == null){
+						continue;
+					}
+					if(inputType == "[object Div]"){
+						inputValue = inputComp.fn_get_value();
+					}else{
+						inputValue = inputComp.value;
+					}
+					
+					break;
+				default :
+					break;
+			}
+			
+			if(inputName != null){
+				if(result == null){
+					result = {};
+				}
+				result[inputName] = inputValue;
+			}
+		}
+		
+		return result;
+	},
+
+	/**
+	 * Form내 바인딩 정보로 해당 컴포넌트 ID로 바인딩된 Dataset의 필드 명을 반환한다.
+	 * @param compId 대상 컴포넌트 ID
+	 * @return String
+	 */
+	_getBindItemName : function(compId){
+		var result = null;
+		var bindLeng = this.WORK_FORM.binds.length;
+		for(var i = 0; i < bindLeng; i++){
+			var bindItem = this.WORK_FORM.binds[i];
+			if(bindItem.compid == compId){
+				result = bindItem.columnid;
+				break;
+			}
+		}
+		
+		return result;
+	},
+	
+	/**
+	 * 전달한 값을 Alert 또는 nexacro Outpu trace로 출력.
+	 * 전달한 값이 Dataset의 경우 옵션값에 따라 대상 Dataset의 내용을 String으로 출력
+	 * ex) var option = {
+					viewRow: "expr:compId='div_search'", //[0,2],
+					viewCol: ["colId","notNull","msgId"]
+				};
+		   this.pmsUtil.dumper(this.ds_validation, option, true, true)
+	 * @param value 출력대상(값)
+	 * @param option 출력 Option - 출력대상이 Dataset의 경우에 한정.
+	 * @param viewAlert alert출력 유무 - 기본false
+	 * @param getStr 출력값 반환여부 - 기본 false
+	 * @return void/String
+	 */
+	dumper : function(value, option, viewAlert, getStr){
+		
+		var _host = application.gv_host;
+		var _isLocal = _host.indexOf("local") > -1 ? true : false;
+		
+		if(!this.USE_DUMP){
+			return false;
+		}else{
+			if(!_isLocal){
+				//return false;
+			}
+		}
+		
+		var result = null;
+		var isString = typeof(value) == "string" ? true : false;
+		var isAlert = viewAlert ? viewAlert : false;
+		var isResponse = getStr ? getStr : false;
+		
+		if(isString){
+			isAlert ? alert(value) : trace(value);
+			result = isResponse ? value : null;
+		}else{
+			var valueClass = value.toString();
+			// Dataset의 경우에만 처리
+			switch(valueClass){
+				case "[object Dataset]" :
+					var dataString = "\n[BEGIN] Dump - " + value.name + "\n";
+					var datasetString = this.datasetToObject(value, option, false);
+					dataString += datasetString == null ? "null\n" : datasetString;
+					dataString += "[ END ] Dump";
+					
+					isAlert ? alert(dataString) : trace(dataString);
+					result = isResponse ? dataString : null;
+					break;
+				default :
+					break;
+			}
+		}
+	
+		if(isResponse){
+			return result;
+		}
+	},
+	
+	/**
+	 * Dataset의 내용을 String형태(key=value,...) 또는 Map 형태({KEY:"VALUE",...})로 변환하여 그 결과를 반환한다.
+	 * Map형태의 경우 변환 대상 데이터셋이 1행일 경우 Map, 그 이상일 경우 ArrayList 형으로 변환하여 반환한다.
+	 * 옵션값으로 행, 컬럼의 출력 유/무를 설정할 수 있다.
+	 * ex) var option = {
+					viewRow: "expr:dataset.compId='div_search'", //[0,2],
+					viewCol: ["colId","notNull","msgId"]
+				};
+	 * @param dsObj 대상 Dataset
+	 * @param option option 출력 Option
+	 * @param toMap Map형태 반환 여부 : 기본 true
+	 */
+	datasetToObject : function(dsObj, option, toMap){
+
+		var result = null;
+		var resultMap = null;
+		var resultList = null;
+		var resultItem = null;
+		
+		var isNullToMap = this.WORK_FORM.comUtils.isNullEmpty(toMap);
+		if(isNullToMap){
+			toMap = true;
+		}
+		var viewRow = option ? option.viewRow || null : null;
+		var viewCol = option ? option.viewCol || null : null;
+		
+		var viewAllRow = option ? (viewRow ? false : true) : true;
+		var viewAllCol = option ? (viewCol ? false : true) : true;
+		
+		var rowOptTypeIsArr = viewAllRow ? false : (this.isArray(viewRow) ? true : false);
+		var colOptTypeIsArr = viewAllCol ? false : (this.isArray(viewCol) ? true : false);
+		
+		var filterStr = null;
+		var filterKey = null;
+		var filterValue = null;
+		
+		if(!viewAllRow && !rowOptTypeIsArr){
+			if(viewRow.indexOf("expr") == -1){
+				viewAllRow = true;
+			}else{
+				filterStr = viewRow.replace(/expr:/gi,"");
+				var filterValArr = filterStr.split("=");
+				filterKey = filterValArr[0];
+				filterValue = filterValArr[1];
+			}
+		}
+		
+		if(!viewAllCol && !colOptTypeIsArr){
+			viewAllCol = true;
+		}
+		
+		var rowCount = dsObj.getRowCount();
+		var colCount = dsObj.getColCount();
+		
+		if(rowCount > 0){
+		
+			result = "";
+			 
+			var isList = false;
+			if(toMap){
+				resultMap = {};
+				isList = rowOptTypeIsArr ? (viewRow.length > 1 ? true : false) : (rowCount > 1 ? true : false);
+				if(isList){
+					resultList = [];
+				}
+			}
+			
+			for(var i = 0; i < rowCount; i++){
+			
+				if(rowOptTypeIsArr){
+					var isViewRow = false;
+					var rowArrLeng = viewRow.length;
+					for(var x = 0; x < rowArrLeng; x++){
+						if(i == viewRow[x]){
+							isViewRow = true;
+							break;
+						}
+					}
+					if(!isViewRow) continue;
+				}
+				
+				if(filterStr != null){
+					var matchFilterRow = dsObj.findRowExpr(filterStr, i, i+1);
+					if(matchFilterRow < 0 || matchFilterRow != i){
+						continue;
+					}
+				}
+				/*
+				if(filterKey != null){
+					var targetValue = dsObj.getColumn(i, filterKey);
+					if(filterValue != targetValue){
+						continue;
+					}
+				}
+				*/
+			
+				if(toMap){
+					if(isList){
+						resultItem = {};
+						resultItem["DS_ROW"] = i;
+					}else{
+						resultMap["DS_ROW"] = i;
+					}
+				}else{
+					result += "ROW " + i + " : ";
+				}
+				
+				for(var j=0; j<colCount; j++){
+				
+					var columnId = dsObj.getColID(j);
+					var value = dsObj.getColumn(i, columnId);
+				
+					var addComm = false;
+					if(viewAllCol){
+						
+						if(toMap){
+							if(isList){
+								resultItem[columnId] = value;
+							}else{
+								resultMap[columnId] = value;
+							}
+						}else{
+							result += columnId + "=" + value;
+						}
+						
+						addComm = true;
+					}else{
+						var viewCollLeng = viewCol.length;
+						for(var k = 0; k < viewCollLeng; k++){
+							var viewColId = viewCol[k];
+							if(columnId == viewColId){
+								if(toMap){
+									if(isList){
+										resultItem[columnId] = value;
+									}else{
+										resultMap[columnId] = value;
+									}
+								}else{
+									result += columnId + "=" + value;
+								}
+								addComm = true;
+								break;
+							}
+						}
+					}
+					
+					if(!toMap){
+						if(j != colCount-1){
+							result += addComm ? ", " : "";
+						}else{
+							var rowType = dsObj.getRowType(i);	//dsObj._viewRecords[i]._rtype;
+							var rowTypeName = this._getDsRowTypeName(rowType);
+							result += " rowType=" +  rowType + "(" + rowTypeName + ")\n";
+						}
+					}else{
+						// 마지막 행의 경우
+						if(j == colCount-1){
+							var rowType = dsObj.getRowType(i);
+							var rowTypeNm = this._getDsRowTypeName(rowType);
+							if(isList){
+								resultItem["DS_ROW_TYPE"] = rowType;
+								resultItem["DS_ROW_TYPE_NM"] = rowTypeNm;
+							}else{
+								resultMap["DS_ROW_TYPE"] = rowType;
+								resultMap["DS_ROW_TYPE_NM"] = rowTypeNm;
+							}
+						}
+					}
+				}
+				
+				if(toMap && isList){
+					resultList.push(resultItem);
+				}
+			}
+			
+			// 반환 타입이 Map이고 dataSet의 행이 1개 이상(리스트)일 경우
+			// 반환 Map에 pmsUtil.TOMAP_LIST_NAME(RESULT_LIST)을 Key 값으로 변환한 리스트를 담는다.
+			/*
+			if(toMap && isList){
+				var listKeyName = this.TOMAP_LIST_NAME;
+				resultMap[listKeyName] = resultList;
+			}
+			*/
+		}
+		
+		return toMap ? (isList ? resultList : resultMap) : result;
+	},
+	
+	// Dataset에서 지정된 행(row)의 타입에 대한 명칭을 반환한다.
+	_getDsRowTypeName : function(type){
+		var result = "";
+		switch(type){
+			case Dataset.ROWTYPE_EMPTY :
+				result = "없음";
+				break;
+			case Dataset.ROWTYPE_NORMAL :
+				result = "초기";
+				break;
+			case Dataset.ROWTYPE_INSERT :
+				result = "추가";
+				break;
+			case Dataset.ROWTYPE_UPDATE :
+				result = "수정";
+				break;
+			case Dataset.ROWTYPE_DELETE :
+				result = "삭제";
+				break;
+			case Dataset.ROWTYPE_GROUP :
+				result = "그룹";
+				break;
+			default :
+				break;
+		}
+		return result;
+	}
+};
+
+function switchSymbolFormatter(sSymbol){
+	
+	this.SWITCH_SYMBOL = sSymbol ? sSymbol : "#";
+	this.isValid = true;
+	this.formatValue = function(format, source){
+		var numStr = "";
+        var uStrIndx = 0;
+
+        var n = format.length;
+        for (var i = 0; i < n; i++)
+        {
+            var letter = format.charAt(i);
+            if (letter == this.SWITCH_SYMBOL)
+                numStr += String(source).charAt(uStrIndx++);
+            else
+                numStr += format.charAt(i);
+        }
+        return numStr;
+	};
+}
+
+this.fileManager = function(oForm, sysSe, jobSe){
+
+	this.DEBUG = true;
+	this.MODE_TEST = false;						// 서버 테스트 용 : true일 경우 파일 및 정보가 저장되지 않음
+	this.TYPE_UPLOADER = "ExtFileUpload";
+	this.TYPE_DOWNLOADER = "ExtFileDownload";
+	this.DEF_UPLOAD_URL = "hsco/cmm/file/uploadFile.do";
+	this.DEF_DOWNLOAD_URL = "hsco/cmm/download/fileDownload.do";
+	//this.DEF_ALLOW_TYPE = ["jpg","jpeg","gif","png","bmp","txt","zip","7z","gzip","doc","docx","ppt","pptx","xls","xlsx","pdf","hwp","hwt","JPG","JPEG","GIF","PNG","BMP","TXT","ZIP","7Z","GZIP","DOC","DOCX","PPT","PPTX","XLS","XLSX","PDF","HWP","HWT",""];
+	this.DEF_ALLOW_TYPE = ["jpg","jpeg","gif","png","bmp","txt","zip","7z","gzip","doc","docx","ppt","pptx","xls","xlsx","pdf","hwp","hwt",""];
+	this.DATASET_NAME_UP_BASE = "ds_upBase";		// 업로드 기초정보
+	this.DATASET_NAME_UP = "ds_upFiles";		// 업로드 파일정보
+	this.DATASET_NAME_DOWN = "ds_downFiles";	// 다운로드 파일정보
+	this.DATASET_COLUMN_UP = ["FILE_SN"			// 파일일련번호
+							, "FILE_ORDR"		// 파일순차
+							, "FILE_STRE_COURS"	// 파일저장경로
+							, "STRE_FILE_NM"	// 저장파일명
+							, "ORGINL_FILE_NM"	// 원본파일명
+							, "FILE_EXTSN"		// 파일확장자
+							, "FILE_CN"			// 파일내용
+							, "FILE_MG"			// 파일크기
+							, "USE_AT"			// 사용여부
+							, "FILE_ID"			// 
+							, "FILE_TY"			// 
+							// 파일 마스터
+							, "SN"				// 파일 ID
+							, "SYS_SE_CODE"		// 시스템구분코드
+							, "JOB_SE"			// 업부구분코드 JOB_SE_CODE
+							// 운영 정보
+							, "FILE_IMAGE"		//
+							, "PROGRS"			//
+							, "TRNSMIS_FILE_SIZE"	//
+							, "DELETE_IMAGE"	//
+							, "STTUS"			//
+							];
+							
+	this.DATASET_COLUMN_DOWN = ["FILE_SN"			// 파일일련번호
+								, "FILE_ORDR"		// 파일순차
+								];
+								
+	this.DATASET_COLUMN_UP_BASE = ["SINGLE_FILE_SN"	// 일련번호당 파일 1건 : Y(true), N(false)
+									, "MODE_TEST"
+									];
+								
+	this.USE_ADD_FILE_SN = false,		// 업로드 파일선택시 파일일련번호 포함 사용여부
+	this.ADD_FILE_SN = null,			// 업로드 선택파일의 파일일련번호
+	this.ADD_FILE_SN_SINGLE = false,	// 파일일련번호 포함 업로드 시 싱글파일 처리여부
+								
+	this.maxCount = 10;
+	this.maxSize = "30MB";			// 단위 MB 
+	this.maxTotalSize = "200MB";	// 단위 MB
+								
+	this._form = oForm;
+	this._sysSe = sysSe;
+	this._jobSe = jobSe;
+	
+	this._uploader = null;
+	this._downloader = null;
+	
+	this._host = null;
+	this._uploadUrl = null;
+	this._downloadUrl = null;
+	this._allowTypes = null;
+	this._useMultiSelect = false;
+	this._transferType = "all";				// transferType 전송유형.(all: 대상파일을 한번에 전송(defalut), each: 개별 전송)
+	
+	this._userOnChange = null;				// 사용자 파일선택 후 이벤트 처리 함수
+	this._userOnSuccess = null;				// 사용자 성공 이벤트 처리 함수
+	this._userOnError = null;				// 사용자 실패 이벤트 처리 함수
+	this._userOnProgress = null;			// 사용자 상태변경 이벤트 처리 함수
+	this._userOnReadyStateChange = null;	// 사용자 프로그래스 이벤트 처리 함수
+	
+	this._userOnCancelFile = null;			// 사용자 선택파일 취소 이벤트 처리 함수
+	
+	this._ds_upFile = null;
+	this._ds_downFile = null;
+	this._ds_upBase = null;
+	
+	this._useMultiUpload = false;
+	this._fileSn = null;					// 파일 일련번호
+	
+	this._responseGrid = null;
+	this._responseArea = null;
+	
+	this.init = function(oConfig){
+		if(this._sysSe == null || this._jobSe == null){
+			alert("파일업/다운로드 : 시스템구분 또는 업무구분 값이 없습니다.");
+			return;
+		}
+	
+		// 업/다운로드용 데이터셋 생성
+		var createUpBaseDs = this._createFileDataset("UP_BASE", this.DATASET_NAME_UP_BASE, this.DATASET_COLUMN_UP_BASE);
+		if(!createUpBaseDs){
+			alert("파일 업로드 기본 데이터셋 생성 실패");
+			return;
+		}
+		
+		var createUpDs = this._createFileDataset(this.TYPE_UPLOADER, this.DATASET_NAME_UP, this.DATASET_COLUMN_UP);
+		if(!createUpDs){
+			alert("파일 업로드 데이터셋 생성 실패");
+			return;
+		}
+		
+		var createDownDs = this._createFileDataset(this.TYPE_DOWNLOADER, this.DATASET_NAME_DOWN, this.DATASET_COLUMN_DOWN);
+		if(!createDownDs){
+			alert("파일 다운로드 데이터셋 생성 실패");
+			return;
+		}
+	
+		// 업로드 컴포넌트
+		var upName = Eco.getUniqueId("extUpload_");
+		this._uploader = new nexacro.ExtFileUpload(upName, this._form);
+		this._form.addChild(upName, this._uploader);
+		
+		// 다운로드 컴포넌트 설정
+		var downName = Eco.getUniqueId("extDownload_");
+		this._downloader = new nexacro.ExtFileDownload(downName, this._form);
+		this._form.addChild(downName, this._downloader);
+		
+		// 설정값 반영
+		this._setConfig(oConfig);		// 사용자 설정 적용
+	};
+	
+	this._setConfig = function(oConfig){
+	
+		// 기본 설정
+		this._host = oConfig && oConfig["host"] ? oConfig["host"] : application.gv_host;
+		this._uploadUrl = oConfig && oConfig["uploadUrl"] ? oConfig["uploadUrl"] : this.DEF_UPLOAD_URL;
+		this._downloadUrl = oConfig && oConfig["downloadUrl"] ? oConfig["downloadUrl"] : this.DEF_DOWNLOAD_URL;
+		this._allowTypes = oConfig && oConfig["allowTypes"] ? oConfig["allowTypes"] : this.DEF_ALLOW_TYPE;
+		this._useMultiSelect = oConfig && oConfig["useMultiSelect"] ? oConfig["useMultiSelect"] : false;				// 다중선택 가능 여부
+		this._useMultiUpload = oConfig && oConfig["useMultiUpload"] ? oConfig["useMultiUpload"] : false;				// 멀티업로드 여부
+
+		this._responseGrid = oConfig && oConfig["responseGrid"] ? oConfig["responseGrid"] : null;
+		this._responseArea = oConfig && oConfig["responseArea"] ? oConfig["responseArea"] : null;
+
+		this._userOnChange = oConfig && oConfig["onChange"] ? oConfig["onChange"] : null;								// 사용자 파일 선택 이벤트 처리 함수
+		this._userOnSuccess = oConfig && oConfig["onSuccess"] ? oConfig["onSuccess"] : null;							// 사용자 성공 이벤트 처리 함수
+		this._userOnError = oConfig && oConfig["onError"] ? oConfig["onError"] : null;									// 사용자 실패 이벤트 처리 함수
+		this._userOnProgress = oConfig && oConfig["onProgress"] ? oConfig["onProgress"] : null;							// 사용자 상태변경 이벤트 처리 함수
+		this._userOnReadyStateChange = oConfig && oConfig["onReadyStateChange"] ? oConfig["onReadyStateChange"] : null;	// 사용자 프로그래스 이벤트 처리 함수
+
+		this._userOnCancelFile = oConfig && oConfig["onCancel"] ? oConfig["onCancel"] : null;							// 사용자 파일 선택 취소 이벤트 처리 함수
+
+		this._uploader.set_multiselect(this._useMultiSelect);	// 사용자가 다중 파일업로드시 처리
+		
+		if(this._uploader.support.FileAPI){
+			if(this._responseArea != null && this._responseGrid != null){
+				this._uploader.setResponseZone(this._form, this._responseArea, this._responseGrid);	// 드래그 & 드롭
+			}
+		}else{
+			this._responseArea.set_visible(false);
+		}
+		
+		if(this._host.indexOf("local") > -1){
+			this.DEBUG = true;
+		}
+		
+		// 업로드 이벤트 설정
+		this._uploader.addEventHandler("onchange", this.onChangeHandler, this);						// 파일 선택시 발행 이벤트
+		this._uploader.addEventHandler("onsuccess", this.onSuccessHandler, this);					// 통신 성공시 발생 이벤트
+		this._uploader.addEventHandler("onerror", this.onErrorHandler, this);						// 통신 오류시 발생 이벤트
+		this._uploader.addEventHandler("onprogress", this.onProgressHandler, this);					// 프로그래스 이벤트 : HTML5 Only : XMLHttpRequest가 데이터를 보내거나 받는 동안 서버에서 정의된 간격으로 발생
+		this._uploader.addEventHandler("onreadystatechange", this.onReadystateChangeHandler, this);	// readystate 변경 이벤트 : HTML5 Only : XMLHttpRequest 통신시 readystate 속성 변경
+		this._uploader.show();
+		
+		// 다운로드 이벤트 설정
+		this._downloader.addEventHandler("onsuccess", this.onSuccessHandler, this);					// 통신 성공시 발생 이벤트
+		this._downloader.addEventHandler("onerror", this.onErrorHandler, this);						// 통신 오류시 발생 이벤트
+		this._downloader.addEventHandler("onprogress", this.onProgressHandler, this);				// 프로그래스 이벤트 : HTML5 Only : XMLHttpRequest가 데이터를 보내거나 받는 동안 서버에서 정의된 간격으로 발생
+		this._downloader.show();
+
+		this.debug("PMS fileManager Ready!!");
+	};
+	
+	//==================================================
+	// 기능 처리 부분 
+	//==================================================
+	
+	/**
+	 * 현재 선택된 파일 수 반환
+	 */
+	this.getfileCount = function(){
+		return this._ds_upFile.getRowCount();
+	};
+	
+	this.hasFile = function(){
+		return this._ds_upFile.getRowCount() > 0 ? true : false;
+	};
+	
+	/**
+	 * 파일 일련번호 설정
+	 * 기존의 파일일련번호로 파일을 업로드 할 경우를 위해 업로드 시 설정
+	 */
+	this.setFileSn = function(value){
+		this._fileSn = value;
+	}
+
+	// 기능 초기화
+	this.reset = function(){
+		var result = this.cancelAllFile();
+	
+		if(result){
+			this.USE_ADD_FILE_SN = false;	// 업로드 파일선택시 파일일련번호 포함 사용여부
+			this.ADD_FILE_SN = null;		// 업로드 선택파일의 파일일련번호
+			
+			// 기타 설정 초기화...
+		}
+	
+		return result;
+	}
+
+	/**
+	 * 업로드 파일 선택
+	 */
+	this.addFiles = function(allowTypes, useMultiUpload, useMultiSelect){
+		this.debug("[BEGIN] fileManager.addFiles ==========");
+		
+		this.USE_ADD_FILE_SN = false;
+		this._allowTypes = allowTypes ? allowTypes : this.DEF_ALLOW_TYPE;
+		var reUseMultiSelect = useMultiSelect ? useMultiSelect : this._useMultiSelect;
+		var reUseMultiUpload = useMultiUpload ? useMultiUpload : this._useMultiUpload;
+		
+		//this.debug("파일 다중선택 = 기본 : " + this._useMultiSelect + " :: 임시변경 : " + reUseMultiSelect);
+		//this.debug("파일 다건업로드 = 기본 : " + this._useMultiUpload + " :: 임시변경 : " + reUseMultiUpload);
+		
+		// 단일 파일 선택일 경우 기존 파일 취소 처리
+		if(!reUseMultiUpload){
+			this.cancelAllFile();		// 전체 파일 취소
+		}
+		
+		this._uploader.set_multiselect(reUseMultiSelect);		// 업로드 파일 다중 선택여부 재 설정
+		
+		this._uploader.addFiles();
+		
+		this.debug("[ END ] fileManager.addFiles ==========");
+	};
+	
+	/**
+	 * 업로드 파일 선택(파일일련 번호)
+	 * 파일일련번호로 파일선택시 1건씩 선택되도록 처리함.
+	 * @param fileSn 파일일련번호
+	 * @param useMultiUpload 다건 업로드 가능여부
+	 * @param isSingle 파일일련번호당 1건의 파일선택 여부
+	 * @param useMultiSelect 다건 선택 가능여부(동작안됨)
+	 * @param allowTypes 허용 파일타입
+	 */
+	this.addFilesWithSn = function(fileSn, useMultiUpload, isSingle, useMultiSelect, allowTypes){
+		
+		this.debug("[BEGIN] fileManager.addFilesWithSn ==========");
+		
+		this._allowTypes = allowTypes ? allowTypes : this.DEF_ALLOW_TYPE;
+		var reUseMultiSelect = useMultiSelect ? useMultiSelect : this._useMultiSelect;
+		var reUseMultiUpload = useMultiUpload ? useMultiUpload : this._useMultiUpload;
+		var reIsSingle = isSingle ? isSingle : this.ADD_FILE_SN_SINGLE;
+		
+		//this.debug("파일 다중선택 = 기본 : " + this._useMultiSelect + " :: 임시변경 : " + reUseMultiSelect);
+		//this.debug("파일 다건업로드 = 기본 : " + this._useMultiUpload + " :: 임시변경 : " + reUseMultiUpload);
+		//this.debug("일련번호당 1건 여부 = 기본 : " + this.ADD_FILE_SN_SINGLE + " :: 임시변경 : " + reIsSingle);
+		
+		this.USE_ADD_FILE_SN = true;			// 일련번호 첨부
+		this.ADD_FILE_SN = fileSn;				// 일련번호
+		this.ADD_FILE_SN_SINGLE = reIsSingle;	// 일련번호당 1건 여부
+		
+		//this.debug("파일선택 USE_ADD_FILE_SN = " + this.USE_ADD_FILE_SN + " : ADD_FILE_SN = " + this.ADD_FILE_SN);
+		
+		// 단일 파일 선택일 경우 기존 파일 취소 처리
+		if(!reUseMultiUpload){
+			this.cancelAllFile();		// 전체 파일 취소
+		}
+		else{
+			this._uploader._resetInputFile();
+		}
+		
+		this._uploader.set_multiselect(reUseMultiSelect);		// 업로드 파일 다중 선택여부 재 설정
+		
+		//_resetInputFile
+
+		this.debug(JSON.stringify(this._uploader._addedfiles));
+		
+		//this.debug("파일선택 팝업 출력!");
+		
+		this._uploader.addFiles();
+		
+		this.debug("[ END ] fileManager.addFilesWithSn ==========");
+	}
+	
+	/**
+	 * 파일 업로드 선택 파일 취소 처리
+	 * @param fileName 파일명 또는 파일일련번호
+	 * @return void
+	 */
+	this.cancelFiles = function(fileName){
+		
+		this.debug("[BEGIN] fileManager.cancelFiles ==========");
+		
+		var result = false;
+		
+		// 파일 일련번호로 업로드 할 경우 파일명이 동일한 것이 존재 할 수도... 
+		var useAddFileSn = this.USE_ADD_FILE_SN;
+		var findField = useAddFileSn ? "FILE_SN" : "ORGINL_FILE_NM";
+		
+		var dsIndex = -1;
+		var fileId = null;
+		if(this.isArray(fileName)){
+			var nameLeng = fileName.length;
+			for(var i = 0; i < nameLeng; i++){
+			
+				dsIndex = this._ds_upFile.findRow(findField, fileName);
+				fileId = this._ds_upFile.getColumn(dsIndex, "FILE_ID");
+				
+				result = this._cancelFile(fileId, dsIndex);
+				if(!result){
+					break;
+				}
+			}
+			
+			if(!result){
+				var confirmMsg = "선택파일 취소(삭제) 중 오류가 발생하였습니다.\n전체 파일을 취소(삭제)하시겟습니까?";
+				if(confirm(confirmMsg)){
+					this.cancelAllFile();
+				}
+			}
+		}else{
+			dsIndex = this._ds_upFile.findRow(findField, fileName);
+			fileId = this._ds_upFile.getColumn(dsIndex, "FILE_ID");
+			
+			result = this._cancelFile(fileId, dsIndex);
+		}
+		
+		//this.debug("	fileManager.cancelFiles : result = " + result);
+		this.debug("[ END ] fileManager.cancelFiles ==========");
+		
+		return result;
+	};
+	
+	/**
+	 * 대상 파일 삭제 처리(단건)
+	 */
+	this._cancelFile = function(fileId, dsIndex){
+	
+		var result = this._ds_upFile.deleteRow(dsIndex);
+		if(result){
+			this._uploader.removeFile(fileId);
+		}else{
+			this._ds_upFile.reset();
+		}
+		
+		return result;
+	};
+	
+	/**
+	 * 선택파일 전체 취소(삭제)처리
+	 */
+	this.cancelAllFile = function(){
+		var result = false;
+		
+		this._uploader.removeAll();
+		this._ds_upFile.clearData();
+		
+		var fileLeng = this._uploader.getAddedFileLength();
+		var dsLeng = this._ds_upFile.getRowCount();
+		
+		//this.debug("fileLeng = " + fileLeng + " :: dsLeng = " + dsLeng);
+		
+		if(fileLeng == 0 && fileLeng == dsLeng){
+			result = true;
+		}
+		
+		return result;
+	};
+	
+	//==================================================
+	// 이벤트 Handler 부분 
+	//==================================================
+	
+	/**
+	 * 파일 다이얼로그 파일 선택 후 발생 이벤트 핸들러
+	 * - 업로더 전용
+	 * obj:nexacro.ExtFileUpload, e:nexacro.ExtFileUploadChangeEventInfo
+	 */
+	this.onChangeHandler = function(obj, e){
+		
+		this.debug("[BEGIN] fileManager.onChangeHandler ==========");
+		
+		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+		var objType = obj._type_name;
+		
+		var newFileIndex = e.index;		// 신규 추가 파일 Idx;
+		
+		var index = e.index;
+		var fileList = e.files;
+		var fileCount = fileList.length;
+		var fileSupport = (this._uploader.support.XHR2 && this._uploader.support.FileAPI);
+		
+		//this.debug("fileSupport = " + fileSupport);
+		/*
+		if(this.DEBUG){
+			var fileObj = fileList[fileCount-1];
+			for(var sKey in fileObj){
+				trace("fileList[" + sKey + "] = " + fileObj[sKey]);
+			}
+		}
+		*/
+		
+		//this.debug("멀티선택 가능 = " + this._uploader.multiselect + " :: " + (fileCount > 1 ? "다건 선택" : "단건 선택"));
+		
+		// 파일 적용처리
+		var checkResult = this._checkAllowFileList(fileList, this.ADD_FILE_SN);
+		
+		// 적용 파일기준 업로드 파일정보 설정
+		
+		//this.debug("업로드 파일정보 설정 > USE_ADD_FILE_SN = " + this.USE_ADD_FILE_SN + " : ADD_FILE_SN = " + this.ADD_FILE_SN);
+		
+		var fileItem = null;
+		var addidx = null;
+		var addIdxArr = [];
+
+		var newInDsList = checkResult["allow"];
+		var newInDsListLeng = newInDsList == null ? 0 : newInDsList.length;
+		for(var i = 0; i < newInDsListLeng; i++){
+			fileItem = newInDsList[i];
+			
+			if(this.USE_ADD_FILE_SN){
+				fileItem["FILE_SN"] = this.ADD_FILE_SN;		// 파일일련번호 선택 사용시 지정된 파일일련번호로 설정
+			}
+			
+			//this.debug("재설정 fileItem = " + JSON.stringify(fileItem));
+			
+			addidx = this._putFileInfoToDs(fileItem);
+			addIdxArr.push(addidx);
+		}
+
+		// 추가가 완료되었으므로 FILE_SN은 초기화
+		this.ADD_FILE_SN = null;
+
+		// Debug용
+		
+		//var fileLeng = this._uploader.getAddedFileLength();
+		//var dsLeng = this._ds_upFile.getRowCount();
+		//this.debug("fileLeng = " + fileLeng + " :: dsLeng = " + dsLeng + " :: newInDsListLeng = " + newInDsListLeng + " :: addIdxArr = " + addIdxArr);
+		
+		// 업로드 데이터셋 Debug!!
+		//this._form.pmsUtil.dumper(this._ds_upFile);
+		
+		// 추가 제외 파일
+		var rejectList = checkResult["reject"];
+		var rejectListSize = rejectList == null ? 0 : rejectList.length;
+		if(rejectListSize > 0){
+			var infoMsg = "";
+			var infoCouseMsg = "";
+			for(var j = 0; j < rejectListSize; j++){
+				//{FILE_ID:selFileId, FILE_NAME: selFileFullNm, COUSE: couseCont}
+				var rejctItem = rejectList[j];
+				infoCouseMsg += (j+1)+ ". " + rejctItem["FILE_NAME"];
+				infoCouseMsg += " : ";
+				infoCouseMsg += rejctItem["COUSE"];
+				infoCouseMsg += "\n";
+			}
+			
+			// 추가된 내부 파일정보 제거
+			this._uploader.removeFile(rejctItem["FILE_ID"]);
+			
+			//infoMsg += "\n으로 제외되었습니다.";
+			this._form.gfn_message(null, "선택 파일중 아래의 사유로 제외된 파일이 있습니다.", infoCouseMsg);
+		}
+		
+		// 파일추가 사용자 이벤트 발생
+		if(this._userOnChange != null){
+		
+			this.debug("Call User onChange Event Handler");
+			
+			var isMultiSelect = this._uploader.multiselect;
+			
+			//this.debug("isMultiSelect = " + isMultiSelect);
+			
+			var result = null;
+			var resultFileItem = null;
+			if(isMultiSelect){
+				result = [];
+				for(var k = 0; k < newInDsListLeng; k++){
+					resultFileItem = newInDsList[k];
+					//orgFileName = this._ds_upFile.getColumn(i, "ORGINL_FILE_NM");
+					var orgFileName = resultFileItem["name"];
+					result.push(orgFileName);
+				}
+			}else{
+				resultFileItem = newInDsList[0];
+				result = resultFileItem == null ? false : resultFileItem["name"];//this._ds_upFile.getColumn(0, "ORGINL_FILE_NM");
+			}
+			
+			if(this._userOnChange != null){
+				if(typeof this._userOnChange == "function"){
+					this._userOnChange.call(this._form, objType, result);
+				}else{
+					this._form[this._userOnChange](objType, result);
+				}
+			}
+			
+		}
+		
+		this.debug("[ END ] fileManager.onChangeHandler ==========");
+	};
+	
+	// 업로드 대상 파일목록에서 허용확장자, 용량. 중복여부를 판단한다. 
+	this._checkAllowFileList = function(fileList, fileSn){
+	
+		var result = {};
+		var rejectList = [];
+		var allowList = [];
+		
+		var maxSingleSize = this.sizeToByte(this.maxSize);
+		var maxTotalSize = this.sizeToByte(this.maxTotalSize);
+		
+		var allowTotalSize = 0;
+		var fileListSize = fileList == null ? 0 : fileList.length;
+		var i = 0;
+		for(i = 0; i < fileListSize; i++){
+		
+			var fileInfo = fileList[i];
+			
+			var selFileId = fileInfo["id"];
+			var selFileFullNm = fileInfo["name"];
+			var selFileSize = fileInfo["size"];
+			var selFileType = fileInfo["type"];
+			var selFileNm = selFileFullNm.substring(0, selFileFullNm.lastIndexOf('.'));
+			var selFileExt = "";
+			if(selFileFullNm.lastIndexOf('.') > -1){
+				selFileExt = selFileFullNm.substring(selFileFullNm.lastIndexOf('.') + 1, selFileFullNm.length);
+			}
+			
+			// 확장자 확인
+			var isAllowType = this._isAllowType(selFileExt);
+			var couseCont = "";
+			if(!isAllowType){
+				couseCont = "허용확장자(" + this._allowTypes + ") 아님";
+				rejectList.push({FILE_ID:selFileId, FILE_NAME: selFileFullNm, COUSE: couseCont});
+				continue;
+			}
+			
+			// 용량확인
+			var isAllowSize = selFileSize <= maxSingleSize ? true : false;
+			if(!isAllowSize){
+				couseCont = "허용용량(" + maxSingleSize + ") 초과";
+				rejectList.push({FILE_ID:selFileId, FILE_NAME: selFileFullNm, COUSE: couseCont});
+				continue;
+			}
+			
+			// 중복확인 - Dataset 비교
+			var useAddFileSn = this.USE_ADD_FILE_SN;
+			var inDsIndex = -1;
+			if(useAddFileSn && fileSn != null){
+			
+				/*
+				// 서버에서 동일파일명은 처리가 불가
+				// 일련번호당 1건일 경우 확인
+				if(this.ADD_FILE_SN_SINGLE){
+					inDsIndex = this._ds_upFile.findRow("FILE_SN", fileSn);
+					if(inDsIndex > -1){
+						couseCont = "일련번호당 1건 초과 (" + FILE_SN + ")";
+						rejectList.push({FILE_ID:selFileId, FILE_NAME: selFileFullNm, COUSE: couseCont});
+						continue;
+					}
+				}else{
+					// 파일일련번호를 사용할 경우 동일 파일 일련번호내 동일 파일존재 확인
+					var filterStr = "FILE_SN=='" + fileSn 
+									+ "'&&ORGINL_FILE_NM=='" + selFileFullNm + "'";
+							
+					inDsIndex = this._ds_upFile.findRowExpr(filterStr);
+					if(inDsIndex > -1){
+						couseCont = "중복파일명(" + selFileFullNm + ")";
+						rejectList.push({FILE_ID:selFileId, FILE_NAME: selFileFullNm, COUSE: couseCont});
+						continue;
+					}
+				}
+				*/
+				
+				inDsIndex = this._ds_upFile.findRow("ORGINL_FILE_NM", selFileFullNm);
+				if(inDsIndex > -1){
+					couseCont = "중복파일명(" + selFileFullNm + ")";
+					rejectList.push({FILE_ID:selFileId, FILE_NAME: selFileFullNm, COUSE: couseCont});
+					continue;
+				}
+			}else{
+				inDsIndex = this._ds_upFile.findRow("ORGINL_FILE_NM", selFileFullNm);
+				if(inDsIndex > -1){
+					couseCont = "중복파일명(" + selFileFullNm + ")";
+					rejectList.push({FILE_ID:selFileId, FILE_NAME: selFileFullNm, COUSE: couseCont});
+					continue;
+				}
+			}
+			
+			// 전체용량확인
+			allowTotalSize += selFileSize;
+			if(allowTotalSize > maxTotalSize){
+				rejectList.push(selFileId);
+				continue;
+			}
+			
+			allowList.push(fileInfo);
+		}
+		
+		//this.debug("allowList = " + allowList.toString());
+		//this.debug("rejectList = " + rejectList.toString());
+		
+		// 제외대상을 실제 업로드 목록에서 제거한다.
+		var rejectLeng = rejectList == null ? 0 : rejectList.length;
+		for(i = 0; i < rejectLeng; i++){
+			var rejectId = rejectList[i];
+			this._uploader.removeFile(rejectId);
+		}
+		
+		result["allow"] = allowList;
+		result["reject"] = rejectList;
+		
+		return result;
+	};
+	
+	/**
+	 * 허용확장자 확인
+	 *  - 허용확장자일 경우 true 반환
+	 * @param fileType
+	 * @return Boolean
+	 */
+	this._isAllowType = function(fileType){
+		var result = false;
+		var allowLeng = this._allowTypes.length;
+		
+		fileType = fileType || '';
+		
+		for(var i = 0; i < allowLeng; i++){
+			var allowType = this._allowTypes[i];
+			if(fileType.toLowerCase() == allowType){
+				result = true;
+				break;
+			}
+		}
+		return result;
+	}
+	
+	/*
+	 * 통신 성공시에 발생하는 이벤트입니다
+	 * - 업/다운로더 공용
+	 * obj:nexacro.ExtFileUpload(ExtFileDownload), e:nexacro.ExtFileLoadEventInfo(ExtFileLoadEventInfo)
+	 */
+	this.onSuccessHandler = function(obj, e){
+  		
+  		this.debug("[BEGIN] fileManager.onSuccessHandler ==========");
+  		
+  		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+  		
+  		this._fileSn = null;	// 완료되었으므로 초기화
+  		
+  		var errorCode = e.errorcode;
+		var errorMsg = e.errormsg;
+  		var objType = obj._type_name;
+  		switch(objType){
+  		
+			case this.TYPE_UPLOADER :	// 파일 업로더
+			
+				this.debug("	" + this.TYPE_UPLOADER + " onSuccess!");
+							
+				if(errorCode < 0){				
+					this._form.gfn_callBackMsg("fileUpload", errorCode, errorMsg);
+				}
+				
+				var fileLeng = this._uploader.getAddedFileLength();
+				var dsLeng = this._ds_upFile.getRowCount();
+				
+				//this.debug("	fileLeng = " + fileLeng + " :: dsLeng = " + dsLeng);
+				if(fileLeng == 0 && fileLeng != dsLeng){
+					this.debug("	데이터 초기화 > _ds_upBase, _ds_upFile");
+					this._ds_upBase.clearData();	// 데이터 초기화
+					this._ds_upFile.clearData();	// 데이터 초기화
+				}
+				
+				break;
+			
+			case this.TYPE_DOWNLOADER :	// 파일 다운로더
+			
+				this.debug("	" + this.TYPE_DOWNLOADER + " onSuccess!");
+			
+				break;
+				
+			default :
+				break;
+		}
+		
+		// 사용자 Success Event Handler 호출
+		if(errorCode < 0){
+			if(this._userOnError != null){
+					
+				this.debug("Call User onError Event Handler");
+				
+				if(typeof this._userOnError == "function"){
+					this._userOnError.call(this._form, objType, e);
+				}else{
+					this._form[this._userOnError](objType, e);
+				}
+			}
+		}else{
+			if(this._userOnSuccess != null){
+						
+				this.debug("Call User onSuccess Event Handler");
+				
+				if(typeof this._userOnSuccess == "function"){
+					this._userOnSuccess.call(this._form, objType, e);
+				}else{
+					this._form[this._userOnSuccess](objType, e);
+				}
+			}
+		}
+		
+		this.debug("[ END ] fileManager.onSuccessHandler ==========");
+	};
+	
+	/**
+	 * 통신 오류 시 발생하는 이벤트입니다
+	 * - 업/다운로드 공용
+	 * obj:nexacro.ExtFileUpload(ExtFileDownload), e:nexacro.ExtFileErrorEventInfo(ExtFileErrorEventInfo)
+	 */
+	this.onErrorHandler = function(obj, e){
+	
+		this.debug("[BEGIN] fileManager.onErrorHandler ==========");
+	
+		//this._form.gfn_message("err.서버통신.오류발생2", e.index +'|'+ e.errortype +'|'+ e.statuscode +'|'+ e.requesturi);
+		
+		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+		
+		var objType = obj._type_name;
+		var errorCode = e.errorcode;
+		var errorMsg = e.errormsg;
+		
+		// 사용자 OnError Handler 호출
+		if(errorCode < 0 || errorCode == "404"){
+			if(this._userOnError != null){
+						
+				this.debug("Call User onError Event Handler");
+				
+				if(typeof this._userOnError == "function"){
+					this._userOnError.call(this._form, objType, e);
+				}else{
+					this._form[this._userOnError](objType, e);
+				}
+			}else{
+			
+				switch(objType){
+			
+					case this.TYPE_UPLOADER :	// 업로더
+						
+						this.debug("	" + this.TYPE_UPLOADER + " onError!");
+						
+						break;
+						
+					case this.TYPE_DOWNLOADER :	// 다운로더
+					
+						this.debug("	" + this.TYPE_DOWNLOADER + " onError!");
+					
+						
+						if(errorCode < 0){				
+							this._form.gfn_callBackMsg("fileDownload", errorCode, errorMsg);
+						}
+						
+						if(errorCode == "404"){
+							this._form.gfn_message("err.파일.없음", errorMsg);
+						}
+					
+						break;
+						
+					default :
+						break;
+						
+				}
+			}
+		}
+		
+		this.debug("[ END ] fileManager.onErrorHandler ==========");
+	};
+	
+	/**
+	 * [HTML5 Only] XMLHttpRequest가 데이터를 보내거나 받는 동안 서버에서 정의된 간격으로 발생합니다.
+	 * - 업/다운로드 공용
+	 * file upload & download 진행시 progress bar 처리용
+	 * @param {ExtFileUpload} obj ExtFileUpload
+	 * @param {ExtFileProgress} e ExtFileProgress
+	 * obj:nexacro.ExtFileUpload, e:nexacro.ExtFileProgress
+	 */
+	this.onProgressHandler = function(obj, e){
+	
+		this.debug("[BEGIN] fileManager.onProgressHandler ==========");
+	
+		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+		
+		var objType = obj._type_name;
+		switch(objType){
+			
+			case this.TYPE_UPLOADER :	// 업로더
+	
+				this.debug("	" + this.TYPE_UPLOADER + " onProgress!");
+	
+				if(this._userOnProgress != null){
+				
+					this.debug("Call User onProgress Event Handler");
+				
+					if(typeof this._userOnProgress == "function"){
+						this._userOnProgress.call(this._form, objType, e);
+					}else{
+						this._form[this._userOnProgress](objType, e);
+					}
+				}
+				
+				break;
+			
+			case this.TYPE_DOWNLOADER :	// 다운로더
+			
+				this.debug("	" + this.TYPE_DOWNLOADER + " onProgress!");
+			
+				break;
+				
+			default :
+				break;
+		}
+		
+		this.debug("[ END ] fileManager.onProgressHandler ==========");
+	};
+	
+	/**
+	 * [HTML5 Only] XMLHttpRequest 통신시 readystate 속성 변경 event
+	 * - 업로더 전용
+	 * @param {ExtFileUpload} obj ExtFileUpload
+	 * @param {ExtFileReadystateChangEventInfo} e ExtFileReadystateChangEventInfo
+	 * obj:nexacro.ExtFileUpload, e:nexacro.ExtFileReadystateChangEventInfo
+	 */
+	this.onReadystateChangeHandler = function(obj, e){
+		
+		this.debug("[BEGIN] fileManager.onReadystateChangeHandler ==========");
+	
+		//this.debug(	"obj = " + obj._type + " :: " + obj._type_name);
+		
+		var objType = obj._type_name;
+		if(this._userOnReadyStateChange != null){
+		
+			this.debug("Call User onReadyStateChange Event Handler");
+		
+			if(typeof this._userOnReadyStateChange == "function"){
+				this._userOnReadyStateChange.call(this._form, objType, e.readyState, e.status, e);
+			}else{
+				this._form[this._userOnReadyStateChange](objType, e.readyState, e.status, e);
+			}
+		}
+		
+		this.debug("[ END ] fileManager.onReadystateChangeHandler ==========");
+	};
+	
+	//==================================================
+	// 실행 부분 
+	//==================================================
+	
+	/**
+	 * 파일업로드 실행
+	 * transferType 전송유형.(all: 대상파일을 한번에 전송(defalut), each: 개별 전송)
+	 */
+	this.upload = function(sCtrl, sInDs, sOutDs){
+	
+		this.debug("[BEGIN] fileManager.upload ==========");
+		
+		this.debug("	sCtrl = " + sCtrl);
+		this.debug("	sInDs = " + sInDs);
+		this.debug("	sOutDs = " + sOutDs);
+		
+		//this.debug("	USE_ADD_FILE_SN = " + this.USE_ADD_FILE_SN);
+		//this.debug("	ADD_FILE_SN = " + this.ADD_FILE_SN);
+		//this.debug("	ADD_FILE_SN_SINGLE = " + this.ADD_FILE_SN_SINGLE);
+		//this.debug("	fileSn = " + this._fileSn);
+		
+		// 파일일련번호 포함 추가가 아니고, 파일 일련번호가 있을 경우
+		// 특정 파일일련번호로 일괄 조정
+		if(this.USE_ADD_FILE_SN == false && this._fileSn != null){
+			this._setUpFileSn();	// 파일 정보에 파일일련번호 값 설정
+		}
+		
+		// 업로드 기초정보 설정
+		var upBaseLeng = this._ds_upBase.getRowCount();
+		if(upBaseLeng > 0){
+			this._ds_upBase.clearData();
+		}
+		var baseIdx = this._ds_upBase.addRow();
+		var singleFileSn = this.ADD_FILE_SN_SINGLE == true ? "Y" : "N";
+		var modeTest = this.MODE_TEST == true ? "Y" : "N";
+		this._ds_upBase.setColumn(baseIdx, "SINGLE_FILE_SN", singleFileSn);
+		this._ds_upBase.setColumn(baseIdx, "MODE_TEST", modeTest);
+		
+		// 업로드 데이터셋 Debug!!
+		//this._form.pmsUtil.dumper(this._ds_upBase);
+		//this._form.pmsUtil.dumper(this._ds_upFile);
+		
+		// var url = this.fileConfig.host + this.fileConfig.uploadUrl;
+		var uploadUrl = this._host + (sCtrl ? sCtrl : this._uploadUrl);
+		
+		var sInFileDatasets = "inputFile=" + this._ds_upFile.name + " inputFileBase=" + this._ds_upBase.name;
+		if(sInDs){
+			sInFileDatasets += " " + sInDs;
+		}
+		
+		//this.debug("sInFileDatasets = " + sInFileDatasets);
+		
+		var baseInDatasets = Ex.core.setTranBaseInfo(this._form, "fileUpload", sCtrl, sInFileDatasets, sOutDs);
+		var sInDatasets = baseInDatasets["strInDatasets"] + sInFileDatasets;
+		
+		//this.debug("sendDatasets = " + sInDatasets);
+		
+		var sOutDatasets = sOutDs ? sOutDs : "";
+		var transferType = this._transferType;
+		
+		//  @param {string} path upload url 정보. default는 상단의 extUp.set_uploadurl()에서 설정한 정보.
+		//  @param {string} inDatasetsParam input dataset 정보
+		//  @param {string} outDatasetsParam output dataset 정보
+		//  @param {string} transferType 전송유형.(all: 대상파일을 한번에 전송(defalut), each: 개별 전송)
+		//  @param {number} datatype data 전송방식. 0:XML, 1:Binary(Runtime only), 2:SSV
+		this._uploader.upload(uploadUrl, sInDatasets, sOutDatasets, transferType, 0);
+		
+		this.debug("[ END ] fileManager.upload ==========");
+	};
+	
+	/**
+	 * 파일 다운로드 실행
+	 * @param fileSn 파일일련번호
+	 * @param fileOrder 파일순차 - 없을 경우 파일일련번호에 해당하는 모든 파일을 다운로드
+	 * @param fileName 파일명
+	 * return void
+	 */
+	this.download = function(fileSn, fileOrder, fileName){
+		this.debug("[BEGIN] fileManager.download ==========");
+		
+		this.debug("	fileSn = " + fileSn);
+		this.debug("	fileOrder = " + fileOrder);
+		this.debug("	fileName = " + fileName);
+	
+		//this._ds_downFile.reset();
+		this._ds_downFile.clearData();
+		
+		var addIdx = this._ds_downFile.addRow();
+		this._ds_downFile.setColumn(addIdx, "FILE_SN", fileSn);
+		this._ds_downFile.setColumn(addIdx, "FILE_ORDR", fileOrder);
+	
+		//var downloadUrl = this.fileConfig.host + this.fileConfig.downloadUrl;
+		var sUrl = this._host + this._downloadUrl;
+		
+		var sInFileDatasets = "input1=" + this._ds_downFile.name;
+		var baseInDatasets = Ex.core.setTranBaseInfo(this._form, "fileDownload", this._downloadUrl, sInFileDatasets, "");
+		var sInDatasets = baseInDatasets["strInDatasets"] + sInFileDatasets;
+		
+		// ExtFileUploadSupport.XHR2 지원여부
+		//var enabledXHR = this._ds_downFile.support.XHR2 && (this._ds_downFile.support.Download || this._ds_downFile.support.MSSave);
+		
+		//this.debug("ExtFileUploadSupport.XHR2 = " + enabledXHR);
+		
+		this._downloader.download(sUrl, fileName, sInDatasets);
+		
+		//var downloadUrl = sUrl + "?FILE_SN=" + fileSn + "&FILE_ORDR=" + fileOrder;
+		//this._downloader.download(downloadUrl, fileName);
+		
+		this.debug("[ END ] fileManager.download ==========");
+	};
+	
+	this.dataFileDownload = function(sController, sInDatasets, fileName){
+		
+		this.debug("[BEGIN] fileManager.dataFiledownload ==========");
+		
+		var sUrl = this._host + sController;
+		var baseInDatasets = Ex.core.setTranBaseInfo(this._form, "fileDownload", this._downloadUrl, sInDatasets, "");
+		var sDatasets = baseInDatasets["strInDatasets"] + sInDatasets;
+		
+		//this.debug("sDatasets = " + sDatasets);
+		
+		this._downloader.download(sUrl, fileName, sDatasets);
+		
+		this.debug("[ END ] fileManager.dataFiledownload ==========");
+	};
+	
+	//==================================================
+	// 데이터셋 처리 부분 
+	//==================================================
+	
+	/**
+	 * 파일 데이터셋에 파일정보 설정
+	 */
+	this._putFileInfoToDs = function(fileInfo){
+		
+		this.debug("[BEGIN] fileManager._putFileInfoToDs ==========");
+		
+		var selFileId = fileInfo["id"];
+		var selFileFullNm = fileInfo["name"];
+		var selFileSize = fileInfo["size"];
+		var selFileType = fileInfo["type"];
+
+		var selFileNm = selFileFullNm.substring(0, selFileFullNm.lastIndexOf('.'));
+        var selFileExt = selFileFullNm.substring(selFileFullNm.lastIndexOf('.') + 1, selFileFullNm.length);
+		
+		//this.debug("NM = " + selFileNm + " : EXTENSION = " + selFileExt);
+		
+		var addidx = this._ds_upFile.addRow();
+			
+		this._ds_upFile.setColumn(addidx, "ORGINL_FILE_NM", selFileFullNm);	// 실제 파일명(full)
+		if(selFileSize > 0){
+			this._ds_upFile.setColumn(addidx, "FILE_MG", selFileSize);		// 파일사이즈
+		}
+		this._ds_upFile.setColumn(addidx, "FILE_EXTSN", selFileExt);		// 파일 확장자
+		this._ds_upFile.setColumn(addidx, "USE_AT", '1');					// 사용여부
+		this._ds_upFile.setColumn(addidx, "FILE_ID", selFileId);			// 파일ID(로컬)
+		this._ds_upFile.setColumn(addidx, "FILE_TY", selFileType);			// 파일타입
+		this._ds_upFile.setColumn(addidx, "PROGRS", 0);						// 프로그래스
+		this._ds_upFile.setColumn(addidx, "SYS_SE_CODE", this._sysSe);		// 시스템구분
+		this._ds_upFile.setColumn(addidx, "JOB_SE", this._jobSe);			// 업무구분
+		
+		// 파일일련번호 - 기본적으로 서버에서 처리하며, 파일일련번호가 있을 경우 업로드전 별도처리
+		// 파일일련번호와 함께 선택할 경우 처리(서버에서 파일일련번호를 채번한 경우)
+		if(this.USE_ADD_FILE_SN){
+			var addFileSn = selFileType = fileInfo["FILE_SN"];
+			this._ds_upFile.setColumn(addidx, "FILE_SN", addFileSn);				// 파일일련번호
+		}
+		
+		//this._ds_upFile.setColumn(addidx, "SN", selFileId);				// 파일 순번
+		//this._ds_upFile.setColumn(addidx, "DELETE_IMAGE", this.fileConfig.delImage);
+		
+		this.debug("[ END ] fileManager._putFileInfoToDs ==========");
+		
+		return addidx;
+	};
+
+	/**
+	 * File Dataset을 생성.
+	 * @param null
+	 * @return Boolean
+	 */
+	this._createFileDataset = function(type, dsName, columnInfo){
+		
+		this.debug("[BEGIN] fileManager._createFileDataset ==========");
+		
+		try{
+			// 데이터 전달용 DataSet이 있는지 확인.
+			var fileDs =  this._form.objects[dsName];
+			var noFileDs = fileDs ? false : true;
+
+			this.debug("	" + type + " 파일 정보 Dataset 없음? = " + noFileDs);
+
+			if(noFileDs){
+			
+				this.debug("	" + type + " 파일 정보 Dataset 생성");
+				
+				fileDs = new Dataset;
+				fileDs.set_name(dsName);
+				
+				// 컬럼정보 설정
+				var columnLeng = columnInfo.length;
+				for(var i = 0; i < columnLeng; i++){
+					fileDs.addColumn(columnInfo[i], "string");
+				}
+				
+			}else{
+			
+				this.debug("	" + type + " 파일 정보 Dataset 초기화(clearData)");
+			
+				fileDs.clearData();	// 데이터셋 초기화 - 데이터 삭제
+			}
+			
+			if(noFileDs){
+				this._form.addChild(dsName, fileDs);
+			}
+			
+			if(type == this.TYPE_UPLOADER){
+				this._ds_upFile = fileDs;
+			}else if(type == this.TYPE_DOWNLOADER){
+				this._ds_downFile = fileDs;
+			}else if(type == "UP_BASE"){
+				this._ds_upBase = fileDs;
+			}
+			
+			this.debug("[ END ] fileManager._createFileDataset ==========");
+			
+			return true;
+		}catch(ex){
+		
+			this.debug("	" + type + " 파일 정보 Dataset 생성/초기화 실패");
+		
+			trace(ex.message + "\n" +ex.description);
+			
+			this.debug("[ END ] fileManager._createFileDataset ==========");
+			
+			return false;
+		}
+	};
+	
+	/**
+	 * 파일 일련번호를 업로드 대상 파일정보에 추가한다.
+	 */
+	this._setUpFileSn = function(){
+		
+		if(this._fileSn == null){
+			return;
+		}
+		
+		var dsRowCnt = this._ds_upFile.getRowCount();
+		for(var i = 0; i < dsRowCnt; i++){
+			this._ds_upFile.setColumn(i, "FILE_SN", this._fileSn);
+		}
+	};
+	
+	//==================================================
+	// Utillity 부분 
+	//==================================================
+	
+	/**
+	 * 값이 Array인지 여부를 나타내는 메소드
+	 * @param value Object
+	 * @return Boolean
+	 */
+	this.isArray = function(value){
+		var ARRAY_CLASS = "[object Array]";
+		var typeClass = Object.prototype.toString.call(value);
+		return typeClass === ARRAY_CLASS;
+	};
+	
+	/**
+	 * size를 byte로 변환처리한다.
+	 * @param {number} fileSize file size
+	 * @return {number} file size
+	 */
+	this.sizeToByte = function(sFileSize){
+		var unit = sFileSize.match(/[^\d]+/g);
+		var size = sFileSize.match(/\d+/);
+		
+		unit = unit ? unit[0].toLowerCase() : "";
+		size = size ? size[0] : sFileSize;
+		
+		if(unit == "mb"){
+			return size * 1024 * 1024;
+		}else if(unit == "gb"){
+			return size * 1024 * 1024 * 1024;
+		}else if(unit == "tb"){
+			return size * 1024 * 1024 * 1024 * 1024;
+		}else if(unit == ""){
+			return size;
+		}else{
+			return sFileSize;
+		}
+	};
+	
+	this.debug = function(strValue){
+		if(this.DEBUG){
+			trace(strValue);
+		}
+	};
+};
+
+this.dumper = function(value, option, viewAlert, getStr){
+	this.pmsUtil.dumper(value, option, viewAlert, getStr);
+}
+]]></Script>

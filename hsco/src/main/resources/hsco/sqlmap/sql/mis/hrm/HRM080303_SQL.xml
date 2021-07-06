@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM080303_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 교육실적등록(개인별) 조회 -->
+	<select id="HRM080303DAO.selectEdcAcmsltList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080303DAO.selectEdcAcmsltList*/]]>
+		SELECT T1.YEAR
+		     , T1.EMPNO
+		     , NVL(T2.EMPNM, '알수없음')                                               AS EMPNM
+		     , NVL(T1.DEPT_CODE, T2.DEPT_CODE)                                         AS DEPT_CODE
+		     , NVL(T6.DEPT_NM, '알수없음')                                             AS DEPT_NM
+		     , NVL(T1.JSSFC_SE, T2.JSSFC_SE)                                           AS JSSFC_SE
+		     , T7.CODE_NM                                                              AS JSSFC_NM
+		     , NVL(T1.HR_CLSF_SE, T2.HR_CLSF_SE)                                       AS HR_CLSF_SE
+		     , T8.CODE_NM                                                              AS HR_CLSF_NM
+		     , NVL(T1.OFCPS_SE, T2.OFCPS_SE)                                           AS OFCPS_SE
+		     , T9.CODE_NM                                                              AS OFCPS_NM
+		     , T1.SN
+		     , T1.EDC_CRSE_SN
+		     , T1.EDC_TY_SN
+		     , DECODE(T3.EDC_TY_LCLAS, NULL, NULL, T3.EDC_TY_LCLAS || '-' || T3.EDC_TY_SCLAS)    AS EDC_TY_NM
+		     , T1.EDC_CL_SN
+		     , DECODE(T1.EDC_CL_SN, NULL, NULL, T5.CODE_NM || '-' || T4.ABILITY_NM)    AS EDC_CL_NM
+		     , T1.EDC_INSTT
+		     , T1.CRSE_NM
+		     , T1.EDC_PLACE
+		     , T1.APPN_LRN_AT
+		     , T1.DUTY_EDC_AT
+		     , T1.RELATE_DTY
+		     , T1.EDC_BGNDE
+		     , T1.EDC_ENDDE
+		     , SUBSTR(T1.EDC_BGNDE, 1, 4) || '-' || SUBSTR(T1.EDC_BGNDE, 5, 2) || '-' || SUBSTR(T1.EDC_BGNDE, 7, 2)    AS EDC_BGNDE2
+		     , SUBSTR(T1.EDC_ENDDE, 1, 4) || '-' || SUBSTR(T1.EDC_ENDDE, 5, 2) || '-' || SUBSTR(T1.EDC_ENDDE, 7, 2)    AS EDC_ENDDE2
+		     , T1.REMOTE_EDC_CRSE_SE
+		     , T1.REMOTE_EDC_SN
+		     , T1.EDC_DAYCNT
+		     , T1.EDC_TIME
+		     , T1.EDC_RCOGN_TIME
+		     , T1.DMSTC_SE
+		     , T1.CONFM_AT
+		     , T1.SANCTN_NO
+		     , CASE WHEN (T1.EDC_TY_SN = '7' OR T1.EDC_TY_SN = '8') THEN NULL
+		            ELSE SFCOM_GET_SANCTN_KND(T1.RESULT_SANCTN_NO)
+		       END    AS SANCTN_STS
+		     , T1.RESULT_SANCTN_NO
+		     , T1.EDC_RESULT_MAIN_EDC_CN
+		     , T1.EDC_RESULT_THTS
+		     , T1.EDC_RESULT_ETC_MATTER
+		     , T1.DE_CT
+		     , T1.MEAL_CT
+		     , T1.TRNSPORT_CT
+		     , T1.STAYNG_CT
+		     , T1.RM
+		     , T1.FILE_SN
+		     , CASE WHEN (T1.CONFM_AT = '0' AND (T1.EMPNO = #SYS_EMPNO# OR #AUTH_AT# = '1')) THEN '1'
+		            ELSE '0'
+		       END                                          AS ENABLE_AT
+		     , CASE WHEN SFCOM_GET_SANCTN_KND(T1.RESULT_SANCTN_NO) IN ('1', '4', '5') THEN '0'
+		            WHEN (T1.CONFM_AT = '0' AND (T1.EMPNO = #SYS_EMPNO# OR #AUTH_AT# = '1')) THEN '1'
+		            WHEN (SELECT COUNT(1) FROM TBCOM_USER_GRP WHERE USER_ID = #SYS_EMPNO# AND AUTH_GRP_ID = 'HRM_EDC' AND INTRCP_AT != '1') != 0 THEN '1'
+		            ELSE '0'
+		       END                                          AS TM_ENABLE_AT /*시간수정가능여부*/
+		     , CASE WHEN (T1.EDC_TY_SN = '7' OR T1.EDC_TY_SN = '8') THEN '0'/*원격교육일 경우 결과입력 안함*/
+		            WHEN (    SFCOM_GET_SANCTN_KND(T1.RESULT_SANCTN_NO) NOT IN ('1', '4', '5')
+		                  AND (T1.EMPNO = #SYS_EMPNO# OR #AUTH_AT# = '1')
+		                 ) THEN '1'
+		            ELSE '0'
+		       END    AS RESULT_ENABLE_AT
+		     , /*교육만족도 그리드의 readonly 결정을 위해 수정여부를 반대로 함*/
+		       CASE WHEN (    SFCOM_GET_SANCTN_KND(T1.RESULT_SANCTN_NO) NOT IN ('1', '4', '5')
+		                  AND (T1.EMPNO = #SYS_EMPNO# OR #AUTH_AT# = '1')
+		                 ) THEN '0'
+		            ELSE '1'
+		       END    AS STSFDG_ENABLE_AT
+		  FROM TBHRM_EDC_MANAGE T1
+		       LEFT OUTER JOIN TBHRM_HR_MASTR T2
+		            ON T1.EMPNO = T2.EMPNO
+		       LEFT OUTER JOIN TBHRM_EDC_TY_RCOGN_TIME T3
+		            ON T1.YEAR      = T3.YEAR
+		           AND T1.EDC_TY_SN = T3.SN
+		       LEFT OUTER JOIN TBHRM_ABILITY_CODE_MANAGE T4
+		            ON T1.YEAR      = T4.YEAR
+		           AND T1.EDC_CL_SN = T4.SN
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T5
+		            ON T4.ABILITY_SE = T5.CODE
+		           AND T5.GRP_CODE = 'HRM037'
+		       LEFT OUTER JOIN TBHRM_DEPT T6
+		            ON NVL(T1.DEPT_CODE, T2.DEPT_CODE) = T6.DEPT_CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T7
+		            ON NVL(T1.JSSFC_SE, T2.JSSFC_SE) = T7.CODE
+		           AND T7.GRP_CODE = 'HRM001'
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T8
+		            ON NVL(T1.HR_CLSF_SE, T2.HR_CLSF_SE) = T8.CODE
+		           AND T8.GRP_CODE   = 'HRM002'
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T9
+		            ON NVL(T1.OFCPS_SE, T2.OFCPS_SE) = T9.CODE
+		           AND T9.GRP_CODE = 'HRM003'
+		 WHERE 1=1
+		<isNotEmpty property="YEAR">
+		   AND T1.YEAR  = #YEAR#
+		</isNotEmpty>
+		<isNotEmpty property="EDC_TY_SN">
+		   AND T3.SN    = #EDC_TY_SN#
+		</isNotEmpty>
+		<isNotEmpty property="EDC_CL_SN">
+		   AND T4.SN    = #EDC_CL_SN#
+		</isNotEmpty>
+		<isNotEmpty property="CRSE_NM">
+		   AND T1.CRSE_NM LIKE '%' || #CRSE_NM# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="EMPNO">
+		   AND T1.EMPNO = #EMPNO#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+		    <isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">
+		        (T1.DEPT_CODE='000000' OR T1.DEPT_CODE = #DEPT_CODE#)
+		    </isNotEqual>
+		</isNotEmpty>
+		ORDER BY T1.DEPT_CODE
+		       , T1.EMPNO
+		       , T1.SN
+	</select>
+	
+	<!-- 교육실적 생성 -->
+	<insert id="HRM080303DAO.insertEdcAcmslt" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080303DAO.insertEdcAcmslt*/]]>
+		INSERT INTO TBHRM_EDC_MANAGE (
+		       YEAR
+		     , EMPNO
+		     , SN
+		     , DEPT_CODE
+		     , JSSFC_SE
+		     , HR_CLSF_SE
+		     , OFCPS_SE
+		     , EDC_CRSE_SN
+		     , EDC_TY_SN
+		     , EDC_CL_SN
+		     , EDC_INSTT
+		     , CRSE_NM
+		     , EDC_PLACE
+		     , APPN_LRN_AT
+		     , DUTY_EDC_AT
+		     , RELATE_DTY
+		     , EDC_BGNDE
+		     , EDC_ENDDE
+		     , REMOTE_EDC_CRSE_SE
+		     , REMOTE_EDC_SN
+		     , EDC_DAYCNT
+		     , EDC_TIME
+		     , EDC_RCOGN_TIME
+		     , DMSTC_SE
+		     , CONFM_AT
+		     , DE_CT
+		     , MEAL_CT
+		     , TRNSPORT_CT
+		     , STAYNG_CT
+		     , RM
+		     , SANCTN_NO
+		     , EDC_RESULT_MAIN_EDC_CN
+		     , EDC_RESULT_THTS
+		     , EDC_RESULT_ETC_MATTER
+		     , FILE_SN
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		)
+		SELECT #YEAR#
+		     , #EMPNO#
+		     , (SELECT NVL(MAX(SN), 0) + 1 FROM TBHRM_EDC_MANAGE WHERE YEAR = #YEAR# AND EMPNO = #EMPNO#)
+		     , DEPT_CODE
+		     , JSSFC_SE
+		     , HR_CLSF_SE
+		     , OFCPS_SE
+		     , #EDC_CRSE_SN#
+		     , #EDC_TY_SN#
+		     , #EDC_CL_SN#
+		     , #EDC_INSTT#
+		     , #CRSE_NM#
+		     , #EDC_PLACE#
+		     , #APPN_LRN_AT#
+		     , #DUTY_EDC_AT#
+		     , #RELATE_DTY#
+		     , #EDC_BGNDE#
+		     , #EDC_ENDDE#
+		     , #REMOTE_EDC_CRSE_SE#
+		     , #REMOTE_EDC_SN#
+		     , #EDC_DAYCNT#
+		     , #EDC_TIME#
+		     , #EDC_RCOGN_TIME#
+		     , #DMSTC_SE#
+		     , #CONFM_AT#
+		     , NVL(#DE_CT#, 0)
+		     , NVL(#MEAL_CT#, 0)
+		     , NVL(#TRNSPORT_CT#, 0)
+		     , NVL(#STAYNG_CT#, 0)
+		     , #RM#
+		     , #SANCTN_NO#
+		     , #EDC_RESULT_MAIN_EDC_CN#
+		     , #EDC_RESULT_THTS#
+		     , #EDC_RESULT_ETC_MATTER#
+		     , #FILE_SN#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		  FROM TBHRM_HR_MASTR
+		 WHERE EMPNO = #EMPNO#
+	</insert>
+	
+	<!-- 교육실적 수정 -->
+	<update id="HRM080303DAO.updateEdcAcmslt" parameterClass="java.util.Map">
+		<![CDATA[/*HRM080303DAO.updateEdcAcmslt*/]]>
+		UPDATE TBHRM_EDC_MANAGE
+		   SET EDC_CRSE_SN            = #EDC_CRSE_SN#
+		     , EDC_TY_SN              = #EDC_TY_SN#
+		     , EDC_CL_SN              = #EDC_CL_SN#
+		     , EDC_INSTT              = #EDC_INSTT#
+		     , CRSE_NM                = #CRSE_NM#
+		     , EDC_PLACE              = #EDC_PLACE#
+		     , APPN_LRN_AT            = #APPN_LRN_AT#
+		     , DUTY_EDC_AT            = #DUTY_EDC_AT#
+		     , RELATE_DTY             = #RELATE_DTY#
+		     , EDC_BGNDE              = #EDC_BGNDE#
+		     , EDC_ENDDE              = #EDC_ENDDE#
+		     , REMOTE_EDC_CRSE_SE     = #REMOTE_EDC_CRSE_SE#
+		     , REMOTE_EDC_SN          = #REMOTE_EDC_SN#
+		     , EDC_DAYCNT             = #EDC_DAYCNT#
+		     , EDC_TIME               = #EDC_TIME#
+		     , EDC_RCOGN_TIME         = #EDC_RCOGN_TIME#
+		     , DMSTC_SE               = #DMSTC_SE#
+		     , CONFM_AT               = #CONFM_AT#
+		     , DE_CT                  = #DE_CT#
+		     , MEAL_CT                = #MEAL_CT#
+		     , TRNSPORT_CT            = #TRNSPORT_CT#
+		     , STAYNG_CT              = #STAYNG_CT#
+		     , RM                     = #RM#
+		     , SANCTN_NO              = #SANCTN_NO#
+		     , EDC_RESULT_MAIN_EDC_CN = #EDC_RESULT_MAIN_EDC_CN#
+		     , EDC_RESULT_THTS        = #EDC_RESULT_THTS#
+		     , EDC_RESULT_ETC_MATTER  = #EDC_RESULT_ETC_MATTER#
+		     , FILE_SN                = #FILE_SN#
+		     , UPDUSR_ID              = #S_USER_ID#
+		     , UPDT_DT                = SYSDATE
+		 WHERE 1=1
+		   AND YEAR  = #YEAR#
+		   AND EMPNO = #EMPNO#
+		   AND SN    = #SN#
+	</update>
+	
+	<!-- 교육실적 삭제 -->
+	<delete id="HRM080303DAO.deleteEdcAcmslt" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080303DAO.deleteEdcAcmslt*/]]>
+		DELETE
+		  FROM TBHRM_EDC_MANAGE
+		 WHERE 1=1
+		   AND YEAR  = #YEAR#
+		   AND EMPNO = #EMPNO#
+		   AND SN    = #SN#
+	</delete>
+	
+	<!-- 교육만족도 조회 -->
+	<select id="HRM080303DAO.selectEdcStsfdgList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080303DAO.selectEdcStsfdgList*/]]>
+		SELECT T1.YEAR
+		     , #EMPNO#             AS EMPNO
+		     , #SN#                AS SN
+		     , T1.EDC_TY_SN
+		     , T1.QESTNAR_NO
+		     , T1.QUSTNR_NO
+		     , T1.STSFDG_SE
+		     , T3.CODE_NM          AS STSFDG_SE_NM
+		     , T1.QUSTNR_CN
+		     , T1.QUSTNR_TY
+		     , T2.QUSTNR_RESULT
+		  FROM TBHRM_EDC_STSFDG_EXAMIN T1
+		       LEFT OUTER JOIN TBHRM_EDC_STSFDG T2
+		            ON T1.YEAR       = T2.YEAR
+		           AND T1.EDC_TY_SN  = T2.EDC_TY_SN
+		           AND T1.QESTNAR_NO = T2.QESTNAR_NO
+		           AND T1.QUSTNR_NO  = T2.QUSTNR_NO
+		           AND T2.EMPNO      = #EMPNO#
+		           AND T2.SN         = #SN#
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T3
+		            ON T1.STSFDG_SE = T3.CODE
+		           AND T3.GRP_CODE  = 'HRM042'
+		 WHERE 1=1
+		   AND T1.YEAR       = #YEAR#
+		   AND T1.EDC_TY_SN  = #EDC_TY_SN#
+		ORDER BY T1.STSFDG_SE
+		       , T1.QESTNAR_NO
+		       , T1.QUSTNR_NO
+	</select>
+	
+	<!-- 교육만족도 저장 -->
+	<update id="HRM080303DAO.updateEdcStsfdg" parameterClass="java.util.HashMap">
+	<![CDATA[/*HRM080303DAO.updateEdcStsfdg*/]]>
+		MERGE INTO TBHRM_EDC_STSFDG
+		USING DUAL
+		ON    (
+		           YEAR       = #YEAR#
+		       AND EMPNO      = #EMPNO#
+		       AND SN         = #SN#
+		       AND QESTNAR_NO = #QESTNAR_NO#
+		       AND QUSTNR_NO  = #QUSTNR_NO#
+		       AND EDC_TY_SN  = #EDC_TY_SN#
+		      )
+		WHEN MATCHED THEN
+		    UPDATE
+		       SET QUSTNR_RESULT = #QUSTNR_RESULT#
+		         , UPDUSR_ID     = #S_USER_ID#
+		         , UPDT_DT       = SYSDATE
+		WHEN NOT MATCHED THEN
+		    INSERT (
+		           YEAR
+		         , EMPNO
+		         , SN
+		         , EDC_TY_SN
+		         , QESTNAR_NO
+		         , QUSTNR_NO
+		         , QUSTNR_RESULT
+		         , REGISTER_ID
+		         , REGIST_DT
+		         , UPDUSR_ID
+		         , UPDT_DT
+		    )
+		    VALUES (
+		           #YEAR#
+		         , #EMPNO#
+		         , #SN#
+		         , #EDC_TY_SN#
+		         , #QESTNAR_NO#
+		         , #QUSTNR_NO#
+		         , #QUSTNR_RESULT#
+		         , #S_USER_ID#
+		         , SYSDATE
+		         , #S_USER_ID#
+		         , SYSDATE
+		    )
+	</update>
+	
+	<!-- 교육만족도 삭제 -->
+	<delete id="HRM080303DAO.deleteEdcStsfdgAll" parameterClass="java.util.HashMap">
+		<![CDATA[/*HRM080303DAO.deleteEdcStsfdgAll*/]]>
+		DELETE
+		  FROM TBHRM_EDC_STSFDG
+		 WHERE 1=1
+		   AND YEAR  = #YEAR#
+		   AND EMPNO = #EMPNO#
+		   AND SN    = #SN#
+	</delete>
+	
+	<!-- 원격교육코드 조회 -->
+	<select id="HRM080303DAO.selectRemoteEdcCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM080303DAO.selectRemoteEdcCodeList*/]]>
+		SELECT T1.CODE
+		     , T1.CODE_NM
+		  FROM TBHRM_REMOTE_EDC_CODE T1
+		 WHERE 1=1
+		   AND T1.USE_AT = '1'
+		   AND T1.YEAR   = #YEAR#
+		ORDER BY T1.CODE_ORDR
+	</select>
+</sqlMap>

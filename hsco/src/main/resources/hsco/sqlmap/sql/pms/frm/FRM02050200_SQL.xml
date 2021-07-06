@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FRM02050200SQL">	
+
+	<!-- 쿼리명 : 총계정원장
+	설명 : 결산내역 조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.02.23
+	-->
+	<select id="FRM02050200DAO.selectTotAcntLedgr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   SELECT ACCNUT_YEAR,
+              decode(MONTH,'00','',MONTH) MONTH,
+              ACNT_CODE,
+              decode(MONTH,'00',ACNT_CODE,'') ACNT_CODE_PRT,
+              CASE WHEN MONTH = '00' THEN ACNTCTGR_NM
+                   ELSE ' [ ' || MONTH || ' 월' || ' ]'
+               END ACNTCTGR_NM ,
+              BEF_AMOUNT BEF_CYFD_AMT,
+              DEBTOR_AMOUNT DR_AMT,
+              CRDIT_AMOUNT  CR_AMT,
+              CASE WHEN MONTH = '00' THEN 0
+                   ELSE SUM(JAN_AMT) OVER (PARTITION BY ACNT_CODE ORDER BY MONTH)
+               END  SUM_JAN_AMT         
+         FROM(SELECT ACCNUT_YEAR,
+                    '00' MONTH,
+                    ACNT_CODE,
+                    ACNTCTGR_NM,
+                    NVL((SELECT SUM(CASE WHEN a.DBRT_SE  = '1' THEN DEBTOR_AMOUNT - CRDIT_AMOUNT
+                                         WHEN a.DBRT_SE  = '2' THEN CRDIT_AMOUNT  - DEBTOR_AMOUNT
+                                     ELSE 0
+                                 END)
+                           FROM TBFRM_ENDW_ACCNUT_STACNT z
+                          WHERE ACCNUT_YM <![CDATA[ <  ]]> #schFrMon#
+                            AND ACNT_CODE = a.ACNT_CODE),0) BEF_AMOUNT,
+                    0 DEBTOR_AMOUNT,
+                    0 CRDIT_AMOUNT,
+                     NVL((SELECT SUM(CASE  WHEN a.DBRT_SE  = '1' THEN DEBTOR_AMOUNT - CRDIT_AMOUNT
+                                           WHEN a.DBRT_SE  = '2' THEN CRDIT_AMOUNT  - DEBTOR_AMOUNT
+                                           ELSE 0
+                                      END)
+                           FROM TBFRM_ENDW_ACCNUT_STACNT z
+                          WHERE ACCNUT_YM <![CDATA[ <  ]]> #schFrMon#
+                            AND ACNT_CODE = a.ACNT_CODE),0) JAN_AMT
+               FROM TBFRM_ENDW_ACNTCTGR a
+               WHERE ACCNUT_YEAR = SUBSTR(#schFrMon#,1,4)
+                 AND ACNT_CODE BETWEEN #acntCodeFr# AND #acntCodeTo#
+                 AND JRNLZ_AT = '1'
+                 AND EXISTS(SELECT 'X'
+                              FROM TBFRM_ENDW_ACCNUT_STACNT z
+                              WHERE SUBSTR(ACCNUT_YM,1,4) = a.ACCNUT_YEAR
+                                AND ACNT_CODE = a.ACNT_CODE
+                                AND ACCNUT_YM <![CDATA[ <= ]]> #schToMon#
+                                AND (DEBTOR_AMOUNT > 0 OR CRDIT_AMOUNT >0) )
+            UNION ALL
+
+            SELECT SUBSTR(a.ACCNUT_YM,1,4) ACCNUT_YEAR,
+                   SUBSTR(a.ACCNUT_YM,5,2) MONTH,
+                   a.ACNT_CODE,
+                   '',
+                   0,
+                   SUM(DEBTOR_AMOUNT),
+                   SUM(CRDIT_AMOUNT),
+                   SUM(CASE WHEN  b.DBRT_SE  = '1' THEN a.DEBTOR_AMOUNT - a.CRDIT_AMOUNT
+                             WHEN b.DBRT_SE  = '2' THEN a.CRDIT_AMOUNT  - a.DEBTOR_AMOUNT
+                             ELSE 0
+                         END)
+              FROM TBFRM_ENDW_ACCNUT_STACNT a,
+                   TBFRM_ENDW_ACNTCTGR b
+             WHERE a.ACCNUT_YM BETWEEN #schFrMon# AND #schToMon#
+               AND a.ACNT_CODE BETWEEN #acntCodeFr# AND #acntCodeTo#
+               AND SUBSTR(a.ACCNUT_YM,1,4) = b.ACCNUT_YEAR
+               AND a.ACNT_CODE = b.ACNT_CODE
+               AND b.JRNLZ_AT = '1'
+               AND (DEBTOR_AMOUNT > 0 OR CRDIT_AMOUNT >0)
+             GROUP BY  SUBSTR(a.ACCNUT_YM,1,4),
+                       SUBSTR(a.ACCNUT_YM,5,2) ,
+                       a.ACNT_CODE
+                       )
+       ORDER BY ACNT_CODE,
+                MONTH NULLS FIRST
+               
+	</select>
+	
+	<!-- 총계정원장 상세조회 -->
+	
+	<select id="FRM02050200DAO.selectTotAcntLedgrDetail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+       SELECT  b.ACNT_CODE,
+               0 AS CYFD_AMT,
+               b.DEBTOR_AMOUNT DR_AMT,
+               b.CRDIT_AMOUNT  CR_AMT,
+               DECODE(c.DBRT_SE,'1', b.DEBTOR_AMOUNT - b.CRDIT_AMOUNT,'2',b.CRDIT_AMOUNT - b.DEBTOR_AMOUNT,0) AS JAN_AMT,
+               SUMRY,
+               ACNTCTGR_NM,
+               CHIT_DE
+          FROM TBFRM_ENDW_CHIT a,
+               TBFRM_ENDW_CHIT_DETAIL b,
+               TBFRM_ENDW_ACNTCTGR c
+         WHERE a.ACCNUT_YEAR = b.ACCNUT_YEAR
+           AND a.CHIT_NO     = b.CHIT_NO
+           AND b.ACCNUT_YEAR = c.ACCNUT_YEAR(+)
+           AND b.ACNT_CODE   = c.ACNT_CODE(+)
+           AND a.ACCNUT_YEAR  = #accnutYear#
+           AND substr(a.CHIT_DE,1,6) = #accnutYear# || #month#
+           AND b.ACNT_CODE = #acntCode#
+       ORDER BY CHIT_DE NULLS FIRST
+               
+	</select>
+</sqlMap>

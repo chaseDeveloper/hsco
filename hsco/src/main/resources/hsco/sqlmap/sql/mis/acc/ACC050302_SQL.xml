@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050302_SQL">	
+	
+	<select id="ACC050302DAO.prflosBillList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+	<![CDATA[ /* ACC050302DAO.prflosBillListIfrs */ ]]>
+	<![CDATA[
+    	WITH THIS_STACNT_T AS ( /*당기*/
+		    SELECT ACCNUT_YEAR
+		         , CASE WHEN ACCNUT_ACNT_CODE = '10000000' /*자산*/ THEN '19900000' /*자산총계*/
+		                WHEN ACCNUT_ACNT_CODE = '20000000' /*부채*/ THEN '29900000' /*부채총계*/
+		                WHEN ACCNUT_ACNT_CODE = '30000000' /*자본*/ THEN '32070990' /*자본총계*/
+		                ELSE ACCNUT_ACNT_CODE
+		           END AS ACCNUT_ACNT_CODE
+		         , NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNTSUM
+		    WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+		    AND   ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+		    GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+		    UNION ALL
+		    SELECT ACCNUT_YEAR
+		         , CASE WHEN ACCNUT_ACNT_CODE = '10000000' /*자산*/ THEN '19900000' /*자산총계*/
+		                WHEN ACCNUT_ACNT_CODE = '20000000' /*부채*/ THEN '29900000' /*부채총계*/
+		                WHEN ACCNUT_ACNT_CODE = '30000000' /*자본*/ THEN '32070990' /*자본총계*/
+		                ELSE ACCNUT_ACNT_CODE
+		           END AS ACCNUT_ACNT_CODE
+		         , NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNT
+		    WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+		    AND   ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+		    GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+		)
+		, PRE_STACNT_T AS (     /*전기*/
+		    SELECT ACCNUT_YEAR 
+		         , CASE WHEN ACCNUT_ACNT_CODE = '10000000' /*자산*/ THEN '19900000' /*자산총계*/
+		                WHEN ACCNUT_ACNT_CODE = '20000000' /*부채*/ THEN '29900000' /*부채총계*/
+		                WHEN ACCNUT_ACNT_CODE = '30000000' /*자본*/ THEN '32070990' /*자본총계*/
+		                ELSE ACCNUT_ACNT_CODE
+		           END AS ACCNUT_ACNT_CODE
+		         , NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNTSUM
+		    WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#, 0, 4)-1
+		    AND   ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+		    GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+		    UNION ALL
+		    SELECT ACCNUT_YEAR
+		         , CASE WHEN ACCNUT_ACNT_CODE = '10000000' /*자산*/ THEN '19900000' /*자산총계*/
+		                WHEN ACCNUT_ACNT_CODE = '20000000' /*부채*/ THEN '29900000' /*부채총계*/
+		                WHEN ACCNUT_ACNT_CODE = '30000000' /*자본*/ THEN '32070990' /*자본총계*/
+		                ELSE ACCNUT_ACNT_CODE
+		           END AS ACCNUT_ACNT_CODE
+		         , NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNT
+		    WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#, 0, 4)-1
+		    AND   ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+		    GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+		)
+		SELECT  t1.ACCNUT_ACNT_CODE ,
+		        NVL(t1.THIS_STACNT_AMT,0) 							AS THSTRM_AMOUNT,
+		        NVL(t1.THIS_STACNT_SM,0) 							AS THSTRM_SM,
+		        NVL(t2.PRE_STACNT_AMT,0) 							AS FRMTRM_AMOUNT,
+		        NVL(t2.PRE_STACNT_SM,0) 							AS FRMTRM_SM,
+		        t1.ACNT_LEVEL,
+		        DECODE(DECODE(t1.ACCNUT_ACNT_CODE,'56500000',3,t1.ACNT_LEVEL),1,' '
+		                            ,2,DECODE(DENSE_RANK() OVER(PARTITION BY t1.ACNT_LEVEL ORDER BY t1.ACCNUT_ACNT_CODE),1,'Ⅰ. ',2,'Ⅱ. ',3,'Ⅲ. ',4,'Ⅳ. ',5,'Ⅴ. ',6,'Ⅵ. ',7,'Ⅶ. ',8,'Ⅷ. ',9,'Ⅸ. ',10,'Ⅹ. ',11,'ⅩⅠ. ',12,'ⅩⅡ. ',13,'ⅩⅢ. ')
+		                            ,3,'    '||DENSE_RANK() OVER(PARTITION BY DECODE(t1.ACCNUT_ACNT_CODE,'56500000',3,t1.ACNT_LEVEL), SUBSTR(DECODE(t1.ACCNUT_ACNT_CODE,'56500000','50508999',t1.ACCNUT_ACNT_CODE),1,3) ORDER BY DECODE(t1.ACCNUT_ACNT_CODE,'56500000','50508999',t1.ACCNUT_ACNT_CODE))||'. '
+		                            ,'        ')
+		        ||t1.ACCNUT_ACNT_NM AS ACCNUT_ACNT_NM
+		FROM (SELECT t1.ACCNUT_ACNT_CODE ,
+		             t1.ACCNUT_ACNT_NM ,
+		             t1.ACNT_LEVEL,
+		             CASE 
+		                 WHEN DECODE(t1.ACCNUT_ACNT_CODE,'56500000',3,t1.ACNT_LEVEL) >= 3
+		                 THEN 
+		                    CASE
+		                      WHEN t1.ACCNUT_ACNT_CODE = '50500000'/*매출원가*/
+		                      THEN SFACC_GET_50500000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                      WHEN t1.ACCNUT_ACNT_CODE = '51000000'/*매출총이익*/
+		                      THEN SFACC_GET_41500000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                      WHEN t1.ACCNUT_ACNT_CODE = '52000000'/*영업이익*/
+		                      THEN SFACC_GET_42500000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                      WHEN t1.ACCNUT_ACNT_CODE = '55000000'/*법인세비용차감전순이익*/
+		                      THEN SFACC_GET_46000000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                      WHEN t1.ACCNUT_ACNT_CODE = '56000000'/*당기순이익(손실)*/
+		                      THEN SFACC_GET_47000000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                      ELSE t1.THIS_STACNT_AMT
+		                    END            
+		                 ELSE 0
+		              END AS THIS_STACNT_AMT ,
+		              CASE 
+		                     WHEN DECODE(t1.ACCNUT_ACNT_CODE,'56500000',3,t1.ACNT_LEVEL) < 3
+		                 THEN 
+		                     CASE
+		                          WHEN t1.ACCNUT_ACNT_CODE = '50500000'/*매출원가*/
+		                          THEN SFACC_GET_50500000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                          WHEN t1.ACCNUT_ACNT_CODE = '51000000'/*매출총이익*/
+		                          THEN SFACC_GET_41500000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                          WHEN t1.ACCNUT_ACNT_CODE = '52000000'/*영업이익*/
+		                          THEN SFACC_GET_42500000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                          WHEN t1.ACCNUT_ACNT_CODE = '55000000'/*법인세비용차감전순이익*/
+		                          THEN SFACC_GET_46000000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                          WHEN t1.ACCNUT_ACNT_CODE = '56000000'/*당기순이익(손실)*/
+		                          THEN SFACC_GET_47000000_AMT(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,2))
+		                          ELSE t1.THIS_STACNT_AMT
+		                     END
+		                 ELSE 0
+		              END AS THIS_STACNT_SM 
+		      FROM (
+		              SELECT t1.ACCNUT_ACNT_CODE
+		                   , t1.ACNT_LEVEL
+		                   , MAX(t1.ACCNUT_ACNT_NM) AS ACCNUT_ACNT_NM
+		                   , CASE WHEN t1.RSYMNEY_ACNT_AT = '1' 
+		                          THEN NVL(SUM(t2.DR_AMT - t2.CR_AMT),0)
+		                          ELSE NVL(SUM(DECODE(t1.DBRT_SE, 'D', t2.DR_AMT - t2.CR_AMT, 'C', t2.CR_AMT - t2.DR_AMT ,t2.DR_AMT - t2.CR_AMT)),0) 
+		                     END  AS THIS_STACNT_AMT
+		                  
+		              FROM TBACC_ACCNUT_ACNT_SBJECT t1
+		                LEFT OUTER JOIN THIS_STACNT_T t2
+		                ON  t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+		                AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+		              WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+		              AND   t1.ACNT_SE  = '2' /*손익계산서*/
+		             
+		              GROUP BY t1.ACCNUT_YEAR ,
+		                       t1.ACCNUT_ACNT_CODE ,
+		                       t1.RSYMNEY_ACNT_AT,
+		                       t1.ACNT_LEVEL
+		                  ORDER BY t1.ACCNUT_ACNT_CODE ASC
+		          ) t1
+		    ) t1
+		    LEFT OUTER JOIN
+		   (SELECT t1.ACCNUT_ACNT_CODE ,
+		            t1.ACCNUT_ACNT_NM ,
+		            CASE 
+		                     WHEN DECODE(t1.ACCNUT_ACNT_CODE,'56500000',3,t1.ACNT_LEVEL) >= 3
+		                 THEN 
+		                
+		                                CASE
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '50500000'/*매출원가*/
+		                                  THEN SFACC_GET_50500000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '51000000'/*매출총이익*/
+		                                  THEN SFACC_GET_41500000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '52000000'/*영업이익*/
+		                                  THEN SFACC_GET_42500000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '55000000'/*법인세비용차감전순이익*/
+		                                  THEN SFACC_GET_46000000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '56000000'/*당기순이익(손실)*/
+		                                  THEN SFACC_GET_47000000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  ELSE t1.PRE_STACNT_AMT
+		                              END
+		                 ELSE 0
+		            END AS PRE_STACNT_AMT ,
+		             CASE 
+		                     WHEN DECODE(t1.ACCNUT_ACNT_CODE,'56500000',3,t1.ACNT_LEVEL) < 3
+		                 THEN 
+		                 
+		                                CASE
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '50500000'/*매출원가*/
+		                                  THEN SFACC_GET_50500000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '51000000'/*매출총이익*/
+		                                  THEN SFACC_GET_41500000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '52000000'/*영업이익*/
+		                                  THEN SFACC_GET_42500000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '55000000'/*법인세비용차감전순이익*/
+		                                  THEN SFACC_GET_46000000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  WHEN t1.ACCNUT_ACNT_CODE = '56000000'/*당기순이익(손실)*/
+		                                  THEN SFACC_GET_47000000_AMT(SUBSTR(#YYYYMM#,1,4)-1, SUBSTR(#YYYYMM#,5,2))
+		                                  ELSE t1.PRE_STACNT_AMT
+		                            END
+		                         
+		                 ELSE 0
+		            END AS PRE_STACNT_SM 
+		  FROM (
+		          SELECT t1.ACCNUT_ACNT_CODE
+		               , t1.ACNT_LEVEL
+		               , MAX(NVL(t1.OUTPT_ACNT_NM, t1.ACCNUT_ACNT_NM)) AS ACCNUT_ACNT_NM
+		               , CASE WHEN t1.RSYMNEY_ACNT_AT = '1' 
+		                      THEN NVL(SUM(t2.DR_AMT - t2.CR_AMT),0)
+		                      ELSE NVL(SUM(DECODE(t1.DBRT_SE, 'D', t2.DR_AMT - t2.CR_AMT, 'C', t2.CR_AMT - t2.DR_AMT ,t2.DR_AMT - t2.CR_AMT)),0) 
+		                 END  AS PRE_STACNT_AMT
+		              
+		          FROM TBACC_ACCNUT_ACNT_SBJECT t1
+		            LEFT OUTER JOIN PRE_STACNT_T t2
+		            ON  t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+		            AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+		            
+		          WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)-1
+		          AND   t1.ACNT_SE  = '2' /*손익계산서*/
+		         
+		          GROUP BY t1.ACCNUT_YEAR ,
+		                   t1.ACCNUT_ACNT_CODE ,
+		                   t1.RSYMNEY_ACNT_AT,
+		                   t1.ACNT_LEVEL
+		      ) t1
+		   )t2
+		   ON t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+		WHERE (THIS_STACNT_AMT <> 0 OR THIS_STACNT_SM <> 0 OR	PRE_STACNT_AMT <> 0 OR PRE_STACNT_SM  <> 0)
+		  AND t1.ACCNUT_ACNT_CODE NOT IN ('40000000','50000000')
+		  AND t1.ACCNUT_ACNT_CODE NOT BETWEEN '56500001' AND '56599999'
+		  AND t1.ACNT_LEVEL < 4
+		ORDER BY DECODE(t1.ACCNUT_ACNT_CODE,'56500000','50508999',t1.ACCNUT_ACNT_CODE) ASC
+    ]]>
+	</select>
+</sqlMap>

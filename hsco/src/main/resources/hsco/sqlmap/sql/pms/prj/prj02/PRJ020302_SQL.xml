@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj02">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_PRMPC_CODE			원가코드
+		CRUD : TBPRJ_PRSMP_PRMPC		추정원가
+		 R   : TBPRJ_EXPENS_RT			경비율
+	-->
+
+	<!-- 추정원가산정 ================================================== -->
+
+	<!-- 추정원가산정 조회 -->
+	<select id="PRJ020302.mList" parameterClass="map" resultClass="hashmap">
+WITH DATA AS (
+	SELECT
+		 BSNS_CODE
+		,BSNS_STEP
+		,STD_PRMPC_CODE
+		,SUM(EXPENS_ELSE) AS EXPENS_ELSE
+	FROM TBPRJ_PRSMP_PRMPC_DSTRC D2	/* 추정원가년차-설계 */
+	GROUP BY BSNS_CODE, BSNS_STEP, STD_PRMPC_CODE
+)
+SELECT
+	 A2.BSNS_CODE		/* 사업코드 */
+	,C.STD_PRMPC_CODE	/* 표준원가코드 */
+	,C.CL_SE			/* 분류구분 */
+	,DECODE(C.CL_SE, 1, C.LCLAS_NM, 2, C.MLSFC_NM, C.SCLAS_NM)
+	 AS CODE_NM			/* 원가항목명 */
+	,A2.ODR				/* 차수 */
+	,A2.QY				/* 수량 */
+	,A2.UNTPC			/* 단가 */
+	,A2.UNIT_NM			/* 단위 */
+	,ROUND(A2.AMOUNT /100000000,2) AS AMT2						/* 금액2(억원) */
+	,ROUND(D2.EXPENS_ELSE /100000000,2) AS EX2					/* 제경비외2(억원) */
+	,ROUND((A2.AMOUNT+NVL(D2.EXPENS_ELSE,0)) /100000000,2) AS S_AMT2	/* 합계2(억원) */
+	,A1.ODR AS ODR1												/* 차수1(억원) */
+	,ROUND(A1.AMOUNT /100000000,2) AS AMT1						/* 금액1(억원) */
+	,ROUND(D1.EXPENS_ELSE /100000000,2) AS EX1					/* 제경비외1(억원) */
+	,ROUND((A1.AMOUNT+NVL(D1.EXPENS_ELSE,0)) /100000000,2) AS S_AMT1	/* 합계1(억원) */
+	,ROUND((A2.AMOUNT-A1.AMOUNT+NVL(D2.EXPENS_ELSE - D1.EXPENS_ELSE,0)) /100000000,2)
+	 AS AMTD			/* 차액(억원) 설계-개발 */
+FROM TBPRJ_PRMPC_CODE C				/* TBPRJ_PRMPC_CODE */
+JOIN TBPRJ_PRSMP_PRMPC_SBJECT A2		/* 추정원가_과목별-설계 */
+  ON A2.BSNS_CODE LIKE '%'
+ AND A2.BSNS_STEP = 2
+ AND A2.STD_PRMPC_CODE = C.STD_PRMPC_CODE
+JOIN TBPRJ_PRSMP_PRMPC_SBJECT A1		/* 추정원가_과목별-개발 */
+  ON A1.BSNS_CODE = A2.BSNS_CODE
+ AND A1.BSNS_STEP = 1
+ AND A1.STD_PRMPC_CODE = C.STD_PRMPC_CODE
+LEFT JOIN DATA D2						/* 추정원가년차-설계 */
+  ON D2.BSNS_CODE = A2.BSNS_CODE
+ AND D2.BSNS_STEP = A2.BSNS_STEP
+ AND D2.STD_PRMPC_CODE = A2.STD_PRMPC_CODE
+LEFT JOIN DATA D1						/* 추정원가년차-개발 */
+  ON D1.BSNS_CODE = A1.BSNS_CODE
+ AND D1.BSNS_STEP = A1.BSNS_STEP
+ AND D1.STD_PRMPC_CODE = A1.STD_PRMPC_CODE
+WHERE A2.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A2.ODR = (SELECT MAX(S.ODR)
+				FROM TBPRJ_PRSMP_PRMPC_SBJECT S
+				WHERE S.BSNS_CODE = A2.BSNS_CODE
+				  AND S.BSNS_STEP = A2.BSNS_STEP)
+  AND A1.ODR = (SELECT MAX(S.ODR)
+				FROM TBPRJ_PRSMP_PRMPC_SBJECT S
+				WHERE S.BSNS_CODE = A1.BSNS_CODE
+				  AND S.BSNS_STEP = A1.BSNS_STEP)
+<isNotEmpty property="CD1" >
+</isNotEmpty>
+ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 추정원가년차 ================================================== -->
+
+	<select id="PRJ020302.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A2.BSNS_CODE			/* 사업코드 */
+	,A2.BSNS_STEP			/* 사업단계 */
+	,A2.ODR					/* 차수 */
+	,A2.STD_PRMPC_CODE		/* 표준원가코드 */
+	,A2.YRYC					/* 연차 */
+	,A2.YEAR					/* 년도 */
+	,ROUND(A2.AMOUNT /100000000,2) AS AMT2					/* 금액2(억원) */
+	,ROUND(A1.AMOUNT /100000000,2) AS AMT1					/* 금액1(억원) */
+	,ROUND((A2.AMOUNT-A1.AMOUNT) /100000000,2) AS AMTD		/* 차액(억원) */
+FROM TBPRJ_PRSMP_PRMPC_DSTRC A2					/* 추정원가년차-개발 */
+LEFT JOIN TBPRJ_PRSMP_PRMPC_DSTRC A1			/* 추정원가년차-설계 */
+  ON A1.BSNS_CODE = A2.BSNS_CODE				/* 사업코드 */
+ AND A1.BSNS_STEP = 1						/* 사업단계(설계) */
+ AND A1.STD_PRMPC_CODE = A2.STD_PRMPC_CODE	/* 표준원가코드 */
+ AND A1.YRYC = A2.YRYC						/* 연차 */
+WHERE A2.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A2.BSNS_STEP = 2					/* 사업단계(개발) */
+  AND A2.ODR = (SELECT MAX(S.ODR)
+				FROM TBPRJ_PRSMP_PRMPC_DSTRC S
+				WHERE S.BSNS_CODE = A2.BSNS_CODE
+				  AND S.BSNS_STEP = A2.BSNS_STEP)
+  AND A1.ODR = (SELECT MAX(S.ODR)
+				FROM TBPRJ_PRSMP_PRMPC_DSTRC S
+				WHERE S.BSNS_CODE = A1.BSNS_CODE
+				  AND S.BSNS_STEP = A1.BSNS_STEP)
+  AND A2.STD_PRMPC_CODE = #STD_PRMPC_CODE#	/* 표준원가코드 */
+ORDER BY 1,2,3,4,5
+	</select>
+
+	<!-- 제경비외 ================================================== -->
+
+	<select id="PRJ020302.r2List" parameterClass="map" resultClass="hashmap">
+SELECT
+	 BC.BSNS_CODE			/* 사업코드 */
+	,A2.STD_PRMPC_CODE		/* 표준원가코드 */
+
+	,ER.RATE_CODE			/* 비율코드 */
+	,ER.EXPENS_RT_SBJECT	/* 제경비율과목 */
+	,ER.COMPUT_RATE			/* 산출비율 */
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+	,ROUND(A2.EX2 /100000000,2) AS EX2	/* 제경비외_설계(억원) */
+	,ROUND(A2.EX1 /100000000,2) AS EX1	/* 제경비외_개발(억원) */
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 원장 */
+	,ROUND(A2.AMT2 * ER.COMPUT_RATE /(100 * 100000000),2) AS EX2	/* 제경비외_설계(억원) */
+	,ROUND(A2.AMT1 * ER.COMPUT_RATE /(100 * 100000000),2) AS EX1	/* 제경비외_개발(억원) */
+</isEqual>
+FROM TBPRJ_BSNS_CODE BC			/* 사업코드 */
+JOIN TBPRJ_EXPENS_RT ER			/* 경비율 */
+  ON ER.BSNS_TY = BC.BSNS_TY
+LEFT JOIN (
+	SELECT
+		 BSNS_CODE, STD_PRMPC_CODE
+<isNotEqual property="DATA_SRC" compareValue="1">		/* 집계 */
+		,SUM(DECODE(BSNS_STEP, 1, EXPENS_ELSE, 0)) AS EX1
+		,SUM(DECODE(BSNS_STEP, 2, EXPENS_ELSE, 0)) AS EX2
+</isNotEqual>
+<isEqual property="DATA_SRC" compareValue="1">			/* 원장 */
+		,SUM(DECODE(BSNS_STEP, 1, AMOUNT, 0)) AS AMT1
+		,SUM(DECODE(BSNS_STEP, 2, AMOUNT, 0)) AS AMT2
+</isEqual>
+	FROM TBPRJ_PRSMP_PRMPC_DSTRC A2
+	WHERE ODR =
+		(SELECT MAX(S.ODR)
+		FROM TBPRJ_PRSMP_PRMPC_DSTRC S
+		WHERE S.BSNS_CODE = A2.BSNS_CODE
+		  AND S.BSNS_STEP = A2.BSNS_STEP)
+	GROUP BY BSNS_CODE, STD_PRMPC_CODE
+) A2
+  ON A2.BSNS_CODE = BC.BSNS_CODE
+WHERE BC.BSNS_CODE = #BSNS_CODE#				/* 사업코드 */
+  AND ER.APPLC_YEAR = #APPLC_YEAR#				/* 적용년도 */
+  AND A2.STD_PRMPC_CODE = #STD_PRMPC_CODE#		/* 표준원가코드 */
+ORDER BY 1,2,3,4,5
+	</select>
+
+	<!-- 추정원가 산정 생성 -->
+
+	<insert id="PRJ020302.make" parameterClass="map">
+UPDATE TBPRJ_PRSMP_PRMPC_DSTRC A			/* 추정원가년차 */
+  SET
+	 A.EXPENS_ELSE			/* 제경비외 */
+		= NVL((SELECT
+				ROUND(SUM(B.AMOUNT * ER.COMPUT_RATE) /100,0)
+			FROM TBPRJ_PRSMP_PRMPC_DSTRC B
+			JOIN TBPRJ_BSNS_CODE BC
+			  ON BC.BSNS_CODE = B.BSNS_CODE
+			JOIN TBPRJ_EXPENS_RT ER			/* 경비율 */
+			  ON ER.APPLC_YEAR = B.YEAR
+			 AND ER.BSNS_TY = BC.BSNS_TY
+			WHERE B.BSNS_CODE = A.BSNS_CODE
+			  AND B.BSNS_STEP = A.BSNS_STEP
+			  AND B.ODR = A.ODR
+			  AND B.STD_PRMPC_CODE = A.STD_PRMPC_CODE
+			  AND B.YRYC = A.YRYC
+			),0)
+	,UPDUSR_ID = #S_USER_ID#	/* 수정자ID */
+	,UPDT_DT = SYSDATE			/* 수정일시 */
+WHERE (BSNS_CODE, BSNS_STEP, ODR)
+		IN (SELECT BSNS_CODE, BSNS_STEP, MAX(ODR)
+			FROM TBPRJ_PRSMP_PRMPC_DSTRC
+			WHERE BSNS_CODE = #BSNS_CODE#
+			GROUP BY BSNS_CODE, BSNS_STEP
+			)
+	</insert>
+
+</sqlMap>

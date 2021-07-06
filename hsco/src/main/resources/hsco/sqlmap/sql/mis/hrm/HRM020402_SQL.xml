@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM020402_SQL">
+
+		<!-- 최종결과관리 조회 -->
+	<select id="HRM020402DAO.selectEmpmnRcritRealmList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+		     t1.EMPMN_YEAR        /*채용년도*/
+		    ,t1.ODR_SE            /*채용차수*/
+		    ,t1.JSSFC_SE          /*직종구분*/
+		    ,t1.SN                /*채용기초항목순번*/
+		    ,t1.CMPET_SE          /*경쟁구분*/
+		    ,t1.EMPMN_SE          /*채용구분*/
+		    ,t1.APYEXM_CLSF_SE    /*응시직급구분*/
+		    ,t1.APYEXM_REALM_SE   /*응시분야구분*/
+		    ,t1.PREARNGE_NMPR
+		    ,t2.PASS_CNT
+		    ,t2.DCSN_CNT
+		    /*최종결과 001 : 합격, 002 : 불합격, 003 : 예비합격*/
+		FROM TBHRM_EMPMN_RCRIT_REALM t1
+		LEFT OUTER JOIN (
+		                    SELECT
+		                         s1.EMPMN_YEAR
+		                        ,s1.ODR_SE
+		                        ,s1.RCRIT_REALM_SN
+		                        ,COUNT(CASE WHEN s2.LAST_RESULT_SE = '001' THEN 1 END) AS PASS_CNT
+		                        ,COUNT(CASE WHEN s2.EMPMN_DCSN_AT = '1' THEN 1 END) AS DCSN_CNT
+		                    FROM TBHRM_ECNY_SPORT_GNRL s1
+		                    LEFT OUTER JOIN TBHRM_EMPMN_LAST_RESULT s2
+		                    ON  s1.EMPMN_YEAR   = s2.EMPMN_YEAR
+		                    AND s1.ODR_SE       = s2.ODR_SE
+		                    AND s1.RL_APYEXM_NO = s2.APYEXM_NO
+		                    WHERE s1.PROPER_AT  = '1'	/*적격여부*/
+		                    GROUP BY s1.EMPMN_YEAR, s1.ODR_SE, s1.RCRIT_REALM_SN
+		                ) t2
+		ON  t1.EMPMN_YEAR = t2.EMPMN_YEAR
+		AND t1.ODR_SE     = t2.ODR_SE
+		AND t1.SN         = t2.RCRIT_REALM_SN
+		WHERE t1.EMPMN_YEAR = #EMPMN_YEAR#
+          AND t1.ODR_SE     = #ODR_SE#
+		<isNotEmpty property="CMPET_SE">
+			AND t1.CMPET_SE = #CMPET_SE#
+		</isNotEmpty>
+		<isNotEmpty property="EMPMN_SE">
+			AND t1.EMPMN_SE = #EMPMN_SE#
+		</isNotEmpty>
+		<isNotEmpty property="APYEXM_CLSF_SE">
+			AND t1.APYEXM_CLSF_SE  = #APYEXM_CLSF_SE#
+		</isNotEmpty>
+		<isNotEmpty property="APYEXM_REALM_SE">
+			AND t1.APYEXM_REALM_SE  = #APYEXM_REALM_SE#
+		</isNotEmpty>
+		ORDER BY SN ASC
+	</select> 
+	
+ 	<!-- 최종결과관리 상세조회 -->
+	<select id="HRM020402DAO.empmnLastResultR" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		    SELECT
+		    	 RANK() OVER (ORDER BY t3.LAST_SCORE DESC NULLS LAST) AS EVL_RANK   
+		        ,t1.EMPMN_YEAR          /*채용연도*/
+		        ,t1.ODR_SE              /*차수구분*/
+		        ,t1.APYEXM_NO           /*응시번호*/
+		        ,t1.RL_APYEXM_NO			
+		        ,t1.NM_KOREAN           /*성명한글*/
+		        ,t1.PHOTO_FILE_ID   AS FILE_SN
+		        ,t3.LAST_RANK           /*최종순위*/
+		        ,t3.LAST_RESULT_SE      /*최종결과구분*/
+		        ,t3.EMPMN_DCSN_AT       /*채용확정여부*/
+		        ,t3.DCSN_DE
+		        ,t3.RM                  /*비고*/
+		        ,t3.LAST_SCORE
+		        ,t3.DTA_CREAT_AT
+		        ,TO_CHAR(t3.DTA_CREAT_DT, 'yyyymmdd') AS DTA_CREAT_DE
+		    FROM TBHRM_ECNY_SPORT_GNRL t1
+		        LEFT OUTER JOIN TBHRM_EMPMN_RCRIT_REALM t2
+		          ON t1.EMPMN_YEAR     = t2.EMPMN_YEAR
+		         AND t1.ODR_SE         = t2.ODR_SE
+		         AND t1.RCRIT_REALM_SN = t2.SN
+		        LEFT OUTER JOIN TBHRM_EMPMN_LAST_RESULT t3
+		          ON t1.EMPMN_YEAR   = t3.EMPMN_YEAR
+		         AND t1.ODR_SE       = t3.ODR_SE
+		         AND t1.RL_APYEXM_NO = t3.APYEXM_NO
+		        LEFT OUTER JOIN TBHRM_INTRVW_EVL t4     /*면접*/
+		          ON t1.EMPMN_YEAR   = t4.EMPMN_YEAR
+		         AND t1.ODR_SE       = t4.ODR_SE
+		         AND t1.RL_APYEXM_NO = t4.APYEXM_NO
+		    WHERE 1               = 1
+			  AND t1.EMPMN_YEAR = #EMPMN_YEAR#
+			  AND t1.ODR_SE	= #ODR_SE#
+			  AND t1.RCRIT_REALM_SN = #RCRIT_REALM_SN#	
+		      AND t1.PROPER_AT = '1'	 /*적격여부*/
+		      AND t4.EVL_RESULT_SE = '1' /*면접전형합격자*/
+		      AND t3.LAST_RESULT_SE = '001'	/*최종결과 : 합격*/
+		ORDER BY EVL_RANK ASC
+	</select> 	
+	
+	<!--  최종결과관리  상세 수정 -->
+	<update id="HRM020402DAO.empmnLastResultCU" parameterClass="java.util.HashMap">
+		MERGE INTO TBHRM_EMPMN_LAST_RESULT 
+		USING DUAL
+		  ON ( 		EMPMN_YEAR = #EMPMN_YEAR#
+		  		AND ODR_SE	   = #ODR_SE#
+		  		AND APYEXM_NO  = #RL_APYEXM_NO# )
+		WHEN MATCHED THEN
+		UPDATE SET LAST_SCORE = #LAST_SCORE#
+			  ,LAST_RANK      = #LAST_RANK#
+			  ,LAST_RESULT_SE = #LAST_RESULT_SE#
+			  ,EMPMN_DCSN_AT  = #EMPMN_DCSN_AT#
+			  ,DCSN_DE        = #DCSN_DE#
+			  ,RM             = #RM#
+			  ,DTA_CREAT_AT   = #DTA_CREAT_AT#
+			  ,DTA_CREAT_DT   = #DTA_CREAT_DT#
+			  ,UPDUSR_ID      = #S_USER_ID#
+			  ,UPDT_DT        = SYSDATE
+		WHEN NOT MATCHED THEN
+		INSERT (
+			 EMPMN_YEAR
+			,ODR_SE
+			,APYEXM_NO
+			,LAST_SCORE
+			,LAST_RANK
+			,LAST_RESULT_SE
+			,EMPMN_DCSN_AT
+			,DCSN_DE
+			,RM
+			,DTA_CREAT_AT
+			,DTA_CREAT_DT
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)VALUES (
+			 #EMPMN_YEAR#
+			,#ODR_SE#
+			,#RL_APYEXM_NO#
+			,#LAST_SCORE#
+			,#LAST_RANK#
+			,#LAST_RESULT_SE#
+			,#EMPMN_DCSN_AT#
+			,#DCSN_DE#
+			,#RM#
+			,#DTA_CREAT_AT#
+			,#DTA_CREAT_DT#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</update>
+	
+	<!-- ========================== 인사자료생성 ========================== -->
+
+    <!-- 입사지원관리->인사마스터에 생성 -->
+ 	<insert id="HRM020402DAO.hrmastrC" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_HR_MASTR (
+		     EMPNO
+		    ,EMPNM
+		    ,STTUS_SE
+		    ,JSSFC_SE
+		    ,HR_CLSF_SE
+		    ,OFCPS_SE
+		    ,JBLN_SE
+		    ,FILE_SN
+		    ,ECNY_DE
+		    ,BRTHDY
+		    ,TELNO_1
+		    ,TELNO_2
+		    ,EMAIL
+		    ,ADRES
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		SELECT 
+		    #EMPNO#
+		   ,t1.NM_KOREAN
+		   ,'000' /*재직*/
+		   ,''
+		   ,t2.APYEXM_CLSF_SE
+		   ,''
+		   ,''
+		   ,#FILE_SN#
+		   ,#DCSN_DE#
+		   ,LPAD(t1.BRTHDY, 8, '0')
+		   ,H_DECRYPT(t1.CTTPC_TELNO)
+		   ,H_DECRYPT(t1.CTTPC_MOBLPHON)
+		   ,t1.CTTPC_EMAIL
+		   ,t1.NOW_ADRES
+		   ,#S_USER_ID#
+		   ,SYSDATE
+		   ,#S_USER_ID#
+		   ,SYSDATE
+		FROM TBHRM_ECNY_SPORT_GNRL t1
+		    LEFT OUTER JOIN  TBHRM_EMPMN_RCRIT_REALM t2
+		      ON t1.EMPMN_YEAR     = t2.EMPMN_YEAR
+		     AND t1.ODR_SE	       = t2.ODR_SE
+		     AND t1.RCRIT_REALM_SN = t2.SN
+		    LEFT OUTER JOIN  TBHRM_EMPMN_LAST_RESULT t3
+		      ON t1.EMPMN_YEAR     = t3.EMPMN_YEAR
+		     AND t1.ODR_SE	       = t3.ODR_SE
+		     AND t1.RL_APYEXM_NO   = t3.APYEXM_NO
+		 WHERE t1.EMPMN_YEAR = #EMPMN_YEAR#
+		   AND t1.ODR_SE     = #ODR_SE#
+		   AND t1.RL_APYEXM_NO  = #RL_APYEXM_NO#
+		   AND t3.EMPMN_DCSN_AT = '1' 	/*채용확정여부*/
+		   AND NVL(t3.DTA_CREAT_AT, '0') <> '1' 	/*자료생성여부*/
+	]]>
+	</insert>
+
+	<!--  채용최종결과 자료생성여부 업데이트 -->
+	<update id="HRM020402DAO.empmnLastResultU" parameterClass="java.util.HashMap">
+			UPDATE TBHRM_EMPMN_LAST_RESULT 
+			   SET DTA_CREAT_AT =   '1'
+			      ,DTA_CREAT_DT =   SYSDATE
+			      ,UPDUSR_ID	=   #S_USER_ID#
+			      ,UPDT_DT		=   SYSDATE
+			WHERE 1=1
+			  AND EMPMN_YEAR    =  #EMPMN_YEAR#
+			  AND ODR_SE       =   #ODR_SE#
+			  AND APYEXM_NO    =   #RL_APYEXM_NO#
+	</update>
+	
+	<!-- 공통첨부파일 추가 -->
+	<insert id="HRM020402DAO.insertAtchmnFile" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_CMMN_ATCHMNFL (			/* 공통첨부파일 */
+        	 FILE_SN			/* 파일일련번호 */
+        	,FILE_ORDR			/* 파일순차 */
+        	,FILE_STRE_COURS	/* 파일저장경로 */
+        	,STRE_FILE_NM		/* 저장파일명 */
+        	,ORGINL_FILE_NM		/* 원본파일명 */
+        	,FILE_EXTSN			/* 파일확장자 */
+        	,FILE_MG			/* 파일크기 */
+        	,USE_AT				/* 사용여부 */
+        	,REGISTER_ID		/* 등록자ID */
+        	,REGIST_DT			/* 등록일시 */
+        	,UPDUSR_ID			/* 수정자ID */
+        	,UPDT_DT			/* 수정일시 */
+        	,FILE_ID
+        	,FILE_TY
+        )SELECT
+        	 #NEW_FILE_SN#		/* 파일일련번호 */
+        	,FILE_ORDR			/* 파일순차 */
+        	,FILE_STRE_COURS	/* 파일저장경로 */
+        	,STRE_FILE_NM		/* 저장파일명 */
+        	,ORGINL_FILE_NM		/* 원본파일명 */
+        	,FILE_EXTSN			/* 파일확장자 */
+        	,FILE_MG			/* 파일크기 */
+        	,USE_AT				/* 사용여부 */
+        	,#S_USER_ID#		/* 등록자ID */
+        	,SYSDATE			/* 등록일시 */
+        	,#S_USER_ID#		/* 수정자ID */
+        	,SYSDATE			/* 수정일시 */
+        	,FILE_ID
+        	,FILE_TY
+        FROM TBCOM_CMMN_ATCHMNFL
+        WHERE FILE_SN = #FILE_SN#
+          AND FILE_ORDR = '1'
+	</insert>
+	
+		<!-- 공통첨부파일마스터 추가 -->
+	<insert id="HRM020402DAO.insertAtchmnFileMast" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_CMMN_ATCHMNFL_MASTR (			/* 공통첨부파일마스터 */
+        	 FILE_SN			/* 파일일련번호 */
+        	,SYS_SE_CODE		/* 시스템구분코드 */
+        	,JOB_SE_CODE		/* 업무구분코드 */
+        	,REGISTER_ID		/* 등록자ID */
+        	,REGIST_DT			/* 등록일시  */
+        	,UPDUSR_ID			/* 수정자ID */
+        	,UPDT_DT			/* 수정일시  */
+        )
+        SELECT 
+        	 #NEW_FILE_SN#		/* 파일일련번호*/
+        	,#SYS_SE_CODE#		/* 시스템구분코드 */
+        	,#JOB_SE#			/* 업무구분코드*/
+        	,#S_USER_ID#		/* 등록자ID */
+        	,SYSDATE			/* 등록일시 */
+        	,#S_USER_ID#		/* 수정자ID */
+        	,SYSDATE			/* 수정일시 */
+        FROM TBCOM_CMMN_ATCHMNFL_MASTR
+        WHERE FILE_SN = #FILE_SN#
+	</insert>
+  </sqlMap>

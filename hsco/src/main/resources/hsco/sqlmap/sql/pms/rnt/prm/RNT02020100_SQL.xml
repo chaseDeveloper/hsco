@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02020100_SQL">	
+	<!--
+	쿼리명 		: 매입 임대 대기자 목록 정보 조회
+	설명 		: 매입임대 대기자 목록 정보 조회 쿼리
+	수정일 		: 수정자  수정내용	
+	작성자 		: 변승우
+	최초작성일 	: 2015.10.22
+	-->	
+	<select id="RNT02020100DAO.selectMvnWaitrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		    	 A.AREA_CODE		/* 지역코드 */
+		    	,A.RCEPT_DE			/* 접수일자 */
+		    	,A.WAIT_RCEPT_SN	/* 대기접수일련번호 */
+		    	,A.PUCHAS_CSTMR_NO	/* 매입고객번호 */
+		    	,A.FAMILY_CO		/* 가족수 */
+		    	,A.QUALF_SE			/* 자격구분 */
+		    	,A.ROOM_STRUCTURE	/* 방구조 */
+		    	,A.GDCC_SNDNG_DE	/* 안내문발송일자 */
+		    	,A.RM				/* 비고 */
+		    	,A.WAIT_NO			/* 대기번호 */
+		    	,A.EXAMIN_ID		/* 조사ID */
+		    	,A.ALLOT			/* 배점 */
+		    	,A.HOUSE_POSESN_AT	/* 주택소유여부 */
+		        ,B.NM				/* 성명 */
+		        ,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM	/* 주민등록번호 */
+		        ,B.ZIP				/* 우편번호 */
+		        ,B.ADRES			/* 주소 */
+		        ,B.ADRES_DETAIL		/* 주소_상세 */
+		        ,B.TELNO			/* 전화번호 */
+		        ,B.MBTLNO			/* 휴대폰번호 */
+		        ,B.EMAIL			/* 이메일 */
+		        ,C.CNTRCTR_NO		/* 계약자번호 */
+		        ,C.RENT_HOUSE_CODE	/* 임대주택코드 */
+		        ,C.DONG				/* 동 */
+		        ,C.HO				/* 호 */
+		        ,DECODE(C.CNTRCT_DE, NULL, '', C.DONG || '/' || C.HO) AS DONGHO
+		        ,C.CNTRCT_DE		/* 계약일자 */
+                ,D.RENT_HOUSE_NM	/* 임대주택명 */                
+		  FROM TBRNT_PUCHAS_WAITR A 
+		   INNER JOIN TBRNT_PUCHAS_RENT_CSTMR B ON A.PUCHAS_CSTMR_NO = B.PUCHAS_CSTMR_NO 
+		   LEFT JOIN TBRNT_PUCHAS_CNTRCT C ON A.CNTRCTR_NO = C.CNTRCTR_NO
+           LEFT JOIN TBRNT_PUCHAS_HOUSE D ON C.RENT_HOUSE_CODE = D.RENT_HOUSE_CODE
+		 WHERE 1=1 
+		       <!-- AND A.CNTRCTR_NO IS NULL  -->
+		       AND SUBSTR((A.RCEPT_DE), 1, 4) BETWEEN #stRceptYr# AND #edRceptYr#
+		 <isNotEmpty property="areaCode"> 
+		       AND A.AREA_CODE = #areaCode#
+		 </isNotEmpty>
+		 <isNotEmpty property="nm"> 
+		       AND B.NM LIKE '%' || #nm# || '%'
+		 </isNotEmpty>
+		 <isNotEmpty property="gdccSndngDe"> 
+		       AND A.GDCC_SNDNG_DE = #gdccSndngDe#
+		 </isNotEmpty>
+		 <isEqual property="sndngSe" compareValue="0"> 
+		       AND A.GDCC_SNDNG_DE IS NULL
+		 </isEqual>
+		 <isEqual property="sndngSe" compareValue="1">
+			AND   A.GDCC_SNDNG_DE IS NOT NULL
+			<isNotEmpty property="sndngDe">
+			AND	  A.GDCC_SNDNG_DE = #sndngDe#
+			</isNotEmpty>
+		</isEqual>
+		<isNotEmpty property="RCEPT_DE">
+			AND	  A.RCEPT_DE = #RCEPT_DE#
+		</isNotEmpty>
+		<isNotEmpty property="WAIT_RCEPT_SN">
+			AND	  A.WAIT_RCEPT_SN = #WAIT_RCEPT_SN#
+		</isNotEmpty>
+		<isNotEmpty property="roomStructure">
+			AND   A.ROOM_STRUCTURE = #roomStructure#
+		</isNotEmpty>
+		ORDER BY A.AREA_CODE, A.ROOM_STRUCTURE, A.RCEPT_DE, A.WAIT_RCEPT_SN, A.WAIT_NO
+	</select>
+
+	<!--
+	쿼리명 		: 매입임대 대기자 정보 입력
+	설명 		: 매입임대 대기자 정보 입력 쿼리
+	수정일 		: 수정자  수정내용	
+	작성자 		: 변승우
+	최초작성일 	: 2015.10.22
+	20170118:김호준:파라미터 가족관계가 본인일 경우와 아닐경우에 인서트 테이블을 분기 한다.
+	-->	
+	<insert id="RNT02020100DAO.saveMvnWaitrC" parameterClass="java.util.HashMap">
+	
+		<isEqual property="FAMILY_RELATE" compareValue="000">
+		INSERT INTO TBRNT_PUCHAS_WAITR(
+			 AREA_CODE   
+			,RCEPT_DE          
+			,WAIT_RCEPT_SN          
+			,PUCHAS_CSTMR_NO
+			,RCEPT_SEQ
+			,FAMILY_CO         
+			,QUALF_SE          
+			,ROOM_STRUCTURE          
+			,GDCC_SNDNG_DE   
+			,CNTRCTR_NO        
+			,RM                
+			,WAIT_NO           
+			,EXAMIN_ID          
+			,ALLOT        
+			,HOUSE_POSESN_AT    
+			,MULTI_AT
+			,REGISTER_ID
+			,REGIST_DT  
+			,UPDUSR_ID  
+			,UPDT_DT
+		)
+		VALUES(
+			 #AREA_CODE#
+			,#RCEPT_DE#
+			,(SELECT NVL(MAX(WAIT_RCEPT_SN), 0) + 1 
+			    FROM TBRNT_PUCHAS_WAITR
+			   WHERE AREA_CODE = #AREA_CODE#
+			     AND RCEPT_DE  = #RCEPT_DE#)
+			,#PUCHAS_CSTMR_NO# 
+			,#RCEPT_SEQ#
+			,#FAMILY_CO#         
+			,#QUALF_SE#          
+			,#ROOM_STRUCTURE#          
+			,#GDCC_SNDNG_DE#   
+			,#CNTRCTR_NO#        
+			,#RM#                
+			,(NVL(
+					(SELECT COUNT (1)
+            		 FROM TBRNT_PUCHAS_WAITR C
+           			 WHERE C.CNTRCTR_NO 		IS NULL
+             		 AND   C.GDCC_SNDNG_DE 		IS NULL
+             		 AND   C.AREA_CODE 			= #AREA_CODE#
+             		 AND   C.ROOM_STRUCTURE 	= #ROOM_STRUCTURE#
+             		 AND   C.RCEPT_DE || LPAD(C.WAIT_RCEPT_SN, 6, '0') <![CDATA[<]]> #RCEPT_DE# || 
+             		 		LPAD((
+	             		 		SELECT 	NVL(MAX(WAIT_RCEPT_SN), 0) + 1 
+	             		 		FROM 	TBRNT_PUCHAS_WAITR 
+	             		 		WHERE 	AREA_CODE	= #AREA_CODE#
+	             		 		AND	  	RCEPT_DE 	= #RCEPT_DE#), 6, '0')
+             ),0) + 1)          
+			,#EXAMIN_ID#         
+			,#ALLOT#             
+			,CASE WHEN #HOUSE_POSESN_AT# = 'Y' OR #HOUSE_POSESN_AT# = '1' THEN '0' 
+			      WHEN #HOUSE_POSESN_AT# = 'N' OR #HOUSE_POSESN_AT# = '0' THEN '1' 
+			 ELSE '' END
+			,#MULTI_AT#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+		</isEqual>
+		
+		<isNotEqual property="FAMILY_RELATE" compareValue="000">
+		INSERT INTO TBRNT_PUCHAS_FAMILY_MATTER (	/*매입가족사항 테이블*/
+			 SN										/*일련번호*/
+			,PUCHAS_CSTMR_NO						/*매입고객번호*/
+			,FAMILY_RELATE							/*가족관계*/
+			,RM										/*비고*/
+			,EXAMIN_ID								/*조사ID*/
+			,FAMILY_NO								/*가족번호*/
+			,PORTAL_REGIST_AT						/*포털등록여부*/
+			,CNTRCTR_NO								/*계약자번호*/
+			,WAITR_CSTMR_NO							/*대기자고객번호*/
+			,CNTRCTR_CSTMR_NO						/*계약자고객번호*/
+			,REGISTER_ID							/*등록자ID*/
+			,REGIST_DT								/*등록일시*/
+			,UPDUSR_ID								/*수정자ID*/
+			,UPDT_DT								/*수정일시*/
+			,AREA_CODE								/*지역코드*/
+			,RCEPT_DE								/*접수일자*/
+			,WAIT_RCEPT_SN							/*대기접수일련번호*/
+		)
+		
+		VALUES (
+			(SELECT	
+						NVL(MAX(SN),0)	+	1
+			 FROM	TBRNT_PUCHAS_FAMILY_MATTER)		/*일련번호*/
+			,#PUCHAS_CSTMR_NO#						/*매입고객번호*/
+			,#FAMILY_RELATE#						/*가족관계*/
+			,#RM#									/*비고*/
+			,#EXAMIN_ID#							/*조사ID*/
+			,#FAMILY_NO#							/*가족번호*/
+			,#PORTAL_REGIST_AT#						/*포털등록여부*/
+			,#CNTRCTR_NO#							/*계약자번호*/
+			,#WAITR_CSTMR_NO#						/*대기자고객번호*/
+			,#CNTRCTR_CSTMR_NO#						/*계약자고객번호*/
+			,#S_USER_ID#							/*등록자ID*/
+			,SYSDATE								/*등록일시*/
+			,#S_USER_ID#							/*수정자ID*/
+			,SYSDATE								/*수정일시*/
+			,#AREA_CODE#							/*지역코드*/
+			,#RCEPT_DE#								/*접수일자*/
+			,(SELECT MAX(WAIT_RCEPT_SN) 
+			    FROM TBRNT_PUCHAS_WAITR 
+			   WHERE AREA_CODE = #AREA_CODE#
+			     AND RCEPT_DE  = #RCEPT_DE#
+			     AND EXAMIN_ID = #EXAMIN_ID#)  /*대기접수일련번호*/
+		)
+		</isNotEqual>
+		
+	</insert>
+
+	<!--
+	쿼리명 		: 매입임대 대기자 정보 수정
+	설명 		: 매입임대 대기자 정보 수정 쿼리
+	수정일 		: 수정자  수정내용	
+	작성자 		: 변승우
+	최초작성일 	: 2015.10.22
+	-->	
+	<update id="RNT02020100DAO.saveMvnWaitrU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_PUCHAS_WAITR SET
+			 PUCHAS_CSTMR_NO 	= #PUCHAS_CSTMR_NO#
+			,FAMILY_CO 			= #FAMILY_CO#         
+			,QUALF_SE 			= #QUALF_SE#          
+			,ROOM_STRUCTURE 	= #ROOM_STRUCTURE#          
+			,GDCC_SNDNG_DE 		= #GDCC_SNDNG_DE#  
+			,CNTRCTR_NO 		= #CNTRCTR_NO#        
+			,RM 				= #RM#                
+			,WAIT_NO 			= #WAIT_NO#           
+			,EXAMIN_ID 			= #EXAMIN_ID#         
+			,ALLOT 				= #ALLOT#             
+			,HOUSE_POSESN_AT 	= #HOUSE_POSESN_AT#    
+			,UPDUSR_ID 			= #S_USER_ID#
+			,UPDT_DT 			= SYSDATE
+		WHERE AREA_CODE 		= #AREA_CODE#
+		AND   RCEPT_DE 			= #RCEPT_DE#
+		AND   WAIT_RCEPT_SN 	= #WAIT_RCEPT_SN#
+	</update>
+
+
+	<!-- 대기번호 수정필요인원 목록 -->
+	<select id="RNT02020100DAO.mvnWaitrNoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT    AREA_CODE,
+                RCEPT_DE,
+                WAIT_RCEPT_SN,
+                ROOM_STRUCTURE
+        FROM    TBRNT_PUCHAS_WAITR
+        WHERE   AREA_CODE        = #AREA_CODE#
+        AND     ROOM_STRUCTURE  = #ROOM_STRUCTURE#
+        AND     GDCC_SNDNG_DE IS NULL
+        AND     CNTRCTR_NO IS NULL
+        ORDER BY RCEPT_DE,
+                 RCEPT_SEQ
+	</select>
+
+
+	<!-- 대기번호 일괄 수정 -->
+	<update id="RNT02020100DAO.mvnWaitrNoU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_PUCHAS_WAITR SET
+			 WAIT_NO 			= #WAIT_NO#
+	      	,UPDUSR_ID 			= #S_USER_ID#
+			,UPDT_DT 			= SYSDATE
+	    WHERE  AREA_CODE			= #AREA_CODE#
+	    AND   RCEPT_DE        	= #RCEPT_DE#
+		AND   WAIT_RCEPT_SN     = #WAIT_RCEPT_SN#
+		AND   GDCC_SNDNG_DE IS NULL		
+	</update>
+
+
+	<!--
+	쿼리명 		: 매입임대 대기자 정보 삭제
+	설명 		: 매입임대 대기자 정보 삭제 쿼리
+	수정일 		: 수정자  수정내용	
+	작성자 		: 변승우
+	최초작성일 	: 2015.10.22
+	-->	
+	<delete id="RNT02020100DAO.saveMvnWaitrD" parameterClass="java.util.HashMap">
+		DELETE 	FROM TBRNT_PUCHAS_WAITR				/*매입대기자 테이블*/
+		WHERE 	AREA_CODE		=	#AREA_CODE#
+		AND	 	RCEPT_DE		=	#RCEPT_DE#
+		AND		WAIT_RCEPT_SN	=	#WAIT_RCEPT_SN#
+	</delete>
+
+
+	<!-- 매입 임대고객 매입고객번호 조회 -->
+	<select id="RNT02020100DAO.prmanentRentCstmr" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT PUCHAS_CSTMR_NO
+		FROM   TBRNT_PUCHAS_RENT_CSTMR
+		WHERE  NM      = #NM#
+		AND    IHIDNUM = #IHIDNUM#
+	</select>
+
+	<!-- get 주택코드정보  -->
+	<select id="RNT02020100DAO.selectRentHouseCode" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT CHRCTR_PREPAR_VALUE_0 AS RENT_HOUSE_CODE
+		  FROM TBCOM_CMMN_CODE
+		 WHERE 1=1
+		   AND GRP_CODE = 'RNT004'
+		   AND CODE 	= #AREA_SE#   
+    </select>  	
+</sqlMap>

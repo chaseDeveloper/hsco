@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02050300SQL">	
+
+	<!-- 쿼리명 : 매입임대 문제세대(주택,체납,미계약) 조회
+		    설명 : 매입임대 문제세대(주택,체납,미계약) 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.11
+	-->
+	<select id="RNT02050300DAO.selectQuesHouseHoldList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT02050300DAO.selectQuesHouseHoldList */
+		SELECT A.RENT_HOUSE_CODE,						/* 주택코드 */
+			   H.RENT_HOUSE_NM,							/* 주택명 */
+			   A.DONG,									/* 동 */
+			   A.HO,									/* 호 */
+			   R.NM,									/* 계약자 */
+			   SFCOM_DEC_ALL(R.IHIDNUM) AS IHIDNUM,		/* 주민번호 */
+			   G.ZIP,									/* 우편번호 */
+			   G.ADRES || ' ' || G.ADRES_DETAIL AS ADRES,	/* 주소 */
+			   R.TELNO,									/* 전화번호 */
+			   R.MBTLNO,								/* 휴대폰번호 */
+			   A.CNTRCT_DE,								/* 계약일자 */
+			   B.RENT_ENDDE_BFCHG,						/* 임대종료일자_변경전 */
+			   A.RENT_ENDDE,							/* 임대종료일자 */
+			   P.ROOM_STRUCTURE,						/* 방구조 */
+			   A.QUALF_SE,								/* 자격구분 */
+			   NVL(A.HOUSE_POSESN_AT, '0') AS HOUSE_POSESN_AT,			/* 주택유무 */
+			   NVL(A.DEATH_AT, '0') AS DEATH_AT,		/* 사망여부 */
+			   C.SEIZR_SE,								/* 압류구분 */
+			   F.CNT,									/* 체납개월 */
+			   F.PAY_AMT,								/* 체납금액 */
+			   B.INC_GTN,								/* 증액보증금 */
+			   B.GTN,									/* 현보증금 */
+			   (SELECT SUM(R.GTN)
+				  FROM TBRNT_PUCHAS_GTN R
+				 WHERE R.CNTRCTR_NO = A.CNTRCTR_NO
+				   AND R.RCIV_DE IS NOT NULL
+			   ) AS RCIV_AMOUNT,						/* 납부보증금 */
+			   A.RM,									/* 비고 */
+			   H.RENT_HOUSE_NM || ' ' || A.DONG || '동 ' || A.HO || '호' AS ADDR		/* 소재지 */
+		  FROM TBRNT_PUCHAS_CNTRCT A
+		 INNER JOIN TBRNT_PUCHAS_RENT_CSTMR R
+			ON R.PUCHAS_CSTMR_NO = A.PUCHAS_CSTMR_NO
+		 INNER JOIN TBRNT_PUCHAS_HOUSE H
+			ON H.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		 INNER JOIN TBRNT_PUCHAS_HOUSE_DONG G
+			ON G.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		   AND G.DONG = A.DONG
+		 INNER JOIN TBRNT_PUCHAS_HOUSE_BILD P
+			ON P.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+		   AND P.DONG = A.DONG
+		   AND P.HO = A.HO
+		 INNER JOIN (									/* 재계약정보 */
+					SELECT A.*,
+						   A.GTN - GTN_BFCHG AS INC_GTN
+					  FROM TBRNT_PUCHAS_RE_CNTRCT A
+					 INNER JOIN (
+								SELECT CNTRCTR_NO,
+									   MAX(RENT_ENDDE_BFCHG) AS RENT_ENDDE_BFCHG
+								  FROM TBRNT_PUCHAS_RE_CNTRCT
+								 WHERE CNTRCT_DE IS NULL
+								   AND SUBSTR(RENT_ENDDE_BFCHG, 1, 6) <![CDATA[<=]]> #stdDe#
+								 GROUP BY CNTRCTR_NO
+						   ) B
+						ON B.CNTRCTR_NO = A.CNTRCTR_NO
+					   AND B.RENT_ENDDE_BFCHG = A.RENT_ENDDE_BFCHG
+					 WHERE SUBSTR(A.RENT_ENDDE_BFCHG, 1, 6) <![CDATA[<=]]> #stdDe#
+					   AND A.GTN - A.GTN_BFCHG >= -90000000
+			   ) B
+			ON B.CNTRCTR_NO = A.CNTRCTR_NO
+		  LEFT JOIN (									/* 압류정보 */
+					SELECT CNTRCTR_NO,
+							DECODE(SIGN(CNT0), 1, '압류('   || CNT0 || ')') ||
+							DECODE(SIGN(CNT1), 1, '가압류('  || CNT1 || ')') ||
+							DECODE(SIGN(CNT2), 1, '압류및추심('|| CNT2 || ')') ||
+							DECODE(SIGN(CNT3), 1, '압류및전부('|| CNT3 || ')') ||
+							DECODE(SIGN(CNT4), 1, '채권양도(' || CNT4 || ')') ||
+							DECODE(SIGN(CNT5), 1, '기타('    || CNT5 || ')') AS SEIZR_SE,
+							CNT1 AS SEIZR_CNT
+					  FROM (
+							SELECT CNTRCTR_NO,
+								   SUM(DECODE(SEIZR_SE, '00', 1, 0)) AS CNT0,
+								   SUM(DECODE(SEIZR_SE, '01', 1, 0)) AS CNT1,
+								   SUM(DECODE(SEIZR_SE, '02', 1, 0)) AS CNT2,
+								   SUM(DECODE(SEIZR_SE, '03', 1, 0)) AS CNT3,
+								   SUM(DECODE(SEIZR_SE, '04', 1, 0)) AS CNT4,
+								   SUM(CASE WHEN NVL(SEIZR_SE, '99') NOT IN ('00','01','02','03','04') THEN 1
+											ELSE 0
+										END) AS CNT5
+							  FROM TBRNT_PUCHAS_SEIZR
+							 WHERE (RELIS_DE IS NULL OR RELIS_DE = '')
+							 GROUP BY CNTRCTR_NO
+							)
+			   ) C
+			ON C.CNTRCTR_NO = A.CNTRCTR_NO
+		  LEFT JOIN (									/* 채납정보 */
+					SELECT CNTRCTR_NO,
+						   SUM(NVL(RNTCHRG, 0)) AS PAY_AMT,
+						   SUM(NVL(OVDINTR, 0)) AS DEL_INT,
+						   SUM(NVL(RNTCHRG, 0) + NVL(OVDINTR, 0)) AS DEL_AMT,
+						   COUNT(1) AS CNT
+					  FROM TBRNT_PUCHAS_MT_RNTCHRG
+					 WHERE RCIV_DE IS NULL
+					 GROUP BY CNTRCTR_NO
+			   ) F
+			ON F.CNTRCTR_NO = A.CNTRCTR_NO
+		 WHERE A.CANCL_DE IS NULL
+		   AND B.RENT_ENDDE_BFCHG > A.CNTRCT_DE
+		<isNotEmpty property="houseCode">
+		   AND A.RENT_HOUSE_CODE = #houseCode#
+		</isNotEmpty>
+		 ORDER BY A.RENT_HOUSE_CODE, A.DONG, A.HO
+	</select>
+</sqlMap>

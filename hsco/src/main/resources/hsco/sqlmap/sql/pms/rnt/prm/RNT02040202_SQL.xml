@@ -1,0 +1,484 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02040202_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 고지서출력관리 조회
+			 설명 : 매입임대 고지서출력관리 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.16
+	-->	
+	<select id="RNT02040202DAO.selectPuchasNhtOutptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+					A.RENT_HOUSE_NM													/*주택명*/
+					,B.DONG																	/*동*/
+					,B.HO																		/*호*/
+					,C.NM																		/*계약자*/
+					,D.PAY_TMLMT															/*납입기한*/
+					,D.RNTCHRG															/*임대료*/
+					,D.OVDINTR																/*연체이자*/
+					,DECODE(D.ATCNG_AT,'1','자납','일반') AS ATCNG_AT	  		/*자납구분*/
+					,D.ACNUTNO															/*계좌번호*/
+		FROM	TBRNT_PUCHAS_HOUSE A											/*매입주택 테이블*/
+					,TBRNT_PUCHAS_CNTRCT B											/*매입계약 테이블*/
+					,TBRNT_PUCHAS_RENT_CSTMR C									/*매입임대고객 테이블*/
+					,TBRNT_PUCHAS_NHT_OUTPT D									/*매입고지서출력 테이블*/
+		WHERE	D.CNTRCTR_NO				=	B.CNTRCTR_NO
+		AND	B.PUCHAS_CSTMR_NO		=	C.PUCHAS_CSTMR_NO
+		AND	B.RENT_HOUSE_CODE			=	A.RENT_HOUSE_CODE
+		AND	SUBSTR(D.PAY_TMLMT,1,6)	=	SUBSTR(SUBSTR(#mdatYm#,1,6),1,6)
+		ORDER BY	DONG,	HO
+	</select>
+
+
+
+	<!-- 쿼리명 : 매입임대 고지서  건수 조회
+			 설명 : 매입임대 고지서 건수 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.16
+	-->	
+	<select id="RNT02040202DAO.selectNhtOutptCnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+				count(1) AS CNT
+		FROM TBRNT_PUCHAS_NHT_OUTPT 
+		WHERE MDAT_YM LIKE SUBSTR(SUBSTR(#mdatYm#,1,6),1,6)
+	</select>
+	
+	
+	
+	<!-- 쿼리명 : 매입임대 고지서 삭제
+			 설명 : 매입임대 고지서 삭제 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.12
+	-->	
+	<delete id="RNT02040202DAO.savePuchasNhtOutptD" parameterClass="java.util.HashMap">
+			DELETE FROM TBRNT_PUCHAS_NHT_OUTPT WHERE MDAT_YM LIKE SUBSTR(SUBSTR(#mdatYm#,1,6),1,6)
+	</delete>
+	
+	
+	
+	<!-- 쿼리명 : 매입임대 보증금 정보 입력
+			 설명 : 매입임대 보증금 정보 입력 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.12
+	-->	
+	<insert id="RNT02040202DAO.savePuchasNhtOutptC" parameterClass="java.util.HashMap">
+		INSERT INTO TBRNT_PUCHAS_NHT_OUTPT (
+				NTIC_SE
+				,MDAT_YM
+				,PAY_SE
+				,CNTRCTR_NO
+				,RNTCHRG
+				,OVDINTR
+				,PAY_TMLMT
+				,ATCNG_AT
+				,ACNUTNO
+				,REGISTER_ID
+				,REGIST_DT
+			 	,UPDUSR_ID
+			  	,UPDT_DT
+				)
+			SELECT 
+				'1' AS NTIC_SE
+				,a.MDAT_YM
+				,'2' AS PAY_SE
+				,c.CNTRCTR_NO
+				,NVL(a.RNTCHRG, 0) + NVL(a.RDCAMT_AMOUNT, 0) AS RNTCHRG
+				,NVL(a.OVDINTR, 0) AS OVDINTR
+				,a.PAY_TMLMT AS PAY_TMLMT
+				,DECODE(b.ACNUTNO, NULL, '', '1') AS ATCNG_AT
+				,b.ACNUTNO
+				,#S_USER_ID#
+				,SYSDATE
+			  	,#S_USER_ID#
+				,SYSDATE
+		FROM TBRNT_PUCHAS_MT_RNTCHRG a
+			,(
+				SELECT CNTRCTR_NO
+				,max(ACNUTNO) AS ACNUTNO
+				FROM TBPMS_ATCNG d
+				WHERE ATCNG_CANCL_DE IS NULL
+				GROUP BY CNTRCTR_NO
+				) b
+			,TBRNT_PUCHAS_CNTRCT c
+			,TBRNT_PUCHAS_HOUSE d
+		  ,TBRNT_PUCHAS_RESCI r
+		WHERE a.MDAT_YM = SUBSTR(#mdatYm#,1,6)
+			AND a.RCIV_DE IS NULL
+			AND a.CNTRCTR_NO = b.CNTRCTR_NO(+)
+			AND a.CNTRCTR_NO = c.CNTRCTR_NO
+		  	AND c.CNTRCTR_NO = r.CNTRCTR_NO(+)
+			AND r.CANCL_DE IS NULL
+			AND c.RENT_HOUSE_CODE = d.RENT_HOUSE_CODE
+	</insert>
+	
+	
+	
+	<!-- 쿼리명 : 매입임대 고지서출력 조회
+			 설명 : 매입임대 고지서출력 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.16
+	-->	
+	<select id="RNT02040202DAO.selectNhtOutputList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT 
+				a.MDAT_YM
+				,'임대료' AS PAY_SE
+			  	,d.RENT_HOUSE_CODE
+			  	,d.DONG
+			  	,d.HO
+			  	,e.NM
+				,a.CNTRCTR_NO
+				,c.RENT_HOUSE_NM
+				,a.RNTCHRG
+				,a.OVDINTR
+				,a.PAY_TMLMT
+				,decode(a.ATCNG_AT, '1', '자납', '일반') AS ATCNG_AT
+				,a.ACNUTNO
+		FROM TBRNT_PUCHAS_NHT_OUTPT a
+				,(
+					SELECT DISTINCT 
+						CNTRCTR_NO
+						,ACNUTNO
+						,DPSTR
+					FROM TBPMS_ATCNG
+					WHERE ATCNG_CANCL_DE IS NULL
+					  AND JOB_SE = 'RN2'
+					  AND PAY_SE= '03'
+				) b
+ 			  ,TBRNT_PUCHAS_HOUSE c
+			  ,TBRNT_PUCHAS_CNTRCT d
+			  ,TBRNT_PUCHAS_RENT_CSTMR e
+		WHERE a.MDAT_YM = SUBSTR(#mdatYm#,1,6)
+			AND a.CNTRCTR_NO = b.CNTRCTR_NO(+)
+		  AND a.CNTRCTR_NO = d.CNTRCTR_NO
+		  AND d.PUCHAS_CSTMR_NO = e.PUCHAS_CSTMR_NO
+			AND a.ACNUTNO = b.ACNUTNO(+)
+			AND d.RENT_HOUSE_CODE = c.RENT_HOUSE_CODE
+		ORDER BY d.RENT_HOUSE_CODE, d.DONG ,d.HO 
+	</select>
+	
+	
+	<!-- 쿼리명 : 매입임대 출력용 파일 조회
+			 설명 : 매입임대 출력용 파일 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.16
+	-->	
+	<select id="RNT02040202DAO.selectPuchasNhtOutptFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 B.RENT_HOUSE_CODE				/*주택코드*/
+		    ,B.DONG							/*동*/
+		    ,B.HO							/*호*/
+		    ,G.NM							/*납부자*/
+		    ,SUBSTR(REPLACE(B1.ZIP,'-',''),1,3) || '-' || SUBSTR(REPLACE(B1.ZIP,'-',''),4,3) AS POSTNO	/*아파트 우편번호*/
+		    ,TRIM(B1.ADRES) ||' ' ||TRIM(B1.ADRES_DETAIL) AS ADDR1										/*아파트 주소*/
+		    ,D.RENT_HOUSE_NM || ' ' ||TRIM(TO_NUMBER(B.DONG) ||'-'|| TO_NUMBER(B.HO)) AS ADDR2			/*아파트 상세 주소*/
+		    ,A.MDAT_YM						/*청구년월*/
+		    ,TO_CHAR(TO_DATE(SFCOM_GET_TREDATE(#payTmlmt#)),'YYYY-MM-DD') AS  PAY_TMLMT		/*납입기한*/
+		    ,'주택(아파트)' AS C_TITLE1			/*납부대상_TITLE1*/
+		    ,D.RENT_HOUSE_NM AS C_CONT1		/*납부대상_CONT1*/
+		    ,'동   호   수' AS C_TITLE2			/*납부대상_TITLE2*/
+		    , TRIM(TO_NUMBER(B.DONG) ||'-'|| TO_NUMBER(B.HO)) AS C_CONT2	/*납부대상_CONT2*/
+		    ,'납   부   자' AS C_TITLE3			/*납부대상_TITLE3*/
+		    , G.NM AS C_CONT3				/*납부대상_CONT3*/
+		    ,'  ' AS C_TITLE4				/*납부대상_TITLE4*/
+		    ,'  ' AS C_CONT4				/*납부대상_CONT4*/
+		    ,'납부대상금액' AS A_TITLE1			/*납부내역_TITLE1*/
+		    ,C.RENT_AMT AS A_AMT1			/*납부내역_AMT1*/
+		    ,'차감금액' AS A_TITLE2				/*납부내역_TITLE2*/
+		    ,C.CHA_AMT AS A_AMT2			/*납부내역_AMT2*/
+		    ,'연체금액' AS A_TITLE3				/*납부내역_TITLE3*/
+		    ,C.APAY_AMT AS A_AMT3			/*납부내역_AMT3*/
+		    ,'  ' AS A_TITLE4				/*납부내역_TITLE4*/
+		    ,0 AS A_AMT4					/*납부내역_AMT4*/
+		    ,NVL(C.RENT_AMT,0) + NVL(C.CHA_AMT,0) + NVL(C.APAY_AMT,0) AS A_AMT5	/*납부내역_AMT5*/
+		    ,E.MIN_RATIO					/*연체요율1*/
+		    ,E.MAX_RATIO					/*연체요율2*/
+		    ,F.OPOST_NO						/*회사우편번호*/
+		    ,F.OADDR1						/*회사주소*/
+		    ,F.OADDR2						/*회사상세주소*/
+		    ,F.OTEL_NO						/*회사전화번호*/
+		    ,F.OFAX_NO						/*회사팩스번호*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.BANK1,'') AS BANK1				/*은행명1*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.ACCT_NO1,'') AS ACCT_NO1			/*계좌번호1*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.BANK2,'') AS BANK2				/*은행명2*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.ACCT_NO2,'') AS ACCT_NO2			/*계좌번호2*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.BANK3,'') AS BANK3				/*은행명3*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.ACCT_NO3,'') AS ACCT_NO3			/*계좌번호3*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.BANK4,'') AS BANK4				/*은행명4*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.ACCT_NO4,'') AS ACCT_NO4			/*계좌번호4*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.BANK5,'') AS BANK5				/*은행명5*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.ACCT_NO5,'') AS ACCT_NO5			/*계좌번호5*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.BANK6,'') AS BANK6				/*은행명6*/
+		    ,DECODE(S.CNTRCTR_NO,'',V.ACCT_NO6,'') AS ACCT_NO6			/*계좌번호6*/
+		    ,C.*
+		    ,R.REC_DATE						/*수납일*/
+		    ,R.REC_AMT						/*수납금액*/
+		    ,S.BANK_NM						/*자동이체은행명*/
+		    ,S.ACNUTNO						/*자동이체계좌번호*/
+		    ,S.DPSTR						/*자동이체예금주*/
+			,Z.AUTO_NO						/*기관코드*/		     				
+		FROM 
+			 (SELECT * FROM TBRNT_PUCHAS_NHT_OUTPT WHERE NTIC_SE = '1' AND MDAT_YM = SUBSTR(#mdatYm#,1,6) ) A
+		    ,TBRNT_PUCHAS_HOUSE D
+		    ,TBRNT_PUCHAS_CNTRCT B
+		    ,TBRNT_PUCHAS_RENT_CSTMR G
+		    ,TBRNT_PUCHAS_HOUSE_DONG B1
+		    ,(
+		    	SELECT 
+		        	 A.CNTRCTR_NO AS CNTRCTR_NO
+		            ,MAX(RCIV_DE) AS REC_DATE
+		            ,SUM(RCIV_AMOUNT) AS REC_AMT
+		        FROM TBRNT_PUCHAS_RCIV A
+		        WHERE A.NTIC_SE = '1'
+		          AND A.PAY_SE = '2'
+		          AND A.RCIV_DE =  SFCOM_GET_TREDATE(#reivDt#)
+		        GROUP BY CNTRCTR_NO
+		     ) R
+		    ,(
+		    	SELECT 
+		        	 CNTRCTR_NO AS CNTRCTR_NO
+		            ,(
+		            	SELECT CODE_NM
+		                FROM TBCOM_CMMN_CODE 
+		                WHERE GRP_CODE = 'COM021' 
+		                AND CODE = BANK_CODE
+		             ) AS BANK_NM
+		            ,ACNUTNO
+		            , DPSTR
+		           FROM TBPMS_ATCNG
+		           WHERE JOB_SE = 'RN2'
+                   AND PAY_SE = '03'
+                   AND ATCNG_CANCL_DE IS NULL
+		      ) S
+		     ,(
+				SELECT 
+					CNTRCTR_NO
+		            ,SUM(NVL(RENT_AMT,0)) AS RENT_AMT				/*RENT_AMT(납부대상금액)*/
+		            ,SUM(NVL(CHA_AMT,0)) AS CHA_AMT					/*CHA_AMT(차감금액)*/
+		            ,SUM(NVL(APAY_AMT,0)) AS APAY_AMT				/*APAY_AMT(연체금액)*/
+		            ,SUM(NVL(TOT_AMT,0)) AS TOT_AMT					/*TOT_AMT(납부하실금액)*/
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE1), 'YYYYMMDD'),'YYYY-MM') AS MONTH1
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE1), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE1
+		            ,SUM(RENT_AMT1) AS RENT_AMT1
+		            ,SUM(CHA_AMT1) AS CHA_AMT1
+		            ,SUM(APAY_AMT1) AS APAY_AMT1
+		            ,SUM(NVL(RENT_AMT1,'0')+NVL(CHA_AMT1,'0')+NVL(APAY_AMT1,'0')) AS TOT_ATM1
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE2), 'YYYYMMDD'),'YYYY-MM') AS MONTH2
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE2), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE2
+		            ,SUM(RENT_AMT2) AS RENT_AMT2
+		            ,SUM(CHA_AMT2) AS CHA_AMT2
+		            ,SUM(APAY_AMT2) AS APAY_AMT2
+					,SUM(NVL(RENT_AMT2,'0')+NVL(CHA_AMT2,'0')+NVL(APAY_AMT2,'0')) AS TOT_ATM2		            
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE3), 'YYYYMMDD'),'YYYY-MM') AS MONTH3
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE3), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE3
+		            ,SUM(RENT_AMT3) AS RENT_AMT3
+		            ,SUM(CHA_AMT3) AS CHA_AMT3
+		            ,SUM(APAY_AMT3) AS APAY_AMT3
+		            ,SUM(NVL(RENT_AMT3,'0')+NVL(CHA_AMT3,'0')+NVL(APAY_AMT3,'0')) AS TOT_ATM3
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE4), 'YYYYMMDD'),'YYYY-MM') AS MONTH4
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE4), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE4
+		            ,SUM(RENT_AMT4) AS RENT_AMT4
+		            ,SUM(CHA_AMT4) AS CHA_AMT4
+		            ,SUM(APAY_AMT4) AS APAY_AMT4
+		            ,SUM(NVL(RENT_AMT4,'0')+NVL(CHA_AMT4,'0')+NVL(APAY_AMT4,'0')) AS TOT_ATM4
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE5), 'YYYYMMDD'),'YYYY-MM') AS MONTH5
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE5), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE5
+		            ,SUM(RENT_AMT5) AS RENT_AMT5
+		            ,SUM(CHA_AMT5) AS CHA_AMT5
+		            ,SUM(APAY_AMT5) AS APAY_AMT5
+		            ,SUM(NVL(RENT_AMT5,'0')+NVL(CHA_AMT5,'0')+NVL(APAY_AMT5,'0')) AS TOT_ATM5
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE6), 'YYYYMMDD'),'YYYY-MM') AS MONTH6
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE6), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE6
+		            ,SUM(RENT_AMT6) AS RENT_AMT6
+		            ,SUM(CHA_AMT6) AS CHA_AMT6
+		            ,SUM(APAY_AMT6) AS APAY_AMT6
+		            ,SUM(NVL(RENT_AMT6,'0')+NVL(CHA_AMT6,'0')+NVL(APAY_AMT6,'0')) AS TOT_ATM6
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE7), 'YYYYMMDD'),'YYYY-MM') AS MONTH7
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE7), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE7
+		            ,SUM(RENT_AMT7) AS RENT_AMT7
+		            ,SUM(CHA_AMT7) AS CHA_AMT7
+		            ,SUM(APAY_AMT7) AS APAY_AMT7
+		            ,SUM(NVL(RENT_AMT7,'0')+NVL(CHA_AMT7,'0')+NVL(APAY_AMT7,'0')) AS TOT_ATM7
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE8), 'YYYYMMDD'),'YYYY-MM') AS MONTH8
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE8), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE8
+		            ,SUM(RENT_AMT8) AS RENT_AMT8
+		            ,SUM(CHA_AMT8) AS CHA_AMT8
+		            ,SUM(APAY_AMT8) AS APAY_AMT8
+		            ,SUM(NVL(RENT_AMT8,'0')+NVL(CHA_AMT8,'0')+NVL(APAY_AMT8,'0')) AS TOT_ATM8
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE9), 'YYYYMMDD'),'YYYY-MM') AS MONTH9
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE9), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE9
+		            ,SUM(RENT_AMT9) AS RENT_AMT9
+		            ,SUM(CHA_AMT9) AS CHA_AMT9
+		            ,SUM(APAY_AMT9) AS APAY_AMT9
+		            ,SUM(NVL(RENT_AMT9,'0')+NVL(CHA_AMT9,'0')+NVL(APAY_AMT9,'0')) AS TOT_ATM9
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE10), 'YYYYMMDD'),'YYYY-MM') AS MONTH10
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE10), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE10
+		            ,SUM(RENT_AMT10) AS RENT_AMT10
+		            ,SUM(CHA_AMT10) AS CHA_AMT10
+		            ,SUM(APAY_AMT10) AS APAY_AMT10
+		            ,SUM(NVL(RENT_AMT10,'0')+NVL(CHA_AMT10,'0')+NVL(APAY_AMT10,'0')) AS TOT_ATM10
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE11), 'YYYYMMDD'),'YYYY-MM') AS MONTH11
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE11), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE11
+		            ,SUM(RENT_AMT11) AS RENT_AMT11
+		            ,SUM(CHA_AMT11) AS CHA_AMT11
+		            ,SUM(APAY_AMT11) AS APAY_AMT11
+		            ,SUM(NVL(RENT_AMT11,'0')+NVL(CHA_AMT11,'0')+NVL(APAY_AMT11,'0')) AS TOT_ATM11
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE12), 'YYYYMMDD'),'YYYY-MM') AS MONTH12
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE12), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE12
+		            ,SUM(RENT_AMT12) AS RENT_AMT12
+		            ,SUM(CHA_AMT12) AS CHA_AMT12
+		            ,SUM(APAY_AMT12) AS APAY_AMT12
+		            ,SUM(NVL(RENT_AMT12,'0')+NVL(CHA_AMT12,'0')+NVL(APAY_AMT12,'0')) AS TOT_ATM12
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE13), 'YYYYMMDD'),'YYYY-MM') AS MONTH13
+		            ,TO_CHAR(TO_DATE(MAX(PAYEND_DATE13), 'YYYYMMDD'),'YYYY-MM-DD') AS PAYEND_DATE13
+		            ,SUM(RENT_AMT13) AS RENT_AMT13
+		            ,SUM(CHA_AMT13) AS CHA_AMT13
+		            ,SUM(APAY_AMT13) AS APAY_AMT13
+		            ,SUM(NVL(RENT_AMT13,'0')+NVL(CHA_AMT13,'0')+NVL(APAY_AMT13,'0')) AS TOT_ATM13
+		        FROM ( 
+					SELECT 
+		            	 C.CNTRCTR_NO
+		                ,NVL(RENT_AMT,0) RENT_AMT
+		                ,NVL(CHA_AMT,0) CHA_AMT
+		                ,NVL(APAY_AMT,0) APAY_AMT
+		                ,NVL(RENT_AMT,0) + NVL(CHA_AMT,0) + NVL(APAY_AMT,0) AS TOT_AMT
+		                ,DECODE(MDAT_YM,SUBSTR(#mdatYm#,1,6),PAYEND_DATE,NULL) AS PAYEND_DATE1
+		                ,DECODE(MDAT_YM,SUBSTR(#mdatYm#,1,6),RENT_AMT,0) AS RENT_AMT1
+		                ,DECODE(MDAT_YM,SUBSTR(#mdatYm#,1,6),CHA_AMT,0)  AS CHA_AMT1
+		                ,DECODE(MDAT_YM,SUBSTR(#mdatYm#,1,6),APAY_AMT,0) AS APAY_AMT1
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-1),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE2
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-1),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT2
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-1),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT2
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-1),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT2
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-2),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE3
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-2),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT3
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-2),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT3
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-2),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT3
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-3),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE4
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-3),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT4
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-3),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT4
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-3),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT4
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-4),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE5
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-4),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT5
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-4),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT5
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-4),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT5
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-5),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE6
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-5),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT6
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-5),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT6
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-5),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT6
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-6),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE7
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-6),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT7
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-6),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT7
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-6),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT7
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-7),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE8
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-7),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT8
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-7),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT8
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-7),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT8
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-8),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE9
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-8),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT9
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-8),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT9
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-8),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT9
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-9),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE10
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-9),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT10
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-9),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT10
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-9),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT10
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-10),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE11
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-10),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT11
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-10),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT11
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-10),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT11
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-11),'YYYYMM') ,PAYEND_DATE,NULL) AS PAYEND_DATE12
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-11),'YYYYMM') ,RENT_AMT,0) AS RENT_AMT12
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-11),'YYYYMM') ,CHA_AMT,0)  AS CHA_AMT12
+		                ,DECODE(MDAT_YM,TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-11),'YYYYMM') ,APAY_AMT,0) AS APAY_AMT12
+		                ,CASE WHEN MDAT_YM <![CDATA[ <= ]]>TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-12),'YYYYMM') THEN PAYEND_DATE END AS PAYEND_DATE13
+		                ,CASE WHEN MDAT_YM <![CDATA[ <= ]]>TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-12),'YYYYMM') THEN RENT_AMT ELSE 0 END AS RENT_AMT13
+		                ,CASE WHEN MDAT_YM <![CDATA[ <= ]]>TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-12),'YYYYMM') THEN CHA_AMT ELSE 0 END AS CHA_AMT13
+		                ,CASE WHEN MDAT_YM <![CDATA[ <= ]]>TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(#mdatYm#,1,6) ||'01', 'YYYYMMDD'),-12),'YYYYMM') THEN APAY_AMT ELSE 0 END AS APAY_AMT13
+            		FROM (
+            			SELECT 
+		                	 CNTRCTR_NO
+		                    ,MDAT_YM
+		                    ,PAY_TMLMT AS PAYEND_DATE
+		                    ,NVL(RNTCHRG,0) AS RENT_AMT
+		                    ,NVL(OVDINTR,0) AS APAY_AMT
+		                    ,NVL(RDCAMT_AMOUNT,0) AS CHA_AMT
+                		FROM TBRNT_PUCHAS_MT_RNTCHRG C                
+                		WHERE C.MDAT_YM <![CDATA[ <= ]]>SUBSTR(#mdatYm#,1,6)
+                  		AND C.RCIV_DE IS NULL
+                  		AND EXISTS(
+                      		SELECT 1 
+                      		FROM VA_BILL V
+                      		WHERE CRT_DIV = 'RN'
+                        		AND BILL_DIV = 'A'
+                        		AND V.CRT_ID = C.CNTRCTR_NO
+                		)
+                		AND INSTR(PAY_TMLMT, '/') = 0
+                	) C
+        		) GROUP BY CNTRCTR_NO
+	        ) C
+	       ,(
+					SELECT    MIN (INTRT) AS MIN_RATIO,
+                              MAX (INTRT) AS MAX_RATIO
+                       FROM   TBPMS_INTRT_INFO A
+                      WHERE   JOB_SE = 'RN2'
+	         ) E
+	       ,(
+	          SELECT 
+	               CHRCTR_PREPAR_VALUE_0 AS OPOST_NO
+	              ,CHRCTR_PREPAR_VALUE_1 AS OADDR1
+	              ,CHRCTR_PREPAR_VALUE_2 AS OADDR2
+	              ,'전화:' || (SELECT CHRCTR_PREPAR_VALUE_0 FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'COM027' AND CODE_NM = 'RN') AS OTEL_NO
+	              ,'FAX :' || (SELECT CHRCTR_PREPAR_VALUE_1 FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'COM027' AND CODE_NM = 'RN') AS OFAX_NO
+	          FROM TBCOM_CMMN_CODE A
+	          WHERE GRP_CODE = 'COM027'
+	            AND CODE = 'RN'
+	       ) F
+	       ,(
+	          SELECT *
+	          FROM VI_VA_MAST 
+	          WHERE CRT_DIV = 'RN'
+	            AND OPT1 = '1'
+	        ) V         
+	        ,(SELECT CHRCTR_PREPAR_VALUE_2 AS AUTO_NO
+                      FROM TBCOM_CMMN_CODE
+                     WHERE GRP_CODE = 'PCOM05'
+                       AND CODE = '03' ) Z
+		WHERE INSTR('R2', D.HOUSE_SE) <![CDATA[ > ]]>0
+		  AND D.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE   
+		  AND A.CNTRCTR_NO = B.CNTRCTR_NO
+		  AND B.CNTRCTR_NO = C.CNTRCTR_NO      
+		  AND B.RENT_HOUSE_CODE = B1.RENT_HOUSE_CODE(+)
+		  AND B.DONG = B1.DONG(+)
+		  AND B.CNTRCTR_NO = V.CRT_ID
+		  AND B.CNTRCTR_NO = R.CNTRCTR_NO(+)
+		  AND B.CNTRCTR_NO = S.CNTRCTR_NO(+)
+		  AND B.PUCHAS_CSTMR_NO = G.PUCHAS_CSTMR_NO
+		ORDER BY 1,2,3
+	</select>	
+	
+	
+	<!-- 쿼리명 : 매입임대 일괄납부요청 프로시저
+			 설명 : 매입임대 일괄납부요청 프로시저 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.11.16
+	-->	
+	<parameterMap id="SP_VA_BILL_UID_ALL_PARAM" class="java.util.HashMap">
+		<parameter property="STR_DE" jdbcType="VARCHAR" javaType="string" mode="IN" />	
+		<parameter property="RQEST_DE" jdbcType="VARCHAR" javaType="string" mode="IN" />	 
+		<parameter property="ST_SETLE_DE" jdbcType="VARCHAR" javaType="string" mode="IN" />	 
+		<parameter property="ED_SETLE_DE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	</parameterMap>	
+	
+		<!-- 매입임대 일괄납부요청 프로시저 콜 -->
+	<procedure id="RNT02040202DAO.SP_VA_BILL_UID_ALL" parameterMap="SP_VA_BILL_UID_ALL_PARAM">
+		{ CALL SP_VA_BILL_UID_ALL('RN', 'PUCHAS', 'R2', '%', '%', ?, ' ', ?, ?, ?, ?) }
+	</procedure>
+</sqlMap>

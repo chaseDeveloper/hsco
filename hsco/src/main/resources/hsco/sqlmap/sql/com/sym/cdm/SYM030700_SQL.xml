@@ -1,0 +1,486 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM030700_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	
+	
+	 <!-- SMS 메시지 상세 목록조회 -->
+    <select id="SYM030700DAO.selectSmstranList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+	     SELECT *
+	     FROM (
+	        SELECT 
+			        A.MT_PR
+			       ,A.MT_SEQ 
+			       ,(SELECT SFSAL_GETDEPTNM_01(MT_REFKEY) 
+			         FROM EMMA.EM_SMT_TRAN
+			         WHERE MT_PR = A.MT_PR)  AS DEPT_CODE              /* 부서코드*/
+			       ,(SELECT TO_CHAR(DATE_CLIENT_REQ,'YYYYMMDDHH24MI')
+			         FROM EMMA.EM_SMT_TRAN
+			         WHERE MT_PR = A.MT_PR)	           AS REG_DATE     /* 발송일시 */  
+			       ,TO_CHAR(DATE_RSLT,'YYYYMMDDHH24MM')  AS DATE_RSLT    /* 단말기수신일시 */        
+			       ,(SELECT SERVICE_TYPE 
+			         FROM EMMA.EM_SMT_TRAN
+			         WHERE MT_PR = A.MT_PR)   AS  SERVICE_TYPE         /* SMS,MMX */
+			       ,A.MSG_STATUS
+			       ,A.RECIPIENT_NUM
+			       ,A.CHANGE_WORD5
+			       ,(SELECT CONTENT
+			         FROM EMMA.EM_SMT_TRAN
+			         WHERE MT_PR = A.MT_PR)  AS  CONTENT   /* 메시지 */
+			FROM EMMA.EM_SMT_CLIENT A
+			WHERE 1=1
+		]]>
+		<isNotEmpty property="DEPT_CODE">
+			AND A.MT_PR IN  (SELECT MT_PR 
+			                 FROM EMMA.EM_SMT_TRAN
+			                 WHERE MT_REFKEY = #DEPT_CODE#)
+		</isNotEmpty>
+		<isNotEmpty property="APPLC_DE">
+		  <![CDATA[
+			AND TO_CHAR(REG_DATE,'YYYYMMDD') >= #APPLC_DE#
+		  ]]>	
+		</isNotEmpty>
+		<isNotEmpty property="APPLC_DE2">
+		  <![CDATA[
+			AND TO_CHAR(REG_DATE,'YYYYMMDD') <= #APPLC_DE2#
+		  ]]>	
+		</isNotEmpty>
+		    UNION ALL
+		<![CDATA[	
+	        SELECT 
+			        A.MT_PR
+			       ,A.MT_SEQ 
+			       ,(SELECT SFSAL_GETDEPTNM_01(MT_REFKEY) 
+			         FROM EMMA.EM_MMT_TRAN
+			         WHERE MT_PR = A.MT_PR)  AS DEPT_CODE              /* 부서코드*/
+			       ,(SELECT TO_CHAR(DATE_CLIENT_REQ,'YYYYMMDDHH24MI')
+			         FROM EMMA.EM_MMT_TRAN
+			         WHERE MT_PR = A.MT_PR)	           AS REG_DATE     /* 발송일시 */  
+			       ,TO_CHAR(DATE_RSLT,'YYYYMMDDHH24MM')  AS DATE_RSLT    /* 단말기수신일시 */        
+			       ,(SELECT SERVICE_TYPE 
+			         FROM EMMA.EM_MMT_TRAN
+			         WHERE MT_PR = A.MT_PR)   AS  SERVICE_TYPE         /* SMS,MMX */
+			       ,A.MSG_STATUS
+			       ,A.RECIPIENT_NUM
+			       ,A.CHANGE_WORD5
+			       ,(SELECT CONTENT
+			         FROM EMMA.EM_MMT_TRAN
+			         WHERE MT_PR = A.MT_PR)  AS  CONTENT   /* 메시지 */
+			FROM EMMA.EM_MMT_CLIENT A
+			WHERE 1=1
+		]]>
+		<isNotEmpty property="DEPT_CODE">
+			AND A.MT_PR IN  (SELECT MT_PR 
+			                 FROM EMMA.EM_MMT_TRAN
+			                 WHERE MT_REFKEY = #DEPT_CODE#)
+		</isNotEmpty>
+		<isNotEmpty property="APPLC_DE">
+		  <![CDATA[
+			AND TO_CHAR(REG_DATE,'YYYYMMDD') >= #APPLC_DE#
+		  ]]>	
+		</isNotEmpty>
+		<isNotEmpty property="APPLC_DE2">
+		  <![CDATA[
+			AND TO_CHAR(REG_DATE,'YYYYMMDD') <= #APPLC_DE2#
+		  ]]>	
+		</isNotEmpty>
+		  )
+		  ORDER BY REG_DATE DESC
+	 		        	     
+    </select>
+    
+     <!-- 부서정보 목록조회 -->
+    <select id="SYM030700DAO.selectDeptcodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+	         SELECT
+	              A.DEPT_CODE  AS CODE
+				 ,A.DEPT_NM  AS NAME
+			FROM  VWHRM_DEPT A
+			WHERE 1=1
+			AND A.USE_AT = '1'
+			AND A.DEPT_LEVEL_SE IN('1','2')
+			ORDER BY OUTPT_ORDR
+		]]>		 		        	     
+    </select>
+    
+      <!-- 키값정보 목록조회 -->
+    <select id="SYM030700DAO.selectMtprList" parameterClass="java.util.HashMap" resultClass="Integer">
+	  <isEqual property="SERVICE_TYPE" compareValue = "0"> 	
+		<![CDATA[	
+	        SELECT
+	              MAX(MT_PR)  AS MT_PR
+			FROM EMMA.EM_SMT_TRAN
+		]]>	
+	  </isEqual>
+	  <isEqual property="SERVICE_TYPE" compareValue = "2"> 	
+		<![CDATA[	
+	        SELECT
+	              MAX(MT_PR)  AS MT_PR
+			FROM EMMA.EM_MMT_TRAN
+		]]>	
+	  </isEqual>		 		        	     
+    </select>
+    
+    <!-- SMS 메시지 입력 -->
+    <insert id="SYM030700DAO.SmstranC_M" parameterClass="java.util.HashMap">
+      <isEqual property="SERVICE_TYPE" compareValue = "0">
+        <![CDATA[
+            INSERT INTO EMMA.EM_SMT_TRAN (
+                         MT_PR
+						,MSG_KEY
+						,INPUT_TYPE
+						,MT_REFKEY
+						,PRIORITY
+						,DATE_CLIENT_REQ
+						,CONTENT
+						,CALLBACK
+						,SERVICE_TYPE
+						,BROADCAST_YN
+						,MSG_STATUS
+						,RECIPIENT_NUM
+						,DATE_MT_SENT
+						,DATE_RSLT
+						,DATE_MT_REPORT
+						,MT_REPORT_CODE_IB
+						,MT_REPORT_CODE_IBTYPE
+						,CARRIER
+						,RS_ID
+						,RECIPIENT_NET
+						,RECIPIENT_NPSEND
+						,COUNTRY_CODE
+						,CHARSET
+						,MSG_TYPE
+						,CRYPTO_YN
+						,TTL
+						,EMMA_ID
+						,REG_DATE
+						,MT_RES_CNT
+             ) VALUES (
+                         EMMA.SQ_EM_SMT_TRAN_01.NEXTVAL     /* 일련번호 */
+						,''
+						,#INPUT_TYPE#
+						,#MT_REFKEY#                        /* 부서코드 */
+						,'S'                                /* 전송우선순위 VF,F,S */
+					]]>
+					<isEqual property="SMS_SCDLE_TYPE" compareValue = "N">							
+						,TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')                 /* 전송예약시간 */					
+                    </isEqual>	
+                    <isEqual property="SMS_SCDLE_TYPE" compareValue = "Y">							
+						,TO_DATE(#DATE_CLIENT_REQ#,'YYYYMMDDHH24MISS')     /* 전송예약시간 */					
+                    </isEqual>	
+				    <![CDATA[
+						,SUBSTRB(#CONTENT#, 0, 80)   /* 내용 : 80 Byte 제한 */
+						,#CALLBACK#
+						,#SERVICE_TYPE#               /* 서비스타입 */  
+						,'Y'
+						,'0'
+						,''                           /* 단일발송 */
+						,#DATE_MT_SENT#
+						,#DATE_RSLT#
+						,#DATE_MT_REPORT#
+						,#MT_REPORT_CODE_IB#
+						,#MT_REPORT_CODE_IBTYPE#
+						,#CARRIER#
+						,#RS_ID#
+						,#RECIPIENT_NET#
+						,#RECIPIENT_NPSEND#
+						,'82'
+						,#CHARSET#
+						,#MSG_TYPE#
+						,#CRYPTO_YN#
+						,#TTL#
+						,#EMMA_ID#
+						,SYSDATE
+						,#MT_RES_CNT#
+             )
+        ]]>
+      </isEqual>  
+      <isEqual property="SERVICE_TYPE" compareValue = "2">
+        <![CDATA[
+            INSERT INTO EMMA.EM_MMT_TRAN (
+                         MT_PR
+						,MSG_KEY
+						,INPUT_TYPE
+						,MT_REFKEY
+						,PRIORITY
+						,MSG_CLASS
+						,DATE_CLIENT_REQ
+						,SUBJECT
+						,CONTENT_TYPE
+						,CONTENT
+						,ATTACH_FILE_GROUP_KEY
+						,CALLBACK
+						,SERVICE_TYPE
+						,BROADCAST_YN
+						,MSG_STATUS
+						,RECIPIENT_NUM
+						,DATE_MT_SENT
+						,DATE_RSLT
+						,DATE_MT_REPORT
+						,MT_REPORT_CODE_IB
+						,MT_REPORT_CODE_IBTYPE
+						,CARRIER
+						,RS_ID
+						,RECIPIENT_NET
+						,RECIPIENT_NPSEND
+						,COUNTRY_CODE
+						,CHARSET
+						,MSG_TYPE
+						,CRYPTO_YN
+						,TTL
+						,EMMA_ID
+						,REG_DATE
+						,MT_RES_CNT
+             ) VALUES (
+                         EMMA.SQ_EM_MMT_TRAN_01.NEXTVAL     /* 일련번호 */
+						,''
+						,#INPUT_TYPE#
+						,#MT_REFKEY#                        /* 부서코드 */
+						,'S'                                /* 전송우선순위 VF,F,S */
+						,'1'                                /* 일반/광고 */
+					]]>
+					<isEqual property="SMS_SCDLE_TYPE" compareValue = "N">							
+						,TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')                   /* 전송예약시간 */					
+                    </isEqual>	
+                    <isEqual property="SMS_SCDLE_TYPE" compareValue = "Y">							
+						,TO_DATE(#DATE_CLIENT_REQ#,'YYYYMMDDHH24MISS')       /* 전송예약시간 */					
+                    </isEqual>	
+				    <![CDATA[
+						,SUBSTRB(#CONTENT#, 0, 35)   /* 제목 : 35 Byte 제한 */
+						,0
+						,SUBSTRB(#CONTENT#, 0, 80)   /* 내용 : 80 Byte 제한 */
+						,#ATTACH_FILE_GROUP_KEY#
+						,#CALLBACK#
+						,'2'
+						,'Y'
+						,'0'
+						,''
+						,#DATE_MT_SENT#
+						,#DATE_RSLT#
+						,#DATE_MT_REPORT#
+						,#MT_REPORT_CODE_IB#
+						,#MT_REPORT_CODE_IBTYPE#
+						,#CARRIER#
+						,#RS_ID#
+						,#RECIPIENT_NET#
+						,#RECIPIENT_NPSEND#
+						,'82'
+						,#CHARSET#
+						,'1001'
+						,#CRYPTO_YN#
+						,#TTL#
+						,#EMMA_ID#
+						,SYSDATE
+						,#MT_RES_CNT#
+             )
+        ]]>
+      </isEqual>
+      
+    </insert>
+    
+       <!-- SMS 메시지 입력(상세) -->
+    <insert id="SYM030700DAO.SmstranCre" parameterClass="java.util.HashMap">
+      <isEqual property="SERVICE_TYPE" compareValue = "0">
+        <![CDATA[
+            INSERT INTO EMMA.EM_SMT_CLIENT (
+                         MT_PR
+						,MT_SEQ
+						,MSG_STATUS
+						,RECIPIENT_NUM
+						,CHANGE_WORD1
+						,CHANGE_WORD2
+						,CHANGE_WORD3
+						,CHANGE_WORD4
+						,CHANGE_WORD5
+						,DATE_MT_SENT
+						,DATE_RSLT
+						,DATE_MT_REPORT
+						,MT_REPORT_CODE_IB
+						,MT_REPORT_CODE_IBTYPE
+						,CARRIER
+						,RS_ID
+						,RECIPIENT_NET
+						,RECIPIENT_NPSEND
+						,COUNTRY_CODE
+						,REG_DATE
+						,MT_RES_CNT
+             ) VALUES (
+                         #MT_PR#
+						,NVL((SELECT MAX(MT_SEQ)+1 FROM EMMA.EM_SMT_CLIENT WHERE MT_PR = #MT_PR#),1)
+						,'1'
+						,#RECIPIENT_NUM#
+						,#CHANGE_WORD1#
+						,#CHANGE_WORD2#
+						,#CHANGE_WORD3#
+						,#CHANGE_WORD4#
+						,#CHANGE_WORD5#
+						,#DATE_MT_SENT#
+						,#DATE_RSLT#
+						,#DATE_MT_REPORT#
+						,#MT_REPORT_CODE_IB#
+						,#MT_REPORT_CODE_IBTYPE#
+						,#CARRIER#
+						,#RS_ID#
+						,#RECIPIENT_NET#
+						,#RECIPIENT_NPSEND#
+						,'82'
+						,SYSDATE
+						,#MT_RES_CNT#
+             )
+        ]]>
+      </isEqual> 
+      <isEqual property="SERVICE_TYPE" compareValue = "2">
+        <![CDATA[
+            INSERT INTO EMMA.EM_MMT_CLIENT (
+                         MT_PR
+						,MT_SEQ
+						,MSG_STATUS
+						,RECIPIENT_NUM
+						,CHANGE_WORD1
+						,CHANGE_WORD2
+						,CHANGE_WORD3
+						,CHANGE_WORD4
+						,CHANGE_WORD5
+						,DATE_MT_SENT
+						,DATE_RSLT
+						,DATE_MT_REPORT
+						,MT_REPORT_CODE_IB
+						,MT_REPORT_CODE_IBTYPE
+						,CARRIER
+						,RS_ID
+						,RECIPIENT_NET
+						,RECIPIENT_NPSEND
+						,COUNTRY_CODE
+						,REG_DATE
+						,MT_RES_CNT
+             ) VALUES (
+                         #MT_PR#
+						,NVL((SELECT MAX(MT_SEQ)+1 FROM EMMA.EM_MMT_CLIENT WHERE MT_PR = #MT_PR#),1)
+						,'1'
+						,#RECIPIENT_NUM#
+						,#CHANGE_WORD1#
+						,#CHANGE_WORD2#
+						,#CHANGE_WORD3#
+						,#CHANGE_WORD4#
+						,#CHANGE_WORD5#
+						,#DATE_MT_SENT#
+						,#DATE_RSLT#
+						,#DATE_MT_REPORT#
+						,#MT_REPORT_CODE_IB#
+						,#MT_REPORT_CODE_IBTYPE#
+						,#CARRIER#
+						,#RS_ID#
+						,#RECIPIENT_NET#
+						,#RECIPIENT_NPSEND#
+						,'82'
+						,SYSDATE
+						,#MT_RES_CNT#
+             )
+        ]]>
+      </isEqual> 
+       
+    </insert>
+
+    <!-- SMS 메시지 수정 -->
+    <update id="SYM030700DAO.SmstranC_U" parameterClass="java.util.HashMap">
+       <isEqual property="SERVICE_TYPE" compareValue = "0">
+        <![CDATA[
+            UPDATE EMMA.EM_SMT_TRAN SET                 
+                 MSG_STATUS       = '1'               
+            WHERE MT_PR = #MT_PR#
+            AND MSG_STATUS = '0'
+        ]]>
+       </isEqual>
+       <isEqual property="SERVICE_TYPE" compareValue = "2">
+        <![CDATA[
+            UPDATE EMMA.EM_MMT_TRAN SET                 
+                 MSG_STATUS       = '1'               
+            WHERE MT_PR = #MT_PR#
+            AND MSG_STATUS = '0'
+        ]]>
+       </isEqual> 
+    </update>
+
+
+    <!-- SMS 메시지 삭제 클라이언트 -->
+    <delete id="SYM030700DAO.SmstranC_D" parameterClass="java.util.HashMap">
+      <isEqual property="SERVICE_TYPE" compareValue = "0">
+        <![CDATA[
+            DELETE FROM EMMA.EM_SMT_CLIENT 
+            WHERE MT_PR = #MT_PR#
+            AND MT_SEQ = #MT_SEQ#
+        ]]>
+      </isEqual>
+      <isEqual property="SERVICE_TYPE" compareValue = "2">
+        <![CDATA[
+            DELETE FROM EMMA.EM_MMT_CLIENT 
+            WHERE MT_PR = #MT_PR#
+            AND MT_SEQ = #MT_SEQ#
+        ]]>
+      </isEqual>  
+    </delete>
+   
+    <!-- SMS 메시지 삭제 마스터 -->
+    <delete id="SYM030700DAO.SmstranM_D" parameterClass="java.util.HashMap">
+      <isEqual property="SERVICE_TYPE" compareValue = "0">
+        <![CDATA[
+            DELETE 
+			FROM EMMA.EM_SMT_TRAN
+			WHERE MT_PR = #MT_PR#
+			AND MT_PR NOT IN(SELECT MT_PR FROM EMMA.EM_SMT_CLIENT)
+        ]]>
+      </isEqual>
+      <isEqual property="SERVICE_TYPE" compareValue = "2">
+        <![CDATA[
+            DELETE 
+			FROM EMMA.EM_MMT_TRAN
+			WHERE MT_PR = #MT_PR#
+			AND MT_PR NOT IN(SELECT MT_PR FROM EMMA.EM_SMT_CLIENT)
+        ]]>
+      </isEqual>  
+    </delete>
+    
+     <!-- 이메일 발송 입력 -->
+    <insert id="SYM030700DAO.EmailsendCUD" parameterClass="java.util.HashMap">
+        <![CDATA[
+            INSERT INTO TBCOM_EMAIL_DSPTCH_MANAGE (
+                         EMAIL_DSPTCH_SN
+						,EMAIL_CJ 
+						,EMAIL_CN
+						,SENDER_ID
+						,SENDER_NM
+						,RCVER_ID
+						,RCVER_NM
+						,SENDER_EMAIL
+						,RCVER_EMAIL
+						,DSPTCH_RESULT_CODE
+						,DSPTCH_DT
+						,ATCHMNFL_SN
+						,REGISTER_ID
+						,REGIST_DT
+						,UPDUSR_ID
+						,UPDT_DT
+             ) VALUES (
+                         (SELECT NVL(MAX(EMAIL_DSPTCH_SN)+1,1) FROM TBCOM_EMAIL_DSPTCH_MANAGE)
+						,#EMAIL_CJ#
+						,#EMAIL_CN#
+						,#SENDER_ID#
+						,#SENDER_NM#
+						,#RCVER_ID#
+						,#RCVER_NM#
+						,#SENDER_EMAIL#
+						,#RCVER_EMAIL#
+						,#DSPTCH_RESULT_CODE#
+						,#DSPTCH_DT#
+						,#ATCHMNFL_SN#
+						,#S_USER_ID#			    /** 등록자ID */
+        	            ,SYSDATE			        /** 등록일시 */
+        	            ,#S_USER_ID#			    /** 수정자ID */
+        	            ,SYSDATE			        /** 수정일시 */
+             )
+        ]]>    
+    </insert>
+   
+</sqlMap>

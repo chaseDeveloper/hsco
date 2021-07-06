@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM010302_SQL">
+	
+	<!-- 개정일자 목록-->
+	<select id="HRM010302DAO.selectPsncpaGrp" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT STDR_DE
+			FROM   (
+			        SELECT STDR_DE
+			        FROM   TBHRM_DEPT_ACCTO_PSNCPA
+			        UNION ALL
+			        SELECT STDR_DE
+			        FROM   TBHRM_CLSF_ACCTO_PSNCPA
+			       )
+			WHERE  1=1
+		]]>
+		<isNotEmpty property="ST_DE"><isNotEmpty property="ED_DE">
+			AND    STDR_DE BETWEEN #ST_DE# AND #ED_DE#
+		</isNotEmpty></isNotEmpty>
+		<![CDATA[
+			GROUP BY STDR_DE
+			ORDER BY STDR_DE DESC
+		]]>
+	</select>
+	
+	<!-- 정현원대비표 조회(직종부서별)-->
+	<select id="HRM010302DAO.selectPsncpaJssfcDeptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">	  
+		WITH DEPT_PSNCPA_T AS (
+		    /*정원*/
+		    SELECT s1.DEPT_CODE         AS PSNCPA_DEPT_CODE
+		          ,s1.DEPT_NM           AS DEPT_NM
+		          ,s1.UPPER_DEPT_CODE   AS UPPER_DEPT_CODE
+		          ,s2.*
+		    FROM   VWHRM_DEPT s1
+		           LEFT OUTER JOIN (
+		                            SELECT DEPT_CODE
+										<iterate property="jssfcList" >
+										 ,SUM(DECODE(JSSFC_SE, #jssfcList[].CODE#, NVL(NMPR,0), 0))   AS PSNCPA_$jssfcList[].CODE$
+										</iterate>
+		                            FROM   TBHRM_DEPT_ACCTO_PSNCPA
+		                            WHERE  STDR_DE = #STDR_DE#
+		                            GROUP BY DEPT_CODE
+		                           ) s2
+		                ON s1.DEPT_CODE = s2.DEPT_CODE
+		    WHERE  1=1
+		)
+		, DEPT_NOW_NMPR_T AS (
+		    /*현원*/
+		    SELECT h1.DEPT_CODE         AS NOW_NMPR_DEPT_CODE
+		          ,h1.DEPT_NM           AS DEPT_NM
+		          ,h1.UPPER_DEPT_CODE   AS UPPER_DEPT_CODE
+		          ,h2.*
+		    FROM   VWHRM_DEPT h1
+		           LEFT OUTER JOIN (
+		                            SELECT DEPT_CODE
+		                            	<iterate property="jssfcList" >
+										 ,SUM(DECODE(JSSFC_SE, #jssfcList[].CODE#, 1, 0))   AS NOW_NMPR_$jssfcList[].CODE$
+										</iterate>
+		                            FROM   TBHRM_HR_MASTR
+		                            WHERE  1=1
+		                              AND STTUS_SE <![CDATA[<>]]> '009'
+		                            GROUP BY DEPT_CODE
+		                           ) h2
+		                ON h1.DEPT_CODE = h2.DEPT_CODE
+		    WHERE  1=1
+		)
+		SELECT t1.DEPT_CODE
+		      ,t1.DEPT_NM
+		      ,t1.DEPT_LV1_NM
+		      ,t1.DEPT_LV2_NM
+		      ,t1.DEPT_LV3_NM
+		      /*정원*/
+				<iterate property="jssfcList" >
+				,(SELECT SUM(NVL(PSNCPA_$jssfcList[].CODE$,0)) FROM DEPT_PSNCPA_T START WITH PSNCPA_DEPT_CODE = t1.DEPT_CODE CONNECT BY PRIOR PSNCPA_DEPT_CODE = UPPER_DEPT_CODE)   AS PSNCPA_$jssfcList[].CODE$
+				</iterate>
+		      /*현원*/
+		      	<iterate property="jssfcList" >
+				,(SELECT SUM(NVL(NOW_NMPR_$jssfcList[].CODE$,0)) FROM DEPT_NOW_NMPR_T START WITH NOW_NMPR_DEPT_CODE = t1.DEPT_CODE CONNECT BY PRIOR NOW_NMPR_DEPT_CODE = UPPER_DEPT_CODE)   AS NOW_NMPR_$jssfcList[].CODE$
+				</iterate>
+		FROM   (
+		        SELECT DEPT_CODE
+		              ,DEPT_NM
+		              ,SUBSTR(DEPT_NM_PTH, INSTR(DEPT_NM_PTH, '|', 1, 1)+1, INSTR(DEPT_NM_PTH, '|', 1, 1+1) - INSTR(DEPT_NM_PTH, '|', 1, 1)-1) AS DEPT_LV1_NM
+		              ,SUBSTR(DEPT_NM_PTH, INSTR(DEPT_NM_PTH, '|', 1, 2)+1, INSTR(DEPT_NM_PTH, '|', 1, 2+1) - INSTR(DEPT_NM_PTH, '|', 1, 2)-1) AS DEPT_LV2_NM
+		              ,SUBSTR(DEPT_NM_PTH, INSTR(DEPT_NM_PTH, '|', 1, 3)+1, INSTR(DEPT_NM_PTH, '|', 1, 3+1) - INSTR(DEPT_NM_PTH, '|', 1, 3)-1) AS DEPT_LV3_NM
+		        FROM   VWHRM_DEPT
+		       ) t1
+		WHERE  1=1
+    </select>
+    
+   	<!-- 정현원대비표 조회(직종직급별)-->
+	<select id="HRM010302DAO.selectPsncpaJssfcHrClsfList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.JSSFC_SE
+		      ,t1.JSSFC_NM
+		      ,t2.*
+		    <iterate property="hrClsfList" >
+			 ,NVL(t3.NOW_NMPR_$hrClsfList[].CODE$, 0)    AS NOW_NMPR_$hrClsfList[].CODE$
+			</iterate>
+		FROM   (
+		        SELECT CODE         AS JSSFC_SE
+		              ,CODE_NM      AS JSSFC_NM
+		        FROM   TBCOM_CMMN_CODE
+		        WHERE  GRP_CODE = 'HRM001'
+		        AND    USE_AT = '1'
+		       ) t1
+		       INNER JOIN (
+		                   /*정원*/
+		                   SELECT JSSFC_SE                                     AS PSNCPA_JSSFC_SE
+								<iterate property="hrClsfList" >
+								 ,SUM(DECODE(CLSF_SE, #hrClsfList[].CODE#, NVL(NMPR,0), 0))  AS PSNCPA_$hrClsfList[].CODE$
+								</iterate>
+		                   FROM   TBHRM_CLSF_ACCTO_PSNCPA
+		                   WHERE  STDR_DE = #STDR_DE#
+		                   GROUP BY JSSFC_SE
+		                  ) t2
+		            ON t1.JSSFC_SE = t2.PSNCPA_JSSFC_SE
+		       LEFT OUTER JOIN (
+		                        /*현원*/
+		                        SELECT JSSFC_SE                               AS NMPR_JSSFC_SE
+									<iterate property="hrClsfList" >
+									 ,SUM(DECODE(HR_CLSF_SE, #hrClsfList[].CODE#, 1, 0))    AS NOW_NMPR_$hrClsfList[].CODE$
+									</iterate>
+		                        FROM   TBHRM_HR_MASTR
+		                        WHERE  1=1
+		                          AND STTUS_SE <![CDATA[<>]]> '009'
+		                        GROUP BY JSSFC_SE
+		                       ) t3
+		            ON t1.JSSFC_SE = t3.NMPR_JSSFC_SE
+		WHERE  1=1
+		ORDER BY t1.JSSFC_SE
+    </select>
+
+</sqlMap>

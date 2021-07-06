@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR030300_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+
+	<!-- 계약대장 조회 -->
+	<select id="CTR030300DAO.selectCntrctList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*CTR030300DAO.selectCntrctList*/]]>
+		WITH TB_CNTRCT_JOB_PROCESS_CRSE AS (
+		    /* 1_계약의뢰 */
+		    SELECT r1.REQEST_DE         AS OCCRRNC_DE
+		      ,NVL(r1.REQEST_AMOUNT, 0) AS BLCE
+		      ,r2.CNTRCT_NO
+		      ,'1'                      AS ORDR
+		    FROM TBCTR_CNTRCT_REQEST r1
+		    INNER JOIN TBCTR_CNTRCT r2
+		    ON  r1.REQEST_NO   = r2.REQEST_NO
+		    UNION ALL
+		    /* 2_최초계약 */
+		    SELECT CNTRCT_DE              AS OCCRRNC_DE
+		      ,NVL(FRST_CNTRCT_AMOUNT, 0) AS BLCE
+		      ,CNTRCT_NO
+		      ,'2'                        AS ORDR
+		    FROM TBCTR_CNTRCT
+		    UNION ALL
+		    /* 3_변경계약 */
+		    SELECT CHANGE_DE               AS OCCRRNC_DE
+		      ,NVL(AFTCH_CNTRCT_AMOUNT, 0) AS BLCE
+		        /*잔액*/
+		     ,CNTRCT_NO
+		     ,'3'                          AS ORDR
+		    FROM TBCTR_CNTRCT_CHANGE
+		    WHERE 1=1
+		    AND CHANGE_SE  IN ('1', '3')
+		    UNION ALL
+		    /* 4_기성내역 */
+		    SELECT TO_CHAR(r1.REGIST_DT, 'YYYYMMDD')                                                                                AS OCCRRNC_DE
+		      ,NVL(r3.CNTRCT_AMOUNT, 0) - ( NVL(LAG(r2.DECSN_AMOUNT) OVER(PARTITION BY r1.CNTRCT_NO ORDER BY r1.REGIST_DT ASC), 0) + NVL(r2.DECSN_AMOUNT,0) ) AS BLCE
+		        /*잔액*/
+		      ,r1.CNTRCT_NO
+		      ,'4'                          AS ORDR
+		    FROM TBCTR_CNTRCT_DECSN r1
+		    INNER JOIN VHACC_EXP_DSN_MASTR r2
+		    ON  r1.CNTRCT_DECSN_YEAR = r2.BUDGET_YEAR
+		    AND r1.DECSN_NO          = r2.DECSN_NO
+		    LEFT OUTER JOIN TBCTR_CNTRCT r3
+		    ON  r1.CNTRCT_NO   = r3.CNTRCT_NO
+
+		), TB_BLCE AS (
+			SELECT MAX(BLCE) KEEP(DENSE_RANK FIRST ORDER BY OCCRRNC_DE DESC, ORDR DESC) AS BLCE
+			      ,CNTRCT_NO
+			FROM TB_CNTRCT_JOB_PROCESS_CRSE
+			GROUP BY CNTRCT_NO
+		)
+			
+		
+		SELECT t1.CNTRCT_NO
+		      ,t1.BSNS_CODE
+		      ,t2.BSNS_NM
+		      ,t1.BSNS_CODE || '.' || T2.BSNS_NM    AS BSNS_NM2
+		      ,t1.CNTRCT_SE
+		      ,t1.DETAIL_SE
+		      ,t1.CNTRCT_NM
+		      ,t1.CNTRCT_MTH_SE
+		      ,NVL(t1.CNTRCT_AMOUNT, 0)             AS CNTRCT_AMOUNT
+		      ,t1.CNTRCT_DE
+		      ,t1.STRWRK_DE
+		      ,t1.COMPET_DE
+		      ,t1.MNG_DEPT_CODE
+		      ,t3.DEPT_NM                           AS MNG_DEPT_NM
+		      ,t1.INFRML_CNTRCT_AT
+		      ,DECODE(t1.INFRML_CNTRCT_AT, '1', '간이계약', '정식계약')    AS INFRML_CNTRCT_AT2
+		      ,t4.BLCE	/*잔액*/
+		FROM   TBCTR_CNTRCT T1
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE T2
+		            ON T1.BSNS_CODE = T2.BSNS_CODE
+		       LEFT OUTER JOIN TBHRM_DEPT t3
+		            ON t1.MNG_DEPT_CODE = t3.DEPT_CODE
+		       LEFT OUTER JOIN TB_BLCE t4
+		            ON t1.CNTRCT_NO = t4.CNTRCT_NO
+		WHERE  1=1
+		<isNotEmpty property="CNTRCT_YEAR" prepend="AND ">T1.CNTRCT_NO LIKE #CNTRCT_YEAR# || '%'</isNotEmpty>
+		<isNotEmpty property="CNTRCT_SE"   prepend="AND ">T1.CNTRCT_SE = #CNTRCT_SE# </isNotEmpty>
+		<isNotEqual property="MNG_DEPT_CODE" compareValue="000000"><isNotEmpty property="MNG_DEPT_CODE"   prepend="AND ">T1.MNG_DEPT_CODE = #MNG_DEPT_CODE#</isNotEmpty></isNotEqual>
+		<isEqual property="SEARCH_SE" compareValue="0">
+			<isNotEmpty property="SEARCH_VAL">
+				AND (t1.CNTRCT_NM LIKE '%' || #SEARCH_VAL# || '%' OR t2.BSNS_NM LIKE '%' || #SEARCH_VAL# || '%')
+			</isNotEmpty>
+		</isEqual>
+		<isEqual property="SEARCH_SE" compareValue="1">
+			<isNotEmpty property="SEARCH_VAL" prepend="AND ">t1.CNTRCT_NM LIKE '%' || #SEARCH_VAL# || '%'</isNotEmpty>
+		</isEqual>
+		<isEqual property="SEARCH_SE" compareValue="2">
+			<isNotEmpty property="SEARCH_VAL" prepend="AND ">t2.BSNS_NM LIKE '%' || #SEARCH_VAL# || '%'</isNotEmpty>
+		</isEqual>
+		<isNotEmpty property="INFRML_CNTRCT_AT">
+			<isEqual property="INFRML_CNTRCT_AT" compareValue="1">
+				AND t1.INFRML_CNTRCT_AT = '1'
+			</isEqual>
+			<isNotEqual property="INFRML_CNTRCT_AT" compareValue="1">
+				AND t1.INFRML_CNTRCT_AT <![CDATA[<>]]> '1'
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="EXCL_BLCE_0">
+			<isEqual property="EXCL_BLCE_0" compareValue="1">
+				AND t4.BLCE <![CDATA[<>]]> 0
+			</isEqual>
+		</isNotEmpty>
+		ORDER BY t1.BSNS_CODE, t1.CNTRCT_NO
+	</select>
+	
+	
+	<!-- 검사입회내역(공사, 용역) 조회 -->
+	<select id="CTR030300DAO.selectPrsecWtnessDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*CTR030300DAO.selectPrsecWtnessDtls*/]]>
+		SELECT T1.CNTRCT_NO
+		     , T1.WTNESS_SN
+		     , T1.PRSEC_SE
+		     , T1.PRSEC_ODR
+		     , T1.PRSEC_DE
+		     , T1.PRSEC_TM
+		     , T1.PRSEC_PLACE
+		     , NVL(SFCTR_GET_CNTRCT_AMOUNT(T1.CNTRCT_NO, T1.PRSEC_DE), '0') AS CNTRCT_AMOUNT
+		     , T1.PRSEC_AMOUNT
+		     , NVL(T1.INFRML_AT, '0')                                                      AS INFRML_AT
+		     , T1.PRSEC_DOC_PRESENTN_DE
+		     , T1.PRSEC_REQST_AMOUNT
+		     , T1.FILE_SN
+		     , T1.SANCTN_NO
+		     , SFCOM_GET_SANCTN_KND(t1.SANCTN_NO)                                          AS SANCTN_KND
+		     , CASE WHEN NVL(T2.CNT, 0) > 0                                    THEN '0'
+		            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) IN ('1', '4', '5') THEN '0'
+		            ELSE '1' END                                                           AS ENABLE_AT
+		     , CASE WHEN NVL(T2.CNT, 0) > 0                                    THEN '1'
+		            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) IN ('1', '4', '5') THEN '1'
+		            ELSE '0' END                                                           AS READONLY_AT
+		     , CASE WHEN NVL(T3.EXPNDTR_CNFIRM_AT, 0) = '1' THEN '004'
+		            WHEN T2.DECSN_NO IS NOT NULL THEN '003'
+		            WHEN T2.CNT > 0 THEN '002'
+		            ELSE '001'
+		       END AS PROGRS_STTUS	/*진행상태*/
+		  FROM TBCTR_PRSEC_WTNESS T1
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                             , WTNESS_SN
+		                             , MAX(DECSN_YEAR) AS DECSN_YEAR
+		                             , MAX(DECSN_NO)   AS DECSN_NO
+		                             , COUNT(1)        AS CNT
+		                          FROM TBCTR_CNTRCT_DECSN
+		                        GROUP BY CNTRCT_NO, WTNESS_SN
+		                       ) T2
+		            ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		           AND T1.WTNESS_SN = T2.WTNESS_SN
+		      LEFT OUTER JOIN TBACC_EXP_DSN_MASTR T3
+		            ON T2.DECSN_YEAR = T3.DECSN_YEAR
+		           AND T2.DECSN_NO = T3.DECSN_NO
+		 WHERE 1=1
+		   AND T1.CNTRCT_NO = #CNTRCT_NO#
+	</select>
+
+
+	<!-- 입회순번 생성 -->
+	<select id="CTR030300DAO.wtnessSn" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+	<![CDATA[/*CTR030300DAO.wtnessSn*/]]>
+		SELECT NVL(MAX(WTNESS_SN), 0) + 1
+		FROM   TBCTR_PRSEC_WTNESS
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+	</select>
+
+
+	<!-- 검사입회내역 등록 -->
+	<insert id="CTR030300DAO.PrsecWtnessDtlsC" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030300DAO.PrsecWtnessDtlsC*/]]>
+		INSERT INTO TBCTR_PRSEC_WTNESS (
+		     CNTRCT_NO
+		    ,WTNESS_SN
+		    ,PRSEC_SE
+		    ,PRSEC_ODR
+		    ,PRSEC_DE
+		    ,PRSEC_TM
+		    ,PRSEC_PLACE
+		    ,PRSEC_AMOUNT
+		    ,INFRML_AT
+		    ,PRSEC_DOC_PRESENTN_DE
+		    ,PRSEC_REQST_AMOUNT
+		    ,FILE_SN
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		) VALUES (
+		     #CNTRCT_NO#
+		    ,#WTNESS_SN#
+		    ,#PRSEC_SE#
+		    ,#PRSEC_ODR#
+		    ,#PRSEC_DE#
+		    ,#PRSEC_TM#
+		    ,#PRSEC_PLACE#
+		    ,#PRSEC_AMOUNT#
+		    ,NVL(#INFRML_AT#, '0')
+		    ,#PRSEC_DOC_PRESENTN_DE#
+		    ,#PRSEC_REQST_AMOUNT#
+		    ,#FILE_SN#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	</insert>
+
+
+	<!-- 검사입회내역 수정 -->
+	<update id="CTR030300DAO.PrsecWtnessDtlsU" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030300DAO.PrsecWtnessDtlsU*/]]>
+		UPDATE TBCTR_PRSEC_WTNESS
+		SET    PRSEC_SE              = #PRSEC_SE#
+		      ,PRSEC_ODR             = #PRSEC_ODR#
+		      ,PRSEC_DE              = #PRSEC_DE#
+		      ,PRSEC_TM              = #PRSEC_TM#
+		      ,PRSEC_PLACE           = #PRSEC_PLACE#
+		      ,PRSEC_AMOUNT          = #PRSEC_AMOUNT#
+		      ,INFRML_AT             = #INFRML_AT#
+		      ,PRSEC_DOC_PRESENTN_DE = #PRSEC_DOC_PRESENTN_DE#
+		      ,PRSEC_REQST_AMOUNT    = #PRSEC_REQST_AMOUNT#
+		      ,UPDUSR_ID             = #S_USER_ID#
+		      ,UPDT_DT               = SYSDATE
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+		AND    WTNESS_SN = #WTNESS_SN#
+	</update>
+
+
+	<!-- 검사입회내역 삭제 -->
+	<delete id="CTR030300DAO.PrsecWtnessDtlsD" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030300DAO.PrsecWtnessDtlsD*/]]>
+		DELETE
+		FROM   TBCTR_PRSEC_WTNESS
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+		AND    WTNESS_SN = #WTNESS_SN#
+	</delete>
+
+
+	<!-- 입회검사자 조회 -->
+	<select id="CTR030300DAO.selectWtnessInsptr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR030300DAO.selectWtnessInsptr*/]]>
+		SELECT t1.CNTRCT_NO
+		      ,t1.WTNESS_SN
+		      ,t1.INSPTR_SN
+		      ,t1.ROLE_SE
+		      ,t1.EMPNO
+		      ,t1.EMPNM
+		FROM   TBCTR_WTNESS_INSPTR t1
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+		AND    WTNESS_SN = #PARENT_SN#
+	</select>
+
+
+	<!-- 입회검사자 등록 -->
+	<insert id="CTR030300DAO.WtnessInsptrC" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030300DAO.WtnessInsptrC*/]]>
+		INSERT INTO TBCTR_WTNESS_INSPTR (
+		     CNTRCT_NO
+		    ,WTNESS_SN
+		    ,INSPTR_SN
+		    ,ROLE_SE
+		    ,EMPNO
+		    ,EMPNM
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES(
+		     #CNTRCT_NO#
+		    ,#WTNESS_SN#
+		    ,(SELECT NVL(MAX(INSPTR_SN), 0) + 1
+		      FROM   TBCTR_WTNESS_INSPTR
+		      WHERE  CNTRCT_NO = #CNTRCT_NO#
+		      AND    WTNESS_SN = #WTNESS_SN#)
+		    ,#ROLE_SE#
+		    ,#EMPNO#
+		    ,#EMPNM#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	</insert>
+
+
+	<!-- 입회검사자 수정 -->
+	<update id="CTR030300DAO.WtnessInsptrU" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030300DAO.WtnessInsptrU*/]]>
+		UPDATE TBCTR_WTNESS_INSPTR
+		SET    ROLE_SE    = #ROLE_SE#
+		      ,EMPNO      = #EMPNO#
+		      ,EMPNM      = #EMPNM#
+		      ,UPDUSR_ID  = #S_USER_ID#
+		      ,UPDT_DT    = SYSDATE
+		WHERE  CNTRCT_NO  = #CNTRCT_NO#
+		AND    WTNESS_SN  = #WTNESS_SN#
+		AND    INSPTR_SN  = #INSPTR_SN#
+	</update>
+	
+	
+	<!-- 입회검사자 삭제 -->
+	<delete id="CTR030300DAO.WtnessInsptrD" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030300DAO.WtnessInsptrD*/]]>
+		DELETE
+		FROM   TBCTR_WTNESS_INSPTR
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+		AND    WTNESS_SN = #WTNESS_SN#
+		AND    INSPTR_SN = #INSPTR_SN#
+	</delete>
+	
+	
+	<!-- 입회검사자 모두 삭제 -->
+	<delete id="CTR030300DAO.WtnessInsptrAllD" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030300DAO.WtnessInsptrAllD*/]]>
+		DELETE
+		FROM   TBCTR_WTNESS_INSPTR
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+		AND    WTNESS_SN = #WTNESS_SN#
+	</delete>
+
+
+</sqlMap>

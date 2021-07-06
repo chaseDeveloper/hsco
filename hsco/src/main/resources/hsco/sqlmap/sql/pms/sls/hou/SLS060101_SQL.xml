@@ -1,0 +1,247 @@
+<?xml version= "1.0" encoding ="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace= "SLS060101_SQL">
+   <!--  설명  : 계약및 납부현황
+       작성자 : 지효정 -->
+       
+        <!-- 총괄정보 목록 -->
+        <select id= "SLS060101DAO.houstTotalInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+              SELECT *
+              FROM(
+                  SELECT
+                       A.DONG             /*동*/
+                      ,A.HO               /*호*/
+                      ,B.HOUSE_NM         /*주택명*/
+                      ,D.HOUSE_DVR_AR     /*전용면적*/
+                      ,D.TY_AEA           /*타입*/
+                      ,E.CSTMR_NM               /*계약자명*/
+                      ,E.TELNO            /*전화번호*/
+                      ,E.MBTLNO           /*휴대전화*/
+                      ,SFCOM_DEC_ALL(E.IHIDNUM) AS IHIDNUM  /*주민등록번호*/
+                      ,F.CSTMR_NM AS CSTMR_NM2
+                      ,SFCOM_DEC_ALL(F.IHIDNUM) AS IHIDNUM2
+                      ,A.CNTRCT_DE        /*계약일자*/
+                      ,a.RENT_LTTOT_CNVRS_DE as LTTOT_CNVRS_DE   /*분양전환일자*/
+                      ,A.RENT_MVN_PRARNDE /*입주예정일*/
+                      ,A.RENT_BGNDE       /*임대시작일*/
+                      ,A.RENT_ENDDE       /*입주종료일*/
+                      ,A.CNTRCTR_NO       /*계약자번호*/
+                      ,C.LTTOT_AMOUNT    /*총분양금*/
+                      , (SELECT CODE_NM FROM TBCOM_CMMN_CODE M WHERE M.GRP_CODE = 'HOU004' AND M.CODE = A.LTTOT_QUALF_SE) AS QUALF_SE
+                      , (SELECT CODE_NM FROM TBCOM_CMMN_CODE M WHERE M.GRP_CODE = 'HOU004' AND M.CODE = A.RENT_QUALF_SE) AS FIRST_QUALF_SE
+                      ,DECODE(BASS_ADRES_DM , NULL , E.ZIP , ZIP_DM) AS ZIP
+                      ,DECODE(BASS_ADRES_DM , NULL , E.ADRES || DECODE(E.ADRES_DETAIL,'','', ', ' ||E.ADRES_DETAIL) , 
+                                     BASS_ADRES_DM|| DECODE(DETAIL_ADRES_DM,'','',', ' || DETAIL_ADRES_DM)) AS ADRES
+                      , K.ALTRV_LON_DE
+                      , CH.CHANGE_DE1
+                      , CH.CHANGE_DE2
+                      , SU.SUBLS_DE
+                      , A.CANCL_DE
+                  FROM
+                        TBSLS_HCNTRCTR A
+                      , TBSLS_HOUSE_INFO B
+                      , TBSLS_HOUSE_DONG_HO C
+                      , TBSLS_HOUSE_TY D
+                      , TBSLS_HOUSE_CSTMR E
+                      , TBSLS_HOUSE_CSTMR F
+                      , TBSLS_HCNTRCTR_KJF_PAY_CNFIRM K 
+                      , (SELECT CNTRCTR_NO
+						 	        , MAX(DECODE(CHANGE_SE,'01',CHANGE_DE)) AS CHANGE_DE1
+								    , MAX(DECODE(CHANGE_SE,'02',CHANGE_DE)) AS CHANGE_DE2 
+						   FROM TBSLS_HCNTRCTR_CHANGE
+					     GROUP BY CNTRCTR_NO
+					     ) CH
+					   , (SELECT CNTRCTR_NO, MAX(SUBLS_DE) AS SUBLS_DE 
+							 FROM TBSLS_HOUSE_SUBLS
+							WHERE (ENDDE IS NULL OR ENDDE > TO_CHAR(SYSDATE,'YYYYMMDD'))
+						    GROUP BY CNTRCTR_NO
+					     ) SU 
+                  WHERE B.HOUSE_CODE = A.HOUSE_CODE
+                  AND   C.HOUSE_CODE = A.HOUSE_CODE
+                  AND   C.DONG = A.DONG
+                  AND   C.HO = A.HO
+                  AND   D.HOUSE_CODE = A.HOUSE_CODE
+                  AND   C.HOUSE_TY_CODE = D.HOUSE_TY_CODE
+                  AND   A.HOUSE_CSTMR_NO = E.HOUSE_CSTMR_NO
+                  AND   A.HOUSE_CSTMR_NO_SUB = F.HOUSE_CSTMR_NO(+)
+                  AND   A.CNTRCTR_NO = K.CNTRCTR_NO(+)
+                  AND   A.CNTRCTR_NO = CH.CNTRCTR_NO(+)
+                  AND   A.CNTRCTR_NO = SU.CNTRCTR_NO(+)
+                  <isNotEmpty property= "houseCode">
+                  AND   A.HOUSE_CODE = #houseCode#
+                  </isNotEmpty>
+                  <isNotEmpty property= "stCntrctDe">
+                  AND   A.CNTRCT_DE <![CDATA[>=]]> #stCntrctDe#
+                  </isNotEmpty>
+                  <isNotEmpty property= "edCntrctDe">
+                  AND   A.CNTRCT_DE <![CDATA[<=]]> #edCntrctDe#
+                  </isNotEmpty>
+                  <isNotEmpty property= "stRentLttotCvDe">
+                     AND   A.RENT_LTTOT_CNVRS_DE <![CDATA[>=]]> #stRentLttotCvDe#
+                  </isNotEmpty>
+                  <isNotEmpty property= "edRentLttotCvDe">
+                     AND   A.RENT_LTTOT_CNVRS_DE <![CDATA[<=]]> #edRentLttotCvDe#
+                  </isNotEmpty>
+                  <isNotEmpty property= "dong">
+                  AND   A.DONG = # dong#
+                  </isNotEmpty>
+                  <isNotEmpty property= "ho">
+                  AND   A.HO = # ho#
+                  </isNotEmpty>
+                  <isNotEmpty property= "qualfSe">
+                  AND   NVL(A.RENT_QUALF_SE, A.LTTOT_QUALF_SE) = #qualfSe#
+                  </isNotEmpty>
+                  <isNotEmpty property= "incAll">
+                  	<isEqual property="incAll" compareValue="0"> <!-- 해약세대 불포함 -->
+		       			AND A.CANCL_DE IS NULL
+		       		</isEqual>
+                  </isNotEmpty>
+                  ORDER BY A.HOUSE_CODE, A.DONG, A.HO
+              )A,
+              (
+                  SELECT 
+                        CNTRCTR_NO
+                       ,SUM(NVL(GYEYAK_PAYAMT,0)) AS GYEYAK_PAYAMT                   /*계약금 납부금액*/
+                       ,SUM(NVL(GYEYAK_RCIV_AMOUNT,0)) AS GYEYAK_RCIV_AMOUNT         /*계약금 수납금액*/
+                       ,SUM(NVL(JUNGDO_PAYAMT,0)) AS JUNGDO_PAYAMT                   /*중도금 총 납부금액*/
+                       ,SUM(NVL(JUNGDO_RCIV_AMOUNT,0)) AS JUNGDO_RCIV_AMOUNT         /*중도금 총 수납금액*/
+                       ,SUM(NVL(JAN_RCIV_AMOUNT,0)) AS JAN_RCIV_AMOUNT              /*잔금 납부금액*/
+                       ,SUM(NVL(JAN_PAYAMT,0)) AS JAN_PAYAMT                        /*잔금 수납금액*/
+                       ,SUM(TOT_PAYAMT) AS TOT_PAYAMT                                            /*총 납부금액*/
+                       ,SUM(TOT_RCIV_AMOUNT) AS TOT_RCIV_AMOUNT                           /*총 수납금액*/
+                     FROM(
+                           SELECT
+                              B.CNTRCTR_NO
+                             ,SUM( CASE WHEN B.PAY_CODE IN('R0','S0') THEN 
+                                                DECODE(A.RENT_LTTOT_CNVRS_DE,null, B.PAYAMT,
+                                                              DECODE(B.PAY_CODE,'S0',B.PAYAMT,0))
+                                       ELSE 0 END) AS GYEYAK_PAYAMT
+                             ,SUM(CASE WHEN B.PAY_CODE IN('R0','S0') THEN 
+                                                DECODE(A.RENT_LTTOT_CNVRS_DE,null, B.RCIV_AMOUNT,
+                                                              DECODE(B.PAY_CODE,'S0',B.RCIV_AMOUNT,0))
+                                       ELSE 0 END) AS GYEYAK_RCIV_AMOUNT
+                             ,SUM(CASE WHEN B.PAY_CODE NOT IN('R0','S0','R9','S9') THEN 
+                                                DECODE(A.RENT_LTTOT_CNVRS_DE,null, B.PAYAMT,
+                                                              DECODE(SUBSTR(B.PAY_CODE,1,1),'S',B.PAYAMT,0))
+                                       ELSE 0 END) AS JUNGDO_PAYAMT
+                             ,SUM(CASE WHEN B.PAY_CODE NOT IN('R0','S0','R9','S9') THEN 
+                                                DECODE(A.RENT_LTTOT_CNVRS_DE,null, B.RCIV_AMOUNT,
+                                                              DECODE(SUBSTR(B.PAY_CODE,1,1),'S',B.RCIV_AMOUNT,0))
+                                       ELSE 0 END) AS JUNGDO_RCIV_AMOUNT
+                             ,SUM(CASE WHEN B.PAY_CODE IN('R9','S9') THEN 
+                                                DECODE(A.RENT_LTTOT_CNVRS_DE,null, B.PAYAMT,
+                                                              DECODE(B.PAY_CODE,'S9',B.PAYAMT,0))
+                                       ELSE 0 END) AS JAN_PAYAMT
+                             ,SUM(CASE WHEN B.PAY_CODE IN('R9','S9') THEN 
+                                                DECODE(A.RENT_LTTOT_CNVRS_DE,null, B.RCIV_AMOUNT,
+                                                              DECODE(B.PAY_CODE,'S9',B.RCIV_AMOUNT,0))
+                                       ELSE 0 END) AS JAN_RCIV_AMOUNT
+                             ,SUM(B.PAYAMT) AS TOT_PAYAMT
+                             ,SUM(B.RCIV_AMOUNT) AS TOT_RCIV_AMOUNT
+                         FROM
+                              TBSLS_HCNTRCTR A
+                             ,TBSLS_HOUSE_LTTOT_PAY B /*주택분양납부*/
+                         WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+                         AND   (SELECT CHRCTR_PREPAR_VALUE_1
+                                 FROM TBCOM_CMMN_CODE
+                                 WHERE GRP_CODE = 'HOU0A1' AND CODE = B.PAY_CODE) IN ('S', 'R')
+                        
+                         <isNotEmpty property= "houseCode">
+                         AND   A.HOUSE_CODE =#houseCode#
+                         </isNotEmpty>
+                         <isNotEmpty property= "stCntrctDe">
+                         AND   A.CNTRCT_DE <![CDATA[>=]]> #stCntrctDe#
+                         </isNotEmpty>
+                         <isNotEmpty property= "edCntrctDe">
+                         AND   A.CNTRCT_DE <![CDATA[<=]]> #edCntrctDe#
+                         </isNotEmpty>
+                         <isNotEmpty property= "stRentLttotCvDe">
+                         AND   A.RENT_LTTOT_CNVRS_DE <![CDATA[>=]]> #stRentLttotCvDe#
+                         </isNotEmpty>
+                         <isNotEmpty property= "edRentLttotCvDe">
+                         AND   A.RENT_LTTOT_CNVRS_DE <![CDATA[<=]]> #edRentLttotCvDe#
+                         </isNotEmpty>
+                         <isNotEmpty property= "dong">
+                         AND   A.DONG = # dong#
+                         </isNotEmpty>
+                         <isNotEmpty property= "ho">
+                         AND   A.HO = # ho#
+                         </isNotEmpty>
+                         <isNotEmpty property= "qualfSe">
+		                  AND   NVL(A.RENT_QUALF_SE, A.LTTOT_QUALF_SE) = #qualfSe#
+		                  </isNotEmpty>
+                         <isNotEmpty property= "incAll">
+		                  	<isEqual property="incAll" compareValue="0"> <!-- 해약세대 불포함 -->
+				       			AND A.CANCL_DE IS NULL
+				       		</isEqual>
+		                  </isNotEmpty>
+                         GROUP BY B.CNTRCTR_NO, B.PAY_NO
+                         )
+                     GROUP BY CNTRCTR_NO
+              )B
+              WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+    </select >
+   
+    <!-- 계약정보 목록 -->
+    <select id="SLS060101DAO.cntrctrlInfoList" parameterClass ="java.util.HashMap" resultClass="java.util.HashMap" >
+           SELECT
+                   A.HOUSE_CODE       /*주택코드*/
+                  ,B.HOUSE_NM         /*주택명*/
+                  ,A.DONG             /*동*/
+                  ,A.HO               /*호*/
+                  ,B.LOCPLC_DETAIL_ADRES
+                  ,D.HOUSE_DVR_AR     /*전용면적*/
+                  ,D.HOUSE_CMNUSE_AR
+                  ,D.HOUSE_LTTOT_AR
+                  ,C.BASS_LTTOT_AMOUNT
+                  ,C.BASS_RNTCHRG
+                  ,A.RENT_BGNDE
+                  ,A.RENT_ENDDE
+                  ,A.RENT_LTTOT_CNVRS_DE
+                  ,E.CSTMR_NM               /*계약자명*/
+                  <![CDATA[
+                  ,case when length(E.CSTMR_NM) > 2 then substr(E.CSTMR_NM,1,1) || lpad('*',length(E.CSTMR_NM)-2,'*') || substr(E.CSTMR_NM, length(E.CSTMR_NM), 1)
+                        when length(E.CSTMR_NM) <= 2 then substr(E.CSTMR_NM,1,1) || '*' end AS CSTMR_NM_MASK
+                  ]]>              
+                  ,SFCOM_DEC_ALL(E.IHIDNUM) AS IHIDNUM          /*주민등록번호*/
+                  ,E.ZIP              /*우편번호*/
+                  ,E.ADRES ||  ' ' || E.ADRES_DETAIL AS ADRES
+                  ,E.TELNO            /*전화번호*/
+                  ,E.MBTLNO           /*휴대전화*/
+                  ,F.PAYAMT           /*계약금*/
+                  ,A.CNTRCT_DE        /*계약일자*/
+                  ,NVL(A.RENT_LTTOT_CNVRS_DE, A.CNTRCT_DE) AS CNTRCT_DE_RPT
+              FROM
+                   TBSLS_HCNTRCTR A
+                  ,TBSLS_HOUSE_INFO B
+                  ,TBSLS_HOUSE_DONG_HO C
+                  ,TBSLS_HOUSE_TY D
+                  ,TBSLS_HOUSE_CSTMR E
+                  ,TBSLS_HOUSE_LTTOT_PAY F
+              WHERE B.HOUSE_CODE = A.HOUSE_CODE
+              AND   C.HOUSE_CODE = A.HOUSE_CODE
+              AND   C.DONG = A.DONG
+              AND   C.HO = A.HO
+              AND   D.HOUSE_CODE = A.HOUSE_CODE
+              AND   C.HOUSE_TY_CODE = D.HOUSE_TY_CODE
+              AND   A.HOUSE_CSTMR_NO = E.HOUSE_CSTMR_NO
+              AND   A.CNTRCTR_NO = F.CNTRCTR_NO
+              AND   F.PAY_CODE = 'S0'
+               <isNotEmpty property= "houseCode">
+           AND   A.HOUSE_CODE = #houseCode#
+           </isNotEmpty>
+        <isNotEmpty property= "stCntrctDe">
+           AND   A.CNTRCT_DE <![CDATA[>=]]> #stCntrctDe#
+           </isNotEmpty>
+           <isNotEmpty property= "edCntrctDe">
+           AND   A.CNTRCT_DE <![CDATA[<=]]> #edCntrctDe#
+           </isNotEmpty>
+           <isNotEmpty property= "dong">
+           AND   A.DONG = # dong#
+           </isNotEmpty>
+           <isNotEmpty property= "ho">
+           AND   A.HO = # ho#
+           </isNotEmpty>
+           ORDER BY A.HOUSE_CODE,  A.DONG, A.HO
+    </select >
+</sqlMap>

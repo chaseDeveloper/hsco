@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC060206_SQL">
+
+	<!-- 구분회계 결산처리 조회  -->
+	<select id="ACC060206DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC060206DAO.select*/]]>
+		WITH THIS_STACNT_T AS ( /*당기*/
+		    SELECT ACCNUT_YEAR
+		         , ACCNUT_ACNT_CODE
+		         , NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNTSUM_SE
+		    WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+		    AND   ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+		<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+		    AND   SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		</isNotEmpty>
+		    GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+		    UNION ALL
+		    SELECT ACCNUT_YEAR
+		         , ACCNUT_ACNT_CODE
+		         , NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNT_SE
+		    WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+		    AND   ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+		<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+		    AND   SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		</isNotEmpty>
+		    GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+		)
+		, PRE_STACNT_T AS (     /*전기*/
+		    SELECT ACCNUT_YEAR 
+		         , ACCNUT_ACNT_CODE
+		         , NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNTSUM_SE
+		    WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#, 0, 4)-1
+		    AND   ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+		<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+		    AND   SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		</isNotEmpty>
+		    GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+		    UNION ALL
+		    SELECT ACCNUT_YEAR
+		         , ACCNUT_ACNT_CODE
+		         , NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT
+		         , NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+		    FROM TBACC_ACCNUT_STACNT_SE
+		    WHERE ACCNUT_YEAR = SUBSTR(#YYYYMM#, 0, 4)-1
+		    AND   ACCNUT_MT   BETWEEN '00'/*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+		<isNotEmpty property="SE_ACCNUT_ACNT_CODE">
+		    AND   SE_ACCNUT_ACNT_CODE = #SE_ACCNUT_ACNT_CODE#
+		</isNotEmpty>
+		    GROUP BY ACCNUT_YEAR, ACCNUT_ACNT_CODE
+		)
+		SELECT t1.ACCNUT_ACNT_CODE
+		     , MAX(NVL(t1.OUTPT_ACNT_NM, t1.ACCNUT_ACNT_NM)) AS ACCNUT_ACNT_NM
+		     , NVL(SUM(DECODE(t1.DBRT_SE, 'D', t2.DR_AMT - t2.CR_AMT, 'C', t2.CR_AMT - t2.DR_AMT ,t2.DR_AMT - t2.CR_AMT)),0)   AS THIS_STACNT_AMT
+		     , NVL(SUM(DECODE(t1.DBRT_SE, 'D', t3.DR_AMT - t3.CR_AMT, 'C', t3.CR_AMT - t3.DR_AMT ,t3.DR_AMT - t3.CR_AMT)),0)   AS PRE_STACNT_AMT
+		FROM TBACC_ACCNUT_ACNT_SBJECT t1
+		  LEFT OUTER JOIN THIS_STACNT_T t2
+		  ON  t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+		  AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+		  LEFT OUTER JOIN PRE_STACNT_T t3
+		  ON  t1.ACCNUT_YEAR      = t3.ACCNUT_YEAR
+		  AND t1.ACCNUT_ACNT_CODE = t3.ACCNUT_ACNT_CODE
+		WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+		AND   t1.ACNT_SE  IN ('1','2') /*재무상태표, 손익계산서*/
+		AND   t1.OUTPT_AT = '1' /*출력여부*/
+		GROUP BY t1.ACCNUT_YEAR
+		       , t1.ACCNUT_ACNT_CODE
+		       , t1.RSYMNEY_ACNT_AT
+		ORDER BY ACCNUT_ACNT_CODE NULLS FIRST
+	</select>
+	
+	<!-- 구분회계결산 처리 -->
+	<procedure id="ACC060206DAO.spaccStacntProcSe" parameterClass="java.util.HashMap">
+		{ CALL SPACC_STACNT_PROC_SE(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,6), #S_USER_ID#) }
+	</procedure>
+	
+	<!-- 구분회계결산 처리(미처분잉여금) -->
+	<procedure id="ACC060206DAO.spaccStacntProcSe01" parameterClass="java.util.HashMap">
+		{ CALL SPACC_STACNT_PROC_SE_01(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,6), #S_USER_ID#) }
+	</procedure>
+	
+	<!-- 구분회계 현금흐름표 처리 -->
+	<procedure id="ACC060206DAO.spaccStacntCashFlow" parameterClass="java.util.HashMap">
+		{ CALL SPACC_STACNT_CASH_FLOW_SE(SUBSTR(#YYYYMM#,1,4), SUBSTR(#YYYYMM#,5,6), 'C2', #S_USER_ID#) }
+	</procedure>
+	
+	<!-- 검증용 결산데이터 생성 -->
+	<procedure id="ACC060206DAO.spaccStacntProcSeMig" parameterClass="java.util.HashMap">
+		{ CALL SPACC_STACNT_PROC_SE_MIG(#S_USER_ID#) }
+	</procedure>
+	
+	
+	
+	
+	<!-- 회계결산_구분회계 : 집계 실행여부 조회 -->
+	<select id="ACC060206DAO.selectAccnutStacntSeCnt" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+       SELECT COUNT(*) AS CNT      
+        FROM TBACC_ACCNUT_STACNT_SE T /*회계결산_구분회계*/
+       WHERE 1 = 1
+         AND T.ACCNUT_YEAR = #YYYY#
+         AND T.ACCNUT_MT = #MM#
+    </select>
+    
+    
+	<!-- 조정구분회계전표생성 -->
+	<parameterMap id="ACC060206DAO.slipToSeSlipMap2" class="java.util.HashMap">
+		<parameter property="YYYY"				jdbcType="VARCHAR" javaType="java.lang.String"  mode="IN" />
+		<parameter property="MM"       			jdbcType="VARCHAR" javaType="java.lang.String"  mode="IN" />
+		<parameter property="S_USER_ID"         jdbcType="VARCHAR" javaType="java.lang.String"  mode="IN" />
+		<parameter property="OUT_SLIP_CNT"      jdbcType="VARCHAR" javaType="java.lang.Integer" mode="OUT" />
+		<parameter property="OUT_RESULT_MSG"    jdbcType="VARCHAR" javaType="java.lang.String"  mode="OUT" />
+	</parameterMap>
+	
+	<!-- 조정구분회계전표생성 -->
+	<procedure id="ACC060206DAO.spaccSlipToSeSlipAi2" parameterMap="ACC060206DAO.slipToSeSlipMap2">
+		{ CALL SPACC_SLIP_TO_SE_SLIP_AI2(?, ?, ?, ?, ?) }
+	</procedure>
+	
+	
+</sqlMap>

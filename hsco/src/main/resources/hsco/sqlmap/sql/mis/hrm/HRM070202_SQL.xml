@@ -1,0 +1,1342 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070202_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 개인별 출장순번 획득 -->
+	<select id="HRM070202DAO.selectBsrpSeq" parameterClass="java.util.HashMap" resultClass="java.lang.Integer">
+		<![CDATA[ /* HRM070202DAO.selectBsrpSeq */ ]]>
+		<![CDATA[
+			SELECT NVL(MAX(BSRP_SEQ),0) + 1 AS BSRP_SEQ
+			FROM TBHRM_BSRP_INDVDL
+			WHERE EMPNO = #EMPNO#
+		]]>
+	</select>
+
+	<!-- ====================== 일비, 식비 관련 sql 영역 =========================== -->
+
+	<!-- 출장비상세 조회 -->
+	<select id="HRM070202DAO.selectTrvctCalc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH temp1 AS (
+			SELECT COUNT(*) AS IN_DATE
+			     , CASE WHEN COUNT(*) = 1 THEN GREATEST(TRUNC((TO_DATE(#BSRP_ENDDE# || #BSRP_END_TM#, 'YYYYMMDDHH24MI')
+			       - TO_DATE(#BSRP_BGNDE# || #BSRP_BEGIN_TM#, 'YYYYMMDDHH24MI')) * 24,0),0)
+			            ELSE 24
+			        END IN_TIME
+		]]>
+		<isEqual property="WHTHRC_AT" compareValue="1">
+			     , GREATEST(ROUND((TO_DATE(#BSRP_ENDDE# || #BSRP_END_TM#, 'YYYYMMDDHH24MI')
+			       - TO_DATE(#BSRP_BGNDE# || #BSRP_BEGIN_TM#, 'YYYYMMDDHH24MI')) * 24,1),0)
+			       AS BSRP_TM	/*관내일 때 시간*/
+		</isEqual>
+		
+		<isNotEqual property="WHTHRC_AT" compareValue="1">
+			     , GREATEST(ROUND((TO_DATE(#BSRP_BGNDE# || #BSRP_END_TM#, 'YYYYMMDDHH24MI')
+			       - TO_DATE(#BSRP_BGNDE# || #BSRP_BEGIN_TM#, 'YYYYMMDDHH24MI')) * 24,1),0)
+			       AS BSRP_TM	/*관외일 때 시간*/
+		</isNotEqual>
+		<![CDATA[
+
+			     , DECODE(#JSSFC_SE#, '01', '1', '2') AS GRAD_SE
+			     , NVL(#WHTHRC_AT#, '0') AS WHTHRC_AT
+			     , NVL(#ORDTM_SE#, '0') AS ORDTM_SE
+			FROM (SELECT TO_CHAR(TO_DATE(#BSRP_BGNDE#, 'YYYYMMDD') + LEVEL - 1, 'YYYYMMDD') AS IN_DATE
+			      FROM DUAL 
+			      CONNECT BY LEVEL <= TO_DATE(#BSRP_ENDDE#, 'YYYYMMDD') - TO_DATE(#BSRP_BGNDE#, 'YYYYMMDD') + 1
+			     ) t1
+			WHERE 1=1
+			AND NOT EXISTS(SELECT 1
+			               FROM   VWHRM_SYS_DAY t2 
+			               WHERE  1=1
+			                 AND  t1.IN_DATE = t2.SYS_DE
+			                 AND  t2.HOLY_AT = '1'
+			              )
+			)
+			, DAIL_ORDTM_CAL_TM AS (
+			    SELECT SUM(DAIL_CT)           AS DAIL_SUM_AMT     /*일비 총계*/
+			         , TRUNC(200000 / 15, -1)     AS ORDTM_AMT        /*상시출장 일비*/
+			    FROM TBHRM_BSRP_INDVDL
+			    WHERE EMPNO = #EMPNO#
+			    AND   (WHTHRC_AT = '1' OR ORDTM_SE  = '1')          /*관내, 상시*/
+			    AND   BSRP_BGNDE LIKE SUBSTR(#BSRP_BGNDE#,1,6) || '%' /*시작일자*/
+			)
+			SELECT MEAL_CT
+			      ,(CASE WHEN NVL(DAIL_CT,0) < 0 THEN 0 ELSE DAIL_CT END)    AS DAIL_CT
+			      ,BSRP_DAYCNT
+			      ,STAYNG_DAYCNT
+			      ,BSRP_TM
+			      ,DAIL_SUM_AMT
+			FROM   (
+			        SELECT s1.MEAL_CT
+			             , CASE
+			                 WHEN s1.WHTHRC_AT = '0' THEN s1.DAIL_CT
+			                 WHEN s1.ORDTM_SE /*[변수] 상시출장여부*/  = '1' THEN s2.ORDTM_AMT
+			                 WHEN (s2.DAIL_SUM_AMT + s1.DAIL_CT) >= 200000 THEN ( 200000 - s2.DAIL_SUM_AMT )
+			                 ELSE s1.DAIL_CT
+			               END                           AS DAIL_CT
+			             , s1.BSRP_DAYCNT
+			             , s1.STAYNG_DAYCNT
+			             , s1.BSRP_TM
+			             , s2.DAIL_SUM_AMT
+			        FROM   (
+			                SELECT CASE WHEN (t1.WHTHRC_AT = '0' AND t1.IN_DATE > 1) THEN t2.MEAL_CT * t1.IN_DATE
+			                            WHEN (t1.WHTHRC_AT = '0' AND t1.IN_DATE = 1 AND t1.IN_TIME >= 8) THEN t2.MEAL_CT * t1.IN_DATE
+			                            ELSE 0
+			                            END AS MEAL_CT
+			                     , CASE WHEN t1.WHTHRC_AT = '0' THEN t2.DAIL_CT * t1.IN_DATE
+			                            WHEN (t1.WHTHRC_AT = '1' AND t1.BSRP_TM > 0 AND t1.BSRP_TM < 4 AND t1.IN_DATE = 1 ) THEN 10000
+			                            WHEN (t1.WHTHRC_AT = '1' AND t1.IN_TIME > 0 AND t1.IN_TIME < 4) THEN 10000
+			                            WHEN (t1.WHTHRC_AT = '1' AND t1.IN_TIME >= 4 AND t1.IN_DATE = 1) THEN 20000
+			                            WHEN (t1.WHTHRC_AT = '1' AND t1.BSRP_TM > 0 AND t1.BSRP_TM < 4 AND t1.IN_DATE > 1 ) THEN t2.DAIL_CT * (t1.IN_DATE-1) + 10000
+			                            WHEN (t1.WHTHRC_AT = '1' AND t1.BSRP_TM >= 4 AND t1.IN_DATE > 1) THEN t2.DAIL_CT * (t1.IN_DATE-1) + 20000
+			                            ELSE 0
+			                            END AS DAIL_CT
+			                     , DECODE(GREATEST(t1.IN_DATE,0), 1, 0, GREATEST(t1.IN_DATE,0)) AS BSRP_DAYCNT
+			                     , GREATEST(t1.IN_DATE - 1,0) AS STAYNG_DAYCNT
+			                     , t1.BSRP_TM
+			                     , t1.WHTHRC_AT
+			                     , t1.ORDTM_SE
+			                FROM temp1 t1
+			                LEFT OUTER JOIN TBHRM_BSRP_TRVCT t2
+			                        ON t1.GRAD_SE = t2.GRAD_SE
+			               ) s1
+			               LEFT OUTER JOIN DAIL_ORDTM_CAL_TM s2
+			               ON 1=1
+			        WHERE  1=1
+			       )
+			WHERE  1=1
+		]]>
+	</select>
+	
+	<!-- ====================== 개인별 출장 sql 영역 =========================== -->
+	
+	<!-- 개인별 출장내역 조회 -->
+	<select id="HRM070202DAO.selectBsrpIndvdl" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /* HRM070202DAO.selectBsrpIndvdl */ ]]>
+		<![CDATA[
+			SELECT t1.EMPNO                           AS EMPNO
+			     , t2.EMPNM                           AS EMPNM
+			     , t1.BSRP_SEQ                        AS BSRP_SEQ
+			     , t2.JSSFC_SE                                    /*SFHRM_GET_EMPL_INFO(t1.EMPNO, 'JSSFC_SE', t1.BSRP_BGNDE) 추후 발령관련 정보 정리되면 수정*/
+			     , t6.CODE_NM                         AS JSSFC_NM /*SFHRM_GET_EMPL_INFO(t1.EMPNO, 'JSSFC_NM', t1.BSRP_BGNDE) 추후 발령관련 정보 정리되면 수정*/
+			     , t7.CODE_NM                         AS CLSF_NM  /*SFHRM_GET_EMPL_INFO(t1.EMPNO, 'CLSF_NM', t1.BSRP_BGNDE)  추후 발령관련 정보 정리되면 수정*/
+			     , t1.DEPT_CODE                       AS DEPT_CODE
+			     , t4.DEPT_NM                         AS DEPT_NM
+			     , NVL(t1.WHTHRC_AT,'0')              AS WHTHRC_AT
+			     , NVL(t1.ORDTM_SE, '0')              AS ORDTM_SE
+			     , t1.BSRP_PURPS                      AS BSRP_PURPS
+			     , t1.MVMN_COURS                      AS MVMN_COURS
+			     , t1.DSTN_NM                         AS DSTN_NM
+			     , t1.CTY_SEQ                         AS CTY_SEQ
+			     , t1.TFCMN_SE                        AS TFCMN_SE
+			     , t1.BSRP_BGNDE                      AS BSRP_BGNDE
+			     , t1.BSRP_BEGIN_TM                   AS BSRP_BEGIN_TM
+			     , t1.BSRP_ENDDE                      AS BSRP_ENDDE
+			     , t1.BSRP_END_TM                     AS BSRP_END_TM
+			     , t1.BSRP_DAYCNT                     AS BSRP_DAYCNT
+			     , t1.STAYNG_DAYCNT                   AS STAYNG_DAYCNT
+			     , t1.BSRP_TM                         AS BSRP_TM
+			     , t1.TRNSPORT_CT                     AS TRNSPORT_CT
+			     , t1.STAYNG_CT                       AS STAYNG_CT
+			     , t1.MEAL_CT                         AS MEAL_CT
+			     , t1.DAIL_CT                         AS DAIL_CT
+			     , t1.ACPLC_ACT_CT                    AS ACPLC_ACT_CT
+			     , t1.ETC_EXPENS                      AS ETC_EXPENS
+			     , t1.TRVCT_TOTAMT                    AS TRVCT_TOTAMT
+			     , t1.EXCCLC_AMOUNT                   AS EXCCLC_AMOUNT
+			     , t1.FILE_SN                         AS FILE_SN
+			     , DECODE(SFCOM_GET_SANCTN_KND(t1.SANCTN_NO),'5','1','1','1','4','1','0') AS CONFM_AT
+			     , t1.SANCTN_NO                       AS SANCTN_NO
+			     , SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) AS SANCTN_STS
+			     , NVL(t9.SANCTN_KND,'0')             AS SANCTN_KND
+			     , t1.BUDGET_DEPT_CODE                AS BUDGET_DEPT_CODE
+			     , t3.DEPT_NM                         AS BUDGET_DEPT_NM
+			     , t1.DECSN_YEAR                      AS DECSN_YEAR
+			     , t1.DECSN_NO                        AS DECSN_NO
+			     , t5.CARALC_SEQ                      AS CARALC_SEQ
+			     , TO_CHAR(t1.REGIST_DT,'YYYYMMDD')   AS REGIST_DT
+			     , CASE WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '1' THEN '0'      /* 결재상태 - 1:기안 */
+			            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '4' THEN '0'      /* 결재상태 - 4:중간결재 */
+			            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5' THEN '0'      /* 결재상태 - 5:결재완료 */
+			            WHEN NVL(t1.CANCL_AT,'0') = '1' THEN '0'                    /* 취소등록여부 */
+			            ELSE '1'
+			            END                           AS UPDATE_POSBL_AT  /* 수정가능여부판단변수 */
+			     , t8.VHCLE_NO
+			     , t8.DRVER_LIST
+			     , NVL(t1.CANCL_AT,'0') AS CANCL_AT
+			     , t10.DAIL_SUM_AMT        /*월간일비누계*/
+			FROM TBHRM_BSRP_INDVDL t1
+			LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON t1.EMPNO = t2.EMPNO
+			LEFT OUTER JOIN VWHRM_DEPT t3
+			        ON t1.BUDGET_DEPT_CODE = t3.DEPT_CODE
+			LEFT OUTER JOIN VWHRM_DEPT t4
+			        ON t1.DEPT_CODE = t4.DEPT_CODE
+			LEFT OUTER JOIN (SELECT CARALC_SEQ, BSRP_EMPNO, BSRP_SEQ FROM TBHRM_CARALC
+			                 
+			                 UNION
+			                 
+			                 SELECT CARALC_SEQ, BSRP_EMPNO, BSRP_SEQ FROM TBHRM_CARALC_FLWPSG
+			                ) t5
+			        ON t1.EMPNO = t5.BSRP_EMPNO
+			       AND t1.BSRP_SEQ = t5.BSRP_SEQ
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+			        ON t2.JSSFC_SE = t6.CODE
+			       AND t6.GRP_CODE = 'HRM001'
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t7
+			        ON t2.HR_CLSF_SE = t7.CODE
+			       AND t7.GRP_CODE   = 'HRM002'
+			LEFT OUTER JOIN (
+			                 SELECT r1.BSRP_EMPNO
+			                       ,r1.BSRP_SEQ
+			                       ,MAX(r5.VHCLE_NO)     AS VHCLE_NO
+			                       ,'[운전자 : ' || NVL(MAX(r3.EMPNM),'') || ']' || DECODE(MAX(r4.EMPNO), NULL, '', ' [동승자 : ' || NVL(LISTAGG(r4.EMPNM, ', ') WITHIN GROUP (ORDER BY r4.EMPNO),'') || ']')        AS DRVER_LIST
+			                 FROM   TBHRM_CARALC r1
+			                        LEFT OUTER JOIN TBHRM_CARALC_FLWPSG r2
+			                             ON r1.CARALC_SEQ = r2.CARALC_SEQ
+			                        LEFT OUTER JOIN TBHRM_HR_MASTR r3
+			                             ON r1.DRVER_EMPNO = r3.EMPNO
+			                        LEFT OUTER JOIN TBHRM_HR_MASTR r4
+			                             ON r2.FLWPSG_EMPNO = r4.EMPNO
+			                        LEFT OUTER JOIN TBHRM_VHCLE_MANAGE r5
+			                             ON r1.VHCLE_CODE = r5.VHCLE_CODE
+			                 WHERE  r1.BSRP_EMPNO IS NOT NULL
+			                 GROUP BY r1.BSRP_EMPNO
+			                         ,r1.BSRP_SEQ 
+			                 UNION ALL
+			                 SELECT r2.BSRP_EMPNO
+			                       ,r2.BSRP_SEQ
+			                       ,MAX(r5.VHCLE_NO)     AS VHCLE_NO
+			                       ,'[운전자 : ' || NVL(MAX(r3.EMPNM),'') || ']' || DECODE(MAX(r4.EMPNO), NULL, '', ' [동승자 : ' || NVL(LISTAGG(r4.EMPNM, ', ') WITHIN GROUP (ORDER BY r4.EMPNO),'') || ']')        AS DRVER_LIST
+			                 FROM   TBHRM_CARALC r1
+			                        LEFT OUTER JOIN TBHRM_CARALC_FLWPSG r2
+			                             ON r1.CARALC_SEQ = r2.CARALC_SEQ
+			                        LEFT OUTER JOIN TBHRM_HR_MASTR r3
+			                             ON r1.DRVER_EMPNO = r3.EMPNO
+			                        LEFT OUTER JOIN TBHRM_HR_MASTR r4
+			                             ON r2.FLWPSG_EMPNO = r4.EMPNO
+			                        LEFT OUTER JOIN TBHRM_VHCLE_MANAGE r5
+			                             ON r1.VHCLE_CODE = r5.VHCLE_CODE
+			                 WHERE  r1.BSRP_EMPNO IS NOT NULL
+			                 GROUP BY r2.BSRP_EMPNO
+			                         ,r2.BSRP_SEQ 
+			                ) t8
+			     ON t1.EMPNO = t8.BSRP_EMPNO
+			    AND t1.BSRP_SEQ = t8.BSRP_SEQ
+			LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR t9
+			     ON t1.SANCTN_NO = t9.SANCTN_NO
+			LEFT OUTER JOIN (
+			                 SELECT SUBSTR(BSRP_BGNDE,1,6)   AS BSRP_YM
+			                       ,EMPNO
+			                       ,SUM(DAIL_CT)           AS DAIL_SUM_AMT
+			                 FROM   TBHRM_BSRP_INDVDL
+			                 WHERE  (WHTHRC_AT = '1' OR ORDTM_SE  = '1')
+			                 GROUP BY SUBSTR(BSRP_BGNDE,1,6), EMPNO
+			                ) t10
+			     ON SUBSTR(t1.BSRP_BGNDE,1,6) = t10.BSRP_YM
+			    AND t1.EMPNO = t10.EMPNO
+			WHERE 1=1
+			AND NVL(t1.OVSEA_AT, '0') <> '1'
+			AND ( #BGNDE# BETWEEN t1.BSRP_BGNDE AND t1.BSRP_ENDDE 
+			      OR #ENDDE# BETWEEN t1.BSRP_BGNDE AND t1.BSRP_ENDDE
+			      OR t1.BSRP_BGNDE BETWEEN #BGNDE# AND #ENDDE# 
+			      OR t1.BSRP_ENDDE BETWEEN #BGNDE# AND #ENDDE#
+			    )
+		]]>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isEqual property="AUTH_GRP" compareValue="GRFRS" prepend="AND">
+				t1.DEPT_CODE IN (SELECT DEPT_CODE FROM TABLE(SFHRM_DEPT_TREE(SFCOM_USER_DEPT_CODE(#S_USER_ID#, 'U'))))
+			</isEqual>
+			<isEqual property="AUTH_GRP" compareValue="USER" prepend="AND">
+				t1.DEPT_CODE IN (SELECT DEPT_CODE FROM TABLE(SFHRM_DEPT_TREE(SFCOM_USER_DEPT_CODE(#S_USER_ID#, 'N'))))
+			</isEqual>
+			<isNotEmpty property="WHTHRC_AT" prepend="AND">
+				NVL(t1.WHTHRC_AT,'0') = #WHTHRC_AT#
+			</isNotEmpty>
+			<isNotEmpty property="BSRP_NM" prepend="AND">
+				t2.EMPNM LIKE '%' || #BSRP_NM# || '%'
+			</isNotEmpty>
+		<![CDATA[
+			ORDER BY TO_DATE(t1.BSRP_BGNDE||t1.BSRP_BEGIN_TM, 'YYYYMMDDHH24MI'), TO_DATE(t1.BSRP_ENDDE||t1.BSRP_END_TM, 'YYYYMMDDHH24MI'), t2.EMPNM, t1.EMPNO, t1.BSRP_SEQ
+		]]>
+	</select>
+
+	<!-- 개인별 출장내역 등록-->
+	<insert id="HRM070202DAO.tbhrmBsrpIndvdlC" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_BSRP_INDVDL (
+		     EMPNO
+		    ,BSRP_SEQ
+		    ,DEPT_CODE
+		    ,WHTHRC_AT
+		    ,ORDTM_SE
+		    ,BSRP_PURPS
+		    ,MVMN_COURS
+		    ,DSTN_NM
+		    ,CTY_SEQ
+		    ,TFCMN_SE
+		    ,BSRP_BGNDE
+		    ,BSRP_BEGIN_TM
+		    ,BSRP_ENDDE
+		    ,BSRP_END_TM
+		    ,BSRP_DAYCNT
+		    ,STAYNG_DAYCNT
+		    ,BSRP_TM
+		    ,TRNSPORT_CT
+		    ,STAYNG_CT
+		    ,MEAL_CT
+		    ,DAIL_CT
+		    ,ACPLC_ACT_CT
+		    ,ETC_EXPENS
+		    ,TRVCT_TOTAMT
+		    ,EXCCLC_AMOUNT
+		    ,FILE_SN
+		    ,CONFM_AT
+		    ,SANCTN_NO
+		    ,BUDGET_DEPT_CODE
+		    ,CANCL_AT
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		) VALUES (
+		     #EMPNO#
+		    ,#BSRP_SEQ#
+		    ,#DEPT_CODE#
+		    ,NVL(#WHTHRC_AT#,'0')
+		    ,NVL(#ORDTM_SE#,'0')
+		    ,#BSRP_PURPS#
+		    ,#MVMN_COURS#
+		    ,#DSTN_NM#
+		    ,#CTY_SEQ#
+		    ,#TFCMN_SE#
+		    ,#BSRP_BGNDE#
+		    ,#BSRP_BEGIN_TM#
+		    ,#BSRP_ENDDE#
+		    ,#BSRP_END_TM#
+		    ,#BSRP_DAYCNT#
+		    ,#STAYNG_DAYCNT#
+		    ,#BSRP_TM#
+		    ,NVL(#TRNSPORT_CT#,0)
+		    ,NVL(#STAYNG_CT#,0)
+		    ,NVL(#MEAL_CT#,0)
+		    ,NVL(#DAIL_CT#,0)
+		    ,NVL(#ACPLC_ACT_CT#,0)
+		    ,NVL(#ETC_EXPENS#,0)
+		    ,NVL(#TRVCT_TOTAMT#,0)
+		    ,NVL(#EXCCLC_AMOUNT#,0)
+		    ,#FILE_SN#
+		    ,#CONFM_AT#
+		    ,#SANCTN_NO#
+		    ,#BUDGET_DEPT_CODE#
+		    ,NVL(#CANCL_AT#,'0')
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+
+	<!-- 개인별 출장내역 수정-->
+	<update id="HRM070202DAO.tbhrmBsrpIndvdlU" parameterClass="java.util.HashMap">
+	<![CDATA[
+		UPDATE TBHRM_BSRP_INDVDL
+		SET    DEPT_CODE        = #DEPT_CODE#         
+		      ,WHTHRC_AT        = NVL(#WHTHRC_AT#,'0')
+		      ,ORDTM_SE         = NVL(#ORDTM_SE#,'0')
+		      ,BSRP_PURPS       = #BSRP_PURPS#        
+		      ,MVMN_COURS       = #MVMN_COURS#        
+		      ,DSTN_NM          = #DSTN_NM#           
+		      ,CTY_SEQ          = #CTY_SEQ#           
+		      ,TFCMN_SE         = #TFCMN_SE#          
+		      ,BSRP_BGNDE       = #BSRP_BGNDE#        
+		      ,BSRP_BEGIN_TM    = #BSRP_BEGIN_TM#     
+		      ,BSRP_ENDDE       = #BSRP_ENDDE#        
+		      ,BSRP_END_TM      = #BSRP_END_TM#       
+		      ,BSRP_DAYCNT      = #BSRP_DAYCNT#       
+		      ,STAYNG_DAYCNT    = #STAYNG_DAYCNT#     
+		      ,BSRP_TM          = #BSRP_TM#
+		      ,TRNSPORT_CT      = NVL(#TRNSPORT_CT#,0)
+		      ,STAYNG_CT        = NVL(#STAYNG_CT#,0)
+		      ,MEAL_CT          = NVL(#MEAL_CT#,0)
+		      ,DAIL_CT          = NVL(#DAIL_CT#,0)
+		      ,ACPLC_ACT_CT     = NVL(#ACPLC_ACT_CT#,0)
+		      ,ETC_EXPENS       = NVL(#ETC_EXPENS#,0)
+		      ,TRVCT_TOTAMT     = NVL(#TRVCT_TOTAMT#,0)
+		      ,EXCCLC_AMOUNT    = NVL(#EXCCLC_AMOUNT#,0)
+		      ,FILE_SN          = #FILE_SN#           
+		      ,CONFM_AT         = #CONFM_AT#          
+		      ,SANCTN_NO        = #SANCTN_NO#         
+		      ,BUDGET_DEPT_CODE = #BUDGET_DEPT_CODE#  
+		      ,UPDUSR_ID        = #S_USER_ID#         
+		      ,UPDT_DT          = SYSDATE             
+		WHERE  EMPNO            = #EMPNO#             
+		AND    BSRP_SEQ         = #BSRP_SEQ#          
+	]]>
+	</update>
+
+	<!-- 개인별 출장내역 삭제-->
+	<delete id="HRM070202DAO.tbhrmBsrpIndvdlD" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_BSRP_INDVDL 
+		WHERE  EMPNO     = #EMPNO#
+		AND    BSRP_SEQ  = #BSRP_SEQ#
+	]]>
+	</delete>
+
+	<!-- ====================== 개인별 출장 취소 sql 영역 =========================== -->
+	
+	<!-- 개인별 출장내역 조회 -->
+	<select id="HRM070202DAO.selectBsrpIndvdlCanclList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[ /* HRM070202DAO.selectBsrpIndvdlCanclList */ ]]>
+		<![CDATA[
+			SELECT t1.EMPNO                           AS EMPNO
+			     , t2.EMPNM                           AS EMPNM
+			     , NULL                               AS BSRP_SEQ
+			     , t1.BSRP_SEQ                        AS CANCL_BSRP_SEQ
+			     , t2.JSSFC_SE                                    /*SFHRM_GET_EMPL_INFO(t1.EMPNO, 'JSSFC_SE', t1.BSRP_BGNDE) 추후 발령관련 정보 정리되면 수정*/
+			     , t6.CODE_NM                         AS JSSFC_NM /*SFHRM_GET_EMPL_INFO(t1.EMPNO, 'JSSFC_NM', t1.BSRP_BGNDE) 추후 발령관련 정보 정리되면 수정*/
+			     , t7.CODE_NM                         AS CLSF_NM  /*SFHRM_GET_EMPL_INFO(t1.EMPNO, 'CLSF_NM', t1.BSRP_BGNDE)  추후 발령관련 정보 정리되면 수정*/
+			     , t1.DEPT_CODE                       AS DEPT_CODE
+			     , t4.DEPT_NM                         AS DEPT_NM
+			     , NVL(t1.WHTHRC_AT,'0')              AS WHTHRC_AT
+			     , NVL(t1.ORDTM_SE, '0')              AS ORDTM_SE
+			     , t1.BSRP_PURPS                      AS BSRP_PURPS
+			     , t1.MVMN_COURS                      AS MVMN_COURS
+			     , t1.DSTN_NM                         AS DSTN_NM
+			     , t1.CTY_SEQ                         AS CTY_SEQ
+			     , t1.TFCMN_SE                        AS TFCMN_SE
+			     , t1.BSRP_BGNDE                      AS BSRP_BGNDE
+			     , t1.BSRP_BEGIN_TM                   AS BSRP_BEGIN_TM
+			     , t1.BSRP_ENDDE                      AS BSRP_ENDDE
+			     , t1.BSRP_END_TM                     AS BSRP_END_TM
+			     , t1.BSRP_DAYCNT                     AS BSRP_DAYCNT
+			     , t1.STAYNG_DAYCNT                   AS STAYNG_DAYCNT
+			     , t1.BSRP_TM                         AS BSRP_TM
+			     , t1.TRNSPORT_CT                     AS TRNSPORT_CT
+			     , t1.STAYNG_CT                       AS STAYNG_CT
+			     , t1.MEAL_CT                         AS MEAL_CT
+			     , t1.DAIL_CT                         AS DAIL_CT
+			     , t1.ACPLC_ACT_CT                    AS ACPLC_ACT_CT
+			     , t1.ETC_EXPENS                      AS ETC_EXPENS
+			     , t1.TRVCT_TOTAMT                    AS TRVCT_TOTAMT
+			     , t1.EXCCLC_AMOUNT                   AS EXCCLC_AMOUNT
+			     , t1.FILE_SN                         AS FILE_SN
+			     , DECODE(SFCOM_GET_SANCTN_KND(t1.SANCTN_NO),'5','1','1','1','4','1','0') AS CONFM_AT
+			     , t1.SANCTN_NO                       AS SANCTN_NO
+			     , SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) AS SANCTN_STS
+			     , NVL(t9.SANCTN_KND,'0')             AS SANCTN_KND
+			     , t1.BUDGET_DEPT_CODE                AS BUDGET_DEPT_CODE
+			     , t3.DEPT_NM                         AS BUDGET_DEPT_NM
+			     , t1.DECSN_YEAR                      AS DECSN_YEAR
+			     , t1.DECSN_NO                        AS DECSN_NO
+			     , t5.CARALC_SEQ                      AS CARALC_SEQ
+			     , TO_CHAR(t1.REGIST_DT,'YYYYMMDD')   AS REGIST_DT
+			     , CASE WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '1' THEN '0'      /* 결재상태 - 1:기안 */
+			            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '4' THEN '0'      /* 결재상태 - 4:중간결재 */
+			            WHEN SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5' THEN '0'      /* 결재상태 - 5:결재완료 */
+			            ELSE '1'
+			            END                           AS UPDATE_POSBL_AT  /* 수정가능여부판단변수 */
+			     , t8.VHCLE_NO
+			     , t8.DRVER_LIST
+			FROM TBHRM_BSRP_INDVDL t1
+			LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			        ON t1.EMPNO = t2.EMPNO
+			LEFT OUTER JOIN VWHRM_DEPT t3
+			        ON t1.BUDGET_DEPT_CODE = t3.DEPT_CODE
+			LEFT OUTER JOIN VWHRM_DEPT t4
+			        ON t1.DEPT_CODE = t4.DEPT_CODE
+			LEFT OUTER JOIN (SELECT CARALC_SEQ, BSRP_EMPNO, BSRP_SEQ FROM TBHRM_CARALC
+			                 
+			                 UNION
+			                 
+			                 SELECT CARALC_SEQ, BSRP_EMPNO, BSRP_SEQ FROM TBHRM_CARALC_FLWPSG
+			                ) t5
+			        ON t1.EMPNO = t5.BSRP_EMPNO
+			       AND t1.BSRP_SEQ = t5.BSRP_SEQ
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t6
+			        ON t2.JSSFC_SE = t6.CODE
+			       AND t6.GRP_CODE = 'HRM001'
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t7
+			        ON t2.HR_CLSF_SE = t7.CODE
+			       AND t7.GRP_CODE   = 'HRM002'
+			LEFT OUTER JOIN (
+			                 SELECT r1.BSRP_EMPNO
+			                       ,r1.BSRP_SEQ
+			                       ,MAX(r5.VHCLE_NO)     AS VHCLE_NO
+			                       ,'[운전자 : ' || NVL(MAX(r3.EMPNM),'') || ']' || DECODE(MAX(r4.EMPNO), NULL, '', ' [동승자 : ' || NVL(LISTAGG(r4.EMPNM, ', ') WITHIN GROUP (ORDER BY r4.EMPNO),'') || ']')        AS DRVER_LIST
+			                 FROM   TBHRM_CARALC r1
+			                        LEFT OUTER JOIN TBHRM_CARALC_FLWPSG r2
+			                             ON r1.CARALC_SEQ = r2.CARALC_SEQ
+			                        LEFT OUTER JOIN TBHRM_HR_MASTR r3
+			                             ON r1.DRVER_EMPNO = r3.EMPNO
+			                        LEFT OUTER JOIN TBHRM_HR_MASTR r4
+			                             ON r2.FLWPSG_EMPNO = r4.EMPNO
+			                        LEFT OUTER JOIN TBHRM_VHCLE_MANAGE r5
+			                             ON r1.VHCLE_CODE = r5.VHCLE_CODE
+			                 WHERE  r1.BSRP_EMPNO IS NOT NULL
+			                 GROUP BY r1.BSRP_EMPNO
+			                         ,r1.BSRP_SEQ 
+			                 UNION ALL
+			                 SELECT r2.BSRP_EMPNO
+			                       ,r2.BSRP_SEQ
+			                       ,MAX(r5.VHCLE_NO)     AS VHCLE_NO
+			                       ,'[운전자 : ' || NVL(MAX(r3.EMPNM),'') || ']' || DECODE(MAX(r4.EMPNO), NULL, '', ' [동승자 : ' || NVL(LISTAGG(r4.EMPNM, ', ') WITHIN GROUP (ORDER BY r4.EMPNO),'') || ']')        AS DRVER_LIST
+			                 FROM   TBHRM_CARALC r1
+			                        LEFT OUTER JOIN TBHRM_CARALC_FLWPSG r2
+			                             ON r1.CARALC_SEQ = r2.CARALC_SEQ
+			                        LEFT OUTER JOIN TBHRM_HR_MASTR r3
+			                             ON r1.DRVER_EMPNO = r3.EMPNO
+			                        LEFT OUTER JOIN TBHRM_HR_MASTR r4
+			                             ON r2.FLWPSG_EMPNO = r4.EMPNO
+			                        LEFT OUTER JOIN TBHRM_VHCLE_MANAGE r5
+			                             ON r1.VHCLE_CODE = r5.VHCLE_CODE
+			                 WHERE  r1.BSRP_EMPNO IS NOT NULL
+			                 GROUP BY r2.BSRP_EMPNO
+			                         ,r2.BSRP_SEQ 
+			                ) t8
+			     ON t1.EMPNO = t8.BSRP_EMPNO
+			    AND t1.BSRP_SEQ = t8.BSRP_SEQ
+			LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR t9
+			     ON t1.SANCTN_NO = t9.SANCTN_NO
+			WHERE 1=1
+			AND NVL(t1.OVSEA_AT, '0') <> '1'                   /*해외출장이 아닌 내역만 조회*/
+			AND SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5'       /*결재가 완료된 내역만 조회*/
+			AND NVL(CANCL_AT,'0') <> '1'                       /*취소여부가 '1' 아닌 내역만 조회*/
+			AND NOT EXISTS (                                   /*취소출장순번과 일치하지 않는 내역만 조회*/
+			      SELECT 1
+			        FROM TBHRM_BSRP_INDVDL temp
+			       WHERE temp.EMPNO = t1.EMPNO
+			         AND temp.CANCL_BSRP_SEQ = t1.BSRP_SEQ
+			    )
+			AND ( #BGNDE# BETWEEN t1.BSRP_BGNDE AND t1.BSRP_ENDDE 
+			      OR #ENDDE# BETWEEN t1.BSRP_BGNDE AND t1.BSRP_ENDDE
+			      OR t1.BSRP_BGNDE BETWEEN #BGNDE# AND #ENDDE# 
+			      OR t1.BSRP_ENDDE BETWEEN #BGNDE# AND #ENDDE#
+			    )
+		]]>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="WHTHRC_AT" prepend="AND">
+				NVL(t1.WHTHRC_AT,'0') = #WHTHRC_AT#
+			</isNotEmpty>
+			<isNotEmpty property="BSRP_NM" prepend="AND">
+				t2.EMPNM LIKE '%' || #BSRP_NM# || '%'
+			</isNotEmpty>
+		<![CDATA[
+			ORDER BY TO_DATE(t1.BSRP_BGNDE||t1.BSRP_BEGIN_TM, 'YYYYMMDDHH24MI'), TO_DATE(t1.BSRP_ENDDE||t1.BSRP_END_TM, 'YYYYMMDDHH24MI'), t2.EMPNM, t1.EMPNO, t1.BSRP_SEQ
+		]]>
+	</select>
+	
+	<!-- 개인별 출장내역 등록-->
+	<insert id="HRM070202DAO.tbhrmBsrpIndvdlCanclC" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_BSRP_INDVDL (
+		     EMPNO
+		    ,BSRP_SEQ
+		    ,DEPT_CODE
+		    ,WHTHRC_AT
+		    ,ORDTM_SE
+		    ,BSRP_PURPS
+		    ,MVMN_COURS
+		    ,DSTN_NM
+		    ,CTY_SEQ
+		    ,TFCMN_SE
+		    ,BSRP_BGNDE
+		    ,BSRP_BEGIN_TM
+		    ,BSRP_ENDDE
+		    ,BSRP_END_TM
+		    ,BSRP_DAYCNT
+		    ,STAYNG_DAYCNT
+		    ,BSRP_TM
+		    ,TRNSPORT_CT
+		    ,STAYNG_CT
+		    ,MEAL_CT
+		    ,DAIL_CT
+		    ,ACPLC_ACT_CT
+		    ,ETC_EXPENS
+		    ,TRVCT_TOTAMT
+		    ,EXCCLC_AMOUNT
+		    ,FILE_SN
+		    ,CONFM_AT
+		    ,SANCTN_NO
+		    ,BUDGET_DEPT_CODE
+		    ,CANCL_AT
+		    ,CANCL_BSRP_SEQ
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		) VALUES (
+		     #EMPNO#
+		    ,#BSRP_SEQ#
+		    ,#DEPT_CODE#
+		    ,NVL(#WHTHRC_AT#,'0')
+		    ,NVL(#ORDTM_SE#,'0')
+		    ,#BSRP_PURPS#
+		    ,#MVMN_COURS#
+		    ,#DSTN_NM#
+		    ,#CTY_SEQ#
+		    ,#TFCMN_SE#
+		    ,#BSRP_BGNDE#
+		    ,#BSRP_BEGIN_TM#
+		    ,#BSRP_ENDDE#
+		    ,#BSRP_END_TM#
+		    ,#BSRP_DAYCNT#
+		    ,#STAYNG_DAYCNT#
+		    ,#BSRP_TM#
+		    ,NVL(#TRNSPORT_CT#*-1,0)
+		    ,NVL(#STAYNG_CT#*-1,0)
+		    ,NVL(#MEAL_CT#*-1,0)
+		    ,NVL(#DAIL_CT#*-1,0)
+		    ,NVL(#ACPLC_ACT_CT#*-1,0)
+		    ,NVL(#ETC_EXPENS#*-1,0)
+		    ,NVL(#TRVCT_TOTAMT#*-1,0)
+		    ,NVL(#EXCCLC_AMOUNT#*-1,0)
+		    ,#FILE_SN#
+		    ,'0'
+		    ,NULL
+		    ,#BUDGET_DEPT_CODE#
+		    ,'1'
+		    ,#CANCL_BSRP_SEQ#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+	
+	<!-- 출장비 상세내역 등록-->
+	<insert id="HRM070202DAO.tbhrmIndvdlExpensCanclC" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_BSRP_EXPENS (
+		     EMPNO
+		    ,BSRP_SEQ
+		    ,SEQ
+		    ,EXPENS_SE
+		    ,DTLS_NM
+		    ,USE_EXPENS
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		SELECT EMPNO
+		      ,#BSRP_SEQ#
+		      ,SEQ
+		      ,EXPENS_SE
+		      ,DTLS_NM
+		      ,NVL(USE_EXPENS*-1, 0)
+		      ,#S_USER_ID#
+		      ,SYSDATE
+		      ,#S_USER_ID#
+		      ,SYSDATE
+		FROM   TBHRM_BSRP_EXPENS
+		WHERE  EMPNO     = #EMPNO#
+		AND    BSRP_SEQ  = #CANCL_BSRP_SEQ#
+	]]>
+	</insert>
+	
+	<!-- ====================== 출장비관련 sql 영역 =========================== -->
+
+	<!-- 출장비상세 조회 -->
+	<select id="HRM070202DAO.selectIndvdlExpens" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT EMPNO
+		      ,BSRP_SEQ
+		      ,SEQ
+		      ,EXPENS_SE
+		      ,DTLS_NM
+		      ,USE_EXPENS
+		FROM   TBHRM_BSRP_EXPENS
+		WHERE  EMPNO     = #EMPNO#
+		AND    BSRP_SEQ  = #BSRP_SEQ#
+	]]>
+	</select>
+	
+	<!-- 출장비 상세내역 등록-->
+	<insert id="HRM070202DAO.tbhrmIndvdlExpensC" parameterClass="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO TBHRM_BSRP_EXPENS (
+		     EMPNO
+		    ,BSRP_SEQ
+		    ,SEQ
+		    ,EXPENS_SE
+		    ,DTLS_NM
+		    ,USE_EXPENS
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		) VALUES (
+		     #EMPNO#
+		    ,#BSRP_SEQ#
+		    ,(SELECT NVL(MAX(SEQ),0)+1 FROM TBHRM_BSRP_EXPENS WHERE EMPNO = #EMPNO# AND BSRP_SEQ = #BSRP_SEQ#)
+		    ,#EXPENS_SE#
+		    ,#DTLS_NM#
+		    ,#USE_EXPENS#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	]]>
+	</insert>
+
+	<!-- 출장비 상세내역 수정-->
+	<update id="HRM070202DAO.tbhrmIndvdlExpensU" parameterClass="java.util.HashMap">
+	<![CDATA[/*HRM070202DAO.tbhrmIndvdlExpensU*/]]>
+		UPDATE TBHRM_BSRP_EXPENS
+		SET    EXPENS_SE      = #EXPENS_SE#
+		      ,DTLS_NM        = #DTLS_NM#
+		      ,USE_EXPENS     = #USE_EXPENS#
+		      ,UPDUSR_ID      = #S_USER_ID#
+		      ,UPDT_DT        = SYSDATE
+		WHERE  EMPNO          = #EMPNO#
+		AND    BSRP_SEQ       = #BSRP_SEQ#
+		AND    SEQ            = #SEQ#
+	</update>
+
+
+	<!-- 출장비 상세내역 삭제-->
+	<delete id="HRM070202DAO.tbhrmIndvdlExpensD" parameterClass="java.util.HashMap">
+	<![CDATA[
+		DELETE
+		FROM   TBHRM_BSRP_EXPENS 
+		WHERE EMPNO     = #EMPNO#
+		  AND BSRP_SEQ  = #BSRP_SEQ#
+	]]>
+	<isNotEmpty property="SEQ">
+		AND    SEQ       = #SEQ#
+	</isNotEmpty>
+	</delete>
+
+	<!-- ====================== 배차관련 sql 영역 =========================== -->
+	
+	<!-- 배차신청 중복 조회 -->
+	<select id="HRM070202DAO.chkCarAlc" parameterClass="java.util.HashMap" resultClass="java.lang.Integer">
+		<![CDATA[/* HRM070202DAO.chkCarAlc */]]>
+		<![CDATA[
+			SELECT COUNT(*) AS CNT
+			FROM TBHRM_CARALC
+			WHERE 1=1
+			AND VHCLE_CODE = #VHCLE_CODE#			
+			AND (  (TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYMMDDHH24MI') <= TO_DATE(#CARALC_BGNDE# || #CARALC_BEGIN_TM#, 'YYMMDDHH24MI')
+			        AND 
+			        TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYMMDDHH24MI') > TO_DATE(#CARALC_BGNDE# || #CARALC_BEGIN_TM#, 'YYMMDDHH24MI')
+			       )
+			    OR (TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYMMDDHH24MI') < TO_DATE(#CARALC_ENDDE# || #CARALC_END_TM#, 'YYMMDDHH24MI')
+			        AND 
+			        TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYMMDDHH24MI') >= TO_DATE(#CARALC_ENDDE# || #CARALC_END_TM#, 'YYMMDDHH24MI')
+			       )
+			    OR (TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYMMDDHH24MI') >= TO_DATE(#CARALC_BGNDE# || #CARALC_BEGIN_TM#, 'YYMMDDHH24MI')
+			        AND 
+			        TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYMMDDHH24MI') <= TO_DATE(#CARALC_ENDDE# || #CARALC_END_TM#, 'YYMMDDHH24MI')
+			       )
+			    )
+		]]>
+		<isNotEmpty property="CARALC_SEQ">
+		<![CDATA[
+		    AND CARALC_SEQ <> #CARALC_SEQ#
+		]]>
+		</isNotEmpty>
+	</select>
+	
+	<!-- 배차신청 정보 조회 -->
+	<select id="HRM070202DAO.selectCarAlcInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT t1.CARALC_SEQ      AS CARALC_SEQ
+                 , t1.BSRP_EMPNO      AS BSRP_EMPNO
+                 , t1.BSRP_SEQ        AS BSRP_SEQ
+                 , t1.DRVER_EMPNO     AS DRVER_EMPNO
+                 , t3.EMPNM           AS DRVER_EMPNM
+                 , t1.DRVER_DEPT_CODE AS DRVER_DEPT_CODE
+                 , t4.DEPT_NM         AS DRVER_DEPT_NM
+                 , t1.VHCLE_CODE      AS VHCLE_CODE
+                 , t2.VHCLE_NO        AS VHCLE_NO
+                 , t2.VHCLE_NM        AS VHCLE_NM
+                 , t1.CARALC_BGNDE    AS CARALC_BGNDE
+                 , t1.CARALC_BEGIN_TM AS CARALC_BEGIN_TM
+                 , t1.CARALC_ENDDE    AS CARALC_ENDDE
+                 , t1.CARALC_END_TM   AS CARALC_END_TM
+                 , t1.DSTN_NM         AS DSTN_NM
+                 , t1.OPRAT_PURPS     AS OPRAT_PURPS
+                 , t1.SANCTN_NO       AS SANCTN_NO
+              FROM TBHRM_CARALC t1
+                LEFT OUTER JOIN TBHRM_VHCLE_MANAGE t2
+                  ON t1.VHCLE_CODE = t2.VHCLE_CODE
+                LEFT OUTER JOIN TBHRM_HR_MASTR t3
+                  ON t1.DRVER_EMPNO = t3.EMPNO
+                LEFT OUTER JOIN VWHRM_DEPT t4
+                  ON t1.DRVER_DEPT_CODE = t4.DEPT_CODE
+             WHERE 1=1
+               AND t1.CARALC_SEQ = #CARALC_SEQ#
+		]]>
+    </select>
+    
+	<!-- 배차신청 정보 추가 -->
+	<insert id="HRM070202DAO.insertReqst" parameterClass="java.util.HashMap">
+		INSERT INTO TBHRM_CARALC (
+               CARALC_SEQ
+             , BSRP_EMPNO
+             , BSRP_SEQ
+             , DRVER_EMPNO
+             , DRVER_DEPT_CODE
+             , VHCLE_CODE
+             , CARALC_BGNDE
+             , CARALC_BEGIN_TM
+             , CARALC_ENDDE
+             , CARALC_END_TM
+             , DSTN_NM
+             , OPRAT_PURPS
+             , SANCTN_NO
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+		) VALUES (
+		       #CARALC_SEQ#
+		     , #BSRP_EMPNO#
+		     , #BSRP_SEQ#
+		     , #DRVER_EMPNO#
+		     , #DRVER_DEPT_CODE#
+		     , #VHCLE_CODE#
+		     , #CARALC_BGNDE#
+		     , #CARALC_BEGIN_TM#
+		     , #CARALC_ENDDE#
+		     , #CARALC_END_TM#
+		     , #DSTN_NM#
+		     , #OPRAT_PURPS#
+		     , #SANCTN_NO#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+	
+	<!-- 배차신청정보 수정 -->
+	<update id="HRM070202DAO.updateReqst" parameterClass="java.util.HashMap">
+		UPDATE TBHRM_CARALC
+           SET DRVER_EMPNO                  = #DRVER_EMPNO#
+             , DRVER_DEPT_CODE              = #DRVER_DEPT_CODE#
+             , VHCLE_CODE                   = #VHCLE_CODE#
+             , CARALC_BGNDE                 = #CARALC_BGNDE#
+             , CARALC_BEGIN_TM              = #CARALC_BEGIN_TM#
+             , CARALC_ENDDE                 = #CARALC_ENDDE#
+             , CARALC_END_TM                = #CARALC_END_TM#
+             , DSTN_NM                      = #DSTN_NM#
+             , OPRAT_PURPS                  = #OPRAT_PURPS#
+             , SANCTN_NO                    = #SANCTN_NO#
+             , UPDUSR_ID                    = #S_USER_ID#
+             , UPDT_DT                      = SYSDATE
+         WHERE CARALC_SEQ                   = #CARALC_SEQ#
+	</update>
+	
+	<!-- 배차신청정보 삭제 -->
+	<delete id="HRM070202DAO.deleteReqst" parameterClass="java.util.HashMap">
+		DELETE
+          FROM TBHRM_CARALC
+         WHERE CARALC_SEQ    = #CARALC_SEQ#
+	</delete>
+	
+	<!-- 동승자조회 -->
+	<select id="HRM070202DAO.selectCralcFlwpsg" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM070202DAO.selectCralcFlwpsg*/]]>
+		<![CDATA[
+			SELECT t1.CARALC_SEQ       as CARALC_SEQ
+			     , t1.FLWPSG_EMPNO     as FLWPSG_EMPNO
+			     , t2.EMPNM            as EMPNM
+			     , t1.FLWPSG_DEPT_CODE as FLWPSG_DEPT_CODE
+			     , t3.DEPT_NM          as DEPT_NM
+			     , t1.BSRP_EMPNO       as BSRP_EMPNO
+			     , t1.BSRP_SEQ         as BSRP_SEQ
+			     , t4.DSTN_NM          as DSTN_NM
+			     , t4.BSRP_PURPS       as BSRP_PURPS
+			     , t4.BSRP_BGNDE       as BSRP_BGNDE
+			     , t4.BSRP_BEGIN_TM    as BSRP_BEGIN_TM
+			     , t4.BSRP_ENDDE       as BSRP_ENDDE
+			     , t4.BSRP_END_TM      as BSRP_END_TM
+			  FROM TBHRM_CARALC_FLWPSG t1
+			  LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			          ON t1.FLWPSG_EMPNO = t2.EMPNO
+			  LEFT OUTER JOIN VWHRM_DEPT t3
+			          ON t1.FLWPSG_DEPT_CODE = t3.DEPT_CODE
+			  LEFT OUTER JOIN TBHRM_BSRP_INDVDL t4
+			          ON t1.BSRP_EMPNO = t4.EMPNO
+			         AND t1.BSRP_SEQ   = t4.BSRP_SEQ
+			 WHERE 1=1
+			   AND t1.CARALC_SEQ = #CARALC_SEQ#
+		]]>
+	</select>
+	
+	<!-- 동승자 정보 추가 -->
+	<insert id="HRM070202DAO.insertFlwpsg" parameterClass="java.util.HashMap">
+		INSERT INTO TBHRM_CARALC_FLWPSG (
+               CARALC_SEQ
+             , FLWPSG_EMPNO
+             , FLWPSG_DEPT_CODE
+             , BSRP_EMPNO
+             , BSRP_SEQ
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+		) VALUES (
+		       #CARALC_SEQ#
+		     , #FLWPSG_EMPNO#
+		     , #FLWPSG_DEPT_CODE#
+		     , #BSRP_EMPNO#
+             , #BSRP_SEQ#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+	
+	<!-- 동승자 삭제 -->
+	<delete id="HRM070202DAO.deleteFlwpsg" parameterClass="java.util.HashMap">
+		DELETE
+          FROM TBHRM_CARALC_FLWPSG
+         WHERE CARALC_SEQ            = #CARALC_SEQ#
+       <isNotEmpty property="FLWPSG_EMPNO">
+           AND FLWPSG_EMPNO          = #FLWPSG_EMPNO#
+       </isNotEmpty>
+	</delete>
+
+	<!-- ====================== 기타 sql 영역 =========================== -->
+	<!-- 차량별 배차 현황 조회 -->
+ 	<select id="HRM070202DAO.selectCarAlcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH temp1 AS (
+				SELECT t2.IN_DATE, t1.*
+				FROM TBHRM_VHCLE_MANAGE t1
+				INNER JOIN (SELECT TO_CHAR(TO_DATE(#BGNDE#, 'YYYYMMDD') + LEVEL - 1, 'YYYYMMDD') AS IN_DATE
+				              FROM DUAL 
+				            CONNECT BY LEVEL <= TO_DATE(#ENDDE#, 'YYYYMMDD') - TO_DATE(#BGNDE#, 'YYYYMMDD') + 1
+				           ) t2
+				        ON 1=1
+				WHERE 1=1
+		]]>
+				<isNotEmpty property="DEPT_CODE" prepend="AND">
+				   t1.MANAGE_DEPT_CODE = #DEPT_CODE#
+				</isNotEmpty>
+				<isNotEmpty property="VHCLE_CODE" prepend="AND">
+				   t1.VHCLE_CODE = #VHCLE_CODE#
+				</isNotEmpty>
+		<![CDATA[
+			) 
+			SELECT t1.VHCLE_CODE
+				 , t1.VHCLE_NO
+				 , t1.VHCLE_NM
+				 , t1.IN_DATE
+				 , t1.MANAGE_DEPT_CODE
+				 , t3.DEPT_NM
+				 , t2.CARALC_SEQ
+				 , t2.CARALC_BGNDE
+				 , t2.CARALC_BEGIN_TM
+				 , t2.CARALC_ENDDE
+				 , t2.CARALC_END_TM
+				 , t2.DSTN_NM
+				 , t2.OPRAT_PURPS
+				 , t4.EMPNM
+				 , t5.DEPT_NM AS DRVER_DEPT_NM
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0900', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T0900
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0910', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T0910
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0920', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T0920
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0930', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T0930
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0940', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T0940
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0950', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T0950
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1000', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1000
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1010', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1010
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1020', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1020
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1030', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1030
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1040', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1040
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1050', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1050
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1100', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1100
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1110', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1110
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1120', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1120
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1130', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1130
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1140', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1140
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1150', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1150
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1200', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1200
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1210', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1210
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1220', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1220
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1230', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1230
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1240', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1240
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1250', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1250
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1300', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1300
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1310', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1310
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1320', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1320
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1330', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1330
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1340', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1340
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1350', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1350
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1400', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1400
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1410', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1410
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1420', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1420
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1430', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1430
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1440', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1440
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1450', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1450
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1500', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1500
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1510', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1510
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1520', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1520
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1530', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1530
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1540', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1540
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1550', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1550
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1600', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1600
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1610', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1610
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1620', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1620
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1630', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1630
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1640', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1640
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1650', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1650
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1700', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1700
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1710', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1710
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1720', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1720
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1730', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1730
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1740', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1740
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1750', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1750
+				 , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1800', 'YYYYMMDDHH24MI') BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN 'X' ELSE 'O' END AS T1800
+			FROM temp1 t1
+			LEFT OUTER JOIN TBHRM_CARALC t2
+			        ON t2.CARALC_BGNDE IS NOT NULL AND t2.CARALC_ENDDE IS NOT NULL
+			       AND (#BGNDE# BETWEEN t2.CARALC_BGNDE AND t2.CARALC_ENDDE 
+			            OR #ENDDE# BETWEEN t2.CARALC_BGNDE AND t2.CARALC_ENDDE
+			            OR t2.CARALC_BGNDE BETWEEN #BGNDE# AND #ENDDE#
+			            OR t2.CARALC_ENDDE BETWEEN #BGNDE# AND #ENDDE#
+			           )
+			       AND t1.VHCLE_CODE = t2.VHCLE_CODE
+			       AND t1.IN_DATE BETWEEN t2.CARALC_BGNDE AND t2.CARALC_ENDDE
+			LEFT OUTER JOIN VWHRM_DEPT t3
+			        ON  t1.MANAGE_DEPT_CODE = t3.DEPT_CODE
+			LEFT OUTER JOIN TBHRM_HR_MASTR t4
+			        ON t2.DRVER_EMPNO = t4.EMPNO
+			LEFT OUTER JOIN VWHRM_DEPT t5
+			        ON t2.DRVER_DEPT_CODE = t5.DEPT_CODE
+			WHERE 1=1
+			ORDER BY t1.MANAGE_DEPT_CODE ASC, t1.VHCLE_CODE ASC, t1.IN_DATE ASC
+		]]>
+	</select>
+	
+	<!-- 동승자 선택 팝업 조회 -->
+	<select id="HRM070202DAO.selectFlwpsgList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*HRM070202DAO.selectFlwpsgList*/]]>
+		<![CDATA[
+			SELECT t1.EMPNO            as FLWPSG_EMPNO
+			     , t2.EMPNM            as EMPNM
+			     , t1.DEPT_CODE        as FLWPSG_DEPT_CODE
+			     , t3.DEPT_NM          as DEPT_NM
+			     , t1.EMPNO            as BSRP_EMPNO
+			     , t1.BSRP_SEQ         as BSRP_SEQ
+			     , t1.DSTN_NM          as DSTN_NM
+			     , t1.BSRP_PURPS       as BSRP_PURPS
+			     , t1.BSRP_BGNDE       as BSRP_BGNDE
+			     , t1.BSRP_BEGIN_TM    as BSRP_BEGIN_TM
+			     , t1.BSRP_ENDDE       as BSRP_ENDDE
+			     , t1.BSRP_END_TM      as BSRP_END_TM
+			  FROM TBHRM_BSRP_INDVDL t1
+			  LEFT OUTER JOIN TBHRM_HR_MASTR t2
+			          ON t1.EMPNO = t2.EMPNO
+			  LEFT OUTER JOIN VWHRM_DEPT t3
+			          ON t1.DEPT_CODE = t3.DEPT_CODE
+			  LEFT OUTER JOIN (SELECT CARALC_SEQ, BSRP_EMPNO, BSRP_SEQ FROM TBHRM_CARALC
+			                 
+			                   UNION
+			                 
+			                   SELECT CARALC_SEQ, BSRP_EMPNO, BSRP_SEQ FROM TBHRM_CARALC_FLWPSG
+			                  ) t4
+			          ON t1.EMPNO = t4.BSRP_EMPNO
+			         AND t1.BSRP_SEQ = t4.BSRP_SEQ
+			 WHERE 1=1
+			   AND t1.TFCMN_SE = '001'
+			   AND NVL(CANCL_AT,'0') <> '1'                       /*취소여부가 '1' 아닌 내역만 조회*/
+			   AND NOT EXISTS (                                   /*취소출장순번과 일치하지 않는 내역만 조회*/
+			         SELECT 1
+			           FROM TBHRM_BSRP_INDVDL temp
+			          WHERE temp.EMPNO = t1.EMPNO
+			            AND temp.CANCL_BSRP_SEQ = t1.BSRP_SEQ
+			       )
+			   AND t4.CARALC_SEQ IS NULL
+			   AND ( #BGNDE# BETWEEN t1.BSRP_BGNDE AND t1.BSRP_ENDDE 
+			      OR #ENDDE# BETWEEN t1.BSRP_BGNDE AND t1.BSRP_ENDDE
+			      OR t1.BSRP_BGNDE BETWEEN #BGNDE# AND #ENDDE# 
+			      OR t1.BSRP_ENDDE BETWEEN #BGNDE# AND #ENDDE#
+			    )
+		]]>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNM" prepend="AND">
+				t2.EMPNM LIKE '%' || #EMPNM# || '%'
+			</isNotEmpty>
+			<isNotEmpty property="WHTHRC_AT" prepend="AND">
+				NVL(t1.WHTHRC_AT,'0') = #WHTHRC_AT#
+			</isNotEmpty>
+		<![CDATA[
+			ORDER BY TO_DATE(t1.BSRP_BGNDE||t1.BSRP_BEGIN_TM, 'YYYYMMDDHH24MI'), TO_DATE(t1.BSRP_ENDDE||t1.BSRP_END_TM, 'YYYYMMDDHH24MI'), t2.EMPNM
+		]]>
+	</select>
+
+	<!-- 차량별 배차 현황 조회 -->
+ 	<select id="HRM070202DAO.selectVhcleCarAlcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			WITH temp1 AS (
+				SELECT t2.IN_DATE, t1.*
+				FROM TBHRM_VHCLE_MANAGE t1
+				INNER JOIN (SELECT TO_CHAR(TO_DATE(#BGNDE#, 'YYYYMMDD') + LEVEL - 1, 'YYYYMMDD') AS IN_DATE
+				              FROM DUAL 
+				            CONNECT BY LEVEL <= TO_DATE(#ENDDE#, 'YYYYMMDD') - TO_DATE(#BGNDE#, 'YYYYMMDD') + 1
+				           ) t2
+				        ON 1=1
+				WHERE 1=1
+		]]>
+				<isNotEmpty property="DEPT_CODE" prepend="AND">
+				   t1.MANAGE_DEPT_CODE = #DEPT_CODE#
+				</isNotEmpty>
+				<isNotEmpty property="VHCLE_CODE" prepend="AND">
+				   t1.VHCLE_CODE = #VHCLE_CODE#
+				</isNotEmpty>
+		<![CDATA[
+			) 
+			,temp2 AS ( 
+				SELECT t1.VHCLE_CODE
+				     , t1.IN_DATE
+				     , t2.CARALC_BGNDE
+				     , t2.CARALC_BEGIN_TM
+				     , t2.CARALC_ENDDE
+				     , t2.CARALC_END_TM
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0900', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T0900
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0910', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T0910
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0920', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T0920
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0930', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T0930
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0940', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T0940
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'0950', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T0950
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1000', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1000
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1010', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1010
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1020', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1020
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1030', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1030
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1040', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1040
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1050', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1050
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1100', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1100
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1110', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1110
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1120', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1120
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1130', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1130
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1140', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1140
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1150', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1150
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1200', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1200
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1210', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1210
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1220', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1220
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1230', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1230
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1240', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1240
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1250', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1250
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1300', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1300
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1310', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1310
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1320', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1320
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1330', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1330
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1340', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1340
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1350', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1350
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1400', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1400
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1410', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1410
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1420', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1420
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1430', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1430
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1440', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1440
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1450', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1450
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1500', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1500
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1510', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1510
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1520', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1520
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1530', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1530
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1540', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1540
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1550', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1550
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1600', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1600
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1610', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1610
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1620', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1620
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1630', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1630
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1640', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1640
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1650', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1650
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1700', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1700
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1710', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1710
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1720', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1720
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1730', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1730
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1740', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1740
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1750', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1750
+				     , CASE WHEN CARALC_BEGIN_TM IS NOT NULL AND TO_DATE(t1.IN_DATE||'1800', 'YYYYMMDDHH24MI') $CALL_SE$ BETWEEN TO_DATE(CARALC_BGNDE||CARALC_BEGIN_TM, 'YYYYMMDDHH24MI') AND TO_DATE(CARALC_ENDDE||CARALC_END_TM, 'YYYYMMDDHH24MI') THEN '1' ELSE '0' END AS T1800
+				FROM temp1 t1
+				LEFT OUTER JOIN TBHRM_CARALC t2
+				             ON t2.CARALC_BGNDE IS NOT NULL AND t2.CARALC_ENDDE IS NOT NULL
+				            AND (#BGNDE# BETWEEN t2.CARALC_BGNDE AND t2.CARALC_ENDDE 
+				                 OR #ENDDE# BETWEEN t2.CARALC_BGNDE AND t2.CARALC_ENDDE
+				                 OR t2.CARALC_BGNDE BETWEEN #BGNDE# AND #ENDDE# 
+				                 OR t2.CARALC_ENDDE BETWEEN #BGNDE# AND #ENDDE#
+				                )
+				            AND t1.VHCLE_CODE = t2.VHCLE_CODE
+				            AND t1.IN_DATE BETWEEN t2.CARALC_BGNDE AND t2.CARALC_ENDDE
+		]]>
+				            <isNotEmpty property="CARALC_SEQ" prepend="AND">
+				            <![CDATA[
+				               t2.CARALC_SEQ <> #CARALC_SEQ#
+				            ]]>
+				            </isNotEmpty>
+		<![CDATA[
+				WHERE 1=1
+			)
+			SELECT t1.VHCLE_CODE                                    AS VHCLE_CODE
+			     , t1.IN_DATE                                       AS IN_DATE
+			     , MAX(t1.MANAGE_DEPT_CODE)                         AS MANAGE_DEPT_CODE
+			     , MAX(t3.DEPT_NM)                                  AS DEPT_NM
+			     , MAX(t1.VHCLE_NO)                                 AS VHCLE_NO
+			     , MAX(t1.VHCLE_NM)                                 AS VHCLE_NM
+			     , DECODE(NVL(MAX(t2.T0900),'0'), '0', 'O', 'X')    AS T0900
+			     , DECODE(NVL(MAX(t2.T0910),'0'), '0', 'O', 'X')    AS T0910
+			     , DECODE(NVL(MAX(t2.T0920),'0'), '0', 'O', 'X')    AS T0920
+			     , DECODE(NVL(MAX(t2.T0930),'0'), '0', 'O', 'X')    AS T0930
+			     , DECODE(NVL(MAX(t2.T0940),'0'), '0', 'O', 'X')    AS T0940
+			     , DECODE(NVL(MAX(t2.T0950),'0'), '0', 'O', 'X')    AS T0950
+			     , DECODE(NVL(MAX(t2.T1000),'0'), '0', 'O', 'X')    AS T1000
+			     , DECODE(NVL(MAX(t2.T1010),'0'), '0', 'O', 'X')    AS T1010
+			     , DECODE(NVL(MAX(t2.T1020),'0'), '0', 'O', 'X')    AS T1020
+			     , DECODE(NVL(MAX(t2.T1030),'0'), '0', 'O', 'X')    AS T1030
+			     , DECODE(NVL(MAX(t2.T1040),'0'), '0', 'O', 'X')    AS T1040
+			     , DECODE(NVL(MAX(t2.T1050),'0'), '0', 'O', 'X')    AS T1050
+			     , DECODE(NVL(MAX(t2.T1100),'0'), '0', 'O', 'X')    AS T1100
+			     , DECODE(NVL(MAX(t2.T1110),'0'), '0', 'O', 'X')    AS T1110
+			     , DECODE(NVL(MAX(t2.T1120),'0'), '0', 'O', 'X')    AS T1120
+			     , DECODE(NVL(MAX(t2.T1130),'0'), '0', 'O', 'X')    AS T1130
+			     , DECODE(NVL(MAX(t2.T1140),'0'), '0', 'O', 'X')    AS T1140
+			     , DECODE(NVL(MAX(t2.T1150),'0'), '0', 'O', 'X')    AS T1150
+			     , DECODE(NVL(MAX(t2.T1200),'0'), '0', 'O', 'X')    AS T1200
+			     , DECODE(NVL(MAX(t2.T1210),'0'), '0', 'O', 'X')    AS T1210
+			     , DECODE(NVL(MAX(t2.T1220),'0'), '0', 'O', 'X')    AS T1220
+			     , DECODE(NVL(MAX(t2.T1230),'0'), '0', 'O', 'X')    AS T1230
+			     , DECODE(NVL(MAX(t2.T1240),'0'), '0', 'O', 'X')    AS T1240
+			     , DECODE(NVL(MAX(t2.T1250),'0'), '0', 'O', 'X')    AS T1250
+			     , DECODE(NVL(MAX(t2.T1300),'0'), '0', 'O', 'X')    AS T1300
+			     , DECODE(NVL(MAX(t2.T1310),'0'), '0', 'O', 'X')    AS T1310
+			     , DECODE(NVL(MAX(t2.T1320),'0'), '0', 'O', 'X')    AS T1320
+			     , DECODE(NVL(MAX(t2.T1330),'0'), '0', 'O', 'X')    AS T1330
+			     , DECODE(NVL(MAX(t2.T1340),'0'), '0', 'O', 'X')    AS T1340
+			     , DECODE(NVL(MAX(t2.T1350),'0'), '0', 'O', 'X')    AS T1350
+			     , DECODE(NVL(MAX(t2.T1400),'0'), '0', 'O', 'X')    AS T1400
+			     , DECODE(NVL(MAX(t2.T1410),'0'), '0', 'O', 'X')    AS T1410
+			     , DECODE(NVL(MAX(t2.T1420),'0'), '0', 'O', 'X')    AS T1420
+			     , DECODE(NVL(MAX(t2.T1430),'0'), '0', 'O', 'X')    AS T1430
+			     , DECODE(NVL(MAX(t2.T1440),'0'), '0', 'O', 'X')    AS T1440
+			     , DECODE(NVL(MAX(t2.T1450),'0'), '0', 'O', 'X')    AS T1450
+			     , DECODE(NVL(MAX(t2.T1500),'0'), '0', 'O', 'X')    AS T1500
+			     , DECODE(NVL(MAX(t2.T1510),'0'), '0', 'O', 'X')    AS T1510
+			     , DECODE(NVL(MAX(t2.T1520),'0'), '0', 'O', 'X')    AS T1520
+			     , DECODE(NVL(MAX(t2.T1530),'0'), '0', 'O', 'X')    AS T1530
+			     , DECODE(NVL(MAX(t2.T1540),'0'), '0', 'O', 'X')    AS T1540
+			     , DECODE(NVL(MAX(t2.T1550),'0'), '0', 'O', 'X')    AS T1550
+			     , DECODE(NVL(MAX(t2.T1600),'0'), '0', 'O', 'X')    AS T1600
+			     , DECODE(NVL(MAX(t2.T1610),'0'), '0', 'O', 'X')    AS T1610
+			     , DECODE(NVL(MAX(t2.T1620),'0'), '0', 'O', 'X')    AS T1620
+			     , DECODE(NVL(MAX(t2.T1630),'0'), '0', 'O', 'X')    AS T1630
+			     , DECODE(NVL(MAX(t2.T1640),'0'), '0', 'O', 'X')    AS T1640
+			     , DECODE(NVL(MAX(t2.T1650),'0'), '0', 'O', 'X')    AS T1650
+			     , DECODE(NVL(MAX(t2.T1700),'0'), '0', 'O', 'X')    AS T1700
+			     , DECODE(NVL(MAX(t2.T1710),'0'), '0', 'O', 'X')    AS T1710
+			     , DECODE(NVL(MAX(t2.T1720),'0'), '0', 'O', 'X')    AS T1720
+			     , DECODE(NVL(MAX(t2.T1730),'0'), '0', 'O', 'X')    AS T1730
+			     , DECODE(NVL(MAX(t2.T1740),'0'), '0', 'O', 'X')    AS T1740
+			     , DECODE(NVL(MAX(t2.T1750),'0'), '0', 'O', 'X')    AS T1750
+			     , DECODE(NVL(MAX(t2.T1800),'0'), '0', 'O', 'X')    AS T1800
+			FROM temp1 t1
+			LEFT OUTER JOIN temp2 t2
+			        ON t1.VHCLE_CODE = t2.VHCLE_CODE
+			       AND t1.IN_DATE = t2.IN_DATE
+			LEFT OUTER JOIN VWHRM_DEPT t3
+			        ON  t1.MANAGE_DEPT_CODE = t3.DEPT_CODE
+			GROUP BY t1.VHCLE_CODE, t1.IN_DATE
+			ORDER BY MAX(t1.MANAGE_DEPT_CODE) ASC, t1.VHCLE_CODE ASC, t1.IN_DATE ASC
+		]]>
+	</select>
+	<!-- ====================== 근무상황부 sql 영역 =========================== -->
+
+ 	<!-- 근무상황부등록 입력	-->
+    <insert id="HRM070202DAO.tbhrmWrkcpC" parameterClass="java.util.HashMap">
+        <![CDATA[
+		INSERT INTO TBHRM_WRKCP (
+				  EMPNO
+				, SEQ
+				, BSRP_SEQ
+				, DEPT_CODE
+				, ASORT_CODE
+				, BGNDE
+				, BEGIN_TM
+				, ENDDE
+				, END_TM
+				, DAYCNT
+				, TIME
+				, PRVONSH
+				, FILE_SN
+				, SANCTN_NO
+				, CNFIRM_AT
+				, REGISTER_ID
+				, REGIST_DT
+				, UPDUSR_ID
+				, UPDT_DT
+		) VALUES (
+				  #EMPNO#
+				, (SELECT NVL(MAX(SEQ),0)+1 AS SEQ FROM TBHRM_WRKCP WHERE EMPNO = #EMPNO#)
+				, #BSRP_SEQ#
+				, #DEPT_CODE#
+				, DECODE(NVL(#WHTHRC_AT#, '0'), '1', '001', '0', '002')
+				, #BSRP_BGNDE#
+				, #BSRP_BEGIN_TM#
+				, #BSRP_ENDDE#
+				, #BSRP_END_TM#
+				, #BSRP_DAYCNT#
+				, #BSRP_TM# 
+				, #BSRP_PURPS#
+				, #FILE_SN#
+				, #SANCTN_NO#
+				, #CONFM_AT#
+				, #S_USER_ID#
+				, SYSDATE
+				, #S_USER_ID#
+				, SYSDATE
+		)
+        ]]>
+    </insert>
+    
+	<!--  근무상황부 수정-->			
+    <update id="HRM070202DAO.tbhrmWrkcpU" parameterClass="java.util.HashMap">
+        <![CDATA[
+			  UPDATE TBHRM_WRKCP
+			    SET	  DEPT_CODE   = #DEPT_CODE#
+					 ,ASORT_CODE  = DECODE(NVL(#WHTHRC_AT#, '0'), '1', '001', '0', '002')
+					 ,BGNDE       = #BSRP_BGNDE#
+					 ,BEGIN_TM    = #BSRP_BEGIN_TM#
+					 ,ENDDE       = #BSRP_ENDDE#
+					 ,END_TM      = #BSRP_END_TM#
+					 ,DAYCNT      = #BSRP_DAYCNT#
+					 ,TIME        = #BSRP_TM#
+					 ,PRVONSH     = #BSRP_PURPS#
+					 ,FILE_SN     = #FILE_SN#
+					 ,SANCTN_NO   = #SANCTN_NO#
+					 ,CNFIRM_AT   = #CONFM_AT#
+					 ,UPDUSR_ID   = #S_USER_ID#
+					 ,UPDT_DT     = SYSDATE
+		      WHERE  EMPNO = #EMPNO#
+			  AND 	 BSRP_SEQ = #BSRP_SEQ#
+
+        ]]>
+    </update>
+    
+	<!--  근무상황부 삭제-->		
+    <delete id="HRM070202DAO.tbhrmWrkcpD" parameterClass="java.util.HashMap">
+        <![CDATA[
+            DELETE FROM TBHRM_WRKCP 
+             WHERE EMPNO = #EMPNO#
+			   AND BSRP_SEQ = #BSRP_SEQ#
+        ]]>
+    </delete>
+</sqlMap>

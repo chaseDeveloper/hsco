@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS060202_SQL">	
+   <!--  설명  : 체납현환
+	작성자 : 지효정 -->
+	
+	<!-- 분양금 체납 목록 -->
+	<select id="SLS060202DAO.boonyangAmtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT '0' AS CHK
+		        ,B.HOUSE_CODE
+		        ,B.HOUSE_NM
+		        ,B.DONG
+		        ,B.HO
+		        ,B.CSTMR_NM
+		        ,C.CODE_CN
+		        ,A.PAY_CODE
+		        ,A.PAY_TMLMT
+		        ,A.PAYAMT
+		        ,A.ARRRG_AMOUNT
+		        , (A.PAYAMT + A.ARRRG_AMOUNT) AS TOT_AMT 
+		        ,B.ZIP_DM
+		        ,B.BASS_ADRES_DM 
+		        ,B.DETAIL_ADRES_DM 
+		        ,B.TELNO
+		        ,B.MBTLNO
+		        ,B.ETC_CTTPC
+		        ,D.LEND_YN           
+		        FROM(
+		            SELECT 
+		                 CNTRCTR_NO   /* 계약자번호 */
+		                 <isEqual property="SEARCH_AT" compareValue="1">
+						                ,MAX(PAY_CODE)    PAY_CODE    /* 납부코드 */
+						                ,MAX(PAY_TMLMT)  PAY_TMLMT  /* 납입기한 */						               		                		                
+		                 </isEqual>  
+		                 <isEqual property="SEARCH_AT" compareValue="0">
+						                , PAY_CODE    /* 납부코드 */
+						                , PAY_TMLMT  /* 납입기한 */						                		                		               
+		                 </isEqual>		                          
+		                , SUM(PAYAMT) AS PAYAMT       /* 납부금액 */
+		                , SUM(SFRNT_LFSTS_DELAY_RATE('HOU',SUBSTR(A.CNTRCTR_NO,1,3), A.PAY_TMLMT, #ARRRG_DT#,NVL(A.PAYAMT,0)+ NVL(POINT_DSCNT_AM,0))) AS ARRRG_AMOUNT   			/* 연체이자 */
+		            FROM TBSLS_HOUSE_LTTOT_PAY A       /* 주택분양납부 */
+		            WHERE 1=1
+		            <isNotEmpty property="PAY_TMLMT_ST">
+						<isNotEmpty property="PAY_TMLMT_ED" prepend="AND ">
+							A.PAY_TMLMT BETWEEN #PAY_TMLMT_ST# AND #PAY_TMLMT_ED#
+						</isNotEmpty>
+					</isNotEmpty>
+				    <isNotEmpty property="RCIV_DE">
+				    AND (RCIV_DE is null or RCIV_DE <![CDATA[>]]> #RCIV_DE#)
+				    </isNotEmpty>            
+		            <!-- AND PAY_CODE = 'S9' -->
+		            AND PAYAMT + NVL(POINT_DSCNT_AM,0) + NVL(ARRRG_DSCNT_AMOUNT,0)  > 0
+		            AND NVL(RM,'%') NOT IN('보증금 자동처리','K','보증금자동처리')
+		            AND (SELECT CHRCTR_PREPAR_VALUE_1
+		                    FROM TBCOM_CMMN_CODE
+		                    WHERE GRP_CODE = 'HOU0A1' AND CODE = PAY_CODE) IN ('S')
+		            GROUP BY CNTRCTR_NO
+		            <isEqual property="SEARCH_AT" compareValue="0">
+		                            , PAY_CODE, PAY_TMLMT 
+		            </isEqual>                          
+		        )A,
+		        (
+		            SELECT 
+		                 A.CNTRCTR_NO           /* 계약자번호 */
+		                ,A.HOUSE_CODE           /* 주택코드 */
+		                ,A.DONG                 /* 동 */
+		                ,A.HO                   /* 호 */
+		                ,B.CSTMR_NM             /* 계약자명 */
+		                ,D.HOUSE_NM
+		                ,A.ZIP_DM
+		                ,A.BASS_ADRES_DM 
+		                ,A.DETAIL_ADRES_DM 
+		                ,B.TELNO
+		                ,B.MBTLNO
+		                ,B.ETC_CTTPC                
+		            FROM 
+		                 TBSLS_HCNTRCTR A          /* 주택계약자 */
+		                ,TBSLS_HOUSE_CSTMR B       /* 주택고객 */
+		                ,TBSLS_HOUSE_DONG_HO C     /* 주택동호 */
+		                ,TBSLS_HOUSE_INFO D        /* 주택정보 */
+		            WHERE A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+		            AND   A.HOUSE_CODE = C.HOUSE_CODE
+		            AND   A.DONG = C.DONG
+		            AND   A.HO = C.HO
+		            AND   A.HOUSE_CODE = D.HOUSE_CODE
+		            AND   D.HOUSE_SE in ('S1','S3','S2','S4')
+		            AND   NVL(D.USE_AT,'0') = '1'
+		            AND   A.CNTRCTR_STTUS_CODE = '01'
+		            AND   A.CNTRCT_DE IS NOT NULL
+				    <isNotEmpty property="HOUSE_CODE">
+				    AND   A.HOUSE_CODE = #HOUSE_CODE#
+				    </isNotEmpty>  
+				    <isNotEmpty property="DONG">
+				    AND   A.DONG = LPAD(#DONG#, 4, '0')
+				    </isNotEmpty> 		               
+				    <isNotEmpty property="HO">
+				    AND   A.HO = LPAD(#HO#, 4, '0')
+				    </isNotEmpty>             
+		        )B
+		        ,TBCOM_CMMN_CODE C
+		        ,(SELECT DISTINCT F.CNTRCTR_NO, '대출' LEND_YN 
+		             FROM TBSLS_HCNTRCTR_LON F , TBSLS_HCNTRCTR G
+		             WHERE  F.CNTRCTR_NO = G.CNTRCTR_NO  
+		             AND F.RELIS_DE IS NULL ) D
+		        WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+		        AND A.PAY_CODE = C.CODE
+		        AND C.GRP_CODE = 'HOU0A1'
+		        <!-- AND C.CODE = 'S9' -->
+		        AND B.CNTRCTR_NO = D.CNTRCTR_NO(+)      
+				ORDER BY B.HOUSE_CODE, B.DONG, B.HO, A.PAY_TMLMT, A.PAY_CODE
+    </select>
+    
+    <!-- 보증금 체납 목록 -->
+	<select id="SLS060202DAO.bojeungAmtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT '0' AS CHK
+		        ,B.HOUSE_CODE
+		        ,B.HOUSE_NM
+		        ,B.DONG
+		        ,B.HO
+		        ,B.CSTMR_NM
+		        ,C.CODE_CN
+		        ,A.PAY_CODE
+		        ,A.PAY_TMLMT
+		        ,A.PAYAMT
+		        ,A.ARRRG_AMOUNT
+		        , (A.PAYAMT + A.ARRRG_AMOUNT) AS TOT_AMT 
+		        ,B.ZIP_DM
+		        ,B.BASS_ADRES_DM 
+		        ,B.DETAIL_ADRES_DM 
+		        ,B.TELNO
+		        ,B.MBTLNO
+		        ,B.ETC_CTTPC
+		        ,D.LEND_YN           
+		        FROM(
+		            SELECT 
+				                 CNTRCTR_NO   /* 계약자번호 */
+				                 <isEqual property="SEARCH_AT" compareValue="1">
+						                ,MAX(PAY_CODE)    PAY_CODE    /* 납부코드 */
+						                ,MAX(PAY_TMLMT)  PAY_TMLMT  /* 납입기한 */						               		                		                
+		                          </isEqual>  
+		                          <isEqual property="SEARCH_AT" compareValue="0">
+						                , PAY_CODE    /* 납부코드 */
+						                , PAY_TMLMT  /* 납입기한 */						                		                		               
+		                          </isEqual>  
+		                           , SUM(PAYAMT) AS PAYAMT       /* 납부금액 */
+						           , SUM(SFRNT_LFSTS_DELAY_RATE('HOU',SUBSTR(A.CNTRCTR_NO,1,3), A.PAY_TMLMT, #ARRRG_DT#,NVL(A.PAYAMT,0)+NVL(POINT_DSCNT_AM,0))) AS ARRRG_AMOUNT   			/* 연체이자 */
+		            FROM TBSLS_HOUSE_LTTOT_PAY  A      /* 주택분양납부 */
+		            WHERE 1=1
+		            <isNotEmpty property="PAY_TMLMT_ST">
+						<isNotEmpty property="PAY_TMLMT_ED" prepend="AND ">
+							A.PAY_TMLMT BETWEEN #PAY_TMLMT_ST# AND #PAY_TMLMT_ED#
+						</isNotEmpty>
+					</isNotEmpty>
+				    <isNotEmpty property="RCIV_DE">
+				    AND (RCIV_DE is null or RCIV_DE <![CDATA[>]]> #RCIV_DE#)
+				    </isNotEmpty>            
+		            <!-- AND PAY_CODE = 'S9' -->
+		            AND PAYAMT +  NVL(POINT_DSCNT_AM,0)  > 0
+		            AND NVL(RM,'%') NOT IN('보증금 자동처리','K','보증금자동처리')
+		            AND (SELECT CHRCTR_PREPAR_VALUE_1
+		                    FROM TBCOM_CMMN_CODE
+		                    WHERE GRP_CODE = 'HOU0A1' AND CODE = PAY_CODE) IN ('R')
+		            GROUP BY CNTRCTR_NO
+		            <isEqual property="SEARCH_AT" compareValue="0">
+		                            , PAY_CODE, PAY_TMLMT 
+		            </isEqual>                                          
+		        )A,
+		        (
+		            SELECT 
+		                 A.CNTRCTR_NO           /* 계약자번호 */
+		                ,A.HOUSE_CODE           /* 주택코드 */
+		                ,A.DONG                 /* 동 */
+		                ,A.HO                   /* 호 */
+		                ,B.CSTMR_NM             /* 계약자명 */
+		                ,D.HOUSE_NM
+		                ,A.ZIP_DM
+		                ,A.BASS_ADRES_DM 
+		                ,A.DETAIL_ADRES_DM 
+		                ,B.TELNO
+		                ,B.MBTLNO
+		                ,B.ETC_CTTPC                
+		            FROM 
+		                 TBSLS_HCNTRCTR A          /* 주택계약자 */
+		                ,TBSLS_HOUSE_CSTMR B       /* 주택고객 */
+		                ,TBSLS_HOUSE_DONG_HO C     /* 주택동호 */
+		                ,TBSLS_HOUSE_INFO D        /* 주택정보 */
+		            WHERE A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+		            AND   A.HOUSE_CODE = C.HOUSE_CODE
+		            AND   A.DONG = C.DONG
+		            AND   A.HO = C.HO
+		            AND   A.HOUSE_CODE = D.HOUSE_CODE
+		            AND   D.HOUSE_SE in ('S1','S3','S2','S4')
+		            AND   NVL(D.USE_AT,'0') = '1'
+		            AND   A.CNTRCTR_STTUS_CODE = '01'
+		            AND   A.CNTRCT_DE IS NOT NULL
+				    <isNotEmpty property="HOUSE_CODE">
+				    AND   A.HOUSE_CODE = #HOUSE_CODE#
+				    </isNotEmpty>  
+				    <isNotEmpty property="DONG">
+				    AND   A.DONG = LPAD(#DONG#, 4, '0')
+				    </isNotEmpty> 		               
+				    <isNotEmpty property="HO">
+				    AND   A.HO = LPAD(#HO#, 4, '0')
+				    </isNotEmpty>             
+		        )B
+		        ,TBCOM_CMMN_CODE C
+		        ,(SELECT DISTINCT F.CNTRCTR_NO, '대출' LEND_YN 
+		             FROM TBSLS_HCNTRCTR_LON F , TBSLS_HCNTRCTR G
+		             WHERE  F.CNTRCTR_NO = G.CNTRCTR_NO  
+		             AND F.RELIS_DE IS NULL ) D
+		        WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+		        AND A.PAY_CODE = C.CODE
+		        AND C.GRP_CODE = 'HOU0A1'
+		        <!-- AND C.CODE = 'S9' -->
+		        AND B.CNTRCTR_NO = D.CNTRCTR_NO(+)      				
+				ORDER BY HOUSE_CODE, DONG, HO		
+    </select>    
+    
+    <!-- 임대료 체납 목록 -->
+<select id="SLS060202DAO.imdeAmtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT '0' AS CHK 
+		    ,A.CNTRCTR_NO             	/* 계약자 번호 */
+		    ,A.PAY_CODE                 /* 납부코드 */
+		    ,A.PAY_TMLMT                 /* 납부코드 */
+		    ,COUNT(A.CNTRCTR_NO) AS MT_CNT                /* 체납개월수 */
+		    ,SUM (NVL(A.MT_RNTCHRG, 0)+ NVL (A.DFNNT_AMOUNT, 0)) AS MT_RNTCHRG						/* 월임대로 */
+		    ,SUM (NVL (A.ARRRG_AMOUNT, 0)) ARRRG_AMOUNT												/* 연체이자 */
+		    ,SUM (NVL(A.MT_RNTCHRG, 0) + NVL(A.DFNNT_AMOUNT, 0) + NVL(A.ARRRG_AMOUNT, 0)) TOT_AMT   /* 합계금액 */
+		    ,(SELECT '대출' FROM TBSLS_HCNTRCTR_LON F WHERE F.CNTRCTR_NO = A.CNTRCTR_NO AND F.RELIS_DE IS NULL) AS LEND_YN	/* 대출여부 */
+		    ,A.CODE_NM
+		    ,B.HOUSE_CODE   			/* 주택코드 */
+		    ,B.HOUSE_NM  			 	/* 주택명 */
+		    ,B.CSTMR_NM 				/* 고객명 */
+		    ,B.DONG 					/* 동 */
+		    ,B.HO 						/* 호 */
+		    ,B.ADRES					/* 주소 */
+		    ,B.TELNO 					/* 전화번호 */
+		    ,B.MBTLNO 					/* 휴대폰번호 */
+		    ,#PAY_MONTH_ST# AS PAY_MONTH_ST /* 체납개월 조회 시작월 */
+		FROM(
+		            SELECT 
+					                 A.CNTRCTR_NO   /* 계약자번호 */
+					                ,A.PAY_CODE     /* 납부코드 */
+					                , DECODE(#SEARCH_AT#,'0', TO_CHAR(TO_DATE(A.PAY_TMLMT,'YYYY-MM-DD'),'YYYY-MM-DD'),NULL ) AS PAY_TMLMT    /* 납입기한 */
+					                ,A.MT_RNTCHRG   /* 월임대료 */
+					                ,SFRNT_LFSTS_DELAY_RATE('HOU',SUBSTR(A.CNTRCTR_NO,1,3), A.PAY_TMLMT, #ARRRG_DT#,NVL(A.MT_RNTCHRG,0) + NVL(A.DFNNT_AMOUNT,0)) AS ARRRG_AMOUNT   			/* 연체이자 */		                
+					                ,A.DFNNT_AMOUNT /* 차액금액 */					               
+					                ,B.CODE_NM
+		            FROM TBSLS_HOUSE_RENT_PAY A        /* 주택임대납부 */
+		                    , (SELECT * FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'HOU0A1') B
+		                    , (SELECT  A.CNTRCTR_NO
+                                          ,  COUNT(1) AS CNT
+                                          ,  SUM(  NVL (A.MT_RNTCHRG, 0) + NVL (A.DFNNT_AMOUNT, 0)) AMT
+                                  FROM  TBSLS_HOUSE_RENT_PAY A
+                                WHERE 1 = 1 
+						            <isNotEmpty property="PAY_TMLMT_ST">
+								    AND   A.PAY_TMLMT <![CDATA[>=]]> #PAY_TMLMT_ST#
+								    </isNotEmpty>
+								    <isNotEmpty property="PAY_TMLMT_ED">
+								    AND   A.PAY_TMLMT <![CDATA[<=]]> #PAY_TMLMT_ED#
+								    </isNotEmpty>
+								    <isNotEmpty property="RCIV_DE">
+								    AND (A.RCIV_DE IS NULL or A.RCIV_DE <![CDATA[>]]> #RCIV_DE# )
+								    </isNotEmpty>
+							   GROUP BY A.CNTRCTR_NO	      
+							   HAVING 1=1
+								<isNotEmpty property="PAY_MONTH_ST">
+									<isNotEmpty property="PAY_MONTH_ED" prepend="AND ">
+										COUNT (1) BETWEEN TO_NUMBER(#PAY_MONTH_ST#) AND TO_NUMBER(#PAY_MONTH_ED#)/* 체납개월 */
+									</isNotEmpty>
+								</isNotEmpty>
+								<isNotEmpty property="PAY_AMT_ST">
+									<isNotEmpty property="PAY_AMT_ED" prepend="AND ">
+										SUM (A.MT_RNTCHRG + NVL(A.DFNNT_AMOUNT, 0)) BETWEEN TO_NUMBER(#PAY_AMT_ST#) AND TO_NUMBER(#PAY_AMT_ED#) /* 채납금액 */
+									</isNotEmpty>
+								</isNotEmpty>		                                                          
+                               ) C
+		            WHERE A.CNTRCTR_NO = C.CNTRCTR_NO
+		            <isNotEmpty property="PAY_TMLMT_ST">
+				    AND   A.PAY_TMLMT <![CDATA[>=]]> #PAY_TMLMT_ST#
+				    </isNotEmpty>
+				    <isNotEmpty property="PAY_TMLMT_ED">
+				    AND   A.PAY_TMLMT <![CDATA[<=]]> #PAY_TMLMT_ED#
+				    </isNotEmpty>
+				    <isNotEmpty property="RCIV_DE">
+				    AND (A.RCIV_DE IS NULL or A.RCIV_DE <![CDATA[>]]> #RCIV_DE# )
+				    </isNotEmpty>		    
+		            AND A.PAY_CODE = B.CODE		
+		)A,
+		(
+		    SELECT 
+		         A.CNTRCTR_NO           /* 계약자번호 */
+		        ,A.HOUSE_CODE           /* 주택코드 */
+		        ,A.DONG                 /* 동 */
+		        ,A.HO                   /* 호 */
+		        ,B.ADRES                /* 주소 */
+		        ,B.TELNO                /* 전화번호 */
+		        ,B.MBTLNO                /* 휴대폰번호 */
+		        ,B.CSTMR_NM                   /* 계약자명 */
+		        ,D.HOUSE_NM
+		    FROM 
+		         TBSLS_HCNTRCTR A		/* 주택계약자 */
+		        ,TBSLS_HOUSE_CSTMR B	/* 주택고객 */
+		        ,TBSLS_HOUSE_DONG_HO C	/* 주택동호 */
+		        ,TBSLS_HOUSE_INFO D		/* 주택정보 */
+		    WHERE A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+		    AND   A.HOUSE_CODE = C.HOUSE_CODE
+		    AND   A.CNTRCT_DE IS NOT NULL
+		    AND   A.DONG = C.DONG
+		    AND   A.HO = C.HO
+		    AND   A.HOUSE_CODE = D.HOUSE_CODE
+		    AND  (D.HOUSE_SE IN ('S2', 'S4') OR D.LTTOT_CNVRS_SE = '02')
+		    AND   nvl(D.USE_AT,'0') = '1'
+		    <isNotEmpty property="HOUSE_CODE">
+		    AND   A.HOUSE_CODE <![CDATA[=]]> #HOUSE_CODE#
+		    </isNotEmpty>		    
+		    <isNotEmpty property="DONG">
+		    AND   A.DONG = LPAD(#DONG#, 4, '0')
+		    </isNotEmpty>
+		    <isNotEmpty property="HO">
+		    AND   A.HO = LPAD(#HO#, 4, '0')
+		    </isNotEmpty>		   
+		    ORDER BY A.HOUSE_CODE, B.CSTMR_NM
+		)B
+		WHERE A.CNTRCTR_NO = B.CNTRCTR_NO				
+		GROUP BY  A.CNTRCTR_NO,       
+		           A.PAY_CODE,
+		           A.PAY_TMLMT,
+		           B.HOUSE_CODE,
+		           B.DONG,
+		           B.HO,
+		           B.CSTMR_NM,
+		           B.HOUSE_NM,
+		           B.ADRES,
+		           B.TELNO,
+		           B.MBTLNO,
+		           A.CODE_NM 			
+		   ORDER BY B.HOUSE_CODE, B.DONG, B.HO 		    
+    </select>
+    
+    <!-- 융자금 체납 목록 -->
+    <select id="SLS060202DAO.yoongjaAmtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">			
+			       SELECT  '0' AS CHK
+			            , A.HOUSE_CODE               			/* 주택코드 */
+			            ,A.MAIN_CODE AS DONG        			/* 동 */
+			            ,A.DETAIL_CODE AS HO        			/* 호 */
+			            ,C.HOUSE_NM                 			/* 주택명 */
+			            ,D.CSTMR_NM                 			/* 계약자명 */
+			            ,B.PAY_TMLMT                    		/* 납부기한 */
+			            ,B.MDAT_YM                     		 	/* 조정년월 */			            
+			            ,NVL(B.PRNCPAL,0) + NVL(B.BRRW_AMOUNT,0) AS PAYAMT    		/* 원금 */
+			            ,NVL(B.INTR,0) AS INTR    				/* 이자 */			            
+			            , NVL(B.OVDINTR,0) AS IJA_AMT   	 		/* 연체이자 */			
+			            , NVL(B.BRRW_AMOUNT,0) AS BRRW_AMOUNT    /* 차입금액 */
+			            , NVL(B.PRNCPAL,0) + NVL(B.BRRW_AMOUNT,0) + NVL(B.INTR,0)   + NVL(B.OVDINTR,0)  TOT_AMT /* 합계금액 */
+			            , ' ' CDM_ADDR_POSTNO    
+			            , ' ' ADRES    
+			            , ' ' CTELNO
+			            , ' ' CHP_NO
+			        FROM
+			            TBSLS_HOUSE_LANMN_CNTRCTR A
+			            , (SELECT  B.HOUSE_CODE, B.MAIN_CODE, B.DETAIL_CODE
+							            <isEqual property="SEARCH_AT" compareValue="1">                                   					   
+										             ,  MAX(MDAT_YM) MDAT_YM           /* 조정년월 */
+			                                         ,  MAX(PAY_TMLMT) PAY_TMLMT    /* 납입기한 */										             						          
+									    </isEqual>
+			                            <isEqual property="SEARCH_AT" compareValue="0">                                   					   
+										             ,  MDAT_YM           /* 조정년월 */
+			                                         ,  PAY_TMLMT        /* 납입기한 */						          
+									    </isEqual>
+			                          ,  SUM(NVL(B.PRNCPAL,0)) AS PRNCPAL    		/* 원금 */
+			                          ,  SUM(NVL(B.INTR,0)) AS INTR    				/* 이자 */
+			                          ,  SUM(NVL(B.BRRW_AMOUNT,0)) AS BRRW_AMOUNT    /* 차입금액 */		
+			                          ,  SUM(SFRNT_LFSTS_DELAY_RATE('HOU',B.HOUSE_CODE, B.PAY_TMLMT, #ARRRG_DT#,NVL(B.PRNCPAL,0) + NVL(B.INTR,0) + NVL(B.BRRW_AMOUNT,0))) AS OVDINTR   			/* 연체이자 */	                          			                         
+			                 FROM  TBSLS_HOUSE_MT_LANMN B
+			                WHERE NVL(B.PRNCPAL,0) + NVL(B.INTR,0) + NVL(B.BRRW_AMOUNT,0) > 0
+			                 <isNotEmpty property="PAY_TMLMT_ST">
+								<isNotEmpty property="PAY_TMLMT_ED" prepend="AND ">
+									B.PAY_TMLMT BETWEEN #PAY_TMLMT_ST# AND #PAY_TMLMT_ED#
+								</isNotEmpty>
+							</isNotEmpty>
+							<isNotEmpty property="RCIV_DE">
+					    	 AND (B.RCIV_DE IS NULL or B.RCIV_DE > #RCIV_DE#)
+						    </isNotEmpty>
+						    GROUP BY B.HOUSE_CODE, B.MAIN_CODE, B.DETAIL_CODE                            
+                            <isEqual property="SEARCH_AT" compareValue="0">                                   					   
+						                     , B.MDAT_YM , B.PAY_TMLMT						          
+						    </isEqual>                  
+			              ) B
+			            ,TBSLS_HOUSE_INFO C
+			            ,TBSLS_HOUSE_CSTMR D
+			        WHERE A.HOUSE_CODE = B.HOUSE_CODE
+			         AND A.MAIN_CODE = B.MAIN_CODE
+			         AND A.DETAIL_CODE = B.DETAIL_CODE
+			         AND C.HOUSE_CODE = A.HOUSE_CODE
+			         AND A.HOUSE_CSTMR_NO = D.HOUSE_CSTMR_NO			          			            
+					<isNotEmpty property="HOUSE_CODE">
+			    	 AND   A.HOUSE_CODE <![CDATA[=]]> #HOUSE_CODE#
+				    </isNotEmpty>   
+				    <isNotEmpty property="DONG">
+			    	 AND   A.MAIN_CODE <![CDATA[=]]> LPAD(#DONG#, 4, '0')
+				    </isNotEmpty>
+					<isNotEmpty property="HO">
+			    	 AND   A.DETAIL_CODE <![CDATA[=]]> LPAD(#HO#, 4, '0')
+				    </isNotEmpty>							    		    	       
+			         AND NVL (C.USE_AT, '0') = '1'			         
+			ORDER BY HOUSE_CODE, DONG, HO, CSTMR_NM      
+    </select>
+</sqlMap>

@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM020400_SQL">
+	
+	
+	
+    <!-- 권한에 대한 서비스목록 -->
+    <select id="SYM020400DAO.getListSvc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+        SELECT
+            NVL2(B.SVC_ID, '1', '0') AS CHK,
+            A.SVC_ID, A.SVC_NM, A.SVC_CLASS, A.SVC_DC,
+            A.USE_AT, #AUTH_GRP_ID# AS AUTH_GRP_ID
+        FROM
+            TBCOM_SVC A,
+            (
+                SELECT DISTINCT SVC_ID 
+                FROM TBCOM_AUTH_GRP_OPRTIN 
+                WHERE AUTH_GRP_ID = #AUTH_GRP_ID#
+            ) B
+        WHERE
+            A.SVC_ID = B.SVC_ID(+)
+        ORDER BY A.SVC_ID
+        		
+    </select>
+    
+	<!-- 서비스에 대한 오퍼레이션 목록 -->
+	<select id="SYM020400DAO.getListOprtin" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+        SELECT
+            NVL2(B.SVC_ID, '1', '0') AS CHK,
+            C.SVC_ID, C.SVC_NM, A.OPRTIN_NM,
+            A.OPRTIN_SE_CODE, A.OPRTIN_DC,
+            B.INTRCP_AT
+            , D.CODE_NM AS OPRTIN_SE_NM,
+            #AUTH_GRP_ID# AS AUTH_GRP_ID
+        FROM
+            TBCOM_OPRTIN A, 
+            (
+                SELECT 
+                    AUTH_GRP_ID, SVC_ID, OPRTIN_NM,
+                    INTRCP_AT
+                   /* NVL(INTRCP_AT, '0') AS INTRCP_AT */
+                FROM TBCOM_AUTH_GRP_OPRTIN
+                WHERE AUTH_GRP_ID = #AUTH_GRP_ID#
+            ) B,
+            TBCOM_SVC C,
+            TBCOM_CMMN_CODE D
+        WHERE
+            A.OPRTIN_NM = B.OPRTIN_NM(+)
+        AND A.SVC_ID = B.SVC_ID(+)
+        AND A.SVC_ID = C.SVC_ID
+        AND A.OPRTIN_SE_CODE = D.CODE
+        AND D.GRP_CODE = 'COM026'
+        AND C.SVC_ID = #SVC_ID#     
+        ORDER BY A.OPRTIN_NM
+               	     
+    </select>
+        
+ 
+ 	<!-- 오퍼레이션 차단 추가 -->
+    <insert id="SYM020400DAO.insertAuthOprtin" parameterClass="java.util.Map" >
+
+		INSERT INTO TBCOM_AUTH_GRP_OPRTIN (
+						AUTH_GRP_ID,
+						SVC_ID,
+						OPRTIN_NM,
+						INTRCP_AT,
+						REGISTER_ID,
+						REGIST_DT,
+						UPDUSR_ID,
+						UPDT_DT
+					)
+			VALUES (
+					#AUTH_GRP_ID#,
+					#SVC_ID#,
+					#OPRTIN_NM#,
+					#INTRCP_AT#,
+					/* NVL(INTRCP_AT, '0', */
+					#S_USER_ID#,
+					SYSDATE,
+					#S_USER_ID#,
+					SYSDATE
+			)
+
+	</insert>
+	
+	<!-- 오퍼레이션 차단 수정 -->
+	<update id="SYM020400DAO.updateAuthOprtin" parameterClass="java.util.Map" >
+	
+		MERGE INTO TBCOM_AUTH_GRP_OPRTIN A
+		USING DUAL
+		ON ( A.AUTH_GRP_ID = #AUTH_GRP_ID# AND A.SVC_ID = #SVC_ID# AND A.OPRTIN_NM = #OPRTIN_NM# )
+		
+		WHEN MATCHED THEN
+		UPDATE 
+			SET 
+				INTRCP_AT = #INTRCP_AT#,
+				/* INTRCP_AT = NVL(INTRCP_AT,'0'), */
+				UPDUSR_ID = #S_USER_ID#,
+				UPDT_DT = SYSDATE
+		WHERE
+				AUTH_GRP_ID = #AUTH_GRP_ID#
+		AND		SVC_ID = #SVC_ID#
+		AND 	OPRTIN_NM = #OPRTIN_NM#
+		
+		WHEN NOT MATCHED THEN
+		INSERT (
+					AUTH_GRP_ID,
+					SVC_ID,
+					OPRTIN_NM,
+					INTRCP_AT,
+					REGISTER_ID,
+					REGIST_DT,
+					UPDUSR_ID,
+					UPDT_DT
+				)
+		VALUES (
+				#AUTH_GRP_ID#,
+				#SVC_ID#,
+				#OPRTIN_NM#,
+				#INTRCP_AT#,
+				/* NVL(INTRCP_AT, '0'), */
+				#S_USER_ID#,
+				SYSDATE,
+				#S_USER_ID#,
+				SYSDATE
+			)
+
+	</update>
+	
+    <!-- 오퍼레이션 차단 삭제 -->
+    <delete id="SYM020400DAO.deleteAuthOprtin" parameterClass="java.util.Map" >
+
+	      	DELETE FROM TBCOM_AUTH_GRP_OPRTIN
+			WHERE
+		        AUTH_GRP_ID = #AUTH_GRP_ID#
+		    AND SVC_ID = #SVC_ID#
+		    AND OPRTIN_NM = #OPRTIN_NM#
+
+    </delete>
+
+ 	<select id="SYM020400DAO.getListUserChangeOprtin" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+  		<![CDATA[ 
+		SELECT AA.USER_ID,
+               AA.SVC_ID,
+               AA.AUTH_GRP_ID,
+               AA.OPRTIN_NM,
+               AA.INTRCP_AT,
+               AA.INTRCP_AT_CNT,
+               BB.INTRCP_AT AS ORG_INTRCP_AT,
+               CASE
+                  WHEN BB.INTRCP_AT IS NULL THEN 'I'
+                  WHEN AA.INTRCP_AT = BB.INTRCP_AT THEN 'N'
+                  WHEN AA.INTRCP_AT <> BB.INTRCP_AT THEN 'U'
+                  ELSE 'UNKNOWN'
+               END FLAG
+          FROM (  SELECT A.USER_ID,
+                         SVC_ID,
+                         OPRTIN_NM,
+                         MAX(A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+                         (CASE
+                             WHEN (SUM (CASE WHEN B.INTRCP_AT = '0' THEN 1 ELSE 0 END)) > 0 THEN '0' ELSE  '1'  END) AS INTRCP_AT,
+                         SUM (CASE WHEN B.INTRCP_AT = '0' THEN 1 ELSE 0 END) AS INTRCP_AT_CNT
+                    FROM (  SELECT K.USER_ID, J.AUTH_GRP_ID
+                              FROM TBCOM_USER_GRP J,
+                                   (SELECT B.USER_ID
+                                      FROM TBCOM_USER_GRP A,
+                                           TBCOM_USER B,
+                                           TBCOM_AUTH_GRP C
+                                     WHERE     1 = 1
+                                           AND A.USER_ID = B.USER_ID
+                                           AND A.AUTH_GRP_ID = C.AUTH_GRP_ID
+                                           AND INTRCP_AT = '0'
+                                           AND A.AUTH_GRP_ID = #AUTH_GRP_ID#) K
+                             WHERE J.USER_ID = K.USER_ID
+                          ORDER BY USER_ID) A,
+                         (SELECT A.AUTH_GRP_ID,
+							     A.SVC_ID,
+							     A.OPRTIN_NM,
+							     A.INTRCP_AT
+							FROM TBCOM_AUTH_GRP_OPRTIN A, TBCOM_OPRTIN B
+							WHERE     A.OPRTIN_NM = B.OPRTIN_NM
+							     AND A.SVC_ID = B.SVC_ID
+							     AND A.SVC_ID = #SVC_ID#
+							     AND A.OPRTIN_NM = #OPRTIN_NM#
+							UNION
+							SELECT #AUTH_GRP_ID# AS AUTH_GRP_ID, #SVC_ID# AS SVC_ID, #OPRTIN_NM# AS OPRTIN_NM,  '1' AS INTRCP_AT
+							FROM DUAL
+							WHERE   (#AUTH_GRP_ID#, #SVC_ID#, #OPRTIN_NM#) NOT IN 
+							                (SELECT A.AUTH_GRP_ID,
+							                             A.SVC_ID,
+							                             A.OPRTIN_NM
+							                        FROM TBCOM_AUTH_GRP_OPRTIN A, TBCOM_OPRTIN B
+							                        WHERE     A.OPRTIN_NM = B.OPRTIN_NM
+							                             AND A.SVC_ID = B.SVC_ID
+							                             AND A.SVC_ID = #SVC_ID#
+							                             AND A.OPRTIN_NM = #OPRTIN_NM#)) B
+                   WHERE A.AUTH_GRP_ID = B.AUTH_GRP_ID
+                GROUP BY A.USER_ID,
+                         B.SVC_ID,
+                         B.OPRTIN_NM) AA,
+               (SELECT *
+                  FROM TBCOM_USER_OPRTIN
+                 WHERE SVC_ID = #SVC_ID# AND OPRTIN_NM = #OPRTIN_NM#) BB
+         WHERE     AA.USER_ID = BB.USER_ID(+)
+               AND AA.SVC_ID = BB.SVC_ID(+)
+               AND AA.OPRTIN_NM = BB.OPRTIN_NM(+)	
+		       		]]>
+    </select>
+    
+    <insert id="SYM020400DAO.saveUserOprtin" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			INSERT INTO TBCOM_USER_OPRTIN   (USER_ID,
+		                                     SVC_ID,
+		                                     OPRTIN_NM,
+		                                     AUTH_GRP_ID,
+		                                     INTRCP_AT,
+		                                     REGISTER_ID,
+		                                     REGIST_DT,
+		                                     UPDUSR_ID,
+		                                     UPDT_DT)
+			     VALUES (#USER_ID#,
+			             #SVC_ID#,
+			             #OPRTIN_NM#,
+			             #AUTH_GRP_ID#,
+			             #INTRCP_AT#,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #S_USER_ID#,
+			             SYSDATE)
+		]]>
+	</insert> 	 
+	
+	<update id="SYM020400DAO.updateUserOprtin" parameterClass="java.util.Map" >
+		UPDATE TBCOM_USER_OPRTIN
+		   SET INTRCP_AT = #INTRCP_AT#
+		 WHERE USER_ID = #USER_ID# AND SVC_ID = #SVC_ID# AND OPRTIN_NM = #OPRTIN_NM#
+
+	</update>
+	       
+    <insert id="SYM020400DAO.saveLog" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			INSERT INTO TBCOM_USER_AUTH_CHGHST (AUTH_CHANGE_SN,
+			                                    USER_ID,
+			                                    CHANGE_AUTH_KND_CODE,
+			                                    CHANG_AUTH_TRGET_ID,
+			                                    AFTCH_AUTH_STTUS_CODE,
+			                                    REGISTER_ID,
+			                                    REGIST_DT,
+			                                    UPDUSR_ID,
+			                                    UPDT_DT,
+			                                    BFCHG_AUTH_STTUS_CODE,
+			                                    EVENT_FNCT)
+			     VALUES (SQ_COM_USER_AUTH_CHGHST_1.NEXTVAL,
+			             #USER_ID#,
+			             #CHANGE_AUTH_KND_CODE#,
+			             #CHANG_AUTH_TRGET_ID#,
+			             #AFTCH_AUTH_STTUS_CODE#,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #BFCHG_AUTH_STTUS_CODE#,
+			             #EVENT_FNCT#)   
+		]]>
+	</insert>
+</sqlMap>

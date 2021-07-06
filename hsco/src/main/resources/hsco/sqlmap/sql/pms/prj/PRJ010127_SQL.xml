@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PRJ010127_SQL">
+	
+	<!-- 사업지구별 현황 -->
+	<select id="PRJ010127DAO.selectDs_T01" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT *
+		FROM   (
+		        SELECT A.*
+		              ,CASE WHEN NVL(EXCUT_PREARNGE_RT,0) = 0         THEN ''
+		                    WHEN EXCUT_PREARNGE_RT > 95               THEN '1'
+		                    WHEN EXCUT_PREARNGE_RT BETWEEN 90 AND 95  THEN '2'
+		                    WHEN EXCUT_PREARNGE_RT < 90               THEN '3' END     AS STTUS
+		        FROM   (
+		                SELECT t1.BSNS_CODE
+		                      ,t1.BSNS_NM
+		                      ,t2.CNTRCT_AMOUNT
+		                      ,t3.PLN_CSTP_RT
+		                      ,DECODE(NVL(t3.PLN_CSTP_RT,0),  0, NULL, ROUND(NVL(t2.CNTRCT_AMOUNT,0) * NVL(t3.PLN_CSTP_RT,0)  / 100))                       AS PLN_CSTP_AMOUNT
+		                      ,t3.PRCS_ARSL_RT
+		                      ,DECODE(NVL(t3.PRCS_ARSL_RT,0), 0, NULL, ROUND(NVL(t2.CNTRCT_AMOUNT,0) * NVL(t3.PRCS_ARSL_RT,0) / 100))                       AS PRCS_ARSL_AMOUNT
+		                      ,t3.PXCOND_PYMNT_RT
+		                      ,t2.DECSN_AMOUNT
+		                      ,DECODE(NVL(t3.PRCS_ARSL_RT,0), 0, NULL, ROUND(NVL(t2.CNTRCT_AMOUNT,0) * NVL(t3.PRCS_ARSL_RT,0) / 100)) - t2.DECSN_AMOUNT     AS EXCUT_PREARNGE_AMOUNT
+		                      ,DECODE(NVL(t2.DECSN_AMOUNT,0), 0, NULL, DECODE(NVL(t3.PRCS_ARSL_RT,0), 0, NULL, ROUND(NVL(t2.CNTRCT_AMOUNT,0) * NVL(t3.PRCS_ARSL_RT,0) / 100)) / NVL(t2.DECSN_AMOUNT,0))     AS EXCUT_PREARNGE_RT
+		                FROM   TBPRJ_BSNS_CODE t1
+		                       LEFT OUTER JOIN (
+		                                        SELECT s1.BSNS_CODE
+		                                              ,SUM(NVL(s1.CNTRCT_AMOUNT,0))     AS CNTRCT_AMOUNT
+		                                              ,SUM(NVL(s2.DECSN_AMOUNT,0))      AS DECSN_AMOUNT
+		                                        FROM   TBCTR_CNTRCT s1
+		                                               LEFT OUTER JOIN (
+		                                                                SELECT CNTRCT_NO
+		                                                                       ,NVL(SUM(DECSN_AMOUNT),0)    AS DECSN_AMOUNT
+		                                                                 FROM   VHACC_EXP_DSN_MASTR
+		                                                                 GROUP BY CNTRCT_NO
+		                                                                ) s2
+		                                                     ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		                                         GROUP BY s1.BSNS_CODE
+		                                        ) t2
+		                             ON t1.BSNS_CODE = t2.BSNS_CODE
+		                        LEFT OUTER JOIN (
+		                                         SELECT BSNS_CODE
+		                                               ,PLN_CSTP_RT
+		                                               ,PRCS_ARSL_RT
+		                                               ,PXCOND_PYMNT_RT
+		                                         FROM   (
+		                                                 SELECT s3.BSNS_CODE
+		                                                       ,SUM(NVL(s1.PLN_CSTP_RT,0))           AS PLN_CSTP_RT
+		                                                       ,SUM(NVL(s2.PRCS_ARSL_RT,0))          AS PRCS_ARSL_RT
+		                                                       ,SUM(NVL(s2.PXCOND_PYMNT_RT,0))       AS PXCOND_PYMNT_RT
+		                                                 FROM   (
+		                                                         SELECT p1.CNTRCT_NO
+		                                                               ,p1.CHG_TO
+		                                                               ,p1.PLN_W
+		                                                               ,SUM(p1.PLN_CSTP_RT)      AS PLN_CSTP_RT
+		                                                         FROM   TBBF_PLN_PRCS_DTLS p1
+		                                                                INNER JOIN (
+		                                                                            SELECT CNTRCT_NO
+		                                                                                  ,MAX(CHG_TO)      AS CHG_TO
+		                                                                            FROM   TBBF_PLN_PRCS
+		                                                                            GROUP BY CNTRCT_NO
+		                                                                           ) p2
+		                                                                     ON p1.CNTRCT_NO = p2.CNTRCT_NO
+		                                                                    AND p1.CHG_TO = p2.CHG_TO
+		                                                         WHERE  TO_CHAR(SYSDATE,'YYYYMMDD') > PLN_BGNDE
+		                                                         GROUP BY p1.CNTRCT_NO
+		                                                                 ,p1.CHG_TO
+		                                                                 ,p1.PLN_W
+		                                                        ) s1
+		                                                        LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL s2
+		                                                             ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		                                                            AND s1.PLN_W = s2.PPLS_ARSL_Y_W
+		                                                        LEFT OUTER JOIN TBCTR_CNTRCT s3
+		                                                             ON s1.CNTRCT_NO = s3.CNTRCT_NO
+		                                                 GROUP BY s3.BSNS_CODE
+		                                                )
+		                                         WHERE  1=1
+		                                        ) t3
+		                             ON t1.BSNS_CODE = t3.BSNS_CODE
+		                ) A
+		       )
+	]]>
+	<isNotEmpty property="BSNS_STTUS">
+		WHERE  STTUS = #BSNS_STTUS# 
+	</isNotEmpty>
+		ORDER BY BSNS_CODE
+	</select>
+	
+	
+	<!-- 부서별현황 -->
+	<select id="PRJ010127DAO.selectDs_T02" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT *
+		FROM   (
+		        SELECT A.*
+		              ,CASE WHEN NVL(EXCUT_PREARNGE_RT,0) = 0         THEN ''
+		                    WHEN EXCUT_PREARNGE_RT > 95               THEN '1'
+		                    WHEN EXCUT_PREARNGE_RT BETWEEN 90 AND 95  THEN '2'
+		                    WHEN EXCUT_PREARNGE_RT < 90               THEN '3' END     AS STTUS
+		        FROM   (
+		        SELECT t1.DEPT_CODE
+		              ,t2.DEPT_NM
+		              ,t3.PLN_CSTP_RT
+		              ,DECODE(NVL(t3.PLN_CSTP_RT,0),  0, NULL, ROUND(NVL(t1.CNTRCT_AMOUNT,0) * NVL(t3.PLN_CSTP_RT,0)  / 100))                       AS PLN_CSTP_AMOUNT
+		              ,t3.PRCS_ARSL_RT
+		              ,DECODE(NVL(t3.PRCS_ARSL_RT,0), 0, NULL, ROUND(NVL(t1.CNTRCT_AMOUNT,0) * NVL(t3.PRCS_ARSL_RT,0) / 100))                       AS PRCS_ARSL_AMOUNT
+		              ,t3.PXCOND_PYMNT_RT
+		              ,t1.DECSN_AMOUNT
+		              ,DECODE(NVL(t3.PRCS_ARSL_RT,0), 0, NULL, ROUND(NVL(t1.CNTRCT_AMOUNT,0) * NVL(t3.PRCS_ARSL_RT,0) / 100)) - t1.DECSN_AMOUNT     AS EXCUT_PREARNGE_AMOUNT
+		              ,DECODE(NVL(t1.DECSN_AMOUNT,0), 0, NULL, DECODE(NVL(t3.PRCS_ARSL_RT,0), 0, NULL, ROUND(NVL(t1.CNTRCT_AMOUNT,0) * NVL(t3.PRCS_ARSL_RT,0) / 100)) / NVL(t1.DECSN_AMOUNT,0))     AS EXCUT_PREARNGE_RT
+		        FROM   (
+		                SELECT s1.MNG_DEPT_CODE                 AS DEPT_CODE
+		                      ,SUM(NVL(s1.CNTRCT_AMOUNT,0))     AS CNTRCT_AMOUNT
+		                      ,SUM(NVL(s2.DECSN_AMOUNT,0))      AS DECSN_AMOUNT
+		                FROM   TBCTR_CNTRCT s1
+		                       LEFT OUTER JOIN (
+		                                        SELECT CNTRCT_NO
+		                                              ,NVL(SUM(DECSN_AMOUNT),0)    AS DECSN_AMOUNT
+		                                        FROM   VHACC_EXP_DSN_MASTR
+		                                        GROUP BY CNTRCT_NO
+		                                       ) s2
+		                            ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		                GROUP BY s1.MNG_DEPT_CODE
+		               ) t1
+		               LEFT OUTER JOIN TBHRM_DEPT t2
+		                    ON t1.DEPT_CODE = t2.DEPT_CODE
+		               LEFT OUTER JOIN (
+		                                SELECT DEPT_CODE
+		                                      ,PLN_CSTP_RT
+		                                      ,PRCS_ARSL_RT
+		                                      ,PXCOND_PYMNT_RT
+		                                FROM   (
+		                                        SELECT s3.MNG_DEPT_CODE                     AS DEPT_CODE
+		                                              ,SUM(NVL(s1.PLN_CSTP_RT,0))           AS PLN_CSTP_RT
+		                                              ,SUM(NVL(s2.PRCS_ARSL_RT,0))          AS PRCS_ARSL_RT
+		                                              ,SUM(NVL(s2.PXCOND_PYMNT_RT,0))       AS PXCOND_PYMNT_RT
+		                                        FROM   (
+		                                                SELECT p1.CNTRCT_NO
+		                                                      ,p1.CHG_TO
+		                                                      ,p1.PLN_W
+		                                                      ,SUM(p1.PLN_CSTP_RT)      AS PLN_CSTP_RT
+		                                                FROM   TBBF_PLN_PRCS_DTLS p1
+		                                                       INNER JOIN (
+		                                                                   SELECT CNTRCT_NO
+		                                                                         ,MAX(CHG_TO)      AS CHG_TO
+		                                                                   FROM   TBBF_PLN_PRCS
+		                                                                   GROUP BY CNTRCT_NO
+		                                                                  ) p2
+		                                                            ON p1.CNTRCT_NO = p2.CNTRCT_NO
+		                                                           AND p1.CHG_TO = p2.CHG_TO
+		                                                WHERE  TO_CHAR(SYSDATE,'YYYYMMDD') > PLN_BGNDE
+		                                                GROUP BY p1.CNTRCT_NO
+		                                                        ,p1.CHG_TO
+		                                                        ,p1.PLN_W
+		                                               ) s1
+		                                               LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL s2
+		                                                    ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		                                                   AND s1.PLN_W = s2.PPLS_ARSL_Y_W
+		                                               LEFT OUTER JOIN TBCTR_CNTRCT s3
+		                                                    ON s1.CNTRCT_NO = s3.CNTRCT_NO
+		                                        GROUP BY s3.MNG_DEPT_CODE
+		                                       )
+		                                WHERE  1=1
+		                               ) t3
+		                    ON t1.DEPT_CODE = t3.DEPT_CODE
+		                ) A
+		       )
+	]]>
+	<isNotEmpty property="BSNS_STTUS">
+		WHERE  STTUS = #BSNS_STTUS# 
+	</isNotEmpty>
+		ORDER BY DEPT_CODE
+	</select>
+	
+	<!-- 계약별현황 -->
+	<select id="PRJ010127DAO.selectDs_T03" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT *
+		FROM   (
+		        SELECT A.*
+		              ,CASE WHEN NVL(EXCUT_PREARNGE_RT,0) = 0         THEN ''
+		                    WHEN EXCUT_PREARNGE_RT > 95               THEN '1'
+		                    WHEN EXCUT_PREARNGE_RT BETWEEN 90 AND 95  THEN '2'
+		                    WHEN EXCUT_PREARNGE_RT < 90               THEN '3' END     AS STTUS
+		        FROM   (
+		                SELECT t1.BSNS_CODE
+		                      ,t1.BSNS_NM
+		                      ,t2.CNTRCT_NO
+		                      ,t2.CNTRCT_NM
+		                      ,t2.CNTRCT_AMOUNT
+		                      ,t3.PLN_CSTP_RT
+		                      ,DECODE(NVL(t3.PLN_CSTP_RT,0),  0, NULL, ROUND(NVL(t2.CNTRCT_AMOUNT,0) * NVL(t3.PLN_CSTP_RT,0)  / 100))                       AS PLN_CSTP_AMOUNT
+		                      ,t3.PRCS_ARSL_RT
+		                      ,DECODE(NVL(t3.PRCS_ARSL_RT,0), 0, NULL, ROUND(NVL(t2.CNTRCT_AMOUNT,0) * NVL(t3.PRCS_ARSL_RT,0) / 100))                       AS PRCS_ARSL_AMOUNT
+		                      ,t3.PXCOND_PYMNT_RT
+		                      ,t2.DECSN_AMOUNT
+		                      ,DECODE(NVL(t3.PRCS_ARSL_RT,0), 0, NULL, ROUND(NVL(t2.CNTRCT_AMOUNT,0) * NVL(t3.PRCS_ARSL_RT,0) / 100)) - t2.DECSN_AMOUNT     AS EXCUT_PREARNGE_AMOUNT
+		                      ,DECODE(NVL(t2.DECSN_AMOUNT,0), 0, NULL, DECODE(NVL(t3.PRCS_ARSL_RT,0), 0, NULL, ROUND(NVL(t2.CNTRCT_AMOUNT,0) * NVL(t3.PRCS_ARSL_RT,0) / 100)) / NVL(t2.DECSN_AMOUNT,0))     AS EXCUT_PREARNGE_RT
+		                FROM   TBPRJ_BSNS_CODE t1
+		                       LEFT OUTER JOIN (
+		                                        SELECT s1.BSNS_CODE
+		                                              ,s1.CNTRCT_NO
+		                                              ,s1.CNTRCT_NM
+		                                              ,SUM(NVL(s1.CNTRCT_AMOUNT,0))     AS CNTRCT_AMOUNT
+		                                              ,SUM(NVL(s2.DECSN_AMOUNT,0))      AS DECSN_AMOUNT
+		                                        FROM   TBCTR_CNTRCT s1
+		                                               LEFT OUTER JOIN (
+		                                                                SELECT CNTRCT_NO
+		                                                                      ,NVL(SUM(DECSN_AMOUNT),0)    AS DECSN_AMOUNT
+		                                                                FROM   VHACC_EXP_DSN_MASTR
+		                                                                GROUP BY CNTRCT_NO
+		                                                               ) s2
+		                                                    ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		                                        GROUP BY s1.BSNS_CODE, s1.CNTRCT_NO, s1.CNTRCT_NM
+		                                       ) t2
+		                            ON t1.BSNS_CODE = t2.BSNS_CODE
+		                       LEFT OUTER JOIN (
+		                                        SELECT BSNS_CODE
+		                                              ,CNTRCT_NO
+		                                              ,PLN_CSTP_RT
+		                                              ,PRCS_ARSL_RT
+		                                              ,PXCOND_PYMNT_RT
+		                                        FROM   (
+		                                                SELECT s3.BSNS_CODE
+		                                                      ,s1.CNTRCT_NO
+		                                                      ,SUM(NVL(s1.PLN_CSTP_RT,0))           AS PLN_CSTP_RT
+		                                                      ,SUM(NVL(s2.PRCS_ARSL_RT,0))          AS PRCS_ARSL_RT
+		                                                      ,SUM(NVL(s2.PXCOND_PYMNT_RT,0))       AS PXCOND_PYMNT_RT
+		                                                FROM   (
+		                                                        SELECT p1.CNTRCT_NO
+		                                                              ,p1.CHG_TO
+		                                                              ,p1.PLN_W
+		                                                              ,SUM(p1.PLN_CSTP_RT)      AS PLN_CSTP_RT
+		                                                        FROM   TBBF_PLN_PRCS_DTLS p1
+		                                                               INNER JOIN (
+		                                                                           SELECT CNTRCT_NO
+		                                                                                 ,MAX(CHG_TO)      AS CHG_TO
+		                                                                           FROM   TBBF_PLN_PRCS
+		                                                                           GROUP BY CNTRCT_NO
+		                                                                          ) p2
+		                                                                    ON p1.CNTRCT_NO = p2.CNTRCT_NO
+		                                                                   AND p1.CHG_TO = p2.CHG_TO
+		                                                        WHERE  TO_CHAR(SYSDATE,'YYYYMMDD') > PLN_BGNDE
+		                                                        GROUP BY p1.CNTRCT_NO
+		                                                                ,p1.CHG_TO
+		                                                                ,p1.PLN_W
+		                                                       ) s1
+		                                                       LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL s2
+		                                                            ON s1.CNTRCT_NO = s2.CNTRCT_NO
+		                                                           AND s1.PLN_W = s2.PPLS_ARSL_Y_W
+		                                                       LEFT OUTER JOIN TBCTR_CNTRCT s3
+		                                                            ON s1.CNTRCT_NO = s3.CNTRCT_NO
+		                                                GROUP BY s3.BSNS_CODE, s1.CNTRCT_NO
+		                                               )
+		                                        WHERE  1=1
+		                                       ) t3
+		                            ON t2.BSNS_CODE = t3.BSNS_CODE
+		                           AND t2.CNTRCT_NO = t3.CNTRCT_NO
+		                WHERE  1=1
+		]]>
+		<isNotEmpty property="BSNS_NM">
+		                AND  t1.BSNS_NM like '%'|| #BSNS_NM# ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="CNTRCT_NM">
+		                AND  t2.CNTRCT_NM like '%'||#CNTRCT_NM#||'%'
+		</isNotEmpty>
+		<isNotEmpty property ="CNTRCT_YEAR">
+		                AND    SUBSTR(t2.CNTRCT_NO, 0, 4) = #CNTRCT_YEAR#
+		</isNotEmpty>
+		               ) A
+		       )
+	<isNotEmpty property="BSNS_STTUS">
+		WHERE  STTUS = #BSNS_STTUS# 
+	</isNotEmpty>
+		ORDER BY BSNS_CODE, CNTRCT_NO
+	</select>
+</sqlMap>

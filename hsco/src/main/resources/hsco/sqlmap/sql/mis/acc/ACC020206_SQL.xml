@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020206_SQL">	
+	<!-- 조회 -->
+	<select id="ACC020206DAO.selectPrivateContract" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*ACC020206DAO.selectPrivateContract*/
+			WITH TMP_CNTRCT_BCNC AS
+			( SELECT DISTINCT DECSN_YEAR,
+			                 DECSN_NO ,
+			                 LISTAGG(BCNC_NM, CHR(13)
+			                                  ||CHR(10)) WITHIN GROUP(ORDER BY BCNC_NM) OVER(PARTITION BY DECSN_YEAR, DECSN_NO) AS BCNC_NM ,
+			                 LISTAGG(ADRES, CHR(13)
+			                                  ||CHR(10)) WITHIN GROUP(ORDER BY ADRES) OVER(PARTITION BY DECSN_YEAR, DECSN_NO) AS ADRES ,
+			                 LISTAGG(NM, CHR(13)
+			                                  ||CHR(10)) WITHIN GROUP(ORDER BY NM) OVER(PARTITION BY DECSN_YEAR, DECSN_NO) AS NM
+			FROM             ( SELECT  a.DECSN_YEAR,
+			                          a.DECSN_NO ,
+			                          ROW_NUMBER() OVER (PARTITION BY a.DECSN_YEAR, a.DECSN_NO ORDER BY ROWNUM)
+			                                   || '.'
+			                                   || NVL(NVL(a.BCNC_NM, b.BCNC_NM),'-') AS BCNC_NM,
+			                          ROW_NUMBER() OVER (PARTITION BY a.DECSN_YEAR, a.DECSN_NO ORDER BY ROWNUM)
+			                                   || '.'
+			                                   || NVL(A.ADRES,'-') AS ADRES,
+			                          ROW_NUMBER() OVER (PARTITION BY a.DECSN_YEAR, a.DECSN_NO ORDER BY ROWNUM)
+			                                   || '.'
+			                                   || NVL(NVL(a.NM, b.RPRSNTV),'-') AS NM
+			                 FROM     TBACC_EXP_DSN_DETAIL a
+			                          LEFT OUTER JOIN TBCTR_BCNC_MASTR b
+			                          ON       a.BCNC_CODE = b.BCNC_CODE
+			                 WHERE a.DECSN_YEAR = SUBSTR(#EXPNDTR_YM#,1,4)
+			                 )
+			)
+			SELECT   T1.DECSN_YEAR											/*결의년도*/											
+			         ,T1.DECSN_NO											/*결의번호*/
+			         ,T2.CNTRCT_MTHD			        					/*계약방식*/
+			         ,T1.ANACT_KND											/*결의서구분코드*/
+			         ,(SELECT SUBSTR(CODE_NM,1,2)							
+				         FROM TBCOM_CMMN_CODE tcc
+				        WHERE tcc.GRP_CODE = 'ACC002'
+				          AND tcc.CODE     = T1.ANACT_KND )	AS ANACT_NM 	/*결의서구분명*/
+			         ,T1.SUMRY			         							/*계약명*/
+			         ,T1.CPTAL_EXPNDTR_ACNTBK_DE					        /*지출일자*/
+			         ,NVL(T2.CNTRCT_DE,T4.CAUSE_ACTION_DE)  AS CNTRCT_DE	/*계약일자*/
+			         ,T1.DECSN_AMOUNT				  				        /*계약금액*/
+			         ,T3.BCNC_NM			         						/*업체명*/
+			         ,T3.ADRES				         						/*소재지*/
+			         ,T3.NM			         								/*대표자*/
+			         ,'지방자치단체를 당사자로 하는 계약에 관한' ||CHR(10)||'법률 시행령 제 25조 제 1항 제5호' AS CNTRCT_REASON			         /*수의계약사유*/
+			         ,T1.DEPT_CODE			         						/*부서코드*/
+			         ,T6.DEPT_NM 											/*부서명*/
+			        
+			FROM     TBACC_EXP_DSN_MASTR T1
+			         LEFT OUTER JOIN TBACC_EXP_DSN_MTR_DET T2
+			         ON       T1.DECSN_YEAR = T2.DECSN_YEAR
+			         AND      T1.DECSN_NO   = T2.DECSN_NO
+			         LEFT OUTER JOIN TMP_CNTRCT_BCNC T3
+			         ON       T1.DECSN_YEAR = T3.DECSN_YEAR
+			         AND      T1.DECSN_NO   = T3.DECSN_NO
+			         LEFT OUTER JOIN TBACC_CA_ACT_MASTR T4
+			         ON       T1.CAUSE_ACTION_NO = T4.CAUSE_ACTION_NO
+			         LEFT OUTER JOIN VWHRM_DEPT T6
+			         ON       T1.DEPT_CODE = T6.DEPT_CODE
+			WHERE    SUBSTR(T1.CPTAL_EXPNDTR_ACNTBK_DE,1,6)    = #EXPNDTR_YM#
+			AND      T2.CNTRCT_MTHD   ='02'
+			AND      T1.DECSN_AMOUNT >= 5000000
+			ORDER BY T1.DECSN_NO
+			]]>
+			        
+			          		
+	</select>
+</sqlMap>

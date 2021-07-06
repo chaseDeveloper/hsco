@@ -1,0 +1,1294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG040205_SQL">	
+
+	<!--지출결산보고서 리스트조회 -->
+	<select id="BDG040205DAO.ExpndtrStacntReprt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		<![CDATA[ /*BDG040205DAO.ExpndtrStacntReprt*/ ]]>
+		WITH EXECUT_BUDGET_TM2 AS (
+		     SELECT YEAR AS BUDGET_YEAR
+		           ,BSNS_SE
+		           ,BALC_SE
+		           ,DETAIL_BSNS_CODE AS BSNS_CODE
+		           ,DEPT_CODE
+		           ,BUDGET_ACNT_CODE
+		           ,EXPNDTR_UNIT_CODE
+		           ,SUM(NVL(CYFD_BUDGET, 0)) AS CYFD_BUDGET_AMT                                                                                /*이월예산*/
+		           ,SUM(NVL(ORIBDGT, 0)) AS ORIBDGT_AMT                                                                                         /*본예산*/
+		           ,  SUM(NVL(RVSPBGT_1_ODR, 0))
+		            + SUM(NVL(RVSPBGT_2_ODR, 0))
+		            + SUM(NVL(RVSPBGT_3_ODR, 0))
+		            + SUM(NVL(RVSPBGT_4_ODR, 0))
+		            + SUM(NVL(RVSPBGT_5_ODR, 0))
+		            + SUM(NVL(RVSPBGT_6_ODR, 0))
+		            + SUM(NVL(RVSPBGT_7_ODR, 0))
+		               AS RVSPBGT_AMT                                                                                                    /*추경예산(합산금액)*/
+		           ,SUM(NVL(MVMN_AM, 0)) + SUM(NVL(BUKIP_MVMN_AM, 0)) + SUM(NVL(DVR_AM, 0)) + SUM(NVL(TRSF_AM, 0)) + SUM(NVL(RSVFND_REQST_AM, 0))
+		               AS DVR_AMT                                                                         /*부기이동 + 이동(조정) + 전용 + 이용 + 예비비사용 = 전용으로 표기*/
+		           ,  SUM(NVL(CYFD_BUDGET, 0))
+		            + SUM(NVL(ORIBDGT, 0))
+		            + SUM(NVL(RVSPBGT_1_ODR, 0))
+		            + SUM(NVL(RVSPBGT_2_ODR, 0))
+		            + SUM(NVL(RVSPBGT_3_ODR, 0))
+		            + SUM(NVL(RVSPBGT_4_ODR, 0))
+		            + SUM(NVL(RVSPBGT_5_ODR, 0))
+		            + SUM(NVL(RVSPBGT_6_ODR, 0))
+		            + SUM(NVL(RVSPBGT_7_ODR, 0))
+		            + SUM(NVL(MVMN_AM, 0))
+		            + SUM(NVL(BUKIP_MVMN_AM, 0))
+		            + SUM(NVL(DVR_AM, 0))
+		            + SUM(NVL(TRSF_AM, 0))
+		            + SUM(NVL(RSVFND_REQST_AM, 0))
+		               AS EXECUT_BUDGET_AM
+		     FROM   TBBDG_EXECUT_BUDGET
+		     GROUP BY YEAR
+		             ,BSNS_SE
+		             ,BALC_SE
+		             ,DETAIL_BSNS_CODE
+		             ,DEPT_CODE
+		             ,BUDGET_ACNT_CODE
+		             ,EXPNDTR_UNIT_CODE)
+		,TBACC_CNSUL_TM2 AS (
+		     SELECT t1.BUDGET_YEAR
+		           ,t1.BSNS_SE                                                                                                                 /*사업구분*/
+		           ,t1.BALC_SE                                                                                                                 /*수지구분*/
+		           ,t1.BSNS_CODE                                                                                                               /*사업코드*/
+		           ,t1.BUDGET_DEPT_CODE AS DEPT_CODE                                                                                         /*예산부서코드*/
+		           ,t1.BUDGET_ACNT_CODE                                                                                                      /*예산계정코드*/
+		           ,t1.BUKIP_CODE AS EXPNDTR_UNIT_CODE                                                                                       /*지출단위코드*/
+		           ,NVL(SUM(t1.CNSUL_AMOUNT), 0) - NVL(SUM(t1.CNSUL_RTRVL_AMOUNT), 0) AS CAUSE_ACTION_AMOUNT                                 /*원인행위금액*/
+		           ,NVL(SUM(t2.DECSN_AMOUNT), 0) AS CAUSE_ACTION_DECSN_AMOUNT                                                             /*원인행위 결의금액*/
+		     FROM   TBACC_CNSUL t1                                                                                                          /*원인행위마스터*/
+		            LEFT OUTER JOIN (SELECT BUDGET_YEAR, CAUSE_ACTION_NO, SUM(DECSN_AMOUNT) AS DECSN_AMOUNT
+		                             FROM   TBACC_EXP_DSN_MASTR                                                                             /*지출결의마스터*/
+		                             GROUP BY BUDGET_YEAR, CAUSE_ACTION_NO) t2
+		               ON t1.BUDGET_YEAR = t2.BUDGET_YEAR
+		               AND t1.CAUSE_ACTION_NO = t2.CAUSE_ACTION_NO
+		     WHERE  t1.BUDGET_YEAR >= '2018'
+		     AND    t1.CNSUL_DE BETWEEN #BGNDE# AND #ENDDE#
+		     GROUP BY t1.BUDGET_YEAR
+		             ,t1.BSNS_SE
+		             ,t1.BALC_SE
+		             ,t1.BSNS_CODE
+		             ,t1.BUDGET_DEPT_CODE
+		             ,t1.BUDGET_ACNT_CODE
+		             ,t1.BUKIP_CODE)
+		,TBACC_CNSUL_MONTH_TM2 AS (
+		     SELECT t1.BUDGET_YEAR
+		           ,t1.BSNS_SE                                                                                                                 /*사업구분*/
+		           ,t1.BALC_SE                                                                                                                 /*수지구분*/
+		           ,t1.BSNS_CODE                                                                                                               /*사업코드*/
+		           ,t1.BUDGET_DEPT_CODE AS DEPT_CODE                                                                                         /*예산부서코드*/
+		           ,t1.BUDGET_ACNT_CODE                                                                                                      /*예산계정코드*/
+		           ,t1.BUKIP_CODE AS EXPNDTR_UNIT_CODE                                                                                       /*지출단위코드*/
+		           ,NVL(SUM(t1.CNSUL_AMOUNT), 0) - NVL(SUM(t1.CNSUL_RTRVL_AMOUNT), 0) AS CAUSE_ACTION_AMOUNT                                 /*원인행위금액*/
+		     FROM   TBACC_CNSUL t1                                                                                                          /*원인행위마스터*/
+		     WHERE  t1.BUDGET_YEAR >= '2018'
+		     AND    SUBSTR(t1.CNSUL_DE, 1, 6) = TO_CHAR(SYSDATE, 'YYYYMM')                                                      /*원인행위등록일 또는 결의서 등록일자*/
+		     GROUP BY t1.BUDGET_YEAR
+		             ,t1.BSNS_SE
+		             ,t1.BALC_SE
+		             ,t1.BSNS_CODE
+		             ,t1.BUDGET_DEPT_CODE
+		             ,t1.BUDGET_ACNT_CODE
+		             ,t1.BUKIP_CODE)
+		,TBACC_EXP_DSN_MASTR_TM2 AS (        /*결의서등록 : 부기단위*/
+		     SELECT t1.BUDGET_YEAR
+		           ,t1.BSNS_SE
+		           ,t1.BALC_SE
+		           ,t1.BSNS_CODE
+		           ,t1.BUDGET_DEPT_CODE AS DEPT_CODE
+		           ,t1.BUDGET_ACNT_CODE
+		           ,t1.EXPNDTR_UNIT_CODE
+		           ,t1.ANACT_KND
+		           ,SUM(NVL(DECSN_AMOUNT, 0)) AS EXP_DSN_AMOUNT                                                                                /*결의금액*/
+		           ,SUM(CASE WHEN t1.EXPNDTR_CNFIRM_AT = '1' THEN NVL(t1.DECSN_AMOUNT, 0) ELSE 0 END) AS DEBT_AMT                              /*채무확정*/
+		           ,SUM(CASE
+		                   WHEN ((t2.SANCTN_KND = '5' OR t1.SANCTN_NO = '0') AND t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #BGNDE# AND #ENDDE#)
+		                        THEN NVL(t1.DECSN_AMOUNT, 0)
+		                   ELSE 0
+		                END) AS DECSN_AMOUNT                                                                                                   /*결산액*/
+		           ,SUM(CASE
+		                   WHEN ((t2.SANCTN_KND = '5' OR t1.SANCTN_NO = '0') AND t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #BGNDE# AND #ENDDE# AND t1.CYFD_SE = '0')
+		                        THEN NVL(t1.DECSN_AMOUNT, 0)
+		                   ELSE 0
+		                END) AS DECSN_AMOUNT_ORI                                                                                          /*결산액_본예산*/
+		           ,SUM(CASE
+		                   WHEN ((t2.SANCTN_KND = '5' OR t1.SANCTN_NO = '0') AND t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #BGNDE# AND #ENDDE# AND t1.CYFD_SE IN ('1', '2'))
+		                        THEN NVL(t1.DECSN_AMOUNT, 0)
+		                   ELSE 0
+		                END) AS DECSN_AMOUNT_CYFD                                                                                        /*결산액_이월예산*/
+		           ,SUM(CASE WHEN t3.CAUSE_ACTION_NO IS NULL THEN NVL(t1.DECSN_AMOUNT, 0) ELSE 0 END) AS EXC_DSN_AMOUNT                 /*원인행위없는 지출결의*/
+		     FROM   TBACC_EXP_DSN_MASTR t1                                                                                                  /*지출결의마스터*/
+		            LEFT OUTER JOIN VIEW_MIS_SANCTN_KND@DL_INTRACITY t2
+		               ON t1.SANCTN_NO = t2.SANCTN_NO
+		            LEFT OUTER JOIN TBACC_CNSUL t3 ON t1.CAUSE_ACTION_NO = t3.CAUSE_ACTION_NO
+		     WHERE  t1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #BGNDE# AND #ENDDE#
+		     <isNotEmpty property = "ACNUTNO">
+		     	AND 	t1.ACNUTNO = #ACNUTNO#
+		     </isNotEmpty>		     
+		     GROUP BY t1.BUDGET_YEAR
+		             ,t1.BSNS_SE
+		             ,t1.BALC_SE
+		             ,t1.BSNS_CODE
+		             ,t1.BUDGET_DEPT_CODE
+		             ,t1.BUDGET_ACNT_CODE
+		             ,t1.EXPNDTR_UNIT_CODE
+		             ,t1.ANACT_KND)
+		,TBACC_EXP_DSN_MASTR_MONTH_TM2 AS (    /*결의서등록 : 부기단위*/
+		     SELECT t1.BUDGET_YEAR
+		           ,t1.BSNS_SE
+		           ,t1.BALC_SE
+		           ,t1.BSNS_CODE
+		           ,t1.BUDGET_DEPT_CODE AS DEPT_CODE
+		           ,t1.BUDGET_ACNT_CODE
+		           ,t1.EXPNDTR_UNIT_CODE
+		           ,SUM(DECSN_AMOUNT) AS DECSN_AMOUNT
+		     FROM   TBACC_EXP_DSN_MASTR t1                                                                                                  /*지출결의마스터*/
+		     WHERE  SUBSTR(t1.ITNC_DE, 1, 6) = TO_CHAR(SYSDATE, 'YYYYMM')                                                       /*원인행위등록일 또는 결의서 등록일자*/
+		     GROUP BY t1.BUDGET_YEAR
+		             ,t1.BSNS_SE
+		             ,t1.BALC_SE
+		             ,t1.BSNS_CODE
+		             ,t1.BUDGET_DEPT_CODE
+		             ,t1.BUDGET_ACNT_CODE
+		             ,t1.EXPNDTR_UNIT_CODE)
+		,TBACC_EXP_DSN_SEMOK_MONTH_TM2 AS (    /*결의서등록 : 세목단위 월단위 결의서금액*/
+		     SELECT t1.BUDGET_YEAR
+		           ,t1.BSNS_SE
+		           ,t1.BALC_SE
+		           ,t1.BSNS_CODE
+		           ,t1.BUDGET_DEPT_CODE AS DEPT_CODE
+		           ,t1.BUDGET_ACNT_CODE
+		           ,SUM(DECSN_AMOUNT) AS DECSN_AMOUNT
+		     FROM   TBACC_EXP_DSN_MASTR t1                                                                                                  /*지출결의마스터*/
+		     WHERE  SUBSTR(t1.ITNC_DE, 1, 6) = TO_CHAR(SYSDATE, 'YYYYMM')                                                       /*원인행위등록일 또는 결의서 등록일자*/
+		     GROUP BY t1.BUDGET_YEAR
+		             ,t1.BSNS_SE
+		             ,t1.BALC_SE
+		             ,t1.BSNS_CODE
+		             ,t1.BUDGET_DEPT_CODE
+		             ,t1.BUDGET_ACNT_CODE)
+		,TBBDG_BUDGET_ASIGN_TM2 AS (    /*배정예산 : 세목단위*/
+		     SELECT t1.YEAR AS BUDGET_YEAR
+		           ,t1.BSNS_SE
+		           ,t1.BALC_SE
+		           ,t1.BSNS_CODE
+		           ,t1.DEPT_CODE
+		           ,t1.BUDGET_ACNT_CODE
+		           ,NVL(SUM(t1.DCSN_AM), 0) AS ASIGN_AMOUNT                                                                                     /*배정액*/
+		     FROM   TBBDG_BUDGET_ASIGN t1
+		     WHERE  t1.YEAR || t1.DEMAND_MT = TO_CHAR(SYSDATE, 'YYYYMM')                                                        /*원인행위등록일 또는 결의서 등록일자*/
+		     GROUP BY t1.YEAR
+		             ,t1.BSNS_SE
+		             ,t1.BALC_SE
+		             ,t1.BSNS_CODE
+		             ,t1.DEPT_CODE
+		             ,t1.BUDGET_ACNT_CODE)
+		,EXP_TM AS (
+		     SELECT t1.BUDGET_YEAR
+		           ,t1.BSNS_SE                                                                                                                          /*사업구분*/
+		           ,t1.BALC_SE                                                                                                                          /*수지구분*/
+		           ,t1.BSNS_CODE                                                                                                                        /*사업코드*/
+		           ,t1.DEPT_CODE                                                                                                                      /*예산부서코드*/
+		           ,t1.BUDGET_ACNT_CODE                                                                                                               /*예산계정코드*/
+		           ,t1.EXPNDTR_UNIT_CODE                                                                                                              /*지출단위코드*/
+		           ,t1.CYFD_BUDGET_AMT                                                                                                                  /*이월예산*/
+		           ,t1.ORIBDGT_AMT                                                                                                                       /*본예산*/
+		           ,t1.RVSPBGT_AMT                                                                                                                      /*추경예산*/
+		           ,t1.DVR_AMT                                                                                                   /*전용 = 이동(조정) + 전용 + 이용 + 예비비*/
+		           ,t1.EXECUT_BUDGET_AM                                                                                                     /*■■[예산현액]■■ 부기단위 */
+		           ,CASE WHEN t3.ANACT_KND IN ('01', '07') THEN NVL(t3.DEBT_AMT, 0) /*여비,봉급지출결의서일 경우 원인행위가 없으므로 채무확정액을 가져온다*/
+		                 ELSE NVL(t2.CAUSE_ACTION_AMOUNT, 0)
+		            END AS CAUSE_ACTION_AMOUNT                                                                             /*원인행위금액*/
+		           ,NVL(t2.CAUSE_ACTION_DECSN_AMOUNT, 0) AS CAUSE_ACTION_DECSN_AMOUNT                                                              /*원인행위 결의금액*/
+		           ,NVL(t2.CAUSE_ACTION_AMOUNT, 0) - NVL(t2.CAUSE_ACTION_DECSN_AMOUNT, 0) AS CAUSE_ACTION_JAN_AMOUNT                                 /*원인행위 잔액*/
+		           ,NVL(t3.EXP_DSN_AMOUNT, 0) AS EXP_DSN_AMOUNT                                                                                 /*결의서작성 금액(총액)*/
+		           ,NVL(t3.DEBT_AMT, 0) AS DEBT_AMT                                                                                                    /*채무확정액*/
+		           ,NVL(t3.DECSN_AMOUNT, 0) AS DECSN_AMOUNT                                                                                              /*결산액*/
+		           ,NVL(t3.DECSN_AMOUNT_ORI, 0) AS DECSN_AMOUNT_ORI                                                                                  /*결산액_본예산*/
+		           ,NVL(t3.DECSN_AMOUNT_CYFD, 0) AS DECSN_AMOUNT_CYFD                                                                              /*결산액_이월예산*/
+		           ,NVL(t5.ASIGN_AMOUNT, 0) AS ASIGN_AMOUNT                                                                                              /*배정액*/
+		           ,NVL(t6.CAUSE_ACTION_AMOUNT, 0) AS MONTH_CAUSE_ACTION_AMOUNT                                                                  /*조회달의 원인행위금액*/
+		           ,NVL(t7.DECSN_AMOUNT, 0) AS MONTH_DECSN_AMOUNT                                                                                  /*조회달의 결의금액*/
+		           /** 사용가능 예산금액 **/
+		           /*,  t1.EXECUT_BUDGET_AM - (CASE WHEN NVL(t2.CAUSE_ACTION_AMOUNT, 0) >= NVL(t3.DECSN_AMOUNT, 0) THEN NVL(t2.CAUSE_ACTION_AMOUNT, 0) ELSE NVL(t3.DECSN_AMOUNT, 0) END) AS EXECUT_BUDGET_JAN_AM 부기잔액*/
+		           ,t1.EXECUT_BUDGET_AM - (NVL(t2.CAUSE_ACTION_AMOUNT, 0) + NVL(t3.EXC_DSN_AMOUNT, 0)) AS EXECUT_BUDGET_JAN_AM                          /*부기잔액*/
+		           ,NVL(t5.ASIGN_AMOUNT, 0) - NVL(t8.DECSN_AMOUNT, 0) AS ASIGN_JAN_AMOUNT                                                               /*배정잔액*/
+		     /*, NVL(t5.ASIGN_AMOUNT,0) - (CASE WHEN NVL(t6.CAUSE_ACTION_AMOUNT,0) >= NVL(t7.DECSN_AMOUNT,0) THEN NVL(t6.CAUSE_ACTION_AMOUNT,0) ELSE NVL(t7.DECSN_AMOUNT,0) END) AS ASIGN_JAN_AMOUNT  배정잔액*/
+		     FROM   EXECUT_BUDGET_TM2 t1
+		            LEFT OUTER JOIN TBACC_CNSUL_TM2 t2
+		               ON t1.BUDGET_YEAR = t2.BUDGET_YEAR
+		               AND t1.BSNS_SE = t2.BSNS_SE
+		               AND t1.BALC_SE = t2.BALC_SE
+		               AND t1.BSNS_CODE = t2.BSNS_CODE
+		               AND t1.DEPT_CODE = t2.DEPT_CODE
+		               AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		               AND t1.EXPNDTR_UNIT_CODE = t2.EXPNDTR_UNIT_CODE
+		            LEFT OUTER JOIN TBACC_EXP_DSN_MASTR_TM2 t3
+		               ON t1.BUDGET_YEAR = t3.BUDGET_YEAR
+		               AND t1.BSNS_SE = t3.BSNS_SE
+		               AND t1.BALC_SE = t3.BALC_SE
+		               AND t1.BSNS_CODE = t3.BSNS_CODE
+		               AND t1.DEPT_CODE = t3.DEPT_CODE
+		               AND t1.BUDGET_ACNT_CODE = t3.BUDGET_ACNT_CODE
+		               AND t1.EXPNDTR_UNIT_CODE = t3.EXPNDTR_UNIT_CODE
+		            LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE t4
+		               ON t1.BUDGET_YEAR = t4.YEAR
+		               AND t1.BSNS_SE = t4.BSNS_SE
+		               AND t1.BALC_SE = t4.BALC_SE
+		               AND t1.BUDGET_ACNT_CODE = t4.BUDGET_ACNT_CODE
+		            LEFT OUTER JOIN TBBDG_BUDGET_ASIGN_TM2 t5
+		               ON t1.BUDGET_YEAR = t5.BUDGET_YEAR
+		               AND t1.BSNS_SE = t5.BSNS_SE
+		               AND t1.BALC_SE = t5.BALC_SE
+		               AND t1.BSNS_CODE = t5.BSNS_CODE
+		               AND t1.DEPT_CODE = t5.DEPT_CODE
+		               AND t1.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		            LEFT OUTER JOIN TBACC_CNSUL_MONTH_TM2 t6
+		               ON t1.BUDGET_YEAR = t6.BUDGET_YEAR
+		               AND t1.BSNS_SE = t6.BSNS_SE
+		               AND t1.BALC_SE = t6.BALC_SE
+		               AND t1.BSNS_CODE = t6.BSNS_CODE
+		               AND t1.DEPT_CODE = t6.DEPT_CODE
+		               AND t1.BUDGET_ACNT_CODE = t6.BUDGET_ACNT_CODE
+		               AND t1.EXPNDTR_UNIT_CODE = t6.EXPNDTR_UNIT_CODE
+		            LEFT OUTER JOIN TBACC_EXP_DSN_MASTR_MONTH_TM2 t7
+		               ON t1.BUDGET_YEAR = t7.BUDGET_YEAR
+		               AND t1.BSNS_SE = t7.BSNS_SE
+		               AND t1.BALC_SE = t7.BALC_SE
+		               AND t1.BSNS_CODE = t7.BSNS_CODE
+		               AND t1.DEPT_CODE = t7.DEPT_CODE
+		               AND t1.BUDGET_ACNT_CODE = t7.BUDGET_ACNT_CODE
+		               AND t1.EXPNDTR_UNIT_CODE = t7.EXPNDTR_UNIT_CODE
+		            LEFT OUTER JOIN TBACC_EXP_DSN_SEMOK_MONTH_TM2 t8
+		               ON t1.BUDGET_YEAR = t8.BUDGET_YEAR
+		               AND t1.BSNS_SE = t8.BSNS_SE
+		               AND t1.BALC_SE = t8.BALC_SE
+		               AND t1.BSNS_CODE = t8.BSNS_CODE
+		               AND t1.DEPT_CODE = t8.DEPT_CODE
+		               AND t1.BUDGET_ACNT_CODE = t8.BUDGET_ACNT_CODE
+		     WHERE  t1.BUDGET_YEAR >= '2018'
+		)
+		, EXECUT_BUDGET_TM AS (
+		    SELECT YEAR
+		         , BSNS_SE
+		         , BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		         , DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		         , BUDGET_ACNT_CODE
+		         , SUM(NVL(CYFD_BUDGET, 0))          AS CYFD_BUDGET_AMT
+		         , SUM(NVL(ORIBDGT, 0))              AS ORIBDGT_AMT
+		         , SUM(NVL(RVSPBGT_1_ODR, 0))
+		           + SUM(NVL(RVSPBGT_2_ODR, 0))
+		           + SUM(NVL(RVSPBGT_3_ODR, 0))
+		           + SUM(NVL(RVSPBGT_4_ODR, 0))
+		           + SUM(NVL(RVSPBGT_5_ODR, 0))
+		           + SUM(NVL(RVSPBGT_6_ODR, 0))
+		           + SUM(NVL(RVSPBGT_7_ODR, 0))      AS RVSPBGT_AMT
+		         , SUM(NVL(MVMN_AM, 0))
+		           + SUM(NVL(BUKIP_MVMN_AM, 0))
+		           + SUM(NVL(DVR_AM, 0))
+		           + SUM(NVL(TRSF_AM, 0))
+		           + SUM(NVL(RSVFND_REQST_AM, 0))    AS DVR_AMT
+		         , SUM(NVL(ORIBDGT, 0))
+		           + SUM(NVL(RVSPBGT_1_ODR, 0))
+		           + SUM(NVL(RVSPBGT_2_ODR, 0))
+		           + SUM(NVL(RVSPBGT_3_ODR, 0))
+		           + SUM(NVL(RVSPBGT_4_ODR, 0))
+		           + SUM(NVL(RVSPBGT_5_ODR, 0))
+		           + SUM(NVL(RVSPBGT_6_ODR, 0))
+		           + SUM(NVL(RVSPBGT_7_ODR, 0))
+		           + SUM(NVL(MVMN_AM, 0))
+		           + SUM(NVL(BUKIP_MVMN_AM, 0))
+		           + SUM(NVL(DVR_AM, 0))
+		           + SUM(NVL(TRSF_AM, 0))
+		           + SUM(NVL(RSVFND_REQST_AM, 0))    AS PRTINT_YEAR_AM
+		         , SUM(NVL(CYFD_BUDGET, 0))
+		           + SUM(NVL(ORIBDGT, 0))
+		           + SUM(NVL(RVSPBGT_1_ODR, 0))
+		           + SUM(NVL(RVSPBGT_2_ODR, 0))
+		           + SUM(NVL(RVSPBGT_3_ODR, 0))
+		           + SUM(NVL(RVSPBGT_4_ODR, 0))
+		           + SUM(NVL(RVSPBGT_5_ODR, 0))
+		           + SUM(NVL(RVSPBGT_6_ODR, 0))
+		           + SUM(NVL(RVSPBGT_7_ODR, 0))
+		           + SUM(NVL(MVMN_AM, 0))
+		           + SUM(NVL(BUKIP_MVMN_AM, 0))
+		           + SUM(NVL(DVR_AM, 0))
+		           + SUM(NVL(TRSF_AM, 0))
+		           + SUM(NVL(RSVFND_REQST_AM, 0))    AS EXECUT_BUDGET_AM
+		      FROM TBBDG_EXECUT_BUDGET
+		     WHERE 1=1
+		<isEqual property="BSNS_KND" compareValue="1">
+		       AND DETAIL_BSNS_CODE LIKE 'A%'
+		</isEqual>
+		<isEqual property="BSNS_KND" compareValue="2">
+		       AND DETAIL_BSNS_CODE LIKE 'B%'
+		</isEqual>
+		    GROUP BY YEAR
+		           , BSNS_SE
+		           , BALC_SE
+		           , BUDGET_ACNT_CODE
+		<isNotEmpty property="BSNS_CODE">
+		           , DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		    HAVING 1=1
+		<isNotEmpty property="BSNS_CODE">
+		       AND DETAIL_BSNS_CODE = #BSNS_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		       AND DEPT_CODE        = #DEPT_CODE#
+			</isNotEqual>
+		</isNotEmpty>
+		), EXP_DSN_MASTR_TM AS (
+		<isEqual property="YEAR_SE" compareValue="1">
+		    SELECT BUDGET_YEAR AS YEAR
+		         , BSNS_SE
+		         , BALC_SE
+			<isNotEmpty property="BSNS_CODE">
+		         , BSNS_CODE
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , DEPT_CODE
+				</isNotEqual>
+			</isNotEmpty>
+		         , BUDGET_ACNT_CODE
+		         , SUM(NVL(CAUSE_ACTION_AMOUNT, 0))    AS CAUSE_ACTION_AMOUNT
+		         , SUM(NVL(DEBT_AMT, 0))               AS DEBT_AMT
+		         , SUM(NVL(DECSN_AMOUNT, 0))           AS DECSN_AMOUNT
+		         , 0 AS DECSN_AMOUNT_ORI
+		         , 0 AS DECSN_AMOUNT_CYFD
+		      FROM (
+					SELECT tb1.EXP_TYPE
+					     ,tb1.BUDGET_YEAR
+					     ,tb1.DECSN_NO
+					     ,tb1.CYFD_SE
+					     ,tb1.BSNS_SE
+					     ,tb1.BALC_SE
+					     ,tb1.ANACT_KND
+					     ,tb1.DEPT_CODE
+					     ,tb1.BUDGET_ACNT_CODE
+					     ,tb1.EXPNDTR_UNIT_CODE
+					     ,tb1.CAUSE_ACTION_DE
+					     ,tb1.SUMRY
+					     ,tb1.BCNC_CODE
+					     ,tb1.BCNC_NM
+					     ,tb1.ORI_CAUSE_ACTION_AMOUNT
+					     ,tb1.CYFD_CAUSE_ACTION_AMOUNT
+					     ,tb1.CAUSE_ACTION_AMOUNT
+					     ,tb1.CAUSE_ACTION_DECSN_AMOUNT
+					     ,tb1.ORI_DEBT_AMT
+					     ,tb1.CYFD_DEBT_AMT
+					     ,tb1.DEBT_AMT
+					     ,tb1.ORI_DECSN_AMOUNT
+					     ,tb1.CYFD_DECSN_AMOUNT
+					     ,tb1.DECSN_AMOUNT
+					     ,tb1.DUMMY_AMT
+					     ,tb1.CAUSE_ACTION_NO
+					     ,tb1.BSNS_CODE
+					     ,tb1.CNTRCT_NO
+					     ,tb1.BUDGET_DEPT_CODE
+					FROM   (SELECT 'A1' AS EXP_TYPE
+					             ,CASE WHEN SUBSTR(t1.CNSUL_DE, 1, 4) <![CDATA[<]]> t1.BUDGET_YEAR THEN SUBSTR(t1.CNSUL_DE, 1, 4) ELSE t1.BUDGET_YEAR END AS BUDGET_YEAR
+					             ,t1.CAUSE_ACTION_NO AS DECSN_NO                                                                                              /*결의번호*/
+					             ,NULL AS CYFD_SE                                                                                                             /*이월구분*/
+					             ,t1.BSNS_SE                                                                                                                  /*사업구분*/
+					             ,t1.BALC_SE                                                                                                                  /*수지구분*/
+					             ,NULL AS ANACT_KND                                                                                                          /*결의서종류*/
+					             ,t1.DEPT_CODE                                                                                                                /*부서코드*/
+					             ,t1.BUDGET_ACNT_CODE                                                                                                       /*예산계정코드*/
+					             ,t1.BUKIP_CODE AS EXPNDTR_UNIT_CODE                                                                                        /*지출단위코드*/
+					             ,t1.CNSUL_DE AS CAUSE_ACTION_DE                                                                                            /*원인행위일자*/
+					             ,t1.SUMRY                                                                                                                      /*적요*/
+					             ,NULL AS BCNC_CODE                                                                                                          /*거래처코드*/
+					             ,NULL AS BCNC_NM                                                                                                             /*거래처명*/
+					             ,0 AS ORI_CAUSE_ACTION_AMOUNT
+					             ,0 AS CYFD_CAUSE_ACTION_AMOUNT
+					             ,t1.CNSUL_AMOUNT AS CAUSE_ACTION_AMOUNT                                                                                    /*원인행위금액*/
+					             ,t2.DECSN_AMOUNT AS CAUSE_ACTION_DECSN_AMOUNT
+					             ,0 AS ORI_DEBT_AMT
+					             ,0 AS CYFD_DEBT_AMT
+					             ,0 AS DEBT_AMT                                                                                                             /*채무확정금액*/
+					             ,0 AS ORI_DECSN_AMOUNT
+					             ,0 AS CYFD_DECSN_AMOUNT
+					             ,0 AS DECSN_AMOUNT                                                                                                       /*결의금액(지출)*/
+					             ,t1.CNSUL_AMOUNT AS DUMMY_AMT
+					             ,t1.CAUSE_ACTION_NO AS CAUSE_ACTION_NO
+					             ,t1.BSNS_CODE
+					             ,NULL AS CNTRCT_NO
+					             ,t1.BUDGET_DEPT_CODE
+					       FROM   TBACC_CNSUL t1                                                                                                           /*원인행위마스터*/
+					                                                                                                                                       /*지출결의마스터*/
+					              LEFT OUTER JOIN (SELECT DECSN_YEAR
+					                                     ,BUDGET_YEAR
+					                                     ,CAUSE_ACTION_NO
+					                                     ,SUM(DECSN_AMOUNT) AS DECSN_AMOUNT
+					                               FROM   TBACC_EXP_DSN_MASTR
+					                               GROUP BY DECSN_YEAR, BUDGET_YEAR, CAUSE_ACTION_NO) t2
+					                 ON t1.BUDGET_YEAR = t2.DECSN_YEAR
+					                 AND t1.CAUSE_ACTION_NO = t2.CAUSE_ACTION_NO
+					       WHERE  t1.BUDGET_YEAR >= '2018'
+					       UNION ALL
+					       SELECT 'A1' AS EXP_TYPE
+					             ,CASE WHEN SUBSTR(t1.CNSUL_DE, 1, 4) <![CDATA[<]]> t1.BUDGET_YEAR THEN SUBSTR(t1.CNSUL_DE, 1, 4) ELSE t1.BUDGET_YEAR END AS BUDGET_YEAR
+					             ,t1.CAUSE_ACTION_NO AS DECSN_NO                                                                                              /*결의번호*/
+					             ,NULL AS CYFD_SE                                                                                                             /*이월구분*/
+					             ,t1.BSNS_SE                                                                                                                  /*사업구분*/
+					             ,t1.BALC_SE                                                                                                                  /*수지구분*/
+					             ,NULL AS ANACT_KND                                                                                                          /*결의서종류*/
+					             ,t1.DEPT_CODE                                                                                                                /*부서코드*/
+					             ,t1.BUDGET_ACNT_CODE                                                                                                       /*예산계정코드*/
+					             ,t1.BUKIP_CODE AS EXPNDTR_UNIT_CODE                                                                                        /*지출단위코드*/
+					             ,t1.CNSUL_DE AS CAUSE_ACTION_DE                                                                                            /*원인행위일자*/
+					             ,t1.SUMRY                                                                                                                      /*적요*/
+					             ,NULL AS BCNC_CODE                                                                                                          /*거래처코드*/
+					             ,NULL AS BCNC_NM                                                                                                             /*거래처명*/
+					             ,0 AS ORI_CAUSE_ACTION_AMOUNT
+					             ,0 AS CYFD_CAUSE_ACTION_AMOUNT
+					             ,t1.CNSUL_AMOUNT AS CAUSE_ACTION_AMOUNT                                                                                    /*원인행위금액*/
+					             ,0 AS CAUSE_ACTION_DECSN_AMOUNT
+					             ,0 AS ORI_DEBT_AMT
+					             ,0 AS CYFD_DEBT_AMT
+					             ,0 AS DEBT_AMT                                                                                                             /*채무확정금액*/
+					             ,0 AS ORI_DECSN_AMOUNT
+					             ,0 AS CYFD_DECSN_AMOUNT
+					             ,0 AS DECSN_AMOUNT                                                                                                       /*결의금액(지출)*/
+					             ,t1.CNSUL_AMOUNT AS DUMMY_AMT
+					             ,t1.CAUSE_ACTION_NO AS CAUSE_ACTION_NO
+					             ,t1.BSNS_CODE
+					             ,NULL AS CNTRCT_NO
+					             ,t1.BUDGET_DEPT_CODE
+					       FROM   TBACC_CNSUL t1                                                                                                           /*원인행위마스터*/
+					                                                                                                                                       /*지출결의마스터*/
+					       WHERE  t1.BUDGET_YEAR = '2017'
+					       AND    t1.EMPNO = 'SYSTEM'                                                                  /*2017년도 대응 : 2018년도 이후시점부터는 미사용 (오픈전 데이터보정용)*/
+					       UNION ALL
+					       /*채무확정금액*/
+					       SELECT 'A2' AS EXP_TYPE
+					             ,CASE WHEN SUBSTR(t1.DET_DCSN_DE, 1, 4) <![CDATA[<]]> t1.BUDGET_YEAR THEN SUBSTR(t1.DET_DCSN_DE, 1, 4) ELSE t1.BUDGET_YEAR END AS BUDGET_YEAR
+					             ,t1.DECSN_NO AS DECSN_NO                                                                                                     /*결의번호*/
+					             ,t1.CYFD_SE                                                                                                                  /*이월구분*/
+					             ,t1.BSNS_SE                                                                                                                  /*사업구분*/
+					             ,t1.BALC_SE                                                                                                                  /*수지구분*/
+					             ,t1.ANACT_KND                                                                                                               /*결의서종류*/
+					             ,t1.DEPT_CODE                                                                                                                /*부서코드*/
+					             ,t1.BUDGET_ACNT_CODE                                                                                                       /*예산계정코드*/
+					             ,t1.EXPNDTR_UNIT_CODE                                                                                                      /*지출단위코드*/
+					             /*,t1.DET_DCSN_DE AS CAUSE_ACTION_DE                 /*채무확정일자 2016.09.04*/
+					             ,NVL(t1.CPTAL_EXPNDTR_ACNTBK_DE, t1.DET_DCSN_DE) AS CAUSE_ACTION_DE                                           /*자금지출장부일자 2016.09.04*/
+					             ,t1.SUMRY AS SUMRY                                                                                                             /*적요*/
+					             ,t2.BCNC_CODE AS BCNC_CODE                                                                                                  /*거래처코드*/
+					             ,t3.BCNC_NM AS BCNC_NM                                                                                                       /*거래처명*/
+					             ,0 AS ORI_CAUSE_ACTION_AMOUNT
+					             ,0 AS CYFD_CAUSE_ACTION_AMOUNT
+					             ,0 AS CAUSE_ACTION_AMOUNT                                                                                                  /*원인행위금액*/
+					             ,0 AS CAUSE_ACTION_DECSN_AMOUNT
+					             ,t1.ORIBDGT_DECSN_AMOUNT AS ORI_DEBT_AMT
+					             ,t1.CYFD_BUDGET_DECSN_AMOUNT AS CYFD_DEBT_AMT
+					             ,t1.DECSN_AMOUNT AS DEBT_AMT                                                                                                /*채무확정액*/
+					             ,0 AS ORI_DECSN_AMOUNT
+					             ,0 AS CYFD_DECSN_AMOUNT
+					             ,0 AS DECSN_AMOUNT                                                                                                       /*결의금액(지출)*/
+					             ,t1.DECSN_AMOUNT AS DUMMY_AMT
+					             ,t1.CAUSE_ACTION_NO AS CAUSE_ACTION_NO
+					             ,t1.BSNS_CODE
+					             ,t1.CNTRCT_NO
+					             ,t1.BUDGET_DEPT_CODE
+					       FROM   TBACC_EXP_DSN_MASTR t1                                                                                                   /*지출결의마스터*/
+					              LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t2                                                                                   /*지출결의세부*/
+					                 ON t1.DECSN_YEAR = t2.DECSN_YEAR
+					                 AND t1.DECSN_NO = t2.DECSN_NO
+					                 AND t2.SEQ = '1'                                                                                                           /*고정*/
+					              LEFT OUTER JOIN TBCTR_BCNC_MASTR t3 ON t2.BCNC_CODE = t3.BCNC_CODE
+					       WHERE  SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5'                                                                              /* 채무확전건 포함 */
+					       UNION ALL
+					       /*지출금액*/
+					       SELECT 'A3' AS EXP_TYPE
+					             ,CASE
+					                 WHEN t1.CPTAL_EXPNDTR_ACNTBK_DE IS NULL THEN t1.BUDGET_YEAR
+					                 WHEN SUBSTR(t1.CPTAL_EXPNDTR_ACNTBK_DE, 1, 4) <![CDATA[<]]> t1.BUDGET_YEAR THEN SUBSTR(t1.DET_DCSN_DE, 1, 4)
+					                 ELSE t1.BUDGET_YEAR
+					              END
+					                 AS BUDGET_YEAR
+					             ,t1.DECSN_NO AS DECSN_NO                                                                                                     /*결의번호*/
+					             ,t1.CYFD_SE                                                                                                                  /*이월구분*/
+					             ,t1.BSNS_SE                                                                                                                  /*사업구분*/
+					             ,t1.BALC_SE                                                                                                                  /*수지구분*/
+					             ,t1.ANACT_KND                                                                                                               /*결의서종류*/
+					             ,t1.DEPT_CODE                                                                                                                /*부서코드*/
+					             ,t1.BUDGET_ACNT_CODE                                                                                                       /*예산계정코드*/
+					             ,t1.EXPNDTR_UNIT_CODE                                                                                                      /*지출단위코드*/
+					             ,t1.CPTAL_EXPNDTR_ACNTBK_DE AS CAUSE_ACTION_DE                                                                           /*자금지출장부일자*/
+					             ,t1.SUMRY AS SUMRY                                                                                                             /*적요*/
+					             ,t2.BCNC_CODE AS BCNC_CODE                                                                                                  /*거래처코드*/
+					             ,t3.BCNC_NM AS BCNC_NM                                                                                                       /*거래처명*/
+					             ,0 AS ORI_CAUSE_ACTION_AMOUNT
+					             ,0 AS CYFD_CAUSE_ACTION_AMOUNT
+					             ,0 AS CAUSE_ACTION_AMOUNT                                                                                                  /*원인행위금액*/
+					             ,0 AS CAUSE_ACTION_DECSN_AMOUNT
+					             ,0 AS ORI_DEBT_AMT
+					             ,0 AS CYFD_DEBT_AMT
+					             ,0 AS DEBT_AMT                                                                                                              /*채무확정액*/
+					             ,t1.ORIBDGT_DECSN_AMOUNT AS ORI_DECSN_AMOUNT
+					             ,t1.CYFD_BUDGET_DECSN_AMOUNT AS CYFD_DECSN_AMOUNT
+					             ,t1.DECSN_AMOUNT AS DECSN_AMOUNT                                                                                         /*결의금액(지출)*/
+					             ,t1.DECSN_AMOUNT AS DUMMY_AMT
+					             ,t1.CAUSE_ACTION_NO AS CAUSE_ACTION_NO
+					             ,t1.BSNS_CODE
+					             ,t1.CNTRCT_NO
+					             ,t1.BUDGET_DEPT_CODE
+					       FROM   TBACC_EXP_DSN_MASTR t1                                                                                                   /*지출결의마스터*/
+					              LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t2
+					                 ON t1.DECSN_YEAR = t2.DECSN_YEAR
+					                 AND t1.DECSN_NO = t2.DECSN_NO
+					                 AND t2.SEQ = '1'                                                                                                           /*고정*/
+					              LEFT OUTER JOIN TBCTR_BCNC_MASTR t3 ON t2.BCNC_CODE = t3.BCNC_CODE
+					       WHERE  SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5'
+					       AND    CPTAL_EXPNDTR_ACNTBK_DE <![CDATA[<=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')) tb1
+		           )
+		     WHERE 1=1
+		       AND CAUSE_ACTION_DE BETWEEN #BGNDE# AND #ENDDE#
+			<isEqual property="BSNS_KND" compareValue="1">
+		       AND BSNS_CODE LIKE 'A%'
+			</isEqual>
+			<isEqual property="BSNS_KND" compareValue="2">
+		       AND BSNS_CODE LIKE 'B%'
+			</isEqual>
+		    GROUP BY BUDGET_YEAR
+		           , BSNS_SE
+		           , BALC_SE
+			<isNotEmpty property="BSNS_CODE">
+		           , BSNS_CODE
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , DEPT_CODE
+				</isNotEqual>
+			</isNotEmpty>
+		           , BUDGET_ACNT_CODE
+		</isEqual>
+		<isEqual property="YEAR_SE" compareValue="2">
+		    SELECT BUDGET_YEAR AS YEAR
+		         , BSNS_SE
+		         , BALC_SE
+			<isNotEmpty property="BSNS_CODE">
+		         , BSNS_CODE
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , DEPT_CODE
+				</isNotEqual>
+			</isNotEmpty>
+		         , BUDGET_ACNT_CODE
+		         , SUM(NVL(CAUSE_ACTION_AMOUNT, 0))    AS CAUSE_ACTION_AMOUNT
+		         , SUM(NVL(DEBT_AMT, 0))               AS DEBT_AMT
+		         , SUM(NVL(DECSN_AMOUNT, 0))           AS DECSN_AMOUNT
+		         , SUM(NVL(DECSN_AMOUNT_ORI, 0))       AS DECSN_AMOUNT_ORI
+		         , SUM(NVL(DECSN_AMOUNT_CYFD, 0))      AS DECSN_AMOUNT_CYFD
+		      FROM EXP_TM
+		     WHERE 1=1
+			<isEqual property="BSNS_KND" compareValue="1">
+		       AND BSNS_CODE LIKE 'A%'
+			</isEqual>
+			<isEqual property="BSNS_KND" compareValue="2">
+		       AND BSNS_CODE LIKE 'B%'
+			</isEqual>
+		    GROUP BY BUDGET_YEAR
+		           , BSNS_SE
+		           , BALC_SE
+			<isNotEmpty property="BSNS_CODE">
+		           , BSNS_CODE
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , DEPT_CODE
+				</isNotEqual>
+			</isNotEmpty>
+		           , BUDGET_ACNT_CODE
+		</isEqual>
+		), CYFD_DEMAND_TM AS (
+		    SELECT YEAR
+		         , BSNS_SE
+		         , BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		         , DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		         , BUDGET_ACNT_CODE
+		         , SUM(NVL(BUDGET_AM, 0)) AS CYFD_DEMAND_AM
+		      FROM TBBDG_CYFD_BUDGET
+		     WHERE 1=1
+		<isNotEmpty property="BUDGET_KND">
+		    <isNotEqual property="BUDGET_KND" compareValue="1">
+		       AND SE = #BUDGET_KND#
+		    </isNotEqual>
+		</isNotEmpty>
+		<isEqual property="BSNS_KND" compareValue="1">
+		       AND DETAIL_BSNS_CODE LIKE 'A%'
+		</isEqual>
+		<isEqual property="BSNS_KND" compareValue="2">
+		       AND DETAIL_BSNS_CODE LIKE 'B%'
+		</isEqual>
+		    GROUP BY YEAR
+		           , BSNS_SE
+		           , BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		           , DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		           , BUDGET_ACNT_CODE
+		), CYFD_DCSN_TM AS (
+		    SELECT YEAR
+		         , BSNS_SE
+		         , BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		         , DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		         , BUDGET_ACNT_CODE
+		         , SUM(NVL(BUDGET_AM, 0)) AS CYFD_DCSN_AM
+		      FROM TBBDG_CYFD_BUDGET
+		     WHERE 1=1
+		       AND CYFD_DCSN_AT = '1'
+		<isNotEmpty property="BUDGET_KND">
+		    <isNotEqual property="BUDGET_KND" compareValue="1">
+		       AND SE = #BUDGET_KND#
+		    </isNotEqual>
+		</isNotEmpty>
+		<isEqual property="BSNS_KND" compareValue="1">
+		       AND DETAIL_BSNS_CODE LIKE 'A%'
+		</isEqual>
+		<isEqual property="BSNS_KND" compareValue="2">
+		       AND DETAIL_BSNS_CODE LIKE 'B%'
+		</isEqual>
+		    GROUP BY YEAR
+		           , BSNS_SE
+		           , BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		           , DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		           , BUDGET_ACNT_CODE
+		), CYFD_DEMAND_TM2 AS (
+		    SELECT YEAR
+		         , BSNS_SE
+		         , BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		         , CYFD_DETAIL_BSNS_CODE  AS DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , CYFD_DEPT_CODE         AS DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		         , CYFD_BUDGET_ACNT_CODE  AS BUDGET_ACNT_CODE
+		         , SUM(NVL(BUDGET_AM, 0)) AS CYFD_DEMAND_AM
+		      FROM TBBDG_CYFD_BUDGET
+		     WHERE 1=1
+		<isNotEmpty property="BUDGET_KND">
+		    <isNotEqual property="BUDGET_KND" compareValue="1">
+		       AND SE = #BUDGET_KND#
+		    </isNotEqual>
+		</isNotEmpty>
+		<isEqual property="BSNS_KND" compareValue="1">
+		       AND CYFD_DETAIL_BSNS_CODE LIKE 'A%'
+		</isEqual>
+		<isEqual property="BSNS_KND" compareValue="2">
+		       AND CYFD_DETAIL_BSNS_CODE LIKE 'B%'
+		</isEqual>
+		    GROUP BY YEAR
+		           , BSNS_SE
+		           , BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		           , CYFD_DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , CYFD_DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		           , CYFD_BUDGET_ACNT_CODE
+		), CYFD_DCSN_TM2 AS (
+		    SELECT YEAR
+		         , BSNS_SE
+		         , BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		         , CYFD_DETAIL_BSNS_CODE  AS DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , CYFD_DEPT_CODE         AS DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		         , CYFD_BUDGET_ACNT_CODE  AS BUDGET_ACNT_CODE
+		         , SUM(NVL(BUDGET_AM, 0)) AS CYFD_DCSN_AM
+		      FROM TBBDG_CYFD_BUDGET
+		     WHERE 1=1
+		       AND CYFD_DCSN_AT = '1'
+		<isNotEmpty property="BUDGET_KND">
+		    <isNotEqual property="BUDGET_KND" compareValue="1">
+		       AND SE = #BUDGET_KND#
+		    </isNotEqual>
+		</isNotEmpty>
+		<isEqual property="BSNS_KND" compareValue="1">
+		       AND CYFD_DETAIL_BSNS_CODE LIKE 'A%'
+		</isEqual>
+		<isEqual property="BSNS_KND" compareValue="2">
+		       AND CYFD_DETAIL_BSNS_CODE LIKE 'B%'
+		</isEqual>
+		    GROUP BY YEAR
+		           , BSNS_SE
+		           , BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		           , CYFD_DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , CYFD_DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		           , CYFD_BUDGET_ACNT_CODE
+		), BDG_SEMOK_LIST AS (
+		    SELECT T1.YEAR
+		         , T3.GWAN_NM
+		         , T3.HANG_NM
+		         , T3.SEHANG_NM
+		         , T3.MOK_NM
+		         , T3.SEMOK_NM
+		<isNotEmpty property="BSNS_CODE">
+		         , T1.DETAIL_BSNS_CODE
+		         , T4.BSNS_NM                                                                                          AS DETAIL_BSNS_NM
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , T1.DEPT_CODE
+		         , T5.DEPT_NM
+			</isNotEqual>
+		</isNotEmpty>
+		         , TO_CHAR(T1.BUDGET_ACNT_CODE)                                                                        AS BUDGET_ACNT_CODE
+		         , T3.BUDGET_ACNT_NM
+		         , T3.GWAN_NM || '-' || T3.HANG_NM || '-' || T3.SEHANG_NM || '-' || T3.MOK_NM || '-' || T3.SEMOK_NM    AS BUDGET_ACNT_NM2
+		         , NVL(T1.CYFD_BUDGET_AMT,0)                                                                           AS CYFD_BUDGET_AMT
+		         , NVL(T1.ORIBDGT_AMT,0)                                                                               AS ORIBDGT_AMT
+		         , NVL(T1.RVSPBGT_AMT,0)                                                                               AS RVSPBGT_AMT
+		         , NVL(T1.DVR_AMT,0)                                                                                   AS DVR_AMT
+		         , NVL(T1.PRTINT_YEAR_AM, 0)                                                                           AS PRTINT_YEAR_AM
+		         , NVL(T1.EXECUT_BUDGET_AM, 0)                                                                         AS EXECUT_BUDGET_AM
+		         , NVL(T2.CAUSE_ACTION_AMOUNT, 0)                                                                      AS CAUSE_ACTION_AMOUNT
+		         , NVL(T2.CAUSE_ACTION_AMOUNT, 0) - NVL(T2.DEBT_AMT, 0)                                                AS CAUSE_ACTION_INCMP_AMOUNT
+		         , NVL(T2.DEBT_AMT, 0)                                                                                 AS DEBT_AMT
+		         , NVL(T1.EXECUT_BUDGET_AM, 0) - NVL(T2.DEBT_AMT, 0)                                                   AS DFFRNC_AMOUNT
+		         , NVL(T2.DECSN_AMOUNT, 0)                                                                             AS DECSN_AMOUNT
+		         , NVL(T2.DEBT_AMT, 0) - NVL(T2.DECSN_AMOUNT, 0)                                                       AS UNPAY_AMOUNT
+		         , NVL(T1.EXECUT_BUDGET_AM, 0) - NVL(T2.DEBT_AMT, 0) - NVL(T8.CYFD_DCSN_AM, 0)                         AS DISUSE_AMOUNT
+		         , NVL(T1.EXECUT_BUDGET_AM, 0) - NVL(T2.DECSN_AMOUNT, 0)                                               AS BLCE
+		         , NVL(T6.CYFD_DEMAND_AM, 0)                                                                           AS CYFD_DEMAND_AM
+		         , NVL(T8.CYFD_DCSN_AM, 0)                                                                             AS CYFD_DCSN_AM
+		         , NVL(T9.CYFD_DEMAND_AM, 0)                                                                           AS CYFD_DEMAND_AM2
+		         , NVL(T10.CYFD_DCSN_AM, 0)                                                                            AS CYFD_DCSN_AM2
+		         , CASE WHEN T1.YEAR &lt; '2020'
+		                     THEN CASE WHEN (NVL(T1.CYFD_BUDGET_AMT,0) - NVL(T2.DECSN_AMOUNT, 0)) >= 0 THEN NVL(T2.DECSN_AMOUNT, 0)
+		                               ELSE NVL(T1.CYFD_BUDGET_AMT,0)
+		                          END
+		                ELSE NVL(T2.DECSN_AMOUNT_CYFD, 0)
+		           END    AS CYFD_BUDGET_EXPNDTR_AM
+		         , CASE WHEN T1.YEAR &lt; '2020'
+		                     THEN CASE WHEN (NVL(T1.CYFD_BUDGET_AMT,0) - NVL(T2.DECSN_AMOUNT, 0)) >= 0 THEN 0
+		                               ELSE ABS(NVL(T1.CYFD_BUDGET_AMT,0) - NVL(T2.DECSN_AMOUNT, 0))
+		                          END
+		                ELSE NVL(T2.DECSN_AMOUNT_ORI, 0)
+		           END    AS ORIBDGT_EXPNDTR_AM
+		      FROM EXECUT_BUDGET_TM T1
+		           LEFT OUTER JOIN EXP_DSN_MASTR_TM T2
+		                ON T1.YEAR              = T2.YEAR
+		               AND T1.BSNS_SE           = T2.BSNS_SE
+		               AND T1.BALC_SE           = T2.BALC_SE
+		               AND T1.BUDGET_ACNT_CODE  = T2.BUDGET_ACNT_CODE
+		<isNotEmpty property="BSNS_CODE">
+		               AND T1.DETAIL_BSNS_CODE  = T2.BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		               AND T1.DEPT_CODE         = T2.DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_CODE">
+		           LEFT OUTER JOIN TBPRJ_BSNS_CODE T4
+		                ON T1.DETAIL_BSNS_CODE = T4.BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           LEFT OUTER JOIN TBHRM_DEPT T5
+		                ON T1.DEPT_CODE = T5.DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		           LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE T3
+		                ON T1.YEAR             = T3.YEAR
+		               AND T1.BSNS_SE          = T3.BSNS_SE
+		               AND T1.BALC_SE          = T3.BALC_SE
+		               AND T1.BUDGET_ACNT_CODE = T3.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN CYFD_DEMAND_TM T6
+		                ON T1.YEAR              = T6.YEAR
+		               AND T1.BSNS_SE           = T6.BSNS_SE
+		               AND T1.BALC_SE           = T6.BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		               AND T1.DETAIL_BSNS_CODE  = T6.DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		               AND T1.DEPT_CODE         = T6.DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		               AND T1.BUDGET_ACNT_CODE  = T6.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN CYFD_DCSN_TM T8
+		                ON T1.YEAR              = T8.YEAR
+		               AND T1.BSNS_SE           = T8.BSNS_SE
+		               AND T1.BALC_SE           = T8.BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		               AND T1.DETAIL_BSNS_CODE  = T8.DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		               AND T1.DEPT_CODE         = T8.DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		               AND T1.BUDGET_ACNT_CODE  = T8.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN CYFD_DEMAND_TM2 T9
+		                ON T1.YEAR              = TO_CHAR(TO_NUMBER(T9.YEAR)+1)
+		               AND T1.BSNS_SE           = T9.BSNS_SE
+		               AND T1.BALC_SE           = T9.BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		               AND T1.DETAIL_BSNS_CODE  = T9.DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		               AND T1.DEPT_CODE         = T9.DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		               AND T1.BUDGET_ACNT_CODE  = T9.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN CYFD_DCSN_TM2 T10
+		                ON T1.YEAR              = TO_CHAR(TO_NUMBER(T10.YEAR)+1)
+		               AND T1.BSNS_SE           = T10.BSNS_SE
+		               AND T1.BALC_SE           = T10.BALC_SE
+		<isNotEmpty property="BSNS_CODE">
+		               AND T1.DETAIL_BSNS_CODE  = T10.DETAIL_BSNS_CODE
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		               AND T1.DEPT_CODE         = T10.DEPT_CODE
+			</isNotEqual>
+		</isNotEmpty>
+		               AND T1.BUDGET_ACNT_CODE  = T10.BUDGET_ACNT_CODE
+		     WHERE T1.YEAR    = #YEAR#
+		<isNotEmpty property="BSNS_SE">
+		       AND T1.BSNS_SE = #BSNS_SE#
+		</isNotEmpty>
+		       AND T1.BALC_SE = #BALC_SE#
+		), BDG_GWAN_LIST AS (
+		    SELECT YEAR
+		         , MAX(GWAN_NM) AS GWAN_NM
+		         , '' AS HANG_NM
+		         , '' AS SEHANG_NM
+		         , '' AS MOK_NM
+		         , '' AS SEMOK_NM
+		<isNotEmpty property="BSNS_CODE">
+		         , DETAIL_BSNS_CODE
+		         , DETAIL_BSNS_NM
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , DEPT_CODE
+		         , DEPT_NM
+			</isNotEqual>
+		</isNotEmpty>
+		         , CASE WHEN BUDGET_ACNT_CODE LIKE '8%' THEN '7' ELSE SUBSTR(BUDGET_ACNT_CODE,1,1) END || '0000000' AS BUDGET_ACNT_CODE
+		         , '' AS BUDGET_ACNT_NM
+		         , '' AS BUDGET_ACNT_NM2
+		         , SUM(CYFD_BUDGET_AMT)           AS CYFD_BUDGET_AMT
+		         , SUM(ORIBDGT_AMT)               AS ORIBDGT_AMT
+		         , SUM(RVSPBGT_AMT)               AS RVSPBGT_AMT
+		         , SUM(DVR_AMT)                   AS DVR_AMT
+		         , SUM(PRTINT_YEAR_AM)            AS PRTINT_YEAR_AM
+		         , SUM(EXECUT_BUDGET_AM)          AS EXECUT_BUDGET_AM
+		         , SUM(CAUSE_ACTION_AMOUNT)       AS CAUSE_ACTION_AMOUNT
+		         , SUM(CAUSE_ACTION_INCMP_AMOUNT) AS CAUSE_ACTION_INCMP_AMOUNT
+		         , SUM(DEBT_AMT)                  AS DEBT_AMT
+		         , SUM(DFFRNC_AMOUNT)             AS DFFRNC_AMOUNT
+		         , SUM(DECSN_AMOUNT)              AS DECSN_AMOUNT
+		         , SUM(UNPAY_AMOUNT)              AS UNPAY_AMOUNT
+		         , SUM(DISUSE_AMOUNT)             AS DISUSE_AMOUNT
+		         , SUM(BLCE)                      AS BLCE
+		         , SUM(CYFD_DEMAND_AM)            AS CYFD_DEMAND_AM
+		         , SUM(CYFD_DCSN_AM)              AS CYFD_DCSN_AM
+		         , SUM(CYFD_DEMAND_AM2)           AS CYFD_DEMAND_AM2
+		         , SUM(CYFD_DCSN_AM2)             AS CYFD_DCSN_AM2
+		         , SUM(CYFD_BUDGET_EXPNDTR_AM)    AS CYFD_BUDGET_EXPNDTR_AM
+		         , SUM(ORIBDGT_EXPNDTR_AM)        AS ORIBDGT_EXPNDTR_AM
+		      FROM BDG_SEMOK_LIST
+		    GROUP BY YEAR
+		<isNotEmpty property="BSNS_CODE">
+		           , DETAIL_BSNS_CODE
+		           , DETAIL_BSNS_NM
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , DEPT_CODE
+		           , DEPT_NM
+			</isNotEqual>
+		</isNotEmpty>
+		           , CASE WHEN BUDGET_ACNT_CODE LIKE '8%' THEN '7' ELSE SUBSTR(BUDGET_ACNT_CODE,1,1) END || '0000000'
+		), BDG_HANG_LIST AS (
+		    SELECT YEAR
+		         , MAX(GWAN_NM) AS GWAN_NM
+		         , MAX(HANG_NM) AS HANG_NM
+		         , ''           AS SEHANG_NM
+		         , ''           AS MOK_NM
+		         , ''           AS SEMOK_NM
+		<isNotEmpty property="BSNS_CODE">
+		         , DETAIL_BSNS_CODE
+		         , DETAIL_BSNS_NM
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , DEPT_CODE
+		         , DEPT_NM
+			</isNotEqual>
+		</isNotEmpty>
+		         , CASE WHEN BUDGET_ACNT_CODE LIKE '72%' THEN '71'
+		                WHEN BUDGET_ACNT_CODE LIKE '74%' THEN '71'
+		                WHEN BUDGET_ACNT_CODE LIKE '75%' THEN '71'
+		                ELSE SUBSTR(BUDGET_ACNT_CODE,1,2)
+		           END || '000000' AS BUDGET_ACNT_CODE
+		         , '' AS BUDGET_ACNT_NM
+		         , '' AS BUDGET_ACNT_NM2
+		         , SUM(CYFD_BUDGET_AMT)           AS CYFD_BUDGET_AMT
+		         , SUM(ORIBDGT_AMT)               AS ORIBDGT_AMT
+		         , SUM(RVSPBGT_AMT)               AS RVSPBGT_AMT
+		         , SUM(DVR_AMT)                   AS DVR_AMT
+		         , SUM(PRTINT_YEAR_AM)            AS PRTINT_YEAR_AM
+		         , SUM(EXECUT_BUDGET_AM)          AS EXECUT_BUDGET_AM
+		         , SUM(CAUSE_ACTION_AMOUNT)       AS CAUSE_ACTION_AMOUNT
+		         , SUM(CAUSE_ACTION_INCMP_AMOUNT) AS CAUSE_ACTION_INCMP_AMOUNT
+		         , SUM(DEBT_AMT)                  AS DEBT_AMT
+		         , SUM(DFFRNC_AMOUNT)             AS DFFRNC_AMOUNT
+		         , SUM(DECSN_AMOUNT)              AS DECSN_AMOUNT
+		         , SUM(UNPAY_AMOUNT)              AS UNPAY_AMOUNT
+		         , SUM(DISUSE_AMOUNT)             AS DISUSE_AMOUNT
+		         , SUM(BLCE)                      AS BLCE
+		         , SUM(CYFD_DEMAND_AM)            AS CYFD_DEMAND_AM
+		         , SUM(CYFD_DCSN_AM)              AS CYFD_DCSN_AM
+		         , SUM(CYFD_DEMAND_AM2)           AS CYFD_DEMAND_AM2
+		         , SUM(CYFD_DCSN_AM2)             AS CYFD_DCSN_AM2
+		         , SUM(CYFD_BUDGET_EXPNDTR_AM)    AS CYFD_BUDGET_EXPNDTR_AM
+		         , SUM(ORIBDGT_EXPNDTR_AM)        AS ORIBDGT_EXPNDTR_AM
+		      FROM BDG_SEMOK_LIST
+		    GROUP BY YEAR
+		<isNotEmpty property="BSNS_CODE">
+		           , DETAIL_BSNS_CODE
+		           , DETAIL_BSNS_NM
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , DEPT_CODE
+		           , DEPT_NM
+			</isNotEqual>
+		</isNotEmpty>
+		           , CASE WHEN BUDGET_ACNT_CODE LIKE '72%' THEN '71'
+		                  WHEN BUDGET_ACNT_CODE LIKE '74%' THEN '71'
+		                  WHEN BUDGET_ACNT_CODE LIKE '75%' THEN '71'
+		                  ELSE SUBSTR(BUDGET_ACNT_CODE,1,2) 
+		             END || '000000'
+		), BDG_SEHANG_LIST AS (
+		    SELECT YEAR
+		         , MAX(GWAN_NM)                   AS GWAN_NM
+		         , MAX(HANG_NM)                   AS HANG_NM
+		         , MAX(SEHANG_NM)                 AS SEHANG_NM
+		         , ''                             AS MOK_NM
+		         , ''                             AS SEMOK_NM
+		<isNotEmpty property="BSNS_CODE">
+		         , DETAIL_BSNS_CODE
+		         , DETAIL_BSNS_NM
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , DEPT_CODE
+		         , DEPT_NM
+			</isNotEqual>
+		</isNotEmpty>
+		         , SUBSTR(BUDGET_ACNT_CODE,1,3) || '00000' AS BUDGET_ACNT_CODE
+		         , '' AS BUDGET_ACNT_NM
+		         , '' AS BUDGET_ACNT_NM2
+		         , SUM(CYFD_BUDGET_AMT)           AS CYFD_BUDGET_AMT
+		         , SUM(ORIBDGT_AMT)               AS ORIBDGT_AMT
+		         , SUM(RVSPBGT_AMT)               AS RVSPBGT_AMT
+		         , SUM(DVR_AMT)                   AS DVR_AMT
+		         , SUM(PRTINT_YEAR_AM)            AS PRTINT_YEAR_AM
+		         , SUM(EXECUT_BUDGET_AM)          AS EXECUT_BUDGET_AM
+		         , SUM(CAUSE_ACTION_AMOUNT)       AS CAUSE_ACTION_AMOUNT
+		         , SUM(CAUSE_ACTION_INCMP_AMOUNT) AS CAUSE_ACTION_INCMP_AMOUNT
+		         , SUM(DEBT_AMT)                  AS DEBT_AMT
+		         , SUM(DFFRNC_AMOUNT)             AS DFFRNC_AMOUNT
+		         , SUM(DECSN_AMOUNT)              AS DECSN_AMOUNT
+		         , SUM(UNPAY_AMOUNT)              AS UNPAY_AMOUNT
+		         , SUM(DISUSE_AMOUNT)             AS DISUSE_AMOUNT
+		         , SUM(BLCE)                      AS BLCE
+		         , SUM(CYFD_DEMAND_AM)            AS CYFD_DEMAND_AM
+		         , SUM(CYFD_DCSN_AM)              AS CYFD_DCSN_AM
+		         , SUM(CYFD_DEMAND_AM2)           AS CYFD_DEMAND_AM2
+		         , SUM(CYFD_DCSN_AM2)             AS CYFD_DCSN_AM2
+		         , SUM(CYFD_BUDGET_EXPNDTR_AM)    AS CYFD_BUDGET_EXPNDTR_AM
+		         , SUM(ORIBDGT_EXPNDTR_AM)        AS ORIBDGT_EXPNDTR_AM
+		      FROM BDG_SEMOK_LIST
+		    GROUP BY YEAR
+		<isNotEmpty property="BSNS_CODE">
+		           , DETAIL_BSNS_CODE
+		           , DETAIL_BSNS_NM
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , DEPT_CODE
+		           , DEPT_NM
+			</isNotEqual>
+		</isNotEmpty>
+		           , SUBSTR(BUDGET_ACNT_CODE,1,3) || '00000'
+		), BDG_MOK_LIST AS (
+		    SELECT YEAR
+		         , MAX(GWAN_NM)      AS GWAN_NM
+		         , MAX(HANG_NM)      AS HANG_NM
+		         , MAX(SEHANG_NM)    AS SEHANG_NM
+		         , MAX(MOK_NM)       AS MOK_NM
+		         , ''                AS SEMOK_NM
+		<isNotEmpty property="BSNS_CODE">
+		         , DETAIL_BSNS_CODE
+		         , DETAIL_BSNS_NM
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , DEPT_CODE
+		         , DEPT_NM
+			</isNotEqual>
+		</isNotEmpty>
+		         , SUBSTR(BUDGET_ACNT_CODE,1,6) || '00' AS BUDGET_ACNT_CODE
+		         , '' AS BUDGET_ACNT_NM
+		         , '' AS BUDGET_ACNT_NM2
+		         , SUM(CYFD_BUDGET_AMT)           AS CYFD_BUDGET_AMT
+		         , SUM(ORIBDGT_AMT)               AS ORIBDGT_AMT
+		         , SUM(RVSPBGT_AMT)               AS RVSPBGT_AMT
+		         , SUM(DVR_AMT)                   AS DVR_AMT
+		         , SUM(PRTINT_YEAR_AM)            AS PRTINT_YEAR_AM
+		         , SUM(EXECUT_BUDGET_AM)          AS EXECUT_BUDGET_AM
+		         , SUM(CAUSE_ACTION_AMOUNT)       AS CAUSE_ACTION_AMOUNT
+		         , SUM(CAUSE_ACTION_INCMP_AMOUNT) AS CAUSE_ACTION_INCMP_AMOUNT
+		         , SUM(DEBT_AMT)                  AS DEBT_AMT
+		         , SUM(DFFRNC_AMOUNT)             AS DFFRNC_AMOUNT
+		         , SUM(DECSN_AMOUNT)              AS DECSN_AMOUNT
+		         , SUM(UNPAY_AMOUNT)              AS UNPAY_AMOUNT
+		         , SUM(DISUSE_AMOUNT)             AS DISUSE_AMOUNT
+		         , SUM(BLCE)                      AS BLCE
+		         , SUM(CYFD_DEMAND_AM)            AS CYFD_DEMAND_AM
+		         , SUM(CYFD_DCSN_AM)              AS CYFD_DCSN_AM
+		         , SUM(CYFD_DEMAND_AM2)           AS CYFD_DEMAND_AM2
+		         , SUM(CYFD_DCSN_AM2)             AS CYFD_DCSN_AM2
+		         , SUM(CYFD_BUDGET_EXPNDTR_AM)    AS CYFD_BUDGET_EXPNDTR_AM
+		         , SUM(ORIBDGT_EXPNDTR_AM)        AS ORIBDGT_EXPNDTR_AM
+		      FROM BDG_SEMOK_LIST
+		    GROUP BY YEAR
+		<isNotEmpty property="BSNS_CODE">
+		           , DETAIL_BSNS_CODE
+		           , DETAIL_BSNS_NM
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		           , DEPT_CODE
+		           , DEPT_NM
+			</isNotEqual>
+		</isNotEmpty>
+		           , SUBSTR(BUDGET_ACNT_CODE,1,6) || '00'
+		)
+		SELECT LVL
+		     , YEAR
+		     , GWAN_NM
+		     , HANG_NM
+		     , SEHANG_NM
+		     , MOK_NM
+		     , SEMOK_NM
+		<isNotEmpty property="BSNS_CODE">
+		     , DETAIL_BSNS_CODE
+		     , DETAIL_BSNS_NM
+		     , DETAIL_BSNS_CODE || '.' || DETAIL_BSNS_NM    AS DETAIL_BSNS_NM2
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		     , DEPT_CODE
+		     , DEPT_NM
+		     , DEPT_CODE || '.' || DEPT_NM    AS DEPT_NM2
+			</isNotEqual>
+		</isNotEmpty>
+		     , BUDGET_ACNT_CODE
+		     , BUDGET_ACNT_NM
+		     , BUDGET_ACNT_NM2
+		     , DECODE(LVL, '5', SUBSTR(BUDGET_ACNT_CODE, 1, 3) || '-' || SUBSTR(BUDGET_ACNT_CODE, 4) || '.' || SEMOK_NM
+		            , '4', SUBSTR(BUDGET_ACNT_CODE, 1, 3) || '-' || SUBSTR(BUDGET_ACNT_CODE, 4) || '.' || MOK_NM
+		            , '3', SUBSTR(BUDGET_ACNT_CODE, 1, 3) || '.' || SEHANG_NM
+		            , '2', SUBSTR(BUDGET_ACNT_CODE, 1, 3) || '.' || HANG_NM
+		            , '1', SUBSTR(BUDGET_ACNT_CODE, 1, 3) || '.' || GWAN_NM
+		       )    AS BUDGET_ACNT_NM3
+		<isEmpty property="BUDGET_KND">
+		     , CYFD_BUDGET_AMT           /*이월예산*/
+		</isEmpty>
+		<isNotEmpty property="BUDGET_KND">
+			<isEqual property="BUDGET_KND" compareValue="1">
+		     , CYFD_BUDGET_AMT           /*이월예산*/
+			</isEqual>
+			<isNotEqual property="BUDGET_KND" compareValue="1">
+		     , CYFD_DCSN_AM2                  AS CYFD_BUDGET_AMT /*이월예산(사고,계속비)*/
+			</isNotEqual>
+		</isNotEmpty>
+		     , ORIBDGT_AMT               /*본예산*/
+		     , RVSPBGT_AMT               /*추경예산*/
+		     , DVR_AMT                   /*전용*/
+		     , PRTINT_YEAR_AM            /*당해년도금액*/
+		     , EXECUT_BUDGET_AM          /*실행예산*/
+		     , CAUSE_ACTION_AMOUNT       /*원인행위액*/
+		     , CAUSE_ACTION_INCMP_AMOUNT /*원인행위미필액*/
+		     , DEBT_AMT                  /*채무확정액*/
+		     , DFFRNC_AMOUNT             /*예산액대결산액차이*/
+		     , DECSN_AMOUNT              /*지출액*/
+		     , UNPAY_AMOUNT              /*미지급금*/
+		     , DISUSE_AMOUNT             /*불용액*/
+		     , BLCE                      /*작앤*/
+		     , CYFD_DEMAND_AM            /*익년도이월요구액*/
+		     , CYFD_DCSN_AM              /*익년도이월확정액*/
+		     , CYFD_BUDGET_EXPNDTR_AM    /*이월예산지출금액*/
+		     , ORIBDGT_EXPNDTR_AM        /*본예산지출금액*/
+		  FROM (
+		        SELECT '1' AS LVL , t1.* FROM BDG_GWAN_LIST t1
+		        UNION ALL
+		        SELECT '2' AS LVL , t2.* FROM BDG_HANG_LIST t2
+		        UNION ALL
+		        SELECT '3' AS LVL , t3.* FROM BDG_SEHANG_LIST t3
+		        UNION ALL
+		        SELECT '4' AS LVL , t4.* FROM BDG_MOK_LIST t4
+		        UNION ALL
+		        SELECT '5' AS LVL , t5.* FROM BDG_SEMOK_LIST t5
+		       )
+		 WHERE 1=1
+		<isNotEmpty property="BUDGET_KND">
+		    <isEqual property="BUDGET_KND" compareValue="1">
+		   AND (
+		           ORIBDGT_AMT != 0
+		        OR RVSPBGT_AMT != 0
+		        OR DVR_AMT     != 0
+		       )  
+		    </isEqual>
+		    <isNotEqual property="BUDGET_KND" compareValue="1">
+		   AND (
+		           CYFD_DCSN_AM  != 0
+		        OR CYFD_DCSN_AM2 != 0
+		       )
+		    </isNotEqual>
+		</isNotEmpty>
+		ORDER BY BUDGET_ACNT_CODE
+	</select>
+	
+	<!--지출결산보고서 리스트조회 -->
+	<select id="BDG040205DAO.selectExpDsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		<![CDATA[ /*BDG040205DAO.selectExpDsnList*/ ]]>		
+			SELECT T1.DECSN_YEAR                        			/*결의년도*/
+		         , T1.BUDGET_YEAR		                			/*예산년도*/
+		         , T1.BSNS_SE                           			/*사업구분*/
+		         , T1.BALC_SE                           			/*수지구분*/
+		    <isNotEmpty property="BSNS_CODE">
+		         , T1.BSNS_CODE                         			/*사업코드*/
+		         , T6.BSNS_CODE || '.' || T6.BSNS_NM   AS BSNS_NM	/*사업명*/
+		    </isNotEmpty>
+		    <isNotEmpty property="DEPT_CODE">
+				 <isNotEqual property="DEPT_CODE" compareValue="000000">
+		         , T1.BUDGET_DEPT_CODE     								/*예산부서코드*/
+		         , T1.BUDGET_DEPT_CODE || '.' || T4.DEPT_NM   AS DEPT_NM	/*부서명*/
+		         </isNotEqual>
+		    </isNotEmpty>	
+		         , T1.BUDGET_ACNT_CODE                  			/*예산계정코드*/
+		         , T1.EXPNDTR_UNIT_CODE                 			/*부기코드*/
+		         , T5.BUKIP_NM                          			/*부기명*/
+		         , T1.ANACT_KND                         			/*결의서종류*/
+		         , NVL(T1.DECSN_AMOUNT, 0) AS EXP_DSN_AMOUNT  		/*결의금액*/
+		         , CASE WHEN T1.EXPNDTR_CNFIRM_AT = '1'  THEN NVL(T1.DECSN_AMOUNT, 0)
+		                ELSE  0
+		           END AS DEBT_AMT                      			/*채무확정*/
+		         , CASE WHEN (T2.SANCTN_KND = '5' AND T1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #BGNDE# AND #ENDDE# ) THEN NVL(T1.DECSN_AMOUNT, 0)
+		                ELSE  0
+		           END AS DECSN_AMOUNT                  			/*결산액*/
+		         , SFCOM_GET_SANCTN_DOC_NO(T1.SANCTN_NO) AS DOC_ID 	/*문서번호*/
+		         , T1.DECSN_NO										/*결의서번호*/         
+		         , T1.CPTAL_EXPNDTR_ACNTBK_DE           			/*자금지출장부일자(지출일자)*/
+		         , T1.ITNC_DE                           			/*발의일자(결의일자)*/
+		         , T1.SUMRY                             			/*적요*/
+		         , T1.DECSN_NO                          			/*결의번호*/
+		         , NVL(T1.CYFD_SE,'0')   AS CYFD_SE     			/*이월구분*/        
+		         , EXPNDTR_CNFIRM_AT                    			/*재무팀승인*/
+		         , SUBSTR(T1.CPTAL_EXPNDTR_ACNTBK_DE,1,4) AS CPTAL_EXPNDTR_ACNTBK_YEAR/*지출년도*/
+		         , T1.REGISTER_ID 									/*등록자ID*/
+    			 , T8.EMPNM				 AS REGISTER_NM				/*등록자*/	
+		    FROM TBACC_EXP_DSN_MASTR                                T1     /*지출결의마스터*/
+		         LEFT OUTER JOIN VIEW_MIS_SANCTN_KND@DL_INTRACITY   T2   ON T1.SANCTN_NO         = T2.SANCTN_NO
+		         LEFT OUTER JOIN TBACC_CNSUL                        T3   ON T1.CAUSE_ACTION_NO   = T3.CAUSE_ACTION_NO
+		         LEFT OUTER JOIN TBHRM_DEPT                         T4   ON T1.DEPT_CODE  		 = T4.DEPT_CODE
+		         LEFT OUTER JOIN TBBDG_BUKIP_CODE                   T5   ON T1.EXPNDTR_UNIT_CODE = T5.BUKIP_CODE
+		         LEFT OUTER JOIN TBPRJ_BSNS_CODE                    T6 	 ON T1.BSNS_CODE         = T6.BSNS_CODE 
+		         LEFT OUTER JOIN TBCOM_USER                         T7   ON T1.REGISTER_ID 		 = T7.USER_ID
+    			 LEFT OUTER JOIN TBHRM_HR_MASTR                     T8 	 ON T7.EMPNO 			 = T8.EMPNO 
+		    WHERE 1=1 
+		    AND T1.BUDGET_YEAR = #YEAR#
+		    AND T1.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		    AND T1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #BGNDE# AND #ENDDE#
+		    <isNotEmpty property="BSNS_SE">
+		    	AND T1.BSNS_SE = #BSNS_SE#
+		    </isNotEmpty>
+		    <isNotEmpty property="BSNS_CODE">
+		    	AND T1.BSNS_CODE = #BSNS_CODE#
+		    </isNotEmpty>
+		    	AND T1.BALC_SE = #BALC_SE#
+		    <isNotEmpty property="DEPT_CODE">
+		    	<isNotEqual property="DEPT_CODE" compareValue="000000">
+		    		AND T1.BUDGET_DEPT_CODE = #DEPT_CODE#
+		    	</isNotEqual>
+		    </isNotEmpty>		     
+		    <isEqual property="BSNS_KND" compareValue="1">
+		       AND T1.BSNS_CODE LIKE 'A%'
+			</isEqual>
+			<isEqual property="BSNS_KND" compareValue="2">
+		       AND T1.BSNS_CODE LIKE 'B%'
+			</isEqual>
+    </select>	
+</sqlMap>

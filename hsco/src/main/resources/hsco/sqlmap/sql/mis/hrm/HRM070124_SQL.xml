@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070124_SQL">	
+
+    <!-- 출/퇴근현황(근태기)  조회 -->
+	<select id="HRM070124DAO.selectDclzDtlsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 t1.WORK_DE													/*근무일*/
+			,NVL(v1.DEPT_NM, t3.DCLZ_DEPT_NM) 				AS DEPT_NM	/*부서명*/
+			,t4.EMPNO													/*사원번호*/
+			,NVL(t4.EMPNM, t1.DCLZ_NM)						AS EMPNM	/*사원명*/
+			,t1.BEGIN_TM												/*출근시간*/
+			,t1.END_TM													/*퇴근시간*/
+			,NVL2(t4.EMPNO, '', 'X')						AS EMP_AT	/*사원여부*/
+			,t4.DEPT_CODE
+		FROM TBHRM_DCLZ_DTLS_MANAGE t1
+			LEFT OUTER JOIN TBHRM_DCLZ_MAPPING_MANAGE t2 
+			  ON t1.DCLZ_ID   = t2.DCLZ_ID
+			LEFT OUTER JOIN TBHRM_DCLZ_DB_INFO t3 
+			  ON t1.DCLZ_ID   = t3.DCLZ_ID
+			LEFT OUTER JOIN TBHRM_HR_MASTR t4 
+			  ON t2.EMPNO     = t4.EMPNO
+			LEFT OUTER JOIN VWHRM_DEPT v1 
+			  ON t4.DEPT_CODE = v1.DEPT_CODE
+		WHERE WORK_DE BETWEEN #WORK_DE# AND #WORK_DE2#
+		<isNotEmpty prepend="AND" property="EMPNO">
+			t4.EMPNO = #EMPNO#
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="DEPT_CODE">
+			t4.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		ORDER BY EVENT_ID DESC
+    </select>
+    
+	<!-- 근태기내역 최신화 -->	
+	<delete id="HRM070124DAO.dclzDtlsD" parameterClass="java.util.HashMap" >
+		DELETE FROM TBHRM_DCLZ_DTLS_MANAGE
+		WHERE 1=1
+		<isNotEmpty property="WORK_DE">
+			<isNotEmpty property="WORK_DE2">
+				AND   WORK_DE BETWEEN #WORK_DE# AND #WORK_DE2#
+			</isNotEmpty>
+		</isNotEmpty>
+		<isNotEmpty property="WORK_DE">
+			<isEmpty property="WORK_DE2">
+				AND   WORK_DE = #WORK_DE#
+			</isEmpty>
+		</isNotEmpty>
+		<isEmpty property="WORK_DE">
+			AND WORK_DE = '99999999'
+		</isEmpty>
+		<isNotEmpty property = "DCLZ_ID">
+			AND DCLZ_ID = #DCLZ_ID#
+		</isNotEmpty>
+	</delete>
+
+	<!-- 근태기내역 입력 -->
+	<insert id="HRM070124DAO.dclzDtlsC" parameterClass="java.util.ArrayList">
+		INSERT ALL
+		<iterate conjunction=" ">
+			INTO TBHRM_DCLZ_DTLS_MANAGE
+			(
+				 EVENT_ID
+				,DCLZ_ID
+				,DCLZ_NM
+				,DCLZ_DEPT_NM
+				,WORK_DE
+				,BEGIN_TM
+				,END_TM
+				,END_TM_BF_DAY
+			) 
+			VALUES
+			(
+				 #[].EVENT_ID#
+				,#[].DCLZ_ID#
+				,#[].DCLZ_NM#
+				,#[].DCLZ_DEPT_NM#
+				,#[].WORK_DE#
+				,#[].BEGIN_TM#
+				,#[].END_TM#
+				,#[].END_TM_BF_DAY#
+			)
+		</iterate>
+		SELECT 1 FROM DUAL
+	</insert>	
+	
+    <!-- 근태기ID  조회 -->
+	<select id="HRM070124DAO.selectDclzIdList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.DCLZ_ID
+		FROM TBHRM_DCLZ_MAPPING_MANAGE t1
+		  INNER JOIN TBHRM_HR_MASTR t2
+		    ON  t1.EMPNO = t2.EMPNO
+		WHERE 1=1
+		<isNotEmpty property="DEPT_CODE">
+			AND t2.DEPT_CODE = #DEPT_CODE# 
+		</isNotEmpty>
+		<isNotEmpty property="EMPNO">
+			AND t1.EMPNO = #EMPNO#
+		</isNotEmpty>
+	</select>
+</sqlMap>

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FRM02070100SQL">	
+
+	<!-- 쿼리명 : 결산부속명세서 조회
+	설명 : 결산부속명세서 조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.03.24
+	-->
+	<select id="FRM02070100DAO.selectAtachDtstmnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  a.ACCNUT_YEAR,
+                a.DTSTMN_CODE,
+                a.ACNT_CODE,
+                a.DTSTMN_NM,
+                (SELECT ACNTCTGR_NM
+                   FROM TBFRM_ENDW_ACNTCTGR z
+                   WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                     AND ACNT_CODE   = a.ACNT_CODE) ACNTCTGR_NM
+           FROM TBFRM_ATACH_DTSTMN a
+           WHERE ACCNUT_YEAR = #acntYear#
+
+	</select>
+	
+	<!-- 결산부속명세서 등록  -->
+	<insert id="FRM02070100DAO.inserAtachDtstmnList" parameterClass="java.util.HashMap" >
+		        INSERT INTO TBFRM_ATACH_DTSTMN
+                       (ACCNUT_YEAR,
+                        DTSTMN_CODE,
+                        ACNT_CODE,
+                        DTSTMN_NM,
+                        REGISTER_ID,
+                        REGIST_DT,
+                        UPDUSR_ID,
+                        UPDT_DT)
+                VALUES( #ACCNUT_YEAR#,
+                        #DTSTMN_CODE#,
+                        #ACNT_CODE#,
+                        #DTSTMN_NM#,
+                        #S_USER_ID#,
+                        SYSDATE,
+                        #S_USER_ID#,
+                        SYSDATE)
+		   
+	</insert>
+	
+	<!-- 결산부속명세서 수정 -->
+	<update id="FRM02070100DAO.updateAtachDtstmnList" parameterClass="java.util.HashMap" >
+         UPDATE TBFRM_ATACH_DTSTMN
+            SET DTSTMN_NM = #DTSTMN_NM#
+           WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+             AND DTSTMN_CODE = #DTSTMN_CODE#
+             AND ACNT_CODE   = #ACNT_CODE#
+	</update>
+	
+	<!-- 결산부속명세서 삭제 -->
+	<delete id="FRM02070100DAO.deleteAtachDtstmnList" parameterClass="java.util.HashMap">
+             DELETE FROM TBFRM_ATACH_DTSTMN
+              WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+                AND DTSTMN_CODE = #DTSTMN_CODE#
+                AND ACNT_CODE   = #ACNT_CODE#
+	</delete>
+	
+	
+	<!-- 결산부속명세서 내역조회-->
+	<select id="FRM02070100DAO.selectAtachDtstmnDetailList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT ACCNUT_YEAR,
+                SUM(BEF_AMT) BEF_AMT,
+                SUM(CUR_ADD_AMOUNT) CUR_ADD_AMOUNT,
+                SUM(CUR_MINUS_AMOUNT) CUR_MINUS_AMOUNT,
+                SUM(BEF_AMT) +  SUM(CUR_ADD_AMOUNT) - SUM(CUR_MINUS_AMOUNT) JAN_AMT
+           FROM(SELECT SUBSTR(a.ACCNUT_YM,1,4) ACCNUT_YEAR,
+                       SUM(CASE WHEN DBRT_SE = '1' THEN DEBTOR_AMOUNT
+                                ELSE CRDIT_AMOUNT
+                            END) CUR_ADD_AMOUNT,
+                        SUM(CASE WHEN DBRT_SE = '1' THEN CRDIT_AMOUNT
+                                 ELSE DEBTOR_AMOUNT
+                             END) CUR_MINUS_AMOUNT,
+                        0 BEF_AMT
+                  FROM TBFRM_ENDW_ACCNUT_STACNT a,
+                       TBFRM_ENDW_ACNTCTGR b
+                  WHERE SUBSTR(a.ACCNUT_YM,1,4) = #ACCNUT_YEAR#
+                    AND a.ACNT_CODE = #ACNT_CODE#
+                    AND SUBSTR(a.ACCNUT_YM,1,4) = b.ACCNUT_YEAR
+                    AND a.ACNT_CODE   = b.ACNT_CODE
+                  GROUP BY SUBSTR(a.ACCNUT_YM,1,4)
+
+                  UNION ALL
+
+                  SELECT SUBSTR(a.ACCNUT_YM,1,4),
+                         0,
+                         0,
+                         CASE WHEN DBRT_SE = '1' THEN DEBTOR_AMOUNT
+                              ELSE CRDIT_AMOUNT
+                         END
+                    FROM TBFRM_ENDW_ACCNUT_STACNT a,
+                         TBFRM_ENDW_ACNTCTGR b
+                    WHERE a.ACCNUT_YM = #ACCNUT_YEAR# || '00'
+                      AND a.ACNT_CODE = #ACNT_CODE#
+                      AND SUBSTR(a.ACCNUT_YM,1,4) = b.ACCNUT_YEAR
+                      AND a.ACNT_CODE             = b.ACNT_CODE)
+           GROUP BY ACCNUT_YEAR
+
+	</select>
+	
+</sqlMap>

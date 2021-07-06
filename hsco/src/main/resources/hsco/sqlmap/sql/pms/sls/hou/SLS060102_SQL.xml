@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS060102_SQL">	
+    <!--  설명  : 해약내역조회
+	작성자 : 지효정 -->
+	
+	<!-- 해약내역 목록 -->
+	<select id="SLS060102DAO.houseCancelList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		     AB.*
+		    ,D.HOUSE_NM         /* 주택명 */
+		    ,F.HOUSE_DVR_AR     /* 전용면적 */
+		    ,F.TY_AEA    		/* 타입 */
+		    ,E.BASS_LTTOT_AMOUNT/* 기본공급금액 */
+		    ,E.LTTOT_AMOUNT     /* 공급금액 */
+		FROM
+		    (
+		    SELECT
+		         A.CNTRCTR_NO       /* 계약자번호 */
+		        ,A.HOUSE_CODE       /* 주택코드 */
+		        ,TO_NUMBER(A.DONG) AS DONG            /* 동 */
+		        ,TO_NUMBER(A.HO) AS HO               /* 호 */
+		        ,B.HOUSE_CSTMR_NO   /* 주택고객번호 */
+		        ,V.TOT_PAYAMT /* 실납부액 */
+		        /*  ,A.RETURN_PAYAMT AS RETURN_PAYAMT   /* 반환납부금액 */
+		        ,A.PENLTY           /* 위약금 */
+		        ,A.CANCL_DE         /* 해약일자 */
+		        ,A.RESCI_RESN_CODE  /* 해약사유 */
+		        ,SFCOM_CODE_NM('HOU007', A.RESCI_RESN_CODE, 'CODE_NM') AS RESCI_RESN_CODE_NM  /* 해약사유 */ 
+		        ,C.CSTMR_NM               /* 성명 */
+		        ,DECODE(SFCOM_DEC_ALL(C.IHIDNUM), null,'',SFCOM_DEC_ALL(C.IHIDNUM)) AS IHIDNUM          /* 주민번호 */
+		        ,C.TELNO            /* 전화번호 */
+		        ,C.MBTLNO           /* 휴대전화 */
+		        ,C.ADRES || DECODE(C.ADRES_DETAIL,'','',', ' || C.ADRES_DETAIL) AS ADRES /* 주소 */
+		    FROM
+		         TBSLS_HCNTRCTR_CANCL A /* 주택계약자해약 */
+		        ,TBSLS_HCNTRCTR B       /* 주택계약자 */
+		        ,TBSLS_HOUSE_CSTMR C    /* 주택고객 */
+		        ,(SELECT CNTRCTR_NO, SUM(PAYAMT) AS TOT_PAYAMT
+                    FROM TBSLS_HOUSE_LTTOT_PAY A /* 계약자 납부정보(분양보증금) */
+                   WHERE PAY_CODE LIKE
+	                       (SELECT MAX(SUBSTR(PAY_CODE, 1, 1))
+	                          FROM TBSLS_HOUSE_LTTOT_PAY B
+	                         WHERE A.CNTRCTR_NO = B.CNTRCTR_NO) || '%'	                         
+                     AND RCIV_DE IS NOT NULL
+                   GROUP BY CNTRCTR_NO) V
+                   
+		    WHERE A.CNTRCTR_NO = B.CNTRCTR_NO
+		      AND A.CNTRCTR_NO = V.CNTRCTR_NO
+		      AND B.HOUSE_CSTMR_NO = C.HOUSE_CSTMR_NO
+		    
+		    <isNotEmpty property="houseCode">
+		      AND A.HOUSE_CODE = #houseCode#
+		    </isNotEmpty>
+		    <isNotEmpty property="stCanclDe">
+		      AND A.CANCL_DE <![CDATA[>=]]> #stCanclDe#
+		    </isNotEmpty>
+		    <isNotEmpty property="edCanclDe">
+		      AND A.CANCL_DE <![CDATA[<=]]> #edCanclDe#
+		    </isNotEmpty>
+		    <isNotEmpty property="dong">
+		      AND A.DONG = #dong#
+		    </isNotEmpty>
+		    <isNotEmpty property="ho">
+		      AND A.HO = #ho#
+		    </isNotEmpty>
+		    <isNotEmpty property="nm">
+		      AND C.CSTMR_NM LIKE '%'|| #nm# || '%'
+		    </isNotEmpty>
+		    <isNotEmpty property="ihidnum">
+		      AND SFCOM_DEC_ALL(A.IHIDNUM) LIKE '%'|| #ihidnum# || '%'
+		    </isNotEmpty>
+		    <isEqual property="penltyAt" compareValue="1">
+		      AND NVL(A.PENLTY, 0)  <![CDATA[>]]> 0
+		    </isEqual>
+		    <isEqual property="penltyAt" compareValue="0">
+		      AND NVL(A.PENLTY, 0) = 0
+		    </isEqual>
+		    
+		    ORDER BY A.HOUSE_CODE, C.CSTMR_NM
+		    )AB
+		    ,TBSLS_HOUSE_INFO D         /* 주택정보 */
+		    ,TBSLS_HOUSE_DONG_HO E      /* 주택동호 */
+		    ,TBSLS_HOUSE_TY F           /* 주택타입 */
+		    
+		WHERE AB.HOUSE_CODE= D.HOUSE_CODE
+		  AND AB.DONG = E.DONG
+		  AND AB.HO = E.HO
+		  AND AB.HOUSE_CODE = E.HOUSE_CODE
+		  AND F.HOUSE_CODE = E.HOUSE_CODE
+		  AND F.HOUSE_TY_CODE = E.HOUSE_TY_CODE
+		
+		ORDER BY AB.HOUSE_CODE, AB.DONG ,AB.HO
+    </select>
+    	
+</sqlMap>

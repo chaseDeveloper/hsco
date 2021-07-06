@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010108_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 지급일련번호 생성 -->
+	<select id="CUS010108DAO.selectPymntSn" resultClass="java.lang.String">
+		<![CDATA[	
+			SELECT NVL(MAX(PYMNT_SN),0)+1 AS PYMNT_SN
+			FROM  TBCUS_CSTMR_MNTR_STG_EXPNDTR
+		]]>
+	</select>
+		
+	<!--고객평가지출 목록조회 -->
+	<select id="CUS010108DAO.selectCstmrMntgStgExpndtrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+            SELECT   A.PYMNT_SN                               AS PYMNT_SN
+                   , A.SJ                                     AS SJ
+                   , A.CPTAL_ASIGN_REQST_DE                   AS CPTAL_ASIGN_REQST_DE
+                   , A.CPTAL_ASIGN_CONFM_NO                   AS CPTAL_ASIGN_CONFM_NO
+                   , A.DRFT_JOB_CONFM_NO                      AS DRFT_JOB_CONFM_NO
+                   , A.SANCTN_NO						  	  AS SANCTN_NO
+                   , A.EXPNDTR_DECSN_DE                       AS EXPNDTR_DECSN_DE
+                   , A.EXPNDTR_DECSN_NO                       AS EXPNDTR_DECSN_NO
+                   , A.PYMNT_AM_SM                            AS PYMNT_AM_SM
+                   , A.ATCH_FILE                              AS ATCH_FILE
+                   , A.REGISTER_ID                            AS REGISTER_ID
+                   , TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS') AS REGIST_DT
+                   , A.UPDUSR_ID                              AS UPDUSR_ID
+                   , A.UPDT_DT                                AS UPDT_DT
+                   , A.CN                                     AS CN
+                   , A.ATCH_FILE_2                            AS ATCH_FILE_2
+                   , A.EXPNDTR_PLAN_DE                        AS EXPNDTR_PLAN_DE
+                   , A.EXPNDTR_DECSN_YEAR                     AS EXPNDTR_DECSN_YEAR
+                   , A.CSTMR_EXPNDTR_SE                       AS CSTMR_EXPNDTR_SE
+                   , CASE 
+                     WHEN A.PYMNT_AM_SM IS NULL THEN '1'
+                     WHEN A.PYMNT_AM_SM IS NOT NULL THEN '2'
+                     ELSE NULL END                            AS PYMNT_AT
+                   , B.BSNS_SE                                AS BSNS_SE
+                   , B.BUDGET_ACNT_CODE                       AS BUDGET_ACNT_CODE
+                   , B.EXPNDTR_UNIT_CODE                      AS EXPNDTR_UNIT_CODE
+                   , B.DCSN_AMOUNT                            AS DCSN_AMOUNT                     
+                   , C.BUDGET_ACNT_NM                         AS BUDGET_ACNT_CODE_NM
+                   , C.EXPNDTR_UNIT_NM                        AS EXPNDTR_UNIT_NM              
+                   , D.DETAIL_BSNS_CODE                       AS BSNS_CODE
+                   , E.BSNS_NM                                AS BSNS_NM
+                   , NVL(F.SANCTN_KND, '0')                   AS SANCTN_KND         /* 전자결재상태 */
+                   , NVL(H.CONFM_AT, 0)                       AS CONFM_AT
+				   ,SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT)            AS DRFT_STS           /* 기안상태        */
+              	   ,'theme://images/sanctn/' || 'D' || SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT) || '.png'    AS DRFT_STS_IMG        /* 기안상태Img    */
+              	   ,TO_CHAR(F.DRFT_DT,'YYYY-MM-DD HH24:MI:SS') AS DRFT_DT           /* 기안일시        */
+              	   ,TO_CHAR(F.DRFT_DT,'YYYYMMDD') AS DRFT_DE           /* 기안일시        */
+              	   ,SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT)             AS SANCTN_STS        /* 결재상태        */
+              	   ,'theme://images/sanctn/' || 'A' || SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT) || '.png'    AS SANCTN_STS_IMG    /* 결재상태Img    */
+              	   ,TO_CHAR(F.LAST_SANCTN_DT,'YYYY-MM-DD HH24:MI:SS')     AS LAST_SANCTN_DT    /* 최종결재일시    */
+            FROM   TBCUS_CSTMR_MNTR_STG_EXPNDTR A
+                   LEFT OUTER JOIN (
+                                      SELECT 
+                                               BSNS_SE
+                                             , BUDGET_ACNT_CODE
+                                             , EXPNDTR_UNIT_CODE
+                                             , DCSN_AMOUNT
+                                             , CONFM_AT
+                                             , PLAN_YM 
+                                             , BALC_SE
+                                             , PLAN_YM || WEEK_ATMB || BUDGET_YEAR || BSNS_SE || BALC_SE || BUDGET_ACNT_CODE || DEPT_CODE || SE || EXPNDTR_UNIT_CODE || SN AS NUMB
+                                      FROM   TBFUN_WIK_CPTAL_PLAN 
+                                   )B 
+                                ON A.CPTAL_ASIGN_CONFM_NO  = B.NUMB
+                   LEFT OUTER JOIN (
+                                    SELECT   a1.YEAR
+                                           , a1.BSNS_SE
+                                           , a1.BALC_SE
+                                           , a1.BUDGET_ACNT_CODE
+                                           , a1.BUDGET_ACNT_NM
+                                           , a2.EXPNDTR_UNIT_CODE
+                                           , a2.EXPNDTR_UNIT_NM
+                                      FROM TBBDG_BUDGET_ACNT_CODE a1
+                                           LEFT OUTER JOIN TBBDG_EXPNDTR_UNIT_CODE a2
+                                                        ON a1.YEAR = a2.YEAR
+                                                       AND a1.BSNS_SE = a2.BSNS_SE
+                                                       AND a1.BALC_SE = a2.BALC_SE
+                                                       AND a1.BUDGET_ACNT_CODE = a2.BUDGET_ACNT_CODE
+                                   ) C
+                                ON B.BSNS_SE              = C.BSNS_SE
+                               AND B.BALC_SE              = C.BALC_SE
+                               AND B.BUDGET_ACNT_CODE     = C.BUDGET_ACNT_CODE
+                               AND B.EXPNDTR_UNIT_CODE    = C.EXPNDTR_UNIT_CODE
+                               AND SUBSTR(B.PLAN_YM,0,4)  = C.YEAR
+                   LEFT OUTER JOIN TBBDG_EXECUT_BUDGET D
+                                ON C.YEAR = D.YEAR 
+                               AND C.BSNS_SE = D.BSNS_SE 
+                               AND C.BALC_SE = D.BALC_SE 
+                               AND C.BUDGET_ACNT_CODE = D.BUDGET_ACNT_CODE 
+                               AND C.EXPNDTR_UNIT_CODE = D.EXPNDTR_UNIT_CODE
+                   LEFT OUTER JOIN TBPRJ_BSNS_CODE E
+                                ON D.DETAIL_BSNS_CODE = E.BSNS_CODE              
+                   LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR F
+                                ON A.SANCTN_NO = F.SANCTN_NO
+                   LEFT OUTER JOIN TBACC_EXP_DSN_MASTR G
+                                ON A.EXPNDTR_DECSN_YEAR = G.DECSN_YEAR
+                               AND A.EXPNDTR_DECSN_NO = G.DECSN_NO
+                   LEFT OUTER JOIN TBFUN_WIK_CPTAL_PLAN H
+                                ON G.DECSN_NO = H.DECSN_NO
+            WHERE  1=1
+              AND  A.EXPNDTR_PLAN_DE IS NOT NULL
+              AND  A.EXPNDTR_PLAN_DE <= #END_DE#
+              AND  A.EXPNDTR_PLAN_DE >= #BGN_DE#
+              AND  A.CSTMR_EXPNDTR_SE = '1'     
+            ORDER BY A.EXPNDTR_PLAN_DE DESC, A.PYMNT_SN DESC
+		]]>
+	</select>
+
+	<!--고객모니터단지출 입력,수정 -->
+	<insert id="CUS010108DAO.cstmrMntgStgExpndtrListCU" parameterClass="java.util.HashMap">
+	<![CDATA[
+			MERGE INTO TBCUS_CSTMR_MNTR_STG_EXPNDTR
+				  USING DUAL
+				  ON (PYMNT_SN = #PYMNT_SN#)
+				  WHEN MATCHED THEN
+				  UPDATE SET 
+							 SJ                      = #SJ#
+							,CPTAL_ASIGN_REQST_DE    = #CPTAL_ASIGN_REQST_DE#
+							,CPTAL_ASIGN_CONFM_NO    = #CPTAL_ASIGN_CONFM_NO#
+							,DRFT_DE                 = #DRFT_DE#
+							,DRFT_JOB_CONFM_NO       = #DRFT_JOB_CONFM_NO#
+							,EXPNDTR_DECSN_DE        = #EXPNDTR_DECSN_DE#
+							,EXPNDTR_DECSN_NO        = #EXPNDTR_DECSN_NO#
+							,PYMNT_AM_SM             = #PYMNT_AM_SM#
+							,ATCH_FILE               = #ATCH_FILE#
+							,UPDUSR_ID               = #S_USER_ID#
+							,UPDT_DT                 = SYSDATE 
+							,CN                      = #CN#
+							,ATCH_FILE_2             = #ATCH_FILE_2#
+							,CSTMR_EXPNDTR_SE        = #CSTMR_EXPNDTR_SE#
+							,EXPNDTR_PLAN_DE         = #EXPNDTR_PLAN_DE#   
+				  WHEN NOT MATCHED THEN 
+				  INSERT(
+							 PYMNT_SN
+							,SJ
+							,CPTAL_ASIGN_REQST_DE
+							,CPTAL_ASIGN_CONFM_NO
+							,DRFT_DE
+							,DRFT_JOB_CONFM_NO
+							,EXPNDTR_DECSN_DE
+							,EXPNDTR_DECSN_NO
+							,PYMNT_AM_SM
+							,ATCH_FILE
+							,REGISTER_ID
+							,REGIST_DT
+							,UPDUSR_ID
+							,UPDT_DT
+							,CN
+							,ATCH_FILE_2
+							,EXPNDTR_PLAN_DE
+							,CSTMR_EXPNDTR_SE
+					)VALUES(
+					 #PYMNT_SN#
+					,#SJ#
+					,#CPTAL_ASIGN_REQST_DE#
+					,#CPTAL_ASIGN_CONFM_NO#
+					,#DRFT_DE#
+					,#DRFT_JOB_CONFM_NO#
+					,#EXPNDTR_DECSN_DE#
+					,#EXPNDTR_DECSN_NO#
+					,#PYMNT_AM_SM#
+					,#ATCH_FILE#
+					,#S_USER_ID#
+					,SYSDATE
+					,#S_USER_ID#
+					,SYSDATE
+					,#CN#
+					,#ATCH_FILE_2#
+					,#EXPNDTR_PLAN_DE#
+					,'1'
+			)
+		]]>
+	</insert>
+
+	<!--고객방문평가카드 지출대상 목록조회 -->
+	<select id="CUS010108DAO.selectCstmrVisitEvlCardList01" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+		<![CDATA[
+			SELECT   A.SN                                                                 AS SN
+			        ,A.VISIT_DE                                                           AS VISIT_DE
+			        ,A.CSTMR_NM                                                           AS CSTMR_NM
+					,A.TELNO                                                              AS TELNO
+					,A.ZIP                                                                AS ZIP
+					,A.ADRES                                                              AS ADRES
+					,A.ADRES_DETAIL                                                       AS ADRES_DETAIL
+					,A.CHARGER_NM                                                         AS EMPNO
+				    ,(SELECT SFSAL_GETEMPNO_01(A.CHARGER_NM) FROM DUAL)                   AS CHARGER_NM
+ 				    ,(SELECT SFSAL_GETDEPTNM_01((SELECT DEPT_CODE 
+					     						   FROM TBHRM_HR_MASTR
+						    					  WHERE EMPNO = A.CHARGER_NM)) FROM DUAL) AS DEPT_CODE_NM 			
+					,CASE A.STSFDG_EVL WHEN '1' THEN '5'                                                    
+					                   WHEN '2' THEN '4'                                                    
+					                   WHEN '3' THEN '3'                                                    
+					                   WHEN '4' THEN '2'                                                    
+					                   WHEN '5' THEN '1'                                                    
+					                   ELSE NULL END                                      AS CSTMR_SCORE
+					,A.CSTMR_OPINION                                                      AS CSTMR_OPINION
+					,A.EXPNDTR_TRGET_AT                                                   AS EXPNDTR_TRGET_AT
+					,A.PYMNT_SN                                                           AS PYMNT_SN
+			  FROM TBCUS_CSTMR_VISIT_EVL_CARD A
+			 WHERE 1=1
+			   AND A.VISIT_DE >= #BGN_DE#
+			   AND A.VISIT_DE <= #END_DE#
+			   AND A.EXPNDTR_TRGET_AT = '1'
+			   AND (A.PYMNT_SN IS NULL OR A.PYMNT_SN = 0)
+			 ORDER BY A.SN DESC  
+		]]>
+	</select>
+	
+	<!--고객방문평가카드 지출 상세 목록조회 -->
+	<select id="CUS010108DAO.selectCstmrVisitEvlCardList02" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+		<![CDATA[
+			SELECT   A.SN                                                                 AS SN
+			        ,A.VISIT_DE                                                           AS VISIT_DE
+					,A.CSTMR_NM                                                           AS CSTMR_NM
+					,A.TELNO                                                              AS TELNO
+					,A.ZIP                                                                AS ZIP
+					,A.ADRES                                                              AS ADRES
+					,A.ADRES_DETAIL                                                       AS ADRES_DETAIL
+					,A.CHARGER_NM                                                         AS EMPNO
+				    ,(SELECT SFSAL_GETEMPNO_01(A.CHARGER_NM) FROM DUAL)                   AS CHARGER_NM
+ 				    ,(SELECT SFSAL_GETDEPTNM_01((SELECT DEPT_CODE 
+					     						   FROM TBHRM_HR_MASTR
+						    					  WHERE EMPNO = A.CHARGER_NM)) FROM DUAL) AS DEPT_CODE_NM 			
+					,CASE A.STSFDG_EVL WHEN '1' THEN '5'                                                    
+					                   WHEN '2' THEN '4'                                                    
+					                   WHEN '3' THEN '3'                                                    
+					                   WHEN '4' THEN '2'                                                    
+					                   WHEN '5' THEN '1'                                                    
+					                   ELSE NULL END                                      AS CSTMR_SCORE
+					,A.CSTMR_OPINION                                                      AS CSTMR_OPINION
+					,A.EXPNDTR_TRGET_AT                                                   AS EXPNDTR_TRGET_AT
+					,A.PYMNT_SN                                                           AS PYMNT_SN
+					,B.ALLWNC_BANK_ACNUT												  AS BANK_ACNUT
+        			,B.ALLWNC_BANK_CODE													  AS BANK_CODE
+			  FROM TBCUS_CSTMR_VISIT_EVL_CARD A
+			  LEFT OUTER JOIN TBSAL_EMPL_BANK_ACNUT B
+			    ON A.CHARGER_NM=B.EMPNO
+			 WHERE 1=1
+			   AND A.PYMNT_SN = #PYMNT_SN#
+			 ORDER BY A.SN DESC  
+		]]>
+	</select>	
+
+	<!--고객방문평가카드 지출번호(지급일련번호) 저장-->
+	<update id="CUS010108DAO.cstmrVisitEvlCardU" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			UPDATE TBCUS_CSTMR_VISIT_EVL_CARD
+			   SET 
+					 PYMNT_SN  = #PYMNT_SN#
+					,UPDUSR_ID = #S_USER_ID#
+					,UPDT_DT   = SYSDATE
+			  WHERE SN = #SN#
+		]]>
+	</update>
+	
+	<!-- 고객방문평가카드 지출번호(지급일련번호) 삭제-->
+	<update id="CUS010108DAO.cstmrVisitEvlCardU2" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			UPDATE TBCUS_CSTMR_VISIT_EVL_CARD
+			   SET 
+                    PYMNT_SN   = NULL
+                   ,UPDUSR_ID  = #S_USER_ID#
+                   ,UPDT_DT    = SYSDATE    
+			 WHERE PYMNT_SN = #PYMNT_SN#
+		]]>
+	</update>		
+	
+	<!--지출 테이블 삭제 -->
+	<delete id="CUS010108DAO.cstmrMntgStgExpndtrListD" parameterClass="java.util.HashMap">
+		<![CDATA[
+			DELETE FROM TBCUS_CSTMR_MNTR_STG_EXPNDTR 
+			 WHERE PYMNT_SN = #PYMNT_SN#
+		]]>
+	</delete>
+
+	<!--첨부파일 키저장-->
+	<update id="CUS010108DAO.updateFileSn1U" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		UPDATE TBCUS_CSTMR_MNTR_STG_EXPNDTR
+		   SET 
+			   ATCH_FILE      = #ATCH_FILE#    
+		 WHERE PYMNT_SN       = #KEY1#
+		   
+		]]>
+	</update>
+
+	<!--첨부파일 키저장-->
+	<update id="CUS010108DAO.updateFileSn2U" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		UPDATE TBCUS_CSTMR_MNTR_STG_EXPNDTR
+		   SET 
+			   ATCH_FILE_2      = #ATCH_FILE#    
+		 WHERE PYMNT_SN         = #KEY1#
+		   
+		]]>
+	</update>
+
+	<!--지출결의 번호 저장-->
+	<update id="CUS010108DAO.updateExpndtrDecsnNo" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		UPDATE TBCUS_CSTMR_MNTR_STG_EXPNDTR
+		   SET 
+				 EXPNDTR_DECSN_DE  	= #EXPNDTR_DECSN_DE#
+				,EXPNDTR_DECSN_YEAR = #DSNMASTR.DECSN_YEAR#
+				,EXPNDTR_DECSN_NO  	= #DSNMASTR.DECSN_NO#
+				,UPDUSR_ID         	= #S_USER_ID#
+				,UPDT_DT           	= SYSDATE    
+		 WHERE PYMNT_SN            	= #PYMNT_SN#
+		]]>
+	</update>
+
+	<!--내부결재 레포트 데이터셋 -->
+	<select id="CUS010108DAO.innerSanctnUbiDataset" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ 
+		SELECT
+				 PYMNT_SN	            /*지급일련번호*/
+				,SJ                     /*제목*/
+				,CPTAL_ASIGN_REQST_DE	/*자금배정신청일자*/
+				,CPTAL_ASIGN_CONFM_NO   /*자금배정승인번호*/
+				,DRFT_DE                /*기안일자*/
+				,DRFT_JOB_CONFM_NO	    /*기안업무승인번호*/
+				,EXPNDTR_DECSN_DE	    /*지출결의일자*/
+				,EXPNDTR_DECSN_NO	    /*지출결의번호*/
+				,PYMNT_AM_SM	        /*지급액계*/
+				,ATCH_FILE	            /*첨부파일*/
+				,REGISTER_ID	        /*등록자ID*/
+				,REGIST_DT	            /*등록일시*/
+				,UPDUSR_ID	            /*수정자ID*/
+				,UPDT_DT	            /*수정일시*/
+				,CN	                    /*내용*/
+				,ATCH_FILE_2	        /*첨부파일2*/
+				,EXPNDTR_PLAN_DE	    /*지출계획일자*/
+				,EXPNDTR_DECSN_YEAR	    /*지출결의년도*/
+		  FROM TBCUS_CSTMR_MNTR_STG_EXPNDTR
+	 	 WHERE PYMNT_SN = #PYMNT_SN#
+		  ]]>
+	</select>
+
+	<!--최초 내부결재 진행 여부 체크-->
+	<select id="CUS010108DAO.selectInnerSanctnMasterCheck" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ 
+		SELECT COUNT(1) AS CHK
+		  FROM TBCOM_INNER_SANCTN_MASTR
+		 WHERE INNER_SANCTN_ID = #KEY#
+		  ]]>
+	</select>
+	
+	<!-- 전자결재번호 조회 -->
+	<select id="CUS010108DAO.selectSanctnNO" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		<![CDATA[ /* CUS010108DAO.selectSanctnNO */ ]]>
+			SELECT SANCTN_NO 
+			FROM   TBCOM_ELCTRN_SANCTN_MASTR 
+			WHERE  INTRLCK_IDNTFR = #KEY#
+    </select> 	
+
+	<!--  결재번호 입력-->
+	<update id="CUS010108DAO.approveU" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBCUS_CSTMR_MNTR_STG_EXPNDTR
+			SET SANCTN_NO = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+			  , DRFT_DE   = TO_CHAR(SYSDATE, 'YYYYMMDD')
+			  , UPDUSR_ID =  #S_USER_ID#
+			  , UPDT_DT	  =  SYSDATE
+			WHERE PYMNT_SN  =  #PYMNT_SN#
+		]]>
+	</update>
+
+</sqlMap>

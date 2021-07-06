@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FMS030102_SQL">
+
+	<!-- 시설물 조회 -->
+	<select id="FMS030102DAO.selectFcltsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH CHCK_DGNSS_PLAN_T AS (
+		    SELECT FCLTS_MANAGE_SN
+		          ,YEAR
+		          ,SUM(1)                                               AS CNT
+		          ,SUM(DECODE(CONFM_AT, '1', 1, 0))                     AS CONFM_CNT
+		          ,SUM(DECODE(CONFM_AT, '1', NVL(BUDGET_AMOUNT, 0), 0)) AS CONFM_AMOUNT
+		    FROM   TBFMS_CHCK_DGNSS_PLAN
+		    GROUP BY FCLTS_MANAGE_SN, YEAR
+		), MENDNG_REINFC_PLAN_T AS (
+		    SELECT FCLTS_MANAGE_SN
+		          ,YEAR
+		          ,SUM(1)                                               AS CNT
+		          ,SUM(DECODE(CONFM_AT, '1', 1, 0))                     AS CONFM_CNT
+		          ,SUM(DECODE(CONFM_AT, '1', NVL(CNTRWK_CT, 0), 0))     AS CONFM_AMOUNT
+		    FROM   TBFMS_MENDNG_REINFC_PLAN
+		    GROUP BY FCLTS_MANAGE_SN, YEAR
+		), MNTMNG_PLAN_T AS (
+		    SELECT FCLTS_MANAGE_SN
+		          ,YEAR
+		          ,SUM(1)                               AS CNT
+		    FROM   TBFMS_MNTMNG_PLAN
+		    GROUP BY FCLTS_MANAGE_SN, YEAR
+		)
+		SELECT t1.SN
+		      ,#YEAR#                       AS YEAR
+		      ,t1.FCLTS_SE_SN
+		      ,t2.ASORT_SE
+		      ,t3.CODE_NM                   AS ASORT_NM
+		      ,t1.MANAGE_NO
+		      ,t1.MANAGE_DEPT_CODE
+		      ,t4.DEPT_NM                   AS MANAGE_DEPT_NM
+		      ,t1.FCLTS_NM
+		      ,t1.COMPET_DE
+		      ,t1.CONFM_AT
+		      ,NVL(t5.CNT,0)                AS CHCK_NY_CNT
+		      ,NVL(t5.CONFM_CNT,0)          AS CHCK_NY_CONFM_CNT
+		      ,NVL(t5.CONFM_AMOUNT,0)       AS CHCK_NY_CONFM_AMOUNT
+		      ,NVL(t6.CNT,0)                AS CHCK_BY_CNT
+		      ,NVL(t6.CONFM_CNT,0)          AS CHCK_BY_CONFM_CNT
+		      ,NVL(t6.CONFM_AMOUNT,0)       AS CHCK_BY_CONFM_AMOUNT
+		      ,NVL(t7.CNT,0)                AS MENDNG_NY_CNT
+		      ,NVL(t7.CONFM_CNT,0)          AS MENDNG_NY_CONFM_CNT
+		      ,NVL(t7.CONFM_AMOUNT,0)       AS MENDNG_NY_CONFM_AMOUNT
+		      ,NVL(t8.CNT,0)                AS MENDNG_BY_CNT
+		      ,NVL(t8.CONFM_CNT,0)          AS MENDNG_BY_CONFM_CNT
+		      ,NVL(t8.CONFM_AMOUNT,0)       AS MENDNG_BY_CONFM_AMOUNT
+		      ,NVL(t9.CNT,0)                AS PLAN_NY_CNT
+		      ,NVL(t10.CNT,0)               AS PLAN_BY_CNT
+		FROM   TBFMS_REPRSNT_FCLTS_MANAGE t1
+		       LEFT OUTER JOIN TBFMS_FCLTS_SE_MANAGE t2
+		            ON t1.FCLTS_SE_SN = t2.SN
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		            ON t2.ASORT_SE = t3.CODE
+		           AND t3.GRP_CODE = 'FMS001'
+		       LEFT OUTER JOIN TBHRM_DEPT t4
+		            ON t1.MANAGE_DEPT_CODE = t4.DEPT_CODE
+		       LEFT OUTER JOIN CHCK_DGNSS_PLAN_T t5
+		            ON t1.SN = t5.FCLTS_MANAGE_SN
+		           AND t5.YEAR = #YEAR#
+		       LEFT OUTER JOIN CHCK_DGNSS_PLAN_T t6
+		            ON t1.SN = t6.FCLTS_MANAGE_SN
+		           AND t6.YEAR = (#YEAR#-1)
+		       LEFT OUTER JOIN MENDNG_REINFC_PLAN_T t7
+		            ON t1.SN = t7.FCLTS_MANAGE_SN
+		           AND t7.YEAR = #YEAR#
+		       LEFT OUTER JOIN MENDNG_REINFC_PLAN_T t8
+		            ON t1.SN = t8.FCLTS_MANAGE_SN
+		           AND t8.YEAR = (#YEAR#-1)
+		       LEFT OUTER JOIN MNTMNG_PLAN_T t9
+		            ON t1.SN = t9.FCLTS_MANAGE_SN
+		           AND t9.YEAR = #YEAR#
+		       LEFT OUTER JOIN MNTMNG_PLAN_T t10
+		            ON t1.SN = t10.FCLTS_MANAGE_SN
+		           AND t10.YEAR = (#YEAR#-1)
+		WHERE  t1.CONFM_AT = '1'
+	<isNotEmpty property="DEPT_CODE">
+		AND    t1.MANAGE_DEPT_CODE = #DEPT_CODE#
+	</isNotEmpty>
+		ORDER BY t1.SN
+		        ,t1.FCLTS_SE_SN
+	</select>
+
+
+	<!-- 보수보강계획 조회 -->
+	<select id="FMS030102DAO.selectCheckDgnssPlan" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.FCLTS_MANAGE_SN
+		      ,t1.YEAR
+		      ,t1.SN
+		      ,t1.CNTRWK_SE
+		      ,t1.CNTRWK_BGNDE
+		      ,t1.CNTRWK_ENDDE
+		      ,t1.RELATE_CHCK_DGNSS
+		      ,t1.MENDNG_REGN
+		      ,t1.CNTRWK_DTLS
+		      ,t1.CNTRWK_CT
+		      ,t1.CONFM_AT
+		      ,t1.CONFM_DE
+		FROM   TBFMS_MENDNG_REINFC_PLAN t1
+		WHERE  t1.FCLTS_MANAGE_SN = #FCLTS_MANAGE_SN#
+		AND    t1.YEAR = #YEAR#
+		ORDER BY t1.FCLTS_MANAGE_SN
+		        ,t1.YEAR
+		        ,t1.SN
+	</select>
+
+
+	<!-- 보수보강계획 추가 -->
+	<insert id="FMS030102DAO.mendngReinfcPlanC" parameterClass="java.util.HashMap">
+		INSERT INTO TBFMS_MENDNG_REINFC_PLAN (
+		     FCLTS_MANAGE_SN
+		    ,YEAR
+		    ,SN
+		    ,CNTRWK_SE
+		    ,CNTRWK_BGNDE
+		    ,CNTRWK_ENDDE
+		    ,RELATE_CHCK_DGNSS
+		    ,MENDNG_REGN
+		    ,CNTRWK_DTLS
+		    ,CNTRWK_CT
+		    ,CONFM_AT
+		    ,CONFM_DE
+		    ,REGISTER_ID
+		    ,REGIST_DT
+		    ,UPDUSR_ID
+		    ,UPDT_DT
+		)
+		VALUES (
+		     #FCLTS_MANAGE_SN#
+		    ,#YEAR#
+		    ,(
+		      SELECT NVL(MAX(SN),0)+1
+		      FROM   TBFMS_MENDNG_REINFC_PLAN
+		      WHERE  FCLTS_MANAGE_SN = #FCLTS_MANAGE_SN#
+		      AND    YEAR = #YEAR#
+		     )
+		    ,#CNTRWK_SE#
+		    ,#CNTRWK_BGNDE#
+		    ,#CNTRWK_ENDDE#
+		    ,#RELATE_CHCK_DGNSS#
+		    ,#MENDNG_REGN#
+		    ,#CNTRWK_DTLS#
+		    ,#CNTRWK_CT#
+		    ,#CONFM_AT#
+		    ,#CONFM_DE#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	</insert>
+
+
+	<!-- 보수보강계획 수정 -->
+	<update id="FMS030102DAO.mendngReinfcPlanU" parameterClass="java.util.HashMap">
+		UPDATE TBFMS_MENDNG_REINFC_PLAN
+		SET    CNTRWK_SE         = #CNTRWK_SE#
+		      ,CNTRWK_BGNDE      = #CNTRWK_BGNDE#
+		      ,CNTRWK_ENDDE      = #CNTRWK_ENDDE#
+		      ,RELATE_CHCK_DGNSS = #RELATE_CHCK_DGNSS#
+		      ,MENDNG_REGN       = #MENDNG_REGN#
+		      ,CNTRWK_DTLS       = #CNTRWK_DTLS#
+		      ,CNTRWK_CT         = #CNTRWK_CT#
+		      ,CONFM_AT          = #CONFM_AT#
+		      ,CONFM_DE          = #CONFM_DE#
+		      ,UPDUSR_ID         = #S_USER_ID#
+		      ,UPDT_DT           = SYSDATE
+		WHERE  FCLTS_MANAGE_SN   = #FCLTS_MANAGE_SN#
+		  AND  YEAR              = #YEAR#
+		  AND  SN                = #SN#
+	</update>
+
+
+	<!-- 보수보강계획 삭제 -->
+	<delete id="FMS030102DAO.mendngReinfcPlanD" parameterClass="java.util.HashMap">
+		DELETE
+		FROM   TBFMS_MENDNG_REINFC_PLAN
+		WHERE  FCLTS_MANAGE_SN = #FCLTS_MANAGE_SN#
+		  AND  YEAR            = #YEAR#
+		  AND  SN              = #SN#
+	</delete>
+
+</sqlMap>

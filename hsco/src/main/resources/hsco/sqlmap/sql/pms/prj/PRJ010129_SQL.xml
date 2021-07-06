@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PRJ010129_SQL">
+
+	<!-- 조회 -->
+	<select id="PRJ010129DAO.select" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT MAX(t2.CL_SE)      AS BSNS_SE   /*사업분류*/
+		     , t1.BSNS_AREA_CODE  AS BSNS_CODE
+		     , MAX(t2.BSNS_NM)    AS BSNS_NM
+		     , MAX(BSNS_BEGIN_YM) AS BEGIN_YM
+		     , MAX(BSNS_END_YM)   AS END_YM
+		     , SUM(NVL(t1.AR_INCRPR,0)) AS ALL_AR_INCRPR  /*전체 : 면적수량*/
+		     , SUM(NVL(t1.RWMNY,0))     AS ALL_AMOUNT      /*전체 : 금액*/
+		     , COUNT(t3.OWNER_NO)       AS ALL_PERSON      /*전체 : 인원*/
+		     , SUM(CASE WHEN NVL(t3.RQEST_SE,'0') = '1' THEN NVL(t1.AR_INCRPR,0) ELSE 0 END) AS RQEST_AR_INCRPR /*협의보상 : 면적수량*/
+		     , SUM(CASE WHEN NVL(t3.RQEST_SE,'0') = '1' THEN NVL(t3.RWMNY,0) ELSE 0 END)     AS RQEST_AMOUNT    /*협의보상 : 금액*/
+		     , SUM(CASE WHEN NVL(t3.RQEST_SE,'0') = '1' THEN 1 ELSE 0 END)                   AS RQEST_PERSON    /*협의보상 : 인원*/
+		     , SUM(CASE WHEN t3.ACEPTNC_ADJDC_DE IS NOT NULL THEN NVL(t1.AR_INCRPR,0) ELSE 0 END) AS ACEPTNC_AR_INCRPR /*수용재결 : 면적수량*/
+		     , SUM(CASE WHEN t3.ACEPTNC_ADJDC_DE IS NOT NULL THEN NVL(t3.RWMNY,0) ELSE 0 END)     AS ACEPTNC_AMOUNT    /*수용재결 : 금액*/
+		     , SUM(CASE WHEN t3.ACEPTNC_ADJDC_DE IS NOT NULL THEN 1 ELSE 0 END)                   AS ACEPTNC_PERSON    /*수용재결 : 인원*/
+		     , MAX(t4.OWNERS)        AS OWNERS        /*공탁대상자*/
+		     , MAX(t4.LDGMNT_AMOUNT) AS LDGMNT_AMOUNT /*공탁금액*/
+		     , SUM(NVL(t1.AR_INCRPR,0)) 
+		        - SUM(CASE WHEN NVL(t3.RQEST_SE,'0') = '1' THEN NVL(t1.AR_INCRPR,0) ELSE 0 END) AS JAN_AR_INCRPR  /*미보상 : 면적수량*/
+		     , SUM(NVL(t1.RWMNY,0))     
+		        -  SUM(CASE WHEN NVL(t3.RQEST_SE,'0') = '1' THEN NVL(t3.RWMNY,0) ELSE 0 END) AS JAN_AMOUNT        /*미보상 : 금액*/
+		     , COUNT(t3.OWNER_NO)       
+		        - SUM(CASE WHEN NVL(t3.RQEST_SE,'0') = '1' THEN 1 ELSE 0 END) AS JAN_PERSON                       /*미보상 : 인원*/
+		FROM TBCMP_THING_WTNNC t1
+		   INNER JOIN TBPRJ_BSNS_CODE t2
+		     ON  t1.BSNS_AREA_CODE = t2.BSNS_CODE
+		   INNER JOIN TBCMP_THING_OWNER t3
+		     ON  t1.BSNS_AREA_CODE = t3.BSNS_AREA_CODE
+		     AND t1.THING_SN       = t3.THING_SN
+		   LEFT OUTER JOIN (
+		      SELECT A.BSNS_AREA_CODE
+		           , LISTAGG(B.OWNER_NM, ',') WITHIN GROUP (ORDER BY A.BSNS_AREA_CODE) AS OWNERS /* 대상자들 */
+		           , SUM(A.LDGMNT_AMOUNT) AS LDGMNT_AMOUNT /* 공탁금액 */
+		      FROM TBCMP_LDGMNT A,
+		        TBCMP_OWNER B
+		      WHERE 1=1
+		      AND A.BSNS_AREA_CODE   = B.BSNS_AREA_CODE
+		      AND A.OWNER_NO         = B.OWNER_NO
+		      GROUP BY A.BSNS_AREA_CODE
+		   ) t4
+		     ON  t1.BSNS_AREA_CODE = t4.BSNS_AREA_CODE
+		WHERE  1=1
+	]]>
+	<isNotEmpty property="BSNS_SE">
+		AND    t2.CL_SE = #BSNS_SE#
+	</isNotEmpty>
+	<![CDATA[
+		GROUP BY t1.BSNS_AREA_CODE
+		ORDER BY 1,2,3
+	]]>
+	</select>
+
+</sqlMap>

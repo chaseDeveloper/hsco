@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM050303_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 특별/근속승진정보 조회 -->
+	<select id="HRM050303DAO.tbhrmPrmotPrsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+            SELECT '0'                                                                     AS CHK
+                 , TSPT.PRMOT_SE
+                 , TSPT.STDR_DE
+                 , TSPT.EMPNO
+                 , THM.EMPNM
+                 , TSPT.DEPT_CODE
+                 , NVL(SFSAL_GETDEPTNM_01(TSPT.DEPT_CODE), SFHRM_GET_DEPTNM(TSPT.DEPT_CODE, '0')) AS DEPT_NM
+                 , TSPT.JSSFC_SE
+                 , TSPT.OFCPS_SE
+                 , TSPT.RSPOFC_SE
+                 , TSPT.NOW_CLSF_SE
+                 , TSPT.CNWK_YYCNT
+                 , TSPT.CNWK_MONTH_CO
+                 , TSPT.PRMOT_CLSF
+                 , NVL(TSPT.STTUS, '0')                                                    AS STTUS
+              FROM TBHRM_HR_MASTR THM,
+                   TBHRM_SPECL_PRMOT_TRGTER TSPT
+             WHERE THM.EMPNO = TSPT.EMPNO
+		]]>
+		<isNotEmpty property="PRMOT_SE" prepend="AND">
+		          TSPT.PRMOT_SE = #PRMOT_SE#
+		</isNotEmpty>
+		<isNotEmpty property="APPLC_DE" prepend="AND">
+		          TSPT.STDR_DE = #APPLC_DE#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE" prepend="AND">
+		          TSPT.DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="EMPNM" prepend="AND">
+				  THM.EMPNM LIKE '%' || #EMPNM# || '%'
+		</isNotEmpty>
+		<![CDATA[
+		 ORDER BY TSPT.EMPNO, TSPT.STDR_DE
+		]]>
+    </select>
+    
+    <!-- 근속승진대상자 존재유무 확인 -->
+    <select id="HRM050303DAO.chkData" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+        SELECT COUNT(*)                     AS EXIST_AT
+          FROM TBHRM_SPECL_PRMOT_TRGTER
+         WHERE 1=1
+           AND STDR_DE        = #APPLC_DE#
+           AND PRMOT_SE       = '001'
+    </select>
+    
+    <!-- 근속승진대상자 생성 -->
+	<update id="HRM050303DAO.tbhrmTrgterCreat" parameterClass="java.util.HashMap">
+		INSERT INTO TBHRM_SPECL_PRMOT_TRGTER (
+		       PRMOT_SE
+             , STDR_DE
+             , EMPNO
+             , DEPT_CODE
+             , JSSFC_SE
+             , OFCPS_SE
+             , RSPOFC_SE
+             , NOW_CLSF_SE
+             , CNWK_YYCNT
+             , CNWK_MONTH_CO
+             , PRMOT_CLSF
+             , STTUS
+             , DCSN_DE
+             , RM
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+		)
+		SELECT '001'                                                                            AS PRMOT_SE
+             , #APPLC_DE#                                                                       AS STDR_DE
+             , THM.EMPNO                                                                        AS EMPNO
+             , THM.DEPT_CODE                                                                    AS DEPT_CODE
+             , THM.JSSFC_SE                                                                     AS JSSFC_SE
+             , SFHRM_GET_OFCPSCD(THM.EMPNO,THM.JSSFC_SE,THM.HR_CLSF_SE,THM.ECNY_DE)             AS OFCPS_SE
+             , THM.RSPOFC_SE                                                                    AS RSPOFC_SE
+             , THM.HR_CLSF_SE                                                                   AS HR_CLSF_SE
+             , TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.BGN_DE, 'YYYYMMDD')) / 12)               AS CNWK_YYCNT
+             , TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.BGN_DE, 'YYYYMMDD'))) - (TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.BGN_DE, 'YYYYMMDD')) / 12) * 12) AS CNWK_MONTH_CO
+             , '04'                                                                             AS PRMOT_CLSF
+             , '0'                                                                              AS STTUS
+             , TO_CHAR(SYSDATE, 'YYYYMMDD')                                                     AS DCSN_DE
+             , ''                                                                               AS RM
+             , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+          FROM TBHRM_HR_MASTR THM,
+               (
+                SELECT EMPNO
+                     , JSSFC_SE
+                     , CLSF_SE
+                     , MIN(GNFD_DE) AS BGN_DE
+                  FROM TBHRM_GNFD
+                 WHERE JSSFC_SE IN ('001', '002', '003')
+                   AND CLSF_SE = '05'
+              GROUP BY EMPNO, JSSFC_SE, CLSF_SE
+              ORDER BY EMPNO, BGN_DE
+               ) T
+         WHERE THM.EMPNO = T.EMPNO
+           AND THM.HR_CLSF_SE = T.CLSF_SE
+           AND RETIRE_DE IS NULL
+           AND MONTHS_BETWEEN(SYSDATE, TO_DATE(BGN_DE, 'YYYYMMDD')) >= 72
+	</update>
+	
+	<!-- 특별승진 추가 -->
+    <insert id="HRM050303DAO.insertPrmot" parameterClass="java.util.HashMap">
+		INSERT INTO TBHRM_SPECL_PRMOT_TRGTER (
+		       PRMOT_SE
+             , STDR_DE
+             , EMPNO
+             , DEPT_CODE
+             , JSSFC_SE
+             , OFCPS_SE
+             , RSPOFC_SE
+             , NOW_CLSF_SE
+             , CNWK_YYCNT
+             , CNWK_MONTH_CO
+             , PRMOT_CLSF
+             , STTUS
+             , DCSN_DE
+             , RM
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+		)
+		VALUES (
+		       #PRMOT_SE#
+             , #STDR_DE#
+             , #EMPNO#
+             , #DEPT_CODE#
+             , #JSSFC_SE#
+             , #OFCPS_SE#
+             , #RSPOFC_SE#
+             , #NOW_CLSF_SE#
+             , #CNWK_YYCNT#
+             , #CNWK_MONTH_CO#
+             , #PRMOT_CLSF#
+             , '0'
+             , ''
+             , #RM#
+             , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+	
+	<!-- 승진적용 -->
+	<update id="HRM050303DAO.updatePrmotAt" parameterClass="java.util.HashMap">
+		UPDATE TBHRM_SPECL_PRMOT_TRGTER
+           SET STTUS               = '1'
+             , UPDUSR_ID           = #S_USER_ID#
+             , UPDT_DT             = SYSDATE
+         WHERE EMPNO               = #EMPNO#
+           AND PRMOT_SE            = #PRMOT_SE#
+           AND STDR_DE             = #STDR_DE#
+	</update>
+	
+	<!-- 승진적용(발령 기초 정보 생성) -->
+    <insert id="HRM050303DAO.insertPrmotGNFD" parameterClass="java.util.HashMap">
+		INSERT INTO TBHRM_GNFD (
+		       EMPNO
+             , SEQ
+             , GNFD_DE
+             , GNFD_SE
+             , REGIST_DE
+             , DEPT_CODE
+             , JSSFC_SE
+             , CLSF_SE
+             , BEFORE_DEPT_CODE
+             , BEFORE_JSSFC_SE
+             , BEFORE_RSPOFC_SE
+             , BEFORE_HR_CLSF_SE
+             , BEFORE_PAY_CLSF_SE
+             , BEFORE_SRCLS_SE
+             , BEFORE_DTY_SE
+             , BEFORE_DTY_NM
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+		)
+		SELECT EMPNO
+             , (SELECT NVL(MAX(SEQ), 0)+1 FROM TBHRM_GNFD WHERE EMPNO = #EMPNO#)
+             , TO_CHAR(SYSDATE, 'YYYYMMDD')
+             , DECODE(#PRMOT_SE#, '001', '041', '002', '010')
+             , TO_CHAR(SYSDATE, 'YYYYMMDD')
+             , DEPT_CODE
+             , JSSFC_SE
+             , #PRMOT_CLSF#
+             , DEPT_CODE
+             , JSSFC_SE
+             , RSPOFC_SE
+             , HR_CLSF_SE
+             , PAY_CLSF_SE
+             , SRCLS
+             , DTY_SE
+             , DTY_NM
+             , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+          FROM TBHRM_HR_MASTR
+         WHERE EMPNO = #EMPNO#
+	</insert>
+	
+	<!-- 승진대상자 정보 삭제 -->
+	<delete id="HRM050303DAO.deletePrmot" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBHRM_SPECL_PRMOT_TRGTER
+		 WHERE EMPNO       = #EMPNO#
+		   AND PRMOT_SE    = #PRMOT_SE#
+		   AND STDR_DE     = #STDR_DE#
+	</delete>
+	
+	<!-- 근속기간 조회 -->
+	<select id="HRM050303DAO.getCNWKYM" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+            SELECT TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.BGN_DE, 'YYYYMMDD')) / 12)               AS CNWK_YYCNT
+                 , TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.BGN_DE, 'YYYYMMDD'))) - (TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T.BGN_DE, 'YYYYMMDD')) / 12) * 12) AS CNWK_MONTH_CO
+              FROM TBHRM_HR_MASTR A
+                 , (
+                    SELECT EMPNO
+                         , JSSFC_SE
+                         , CLSF_SE
+                         , MIN(GNFD_DE) AS BGN_DE
+                      FROM TBHRM_GNFD
+                     WHERE JSSFC_SE IN ('001', '002', '003')
+                  GROUP BY EMPNO, JSSFC_SE, CLSF_SE
+                  ORDER BY EMPNO, BGN_DE
+                   ) T
+             WHERE A.RETIRE_DE IS NULL
+               AND A.EMPNO = T.EMPNO(+)
+               AND A.HR_CLSF_SE = T.CLSF_SE(+)
+               AND A.EMPNO = #EMPNO#
+		]]>
+	</select>
+</sqlMap>

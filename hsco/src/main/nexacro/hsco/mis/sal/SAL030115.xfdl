@@ -1,0 +1,285 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.5">
+  <TypeDefinition url="..\..\default_typedef.xml"/>
+  <Form id="SAL030115" classname="SAL030115" left="0" top="0" width="1059" height="735" titletext="공제내역대체사업비" oninit="SAL030115_oninit" onload="SAL030115_onload">
+    <Layouts>
+      <Layout>
+        <Static id="Static31" taborder="2" text="공제내역(대행사업비)" cssclass="sta_WF_Title02" left="0" top="39" width="169" height="19"/>
+        <Div id="div_search" taborder="0" left="0" top="0" right="28" height="33" cssclass="div_WFSA_Box">
+          <Layouts>
+            <Layout>
+              <Static id="Static04" taborder="35" text="지급년월" cssclass="sta_WFSA_Label" left="15" top="5" width="62" height="21"/>
+              <Div id="div_pymntYm" taborder="0" url="common::frmSalMonCal.xfdl" left="78" top="5" width="85" height="21" async="false"/>
+              <Static id="Static00" taborder="37" text="지급번호" cssclass="sta_WFSA_Label" left="178" top="5" width="62" height="21"/>
+              <Spin id="spn_sn" taborder="1" value="0" max="9" min="1" cssclass="spn_WF_Essential" left="245" top="5" width="62" height="21" style="align:center;"/>
+            </Layout>
+          </Layouts>
+        </Div>
+        <Grid id="grd_salaryDdc" taborder="1" binddataset="ds_salaryDdc" useinputpanel="false" left="0" top="58" right="28" bottom="0">
+          <Formats>
+            <Format id="default">
+              <Columns>
+                <Column size="180"/>
+              </Columns>
+              <Rows>
+                <Row size="24" band="head"/>
+                <Row size="30"/>
+              </Rows>
+              <Band id="head">
+                <Cell text="부서"/>
+              </Band>
+              <Band id="body">
+                <Cell style="background:EXPR(comp.parent.fn_rnum(dataset.getColumn(currow, 'RNUM')));background2:EXPR(comp.parent.fn_rnum(dataset.getColumn(currow, 'RNUM')));" text="bind:SALARY_DEPT_NM"/>
+              </Band>
+            </Format>
+          </Formats>
+        </Grid>
+      </Layout>
+    </Layouts>
+    <Objects>
+      <Dataset id="ds_cond">
+        <ColumnInfo>
+          <Column id="BSNS_TY" type="STRING" size="256"/>
+          <Column id="PYMNT_YM" type="STRING" size="256"/>
+          <Column id="SN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_salaryDdc">
+        <ColumnInfo>
+          <Column id="SALARY_DEPT_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_ddcList">
+        <ColumnInfo>
+          <Column id="PYMNT_DDC_CODE" type="STRING" size="256"/>
+          <Column id="PYMNT_DDC_CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item14" compid="div_search.spn_sn" propid="value" datasetid="ds_cond" columnid="SN"/>
+    </Bind>
+    <Script type="xscript5.0"><![CDATA[/***********************************************************************
+ * 업무구분 : 급여
+ * 화면명   : 급여내역조회
+ * 화면설명 : 급여계산된 내역을 조회한다.
+ * 작성일   : 2016.04.06
+ * 작성자   : 이상명
+ * 수정이력 : 
+ ***********************************************************************
+ *     수정일     수정자   내용
+ ***********************************************************************
+ *    
+ ***********************************************************************/
+ 
+ 
+
+/***********************************************************************
+ * Script Include 
+ ***********************************************************************/
+include "lib::comInclude.xjs";
+include "mis_lib::misUtil.xjs";
+
+/***********************************************************************
+ * 화면 변수 선언부
+ ***********************************************************************/
+
+
+/***********************************************************************
+* onInit / onLoad 영역
+ ***********************************************************************/
+this.SAL030115_oninit = function(obj:Form, e:nexacro.InitEventInfo)
+{
+	this.fn_init_form();
+	this.fn_init_dataset();
+	
+}
+
+this.SAL030115_onload = function(obj:Form, e:nexacro.LoadEventInfo)
+{
+	this.fn_search();
+}
+
+/**********************************************************************
+* Form/Dataset 오브젝트 초기화
+***********************************************************************/
+
+/*
+ * 함수명  	: initForm
+ * 설명 		: Form을 초기화한다.
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: this.initForm();
+ */
+this.fn_init_form = function()
+{
+	this.fn_misFormInit(this);
+	this.gfn_initForm(this); 
+	
+	this.div_search.div_pymntYm.fn_setBind("ds_cond","PYMNT_YM");
+}
+
+
+/*
+ * 함수명  	: initDataset
+ * 설명 		: Dataset을 초기화한다
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: this.initDataset();
+ */
+this.fn_init_dataset = function()
+{
+	this.ds_cond.clearData();
+	this.ds_cond.addRow();
+	this.ds_cond.setColumn(0, "PYMNT_YM", this.dateUtils.format(this.gfn_today(),"yyyymm"));
+	this.ds_cond.setColumn(0, "SN", "1");
+	this.ds_cond.setColumn(0 ,"BSNS_TY", "A");
+}
+
+
+/**********************************************************************
+* Transaction 관련 이벤트 핸들러 
+***********************************************************************/
+
+/*
+ * 함수명  	: fn_search
+ * 설명 		: 조회 이벤트 처리
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: this.fn_search();
+ */
+this.fn_search = function()
+{
+	this.ds_salaryDdc.clearData();
+	this.fn_transaction("selectSalaryDdcList");
+}
+
+/**********************************************************************
+* call Transaction 영역
+***********************************************************************/
+/*
+ * 함수명  	: fn_transaction
+ * 설명 		: Transaction 요청 처리 함수
+ * params  		: strSvcId : 서비스요청 ID
+ * return Type 	: None
+ * 사용법		: this.fn_transaction("SELECT");
+ */
+this.fn_transaction = function(strSvcId)
+{
+	switch (strSvcId) {
+		// 해당 월의 지급공제항목 리스트
+		case "selectSalaryDdcList":
+			var sController   	= "hsco/mis/sal/SAL030113/selectSalaryDdcList.do";
+			var sInDatasets   	= "input1=ds_cond";
+			var sOutDatasets  	= "ds_ddcList=output1 ds_salaryDdc=output2";
+			break;
+	}
+	
+	 Ex.core.tran(this, strSvcId, sController, sInDatasets, sOutDatasets); 
+}
+
+
+/**********************************************************************
+* Transaction Callback 영역
+***********************************************************************/
+
+ /*
+ * 함수명  	: fn_callBack
+ * 설명 		: Transaction Callback 처리
+ * params  		: strSvcId    : 서비스요청 ID
+ *                nErrorCode  : 오류 메시지 코드 ([예] 0 : Success, 그밖의 경우, error)
+ *                strErrorMsg : 오류 메시지([예]  success.insert|정상적으로 등록되었습니다.)
+ * return Type 	: None
+ * 사용법		: 
+ */
+this.fn_callBack = function (strSvcId, nErrorCode, strErrorMsg)
+{
+	if(nErrorCode != '0') {
+		this.gfn_callback_message(strSvcId, nErrorCode, strErrorMsg);
+	}
+	
+	if (nErrorCode == '0'){
+		switch (strSvcId) {
+			case "selectSalaryDdcList":
+			this.fn_dynamicGrid();
+			break;
+
+		}
+	}
+}
+
+
+
+this.Button00_onclick = function(obj:Button,  e:nexacro.ClickEventInfo)
+{
+	trace("========== ds_ddcList ==========");
+	trace(this.ds_ddcList.saveXML());
+	trace("========== ds_salaryDdc ==========");
+	trace(this.ds_salaryDdc.saveXML());
+	
+}
+
+
+/*
+ * 함수명  	: fn_dynamicGrid
+ * 설명 		: 그리드 컬럼 동적 생성
+ * params  		: None
+ * return Type 	: None
+ * 사용법		: this.fn_dynamicGrid();
+ */
+this.fn_dynamicGrid = function() {
+	
+	// 기존컬럼 남기고 삭제
+	for(var i=this.grd_salaryDdc.getCellCount("Head"); i> 0; i--) {
+		this.grd_salaryDdc.deleteContentsCol(i);
+	}
+	
+	// 급여지급현황그리드에 지급공제항목 컬럼 동적 생성
+	for(var i=0; i<this.ds_ddcList.getRowCount(); i++) {
+		
+		// column 추가
+		var nCol = this.grd_salaryDdc.appendContentsCol("body", true);
+		
+		// Head 셋팅
+		this.grd_salaryDdc.setCellProperty("Head", nCol ,"text", this.ds_ddcList.getColumn(i, "PYMNT_DDC_CODE_NM"));
+		
+		// Body 셋팅 
+		this.grd_salaryDdc.setCellProperty("Body", nCol ,"displaytype", "number");
+		this.grd_salaryDdc.setCellProperty("Body", nCol ,"align", "right middle");
+		this.grd_salaryDdc.setCellProperty("Body", nCol ,"mask" , "999,999,999");
+
+		this.grd_salaryDdc.setFormatColProperty(nCol, "size", 100);
+		
+		// 소계 색상
+		var rnum = this.ds_salaryDdc.getColumn(i, "RNUM");
+		this.grd_salaryDdc.setCellProperty("Body", nCol, "background" , "expr:comp.parent.fn_rnum(dataset.getColumn(currow, 'RNUM'))");
+		this.grd_salaryDdc.setCellProperty("Body", nCol, "background2", "expr:comp.parent.fn_rnum(dataset.getColumn(currow, 'RNUM'))");
+		
+		// Dataset 컬럼 생성 및 Body 바인드
+		this.grd_salaryDdc.setCellProperty("Body", nCol, "text", "bind:"+this.ds_ddcList.getColumn(i, "PYMNT_DDC_CODE"));
+	}
+}
+
+
+/*
+ * 함수명  	: fn_rnum
+ * 설명 		: 그리드에 소계 집계 표시 함수
+ * params  		: s_rnum : 소계 여부
+ * return Type 	: None
+ * 사용법		: this.fn_rnum(s_rnum);
+ */
+this.fn_rnum = function(s_rnum) {
+	
+	// 소계 또는 합계 : 1, 3, 5, 7
+	var result = "";
+	
+	if(s_rnum == "1" || s_rnum == "3" || s_rnum == "5" || s_rnum == "7") {
+		result = "beige";
+		
+	}
+	return result;
+}
+
+]]></Script>
+  </Form>
+</FDL>

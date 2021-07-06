@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj05">
+
+	<!-- 
+		 R   : TBCTR_CNTRCT				계약정보
+		 R   : TBHRM_HR_MASTR			인사마스터
+		 R   : TBPRJ_MNG_CHANGE			감독변경
+
+		CRUD : TBPRJ_PXCOND_DTLS			기성내역
+		CRUD : TBPRJ_PXCOND_DTLS_ATCH		기성내역첨부
+		CRUD : TBPRJ_PXCOND_DTLS_MNG		기성내역_감독
+	-->
+
+	<!-- 기성내역 ================================================== -->
+	<!-- 기성내역 조회 -->
+	<select id="PRJ050401.mList" parameterClass="map" resultClass="hashmap">
+		SELECT
+			 A.BSNS_CODE								/* 사업코드 */
+			,A.CNTRCT_NO								/* 계약번호 */
+			,A.ODR										/* 차수 */
+			,A.PXCOND_SE								/* 기성구분 */
+			,CASE WHEN C.CNTRCT_AMOUNT - SUM(A.PXCOND_AMOUNT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO ORDER BY A.ODR ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)  <![CDATA[<]]>= 0 THEN '2'
+			      ELSE '1' 
+			 END AS PXCOND_SE2 							/* 기성구분 : 1-기성, 2-완성 */						
+			,A.REQUST_DE								/* 요청일자 */
+			,A.REQUST_NO								/* 요청번호 */
+			,S.SANCTN_KND								/* 결재종류 */
+			,A.PRSEC_DE									/* 검사일자 */
+			,A.EXPNDTR_DE								/* 지출일자 */
+			,A.PXCOND_AMOUNT							/* 기성금액 */
+			,A.REQST_SE									/* 신청구분 : 1-정식,0-약식 */
+			,A.EXAMER									/* 검사관 */
+			,A.EMPNO_OBSRVER_1							/* 사번_입회자1 */
+			,A.EMPNO_OBSRVER_2							/* 사번_입회자2 */
+			,A.FILE_SN									/* 파일일련번호 */
+			,SFSAL_GETEMPNO_01(A.EMPNO_OBSRVER_1) AS NM1
+			,SFSAL_GETEMPNO_01(A.EMPNO_OBSRVER_2) AS NM2
+			,C.CNTRCT_AMOUNT AS TOT_AMT
+			,SUM(A.PXCOND_AMOUNT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO
+					ORDER BY A.ODR ASC
+					ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS S_AMT			/* 누계 기성금액 */
+			,DECODE(NVL(C.CNTRCT_AMOUNT,0)
+				,0 ,0
+				,ROUND(A.PXCOND_AMOUNT * 100 / C.CNTRCT_AMOUNT,2)
+			) AS PXCOND_RT								/* 기성율 */
+			,DECODE(NVL(C.CNTRCT_AMOUNT,0)
+				,0 ,0
+				,ROUND(SUM(A.PXCOND_AMOUNT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO
+					ORDER BY A.ODR ASC
+					ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) * 100
+				 / C.CNTRCT_AMOUNT,2)
+			) AS S_RT									/* 누계 기성율 */
+			,C.CNTRCT_AMOUNT
+			 - SUM(A.PXCOND_AMOUNT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO
+					ORDER BY A.ODR ASC
+					ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS REMAIN_AMT		/* 잔여 기성액 */
+			,0 AS ADVAN_EXCCLC_AMOUNT					/* TODO: 선금정산금액 : 계약참조(추가예정) */
+			,A.PXCOND_AMOUNT - 0 AS RL_PYMNT_AMOUNT		/* TODO: 실지급금액 : 기성금액 - 선금정산금액(추가예정) */
+			,'' AS EXPNDTR_DE							/* TODO: 지출일자(추가예정) */
+		FROM TBPRJ_PXCOND_DTLS A						/* 기성내역 */
+		LEFT JOIN TBCTR_CNTRCT C
+		 ON C.CNTRCT_NO = A.CNTRCT_NO
+		LEFT JOIN TBCOM_ELCTRN_SANCTN_MASTR S
+		 ON S.SANCTN_NO = A.REQUST_NO					/* 전자결재마스터 */
+		WHERE A.BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND A.CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND A.PXCOND_SE = #PXCOND_SE#					/* 기성구분 */
+		ORDER BY 1,2,3,4
+	</select>
+
+
+	<!-- 기성내역 추가 -->
+	<insert id="PRJ050401.mC" parameterClass="map">
+		INSERT INTO TBPRJ_PXCOND_DTLS (					/* 기성내역 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,PXCOND_SE									/* 기성구분 */
+			,ODR										/* 차수 */
+			,REQUST_DE									/* 요청일자 */
+			,REQUST_NO									/* 요청번호 */
+			,PRSEC_DE									/* 검사일자 */
+			,EXPNDTR_DE									/* 지출일자 */
+			,PXCOND_AMOUNT								/* 기성금액 */
+			,PXCOND_RT									/* 기성율 */
+			,REQST_SE									/* 신청구분 */
+			,EXAMER										/* 검사관 */
+			,EMPNO_OBSRVER_1							/* 사번_입회자1 */
+			,EMPNO_OBSRVER_2							/* 사번_입회자2 */
+			,FILE_SN									/* 파일일련번호 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		)
+		VALUES (
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#PXCOND_SE#								/* 기성구분 */
+			,(SELECT NVL(MAX(ODR)+1,1)
+				 FROM TBPRJ_PXCOND_DTLS
+				WHERE BSNS_CODE = #BSNS_CODE#
+				  AND CNTRCT_NO = #CNTRCT_NO#
+			 )											/* 차수 */
+			,#REQUST_DE#								/* 요청일자 */
+			,#REQUST_NO#								/* 요청번호 */
+			,#PRSEC_DE#									/* 검사일자 */
+			,#EXPNDTR_DE#								/* 지출일자 */
+			,#PXCOND_AMOUNT#							/* 기성금액 */
+			,#PXCOND_RT#								/* 기성율 */
+			,#REQST_SE#									/* 신청구분 */
+			,#EXAMER#									/* 검사관 */
+			,#EMPNO_OBSRVER_1#							/* 사번_입회자1 */
+			,#EMPNO_OBSRVER_2#							/* 사번_입회자2 */
+			,#FILE_SN#									/* 파일일련번호 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		)
+	</insert>
+
+	<!-- 기성내역 수정 -->
+	<update id="PRJ050401.mU" parameterClass="map">
+		UPDATE TBPRJ_PXCOND_DTLS						/* 기성내역 */
+		  SET
+			 REQUST_DE = #REQUST_DE#					/* 요청일자 */
+			,REQUST_NO = #REQUST_NO#					/* 요청번호 */
+			,PRSEC_DE = #PRSEC_DE#						/* 검사일자 */
+			,EXPNDTR_DE = #EXPNDTR_DE#					/* 지출일자 */
+			,PXCOND_AMOUNT = #PXCOND_AMOUNT#			/* 기성금액 */
+			,PXCOND_RT = #PXCOND_RT#					/* 기성율 */
+			,REQST_SE = #REQST_SE#						/* 신청구분 */
+			,EXAMER = #EXAMER#							/* 검사관 */
+			,EMPNO_OBSRVER_1 = #EMPNO_OBSRVER_1#		/* 사번_입회자1 */
+			,EMPNO_OBSRVER_2 = #EMPNO_OBSRVER_2#		/* 사번_입회자2 */
+			,FILE_SN = #FILE_SN#						/* 파일일련번호 */
+			,UPDUSR_ID = #S_USER_ID#					/* 수정자ID */
+			,UPDT_DT = SYSDATE							/* 수정일시 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND PXCOND_SE = #PXCOND_SE#					/* 기성구분 */
+		  AND ODR = #ODR#								/* 차수 */
+	</update>
+
+	<!-- 기성내역 삭제 -->
+	<delete id="PRJ050401.mD" parameterClass="map">
+		DELETE FROM TBPRJ_PXCOND_DTLS					/* 기성내역 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND PXCOND_SE = #PXCOND_SE#					/* 기성구분 */
+		<isNotEmpty property="ODR" >
+		  AND ODR = #ODR#								/* 차수 */
+		</isNotEmpty>
+	</delete>
+
+	<!-- 검사원 조회 -->
+	<select id="PRJ050401.rList" parameterClass="map" resultClass="hashmap">
+		SELECT 
+			 A.BSNS_CODE								/* 사업코드 */
+			,A.CNTRCT_NO								/* 계약번호 */			
+			,A.ODR										/* 차수 */
+			,A.MNG_SN									/* 감독원일련번호 */
+			,A.EMPNO									/* 사번_검사원 */
+			,SFSAL_GETEMPNO_01(A.EMPNO) AS EMPNM
+        FROM TBPRJ_PXCOND_DTLS_MNG A			
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND ODR = #ODR#								/* 차수 */
+		ORDER BY A.MNG_SN
+	</select>
+		
+	<!-- 검사원 추가 -->
+	<insert id="PRJ050401.rC" parameterClass="map">
+		INSERT INTO TBPRJ_PXCOND_DTLS_MNG (				/* 기성내역_검사원 */
+			 BSNS_CODE									/* 사업코드 */
+			,CNTRCT_NO									/* 계약번호 */
+			,ODR										/* 차수 */
+			,MNG_SN										/* 일련번호 */
+			,EMPNO										/* 사번 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		)
+		VALUES (
+			 #BSNS_CODE#								/* 사업코드 */
+			,#CNTRCT_NO#								/* 계약번호 */
+			,#ODR#										/* 차수 */
+			,(SELECT NVL(MAX(MNG_SN)+1,1)
+				 FROM TBPRJ_PXCOND_DTLS_MNG
+				WHERE BSNS_CODE = #BSNS_CODE#
+				  AND CNTRCT_NO = #CNTRCT_NO#		
+		  		  AND ODR = #ODR#					
+			 )											/* 일련번호 */
+			,#EMPNO#								    /* 사번 */ 
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		)
+	</insert>		
+
+	<!-- 검사원 수정 -->
+	<update id="PRJ050401.rU" parameterClass="map">
+		UPDATE TBPRJ_PXCOND_DTLS_MNG					/* 기성내역_검사원 */
+		  SET
+			 EMPNO = #EMPNO#							/* 사번 */
+			,UPDUSR_ID = #S_USER_ID#					/* 수정자ID */
+			,UPDT_DT = SYSDATE							/* 수정일시 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND ODR = #ODR#								/* 차수 */
+		  AND MNG_SN = #MNG_SN#							/* 검사원 일련번호 */
+	</update>
+
+	<!-- 검사원 삭제 -->
+	<delete id="PRJ050401.rD" parameterClass="map">
+		DELETE TBPRJ_PXCOND_DTLS_MNG					/* 기성내역_검사원 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND ODR = #ODR#								/* 차수 */
+		  <isNotEmpty property="MNG_SN" >
+		  AND MNG_SN = #MNG_SN#							/* 검사원 일련번호 */
+		  </isNotEmpty>
+	</delete>	
+
+	<!-- 전자결재 저장 ================================================== -->
+
+	<update id="PRJ050401.approveU" parameterClass="map">
+		UPDATE TBPRJ_PXCOND_DTLS						/* 기성내역 */
+		  SET
+			 REQUST_DE = TO_CHAR(SYSDATE,'YYYYMMDD')	/* 요청일자 */
+			,REQUST_NO = #REQUST_NO#					/* 요청번호 */
+			,UPDUSR_ID = #S_USER_ID#					/* 수정자ID */
+			,UPDT_DT = SYSDATE							/* 수정일시 */
+		WHERE BSNS_CODE = #BSNS_CODE#					/* 사업코드 */
+		  AND CNTRCT_NO = #CNTRCT_NO#					/* 계약번호 */
+		  AND PXCOND_SE = #PXCOND_SE#					/* 기성구분 */
+		  AND ODR = #ODR#								/* 차수 */
+	</update>
+
+
+	<!-- 일상감사 추가 ================================================== -->
+	<insert id="PRJ050401.auditC" parameterClass="map">
+		INSERT INTO TBAUD_EDAY_AUDIT (					/* 일상감사 */
+			 EDAY_AUDIT_NO								/* 일상감사번호 */
+			,RCEPT_YEAR									/* 접수년도 */
+			,BSNS_CODE									/* 사업코드 */
+			,DEPT_CODE									/* 부서코드 */
+			,EMPNO										/* 사번 */
+			,EMPNM										/* 사원명 */
+			,PUBLIC_AUDIT_CL							/* 공감법분류 */
+			,INSTT_ACCTO_CL								/* 기관별분류 */
+			,EDAY_AUDIT_NM								/* 일상감사명 */
+			,EDAY_AUDIT_CN								/* 일상감사내용 */
+			,REGISTER_ID								/* 등록자ID */
+			,REGIST_DT									/* 등록일시 */
+			,UPDUSR_ID									/* 수정자ID */
+			,UPDT_DT									/* 수정일시 */
+		)
+		SELECT
+			 (SELECT NVL(MAX(TO_NUMBER(EDAY_AUDIT_NO))+1,1)
+				 FROM TBAUD_EDAY_AUDIT					/* 일상감사 */
+				WHERE RCEPT_YEAR = TO_CHAR(SYSDATE,'YYYY')
+			 )											/* 일상감사번호 */
+			,TO_CHAR(SYSDATE,'YYYY')					/* 접수년도 */
+			,#BSNS_CODE#								/* 사업코드 */
+			,A.DEPT_CODE								/* 부서코드 */
+			,#S_USER_ID#								/* 사번 */
+			,A.EMPNM									/* 사원명 */
+			,'02' AS PUBLIC_AUDIT_CL					/*공감법분류(AUD014) : 02-계약 */
+			,DECODE(SUBSTR(#SANCTN_FORM_SE#,1,1), 2,'01','02')
+			 AS INSTT_ACCTO_CL							/*기관별분류(AUD015) : 01-용역,02-공사 */
+			,#SANCTN_SJ#								/* 일상감사명 */
+			,#SANCTN_SUMM#								/* 일상감사내용 */
+			,#S_USER_ID#								/* 등록자ID */
+			,SYSDATE									/* 등록일시 */
+			,#S_USER_ID#								/* 수정자ID */
+			,SYSDATE									/* 수정일시 */
+		FROM TBHRM_HR_MASTR A							/* 인사마스터 */
+		WHERE A.EMPNO = #S_USER_ID#						/* 사번 */
+	</insert>
+</sqlMap>

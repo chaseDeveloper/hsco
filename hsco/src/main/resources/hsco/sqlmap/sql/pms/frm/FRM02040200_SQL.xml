@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FRM02040200SQL">	
+
+	<!-- 쿼리명 : 전표내역조회
+	설명 : 전표내역조회 조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.02.18
+	-->
+	<select id="FRM02040200DAO.selectendwChitList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+      SELECT ACCNUT_YEAR,
+                 CHIT_NO,
+                 CHIT_DE,
+                 CHIT_TY,
+                 DEBTOR_AMOUNT,
+                 CRDIT_AMOUNT,
+                 ACNTCTGR_NM,
+                 DECSN_NO,
+                 CASE CHIT_TY WHEN '1' THEN (SELECT SUMRY FROM TBFRM_ENDW_INCME_DECSN z WHERE ACCNUT_YEAR = a.ACCNUT_YEAR AND ENDW_INCME_DECSN_NO = a.ENDW_INCME_DECSN_NO)
+                              WHEN '2' THEN (SELECT PRVONSH FROM TBFRM_OVERRPAY_DECSN   z WHERE ACCNUT_YEAR = a.ACCNUT_YEAR AND OVERRPAY_DECSN_NO = a.OVERRPAY_DECSN_NO)
+                              WHEN '3' THEN (SELECT SUMRY FROM TBFRM_ENDW_EXPNDTR_DECSN z WHERE ACCNUT_YEAR = a.ACCNUT_YEAR AND ENDW_EXPNDTR_DECSN_NO = a.ENDW_EXPNDTR_DECSN_NO)
+                              WHEN '4' THEN (SELECT PRVONSH FROM TBFRM_RTURN_DECSN z WHERE ACCNUT_YEAR = a.ACCNUT_YEAR AND RTURN_DECSN_NO = a.RTURN_DECSN_NO)
+                              ELSE RM
+                 END SUMRY
+            FROM(SELECT  ACCNUT_YEAR,
+                         CHIT_NO,
+                         MAX(CHIT_DE)  CHIT_DE,
+                         MAX(RM) RM,
+                         MAX(CHIT_TY) CHIT_TY,
+                         SUM(DEBTOR_AMOUNT) DEBTOR_AMOUNT,
+                         SUM(CRDIT_AMOUNT)  CRDIT_AMOUNT,
+                         '[차 : ' || MAX(DE_ACNTCTGR_NM)  || '] / ' ||
+                         '[대 : ' || MAX(CE_ACNTCTGR_NM)  || ']'  ACNTCTGR_NM,
+                         CASE MAX(CHIT_TY) WHEN  '1'  THEN MAX(ENDW_INCME_DECSN_NO)
+                                           WHEN  '2'  THEN MAX(OVERRPAY_DECSN_NO)
+                                           WHEN  '3'  THEN MAX(ENDW_EXPNDTR_DECSN_NO)
+                                           WHEN  '4'  THEN MAX(RTURN_DECSN_NO)
+                                           ELSE ''
+                         END DECSN_NO,
+                         MAX(ENDW_INCME_DECSN_NO) ENDW_INCME_DECSN_NO,
+                         MAX(OVERRPAY_DECSN_NO) OVERRPAY_DECSN_NO,
+                         MAX(ENDW_EXPNDTR_DECSN_NO) ENDW_EXPNDTR_DECSN_NO,
+                         MAX(RTURN_DECSN_NO) RTURN_DECSN_NO
+                   FROM(SELECT a.ACCNUT_YEAR,
+                               a.CHIT_NO,
+                               MAX(a.CHIT_DE) CHIT_DE,
+                               MAX(a.RM) RM,
+                               MAX(a.CHIT_TY) CHIT_TY,
+                               SUM(b.DEBTOR_AMOUNT) DEBTOR_AMOUNT,
+                               SUM(b.CRDIT_AMOUNT)  CRDIT_AMOUNT,
+                               b.DBRT_SE,
+                               LISTAGG(DECODE(TRIM(b.DBRT_SE),'1',c.ACNTCTGR_NM,''),',') WITHIN GROUP(ORDER BY  b.DBRT_SE) DE_ACNTCTGR_NM,
+                               LISTAGG(DECODE(TRIM(b.DBRT_SE),'2',c.ACNTCTGR_NM,''),',') WITHIN GROUP(ORDER BY  b.DBRT_SE) CE_ACNTCTGR_NM,
+                               MAX(TO_CHAR(ENDW_INCME_DECSN_NO)) ENDW_INCME_DECSN_NO,
+                               MAX(TO_CHAR(OVERRPAY_DECSN_NO)) OVERRPAY_DECSN_NO,
+                               MAX(TO_CHAR(ENDW_EXPNDTR_DECSN_NO)) ENDW_EXPNDTR_DECSN_NO,
+                               MAX(TO_CHAR(RTURN_DECSN_NO)) RTURN_DECSN_NO
+                          FROM TBFRM_ENDW_CHIT a,
+                               TBFRM_ENDW_CHIT_DETAIL b,
+                               TBFRM_ENDW_ACNTCTGR c
+                          WHERE a.ACCNUT_YEAR = b.ACCNUT_YEAR(+)
+                            AND a.CHIT_NO     = b.CHIT_NO(+)
+                            AND b.ACCNUT_YEAR = c.ACCNUT_YEAR(+)
+                            AND b.ACNT_CODE   = c.ACNT_CODE(+)
+                          GROUP BY a.ACCNUT_YEAR,
+                                   a.CHIT_NO,
+                                   b.DBRT_SE) 
+                      GROUP BY ACCNUT_YEAR,
+                               CHIT_NO) a
+            WHERE CHIT_DE BETWEEN #chitFrDe# AND #chitToDe#
+              AND CHIT_TY = #chitTy#
+            <isNotEmpty property="acntCode">
+              AND EXISTS(SELECT  'X'
+                           FROM TBFRM_ENDW_CHIT_DETAIL z
+                           WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                             AND CHIT_NO = a.CHIT_NO
+                             AND ACNT_CODE = #acntCode#)
+            </isNotEmpty>
+	</select>
+	
+	<!-- 쿼리명 : 전표기본 조회
+	설명 : 전표기본 조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.02.18
+	-->
+	<select id="FRM02040200DAO.selectChitMain" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+           SELECT a.ACCNUT_YEAR,
+                  a.CHIT_NO,
+                  a.CHIT_TY,
+                  a.CHIT_DE,
+                  a.DECSN_NO,
+                  b.ITNC_DE,
+                  b.ITNC_MAN_ID,
+                 (SELECT USER_NM
+                    FROM TBCOM_USER z
+                    WHERE USER_ID = b.ITNC_MAN_ID )ITNC_MAN_NM,
+                  b.DECSN_DE,
+                  b.DELNG_TY_CODE,
+                  (SELECT DELNG_TY_NM
+                    FROM TBFRM_DELNG_TY_CODE z
+                    WHERE ACCNUT_YEAR = b.ACCNUT_YEAR
+                      AND DELNG_TY_CODE = b.DELNG_TY_CODE)
+                  DELNG_TY_NM,	           /* 거래유형명 */
+                  DECODE(a.CHIT_TY,'5',a.RM,b.SUMRY) SUMRY 
+             FROM(SELECT ACCNUT_YEAR,
+                         CHIT_NO,
+                         CHIT_DE,
+                         CHIT_TY,
+                         CASE CHIT_TY WHEN '1' THEN TO_CHAR(ENDW_INCME_DECSN_NO)
+                                      WHEN '2' THEN TO_CHAR(OVERRPAY_DECSN_NO)
+                                      WHEN '3' THEN TO_CHAR(ENDW_EXPNDTR_DECSN_NO)
+                                      WHEN '4' THEN TO_CHAR(RTURN_DECSN_NO)
+                                      ELSE ''
+                          END DECSN_NO,
+                          RM
+                    FROM TBFRM_ENDW_CHIT
+                    WHERE ACCNUT_YEAR = #accunYear#
+                      AND CHIT_NO = #chitNo#) a, 
+                 (SELECT '1' CHIT_TY,ACCNUT_YEAR,ENDW_INCME_DECSN_NO DECSN_NO,ITNC_DE,ITNC_MAN_ID,DECSN_DE,DELNG_TY_CODE,SUMRY FROM TBFRM_ENDW_INCME_DECSN WHERE ACCNUT_YEAR = #accunYear#
+                  UNION ALL
+                  SELECT '2' CHIT_TY,ACCNUT_YEAR,OVERRPAY_DECSN_NO  DECSN_NO,ITNC_DE,ITNC_MAN_ID,DECSN_DE,DELNG_TY_CODE,PRVONSH FROM TBFRM_OVERRPAY_DECSN WHERE ACCNUT_YEAR = #accunYear#
+                  UNION ALL
+                  SELECT '3' CHIT_TY,ACCNUT_YEAR,ENDW_EXPNDTR_DECSN_NO DECSN_NO,ITNC_DE,ITNC_MAN_ID,DECSN_DE,DELNG_TY_CODE,SUMRY FROM TBFRM_ENDW_EXPNDTR_DECSN WHERE ACCNUT_YEAR = #accunYear#
+                  UNION ALL
+                  SELECT '4' CHIT_TY,ACCNUT_YEAR,RTURN_DECSN_NO DECSN_NO,ITNC_DE,ITNC_MAN_ID,DECSN_DE,DELNG_TY_CODE,PRVONSH FROM TBFRM_RTURN_DECSN WHERE ACCNUT_YEAR = #accunYear#) b
+           WHERE a.ACCNUT_YEAR = b.ACCNUT_YEAR(+)
+             AND a.DECSN_NO    = b.DECSN_NO(+)
+             AND a.CHIT_TY     = b.CHIT_TY(+)
+	</select>
+	
+	<!-- 쿼리명 : 전표상세조회
+	설명 : 전표상세조회 
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.02.18
+	-->
+	<select id="FRM02040200DAO.selectChitDetail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+           SELECT ROWNUM SN,
+		            CHIT_NO,
+                    CHIT_SN,
+                    ACCNUT_YEAR,
+                    TRIM(DBRT_SE) DBRT_SE ,
+                    ACNT_CODE,
+                    (SELECT ACNTCTGR_NM
+                       FROM TBFRM_ENDW_ACNTCTGR z
+                       WHERE ACCNUT_YEAR = a.ACCNUT_YEAR
+                         AND ACNT_CODE = a.ACNT_CODE ) ACNTCTGR_NM,
+                    DEBTOR_AMOUNT,
+                    CRDIT_AMOUNT,
+                    SUMRY
+               FROM TBFRM_ENDW_CHIT_DETAIL a
+               WHERE ACCNUT_YEAR = #accunYear# 
+                 AND CHIT_NO = #chitNo#
+	</select>
+	
+	<!-- 전표상세 삭제  -->
+	<delete id="FRM02040200DAO.deleteFrmEndwChitDetail" parameterClass="java.util.HashMap" >
+	   DELETE FROM TBFRM_ENDW_CHIT_DETAIL
+              WHERE ACCNUT_YEAR  = #ACCNUT_YEAR#
+                AND CHIT_NO      = #CHIT_NO#   
+	</delete>
+	
+	<!-- 전표등록  -->
+	<insert id="FRM02040200DAO.insertFrmEndwChit" parameterClass="java.util.HashMap" >
+	   INSERT INTO TBFRM_ENDW_CHIT
+                  (ACCNUT_YEAR,
+                   CHIT_NO,
+                   CHIT_DE,
+                   DSCN_AT,
+                   RM,
+                   ENDW_INCME_DECSN_NO,
+                   OVERRPAY_DECSN_NO,
+                   CHIT_TY,
+                   REGISTER_ID,
+                   REGIST_DT,
+                   UPDUSR_ID,
+                   UPDT_DT)
+          VALUES(  #ACCNUT_YEAR#,
+                   #CHIT_NO#,
+                   #CHIT_DE#,
+                   #DSCN_AT#,
+                   #SUMRY#,
+                   #ENDW_INCME_DECSN_NO#,
+                   #OVERRPAY_DECSN_NO#,
+                   '5',
+                   #S_USER_ID#,
+                   SYSDATE,
+                   #S_USER_ID#,
+                   SYSDATE)
+	</insert>
+	
+	<!-- 전표상세등록  -->
+	<insert id="FRM02040200DAO.insertFrmEndwChitDetail" parameterClass="java.util.HashMap" >
+          INSERT INTO TBFRM_ENDW_CHIT_DETAIL
+                     ( CHIT_NO,
+                       CHIT_SN,
+                       ACCNUT_YEAR,
+                       DBRT_SE,
+                       ACNT_CODE,
+                       DEBTOR_AMOUNT,
+                       CRDIT_AMOUNT,
+                       SUMRY,
+                       REGISTER_ID,
+                       REGIST_DT,
+                       UPDUSR_ID,
+                       UPDT_DT)
+               VALUES( #CHIT_NO#,
+                       NVL((SELECT MAX(CHIT_SN)
+                              FROM TBFRM_ENDW_CHIT_DETAIL
+                              WHERE ACCNUT_YEAR = #ACCNUT_YEAR#
+                                AND CHIT_NO = #CHIT_NO#),0) + 1,
+                       #ACCNUT_YEAR#,
+                       #DBRT_SE#,
+                       #ACNT_CODE#,
+                       #DEBTOR_AMOUNT#,
+                       #CRDIT_AMOUNT#,
+                       #SUMRY#,
+                       #S_USER_ID#,
+                       SYSDATE,
+                       #S_USER_ID#,
+                       SYSDATE)   
+	</insert>
+	
+	<!-- 전표번호 채번 -->
+	<select id="FRM02040200DAO.selectChitNo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	      SELECT NVL((SELECT MAX(CHIT_NO)
+	                    FROM TBFRM_ENDW_CHIT
+	                    WHERE ACCNUT_YEAR = #ACCNUT_YEAR#),0) + 1 CHIT_NO
+	        FROM DUAL
+		 
+	</select>
+	
+	
+</sqlMap>

@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CMP040600_SQL">
+<!--  설명  : 보상협의내역
+	작성자 : 지효정 -->
+	
+	<!-- 조서 목록 -->
+	<select id="CMP040600DAO.thingWtnncList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT 
+		     B.*
+		    ,A.AR					/* 소유자 면적 */
+		    ,A.RWMNY				/* 소유자 보상금 */
+		    ,A.ACEPTNC_ADJDC_ODR 	/* 수용재결차수 */
+		    ,A.ADRES				/* 소유자 주소 */
+		    ,A.NM					/* 소유자 이름 */
+		    ,A.RQEST				/* 청구여부 */
+		    ,A.RQEST_DE				/* 청구일자 */
+		    ,A.PYMNT_DE				/* 지급일자 */
+		FROM(
+			SELECT 
+			     AA.BSNS_AREA_CODE
+			    ,AA.THING_SN
+			    ,AA.AR
+			    ,DECODE(AA.RWMNY, NULL, 0, AA.RWMNY) AS RWMNY	/* 보상금 */
+			    ,AA.ACEPTNC_ADJDC_ODR
+			    ,AB.ADRES
+			    ,AB.OWNER_NM AS NM
+			    ,DECODE(AC.RQEST_DE, NULL, '미청구', '청구') AS RQEST
+			    ,AC.RQEST_DE
+			    ,AC.PYMNT_DE
+			FROM TBCMP_THING_OWNER AA, TBCMP_OWNER AB, TBCMP_RWMNY_PYMNT AC
+			WHERE AA.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			AND   AB.BSNS_AREA_CODE = AA.BSNS_AREA_CODE
+			AND   AB.OWNER_NO = AA.OWNER_NO
+	        AND   AB.OWNER_SE = '1'			
+			<isEqual property="RQEST" compareValue="%">
+			AND   AA.BSNS_AREA_CODE = AC.BSNS_AREA_CODE(+)
+			AND   AA.OWNER_NO = AC.OWNER_NO(+)
+			AND   AA.RQEST_SN = AC.RQEST_SN(+)
+			</isEqual>
+			<isEqual property="RQEST" compareValue="Y">
+			AND   AA.BSNS_AREA_CODE = AC.BSNS_AREA_CODE
+			AND   AA.OWNER_NO = AC.OWNER_NO
+			AND   AA.RQEST_SN = AC.RQEST_SN
+			</isEqual>
+			<isEqual property="RQEST" compareValue="N">
+			AND   AA.BSNS_AREA_CODE = AC.BSNS_AREA_CODE(+)
+			AND   AA.OWNER_NO = AC.OWNER_NO(+)
+			AND   AA.RQEST_SN = AC.RQEST_SN(+)
+			AND   AC.RQEST_DE IS NULL
+			</isEqual>
+			<isNotEmpty property="NM">
+	        AND   AB.OWNER_NM LIKE '%' || #NM# || '%'
+	        </isNotEmpty>
+		)A,(
+			SELECT 
+			     BA.BSNS_AREA_CODE	/* 사업지역코드 */
+			    ,BA.THING_SN		/* 물건일련번호 */
+			    ,BA.LOCPLC_CODE		/* 소재지코드 */
+			    ,SFCMP_GET_LOCPLC(BSNS_AREA_CODE, LOCPLC_CODE) || ' ' || 
+             	 DECODE(SLNO, NULL, LNM, LNM || '-' || SLNO) AS FULL_LOCPLC_CODE_NM
+			    ,TRIM(BA.THING_CL) AS THING_CL	/* 물건분류 */
+			    ,BA.THING_NM		/* 물건명 */
+			    ,BA.LNDCGR_LGSTR	/* 지목_공부 */
+			    ,BA.LNDCGR_INCRPR	/* 지목_편입 */
+			    ,BA.AR_LGSTR		/* 면적_공부 */
+			    ,BA.AR_INCRPR		/* 면적_편입 */
+			    ,BA.UNIT			/* 단위 */
+			    ,DECODE(BA.THING_UNTPC, NULL, 0, BA.THING_UNTPC) AS UNTPC	/* 단가 */
+			    ,BA.RM_1			/* 비고1 */
+			    ,DECODE(BB.CODE_ETC_1, 'L', 'T', '3', 'B', 'J') AS THING_CL_KIND /* 물건분류 토지 T, 분묘 B, 지장물 J*/
+			FROM TBCMP_THING_WTNNC BA, TBCOM_CMMN_CODE BB
+			WHERE BSNS_AREA_CODE = #BSNS_AREA_CODE#
+			AND   BB.GRP_CODE = 'CMP001'
+			AND   TRIM(BA.THING_CL) = BB.CODE
+			<isNotEmpty property="LOCPLC_CODE">
+		    AND	  BA.LOCPLC_CODE = #LOCPLC_CODE#
+		   	</isNotEmpty>
+		   	<isEqual property="SELECT" compareValue="0">
+			<isNotEmpty property="THING_CL">
+			AND	  BA.THING_CL IN
+			<iterate property="ARR_THING_CL"  open="(" close=")" conjunction="," >
+			#ARR_THING_CL[]#
+			</iterate>	
+			</isNotEmpty>
+			</isEqual>
+			<isNotEmpty property="LNM">
+			AND   BA.LNM = #LNM#
+			</isNotEmpty>
+			<isNotEmpty property="SLNO">
+			AND	  BA.SLNO = #SLNO#
+			</isNotEmpty>
+		)B
+		WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		AND   A.THING_SN = B.THING_SN
+		ORDER BY DECODE(#ORDER#, 'OWNER', A.NM, B.THING_SN), RWMNY
+	</select>
+	
+	<!-- 조서 집계 목록 -->
+	<select id="CMP040600DAO.thingTotalList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT 
+			 '대상' AS GUBUN	/* 구분 */
+			,SUM(A.RWMNY) AS SUM_RWMNY	/* 금액총계 */
+			,COUNT(DISTINCT DECODE(A.CHRCTR_PREPAR_VALUE_3, '1', A.THING_SN, NULL)) AS SUM_THING_TSUM
+			,TRUNC(SUM(DECODE(B.THING_CL_KIND, 'T', A.AR)),0) AS SUM_THING_T	/* 토지 면적 */
+			,SUM(DECODE(B.THING_CL_KIND, 'T', DECODE(A.RWMNY, NULL, 0, A.RWMNY), 0)) AS SUM_THING_T_RWMNY	/* 토지 금액 */
+			,COUNT(DISTINCT DECODE(B.THING_CL_KIND, 'G', A.OWNER_NO)) AS SUM_THING_G	/* 지장물 건수 */
+			,SUM(DECODE(B.THING_CL_KIND, 'G', DECODE(A.RWMNY, NULL, 0, A.RWMNY), 0)) AS SUM_THING_G_RWMNY	/* 지장물 금액 */
+			,SUM(DECODE(A.THING_CL, '23', A.AR)) AS SUM_THING_B /* 분묘 건수 */
+			,SUM(DECODE(B.THING_CL_KIND, 'B', DECODE(A.RWMNY, NULL, 0, A.RWMNY), 0)) AS SUM_THING_B_RWMNY	/* 분묘 금액 */
+		FROM(
+			SELECT 
+			     AA.BSNS_AREA_CODE
+			    ,AA.THING_SN
+			    ,AA.OWNER_NO
+			    ,AA.AR
+			    ,BA.THING_CL
+			    ,NVL(AA.RWMNY, 0) AS RWMNY
+			    ,'Y' AS RQEST
+			    ,BB.CHRCTR_PREPAR_VALUE_3
+			FROM TBCMP_THING_OWNER AA, TBCMP_THING_WTNNC BA, TBCOM_CMMN_CODE BB
+			WHERE AA.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+            AND   BA.BSNS_AREA_CODE = AA.BSNS_AREA_CODE
+            AND   BA.THING_SN = AA.THING_SN
+            AND   TRIM(BA.THING_CL) = BB.CODE
+            AND   'CMP001' = BB.GRP_CODE 
+		)A,(
+			SELECT 
+			     BA.BSNS_AREA_CODE
+			    ,BA.THING_SN			
+			    ,DECODE(BB.CODE_ETC_1, 'L', 'T', '3', 'B', 'G') AS THING_CL_KIND
+			FROM TBCMP_THING_WTNNC BA, TBCOM_CMMN_CODE BB
+			WHERE BSNS_AREA_CODE =  #BSNS_AREA_CODE#
+			AND   BB.GRP_CODE = 'CMP001'
+			AND   TRIM(BA.THING_CL) = BB.CODE
+		)B
+		WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		AND   A.THING_SN = B.THING_SN
+		
+		UNION ALL
+		
+		SELECT 
+			 '누계' AS GUBUN	/* 구분 */
+			,SUM(A.RWMNY) AS SUM_RWMNY	/* 금액총계 */
+			,COUNT(DISTINCT DECODE(A.CHRCTR_PREPAR_VALUE_3, '1', A.THING_SN, NULL)) AS SUM_THING_TSUM
+			,TRUNC(SUM(DECODE(B.THING_CL_KIND, 'T', A.AR)),0) AS SUM_THING_T	/* 토지 면적 */
+			,SUM(DECODE(B.THING_CL_KIND, 'T', DECODE(A.RWMNY, NULL, 0, A.RWMNY), 0)) AS SUM_THING_T_RWMNY	/* 토지 금액 */
+			,COUNT(DISTINCT DECODE(B.THING_CL_KIND, 'G', A.OWNER_NO)) AS SUM_THING_G	/* 지장물 건수 */
+			,SUM(DECODE(B.THING_CL_KIND, 'G', DECODE(A.RWMNY, NULL, 0, A.RWMNY), 0)) AS SUM_THING_G_RWMNY	/* 지장물 금액 */
+			,SUM(DECODE(A.THING_CL, '23', A.AR)) AS SUM_THING_B /* 분묘 건수 */
+			,SUM(DECODE(B.THING_CL_KIND, 'B', DECODE(A.RWMNY, NULL, 0, A.RWMNY), 0)) AS SUM_THING_B_RWMNY	/* 분묘 금액 */
+		FROM(
+			SELECT 
+			     AA.BSNS_AREA_CODE
+			    ,AA.THING_SN
+			    ,AA.OWNER_NO
+			    ,AA.AR
+			    ,BA.THING_CL
+			    ,NVL(AA.RWMNY, 0) AS RWMNY
+			    ,DECODE(AC.RQEST_DE, NULL, 'N', 'Y') AS RQEST
+			    ,BB.CHRCTR_PREPAR_VALUE_3
+			FROM TBCMP_THING_OWNER AA, TBCMP_THING_RWMNY AB, TBCMP_RWMNY_PYMNT AC, TBCMP_THING_WTNNC BA, TBCOM_CMMN_CODE BB
+			WHERE AA.BSNS_AREA_CODE = #BSNS_AREA_CODE#
+            AND   BA.BSNS_AREA_CODE = AA.BSNS_AREA_CODE
+            AND   BA.THING_SN = AA.THING_SN
+            AND   TRIM(BA.THING_CL) = BB.CODE
+            AND   'CMP001' = BB.GRP_CODE 
+			<isEqual property="RQEST" compareValue="%">
+			AND   AA.BSNS_AREA_CODE = AB.BSNS_AREA_CODE(+)
+			AND   AA.THING_SN = AB.THING_SN(+)
+			AND   AA.OWNER_SN = AB.OWNER_SN(+)
+			AND   AA.OWNER_NO = AB.OWNER_NO(+)		
+			AND   AB.BSNS_AREA_CODE = AC.BSNS_AREA_CODE(+)
+			AND   AB.OWNER_NO = AC.OWNER_NO(+)
+			AND   AB.RQEST_SN = AC.RQEST_SN(+)
+			</isEqual>
+			<isEqual property="RQEST" compareValue="Y">
+			AND   AA.BSNS_AREA_CODE = AB.BSNS_AREA_CODE
+			AND   AA.THING_SN = AB.THING_SN
+			AND   AA.OWNER_SN = AB.OWNER_SN
+			AND   AA.OWNER_NO = AB.OWNER_NO		
+			AND   AB.BSNS_AREA_CODE = AC.BSNS_AREA_CODE
+			AND   AB.OWNER_NO = AC.OWNER_NO
+			AND   AB.RQEST_SN = AC.RQEST_SN
+			</isEqual>
+			<isEqual property="RQEST" compareValue="N">
+			AND   AA.BSNS_AREA_CODE = AB.BSNS_AREA_CODE(+)
+			AND   AA.THING_SN = AB.THING_SN(+)
+			AND   AA.OWNER_SN = AB.OWNER_SN(+)
+			AND   AA.OWNER_NO = AB.OWNER_NO(+)		
+			AND   AB.BSNS_AREA_CODE = AC.BSNS_AREA_CODE(+)
+			AND   AB.OWNER_NO = AC.OWNER_NO(+)
+			AND   AB.RQEST_SN = AC.RQEST_SN(+)
+			AND   AC.RQEST_DE IS NULL
+			</isEqual>
+		)A,(
+			SELECT 
+			     BA.BSNS_AREA_CODE
+			    ,BA.THING_SN			
+			    ,DECODE(BB.CODE_ETC_1, 'L', 'T', '3', 'B', 'G') AS THING_CL_KIND
+			FROM TBCMP_THING_WTNNC BA, TBCOM_CMMN_CODE BB
+			WHERE BSNS_AREA_CODE =  #BSNS_AREA_CODE#
+			AND   BB.GRP_CODE = 'CMP001'
+			AND   TRIM(BA.THING_CL) = BB.CODE
+		)B
+		WHERE A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+		AND   A.THING_SN = B.THING_SN
+		GROUP BY A.RQEST
+		HAVING A.RQEST = 'Y'
+	</select>
+</sqlMap>

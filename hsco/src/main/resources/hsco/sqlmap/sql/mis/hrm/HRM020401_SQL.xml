@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM020401_SQL">
+		
+ 	<!-- 최종결과관리 상세조회 -->
+	<select id="HRM020401DAO.empmnLastResultR" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		SELECT 
+		     RANK() OVER (PARTITION BY s1.EMPMN_SE, s1.CMPET_SE, s1.APYEXM_CLSF_SE, s1.APYEXM_REALM_SE ORDER BY s1.LAST_SCORE DESC NULLS LAST) AS EVL_RANK
+		    ,s1.*
+		FROM (
+		    SELECT 
+		         t1.EMPMN_YEAR          /*채용연도*/
+		        ,t1.ODR_SE              /*차수구분*/
+		        ,t1.APYEXM_NO           /*응시번호*/
+		        ,t1.RL_APYEXM_NO
+		        ,t1.NM_KOREAN           /*성명한글*/
+		        ,t3.LAST_RANK           /*최종순위*/
+		        ,t3.LAST_RESULT_SE      /*최종결과구분*/
+		        ,t3.EMPMN_DCSN_AT       /*채용확정여부*/
+		        ,t3.DCSN_DE             /*확정일자*/
+		        ,t3.RM                  /*비고*/
+		        ,t2.JSSFC_SE
+		        ,t2.EMPMN_SE
+		        ,t2.CMPET_SE
+		        ,t2.APYEXM_CLSF_SE
+		        ,t2.APYEXM_REALM_SE 
+		        ,ROUND(t5.TOT_SCORE, 2)             AS PAPERS_TOT_SCORE		/*서류*/
+		        ,ROUND(t6.TOT_AVRG_SCORE, 2)        AS WRTNG_TOT_AVRG_SCORE	/*필기*/
+		        ,ROUND(t4.TOT_SCORE, 2)             AS INTRVW_TOT_SCORE		/*면접*/
+		        ,ROUND((CASE WHEN (t2.JSSFC_SE = '001' AND t2.EMPMN_SE = '002') OR (t2.JSSFC_SE = '002') OR (t2.JSSFC_SE = '003')
+		              THEN (NVL(t5.TOT_SCORE, 0))*0.5 + (NVL(t4.TOT_SCORE, 0))*0.5
+		              ELSE CASE WHEN t2.JSSFC_SE = '001' AND t2.EMPMN_SE = '001'
+		                        THEN (NVL(t6.TOT_AVRG_SCORE, 0))*0.7 + (NVL(t4.TOT_SCORE, 0))*0.3
+		                    END 
+		                END), 2) AS LAST_SCORE   /*최종점수*/
+		        ,ROUND((CASE WHEN (t2.JSSFC_SE = '001' AND t2.EMPMN_SE = '002') OR (t2.JSSFC_SE = '002') OR (t2.JSSFC_SE = '003')
+		              THEN NVL(t4.TOT_SCORE, 0) * 0.5 
+		              ELSE CASE WHEN t2.JSSFC_SE = '001' AND t2.EMPMN_SE = '001'
+		                        THEN NVL(t4.TOT_SCORE, 0)*0.3
+		                    END 
+		                END), 2) AS INTRVW_SCORE	/*면접점수*/
+		        ,ROUND((CASE WHEN (t2.JSSFC_SE = '001' AND t2.EMPMN_SE = '002') OR (t2.JSSFC_SE = '002') OR (t2.JSSFC_SE = '003')
+		              THEN NVL(t5.TOT_SCORE, 0) * 0.5 
+		              ELSE CASE WHEN t2.JSSFC_SE = '001' AND t2.EMPMN_SE = '001'
+		                        THEN 0
+		                    END 
+		                END), 2) AS PAPERS_SCORE	/*서류점수*/
+		        ,ROUND((CASE WHEN (t2.JSSFC_SE = '001' AND t2.EMPMN_SE = '002') OR (t2.JSSFC_SE = '002')
+		              THEN 0
+		              ELSE CASE WHEN t2.JSSFC_SE = '001' AND t2.EMPMN_SE = '001'
+		                        THEN NVL(t6.TOT_AVRG_SCORE, 0)*0.7 
+		                    END 
+		                END), 2) AS WRTNG_SCORE	/*필기점수*/
+		        ,ROUND(t7.TOT_AVRG_SCORE, 2) AS NCS_SCORE	/*인적성점수*/
+		        <isNotEmpty property="scrproEvlList">
+		            <iterate property="scrproEvlList">
+		              ,t8.MFCMM_$scrproEvlList[].MFCMM_NO$
+		            </iterate>
+		        </isNotEmpty>
+		        ,t8.EVL_ADD_SCORE
+		        ,t10.CODE_NM || '(' || t9.CODE_NM || ')'  AS EMPMN_APYEXM_REALM_NM
+		    FROM TBHRM_ECNY_SPORT_GNRL t1
+		        LEFT OUTER JOIN TBHRM_EMPMN_RCRIT_REALM t2
+		          ON t1.EMPMN_YEAR     = t2.EMPMN_YEAR
+		         AND t1.ODR_SE         = t2.ODR_SE
+		         AND t1.RCRIT_REALM_SN = t2.SN
+		        LEFT OUTER JOIN TBHRM_EMPMN_LAST_RESULT t3
+		          ON t1.EMPMN_YEAR   = t3.EMPMN_YEAR
+		         AND t1.ODR_SE       = t3.ODR_SE
+		         AND t1.RL_APYEXM_NO = t3.APYEXM_NO
+		        LEFT OUTER JOIN TBHRM_INTRVW_EVL t4     /*면접*/
+		          ON t1.EMPMN_YEAR   = t4.EMPMN_YEAR
+		         AND t1.ODR_SE       = t4.ODR_SE
+		         AND t1.RL_APYEXM_NO = t4.APYEXM_NO
+		        LEFT OUTER JOIN TBHRM_PAPERS_SCRPRO t5   /*서류*/
+		          ON t1.EMPMN_YEAR   = t5.EMPMN_YEAR
+		         AND t1.ODR_SE       = t5.ODR_SE
+		         AND t1.RL_APYEXM_NO = t5.APYEXM_NO
+		        LEFT OUTER JOIN TBHRM_WRTNG_SCRPRO t6   /*필기*/
+		          ON t1.EMPMN_YEAR   = t6.EMPMN_YEAR
+		         AND t1.ODR_SE       = t6.ODR_SE
+		         AND t1.RL_APYEXM_NO = t6.APYEXM_NO
+		        LEFT OUTER JOIN TBHRM_NCS_SCRPRO t7     /*인적성*/
+		          ON t1.EMPMN_YEAR   = t7.EMPMN_YEAR
+		         AND t1.ODR_SE       = t7.ODR_SE
+		         AND t1.RL_APYEXM_NO = t7.APYEXM_NO
+		        LEFT OUTER JOIN (	SELECT
+									     s2.EMPMN_YEAR
+									    ,s2.ODR_SE
+									    ,s2.APYEXM_NO
+									    ,SUM(CASE WHEN s1.CODE_ETC_1 = '2' THEN s2.EVL_SCORE ELSE 0 END)/MAX(s3.MFCMM_CNT) AS EVL_ADD_SCORE
+									    <iterate property="scrproEvlList">
+											 ,SUM(DECODE(s2.MFCMM_NO, #scrproEvlList[].MFCMM_NO#, s2.EVL_SCORE, 0)) AS  MFCMM_$scrproEvlList[].MFCMM_NO$
+										</iterate>
+									FROM TBCOM_CMMN_CODE s1
+									    LEFT OUTER JOIN ( SELECT t1.EMPMN_YEAR
+									             ,t1.ODR_SE
+									             ,t1.MFCMM_NO
+									             ,t2.APYEXM_NO
+									             ,t2.EVL_IEM_SE
+									             ,NVL(t2.EVL_SCORE, 0) AS EVL_SCORE
+									       FROM TBHRM_SCRPRO_EVL_MFCMM t1
+									         LEFT OUTER JOIN TBHRM_INTRVW_SCRPRO t2
+									           ON t1.EMPMN_YEAR = t2.EMPMN_YEAR
+									          AND t1.ODR_SE     = t2.ODR_SE
+									          AND t1.MFCMM_NO   = t2.EVL_MFCMM_NO ) s2
+									      ON s1.CODE = s2.EVL_IEM_SE
+									    LEFT OUTER JOIN  (   SELECT EMPMN_YEAR
+									                               ,ODR_SE
+									                               ,COUNT(MFCMM_NO) AS MFCMM_CNT
+									                        FROM TBHRM_SCRPRO_EVL_MFCMM
+									                        GROUP BY EMPMN_YEAR, ODR_SE ) s3    /*평가위원수*/
+									     ON s2.EMPMN_YEAR = s3.EMPMN_YEAR
+									    AND s2.ODR_SE     = s3.ODR_SE
+									WHERE 1=1
+									  AND s1.GRP_CODE       = 'HRM074'
+									  AND s2.EMPMN_YEAR     = #EMPMN_YEAR#
+									  AND s2.ODR_SE         = #ODR_SE#
+									GROUP BY s2.EMPMN_YEAR, s2.ODR_SE, s2.APYEXM_NO ) t8
+		          ON t1.EMPMN_YEAR   = t8.EMPMN_YEAR
+		         AND t1.ODR_SE       = t8.ODR_SE
+		         AND t1.RL_APYEXM_NO = t8.APYEXM_NO
+		         LEFT OUTER JOIN TBCOM_CMMN_CODE t9
+			      ON t2.EMPMN_SE = t9.CODE
+			     AND t9.GRP_CODE   = 'HRM083'
+			    LEFT OUTER JOIN TBCOM_CMMN_CODE t10
+			      ON t2.APYEXM_REALM_SE = t10.CODE
+			     AND t10.GRP_CODE   = 'HRM084'  
+		    WHERE 1               = 1
+			  AND t1.EMPMN_YEAR     = #EMPMN_YEAR#
+			  AND t1.ODR_SE	        = #ODR_SE#
+		      AND t1.PROPER_AT = '1'	 /*적격여부*/
+			  AND t4.EVL_RESULT_SE = '1' /*면접전형합격자*/
+			  AND t2.EMPMN_SE = #EMPMN_SE#
+			<isNotEmpty property="CMPET_SE">
+				AND t2.CMPET_SE = #CMPET_SE#
+			</isNotEmpty>
+			<isNotEmpty property="APYEXM_CLSF_SE">
+				AND t2.APYEXM_CLSF_SE  = #APYEXM_CLSF_SE#
+			</isNotEmpty>
+			<isNotEmpty property="APYEXM_REALM_SE">
+				AND t2.APYEXM_REALM_SE  = #APYEXM_REALM_SE#
+			</isNotEmpty>
+		    ) s1
+		ORDER BY EMPMN_SE, CMPET_SE, APYEXM_CLSF_SE, APYEXM_REALM_SE, EVL_RANK ASC
+	</select> 	
+	
+	<!--  최종결과관리  상세 수정 -->
+	<update id="HRM020401DAO.empmnLastResultCU" parameterClass="java.util.HashMap">
+		MERGE INTO TBHRM_EMPMN_LAST_RESULT 
+		USING DUAL
+		  ON ( 		EMPMN_YEAR = #EMPMN_YEAR#
+		  		AND ODR_SE	   = #ODR_SE#
+		  		AND APYEXM_NO  = #RL_APYEXM_NO# )
+		WHEN MATCHED THEN
+		UPDATE SET LAST_SCORE = #LAST_SCORE#
+			  ,LAST_RANK      = #LAST_RANK#
+			  ,LAST_RESULT_SE = #LAST_RESULT_SE#
+			  ,EMPMN_DCSN_AT  = #EMPMN_DCSN_AT#
+			  ,DCSN_DE        = #DCSN_DE#
+			  ,RM             = #RM#
+			  ,DTA_CREAT_AT   = #DTA_CREAT_AT#
+			  ,DTA_CREAT_DT   = #DTA_CREAT_DT#
+			  ,UPDUSR_ID      = #S_USER_ID#
+			  ,UPDT_DT        = SYSDATE
+		WHEN NOT MATCHED THEN
+		INSERT (
+			 EMPMN_YEAR
+			,ODR_SE
+			,APYEXM_NO
+			,LAST_SCORE
+			,LAST_RANK
+			,LAST_RESULT_SE
+			,EMPMN_DCSN_AT
+			,DCSN_DE
+			,RM
+			,DTA_CREAT_AT
+			,DTA_CREAT_DT
+			,REGISTER_ID
+			,REGIST_DT
+			,UPDUSR_ID
+			,UPDT_DT
+		)VALUES (
+			 #EMPMN_YEAR#
+			,#ODR_SE#
+			,#RL_APYEXM_NO#
+			,#LAST_SCORE#
+			,#LAST_RANK#
+			,#LAST_RESULT_SE#
+			,#EMPMN_DCSN_AT#
+			,#DCSN_DE#
+			,#RM#
+			,#DTA_CREAT_AT#
+			,#DTA_CREAT_DT#
+			,#S_USER_ID#
+			,SYSDATE
+			,#S_USER_ID#
+			,SYSDATE
+		)
+	</update>
+
+    <!-- 최종결과관리 집계자료생성  추가 -->
+	<insert id="HRM020401DAO.empmnLastResultC" parameterClass="java.util.HashMap">
+			<![CDATA[	
+				INSERT INTO TBHRM_EMPMN_LAST_RESULT(
+													EMPMN_YEAR
+													,ODR_SE
+													,APYEXM_NO
+													,LAST_SCORE
+													,LAST_RANK
+													,LAST_RESULT_SE
+													,REGISTER_ID
+													,REGIST_DT
+													,UPDUSR_ID
+													,UPDT_DT
+													)
+								SELECT 
+								       B.EMPMN_YEAR AS EMPMN_YEAR
+								      ,B.ODR_SE
+								      ,C.APYEXM_NO AS APYEXM_NO
+								      ,NVL(C.TOT_SCORE,0) AS LAST_SCORE
+								      ,NVL(C.EVL_RANK,0) AS LAST_RANK
+								      ,NVL(C.EVL_RESULT_SE,0) AS LAST_RESULT_SE
+								      ,#S_USER_ID# AS REGISTER_ID
+								      ,SYSDATE AS REGIST_DT
+								      ,#S_USER_ID# AS UPDUSR_ID
+								      ,SYSDATE AS UPDT_DT
+								FROM   TBHRM_ECNY_SPORT_GNRL B
+								       RIGHT OUTER JOIN 
+			]]>
+			<isEqual property="LAST_SCRPRO_STEP" compareValue="001">
+						       				(
+						                      SELECT  D.RCRIT_REALM_SN
+						                              ,D.EMPMN_YEAR
+						                              ,D.ODR_SE
+						                              ,C.APYEXM_NO
+						                              ,C.TOT_SCORE
+						                              ,C.EVL_RANK
+						                              ,C.EVL_RESULT_SE
+						                      FROM TBHRM_ETC_SCRPRO C
+						                           ,TBHRM_ECNY_SPORT_GNRL D
+						                      WHERE C.APYEXM_NO = D.APYEXM_NO
+						                      AND C.EMPMN_YEAR  = #EMPMN_YEAR#
+						                      AND C.ODR_SE      = #ODR_SE#
+						                      AND C.SCRPRO_SE   = '001'
+						                    ) C
+			</isEqual>
+			<isEqual property="LAST_SCRPRO_STEP" compareValue="002">
+						       				(
+						                      SELECT  D.RCRIT_REALM_SN
+						                              ,D.EMPMN_YEAR
+						                              ,D.ODR_SE
+						                              ,C.APYEXM_NO
+						                              ,C.TOT_SCORE
+						                              ,C.EVL_RANK
+						                              ,C.EVL_RESULT_SE
+						                      FROM TBHRM_PAPERS_SCRPRO C
+						                           ,TBHRM_ECNY_SPORT_GNRL D
+						                      WHERE C.APYEXM_NO = D.APYEXM_NO
+						                      AND C.EMPMN_YEAR  = #EMPMN_YEAR#
+						                      AND C.ODR_SE      = #ODR_SE#
+						                    ) C
+			</isEqual>
+			<isEqual property="LAST_SCRPRO_STEP" compareValue="003">
+						       				(
+						                      SELECT  D.RCRIT_REALM_SN
+						                              ,D.EMPMN_YEAR
+						                              ,D.ODR_SE
+						                              ,C.APYEXM_NO
+						                              ,C.TOT_SCORE
+						                              ,C.EVL_RANK
+						                              ,C.EVL_RESULT_SE
+						                      FROM TBHRM_PAPERS_SCRPRO C
+						                           ,TBHRM_ECNY_SPORT_GNRL D
+						                      WHERE C.APYEXM_NO = D.APYEXM_NO
+						                      AND C.EMPMN_YEAR  = #EMPMN_YEAR#
+						                      AND C.ODR_SE      = #ODR_SE#
+						                      AND C.SCRPRO_SE   = '003'
+						                    ) C
+			</isEqual>
+			<isEqual property="LAST_SCRPRO_STEP" compareValue="004">
+						       				(
+						                      SELECT  D.RCRIT_REALM_SN
+						                              ,D.EMPMN_YEAR
+						                              ,D.ODR_SE
+						                              ,C.APYEXM_NO
+						                              ,C.TOT_SCORE
+						                              ,C.EVL_RANK
+						                              ,C.EVL_RESULT_SE
+						                      FROM TBHRM_INTRVW_EVL C
+						                           ,TBHRM_ECNY_SPORT_GNRL D
+						                      WHERE C.APYEXM_NO = D.APYEXM_NO
+						                      AND C.EMPMN_YEAR  = #EMPMN_YEAR#
+						                      AND C.ODR_SE      = #ODR_SE#
+						                    ) C
+			</isEqual>
+			<![CDATA[
+						                        ON B.EMPMN_YEAR = C.EMPMN_YEAR
+						                        AND B.ODR_SE = C.ODR_SE
+						                        AND B.APYEXM_NO = C.APYEXM_NO
+						WHERE 1=1
+						AND    B.EMPMN_YEAR = #EMPMN_YEAR#
+						AND    B.ODR_SE = #ODR_SE# 
+						GROUP BY B.EMPMN_YEAR,B.ODR_SE, C.APYEXM_NO, B.NM_KOREAN
+						, NVL(C.TOT_SCORE,0), NVL(C.EVL_RANK,0), NVL(C.EVL_RESULT_SE,0)
+						ORDER BY  B.EMPMN_YEAR,B.ODR_SE, C.APYEXM_NO
+			]]>
+		
+	</insert>
+	     
+</sqlMap>

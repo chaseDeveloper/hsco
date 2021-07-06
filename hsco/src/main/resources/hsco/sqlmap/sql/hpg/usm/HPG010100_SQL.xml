@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HPG010100_SQL">
+
+	<!-- 사용자 목록조회 -->
+	<select id="HPG010100DAO.getListUser" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+		SELECT 
+			'0' AS CHK,
+		    USER_ID, USER_NM,
+		    EMPNO, '' AS ECNY_DE,
+		    DEPT_CODE, '경영지원처' AS DEPT_NM,
+		    '임원' AS HR_CLSF_NM,
+		    '1' AS RSPOFC_NM,
+		    USER_STTUS_CODE,
+		    'JA' AS USER_STTUS_NM,
+		    '19690101' BRTHDY, 'M' AS SEXDSTN,
+		    '123-123-1234' AS TELNO_1, '123-123-1234' AS TELNO_2,
+		    LXTN_NO, ZIP,
+		    ADRES, EMAIL,
+		    '0' INTRCP_CN, PWD,
+		    REGIST_DT,
+		    REGIST_DT, 
+		    REGISTER_ID,
+		    UPDT_DT,
+		    UPDUSR_ID
+		FROM TBCOM_USER
+		
+    </select>
+    
+    <!-- 추가사용자 대상 리스트 -->
+    <select id="HPG010100DAO.getListEmp" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT 
+            B.EMPNO AS USER_ID, B.EMPNM AS USER_NM,
+            B.EMPNO, B.ECNY_DE,
+            B.DEPT_CODE, B.DEPT_NM,
+            CASE
+                WHEN B.HR_CLSF_SE IS NULL THEN ''
+                WHEN B.HR_CLSF_SE = '00' THEN '임원'
+                WHEN B.HR_CLSF_SE = '0A' THEN '계약'
+                ELSE SUBSTR(B.HR_CLSF_SE, 2,1) || '급'
+            END AS HR_CLSF_NM,
+            (
+                SELECT CODE_NM FROM TBCOM_CMMN_CODE
+                WHERE GRP_CODE = 'HRM214'
+                AND CODE = B.RSPOFC_SE
+            ) AS RSPOFC_NM,
+            NVL( A.USER_STTUS_CODE, 'JA' ) AS USER_STTUS_CODE,
+            (
+                SELECT CODE_NM FROM TBCOM_CMMN_CODE
+                WHERE GRP_CODE = 'COM011'
+                AND NVL( A.USER_STTUS_CODE, 'JA' ) = CODE
+            ) AS USER_STTUS_NM,
+            B.BRTHDY, B.SEXDSTN,
+            B.TELNO_1, H_DECRYPT(B.TELNO_2) AS TELNO_2,
+            B.LXTN_NO, B.ZIP,
+            B.ADRES, B.EMAIL,            
+            A.INTRCP_CN, A.PWD,
+            TO_CHAR(A.REGIST_DT, 'YYYY-MM-DD HH:MI:SS') AS REGIST_DT,
+            A.REGISTER_ID,
+            TO_CHAR(A.UPDT_DT, 'YYYY-MM-DD HH:MI:SS') AS UPDT_DT,
+            A.UPDUSR_ID
+        FROM 
+            TBCOM_USER A,
+            (
+                SELECT AA.*, BB.DEPT_NM
+                FROM TBHRM_HR_MASTR AA,
+                     VWHRM_DEPT BB
+                WHERE AA.DEPT_CODE = BB.DEPT_CODE
+                AND BB.USE_AT = 1
+            ) B
+        WHERE
+            B.EMPNO = A.EMPNO(+)
+        /*  AND A.USER_ID IS NULL  */
+            
+        
+        <isNotEmpty property="SEARCH_CONDITION">
+            <isEqual property="SEARCH_CONDITION" compareValue="0">
+                <isNotEmpty property="SEARCH_KEYWORD" prepend="and">
+                    B.EMPNO LIKE '%' ||  #SEARCH_KEYWORD# || '%'
+                </isNotEmpty>
+            </isEqual>
+            
+            <isEqual property="SEARCH_CONDITION" compareValue="1">
+                <isNotEmpty property="SEARCH_KEYWORD" prepend="and">
+                    B.EMPNO LIKE '%' ||  #SEARCH_KEYWORD# || '%'
+                </isNotEmpty>
+            </isEqual>
+            
+            <isEqual property="SEARCH_CONDITION" compareValue="2">
+                <isNotEmpty property="SEARCH_KEYWORD" prepend="and">
+                    B.EMPNM LIKE '%' ||  #SEARCH_KEYWORD# || '%'
+                </isNotEmpty>
+                
+            </isEqual>
+            
+        </isNotEmpty>
+                    
+        ORDER BY B.HR_CLSF_SE, B.EMPNO, B.EMPNM
+        
+    </select>
+        
+
+
+	<!-- 사용자 등록 -->
+    <insert id="HPG010100DAO.insertUser" parameterClass="java.util.Map" >
+		INSERT INTO TBCOM_USER (
+		                USER_ID,
+		                USER_NM,
+		                EMPNO,
+		                USER_STTUS_CODE,
+		                PWD,
+		                INTRCP_CN,
+		                REGISTER_ID,
+		                REGIST_DT,
+		                UPDUSR_ID,
+		                UPDT_DT                
+		                )
+		     VALUES (
+		                #USER_ID#,
+		                #USER_NM#,
+		                #EMPNO#,
+		                NVL(TRIM(#USER_STTUS_CODE#), 'JA'),
+		                #PWD#,
+		                #INTRCP_CN#,
+		                #S_USER_ID#,
+		                SYSDATE,
+		                #S_USER_ID#,
+		                SYSDATE   
+		            )
+	</insert>
+	
+	<!-- 사용자 수정 -->
+	<update id="HPG010100DAO.updateUser" parameterClass="java.util.Map" >
+	
+	      	UPDATE TBCOM_USER
+			SET 
+				USER_NM			= #USER_NM#,
+				PWD 			= #PWD#,
+				USER_STTUS_CODE = NVL(TRIM(#USER_STTUS_CODE#), 'JA'),				
+				INTRCP_CN 		= #INTRCP_CN#,
+				UPDUSR_ID		= #S_USER_ID#,
+				UPDT_DT 		= SYSDATE
+			WHERE USER_ID = #USER_ID#
+	
+    </update>
+    
+    <!--  사용자 삭제 -->
+    <delete id="HPG010100DAO.deleteUser" parameterClass="java.util.Map" >
+    
+    	DELETE FROM TBCOM_USER
+		WHERE USER_ID = #USER_ID#
+	   
+    </delete>
+    
+    <statement id="HPG010100DAO.HPG010101LIST" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    <![CDATA[
+	      	SELECT 
+               A.USER_ID
+             , A.USER_NM
+             , A.EMPNO
+             , NVL(A.DEPT_CODE, B.DEPT_CODE) AS DEPT_CODE
+             , A.USER_STTUS_CODE
+            FROM TBCOM_USER A
+            LEFT OUTER JOIN TBHRM_HR_MASTR B
+              ON B.EMPNO = A.EMPNO
+            WHERE 1=1
+        ]]>
+        <isNotEmpty property="USER_ID"> 
+              AND A.USER_ID   LIKE #USER_ID# || '%'
+        </isNotEmpty>
+        <isNotEmpty property="USER_NM"> 
+              AND A.USER_NM   LIKE #USER_NM# || '%'
+        </isNotEmpty>
+        <isNotEmpty property="EMPNO"> 
+              AND A.EMPNO     LIKE #EMPNO# || '%'
+        </isNotEmpty>
+        <isNotEmpty property="DEPT_CODE"> 
+              AND A.DEPT_CODE =    #DEPT_CODE#
+        </isNotEmpty>
+        <![CDATA[
+            ORDER BY A.USER_NM, DEPT_CODE
+	    ]]>
+    </statement>
+</sqlMap>

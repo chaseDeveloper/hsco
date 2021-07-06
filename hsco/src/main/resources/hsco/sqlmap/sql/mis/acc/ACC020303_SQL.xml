@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020303_SQL">	
+	
+	<!-- 지출내역통보 -->
+	<select id="ACC020303DAO.expndtrDtlsDspthList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   <![CDATA[ /*ACC020303DAO.expndtrDtlsDspthList*/ ]]>
+			SELECT CASE WHEN T1.ANACT_KND = '07' AND T1.REGIST_DT > (SELECT TO_DATE(OPEN_DT||'000000','YYYYMMDDHH24MISS') FROM TBPMS_CPR_INFO)
+							THEN (SELECT CREDTR FROM TBACC_SLARY_EXP_DSN_MTR_DET ST WHERE ST.DECSN_YEAR = T1.DECSN_YEAR AND ST.DECSN_NO = T1.DECSN_NO)
+						ELSE T3.RCPT_MAN
+		           END AS RCPT_MAN
+		         , T4.BCNC_NM AS BCNC_NM
+			     , NVL(T3.DECSN_AMOUNT, T1.DECSN_AMOUNT) AS DECSN_AMOUNT
+			     , T1.CHECK_NO
+			     , T1.FNNC_INSTT_CODE      AS PAYMENT_FNNC_INSTT_CODE
+			     , T5.FNNC_INSTT_CODE_NM   AS PAYMENT_FNNC_INSTT_NM
+			     , T1.ACNUTNO              AS PAYMENT_ACNUTNO
+			     , T3.FNNC_INSTT_CODE      AS DEPOSIT_FNNC_INSTT_CODE
+			     , T6.FNNC_INSTT_CODE_NM   AS DEPOSIT_FNNC_INSTT_NM
+			     , NVL(T3.ACNUTNO, '내역별첨') AS DEPOSIT_ACNUTNO
+			  FROM TBACC_EXP_DSN_MASTR T1
+			      LEFT OUTER JOIN (SELECT DECSN_YEAR, DECSN_NO, SEQ, BCNC_CODE, DECSN_AMOUNT, ACNUTNO, FNNC_INSTT_CODE, RCPT_MAN FROM TBACC_EXP_DSN_DETAIL
+			      					UNION ALL
+								   SELECT DECSN_YEAR, DECSN_NO, SEQ, '' AS BCNC_CODE, DECSN_AMOUNT, ACNUTNO, FNNC_INSTT_CODE, RCPT_MAN FROM TBACC_EXP_DSN_DETAIL_TRVCT A WHERE NOT EXISTS(SELECT 1 FROM TBACC_EXP_DSN_DETAIL AA WHERE A.DECSN_YEAR = AA.DECSN_YEAR AND A.DECSN_NO = AA.DECSN_NO)
+								  ) T3
+			                 ON T1.DECSN_YEAR = T3.DECSN_YEAR
+			                AND T1.DECSN_NO   = T3.DECSN_NO
+			      LEFT OUTER JOIN TBCTR_BCNC_MASTR T4
+			                 ON T3.BCNC_CODE = T4.BCNC_CODE
+			      LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE T5
+			                 ON T1.FNNC_INSTT_CODE = T5.FNNC_INSTT_CODE
+			                AND T5.USE_AT          = '1'
+			      LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE T6
+			                 ON T3.FNNC_INSTT_CODE = T6.FNNC_INSTT_CODE
+			                AND T6.USE_AT          = '1'
+			 WHERE T1.BUDGET_YEAR            = SUBSTR(#CPTAL_EXPNDTR_ACNTBK_DE#, 1, 4)
+			       /* AND   t1.CYFD_SE            = '0'*/ /*0:당해년도예산, 1:이월예산*/
+			   /* AND T1.EXPNDTR_CNFIRM_AT = '1' */ 									/*지출확인여부:고정*/
+			   AND SFCOM_GET_IN_SANCTNSTS('MIS' ,'ACC'  ,t1.DECSN_YEAR || '^' || t1.DECSN_NO, T1.REGIST_DT) IN ('S00', 'S01', 'S02')
+			   AND t1.ANACT_KND <![CDATA[<>]]> '05'       						/*결의구분:여입제외*/
+			   AND t1.CPTAL_EXPNDTR_ACNTBK_DE 	= #CPTAL_EXPNDTR_ACNTBK_DE#
+			   AND t1.FNNC_INSTT_CODE 			= #FNNC_INSTT_CODE# 			/*조건:국민은행*/
+			<isNotEmpty property="ACNUTNO">
+			   	AND   t1.ACNUTNO				= #ACNUTNO#
+			</isNotEmpty>
+			<isNotEmpty property="CHECK_NO_ST">
+			   	AND   t1.CHECK_NO <![CDATA[>=]]> #CHECK_NO_ST#
+			</isNotEmpty>
+			<isNotEmpty property="CHECK_NO_ED">
+				AND   t1.CHECK_NO <![CDATA[<=]]> #CHECK_NO_ED#
+			</isNotEmpty>
+		   ORDER BY t1.CHECK_NO, t3.SEQ
+	</select>
+	
+</sqlMap>

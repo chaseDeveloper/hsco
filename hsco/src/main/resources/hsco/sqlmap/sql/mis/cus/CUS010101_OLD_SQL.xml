@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010101_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+    
+    <!--오프라인민원접수관리 테이블 목록조회 -->
+    <select id="CUS010101DAO.selectAuditPlanList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+	       SELECT 
+				     A.RCEPT_NO            AS         RCEPT_NO
+				    ,A.CVPL_NO             AS         CVPL_NO
+				    ,A.INQRY_KND           AS         INQRY_KND
+				    ,A.INQRY_KND_DETAIL    AS         INQRY_KND_DETAIL
+				    ,A.CSTMR_REGIST_DT     AS         CSTMR_REGIST_DT
+				    ,A.RCEPT_DT            AS         RCEPT_DT  
+				    ,A.RCEPT_MTH           AS         RCEPT_MTH
+				    ,A.HOPE_RICFLD_COURS   AS         HOPE_RICFLD_COURS
+				    ,A.SJ                  AS         SJ
+				    ,A.CN                  AS         CN
+				    ,B.CSTMR_NM            AS         NM
+				    ,B.GNRL_TLPHON         AS         GNRL_TLPHON
+				    ,B.MBTLNO              AS         MBTLNO
+				    ,B.EMAIL               AS         EMAIL
+				    ,B.ZIP                 AS         ZIP
+				    ,B.ADRES               AS         ADRES
+				    ,A.ATCH_FILE           AS         ATCH_FILE 
+				    ,A.REGISTER_ID         AS         REGISTER_ID
+				    ,A.REGIST_DT           AS         REGIST_DT
+				    ,A.UPDUSR_ID           AS         UPDUSR_ID
+				    ,A.UPDT_DT             AS         UPDT_DT
+				    ,''                    AS         CHK
+				    ,A.RCEPT_EMPNO         AS         RCEPT_EMPNO
+				    ,(select SFSAL_GETEMPNO_01(A.RCEPT_EMPNO) from dual) 
+				    					   AS         RCEPT_EMPNM
+				    ,A.CVPL_GRAD           AS         CVPL_GRAD 
+				    ,NVL((SELECT 
+				      CASE 
+			           WHEN APPN_CHARGER IS NULL AND DRFT_DE IS NULL AND DRFT_JOB_CONFM_NO IS NULL THEN '1' /*접수대기*/ 
+			           WHEN APPN_CHARGER IS NOT NULL AND DRFT_DE IS NULL AND DRFT_JOB_CONFM_NO IS NULL THEN '2' /*처리중*/
+			           WHEN APPN_CHARGER IS NOT NULL AND DRFT_DE IS NOT NULL AND DRFT_JOB_CONFM_NO IS NULL THEN '3' /*결재중*/
+			           WHEN APPN_CHARGER IS NOT NULL AND DRFT_DE IS NOT NULL AND DRFT_JOB_CONFM_NO IS NOT NULL THEN '5' /*처리완료*/
+			           ELSE NULL END 
+			          FROM TBCUS_HMPG_CVPL_DSTB 
+			         WHERE RCEPT_NO = A.RCEPT_NO
+			           AND CVPL_NO  = A.CVPL_NO   
+			                           ),1)   AS        PRC_STATUS
+				    	
+			FROM TBCUS_HMPG_CSTMR_CVPL A
+			INNER JOIN TBCUS_HMPG_CSTMR_INFO B
+			ON A.NM = B.CSTMR_NM
+			AND A.MBTLNO = B.MBTLNO
+			WHERE A.CSTMR_REGIST_DT >= #REGIST_BGN_DT#
+			AND   A.CSTMR_REGIST_DT <= #REGIST_END_DT#
+			AND   SUBSTR(A.CVPL_NO, 1, 1) = 'B' 
+		]]>  				 		        	     
+		<isNotEmpty property="INQRY_KND">
+			AND A.INQRY_KND = #INQRY_KND#
+		</isNotEmpty>
+		<isNotEmpty property="INQRY_KND_DETAIL">
+			AND A.INQRY_KND_DETAIL = #INQRY_KND_DETAIL#
+		</isNotEmpty>
+		<isNotEmpty property="PRC_STATUS">    /*처리상태 조건 있을시*/
+	    AND NVL((SELECT 
+				      CASE 
+			           WHEN APPN_CHARGER IS NULL AND DRFT_DE IS NULL AND DRFT_JOB_CONFM_NO IS NULL THEN '1' /*접수대기*/ 
+			           WHEN APPN_CHARGER IS NOT NULL AND DRFT_DE IS NULL AND DRFT_JOB_CONFM_NO IS NULL THEN '2' /*처리중*/
+			           WHEN APPN_CHARGER IS NOT NULL AND DRFT_DE IS NOT NULL AND DRFT_JOB_CONFM_NO IS NULL THEN '3' /*결재중*/
+			           WHEN APPN_CHARGER IS NOT NULL AND DRFT_DE IS NOT NULL AND DRFT_JOB_CONFM_NO IS NOT NULL THEN '5' /*처리완료*/
+			           ELSE NULL END 
+			          FROM TBCUS_HMPG_CVPL_DSTB 
+			         WHERE RCEPT_NO = A.RCEPT_NO
+			           AND CVPL_NO  = A.CVPL_NO   
+			                           ),1) = #PRC_STATUS#
+	    </isNotEmpty>
+		<![CDATA[
+			ORDER BY CSTMR_REGIST_DT,
+					 RCEPT_NO
+		]]>
+    </select>
+  
+    <!--오프라인민원접수관리 테이블  입력 -->
+    <insert id="CUS010101DAO.hmpgCvplListC" parameterClass="java.util.HashMap">
+        <![CDATA[
+            INSERT INTO TBCUS_HMPG_CSTMR_CVPL (
+                       RCEPT_NO
+                      ,INQRY_KND
+                      ,INQRY_KND_DETAIL
+                      ,CSTMR_REGIST_DT
+                      ,CVPL_NO
+                      ,RCEPT_MTH
+                      ,SJ
+                      ,CN
+                      ,NM
+                      ,GNRL_TLPHON
+                      ,MBTLNO
+                      ,EMAIL
+                      ,ADRES
+                      ,ATCH_FILE
+                      ,DELETE_DE
+                      ,DTRN
+                      ,RM
+                      ,INQIRE_CO
+                      ,REGISTER_ID
+                      ,REGIST_DT
+                      ,UPDUSR_ID
+                      ,UPDT_DT
+                      ,RCEPT_EMPNO
+                      ,CVPL_GRAD
+             ) VALUES (
+	              ( SELECT 
+	                CASE
+	                WHEN COUNT(RCEPT_NO) = 0 THEN 1
+	                WHEN COUNT(RCEPT_NO) > 0 THEN MAX(TO_NUMBER(RCEPT_NO))+1
+	                ELSE NULL END 
+	                FROM (select nvl2(COUNT(RCEPT_NO),MAX(TO_NUMBER(RCEPT_NO)),1) as RCEPT_NO
+	                	      FROM TBCUS_HMPG_CSTMR_CVPL)
+	               	      GROUP BY RCEPT_NO)       	      
+                  ,#INQRY_KND#
+                  ,#INQRY_KND_DETAIL#
+                  ,#CSTMR_REGIST_DT#
+                  ,'B' || ( SELECT 
+	                CASE
+	                WHEN COUNT(RCEPT_NO) = 0 THEN 1
+	                WHEN COUNT(RCEPT_NO) > 0 THEN MAX(TO_NUMBER(RCEPT_NO))+1
+	                ELSE NULL END 
+	                FROM (select nvl2(COUNT(RCEPT_NO),MAX(TO_NUMBER(RCEPT_NO)),1) as RCEPT_NO
+	                	      FROM TBCUS_HMPG_CSTMR_CVPL)
+	               	      GROUP BY RCEPT_NO)   
+                  ,#RCEPT_MTH#
+                  ,#SJ#
+                  ,#CN#
+                  ,#NM#
+                  ,#GNRL_TLPHON#
+                  ,#MBTLNO#
+                  ,#EMAIL#
+                  ,#ADRES#
+                  ,#ATCH_FILE#
+                  ,#DELETE_DE#
+                  ,#DTRN#
+                  ,#RM#
+                  ,#INQIRE_CO#
+                  ,#S_USER_ID#
+                  ,SYSDATE
+                  ,#S_USER_ID#
+                  ,SYSDATE
+                  ,#RCEPT_EMPNO#
+                  ,#CVPL_GRAD#
+             )
+        ]]>
+    </insert>
+     <!--민원분배관리 테이블  입력 -->
+    <insert id="CUS010101DAO.cvplDstbListC" parameterClass="java.util.HashMap">
+        <![CDATA[
+        
+            INSERT INTO TBCUS_HMPG_CVPL_DSTB (
+                       RCEPT_NO
+                      ,INQRY_KND
+                      ,INQRY_KND_DETAIL
+                      ,CVPL_NO
+                      ,REGISTER_ID
+                      ,REGIST_DT
+                      ,UPDUSR_ID
+                      ,UPDT_DT
+                      ,CVPL_GRAD
+             ) VALUES (
+	               (SELECT MAX(RCEPT_NO) 
+		              FROM TBCUS_HMPG_CSTMR_CVPL)
+	              ,#INQRY_KND#
+                  ,#INQRY_KND_DETAIL#
+                  ,'B' || (SELECT MAX(RCEPT_NO)
+					  FROM TBCUS_HMPG_CSTMR_CVPL)    
+                  ,#S_USER_ID#
+                  ,SYSDATE
+                  ,#S_USER_ID#
+                  ,SYSDATE
+                  ,#CVPL_GRAD#
+             )
+        ]]>
+    </insert>
+	<!--오프라인민원접수관리 테이블수정 -->
+    <update id="CUS010101DAO.cvplDstbListU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBCUS_HMPG_CVPL_DSTB SET
+                       INQRY_KND              =       #INQRY_KND#
+                      ,INQRY_KND_DETAIL       =       #INQRY_KND_DETAIL#
+                      ,ATCH_FILE              =       #ATCH_FILE#
+                      ,DELETE_DE              =       #DELETE_DE#
+                      ,DTRN                   =       #DTRN#
+                      ,RM                     =       #RM#
+                      ,UPDUSR_ID              =       #S_USER_ID#
+                      ,UPDT_DT                =       SYSDATE
+                      ,CVPL_GRAD              =       #CVPL_GRAD#
+            WHERE  RCEPT_NO = #RCEPT_NO#
+              AND  CVPL_NO  = #CVPL_NO#
+          ]]>
+    </update>
+    <!--오프라인민원접수관리 테이블수정 -->
+    <update id="CUS010101DAO.hmpgCvplListU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBCUS_HMPG_CSTMR_CVPL SET
+                       INQRY_KND              =       #INQRY_KND#
+                      ,INQRY_KND_DETAIL       =       #INQRY_KND_DETAIL#
+                      ,CVPL_GRAD              =       #CVPL_GRAD#
+                      ,RCEPT_MTH              =       #RCEPT_MTH#
+                      ,SJ                     =       #SJ#
+                      ,CN                     =       #CN#
+                      ,NM                     =       #NM#
+                      ,GNRL_TLPHON            =       #GNRL_TLPHON#
+                      ,MBTLNO                 =       #MBTLNO#
+                      ,EMAIL                  =       #EMAIL#
+                      ,ADRES                  =       #ADRES#
+                      ,ATCH_FILE              =       #ATCH_FILE#
+                      ,UPDUSR_ID              =       #S_USER_ID#
+                      ,UPDT_DT                =       SYSDATE
+                      ,RCEPT_EMPNO            =       #RCEPT_EMPNO#
+            WHERE  RCEPT_NO = #RCEPT_NO#
+              AND  CVPL_NO  = #CVPL_NO#
+          ]]>
+    </update>
+
+
+    <!--오프라인민원접수관리 테이블 삭제 -->
+    <delete id="CUS010101DAO.hmpgCvplListD" parameterClass="java.util.HashMap">
+        <![CDATA[
+            DELETE FROM TBCUS_HMPG_CSTMR_CVPL
+            WHERE  RCEPT_NO = #RCEPT_NO#
+        ]]>
+    </delete>
+ 
+  
+    <!--고객정보 테이블 목록조회 -->
+    <select id="CUS010101DAO.selectHmpgCstmrInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+	       SELECT 
+				     A.CSTMR_NM            AS         CSTMR_NM              /*이름*/
+				    ,A.MBTLNO              AS         MBTLNO                /*핸드폰번호*/
+				    ,A.EMAIL               AS         EMAIL                 /*이메일*/
+				    ,A.ZIP                 AS         ZIP                   /*우편번호*/
+				    ,A.ADRES               AS         ADRES                 /*주소*/
+				    ,A.GNRL_TLPHON         AS         GNRL_TLPHON           /*전화번호*/
+				    ,A.REGISTER_ID         AS         REGISTER_ID
+				    ,A.REGIST_DT           AS         REGIST_DT
+				    ,A.UPDUSR_ID           AS         UPDUSR_ID
+				    ,A.UPDT_DT             AS         UPDT_DT
+			FROM TBCUS_HMPG_CSTMR_INFO A
+			WHERE A.CSTMR_NM = #CSTMR_NM#
+			AND   A.MBTLNO = #MBTLNO#
+		]]>  				 		        	     
+    </select>
+    
+     <!--고객정보 테이블 입력 -->
+    <insert id="CUS010101DAO.hmpgCstmrInfoC" parameterClass="java.util.HashMap">
+	<![CDATA[
+           MERGE INTO TBCUS_HMPG_CSTMR_INFO
+				  USING DUAL
+				  ON (CSTMR_NM = #NM# AND MBTLNO = #MBTLNO#)
+				  WHEN MATCHED THEN
+				  UPDATE SET 
+				  			 UPDUSR_ID   =    #S_USER_ID#
+				            ,UPDT_DT     =    SYSDATE
+				  ]]>
+				  			<isNotEmpty property="EMAIL" prepend=",">EMAIL = #EMAIL#</isNotEmpty>
+							<isNotEmpty property="ZIP" prepend=",">ZIP = #ZIP#</isNotEmpty>
+							<isNotEmpty property="ADRES" prepend=",">ADRES = #ADRES#</isNotEmpty>
+							<isNotEmpty property="GNRL_TLPHON" prepend=",">GNRL_TLPHON = #GNRL_TLPHON#</isNotEmpty>
+				  <![CDATA[          
+				  WHEN NOT MATCHED THEN 
+				  INSERT(
+				             CSTMR_NM
+				            ,MBTLNO 
+				            ,EMAIL
+				            ,CSTMR_GRAD
+				            ,ZIP
+				            ,ADRES
+				            ,PSTMTR_ADRES
+				            ,GNRL_TLPHON
+				            ,NTCN_AT
+				            ,UPDUSR_ID
+				            ,UPDT_DT
+				            ,REGISTER_ID
+				            ,REGIST_DT
+				            
+				  )VALUES(
+				    #NM#
+				    ,#MBTLNO#
+				    ,#EMAIL#
+				    ,'02'  			/*초기입력 시 고객등급 일반*/
+				    ,#ZIP#
+				    ,#ADRES#
+				    ,#PSTMTR_ADRES#
+				    ,#GNRL_TLPHON#
+				    ,'2'			/*초기입력 시 수신여부 수신거부*/
+				    ,#S_USER_ID#
+				    ,SYSDATE
+				    ,#S_USER_ID#
+				    ,SYSDATE
+				  )
+		          ]]>
+    </insert>
+
+</sqlMap>

@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM050101_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 호봉획정현황 조회 -->
+	<select id="HRM050101DAO.tbhrmSrclsDmrcList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+             SELECT '0' AS CHK
+                  , #APPLC_DE# AS APPLC_DE
+                  , CASE WHEN TO_NUMBER(A.SRCLS) = 30 THEN 30
+                         ELSE TO_NUMBER(A.SRCLS) + 1
+                     END AS NEXT_STEP
+                  , CASE WHEN TO_DATE(A.NSET_DATE,'YYYYMMDD') < TO_DATE(#APPLC_DE#,'YYYYMMDD') THEN SUBSTR(A.SET_DATE,1,4) || SUBSTR(A.NSET_DATE,5,4)
+              	         ELSE NSET_DATE
+                     END AS NSET_DATE_CALC
+                  , A.*
+                  , LPAD(DECODE(A.A_Y, '0', ' ', A.A_Y), 2, ' ') || '년 ' || LPAD(DECODE(A.A_M, '0', ' ', A.A_M), 2, ' ') || '월 ' || LPAD(DECODE(A.A_D, '0', ' ', A.A_D), 2, ' ') || '일'             AS A_DE
+                  , LPAD(DECODE(A.A1_Y, '0', ' ', A.A1_Y), 2, ' ') || '년 ' || LPAD(DECODE(A.A1_M, '0', ' ', A.A1_M), 2, ' ') || '월 ' || LPAD(DECODE(A.A1_D, '0', ' ', A.A1_D), 2, ' ') || '일'       AS A1_DE
+                  , LPAD(DECODE(A.A2_Y, '0', ' ', A.A2_Y), 2, ' ') || '년 ' || LPAD(DECODE(A.A2_M, '0', ' ', A.A2_M), 2, ' ') || '월 ' || LPAD(DECODE(A.A2_D, '0', ' ', A.A2_D), 2, ' ') || '일'       AS A2_DE
+                  , LPAD(DECODE(A.B_Y, '0', ' ', A.B_Y), 2, ' ') || '년 ' || LPAD(DECODE(A.B_M, '0', ' ', A.B_M), 2, ' ') || '월 ' || LPAD(DECODE(A.B_D, '0', ' ', A.B_D), 2, ' ') || '일'             AS B_DE
+                  , LPAD(DECODE(A.C_Y, '0', ' ', A.C_Y), 2, ' ') || '년 ' || LPAD(DECODE(A.C_M, '0', ' ', A.C_M), 2, ' ') || '월 ' || LPAD(DECODE(A.C_D, '0', ' ', A.C_D), 2, ' ') || '일'             AS C_DE
+                  , LPAD(DECODE(A.AB_Y, '0', ' ', A.AB_Y), 2, ' ') || '년 ' || LPAD(DECODE(A.AB_M, '0', ' ', A.AB_M), 2, ' ') || '월 ' || LPAD(DECODE(A.AB_D, '0', ' ', A.AB_D), 2, ' ') || '일'       AS AB_DE
+                  , LPAD(DECODE(A.ABC_Y, '0', ' ', A.ABC_Y), 2, ' ') || '년 ' || LPAD(DECODE(A.ABC_M, '0', ' ', A.ABC_M), 2, ' ') || '월 ' || LPAD(DECODE(A.ABC_D, '0', ' ', A.ABC_D), 2, ' ') || '일' AS ABC_DE
+               FROM
+                    (
+                     SELECT A.EMPNO
+                          , A.EMPNM
+                          , A.DEPT_CODE
+                          , SFHRM_GET_DEPTNM(A.DEPT_CODE,'') AS DEPT_NM
+                          , A.JSSFC_SE
+                          , A.HR_CLSF_SE
+                          , A.ECNY_DE
+                          , A.SRCLS
+                          , A.RSPOFC_SE
+                          , SFHRM_GET_OFCPSCD(A.EMPNO, A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE) AS OFCPS_SE
+                          , A1_Y, A1_M, A1_D
+                          , A2_Y, A2_M, A2_D
+                          , A_Y, A_M, A_D
+                          , B_Y, B_M, B_D
+                          , AB_Y, AB_M, AB_D
+                          , C_Y, C_M, C_D
+                          , ABC_Y, ABC_M, ABC_D
+                          , TRUNC(NVL(B.CAL_TOT,0) / 360) AS DMRC_SRCLS
+                          , TO_NUMBER(A.SRCLS) * 360 - NVL(B.CAL_TOT,0) AS REM_DAYS
+                          , TO_CHAR((TO_DATE(#APPLC_DE#,'YYYYMMDD') -1 + (TO_NUMBER(A.SRCLS) * 360 - B.CAL_TOT)),'YYYYMMDD') AS NEXT_DATE
+                          , TO_CHAR( ADD_MONTHS(ADD_MONTHS((TO_DATE(#APPLC_DE#,'YYYYMMDD') -1 + (TO_NUMBER(A.SRCLS) * 360 - B.CAL_TOT)),1), C_Y*12+C_M) ,'YYYYMM')||'01' AS SET_DATE
+                          , CASE WHEN A.EMPNO IN('19900081','19880025','20070204')
+                                 THEN TO_CHAR(TO_DATE(A.ECNY_DE,'YYYYMMDD') + TRUNC(366 - ((B.CAL_M * 30.5) + B.CAL_D) + 30.5),'YYYYMM') || '01'
+                                 ELSE TO_CHAR(TO_DATE(A.ECNY_DE,'YYYYMMDD') + (360 - ((B.CAL_M * 30) + B.CAL_D) + 30),'YYYYMM') || '01'
+                             END AS NSET_DATE
+                       FROM TBHRM_HR_MASTR A,
+                            (
+                             SELECT EMPNO
+                                  , CAL_TOT
+                                  , SFHRM_GET_YMD_CALC('Y',CAL_TOT,0,'','',0) TOT_Y
+                                  , SFHRM_GET_YMD_CALC('M',CAL_TOT,0,'','',0) TOT_M
+                                  , SFHRM_GET_YMD_CALC('D',CAL_TOT,0,'','',0) TOT_D
+                                  , SFHRM_GET_YMD_CALC('Y',CAL_TOT1,0,'','',0) TOT_Y1
+                                  , SFHRM_GET_YMD_CALC('M',CAL_TOT1,0,'','',0) TOT_M1
+                                  , SFHRM_GET_YMD_CALC('D',CAL_TOT1,0,'','',0) TOT_D1
+                                  ,	SFHRM_GET_YMD_CALC('Y',CAL_DD1,0,'','',0) CAL_Y1
+                                  ,	SFHRM_GET_YMD_CALC('M',CAL_DD1,0,'','',0) CAL_M1
+                                  ,	SFHRM_GET_YMD_CALC('D',CAL_DD1,0,'','',0) CAL_D1
+                                  ,	SFHRM_GET_YMD_CALC('Y',CAL_DD2,0,'','',0) CAL_Y2
+                                  , SFHRM_GET_YMD_CALC('M',CAL_DD2,0,'','',0) CAL_M2
+                                  ,	SFHRM_GET_YMD_CALC('D',CAL_DD2,0,'','',0) CAL_D2
+                                  ,	SFHRM_GET_YMD_CALC('Y',CAL_DD3,0,'','',0) CAL_Y3
+                                  , SFHRM_GET_YMD_CALC('M',CAL_DD3,0,'','',0) CAL_M3
+                                  ,	SFHRM_GET_YMD_CALC('D',CAL_DD3,0,'','',0) CAL_D3
+                                  ,	SFHRM_GET_YMD_CALC('Y',CAL_DD1+CAL_DD2,0,'','',0) CAL_Y
+                                  ,	SFHRM_GET_YMD_CALC('M',CAL_DD1+CAL_DD2,0,'','',0) CAL_M
+                                  ,	SFHRM_GET_YMD_CALC('D',CAL_DD1+CAL_DD2,0,'','',0) CAL_D
+                                  , SFHRM_GET_YMD_CALC('Y',CAL_TOT-CAL_DD3,0,'','',0) LAST_CALC_Y
+                                  ,	SFHRM_GET_YMD_CALC('M',CAL_TOT-CAL_DD3,0,'','',0) LAST_CALC_M
+                                  ,	SFHRM_GET_YMD_CALC('D',CAL_TOT-CAL_DD3,0,'','',0) LAST_CALC_D
+                                  , WRK_Y
+                                  ,	WRK_M
+                                  ,	WRK_D
+                                  ,	SFHRM_GET_YMD_CALC('Y',0,CALC_MONTH1,'','',0) A1_Y
+                                  ,	SFHRM_GET_YMD_CALC('M',0,CALC_MONTH1,'','',0) A1_M
+                                  ,	SFHRM_GET_YMD_CALC('D',0,CALC_MONTH1,'','',0) A1_D
+                                  ,	WRK_Y AS A2_Y
+                                  ,	WRK_M AS A2_M
+                                  ,	WRK_D	AS A2_D
+                                  , SFHRM_GET_YMD_CALC('Y',0,CALC_MONTH1 + WRK_CALC_MONTH,'','',0) A_Y
+                                  , SFHRM_GET_YMD_CALC('M',0,CALC_MONTH1 + WRK_CALC_MONTH,'','',0) A_M
+                                  ,	SFHRM_GET_YMD_CALC('D',0,CALC_MONTH1 + WRK_CALC_MONTH,'','',0) A_D
+                                  , SFHRM_GET_YMD_CALC('Y',0,CALC_MONTH2,'','',0) B_Y
+                                  ,	SFHRM_GET_YMD_CALC('M',0,CALC_MONTH2,'','',0) B_M
+                                  ,	SFHRM_GET_YMD_CALC('D',0,CALC_MONTH2,'','',0) B_D
+                                  ,	SFHRM_GET_YMD_CALC('Y',0,CALC_MONTH1 + WRK_CALC_MONTH + CALC_MONTH2,'','',0) AB_Y
+                                  ,	SFHRM_GET_YMD_CALC('M',0,CALC_MONTH1 + WRK_CALC_MONTH + CALC_MONTH2,'','',0) AB_M
+                                  ,	SFHRM_GET_YMD_CALC('D',0,CALC_MONTH1 + WRK_CALC_MONTH + CALC_MONTH2,'','',0) AB_D
+                                  ,	SFHRM_GET_YMD_CALC('Y',0,CALC_MONTH3,'','',0) C_Y
+                                  ,	SFHRM_GET_YMD_CALC('M',0,CALC_MONTH3,'','',0) C_M
+                                  ,	SFHRM_GET_YMD_CALC('D',0,CALC_MONTH3,'','',0) C_D
+                                  ,	SFHRM_GET_YMD_CALC('Y',0,CALC_MONTH1 + WRK_CALC_MONTH + CALC_MONTH2 - CALC_MONTH3,'','',0) ABC_Y
+                                  ,	SFHRM_GET_YMD_CALC('M',0,CALC_MONTH1 + WRK_CALC_MONTH + CALC_MONTH2 - CALC_MONTH3,'','',0) ABC_M
+                                  ,	SFHRM_GET_YMD_CALC('D',0,CALC_MONTH1 + WRK_CALC_MONTH + CALC_MONTH2 - CALC_MONTH3,'','',0) ABC_D
+                               FROM (
+                                     SELECT  ((NVL(C.CAL_Y,0) + NVL(C.WRK_Y,0)) * 360) + ((NVL(C.CAL_M,0) + NVL(C.WRK_M,0)) * 30) + NVL(C.WRK_D,0) + NVL(C.CAL_D,0) AS CAL_TOT
+                                          , ((NVL(C.CAL_Y1,0) + NVL(C.WRK_Y,0)) * 360) + ((NVL(C.CAL_M1,0) + NVL(C.WRK_M,0)) * 30) + NVL(C.WRK_D,0) + NVL(C.CAL_D1,0) AS CAL_TOT1
+                                          , (NVL(C.CAL_Y1,0) * 360) + (NVL(C.CAL_M1,0) * 30) + NVL(C.CAL_D1,0) AS CAL_DD1
+                                          , (NVL(C.CAL_Y2,0) * 360) + (NVL(C.CAL_M2,0) * 30) + NVL(C.CAL_D2,0) AS CAL_DD2
+                                          , (NVL(C.CAL_Y3,0) * 360) + (NVL(C.CAL_M3,0) * 30) + NVL(C.CAL_D3,0) AS CAL_DD3
+							              , C.*
+                                       FROM (
+                                             SELECT A.EMPNO AS EMPNO
+                                                  , NVL(SFHRM_GET_YMD_CALC('Y',0,0,ECNY_DE,#APPLC_DE#,100),0) WRK_Y
+                                                  , NVL(SFHRM_GET_YMD_CALC('M',0,0,ECNY_DE,#APPLC_DE#,100),0) WRK_M
+                                                  , NVL(SFHRM_GET_YMD_CALC('D',0,0,ECNY_DE,#APPLC_DE#,100),0) WRK_D
+                                                  , NVL(SFHRM_GET_YMD_CALC('T',0,0,ECNY_DE,#APPLC_DE#,100),0) WRK_CALC_MONTH
+                                                  , B.*
+                                               FROM TBHRM_HR_MASTR A,
+                                                    (
+                                                     SELECT EMPNO AS EMPNO_GR
+                                                          , SUM(APP_Y) 						 AS CAL_Y
+                                                          , SUM(APP_M) 						 AS CAL_M
+                                                          , SUM(APP_D) 						 AS CAL_D
+                                                          , SUM(DECODE(RATE_SE,1,APP_Y,0)) 	 AS CAL_Y1
+                                                          , SUM(DECODE(RATE_SE,1,APP_M,0)) 	 AS CAL_M1
+                                                          , SUM(DECODE(RATE_SE,1,APP_D,0)) 	 AS CAL_D1
+                                                          , SUM(DECODE(RATE_SE,2,APP_Y,0)) 	 AS CAL_Y2
+                                                          , SUM(DECODE(RATE_SE,2,APP_M,0)) 	 AS CAL_M2
+                                                          , SUM(DECODE(RATE_SE,2,APP_D,0)) 	 AS CAL_D2
+                                                          , SUM(DECODE(RATE_SE,3,LMTT_Y,0))  AS CAL_Y3
+                                                          , SUM(DECODE(RATE_SE,3,LMTT_M,0))  AS CAL_M3
+                                                          , SUM(DECODE(RATE_SE,3,LMTT_D,0))  AS CAL_D3
+                                                          , SUM(APP_DD) 					 AS CALC_MONTH
+                                                          , SUM(DECODE(RATE_SE,1,APP_DD,0))  AS CALC_MONTH1
+                                                          , SUM(DECODE(RATE_SE,2,APP_DD,0))  AS CALC_MONTH2
+                                                          , SUM(DECODE(RATE_SE,3,LMTT_DD,0)) AS CALC_MONTH3
+                                                       FROM VIHRM_CAREER_TRANS
+                                                   GROUP BY EMPNO
+                                                    ) B
+                                              WHERE A.EMPNO = B.EMPNO_GR(+)
+                                            ) C
+                                    )
+                            ) B
+                     WHERE A.EMPNO = B.EMPNO
+                       AND A.STTUS_SE = '000'
+                       AND A.JSSFC_SE IN('001','002','003')
+                       AND A.SRCLS <= 30
+                    ) A
+              WHERE 1=1
+		]]>	
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				A.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNM" prepend="AND">
+				A.EMPNM LIKE '%' || #EMPNM# || '%'
+			</isNotEmpty>
+		<![CDATA[	
+			 ORDER BY DEPT_CODE, JSSFC_SE, OFCPS_SE, RSPOFC_SE, EMPNO
+		]]>
+    </select>
+    
+    <!-- 호봉획정현황(100% 인정경력) 조회 -->
+    <select id="HRM050101DAO.tbhrmACareer" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+      <![CDATA[         
+             SELECT *
+               FROM VIHRM_CAREER_TRANS
+              WHERE 1=1
+        ]]>
+        <iterate property="EMPNO" prepend="AND    " open="EMPNO IN (" close=")" conjunction=",">
+                    #EMPNO[]#
+        </iterate>
+        <![CDATA[   
+                    AND RATE_SE = 1
+         ORDER BY BGNDE
+      ]]>
+    </select>
+    
+    <!-- 호봉획정현황(유사경력) 조회 -->
+	<select id="HRM050101DAO.tbhrmBCareer" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+             SELECT *
+               FROM VIHRM_CAREER_TRANS
+              WHERE 1=1
+        ]]>
+        <iterate property="EMPNO" prepend="AND    " open="EMPNO IN (" close=")" conjunction=",">
+                    #EMPNO[]#
+        </iterate>
+        <![CDATA[	
+                    AND RATE_SE = 2
+		   ORDER BY BGNDE
+		]]>
+    </select>
+    
+    <!-- 호봉획정현황(제한경력) 조회 -->
+	<select id="HRM050101DAO.tbhrmCCareer" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+             SELECT *
+               FROM VIHRM_CAREER_TRANS
+              WHERE 1=1
+        ]]>
+        <iterate property="EMPNO" prepend="AND    " open="EMPNO IN (" close=")" conjunction=",">
+                    #EMPNO[]#
+        </iterate>
+        <![CDATA[	
+                    AND RATE_SE = 3
+		   ORDER BY BGNDE
+		]]>
+    </select>
+</sqlMap>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02051500_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 특정시점 공가현황 조회
+		   설명 : 매입임대 특정시점 공가현황 조회 쿼리
+		 수정일 : 수정자  수정내용	
+		 작성자 : 손연옥
+	 최초작성일 : 2016.12.14
+	-->
+	<select id="RNT02051500DAO.puchasHouseBildList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	/* RNT02051500DAO.puchasHouseBildList[매입임대 공가현황 조회] */
+	   with tab_01 as
+	   (
+		    SELECT b.rent_house_nm, c.rent_house_code, c.dong, c.ho 
+		              ,  c.DVR_AR, c.CMNUSE_AR, d.RENT_GTN, d.MT_RNTCHRG
+		              ,  decode(c.SUPLY_SE,'1','가능','불가') as SUPLY_SE                              
+ 		      FROM TBRNT_PUCHAS_HOUSE b, TBRNT_PUCHAS_HOUSE_BILD c,
+		                (select rent_house_code, DONG, HO, RENT_GTN, MT_RNTCHRG from TBRNT_PUCHAS_STDR 
+		                 where STDR_YEAR = Substr(#YYYYMM# ,1,4) ) d
+		     where b.USE_AT = '1'
+		         and substr(b.PUCHAS_DE,1,6) <![CDATA[ <= ]]>  #YYYYMM# 
+		       <isNotEmpty property="houseCode">
+				   AND B.RENT_HOUSE_CODE LIKE #houseCode# || '%'
+				</isNotEmpty>       
+		       and b.rent_house_code = c.rent_house_code   
+		       and c.rent_house_code = d.rent_house_code(+)
+		       and c.dong = d.dong(+)
+		       and c.ho = d.ho(+)
+		   ) 
+			select #YYYYMM# as yyyymm, b.RENT_HOUSE_NM, a.rent_house_code, a.dong, a.ho
+			       , a.CANCL_DE, a.CNTRCT_DE 
+			       , b.SUPLY_SE, b.RENT_GTN, b.MT_RNTCHRG, b.DVR_AR, b.CMNUSE_AR
+			  from ( 
+			         select distinct a.rent_house_code, a.dong, a.ho, c.CNTRCT_DE
+			              , greatest( nvl(a.cancl_de,change_de), nvl(b1.change_de,a.cancl_de)) as CANCL_DE
+			           from tbrnt_puchas_cntrct a,
+			               (select rent_house_code, dong, ho, min(FRST_CNTRCT_DE) as CNTRCT_DE
+			                  from tbrnt_puchas_cntrct 
+			                 where substr(FRST_CNTRCT_DE,1,6) <![CDATA[ > ]]>  #YYYYMM#
+			                 group by rent_house_code, dong, ho
+			               ) c,
+			               (SELECT c.RENT_HOUSE_CODE_BFCHG, c.DONG_BFCHG, c.HO_BFCHG, max(c.CHANGE_DE) as CHANGE_DE, '동호변경' as cend_code
+			                  FROM TBRNT_PUCHAS_HOUSE_CHANGE c
+			                 WHERE 1 = 1
+			                 <isNotEmpty property="houseCode">
+						 	    AND C.RENT_HOUSE_CODE_BFCHG LIKE #houseCode# || '%'
+							</isNotEmpty>
+			                 GROUP BY c.RENT_HOUSE_CODE_BFCHG, c.DONG_BFCHG, c.HO_BFCHG     
+			               ) b1 
+			         where substr(a.FRST_CNTRCT_DE,1,6) <![CDATA[ <= ]]>  #YYYYMM# 
+			           and substr(a.CANCL_DE,1,6) <![CDATA[ <= ]]>  #YYYYMM#            
+			           and not exists(select 1 from tbrnt_puchas_cntrct b, TBRNT_PUCHAS_HOUSE_CHANGE h
+			                           where b.rent_house_code = a.rent_house_code
+			                             and b.dong = a.dong
+			                             and b.ho = a.ho
+			                             and b.CNTRCTR_NO <![CDATA[ <> ]]> a.CNTRCTR_NO
+			                             and substr(b.FRST_CNTRCT_DE,1,6) <![CDATA[ <= ]]>  #YYYYMM# 
+			                             and nvl(h.CHANGE_DE,b.FRST_CNTRCT_DE) >= a.CANCL_DE 
+			                             and b.CNTRCTR_NO = h.CNTRCTR_NO(+)
+			                         )                  
+			           and a.CANCL_DE = (select max(c1.CANCL_DE) from tbrnt_puchas_cntrct c1 
+			                              where c1.rent_house_code = a.rent_house_code
+			                                and c1.dong   = a.dong
+			                                and c1.ho = a.ho
+			                                and c1.CANCL_DE is not null
+			                                and substr(c1.CANCL_DE,1,6) <![CDATA[ <= ]]>  #YYYYMM# 
+			                                and substr(c1.FRST_CNTRCT_DE,1,6) <![CDATA[ <= ]]>  #YYYYMM# 
+			                             )
+			           and a.rent_house_code = c.rent_house_code(+) 
+			           and a.dong = c.dong(+)
+			           and a.ho   = c.ho(+)  
+			           AND a.rent_house_code = b1.RENT_HOUSE_CODE_BFCHG(+)
+			           AND a.dong = b1.DONG_BFCHG(+)
+			           AND a.ho = b1.HO_BFCHG(+)     
+			        ) a, tab_01 b
+			 where a.rent_house_code = b.rent_house_code
+			   and a.dong = b.dong
+			   and a.ho = b.ho
+			 union 
+			select  #YYYYMM#  as YYYYMM, b.RENT_HOUSE_NM, b.rent_house_code, b.dong, b.ho
+			     , null CNTRCT_DE
+			     , (SELECT max(c1.CHANGE_DE)
+			          FROM TBRNT_PUCHAS_HOUSE_CHANGE c1
+			         WHERE c1.RENT_HOUSE_CODE_BFCHG = b.rent_house_code
+			           and c1.DONG_BFCHG = b.dong
+			           and c1.HO_BFCHG = b.ho
+			       ) CANCL_DE     
+			     , b.SUPLY_SE
+			     , b.RENT_GTN
+			     , b.MT_RNTCHRG
+			     , b.DVR_AR, b.CMNUSE_AR
+			  from tab_01 b   
+			 where not exists(select 1 from tbrnt_puchas_cntrct a 
+			                   where b.rent_house_code = a.rent_house_code
+			                     and b.dong = a.dong
+			                     and b.ho = a.ho
+			                     and substr(a.FRST_CNTRCT_DE,1,6)  <![CDATA[ <= ]]>  #YYYYMM# )   
+			order by 2,3,4,5
+	</select>
+
+</sqlMap>

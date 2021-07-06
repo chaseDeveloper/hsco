@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ITM070300_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!-- 업무구분 코드 목록조회 -->
+	<select id="ITM070300DAO.ITM070300ListCode" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT SERVC_ENTRPS_CODE AS CODE, 
+				ENTRPS_NM AS CODE_NM
+		  FROM TBCTR_SERVC_ENTRPS
+		 WHERE ENTRPS_SE = '03'
+		   AND USE_AT = '1'
+		  ORDER BY ENTRPS_NM
+	</select>
+	
+	
+	<!-- 업무구분 코드 목록조회 -->
+	<select id="ITM070300DAO.ITM070300ListDetailCode" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT IT_EMP  AS CODE,
+		         IT_EMP_NM AS CODE_NM
+		    FROM TBITM_IT_EMP
+		  WHERE 1=1  
+		   <isNotEmpty property="SERVC_ENTRPS_CODE">
+		     AND SERVC_ENTRPS_CODE = #SERVC_ENTRPS_CODE#
+		   </isNotEmpty>
+		     AND USE_AT = '1'
+		    ORDER BY IT_EMP_NM
+	</select>
+		
+	<!-- 업체 및 소속인원 목록조회 -->
+	<select id="ITM070300DAO.ITM070300List_P" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT A.SERVC_ENTRPS_CODE, ENTRPS_NM,
+		       B.IT_EMP, B.IT_EMP_NM, B.OFCPS, B.IT_JOB, B.USE_AT 
+		       , DECODE(B.USE_AT,'1','재직','퇴사') AS USE_AT_NM
+		  FROM TBCTR_SERVC_ENTRPS A, TBITM_IT_EMP B
+		 WHERE A.ENTRPS_SE = '03'
+		   AND A.USE_AT = '1'
+		   AND B.USE_AT = '1'
+		   AND A.SERVC_ENTRPS_CODE = B.SERVC_ENTRPS_CODE 
+		   <isNotEmpty property="ENTRPS_NM">
+		     AND A.ENTRPS_NM LIKE '%' || #ENTRPS_NM# ||'%'
+		   </isNotEmpty>
+		   <isNotEmpty property="IT_EMP_NM">
+		     AND B.IT_EMP_NM LIKE '%' ||#IT_EMP_NM# ||'%'
+		   </isNotEmpty>
+		   <isNotEmpty property="SPORT_STLE">
+		     AND B.SPORT_STLE LIKE '%' ||#SPORT_STLE# ||'%'
+		   </isNotEmpty>
+		 ORDER BY A.SERVC_ENTRPS_CODE, ENTRPS_NM, NVL(B.USE_AT,'1') DESC, B.IT_EMP
+	</select>
+		
+	<!-- 코드 목록조회 -->
+	<select id="ITM070300DAO.ITM070300List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		        B.SERVC_ENTRPS_CODE,
+		        B.ENTRPS_NM, 
+		        C.IT_EMP, 
+		        C.IT_EMP_NM,
+		        A.SN, 
+		        A.SCRTY_IEM, 
+		        A.SCRTY_VIOLT_DT, 
+		        A.RM, 
+		        A.REGISTER_ID, 
+		        A.REGIST_DT, 
+		        A.UPDUSR_ID, 
+		        A.UPDT_DT
+		        , B.SERVC_ENTRPS_CODE AS SERVC_ENTRPS_CODE_OLD
+		        , C.IT_EMP AS IT_EMP_OLD
+		FROM TBITM_SCRTY_VIOLT A, TBCTR_SERVC_ENTRPS B, TBITM_IT_EMP C
+		WHERE 1=1
+		  AND A.SERVC_ENTRPS_CODE = C.SERVC_ENTRPS_CODE
+		  AND A.IT_EMP = C.IT_EMP
+		  AND B.SERVC_ENTRPS_CODE = C.SERVC_ENTRPS_CODE
+		<isNotEmpty property="IT_EMP_NM">
+			AND C.IT_EMP_NM LIKE '%' ||  #IT_EMP_NM# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="SCRTY_VIOLT_DT">
+			AND TO_CHAR(A.SCRTY_VIOLT_DT,'YYYYMM') = #SCRTY_VIOLT_DT#
+		</isNotEmpty>
+		ORDER BY A.SCRTY_VIOLT_DT, B.SERVC_ENTRPS_CODE, C.IT_EMP,  A.SN  
+    </select>
+    
+    
+    
+    <!-- 그룹코드 등록 -->
+    <insert id="ITM070300DAO.ITM070300C" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+			INSERT INTO TBITM_SCRTY_VIOLT (
+			   SERVC_ENTRPS_CODE, IT_EMP, SN, 
+			   SCRTY_IEM, SCRTY_VIOLT_DT, RM, 
+			   REGISTER_ID, REGIST_DT, UPDUSR_ID, 
+			   UPDT_DT
+			) VALUES ( 
+				#SERVC_ENTRPS_CODE#,
+			 	#IT_EMP#,
+			 	(SELECT NVL(MAX(SN) + 1, 1) FROM TBITM_SCRTY_VIOLT WHERE SERVC_ENTRPS_CODE = #SERVC_ENTRPS_CODE# AND IT_EMP = #IT_EMP#),
+			 	#SCRTY_IEM#,
+			 	#SCRTY_VIOLT_DT#,
+			 	#RM#,
+			 	#S_USER_ID#,	
+			 	SYSDATE,
+			 	#S_USER_ID#,
+			 	SYSDATE 
+			)
+		]]>
+    </insert>
+    
+    <!-- 그룹코드 수정 -->
+    <update id="ITM070300DAO.ITM070300U" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+			UPDATE TBITM_SCRTY_VIOLT
+			SET    SERVC_ENTRPS_CODE = #SERVC_ENTRPS_CODE#,
+			       IT_EMP            = #IT_EMP#,
+			       SCRTY_IEM         = #SCRTY_IEM#,
+			       SCRTY_VIOLT_DT    = #SCRTY_VIOLT_DT#,
+			       RM                = #RM#,
+			       UPDUSR_ID         = #S_USER_ID#,
+			       UPDT_DT           = SYSDATE
+			WHERE  SERVC_ENTRPS_CODE = #SERVC_ENTRPS_CODE_OLD#
+			AND    IT_EMP            = #IT_EMP_OLD#
+			AND    SN                = #SN#
+		]]>
+    </update>
+    
+    <!-- 그룹코드 삭제 -->
+    <delete id="ITM070300DAO.ITM070300D" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+		   DELETE TBITM_SCRTY_VIOLT		   
+			WHERE  SERVC_ENTRPS_CODE = #SERVC_ENTRPS_CODE#
+			AND    IT_EMP            = #IT_EMP#
+			AND    SN                = #SN#
+		]]>
+    </delete>
+    
+
+</sqlMap>

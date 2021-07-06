@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02020200_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 대기자 정보 조회
+			 설명 : 매입임대 대기자 정보 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.10.27
+	-->	
+	<select id="RNT02020200DAO.selectPuchasWaitrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	
+		SELECT ROWNUM ,
+		       a.*
+		FROM   ( SELECT  AREA_CODE ,
+		                (SELECT CODE_CN
+		                FROM   tbcom_cmmn_code
+		                WHERE  grp_code = 'RNT004'
+		                AND    A.AREA_CODE = CHRCTR_PREPAR_VALUE_0
+		                )
+		                AS AREA_NM ,
+		/*                ( SELECT CODE_NM
+		                FROM    TBRNT_PUCHAS_HOUSE b ,
+		                        TBCOM_CMMN_CODE
+		                WHERE   a.RENT_HOUSE_CODE = b.RENT_HOUSE_CODE
+		                AND     GRP_CODE          = 'RNT004'
+		                AND     CODE              = b.AREA_SE
+		                )
+		                AS AREA_SE ,*/
+		                a.PUCHAS_CSTMR_NO ,
+		                RCEPT_DE ,
+		                WAIT_RCEPT_SN,
+		                WAIT_NO ,
+		                SFCOM_DEC_ALL(c.IHIDNUM) AS IHIDNUM,
+		                c.NM ,
+		                c.ZIP ,
+		                c.ADRES ,
+		                c.ADRES_DETAIL ,
+		                c.TELNO ,
+		                c.MBTLNO ,
+		                c.ADRES
+		                         || ' '
+		                         || c.ADRES_DETAIL AS ADDR ,
+		                c.TELNO
+		                         || ' '
+		                         || c.MBTLNO AS TEL ,
+		                FAMILY_CO ,
+		                ROOM_STRUCTURE ,
+		                (SELECT CODE_NM
+						   FROM TBCOM_CMMN_CODE
+						  WHERE GRP_CODE = 'RNT027'
+							AND USE_AT = '1'
+							AND CODE = ROOM_STRUCTURE
+		                ) AS ROOM_STRUCTURE_NM,
+		                GDCC_SNDNG_DE ,
+		                RM ,
+		                QUALF_SE ,
+		                ( SELECT CODE_NM
+		                FROM    TBCOM_CMMN_CODE
+		                WHERE   GRP_CODE = 'RNT001'
+		                AND     CODE     = QUALF_SE
+		                )
+		                AS QULF_NM 
+		/*                ,
+		                (SELECT DVR_AR + CMNUSE_AR
+		                FROM    TBRNT_PUCHAS_HOUSE_BILD b
+		                WHERE   b.RENT_HOUSE_CODE = a.RENT_HOUSE_CODE
+		                )
+		                DVR_AR*/
+			FROM TBRNT_PUCHAS_WAITR a
+		      		,TBRNT_PUCHAS_RENT_CSTMR c
+			WHERE a.CNTRCTR_NO IS NULL
+			<isNotEmpty property="areaCode">
+		    AND A.AREA_CODE = #areaCode#
+		    </isNotEmpty>
+		    AND a.PUCHAS_CSTMR_NO = c.PUCHAS_CSTMR_NO
+		    AND RCEPT_DE BETWEEN #stRceptDe# AND #edRceptDe#
+			AND WAIT_NO BETWEEN #stWaitNo#	AND #edWaitNo#
+			<isEqual property="sndngSe" compareValue="0">
+				AND GDCC_SNDNG_DE IS NULL
+			</isEqual>
+			<isEqual property="sndngSe" compareValue="1">
+				AND GDCC_SNDNG_DE IS NOT NULL
+			</isEqual>
+			<isNotEmpty property="sndngDe">
+				AND GDCC_SNDNG_DE = #sndngDe#
+			</isNotEmpty>
+			<isNotEmpty property="roomStructure">
+				AND ROOM_STRUCTURE = #roomStructure#
+			</isNotEmpty>
+			ORDER BY AREA_CODE, ROOM_STRUCTURE, RCEPT_DE
+		  ) a	
+	</select>
+
+
+	<!-- 쿼리명 : 매입임대 발송완료처리
+			 설명 : 매입임대 발송완료처리 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.10.27
+	-->	
+	<update id="RNT02020200DAO.puchasWaitrU" parameterClass="java.util.HashMap">
+			UPDATE TBRNT_PUCHAS_WAITR SET
+				GDCC_SNDNG_DE = TO_CHAR(SYSDATE, 'YYYYMMDD')
+			WHERE 1 = 1
+			AND   AREA_CODE = #AREA_CODE#
+			AND   RCEPT_DE = #RCEPT_DE#
+			AND WAIT_RCEPT_SN = #WAIT_RCEPT_SN#
+	</update>
+
+	<!-- 쿼리명 : 매입임대 담당자리스트
+			 설명 : 매입임대 담당자리스트
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.10.27
+	-->	
+	<select id="RNT02020200DAO.selectDamdangjaList" resultClass="java.util.HashMap">
+		SELECT
+					A.*
+					,(SELECT
+								EMPNM
+					  FROM TBHRM_HR_MASTR 
+					  WHERE EMPNO = CENTJANG_EMPNO) AS CENTJANG_EMPNM								/*센터장 이름*/
+					,(SELECT
+								EMPNM 
+					  FROM TBHRM_HR_MASTR 
+					  WHERE EMPNO = WAITR_EMPNO) AS WAITR_EMPNM										/*입주대기 담당자 이름*/
+		FROM
+				(SELECT
+							MAX(DECODE(CODE, '01', CHRCTR_PREPAR_VALUE_0)) AS CENTJANG_EMPNO		/*센터장 사번*/
+							,MAX(DECODE(CODE, '01', CHRCTR_PREPAR_VALUE_2)) AS FAX 						/*센터 팩스번호*/	
+							,MAX(DECODE(CODE, '02', CHRCTR_PREPAR_VALUE_1)) AS TELNO					/*센터 전화번호*/
+							,MAX(DECODE(CODE, '02', CHRCTR_PREPAR_VALUE_0)) AS WAITR_EMPNO			/*입주대기 담당자 사번*/
+							,MAX(DECODE(CODE, '99', CHRCTR_PREPAR_VALUE_1)) || MAX(DECODE(CODE, '99', CHRCTR_PREPAR_VALUE_2)) AS ADRES 		/*센터 주소*/
+							,MAX(DECODE(CODE, '99', CHRCTR_PREPAR_VALUE_0)) AS ZIP 						/*센터 우편번호*/
+				FROM	TBCOM_CMMN_CODE
+				WHERE	GRP_CODE	=	'RNT016'
+				AND		CODE		IN		('01','02','99')
+				GROUP	BY	GRP_CODE
+				)A 
+	</select>
+	
+	<!-- 대기번호 수정필요인원 목록(매입) -->
+	<select id="RNT02020200DAO.puchasWaitrNoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT   AREA_CODE ,
+		         RCEPT_DE ,
+		         WAIT_RCEPT_SN ,
+		         ROOM_STRUCTURE
+		FROM     TBRNT_PUCHAS_WAITR
+		WHERE    AREA_CODE           = #AREA_CODE#
+		AND      ROOM_STRUCTURE      = #ROOM_STRUCTURE#
+		AND      GDCC_SNDNG_DE IS NULL
+		ORDER BY RCEPT_DE,
+		         WAIT_RCEPT_SN
+	</select>
+	
+	<!-- 대기번호 일괄 수정(매입) -->
+	<update id="RNT02020200DAO.puchasWaitrNoU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_PUCHAS_WAITR SET
+			 WAIT_NO 			= #WAIT_NO#
+	      	,UPDUSR_ID 			= #S_USER_ID#
+			,UPDT_DT 			= SYSDATE
+	    WHERE GDCC_SNDNG_DE IS NULL 
+	    AND   AREA_CODE         = #AREA_CODE#
+	    AND   ROOM_STRUCTURE    = #ROOM_STRUCTURE#
+	    AND   RCEPT_DE        	= #RCEPT_DE#
+		AND   WAIT_RCEPT_SN     = #WAIT_RCEPT_SN#
+	</update>
+	
+	<!-- 발송일자 조회 -->
+	<select id="RNT02020200DAO.mvnWaitrGdccSndngDeList" resultClass="java.util.HashMap">
+		SELECT   GDCC_SNDNG_DE ,
+		         GDCC_VALUE
+		FROM     ( SELECT DISTINCT GDCC_SNDNG_DE                                            AS GDCC_VALUE,
+		                          TO_CHAR(TO_DATE(GDCC_SNDNG_DE, 'YYYYMMDD'), 'YYYY-MM-DD') AS GDCC_SNDNG_DE
+		         FROM             TBRNT_PUCHAS_WAITR
+		         WHERE            GDCC_SNDNG_DE IS NOT NULL
+		         )
+		ORDER BY GDCC_VALUE DESC
+	</select>
+
+</sqlMap>

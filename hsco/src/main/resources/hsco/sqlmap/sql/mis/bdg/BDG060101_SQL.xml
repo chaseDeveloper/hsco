@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG060101_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	
+	<!-- 배정요구현황 조회 -->
+	<select id="BDG060101DAO.selectAsignRegistList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*BDG060101DAO.selectAsignRegistList*/]]>
+		WITH FDRM_ASIGN AS (  /*정기배정*/
+		    SELECT T.YEAR
+		         , T.BUDGET_SE
+		         , T.BSNS_SE
+		         , T.BALC_SE
+		         , T.BSNS_CODE
+		         , T.DEPT_CODE
+		         , T.BUDGET_ACNT_CODE
+		         , MIN(T.SN)                   AS SN
+		         , T.ASIGN_RESN
+		         , NVL(SUM(T.DEMAND_AM), 0)    AS DEMAND_AM
+		         , T.DEMAND_MT
+		         , NVL(SUM(T.DCSN_AM), 0)      AS DCSN_AM
+		         , MAX(T.DCSN_DE)              AS DCSN_DE
+		         , MIN(T.DCSN_AT)              AS DCSN_AT
+		      FROM (
+		            SELECT YEAR
+		                 , BUDGET_SE
+		                 , BSNS_SE
+		                 , BALC_SE
+		                 , BSNS_CODE
+		                 , DEPT_CODE
+		                 , BUDGET_ACNT_CODE
+		                 , SN
+		                 , ASIGN_RESN
+		                 , DEMAND_AM
+		                 , DEMAND_MT
+		                 , DCSN_AM
+		                 , DCSN_DE
+		                 , DCSN_AT
+		              FROM TBBDG_BUDGET_ASIGN
+		             WHERE ASIGN_TYPE NOT IN ('00', '88', '99')
+		           ) T
+		    GROUP BY T.YEAR
+		           , T.BUDGET_SE
+		           , T.BSNS_SE
+		           , T.BALC_SE
+		           , T.BSNS_CODE
+		           , T.DEPT_CODE
+		           , T.BUDGET_ACNT_CODE
+		           , T.ASIGN_RESN
+		           , T.DEMAND_MT
+		), BLCE_CYFD AS (   /*잔액이월*/
+		    SELECT T.YEAR
+		         , T.BUDGET_SE
+		         , T.BSNS_SE
+		         , T.BALC_SE
+		         , T.BSNS_CODE
+		         , T.DEPT_CODE
+		         , T.BUDGET_ACNT_CODE
+		         , NVL(SUM(T.DEMAND_AM), 0)    AS DEMAND_AM
+		         , T.DEMAND_MT
+		         , NVL(SUM(T.DCSN_AM), 0)      AS DCSN_AM
+		         , MAX(T.DCSN_DE)              AS DCSN_DE
+		         , MIN(T.DCSN_AT)              AS DCSN_AT
+		      FROM (
+		            SELECT YEAR
+		                 , BUDGET_SE
+		                 , BSNS_SE
+		                 , BALC_SE
+		                 , BSNS_CODE
+		                 , DEPT_CODE
+		                 , BUDGET_ACNT_CODE
+		                 , DEMAND_AM
+		                 , DEMAND_MT
+		                 , DCSN_AM
+		                 , DCSN_DE
+		                 , DCSN_AT
+		              FROM TBBDG_BUDGET_ASIGN
+		             WHERE ASIGN_TYPE = '88'
+		           ) T
+		    GROUP BY T.YEAR
+		           , T.BUDGET_SE
+		           , T.BSNS_SE
+		           , T.BALC_SE
+		           , T.BSNS_CODE
+		           , T.DEPT_CODE
+		           , T.BUDGET_ACNT_CODE
+		           , T.DEMAND_MT
+		), ANYTM_ASIGN AS (   /*수시배정*/
+		    SELECT T.YEAR
+		         , T.BUDGET_SE
+		         , T.BSNS_SE
+		         , T.BALC_SE
+		         , T.BSNS_CODE
+		         , T.DEPT_CODE
+		         , T.BUDGET_ACNT_CODE
+		         , NVL(SUM(T.DEMAND_AM), 0)    AS DEMAND_AM
+		         , T.DEMAND_MT
+		         , NVL(SUM(T.DCSN_AM), 0)      AS DCSN_AM
+		      FROM (
+		            SELECT YEAR
+		                 , BUDGET_SE
+		                 , BSNS_SE
+		                 , BALC_SE
+		                 , BSNS_CODE
+		                 , DEPT_CODE
+		                 , BUDGET_ACNT_CODE
+		                 , DEMAND_AM
+		                 , DEMAND_MT
+		                 , DCSN_AM
+		              FROM TBBDG_BUDGET_ASIGN
+		             WHERE ASIGN_TYPE IN ('00', '99')
+		               AND DCSN_AT    = '1'
+		           ) T
+		    GROUP BY T.YEAR
+		           , T.BUDGET_SE
+		           , T.BSNS_SE
+		           , T.BALC_SE
+		           , T.BSNS_CODE
+		           , T.DEPT_CODE
+		           , T.BUDGET_ACNT_CODE
+		           , T.DEMAND_MT
+		), EXP_DSN_MASTR AS (  /*지출결의마스터*/
+		    SELECT BUDGET_YEAR              AS YEAR
+		         , BSNS_SE
+		         , BALC_SE
+		         , BSNS_CODE
+		         , BUDGET_DEPT_CODE         AS DEPT_CODE
+		         , BUDGET_ACNT_CODE
+		         , SUM(NVL(DECSN_AMOUNT, 0))    AS EXP_DSN_AMOUNT /*결의금액*/
+		         , SUM(CASE WHEN EXPNDTR_CNFIRM_AT = '1' THEN NVL(DECSN_AMOUNT,0)
+		                    ELSE 0
+		               END)    AS DEBT_AMT /*채무확정*/
+		         , SUM(NVL(DECSN_AMOUNT, 0))    AS DECSN_AMOUNT
+		         , SUBSTR(ITNC_DE, 5, 2)    AS DECSN_MT
+		      FROM TBACC_EXP_DSN_MASTR /*지출결의마스터*/
+		     WHERE ITNC_DE IS NOT NULL
+		    GROUP BY BUDGET_YEAR
+		           , BSNS_SE
+		           , BALC_SE
+		           , BSNS_CODE
+		           , BUDGET_DEPT_CODE
+		           , BUDGET_ACNT_CODE
+		           , SUBSTR(ITNC_DE, 5, 2)
+		)
+		SELECT T1.YEAR
+		     , T1.BUDGET_SE
+		     , T1.BSNS_SE
+		     , T1.BALC_SE
+		     , T1.BSNS_CODE
+		     , T5.BSNS_NM
+		     , T1.DEPT_CODE
+		     , T6.DEPT_NM
+		     , T1.BUDGET_ACNT_CODE
+		     , T7.BUDGET_ACNT_NM
+		     , T1.SN
+		     , T1.ASIGN_RESN
+		     , T1.DEMAND_MT
+		     , T1.DCSN_DE
+		     , T1.DCSN_AT
+		     , NVL(T1.DEMAND_AM, 0)                                                                      AS DEMAND_AM      /*정기배정요구액*/
+		     , NVL(T2.DCSN_AM, 0)                                                                        AS BLCE_CYFD      /*잔액이월*/
+		     , NVL(T3.DCSN_AM, 0)                                                                        AS ANYTM_ASIGN_AM /*수시배정금액*/
+		     , NVL(T4.EXP_DSN_AMOUNT, 0)                                                                 AS EXP_DSN_AMOUNT   /*결의금액*/
+		     , NVL(T4.DEBT_AMT, 0)                                                                       AS DEBT_AMT   /*채무확정*/
+		     , NVL(T4.DECSN_AMOUNT, 0)                                                                   AS DECSN_AMOUNT   /*결산금액*/
+		     , NVL(T1.DCSN_AM, 0) + NVL(T2.DCSN_AM, 0) + NVL(T3.DCSN_AM, 0)                              AS DCSN_AM        /*배정금액총합계*/
+		     , NVL(T1.DCSN_AM, 0) + NVL(T2.DCSN_AM, 0) + NVL(T3.DCSN_AM, 0) - NVL(T4.DECSN_AMOUNT, 0)    AS BLCE           /*잔액*/
+		     , CASE WHEN T8.DEMAND_MT IS NULL THEN '0'
+		            WHEN NVL(T1.DCSN_AM, 0) + NVL(T2.DCSN_AM, 0) + NVL(T3.DCSN_AM, 0) - NVL(T4.DECSN_AMOUNT, 0) = NVL(T8.DCSN_AM, 0) THEN '1'
+		            ELSE '0'
+		       END    AS BLCE_CYFD_AT /*잔액이월여부*/
+		  FROM FDRM_ASIGN T1
+		       LEFT OUTER JOIN BLCE_CYFD T2
+		            ON T1.YEAR             = T2.YEAR
+		           AND T1.BSNS_SE          = T2.BSNS_SE
+		           AND T1.BALC_SE          = T2.BALC_SE
+		           AND T1.BSNS_CODE        = T2.BSNS_CODE
+		           AND T1.DEPT_CODE        = T2.DEPT_CODE
+		           AND T1.BUDGET_ACNT_CODE = T2.BUDGET_ACNT_CODE
+		           AND T1.DEMAND_MT        = T2.DEMAND_MT
+		       LEFT OUTER JOIN ANYTM_ASIGN T3
+		            ON T1.YEAR             = T3.YEAR
+		           AND T1.BSNS_SE          = T3.BSNS_SE
+		           AND T1.BALC_SE          = T3.BALC_SE
+		           AND T1.BSNS_CODE        = T3.BSNS_CODE
+		           AND T1.DEPT_CODE        = T3.DEPT_CODE
+		           AND T1.BUDGET_ACNT_CODE = T3.BUDGET_ACNT_CODE
+		           AND T1.DEMAND_MT        = T3.DEMAND_MT
+		       LEFT OUTER JOIN EXP_DSN_MASTR T4
+		            ON T1.YEAR             = T4.YEAR
+		           AND T1.BSNS_SE          = T4.BSNS_SE
+		           AND T1.BALC_SE          = T4.BALC_SE
+		           AND T1.BSNS_CODE        = T4.BSNS_CODE
+		           AND T1.DEPT_CODE        = T4.DEPT_CODE
+		           AND T1.BUDGET_ACNT_CODE = T4.BUDGET_ACNT_CODE
+		           AND T1.DEMAND_MT        = T4.DECSN_MT
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE T5
+		            ON T1.BSNS_CODE = T5.BSNS_CODE
+		       LEFT OUTER JOIN TBHRM_DEPT T6
+		            ON T1.DEPT_CODE = T6.DEPT_CODE
+		       LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE T7
+		            ON T1.YEAR             = T7.YEAR
+		           AND T1.BSNS_SE          = T7.BSNS_SE
+		           AND T1.BALC_SE          = T7.BALC_SE
+		           AND T1.BUDGET_ACNT_CODE = T7.BUDGET_ACNT_CODE
+		       LEFT OUTER JOIN BLCE_CYFD T8
+		            ON T1.YEAR             = T8.YEAR
+		           AND T1.BSNS_SE          = T8.BSNS_SE
+		           AND T1.BALC_SE          = T8.BALC_SE
+		           AND T1.BSNS_CODE        = T8.BSNS_CODE
+		           AND T1.DEPT_CODE        = T8.DEPT_CODE
+		           AND T1.BUDGET_ACNT_CODE = T8.BUDGET_ACNT_CODE
+		           AND T1.DEMAND_MT        = LPAD(TO_NUMBER(T8.DEMAND_MT)-1, 2, '0')
+		 WHERE 1=1
+		<isNotEmpty property="YEAR"      prepend="AND ">T1.YEAR       = #YEAR#</isNotEmpty>
+		<isNotEmpty property="BSNS_SE"   prepend="AND ">T1.BSNS_SE    = #BSNS_SE#</isNotEmpty>
+		<isNotEmpty property="BUDGET_SE" prepend="AND ">T1.BUDGET_SE  = #BUDGET_SE#</isNotEmpty>
+		<isNotEmpty property="MT"        prepend="AND ">T1.DEMAND_MT  = #MT#</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+		    <isNotEqual property="DEPT_CODE" compareValue="000000" prepend="AND    ">
+		        (T1.DEPT_CODE='000000' OR T1.DEPT_CODE = #DEPT_CODE#)
+		    </isNotEqual>
+		</isNotEmpty>
+		ORDER BY T1.BSNS_CODE
+			   , T1.DEPT_CODE
+			   , T1.BUDGET_ACNT_CODE
+			   , T1.SN
+	</select>
+	
+	
+	<!-- 배정요구현황수정 -->
+	<update id="BDG060101DAO.updateAnytmAsignDemand" parameterClass="java.util.HashMap">
+		<![CDATA[/*BDG060101DAO.updateAnytmAsignDemand*/]]>
+		UPDATE TBBDG_BUDGET_ASIGN
+		   SET UPDUSR_ID  = #S_USER_ID#
+		     , UPDT_DT    = SYSDATE
+		<isEqual property="DCSN_AT" compareValue="1">
+		     , DCSN_AM    = DEMAND_AM
+		     , DCSN_DE    = TO_CHAR(SYSDATE, 'YYYYMMDD')
+		     , DCSN_AT    = '1'
+		</isEqual>
+		<isNotEqual property="DCSN_AT" compareValue="1">
+		     , DCSN_AM    = NULL
+		     , DCSN_DE    = NULL
+		     , DCSN_AT    = '0'
+		</isNotEqual>
+		 WHERE YEAR             = #YEAR#
+		   AND BUDGET_SE        = #BUDGET_SE#
+		   AND BSNS_SE          = #BSNS_SE#
+		   AND BALC_SE          = #BALC_SE#
+		   AND BSNS_CODE        = #BSNS_CODE#
+		   AND DEPT_CODE        = #DEPT_CODE#
+		   AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+		   AND ASIGN_TYPE       = #DEMAND_MT#
+	</update>
+	
+	
+	<!-- 잔액이월삭제 -->
+	<delete id="BDG060101DAO.deleteBlceCyfd" parameterClass="java.util.HashMap">
+		<![CDATA[/*BDG060101DAO.deleteBlceCyfd*/]]>
+		DELETE TBBDG_BUDGET_ASIGN
+		 WHERE YEAR             = #YEAR#
+		   AND BUDGET_SE        = #BUDGET_SE#
+		<isNotEmpty property="BSNS_SE">
+		   AND BSNS_SE          = #BSNS_SE#
+		</isNotEmpty>
+		   AND DEMAND_MT        = LPAD(TO_NUMBER(#MT#)+1, 2, '0')
+		   AND ASIGN_TYPE       = '88' /*잔액이월*/
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		   AND DEPT_CODE        = #DEPT_CODE#
+			</isNotEqual>
+		</isNotEmpty>
+	</delete>
+	
+	
+	<!-- 잔액이월추가 -->
+	<insert id="BDG060101DAO.insertBlceCyfd" parameterClass="java.util.HashMap">
+		<![CDATA[/*BDG060101DAO.insertBlceCyfd*/]]>
+		INSERT INTO TBBDG_BUDGET_ASIGN (
+		       YEAR
+		     , BUDGET_SE
+		     , BSNS_SE
+		     , BALC_SE
+		     , BSNS_CODE
+		     , DEPT_CODE
+		     , BUDGET_ACNT_CODE
+		     , SN
+		     , ASIGN_TYPE
+		     , ASIGN_RESN
+		     , DEMAND_AM
+		     , DEMAND_MT
+		     , DCSN_AM
+		     , DCSN_DE
+		     , DCSN_AT
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		)
+		WITH ASIGN_AM AS (
+		    SELECT YEAR
+		         , BUDGET_SE
+		         , BSNS_SE
+		         , BALC_SE
+		         , BSNS_CODE
+		         , DEPT_CODE
+		         , BUDGET_ACNT_CODE
+		         , DEMAND_MT
+		         , SUM(NVL(DCSN_AM, 0))    AS DCSN_AM
+		      FROM TBBDG_BUDGET_ASIGN
+		    GROUP BY YEAR
+		           , BUDGET_SE
+		           , BSNS_SE
+		           , BALC_SE
+		           , BSNS_CODE
+		           , DEPT_CODE
+		           , BUDGET_ACNT_CODE
+		           , DEMAND_MT
+		), EXP_DSN_MASTR AS (
+		    SELECT BUDGET_YEAR                  AS YEAR
+		         , BSNS_SE
+		         , BALC_SE
+		         , BSNS_CODE
+		         , BUDGET_DEPT_CODE             AS DEPT_CODE
+		         , BUDGET_ACNT_CODE
+		         , SUM(NVL(DECSN_AMOUNT, 0))    AS DECSN_AMOUNT
+		         , SUBSTR(ITNC_DE, 5, 2)        AS DECSN_MT
+		      FROM TBACC_EXP_DSN_MASTR /*지출결의마스터*/
+		     WHERE ITNC_DE IS NOT NULL
+		    GROUP BY BUDGET_YEAR
+		           , BSNS_SE
+		           , BALC_SE
+		           , BSNS_CODE
+		           , BUDGET_DEPT_CODE
+		           , BUDGET_ACNT_CODE
+		           , SUBSTR(ITNC_DE, 5, 2)
+		), BDG_AM AS (
+		    SELECT T1.YEAR
+		         , T1.BUDGET_SE
+		         , T1.BSNS_SE
+		         , T1.BALC_SE
+		         , T1.BSNS_CODE
+		         , T1.DEPT_CODE
+		         , T1.BUDGET_ACNT_CODE
+		         , T1.DEMAND_MT
+		         , T1.DCSN_AM
+		         , T2.DECSN_AMOUNT
+		         , NVL(T1.DCSN_AM, 0) - NVL(T2.DECSN_AMOUNT, 0)    AS BLCE
+		      FROM ASIGN_AM T1
+		           LEFT OUTER JOIN EXP_DSN_MASTR T2
+		                ON T1.YEAR = T2.YEAR
+		               AND T1.BSNS_SE = T2.BSNS_SE
+		               AND T1.BALC_SE = T2.BALC_SE
+		               AND T1.BSNS_CODE = T2.BSNS_CODE
+		               AND T1.DEPT_CODE = T2.DEPT_CODE
+		               AND T1.BUDGET_ACNT_CODE = T2.BUDGET_ACNT_CODE
+		               AND T1.DEMAND_MT = T2.DECSN_MT
+		)
+		SELECT YEAR
+		     , BUDGET_SE
+		     , BSNS_SE
+		     , BALC_SE
+		     , BSNS_CODE
+		     , DEPT_CODE
+		     , BUDGET_ACNT_CODE
+		     , (SELECT NVL(MAX(SN),0) FROM TBBDG_BUDGET_ASIGN WHERE YEAR = #YEAR#) + ROWNUM    AS SN
+		     , '88'                                    AS ASIGN_TYPE
+		     , DEMAND_MT || '월 배정잔액이월'               AS ASIGN_RESN
+		     , NVL(BLCE, 0)                            AS DEMAND_AM
+		     , LPAD(TO_NUMBER(DEMAND_MT)+1, 2, '0')    AS NEXT_DEMAND_MT
+		     , NVL(BLCE, 0)                            AS DCSN_AM
+		     , TO_CHAR(SYSDATE, 'YYYYMMDD')            AS DCSN_DE
+		     , '1'                                     AS DCSN_AT
+		     , #S_USER_ID#                             AS REGISTER_ID
+		     , SYSDATE                                 AS REGIST_DT
+		     , #S_USER_ID#                             AS UPDUSR_ID
+		     , SYSDATE                                 AS UPDT_DT
+		  FROM BDG_AM
+		 WHERE YEAR      = #YEAR#
+		<isNotEmpty property="BSNS_SE">
+		   AND BSNS_SE   = #BSNS_SE#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		   AND DEPT_CODE = #DEPT_CODE#
+			</isNotEqual>
+		</isNotEmpty>
+		   AND DEMAND_MT = #MT#
+		   AND BLCE <![CDATA[<>]]> 0
+		ORDER BY YEAR
+		       , BSNS_CODE
+		       , DEPT_CODE
+		       , BUDGET_ACNT_CODE
+	</insert>
+	
+	
+</sqlMap>

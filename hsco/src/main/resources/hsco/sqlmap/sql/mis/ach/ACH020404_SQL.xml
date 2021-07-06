@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH020404_SQL">
+	
+	<!-- 대상 계량지표 조회 -->
+	<select id="ACH020404DAO.selectKPIInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT   A.EVL_YEAR                  AS EVL_YEAR                
+				,A.ODR_SE                    AS ODR_SE                  
+				,A.REFRN_SE                  AS REFRN_SE                
+				,A.IX_CODE                   AS IX_CODE                 
+				,B.IX_NM                     AS IX_NM 
+				,'[ ' || A.IX_CODE || ' ] ' || TRIM(B.IX_NM)	AS ALL_CODE_NM                  
+				,B.MESURE_CYCLE              AS MESURE_CYCLE            
+				,B.MESURE_UNIT               AS MESURE_UNIT             
+				,B.ACMSLT_VALUE_MANAGE_MTHD  AS ACMSLT_VALUE_MANAGE_MTHD
+				,B.ACMSLT_CALC_FRMLA         AS ACMSLT_CALC_FRMLA
+				,B.ACHIV_RT_CALC_FRMLA       AS ACHIV_RT_CALC_FRMLA
+                ,B.ACMSLT_INPUT_TY           AS ACMSLT_INPUT_TY
+                ,B.MXMM_EVL_LMT              AS MXMM_EVL_LMT
+                ,B.EXCP_RSLT_CALC_FRMLA      AS EXCP_RSLT_CALC_FRMLA       
+		   FROM TBACH_QYEVAL_REFRN_CNNC A, TBACH_KPI B
+		  WHERE 1=1
+			AND A.EVL_YEAR 	= B.EVL_YEAR
+			AND A.ODR_SE 	= B.ODR_SE
+			AND A.IX_CODE 	= B.IX_CODE
+			AND B.USE_AT 	= '1'
+			AND B.IX_CHARCT = '000' <!-- 계량 -->
+			AND B.IX_SE 	= '004'	<!-- KPI -->
+			AND A.EVL_YEAR 	= #EVL_YEAR#
+			AND A.ODR_SE 	= #ODR_SE#
+			AND A.REFRN_SE 	= #REFRN_SE#
+    </select>
+   
+        
+    <!-- 계량지표 실적참조 내역 조회[전체/조직별] -->
+	<select id="ACH020404DAO.selectRefrnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">		 
+	<![CDATA[
+		SELECT AA.EVL_YEAR                                           AS EVL_YEAR
+		  ,AA.ODR_SE                                                 AS ODR_SE
+		  ,AA.IX_CODE                                                AS IX_CODE
+		  ,AA.ORGNZT_CODE                                            AS ORGNZT_CODE
+		  ,SFACH_GET_ORGNZTNM(AA.EVL_YEAR ,AA.ODR_SE,AA.ORGNZT_CODE) AS ORGNZT_NM
+		  ,AA.WGHTVAL                                                AS WGHTVAL
+		  ,AA.W_GOALVAL                                              AS W_GOALVAL
+		  ,AA.LAST_RSLTS                                             AS LAST_RSLTS
+		  ,AA.R_GOALVAL                                              AS R_GOALVAL
+		  ,AA.EVL_WGHTVAL                                            AS EVL_WGHTVAL         /*가중치*/
+		  ,AA.LAST_ACMSLTVAL                                         AS LAST_ACMSLTVAL
+		  ,AA.SM_ACMSLTVAL                                           AS SM_ACMSLTVAL
+		  ,AA.LAST_RESULT_SCORE                                      AS LAST_RESULT_SCORE
+		  ,AA.GOAL_ASIGN_AT                                          AS GOAL_ASIGN_AT
+		  ,BB.ACMSLT_YY                                              AS ACMSLT_YY
+		  ,NVL(BB.ACMSLT_MT, #SEQ#)                                   AS ACMSLT_MT
+		  ,BB.ACMSLT_DE                                              AS ACMSLT_DE
+		  ,BB.ACMSLT_WEEK                                            AS ACMSLT_WEEK
+		  ,BB.ACMSLT_VAL                                             AS MT_ACMSLT_VAL
+		  ,BB.UPDT_DT                                                AS UPDT_DT
+		  ,BB.BASIS_FID                                              AS BASIS_FID
+		  ,(SELECT DD.ORGINL_FILE_NM
+		    FROM TBCOM_CMMN_ATCHMNFL DD
+		    WHERE 1          =1
+		    AND DD.FILE_SN   = BB.BASIS_FID
+		    AND DD.FILE_ORDR =
+		        (SELECT MAX(CA.FILE_ORDR)
+		        FROM TBCOM_CMMN_ATCHMNFL CA
+		        WHERE 1        =1
+		        AND CA.FILE_SN = DD.FILE_SN
+		        )
+		    )                                     AS ORGINL_FILE_NM
+		  ,CC.MESURE_CYCLE                        AS MESURE_CYCLE
+		  ,NVL(CC.ACMSLT_VALUE_MANAGE_MTHD,'000') AS ACMSLT_VALUE_MANAGE_MTHD
+		  ,(SELECT k.GOALVAL
+		    FROM TBACH_QYEVAL_DSTB_GOAL k
+		    WHERE 1            =1
+		    AND AA.IX_CODE     = k.IX_CODE
+		    AND AA.EVL_YEAR    = k.EVL_YEAR
+		    AND AA.ODR_SE      = k.ODR_SE
+		    AND AA.ORGNZT_CODE = k.ORGNZT_CODE
+		    AND k.GOAL_MT      = #SEQ#
+		    )                 AS MT_GOAL         /*월별목표*/
+		  ,CC.ACMSLT_INPUT_TY AS ACMSLT_INPUT_TY
+		  ,CASE CC.ACMSLT_INPUT_TY
+		        WHEN '001'
+		        THEN
+		            (SELECT SUM(k.GOALVAL)
+		            FROM TBACH_QYEVAL_DSTB_GOAL k
+		            WHERE 1                   =1
+		            AND AA.IX_CODE            = k.IX_CODE
+		            AND AA.EVL_YEAR           = k.EVL_YEAR
+		            AND AA.ODR_SE             = k.ODR_SE
+		            AND AA.ORGNZT_CODE        = k.ORGNZT_CODE
+		            AND TO_NUMBER(k.GOAL_MT) <= TO_NUMBER(#SEQ#)
+		            )
+		        WHEN '002'
+		        THEN
+		            (SELECT ROUND(AVG(k.GOALVAL),2)
+		            FROM TBACH_QYEVAL_DSTB_GOAL k
+		            WHERE 1                   =1
+		            AND AA.IX_CODE            = k.IX_CODE
+		            AND AA.EVL_YEAR           = k.EVL_YEAR
+		            AND AA.ODR_SE             = k.ODR_SE
+		            AND AA.ORGNZT_CODE        = k.ORGNZT_CODE
+		            AND TO_NUMBER(k.GOAL_MT) <= TO_NUMBER(#SEQ#)
+		            AND k.GOALVAL            IS NOT NULL
+		            )
+		        ELSE
+		            (SELECT k.GOALVAL
+		            FROM TBACH_QYEVAL_DSTB_GOAL k
+		            WHERE 1            =1
+		            AND AA.IX_CODE     = k.IX_CODE
+		            AND AA.EVL_YEAR    = k.EVL_YEAR
+		            AND AA.ODR_SE      = k.ODR_SE
+		            AND AA.ORGNZT_CODE = k.ORGNZT_CODE
+		            AND k.GOAL_MT      = #SEQ#
+		            )
+		    END AS FINAL_GOAL
+		  ,CASE CC.ACMSLT_INPUT_TY
+		        WHEN '001'
+		        THEN
+		            (SELECT SUM(k.ACMSLT_VAL)
+		            FROM TBACH_QYEVAL_DSTB_ACMSLT k
+		            WHERE 1                     =1
+		            AND AA.IX_CODE              = k.IX_CODE
+		            AND AA.EVL_YEAR             = k.EVL_YEAR
+		            AND AA.ODR_SE               = k.ODR_SE
+		            AND AA.ORGNZT_CODE          = k.ORGNZT_CODE
+		            AND TO_NUMBER(k.ACMSLT_MT) <= TO_NUMBER(#SEQ#)
+		            )
+		        WHEN '002'
+		        THEN
+		            (SELECT ROUND(AVG(k.ACMSLT_VAL),2)
+		            FROM TBACH_QYEVAL_DSTB_ACMSLT k
+		            WHERE 1                     =1
+		            AND AA.IX_CODE              = k.IX_CODE
+		            AND AA.EVL_YEAR             = k.EVL_YEAR
+		            AND AA.ODR_SE               = k.ODR_SE
+		            AND AA.ORGNZT_CODE          = k.ORGNZT_CODE
+		            AND TO_NUMBER(k.ACMSLT_MT) <= TO_NUMBER(#SEQ#)
+		            AND k.ACMSLT_VAL           IS NOT NULL
+		            )
+		        ELSE
+		            (SELECT k.ACMSLT_VAL
+		            FROM TBACH_QYEVAL_DSTB_ACMSLT k
+		            WHERE 1            =1
+		            AND AA.IX_CODE     = k.IX_CODE
+		            AND AA.EVL_YEAR    = k.EVL_YEAR
+		            AND AA.ODR_SE      = k.ODR_SE
+		            AND AA.ORGNZT_CODE = k.ORGNZT_CODE
+		            AND k.ACMSLT_MT    = #SEQ#
+		            )
+		    END                    AS FINAL_ACMSLT
+		  , CC.ACHIV_RT_CALC_FRMLA AS ACHIV_RT_CALC_FRMLA
+		  , CASE CC.ACHIV_RT_CALC_FRMLA
+		        WHEN '001'
+		        THEN (
+		            CASE
+		                WHEN SFACH_GET_MDAT_RT(AA.EVL_YEAR, AA.ODR_SE, AA.IX_CODE, AA.ORGNZT_CODE) > 100
+		                THEN SFACH_GET_MDAT_RT(AA.EVL_YEAR, AA.ODR_SE, AA.IX_CODE, AA.ORGNZT_CODE)
+		                ELSE (
+		                    CASE
+		                        WHEN ( NVL(SFACH_GET_MT_GOALVAL(AA.EVL_YEAR,AA.ODR_SE, AA.IX_CODE,AA.ORGNZT_CODE, #SEQ#),0) > 0
+		                        AND NVL(BB.ACMSLT_VAL,0)                                                                   > 0 )
+		                        THEN (
+		                            CASE
+		                                WHEN ( ROUND(BB.ACMSLT_VAL / NVL(SFACH_GET_MT_GOALVAL(AA.EVL_YEAR,AA.ODR_SE, AA.IX_CODE,AA.ORGNZT_CODE, #SEQ#),0) * 100 ,2) > TO_NUMBER(NVL(CC.MXMM_EVL_LMT,100)) )
+		                                THEN TO_NUMBER(NVL(CC.MXMM_EVL_LMT,100))
+		                                ELSE ROUND(BB.ACMSLT_VAL / NVL(SFACH_GET_MT_GOALVAL(AA.EVL_YEAR,AA.ODR_SE, AA.IX_CODE,AA.ORGNZT_CODE, #SEQ#),0) * 100 ,2)
+		                            END )
+		                        ELSE (
+		                            CASE
+		                                WHEN CC.ACMSLT_VALUE_MANAGE_MTHD                                                        = 'C'
+		                                AND NVL(SFACH_GET_MT_GOALVAL(AA.EVL_YEAR,AA.ODR_SE, AA.IX_CODE,AA.ORGNZT_CODE, #SEQ#),0) = 0
+		                                AND NVL(BB.ACMSLT_VAL,0)                                                                = 0
+		                                THEN 100
+		                                WHEN CC.EXCP_RSLT_CALC_FRMLA                                                            = '3'
+		                                AND NVL(SFACH_GET_MT_GOALVAL(AA.EVL_YEAR,AA.ODR_SE, AA.IX_CODE,AA.ORGNZT_CODE, #SEQ#),0) = 0
+		                                AND NVL(BB.ACMSLT_VAL,0)                                                                = 0
+		                                THEN 100
+		                                ELSE 0
+		                            END )
+		                    END )
+		            END )
+		        WHEN '002'
+		        THEN (
+		            CASE
+		                WHEN SFACH_GET_MDAT_RT(AA.EVL_YEAR, AA.ODR_SE, AA.IX_CODE, AA.ORGNZT_CODE) > 100
+		                THEN SFACH_GET_MDAT_RT(AA.EVL_YEAR, AA.ODR_SE, AA.IX_CODE, AA.ORGNZT_CODE)
+		                ELSE (
+		                    CASE
+		                        WHEN ( NVL(SFACH_GET_MT_GOALVAL(AA.EVL_YEAR,AA.ODR_SE, AA.IX_CODE,AA.ORGNZT_CODE, #SEQ#),0) > 0
+		                        AND NVL(BB.ACMSLT_VAL,0)                                                                   > 0 )
+		                        THEN (
+		                            CASE
+		                                WHEN ( ROUND(NVL(SFACH_GET_MT_GOALVAL(AA.EVL_YEAR,AA.ODR_SE, AA.IX_CODE,AA.ORGNZT_CODE, #SEQ#),0) / BB.ACMSLT_VAL * 100 ,2) > TO_NUMBER(NVL(CC.MXMM_EVL_LMT,100)) )
+		                                THEN TO_NUMBER(NVL(CC.MXMM_EVL_LMT,100))
+		                                ELSE ROUND(NVL(SFACH_GET_MT_GOALVAL(AA.EVL_YEAR,AA.ODR_SE, AA.IX_CODE,AA.ORGNZT_CODE, #SEQ#),0) / BB.ACMSLT_VAL * 100 ,2)
+		                            END )
+		                        ELSE (
+		                            CASE
+		                                WHEN CC.EXCP_RSLT_CALC_FRMLA = '4'
+		                                AND NVL(BB.ACMSLT_VAL,0)     = 0
+		                                THEN 100
+		                                ELSE 0
+		                            END )
+		                    END )
+		            END )
+		    END AS MT_ACHIV_RT      /*월별달성률*/
+		  , (SELECT SUM(k.ACMSLT_VAL)
+		    FROM TBACH_QYEVAL_DSTB_ACMSLT k
+		    WHERE 1                     =1
+		    AND AA.IX_CODE              = k.IX_CODE
+		    AND AA.EVL_YEAR             = k.EVL_YEAR
+		    AND AA.ODR_SE               = k.ODR_SE
+		    AND AA.ORGNZT_CODE          = k.ORGNZT_CODE
+		    AND TO_NUMBER(k.ACMSLT_MT) <= TO_NUMBER(#SEQ#)
+		    )                      AS TOT_ACMSLT_VAL
+		  ,NVL(BB.RESULT_SCORE,0)  AS MT_RESULT_SCORE   /*월성과*/
+		  ,CC.MXMM_EVL_LMT         AS MXMM_EVL_LMT
+		  ,CC.EXCP_RSLT_CALC_FRMLA AS EXCP_RSLT_CALC_FRMLA
+		  ,NVL(DD.EMP_CNT, 0)                                         AS EMP_CNT
+		  ,NVL(DD.CNVRSN_SCORE_SUM, 0)                                AS CNVRSN_SCORE_SUM
+		  ,NVL(ROUND((DD.CNVRSN_SCORE_SUM/DD.EMP_CNT), 2), 0)         AS CNVRSN_SCORE
+		FROM
+		    (SELECT A.EVL_YEAR
+		      ,A.ODR_SE
+		      ,A.IX_CODE
+		      ,A.ORGNZT_CODE
+		      ,A.WGHTVAL
+		      ,A.GOALVAL AS W_GOALVAL
+		      ,A.LAST_RSLTS
+		      ,B.GOALVAL AS R_GOALVAL
+		      ,B.EVL_WGHTVAL
+		      ,B.LAST_ACMSLTVAL
+		      ,B.SM_ACMSLTVAL
+		      ,B.LAST_RESULT_SCORE
+		      ,B.GOAL_ASIGN_AT
+		    FROM TBACH_WGHTVAL A
+		      ,TBACH_QYEVAL_RESULT B
+		    WHERE 1           =1
+		    AND A.EVL_YEAR    = B.EVL_YEAR
+		    AND A.ODR_SE      = B.ODR_SE
+		    AND A.IX_CODE     = B.IX_CODE
+		    AND A.ORGNZT_CODE = B.ORGNZT_CODE
+		    AND A.EVL_YEAR    = #EVL_YEAR#
+		    AND A.ODR_SE      = #ODR_SE#
+		    AND A.IX_CODE     = #IX_CODE#
+		    ]]>
+			<isNotEmpty prepend="AND" property="ORGNZT_CODE">
+				A.ORGNZT_CODE = #ORGNZT_CODE#
+			</isNotEmpty>
+			<![CDATA[
+		    ) AA
+		  , TBACH_QYEVAL_DSTB_ACMSLT BB
+		  , TBACH_KPI CC
+		  , (SELECT EVL_YEAR
+		      ,ODR_SE
+		      ,ORGNZT_CODE
+		      ,SEQ
+		      ,IX_CODE
+		      ,COUNT(EMPNO)      AS EMP_CNT
+		      ,SUM(PROPSE_CNT)	 AS CNVRSN_SCORE_SUM
+		    FROM TBACH_PROPSE_GOAL
+		    WHERE EVL_YEAR = #EVL_YEAR#
+		    AND ODR_SE     = #ODR_SE#
+		    AND SEQ        = #SEQ#
+		    AND IX_CODE    = #IX_CODE#
+		    GROUP BY EVL_YEAR
+		      , ODR_SE
+		      , ORGNZT_CODE
+		      , SEQ
+		      , IX_CODE
+		    ) DD
+		WHERE 1             =1
+		  AND AA.EVL_YEAR     = BB.EVL_YEAR(+)
+		  AND AA.ODR_SE       = BB.ODR_SE(+)
+		  AND AA.IX_CODE      = BB.IX_CODE(+)
+		  AND AA.ORGNZT_CODE  = BB.ORGNZT_CODE(+)
+		  AND AA.EVL_YEAR     = BB.ACMSLT_YY(+)
+		  AND BB.ACMSLT_MT(+) = #SEQ#
+		  AND AA.EVL_YEAR     = CC.EVL_YEAR
+		  AND AA.ODR_SE       = CC.ODR_SE
+		  AND AA.IX_CODE      = CC.IX_CODE
+		  AND AA.EVL_YEAR     = DD.EVL_YEAR(+)
+		  AND AA.ODR_SE       = DD.ODR_SE(+)
+		  AND AA.ORGNZT_CODE  = DD.ORGNZT_CODE(+)
+		  AND AA.IX_CODE      = DD.IX_CODE(+)
+		ORDER BY AA.ORGNZT_CODE	 
+    ]]>
+    </select>
+    
+    <!-- 평가사원목록 조회 -->
+	<select id="ACH020404DAO.selectEvlEmpList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">		 
+		SELECT 
+			 t3.CODE_NM   AS JSSFC_NM
+			,t4.CODE_NM   AS HR_CLSF_NM
+			,t1.EMPNO
+			,t2.EMPNM
+			,t1.EVL_YEAR		                       /*평가년도*/
+			,t1.ODR_SE			                       /*차수구분*/
+			,t1.ORGNZT_CODE		                       /*조직코드*/
+			,t1.SEQ				                       /*순번_측정월*/
+			,t1.IX_CODE			                       /*지표코드*/
+			,t1.EMPNO			                       /*사원번호*/
+			,t1.ACMSLT			                       /*실적*/
+			,t1.CNVRSN			                       /*환산*/
+			,NVL(t1.PROPSE_CNT, 0)  AS PROPSE_CNT      /*제안건수*/
+		FROM TBACH_PROPSE_GOAL t1
+		    LEFT OUTER JOIN TBHRM_HR_MASTR t2
+		      ON t1.EMPNO = t2.EMPNO
+		    LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		      ON t2.JSSFC_SE     = t3.CODE
+		     AND t3.GRP_CODE	 = 'HRM001'  /*직종*/
+		    LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		      ON t2.HR_CLSF_SE   = t4.CODE
+		     AND t4.GRP_CODE	 = 'HRM002'  /*직급*/
+		WHERE EVL_YEAR	  = #EVL_YEAR#	    
+		  AND ODR_SE	  = #ODR_SE#		
+		  AND IX_CODE     =	#IX_CODE#
+		  AND SEQ		  = #SEQ#			
+		  AND ORGNZT_CODE =	#ORGNZT_CODE#	
+		ORDER BY t2.JSSFC_SE, t2.HR_CLSF_SE, t2.EMPNM
+		
+	</select>
+	
+	<!-- 평가사원목록 병합 -->
+	<insert id="ACH020404DAO.evlEmpCU" parameterClass="java.util.HashMap">		 
+		MERGE INTO TBACH_PROPSE_GOAL
+				USING DUAL
+				ON (    EVL_YEAR    = #EVL_YEAR# 
+				    AND ODR_SE      = #ODR_SE# 
+				    AND ORGNZT_CODE = #ORGNZT_CODE# 
+				    AND SEQ         = #SEQ# 
+				    AND IX_CODE     = #IX_CODE# 
+				    AND EMPNO       = #EMPNO#)
+				WHEN MATCHED THEN
+				  UPDATE
+				     SET ACMSLT 		= #ACMSLT#		
+		                ,CNVRSN	        = #CNVRSN#
+		                ,PROPSE_CNT		= #PROPSE_CNT#
+		                ,UPDUSR_ID	    = #S_USER_ID# 
+		                ,UPDT_DT        = SYSDATE	
+				WHEN NOT MATCHED THEN
+				  INSERT
+				(
+					 EVL_YEAR	
+					,ODR_SE		
+					,ORGNZT_CODE	
+					,SEQ			
+					,IX_CODE		
+					,EMPNO		
+					,ACMSLT			
+					,CNVRSN			
+					,PROPSE_CNT
+					,REGISTER_ID	
+					,REGIST_DT	
+					,UPDUSR_ID	
+					,UPDT_DT		
+				)
+				VALUES
+				(
+					 #EVL_YEAR#	    
+					,#ODR_SE#		    
+					,#ORGNZT_CODE#	
+					,#SEQ#			
+					,#IX_CODE#		
+					,#EMPNO#		    
+					,#ACMSLT#			
+					,#CNVRSN#	
+					,#PROPSE_CNT#
+					,#S_USER_ID#	
+					,SYSDATE	    
+					,#S_USER_ID#	
+					,SYSDATE		
+				)
+	</insert>
+	
+	<!-- 평가사원목록 삭제 -->
+	<delete id="ACH020404DAO.evlEmpD" parameterClass="java.util.HashMap">		 
+		DELETE 
+		FROM TBACH_PROPSE_GOAL
+		WHERE EVL_YEAR	  = #EVL_YEAR#	    
+		  AND ODR_SE	  = #ODR_SE#		
+		  AND IX_CODE     =	#IX_CODE#
+		  AND SEQ		  = #SEQ#			
+		  AND ORGNZT_CODE =	#ORGNZT_CODE#		
+		  AND EMPNO		  = #EMPNO#	
+	</delete>
+    
+    <!-- 계량지표배정실적 삭제 -->
+	<delete id="ACH020404DAO.qyevalDstbAcmsltD" parameterClass="java.util.HashMap">		 
+		DELETE
+		FROM TBACH_QYEVAL_DSTB_ACMSLT
+		WHERE EVL_YEAR	  = #EVL_YEAR#	    
+		  AND ODR_SE	  = #ODR_SE#		
+		  AND IX_CODE     =	#IX_CODE#
+		  AND ACMSLT_MT	  = #SEQ#			
+		  AND ORGNZT_CODE =	#ORGNZT_CODE#
+		AND NOT EXISTS ( SELECT 1
+		                    FROM TBACH_PROPSE_GOAL
+		                    WHERE EVL_YEAR	  = #EVL_YEAR#	    
+							  AND ODR_SE	  = #ODR_SE#		
+							  AND IX_CODE     =	#IX_CODE#
+							  AND SEQ		  = #SEQ#			
+							  AND ORGNZT_CODE =	#ORGNZT_CODE#
+		               )
+	</delete>
+</sqlMap>

@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070127_SQL">	
+
+	<!-- 시간외근무내역조회 -->
+	<select id="HRM070127DAO.selectOvtmworkDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.OVTMWRK_DE
+		      ,t1.SEQ
+		      ,DECODE(v1.HOLY_AT, 0, '평일', 1, '휴일')            AS HOLY_AT 
+		      ,CASE TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D')
+		           WHEN '1' THEN '일'
+		           WHEN '2' THEN '월'
+		           WHEN '3' THEN '화'
+		           WHEN '4' THEN '수'
+		           WHEN '5' THEN '목'
+		           WHEN '6' THEN '금'
+		           WHEN '7' THEN '토'
+		       END AS OVTMWRK_DAY
+		      ,t1.DEPT_CODE
+		      ,t2.DEPT_NM
+		      ,t5.CODE_NM                         AS HR_CLSF_NM
+		      ,t1.EMPNO
+		      ,t3.EMPNM
+		      ,CASE WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '2' THEN NVL(t6.FLXWK_SE_MON, '99')
+		            WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '3' THEN NVL(t6.FLXWK_SE_TUE, '99')
+		            WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '4' THEN NVL(t6.FLXWK_SE_WED, '99')
+		            WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '5' THEN NVL(t6.FLXWK_SE_THU, '99')
+		            WHEN TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D') = '6' THEN NVL(t6.FLXWK_SE_FRI, '99')
+		            ELSE '99'
+		       END  AS FLXWK_SE_DAY                       /*기준근무시간대역*/
+		      ,t1.REQST_BEGIN_TM                          /*신청시작시각*/
+		      ,t1.REQST_END_TM                            /*신청종료시각*/
+		      ,t1.REQST_TIME                              /*신청시간*/
+		      ,t9.BEGIN_TM          AS WORK_BEGIN_TM      /*근무시작시각*/
+		      ,t9.END_TM            AS WORK_END_TM        /*근무종료시각*/
+		      ,t1.RCOGN_BEGIN_TM                          /*인정시작시각*/
+		      ,t1.RCOGN_END_TM                            /*인정종료시각*/
+		      ,t1.RCOGN_TIME                              /*인정시간*/
+		      ,TO_NUMBER(NVL(SUBSTR(t1.OVTIME_WORK_TIME, 1, 2), 0))    AS OVTIME_WORK_TIME     /*시간외근무시간*/
+		      ,TO_NUMBER(NVL(SUBSTR(t1.RESTDE_WORK_TIME, 1, 2), 0))    AS RESTDE_WORK_TIME     /*휴일근무시간*/
+		      ,TO_NUMBER(NVL(SUBSTR(t1.NIGHT_WORK_TIME, 1, 2), 0))     AS NIGHT_WORK_TIME      /*야간근무시간*/
+		      ,t1.WORK_DRCTR                              /*근무지시자*/
+		      ,t1.WORK_PURPS                              /*근무목적*/
+		      ,t1.RM                                      /*비고*/
+		      ,t1.SANCTN_NO
+		      ,t1.SANCTN_NO2
+		      ,SFCOM_GET_SANCTN_KND(t1.SANCTN_NO)                       AS SANCTN_KND
+		      ,SFCOM_GET_SANCTN_KND(t1.SANCTN_NO2)                      AS SANCTN_KND2
+		      ,TO_NUMBER(SUBSTR(NVL(t1.REQST_TIME,'0000'),1,2))         AS RQTM    /*신청*/
+		      ,TO_NUMBER(SUBSTR(NVL(t1.RCOGN_TIME,'0000'),1,2))         AS RCTM /*결과*/
+		      ,TO_NUMBER(SUBSTR(NVL(t1.REQST_TIME,'0000'),1,2)) - TO_NUMBER(SUBSTR(NVL(t1.RCOGN_TIME,'0000'),1,2)) AS SOTM /*과부족*/
+		      /*,NVL(t9.TOT_RCOGN_TIME,0)                                 AS TOTM    /*월누계*/
+		      ,(SELECT NVL(SUM(TO_NUMBER(SUBSTR(NVL(a.RCOGN_TIME,'0000'),1,2))),0)
+		        FROM TBHRM_OVTMWRK a
+		        WHERE a.EMPNO = t1.EMPNO
+		          AND SFCOM_GET_SANCTN_KND(a.SANCTN_NO2) = '5'
+		          AND a.OVTMWRK_DE <![CDATA[<]]> t1.OVTMWRK_DE
+		          AND a.OVTMWRK_DE LIKE #OVTMWRK_YM# || '%'
+		        ) AS TOTM
+		      ,(SELECT NVL(SUM(TO_NUMBER(SUBSTR(NVL(a.OVTIME_WORK_TIME,'0000'),1,2))),0) + NVL(SUM(TO_NUMBER(SUBSTR(NVL(a.RESTDE_WORK_TIME,'0000'),1,2))),0)
+		        FROM TBHRM_OVTMWRK a
+		        WHERE a.EMPNO = t1.EMPNO
+		          AND SFCOM_GET_SANCTN_KND(a.SANCTN_NO2) = '5'
+		          AND a.OVTMWRK_DE <![CDATA[<]]> t1.OVTMWRK_DE
+		          AND a.OVTMWRK_DE LIKE #OVTMWRK_YM# || '%'
+		        ) AS TOTM_OVTMWRK
+		      ,(SELECT NVL(SUM(TO_NUMBER(SUBSTR(NVL(a.NIGHT_WORK_TIME,'0000'),1,2))),0)
+		        FROM TBHRM_OVTMWRK a
+		        WHERE a.EMPNO = t1.EMPNO
+		          AND SFCOM_GET_SANCTN_KND(a.SANCTN_NO2) = '5'
+		          AND a.OVTMWRK_DE <![CDATA[<]]> t1.OVTMWRK_DE
+		          AND a.OVTMWRK_DE LIKE #OVTMWRK_YM# || '%'
+		        ) AS TOTM_NIGHT
+		FROM   TBHRM_OVTMWRK t1
+		       LEFT OUTER JOIN VWHRM_DEPT t2
+		         ON  t1.DEPT_CODE = t2.DEPT_CODE
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t3
+		         ON  t1.EMPNO = t3.EMPNO
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		         ON  t5.GRP_CODE      = 'HRM002'
+		        AND t3.HR_CLSF_SE    = t5.CODE
+		       LEFT OUTER JOIN TBHRM_FLXWK t6
+		         ON  t1.EMPNO = t6.EMPNO
+		        AND t1.OVTMWRK_DE BETWEEN t6.BGNDE AND t6.ENDDE
+		        AND ROWNUM = 1
+		       LEFT OUTER JOIN VWHRM_SYS_DAY v1 
+		         ON TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'yyyymmdd')) = v1.DAY
+		       LEFT OUTER JOIN (
+		                        SELECT T1.EMPNO, T2.WORK_DE, T2.BEGIN_TM, T2.END_TM
+		                        FROM TBHRM_DCLZ_MAPPING_MANAGE T1
+		                           , TBHRM_DCLZ_DTLS_MANAGE T2
+		                        WHERE T1.DCLZ_ID = T2.DCLZ_ID
+		                       ) t9
+		         ON t1.OVTMWRK_DE = t9.WORK_DE
+		        AND t1.EMPNO = t9.EMPNO
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t10
+		         ON t1.EMPNO = t10.EMPNO
+		WHERE  1=1
+		<isNotEmpty prepend="AND" property="DEPT_CODE">
+			t10.DEPT_CODE  = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="EMPNO">
+			t1.EMPNO  = #EMPNO#
+		</isNotEmpty>
+		AND    t1.OVTMWRK_DE LIKE #OVTMWRK_YM# || '%'
+		ORDER BY  t1.OVTMWRK_DE DESC, t3.JSSFC_SE, t3.HR_CLSF_SE, t3.EMPNO
+	</select>
+
+
+	<!-- 시간외근무내역수정(인정시간) -->
+	<update id="HRM070127DAO.ovtmworkDtlsU" parameterClass="java.util.HashMap">
+    	UPDATE TBHRM_OVTMWRK
+    	SET	RCOGN_TIME			= #RCOGN_TIME#
+    	   ,OVTIME_WORK_TIME	= CONCAT(LPAD(#OVTIME_WORK_TIME#, 2, 0),'00')
+    	   ,RESTDE_WORK_TIME	= CONCAT(LPAD(#RESTDE_WORK_TIME#, 2, 0),'00')
+    	   ,NIGHT_WORK_TIME		= CONCAT(LPAD(#NIGHT_WORK_TIME#	, 2, 0),'00')
+    	WHERE OVTMWRK_DE = #OVTMWRK_DE#
+    	  AND	   EMPNO = #EMPNO#
+		  AND		 SEQ = #SEQ# 
+	</update>
+	
+	
+	<!-- 확정시간 -->
+	<select id="HRM070127DAO.selectOvtmworkDcsn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT t0.OVTMWRK_YM
+		     , t0.EMPNO
+		     , t2.SUM_RCOGN_TIME
+		     , t2.OVTIME_WORK_TIME 
+		     , t2.NIGHT_WORK_TIME 
+		     , t2.RESTDE_WORK_TIME
+		     , t3.OVTIME_REWARD 
+		     , t3.RESTDE_REWARD
+		     , NVL(t1.DCSN_TIME,  '0000')           AS DCSN_TIME
+		     , NVL(t1.OVTIME_TIME,'0000')           AS OVTIME_TIME
+		     , NVL(t1.RESTDE_TIME,'0000')           AS RESTDE_TIME
+		     , (NVL(t2.OVTIME_WORK_HOUR_TM,0) - NVL(t3.OVTIME_REWARD_HOUR_TM,0) - CASE WHEN NVL(t2.OVTIME_WORK_MINUTE_TM,0) < NVL(t3.OVTIME_REWARD_MINUTE_TM,0) THEN 1 ELSE 0 END)
+		       || '' ||
+		       LPAD(MOD((NVL(t2.OVTIME_WORK_MINUTE_TM,0) - NVL(t3.OVTIME_REWARD_MINUTE_TM,0) + CASE WHEN NVL(t2.OVTIME_WORK_MINUTE_TM,0) < NVL(t3.OVTIME_REWARD_MINUTE_TM,0) THEN 60 ELSE 0 END),60), 2, '0')       AS CAL_OVTIME_TIME
+		     , (NVL(t2.RESTDE_WORK_HOUR_TM,0) - NVL(t3.RESTDE_REWARD_HOUR_TM,0) - CASE WHEN NVL(t2.RESTDE_WORK_MINUTE_TM,0) < NVL(t3.RESTDE_REWARD_MINUTE_TM,0) THEN 60 ELSE 0 END)
+		       || '' ||
+		       LPAD(MOD((NVL(t2.RESTDE_WORK_MINUTE_TM,0) - NVL(t3.RESTDE_REWARD_MINUTE_TM,0) + CASE WHEN NVL(t2.RESTDE_WORK_MINUTE_TM,0) < NVL(t3.RESTDE_REWARD_MINUTE_TM,0) THEN 60 ELSE 0 END),60), 2, '0')       AS CAL_RESTDE_TIME
+		     , t1.REGISTER_ID
+		     , t1.REGIST_DT
+		     , t1.UPDUSR_ID
+		     , t1.UPDT_DT
+		FROM   (
+		        SELECT #OVTMWRK_YM# AS OVTMWRK_YM
+		              ,#EMPNO#      AS EMPNO
+		        FROM   DUAL
+		       ) t0
+		       LEFT OUTER JOIN TBHRM_OVTMWRK_DCSN t1
+		            ON t0.EMPNO      = t1.EMPNO
+		           AND t0.OVTMWRK_YM = t1.OVTMWRK_YM
+		       LEFT OUTER JOIN (
+		                        SELECT EMPNO
+		                              ,OVTMWRK_YM
+		                              ,RCOGN_HOUR_TM       || ':' || LPAD(RCOGN_MINUTE_TM,2,'0')                AS SUM_RCOGN_TIME
+		                              ,OVTIME_WORK_HOUR_TM || ':' || LPAD(OVTIME_WORK_MINUTE_TM,2,'0')          AS OVTIME_WORK_TIME
+		                              ,NIGHT_WORK_HOUR_TM  || ':' || LPAD(NIGHT_WORK_MINUTE_TM,2,'0')           AS NIGHT_WORK_TIME
+		                              ,RESTDE_WORK_HOUR_TM || ':' || LPAD(RESTDE_WORK_MINUTE_TM,2,'0')          AS RESTDE_WORK_TIME
+		                              ,OVTIME_WORK_HOUR_TM
+		                              ,OVTIME_WORK_MINUTE_TM
+		                              ,RESTDE_WORK_HOUR_TM
+		                              ,RESTDE_WORK_MINUTE_TM
+		                        FROM   (
+		                                SELECT EMPNO
+		                                      ,OVTMWRK_YM
+		                                      ,SUM(RCOGN_HOUR) + TRUNC(SUM(RCOGN_MINUTE)/60)                AS RCOGN_HOUR_TM
+		                                      ,MOD(SUM(RCOGN_MINUTE), 60)                                   AS RCOGN_MINUTE_TM
+		                                      ,SUM(OVTIME_WORK_HOUR) + TRUNC(SUM(OVTIME_WORK_MINUTE)/60)    AS OVTIME_WORK_HOUR_TM
+		                                      ,MOD(SUM(OVTIME_WORK_MINUTE), 60)                             AS OVTIME_WORK_MINUTE_TM
+		                                      ,SUM(NIGHT_WORK_HOUR) + TRUNC(SUM(NIGHT_WORK_MINUTE)/60)      AS NIGHT_WORK_HOUR_TM
+		                                      ,MOD(SUM(NIGHT_WORK_MINUTE), 60)                              AS NIGHT_WORK_MINUTE_TM
+		                                      ,SUM(RESTDE_WORK_HOUR) + TRUNC(SUM(RESTDE_WORK_MINUTE)/60)    AS RESTDE_WORK_HOUR_TM
+		                                      ,MOD(SUM(RESTDE_WORK_MINUTE), 60)                             AS RESTDE_WORK_MINUTE_TM
+		                                FROM   (
+		                                        SELECT EMPNO 
+		                                              ,SUBSTR(OVTMWRK_DE, 0, 6)                                 AS OVTMWRK_YM
+		                                              ,TO_NUMBER(SUBSTR(NVL(RCOGN_TIME,'0000'),1,2))            AS RCOGN_HOUR
+		                                              ,TO_NUMBER(SUBSTR(NVL(RCOGN_TIME,'0000'),3,4))            AS RCOGN_MINUTE
+		                                              ,TO_NUMBER(SUBSTR(NVL(OVTIME_WORK_TIME,'0000'),1,2))      AS OVTIME_WORK_HOUR
+		                                              ,TO_NUMBER(SUBSTR(NVL(OVTIME_WORK_TIME,'0000'),3,4))      AS OVTIME_WORK_MINUTE
+		                                              ,TO_NUMBER(SUBSTR(NVL(NIGHT_WORK_TIME,'0000'),1,2))       AS NIGHT_WORK_HOUR
+		                                              ,TO_NUMBER(SUBSTR(NVL(NIGHT_WORK_TIME,'0000'),3,4))       AS NIGHT_WORK_MINUTE
+		                                              ,TO_NUMBER(SUBSTR(NVL(RESTDE_WORK_TIME,'0000'),1,2))      AS RESTDE_WORK_HOUR
+		                                              ,TO_NUMBER(SUBSTR(NVL(RESTDE_WORK_TIME,'0000'),3,4))      AS RESTDE_WORK_MINUTE
+		                                        FROM   TBHRM_OVTMWRK
+		                                        WHERE  SUBSTR(OVTMWRK_DE, 0, 6) = #OVTMWRK_YM#
+		                                        AND    EMPNO  = #EMPNO#
+		                                        AND    SFCOM_GET_SANCTN_KND(SANCTN_NO) = '5'
+		                                       )
+		                                GROUP BY EMPNO, OVTMWRK_YM
+		                               )
+		                        WHERE  1=1
+		                       ) t2
+		            ON t0.EMPNO = t2.EMPNO
+		           AND t0.OVTMWRK_YM = t2.OVTMWRK_YM
+		       LEFT OUTER JOIN (
+		                        SELECT EMPNO
+		                              ,OVTMWRK_YM
+		                              ,OVTIME_REWARD_HOUR_TM || ':' || LPAD(OVTIME_REWARD_MINUTE_TM,2,'0')          AS OVTIME_REWARD
+		                              ,RESTDE_REWARD_HOUR_TM || ':' || LPAD(RESTDE_REWARD_MINUTE_TM,2,'0')          AS RESTDE_REWARD
+		                              ,OVTIME_REWARD_HOUR_TM
+		                              ,OVTIME_REWARD_MINUTE_TM
+		                              ,RESTDE_REWARD_HOUR_TM
+		                              ,RESTDE_REWARD_MINUTE_TM
+		                        FROM   (
+		                                SELECT EMPNO
+		                                      ,OVTMWRK_YM
+		                                      ,SUM(OVTIME_REWARD_HOUR) + TRUNC(SUM(OVTIME_REWARD_MINUTE)/60)    AS OVTIME_REWARD_HOUR_TM
+		                                      ,MOD(SUM(OVTIME_REWARD_MINUTE), 60)                               AS OVTIME_REWARD_MINUTE_TM
+		                                      ,SUM(RESTDE_REWARD_HOUR) + TRUNC(SUM(RESTDE_REWARD_MINUTE)/60)    AS RESTDE_REWARD_HOUR_TM
+		                                      ,MOD(SUM(RESTDE_REWARD_MINUTE), 60)                               AS RESTDE_REWARD_MINUTE_TM
+		                                FROM   (
+		                                        SELECT EMPNO 
+		                                              ,OVTMWRK_YM
+		                                              ,TO_NUMBER(SUBSTR(NVL(DECODE(REWARD_SE, '1', OVTMWRK_TM), '0000'),1,2))      AS OVTIME_REWARD_HOUR
+		                                              ,TO_NUMBER(SUBSTR(NVL(DECODE(REWARD_SE, '1', OVTMWRK_TM), '0000'),3,4))      AS OVTIME_REWARD_MINUTE
+		                                              ,TO_NUMBER(SUBSTR(NVL(DECODE(REWARD_SE, '2', OVTMWRK_TM), '0000'),1,2))      AS RESTDE_REWARD_HOUR
+		                                              ,TO_NUMBER(SUBSTR(NVL(DECODE(REWARD_SE, '2', OVTMWRK_TM), '0000'),3,4))      AS RESTDE_REWARD_MINUTE
+		                                        FROM   TBHRM_OVTMWRK_REWARD_MANAGE
+		                                        WHERE  OVTMWRK_YM = #OVTMWRK_YM#
+		                                        AND    EMPNO  = #EMPNO#
+		                                       )
+		                                GROUP BY EMPNO, OVTMWRK_YM
+		                               )
+		                        WHERE  1=1
+		                       ) t3
+		            ON t0.EMPNO = t3.EMPNO
+		           AND t0.OVTMWRK_YM = t3.OVTMWRK_YM
+	]]>
+	</select>
+
+
+	<insert id="HRM070127DAO.dcsnTmCU" parameterClass="java.util.HashMap">
+        	MERGE INTO TBHRM_OVTMWRK_DCSN 
+			USING DUAL 
+			ON (OVTMWRK_YM  = #OVTMWRK_YM# AND EMPNO       = #EMPNO#)
+			WHEN MATCHED THEN 
+			  UPDATE SET  DCSN_TIME    = #DCSN_TIME#
+			    	    , OVTIME_TIME  = #OVTIME_TIME#
+			    	    , RESTDE_TIME  = #RESTDE_TIME#
+			    	    , UPDUSR_ID    = #S_USER_ID#
+			    	    , UPDT_DT      = SYSDATE
+			WHEN NOT MATCHED THEN 
+	            INSERT (
+			    	   OVTMWRK_YM
+			    	 , EMPNO
+			    	 , OVTIME_TIME
+			    	 , RESTDE_TIME
+			    	 , DCSN_TIME
+			    	 , REGISTER_ID
+			    	 , REGIST_DT
+			    	 , UPDUSR_ID
+			    	 , UPDT_DT
+		    	)VALUES(
+			    	  #OVTMWRK_YM#
+			    	, #EMPNO#
+			    	, #OVTIME_TIME#
+			    	, #RESTDE_TIME#
+			    	, #DCSN_TIME#
+					, #S_USER_ID#
+					, SYSDATE
+					, #S_USER_ID#
+					, SYSDATE
+				)
+	</insert>
+	
+</sqlMap>

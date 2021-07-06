@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HPM030201SQL">
+	<resultMap class="java.util.HashMap" id="HPM030201.board">
+		<result property="BOARD_IDX" column="BOARD_IDX" />
+		<result property="APP_ID" column="APP_ID" />
+		<result property="BOARD_DEPTH" column="BOARD_DEPTH" />
+		<result property="PARENT_IDX" column="PARENT_IDX" />
+		<result property="VIEW_COUNT" column="VIEW_COUNT" />
+		<result property="USER_NAME" column="USER_NAME" />
+		<result property="BOARD_TITLE" column="BOARD_TITLE" />
+		<result property="BOARD_CONTENT" column="BOARD_CONTENT"  javaType="java.lang.String" jdbcType="CLOB" />
+		<result property="BOARD_CONFIRM" column="BOARD_CONFIRM" />
+		<result property="INPUT_DATE" column="INPUT_DATE" />
+		<result property="BOARD_KIND" column="BOARD_KIND" />
+	</resultMap>	
+
+	<!-- 쿼리명 : 게시글 조회
+	설명 :  게시글 조회
+	수정일  수정자  수정내용
+	작성자 : 김지훈
+	최초작성일 : 2016.04.28
+	-->
+	<select id="HPM030201DAO.selectBoard" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT '0' CHK,
+		       BOARD_IDX,
+		       APP_ID,
+		       BOARD_DEPTH,
+		       PARENT_IDX,
+		       VIEW_COUNT,
+		       USER_NAME,
+		       BOARD_TITLE,
+		       BOARD_CONFIRM,
+		       TO_CHAR(INPUT_DATE,'YYYYMMDDHH24MISS') INPUT_DATE,
+		       BOARD_KIND,
+		       SFCOM_GET_IN_SANCTNSTS('HPM','HPM','BOARD^'||BOARD_IDX, CAST(INPUT_DATE AS DATE)) IN_SANCTNSTS,
+		       SFCOM_GET_IN_SANCTNSTS_IMG('HPM','HPM','BOARD^'||BOARD_IDX, CAST(INPUT_DATE AS DATE)) IN_SANCTNSTS_IMG,
+		       AUTH_KEY
+		  FROM TBHPM_BOARD
+		 WHERE APP_ID=#BBS_ID#
+		   AND INPUT_DATE BETWEEN TO_TIMESTAMP(#INPUT_DATE_STR#||'000000','YYYYMMDDHH24MISS')
+		                      AND TO_TIMESTAMP(#INPUT_DATE_END#||'235959','YYYYMMDDHH24MISS')
+		<isNotEmpty property="USER_NAME">
+		   AND USER_NAME LIKE '%'||#USER_NAME#||'%'
+		</isNotEmpty>
+		<isNotEmpty property="BOARD_TITLE">
+		   AND BOARD_TITLE LIKE '%'||#BOARD_TITLE#||'%'
+		</isNotEmpty>
+		 ORDER BY BOARD_IDX DESC
+	</select>
+	
+	<select id="HPM030201DAO.selectBoardDetail" parameterClass="java.util.HashMap" resultMap="HPM030201.board">
+		SELECT BOARD_IDX,
+		       APP_ID,
+		       BOARD_DEPTH,
+		       PARENT_IDX,
+		       VIEW_COUNT,
+		       USER_NAME,
+		       BOARD_TITLE,
+		       BOARD_CONTENT,
+		       BOARD_CONFIRM,
+		       TO_CHAR(INPUT_DATE,'YYYYMMDDHH24MISS') INPUT_DATE,
+		       BOARD_KIND,
+		       NOTICE_AT
+		  FROM TBHPM_BOARD
+		 WHERE APP_ID=#BBS_ID#
+		   AND BOARD_IDX=#BOARD_IDX#
+	</select>
+	
+
+	<select id="HPM030201DAO.getBoardIdx" parameterClass="java.lang.String" resultClass="java.lang.String">
+ 		SELECT NVL((SELECT MAX(BOARD_IDX)
+		                          FROM   TBHPM_BOARD),0) + 1 AS BOARD_IDX
+		  FROM DUAL
+ 	</select>
+ 	
+	<!-- 게시글 등록  -->
+	<insert id="HPM030201DAO.insertBoard" parameterClass="java.util.HashMap" >
+		INSERT INTO TBHPM_BOARD (
+		        BOARD_IDX,
+		        APP_ID, 
+		        BOARD_DEPTH, 
+		        PARENT_IDX, 
+		        VIEW_COUNT,
+		        USER_NAME, 
+		        BOARD_TITLE, 
+		        BOARD_CONTENT, 
+		        BOARD_CONFIRM,
+		        INPUT_DATE, 
+		        BOARD_KIND, 
+		        AUTH_KEY,
+		        NOTICE_AT ,
+		        SUMRY,
+		        REGISTER_ID, 
+		        REGIST_DT, 
+		        UPDUSR_ID, 
+		        UPDT_DT
+	 ) VALUES ( #BOARD_IDX#,
+		        #APP_ID#, 
+		        #BOARD_DEPTH#, 
+		        '0', 
+		        0,
+		        #USER_NAME#, 
+		        #BOARD_TITLE#, 
+		        #BOARD_CONTENT#, 
+		        #BOARD_CONFIRM#,
+		        CASE WHEN #INPUT_DATE# IS NULL THEN SYSTIMESTAMP ELSE TO_TIMESTAMP(#INPUT_DATE#) END,
+		        #BOARD_KIND#, 
+		        #AUTH_KEY#,
+		        #NOTICE_AT#,
+		        #SUMRY#,
+		        #S_USER_ID#, 
+		        SYSDATE, 
+		        #S_USER_ID#, 
+		        SYSDATE)
+	</insert>
+	
+	<!-- 게시글 수정 -->
+	<update id="HPM030201DAO.updateBoard" parameterClass="java.util.HashMap" >
+		UPDATE TBHPM_BOARD
+		   SET USER_NAME = #USER_NAME#,
+		       BOARD_TITLE = #BOARD_TITLE#,
+		       BOARD_CONTENT = #BOARD_CONTENT#,
+		       BOARD_KIND = #BOARD_KIND#,
+		       UPDUSR_ID = #S_USER_ID#,
+		       UPDT_DT = SYSDATE,
+		       INPUT_DATE = TO_TIMESTAMP(#INPUT_DATE#),
+		       NOTICE_AT = #NOTICE_AT#,
+		       SUMRY = #SUMRY#
+		 WHERE BOARD_IDX = #BOARD_IDX#
+		   AND APP_ID = #APP_ID#
+	</update>
+	
+	<!-- 게시글 삭제 -->
+	<delete id="HPM030201DAO.deleteBoard" parameterClass="java.util.HashMap">
+		UPDATE TBHPM_BOARD
+		   SET BOARD_CONFIRM = '0'
+		 WHERE BOARD_IDX = #BOARD_IDX#
+		   AND APP_ID = #APP_ID#
+	</delete>
+	
+	<!-- 게시글 삭제 -->
+	<delete id="HPM030201DAO.saveBoardD" parameterClass="java.util.HashMap">
+		DELETE TBHPM_BOARD
+		 WHERE BOARD_IDX = #BOARD_IDX#
+		   AND APP_ID = #APP_ID#
+		   AND BOARD_CONFIRM = '0'
+	</delete>
+	
+	<select id="HPM030201DAO.selAtchFile" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT '0' CHK
+		       ,BOARD_IDX FILE_SN
+		       ,FILE_IDX FILE_ORDR
+		       ,'' FILE_STRE_COURS	/*파일저장경로*/
+		       ,A.FILE_SAVE_NAME STRE_FILE_NM		/*저장파일명*/
+		       ,A.FILE_NAME ORGINL_FILE_NM			/*원본파일명*/
+		       ,A.FILE_EXTENSION FILE_EXTSN			/*파일확장자*/
+		       ,FILE_SIZE FILE_CN					/*파일내용*/
+		       ,FILE_SIZE FILE_MG					/*파일크기*/
+		       ,'1' USE_AT							/*사용여부*/
+		       ,A.FILE_SAVE_NAME FILE_ID			
+		       ,'ETC' SYS_SE_CODE					/*시스템구분코드*/
+		       ,'HPG/boardfile/' JOB_SE				/*업무구분코드*/
+		       ,ROW_NUMBER() OVER (PARTITION BY A.BOARD_IDX ORDER BY A.BOARD_IDX ASC) AS SN
+		       ,FILE_TYPE FILE_TY
+		       ,'theme://images/fileUpDownload/file_icon_' || DECODE(LOWER(A.FILE_EXTENSION), 'zip', 'ZIP','rar', 'ZIP','7z', 'ZIP', 'jpg', 'IMG', 'jpeg', 'IMG', 'gif', 'IMG', 'png', 'IMG', 'bmp', 'IMG', 'txt', 'TXT', 'xml', 'TXT', 'doc', 'DOC', 'docx', 'DOC', 'xls', 'XLS', 'xlsx', 'XLS', 'ppt', 'PPT', 'pptx', 'PPT', 'pdf', 'PDF', 'hwp', 'HWP', 'hwt', 'HWP', 'ETC' ) || '.png' AS FILE_IMAGE
+		       ,100 AS PROGRS
+		       ,NULL AS TRNSMIS_FILE_SIZE
+		       ,'theme://images/img_WF_ConfirmE.png' AS DELETE_IMAGE
+		       ,NULL AS STTUS
+		       ,A.FILE_WIDTH
+		       ,A.FILE_HEIGHT
+		  FROM TBHPM_BOARDFILE A
+		 WHERE BOARD_IDX=#BOARD_IDX#
+		 ORDER BY FILE_IDX
+ 	</select>
+ 	
+ 	<select id="HPM030201DAO.selAtchFileInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+ 		SELECT BOARD_IDX FILE_SN
+		       ,FILE_IDX FILE_ORDR
+		       ,A.FILE_SAVE_NAME STRE_FILE_NM 
+		       ,A.FILE_NAME ORGINL_FILE_NM 
+		       ,A.FILE_EXTENSION FILE_EXTSN 
+		  FROM TBHPM_BOARDFILE A 
+		 WHERE BOARD_IDX=#FILE_SN#
+		   AND FILE_IDX=#FILE_ORDR#
+ 	</select>
+ 	
+ 	<delete id="HPM030201DAO.deleteAtchFile" parameterClass="java.util.HashMap">
+ 		DELETE TBHPM_BOARDFILE A 
+		 WHERE BOARD_IDX=#FILE_SN#
+		   AND FILE_IDX=#FILE_ORDR#
+ 	</delete>
+ 	
+ 	<delete id="HPM030201DAO.deleteAtchFileAll" parameterClass="java.lang.String">
+ 		DELETE TBHPM_BOARDFILE A 
+		 WHERE BOARD_IDX=#BOARD_IDX#
+ 	</delete>
+ 	
+ 	<insert id="HPM030201DAO.insertAtchFile" parameterClass="java.util.HashMap"> 
+		INSERT INTO TBHPM_BOARDFILE
+		       (FILE_IDX,
+		        BOARD_IDX,
+		        FILE_NAME,
+		        FILE_SAVE_NAME,
+		        FILE_TYPE,
+		        FILE_EXTENSION,
+		        FILE_SIZE,
+		        FILE_WIDTH,
+		        FILE_HEIGHT,
+		        INPUT_DATE,
+		        REGISTER_ID,
+		        REGIST_DT,
+		        UPDUSR_ID,
+		        UPDT_DT
+	   )VALUES ( NVL((SELECT MAX(FILE_IDX) FROM TBHPM_BOARDFILE),0)+1,
+		         #BOARD_IDX#,
+		         #ORGINL_FILE_NM#,
+		         #STRE_FILE_NM#,
+		         #FILE_TY#,
+		         #FILE_EXTSN#,
+		         #FILE_MG#,
+		         #FILE_WIDTH#,
+		         #FILE_HEIGHT#,
+		         SYSTIMESTAMP,
+				 #S_USER_ID#,
+				 SYSDATE,
+				 #S_USER_ID#,
+				 SYSDATE)
+ 	</insert>
+ 	
+ 	<select id="HPM030101DAO.innerSanctn" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT B.BBS_NM,
+		       B.BBS_TY_CODE,
+		       A.BOARD_TITLE,
+		       NVL(A.BOARD_KIND,'') BOARD_KIND,
+		       A.USER_NAME,
+		       A.BOARD_IDX,
+		       A.AUTH_KEY,
+		       (SELECT TO_CHAR(WMSYS.WM_CONCAT(CAST(FILE_NAME AS VARCHAR2(250))))
+		          FROM TBHPM_BOARDFILE AA
+		         WHERE AA.BOARD_IDX=A.BOARD_IDX) FILE_NAME
+		  FROM TBHPM_BOARD A
+		 INNER JOIN TBHPM_BBS_MASTER B ON (B.BBS_ID=A.APP_ID)
+		 WHERE BOARD_IDX=#BOARD_IDX#
+	</select>
+
+	<update id="HPM030201DAO.updateConfirmYn" parameterClass="java.util.HashMap">
+		UPDATE TBHPM_BOARD
+		   SET BOARD_CONFIRM = #BOARD_CONFIRM#,
+		       UPDUSR_ID = #S_USER_ID#,
+		       UPDT_DT = SYSDATE
+		 WHERE BOARD_IDX = #BOARD_IDX#
+	</update>
+</sqlMap>

@@ -1,0 +1,448 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HouseCstmr_SQL">	
+	
+<!--  설명  : 주택고객 팝업 관리 
+	작성자 : 지효정  -->
+	
+	<!-- 주택고객 목록 -->
+	<select id="HouseCstmrDAO.houseCstmrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 A.HOUSE_CSTMR_NO	/*주택고객번호*/
+			,A.CSTMR_NM            	/*성명*/
+			,SFCOM_DEC_ALL(A.IHIDNUM) AS IHIDNUM       	/*주민등록번호*/
+			,A.ZIP           	/*우편번호*/
+			,A.ADRES         	/*주소*/
+			,A.ADRES_DETAIL  	/*주소_상세*/
+			,A.TELNO         	/*전화번호*/
+			,A.MBTLNO        	/*휴대폰번호*/
+			,A.EMAIL			/*이메일*/
+			,A.ETC_CTTPC        /*기타연락처*/
+		FROM TBSLS_HOUSE_CSTMR A
+		WHERE 1=1
+		<isNotEmpty property="CSTMR_NM">
+		AND   CSTMR_NM LIKE '%' || #CSTMR_NM# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="HOUSE_CSTMR_NO">
+		AND   HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#
+		</isNotEmpty>		
+	</select>
+	
+<!--  설명  : 주택고객 팝업 관리 
+	작성자 : 지효정  -->
+	
+	<!-- 주택고객 목록 -->
+	<select id="HouseCstmrDAO.houseCstmrWaitList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+                '0'  AS   CHK                           /*  체크및 박스     */
+				/*  입주대기자정보 */
+               ,T1.HOUSE_CODE                           /* 주택코드         */
+               ,T1.HOUSE_SN                             /* 주택일련번호     */
+               ,T1.DONG                                 /* 동               */
+               ,T1.HO                                   /* 호               */
+               ,T1.DONG || '-' || T1.HO AS ST_DONGHO    /* 동-호            */
+               ,T1.HOUSE_TY_CODE                        /* 주택타입코드     */
+               ,T1.AEA                                  /* 평수             */
+               ,T1.WAIT_RCEPT_DE                        /* 대기접수일자     */
+               ,T1.WAIT_RCEPT_SN                        /* 대기접수일련번호 */
+               ,T1.WAIT_SN                              /* 대기일련번호     */
+               ,T1.HOUSE_CSTMR_NO                       /* 주택고객번호     */
+               ,T1.QUALF_SE                             /* 자격구분         */
+               ,T1.CNTRCT_DE                            /* 계약일자         */
+               ,T1.CNTRCT_NTICE_DE                      /* 계약통지일자     */
+               ,T1.WAITR_CANCL_PRVONSH                  /* 대기자취소사유   */
+               ,T1.FAMILY_CO                            /* 가족수           */
+               ,T1.WAIT_PROCESS_SE                      /* 대기처리구분     */
+               ,T1.RM                                   /* 비고             */
+               ,T1.REGISTER_ID                          /* 등록자ID         */
+               ,T1.REGIST_DT                            /* 등록일시         */
+               ,T1.UPDUSR_ID                            /* 수정자ID         */
+               ,T1.UPDT_DT                              /* 수정일시         */
+               , CASE WHEN T1.WAIT_PROCESS_SE > '10' 
+                      THEN '미계약' 
+                      ELSE T1.CNTRCT_DE 
+                 END 
+                   AS ST_CONT_DATE                       /* 처리상태        */
+       
+/* 고객정보 */
+               ,T2.CSTMR_NM                                    /* 성명             */
+               ,SFCOM_DEC_ALL(T2.IHIDNUM) AS IHIDNUM            /* 주민등록번호     */
+               ,T2.ZIP                                   /* 우편번호         */
+               ,T2.ADRES                                 /* 주소             */
+               ,T2.ADRES_DETAIL                          /* 상세주소         */
+               ,T2.TELNO                                 /* 전화번호         */
+               ,T2.MBTLNO                                /* 휴대전화번호     */
+               ,T2.EMAIL                                 /* 이메일           */
+               ,T2.ADRES || T2.ADRES_DETAIL AS ST_ADRES  /*  전체주소        */
+               ,'['||T3.HOUSE_CODE||']'|| T3.HOUSE_NM AS HOUSE_CODE_NM  /* 주택코드명       */
+               ,T3.HOUSE_NM                           AS HOUSE_NM       /* 주택명           */
+           FROM TBSLS_HOUSE_MVN_WAITR T1                 /* TBL : 주택입주대기자  */
+               ,TBSLS_HOUSE_CSTMR    T2                  /* TBL : 주택고객        */
+               ,TBSLS_HOUSE_INFO     T3                  /* TBL : 주택정보        */
+
+           WHERE 1 = 1
+             <isNotEmpty property="ST_NO">
+                 <isNotEmpty  property="END_NO">
+		    	     AND T1.WAIT_SN BETWEEN #ST_NO#  AND #END_NO#              /*   발송  */ 
+		    	 </isNotEmpty>
+             </isNotEmpty>
+             
+           <isNotEmpty property="HOUSE_CODE">
+             AND T1.HOUSE_CODE     = #HOUSE_CODE#
+           </isNotEmpty>
+             AND T1.HOUSE_CODE     = T3.HOUSE_CODE(+)
+             AND T1.HOUSE_CSTMR_NO = T2.HOUSE_CSTMR_NO(+)
+     
+             /*  처리구분(WAIT_PROCESS_SE)  01:계약, 02:입주계약, 11:미계약, 99:계약포기  */
+             <isNotEmpty property="SNDDNG_SE">
+                 <isEqual compareValue ="1" property="SNDDNG_SE">
+		    	     AND T1.CNTRCT_NTICE_DE  IS NULL               /*  미발송 */ 
+		    	     AND NVL(T1.WAIT_PROCESS_SE, '11') != '99'   
+		    	      
+		    	 </isEqual>
+		    	 <isEqual compareValue ="2" prepend="AND"  property="SNDDNG_SE">
+		    	     T1.CNTRCT_NTICE_DE  IS NOT NULL                /*   발송  */ 
+		    	 </isEqual>
+             </isNotEmpty>
+            
+             /*  평수  */
+             <isNotEmpty property="AEA">
+			  AND T1.AEA LIKE SUBSTR(#AEA#,1,2)||'%'
+			 </isNotEmpty>
+			 
+			 /*  주민번호  */
+             <isNotEmpty property="JUMIN_NO">
+			  AND SFCOM_DEC_ALL(T2.IHIDNUM) LIKE '%'||#JUMIN_NO#||'%'
+			 </isNotEmpty>
+			
+			/*  대기자명  */
+             <isNotEmpty property="CSTMR_NM">
+			  AND T2.CSTMR_NM LIKE '%'||#CSTMR_NM#||'%'
+			 </isNotEmpty>
+			 
+			/*  접수일자:시작일  */
+            <isNotEmpty property="FROM_DATE">
+			    <![CDATA[	
+			        AND T1.WAIT_RCEPT_DE >= #FROM_DATE#
+			    ]]>
+			  
+			</isNotEmpty>
+			 
+			/*  접수일자:종료일  */
+            <isNotEmpty property="TO_DATE">
+			   <![CDATA[	
+			       AND T1.WAIT_RCEPT_DE <= #TO_DATE#
+			   ]]>	
+			</isNotEmpty>
+			
+             <isNotEmpty property="HOUSE_CSTMR_NO">
+			  AND T1.HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#
+			 </isNotEmpty>					 		
+			
+             
+           ORDER BY T1.HOUSE_CODE      /* 주택코드         */
+                  , T1.AEA             /* 주택타입코드     */
+                  , T1.WAIT_RCEPT_DE   /* 접수일자         */ 
+                  , T1.WAIT_RCEPT_SN   /* 대기접수일련번호 */
+
+                 	
+	</select>	
+	 
+	<!-- 주택고객 생성 -->
+	<insert id="HouseCstmrDAO.houseCstmrC" parameterClass="java.util.HashMap">
+		INSERT INTO TBSLS_HOUSE_CSTMR(
+			 HOUSE_CSTMR_NO	/*주택고객번호*/
+			,CSTMR_NM            	/*성명*/
+			,IHIDNUM       	/*주민등록번호*/
+			,ZIP           	/*우편번호*/
+			,ADRES         	/*주소*/
+			,ADRES_DETAIL  	/*주소_상세*/
+			,TELNO         	/*전화번호*/
+			,MBTLNO        	/*휴대폰번호*/
+			,EMAIL 			/*이메일*/
+			,REGISTER_ID	/*등록자ID*/
+			,REGIST_DT		/*등록일시*/
+			,UPDUSR_ID		/*수정자ID*/
+			,UPDT_DT		/*수정일시*/
+			,ETC_CTTPC
+		) 		
+		VALUES(
+			 SQ_TBSLS_HOUSE_CSTMR_1.NEXTVAL	/*주택고객번호*/
+			,#CSTMR_NM#           /*성명*/
+			,SFCOM_ENC_ALL(#IHIDNUM#)      /*주민등록번호*/
+			,#ZIP#          /*우편번호*/
+			,#ADRES#        /*주소*/
+			,#ADRES_DETAIL# /*주소_상세*/
+			,#TELNO#        /*전화번호*/
+			,#MBTLNO#       /*휴대폰번호*/
+			,#EMAIL#		/*이메일*/
+			,#S_USER_ID#	/*등록자ID*/
+			,SYSDATE		/*등록일시*/
+			,#S_USER_ID#	/*수정자ID*/
+			,SYSDATE 		/*수정일시*/
+			,#ETC_CTTPC#
+		)
+	</insert>
+	 
+	<!-- 주태고객 수정 -->
+	<update id="HouseCstmrDAO.houseCstmrU" parameterClass="java.util.HashMap">
+		UPDATE TBSLS_HOUSE_CSTMR SET
+			 CSTMR_NM = #CSTMR_NM#          			/*성명*/
+			,IHIDNUM = SFCOM_ENC_ALL(#IHIDNUM#)      		/*주민등록번호*/
+			,ZIP = #ZIP#  					/*우편번호*/
+			,ADRES = #ADRES#      			/*주소*/
+			,ADRES_DETAIL = #ADRES_DETAIL#  /*주소_상세*/
+			,TELNO = #TELNO#         		/*전화번호*/
+			,MBTLNO = #MBTLNO#    			/*휴대폰번호*/
+			,EMAIL = #EMAIL#				/*이메일*/
+			,UPDUSR_ID = #S_USER_ID#		/*수정자ID*/
+			,UPDT_DT = SYSDATE				/*수정일시*/
+			,ETC_CTTPC = #ETC_CTTPC#
+		WHERE HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#
+	</update>
+	 
+	<!-- 주택계약자 가족 목록 -->
+	<select id="HouseCstmrDAO.hcntrctrFamilyList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		     A.FAMILY_SN		/*가족일련번호*/
+		    ,A.CNTRCTR_CSTMR_NO	/*계약자고객번호*/
+		    ,A.CNTRCTR_NO	    /*계약자번호*/
+		    ,A.HOUSE_CSTMR_NO	/*주택고객번호*/
+		    ,A.FAMILY_RELATE	/*가족관계*/
+		    ,B.CSTMR_NM            	/*성명*/
+		    ,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM       	/*주민등록번호*/
+		    ,B.ZIP           	/*우편번호*/
+		    ,B.ADRES         	/*주소*/
+		    ,B.ADRES_DETAIL  	/*상세_주소*/
+		    ,B.TELNO         	/*전화번호*/
+		    ,B.MBTLNO        	/*휴대폰번호*/
+		    ,B.EMAIL			/*이메일*/
+		FROM TBSLS_HCNTRCTR_FAMILY A, TBSLS_HOUSE_CSTMR B
+		WHERE A.CNTRCTR_CSTMR_NO = #cntrctrCstmrNo#
+		AND   A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+		
+	</select>	
+
+	<!-- 주택계약자 가족 생성 -->
+	<insert id="HouseCstmrDAO.hcntrctrFamilyC" parameterClass="java.util.HashMap">
+	 	INSERT INTO TBSLS_HCNTRCTR_FAMILY(
+		     CNTRCTR_CSTMR_NO	/*계약자고객번호*/
+	 		,FAMILY_SN   		/*가족일련번호*/
+	 		,CNTRCTR_NO  		/*계약자번호*/
+		    ,HOUSE_CSTMR_NO		/*주택고객번호*/
+		    ,FAMILY_RELATE 		/*가족관계*/
+		    ,RM 				/*비고*/
+			,REGISTER_ID		/*등록자ID*/
+			,REGIST_DT			/*등록일시*/
+			,UPDUSR_ID			/*수정자ID*/
+			,UPDT_DT			/*수정일시*/
+		) 			
+	 	VALUES(
+			 #CNTRCTR_CSTMR_NO#	/*계약자고객번호*/            
+	 		,SQ_TBSLS_HCNTRCTR_FAMILY_1.NEXTVAL	/*가족일련번호*/
+	 		,#CNTRCTR_NO#		/*계약자번호*/
+	 		,#HOUSE_CSTMR_NO#	/*주택고객번호*/
+			,#FAMILY_RELATE#   	/*가족관계*/
+			,#RM#   			/*비고*/
+			,#S_USER_ID#		/*등록자ID*/
+			,SYSDATE			/*등록일시*/
+			,#S_USER_ID#		/*수정자ID*/
+			,SYSDATE 			/*수정일시*/
+	 		)
+	</insert>
+	
+	<!-- 주택계약자 가족 수정 -->
+	<update id="HouseCstmrDAO.hcntrctrFamilyU" parameterClass="java.util.HashMap">
+		UPDATE TBSLS_HCNTRCTR_FAMILY SET
+			 HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#	/*주택고객번호*/
+			,FAMILY_RELATE = #FAMILY_RELATE#	/*가족관계*/
+			,RM = #RM#							/*비고*/
+			,UPDUSR_ID = #S_USER_ID#			/*수정자ID*/
+			,UPDT_DT = SYSDATE					/*수정일시*/
+		WHERE CNTRCTR_CSTMR_NO = #CNTRCTR_CSTMR_NO#
+		AND   HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#
+	</update>
+	
+	<!-- 주택계약자 가족 삭제 -->
+	<delete id="HouseCstmrDAO.hcntrctrFamilyD" parameterClass="java.util.HashMap">
+		DELETE FROM TBSLS_HCNTRCTR_FAMILY
+		WHERE CNTRCTR_CSTMR_NO = #CNTRCTR_CSTMR_NO#
+		AND   HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#
+	</delete>
+	
+	
+	<!-- 주택계약자 특정 가족 삭제 -->
+	<delete id="HouseCstmrDAO.delOnehcntrctrFamily" parameterClass="java.util.HashMap">
+		DELETE FROM TBSLS_HCNTRCTR_FAMILY
+		WHERE CNTRCTR_CSTMR_NO = #CNTRCTR_CSTMR_NO#
+		AND   FAMILY_SN = #FAMILY_SN#
+	</delete>
+	
+	<!-- 주택계약자 공유자 목록 -->
+	<select id="HouseCstmrDAO.hcntrctrCocnrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		     A.COCNR_SN			/*공유자일련번호*/
+		    ,A.CNTRCTR_CSTMR_NO	/*계약자고객번호*/
+		    ,A.HOUSE_CSTMR_NO	/*주택고객번호*/
+		    ,B.CSTMR_NM            	/*성명*/
+		    ,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM       	/*주민등록번호*/
+		    ,B.ZIP           	/*우편번호*/
+		    ,B.ADRES         	/*주소*/
+		    ,B.ADRES_DETAIL  	/*상세_주소*/
+		    ,B.TELNO         	/*전화번호*/
+		    ,B.MBTLNO        	/*휴대폰번호*/
+		    ,B.EMAIL			/*이메일*/
+		FROM TBSLS_HCNTRCTR_COCNR A, TBSLS_HOUSE_CSTMR B
+<!-- 		WHERE A.CNTRCTR_CSTMR_NO = #cntrctrCstmrNo#
+		AND   A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO
+		 -->
+		WHERE 1=1
+		AND   A.COCNR_SN = #COCNR_SN#
+		AND   A.CNTRCTR_NO = #CNTRCTR_NO#
+		AND   A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO	
+	</select>	
+
+	<!-- 주택계약자 공유자 생성 -->
+	<insert id="HouseCstmrDAO.hcntrctrCocnrC" parameterClass="java.util.HashMap">
+	 	INSERT INTO TBSLS_HCNTRCTR_COCNR(
+<!-- 		     CNTRCTR_CSTMR_NO	/*계약자고객번호*/ -->
+	 		COCNR_SN     		/*공유자일련번호*/
+		    ,CNTRCTR_NO  		/*계약자번호*/
+		    ,HOUSE_CSTMR_NO		/*주택고객번호*/
+			,REGISTER_ID		/*등록자ID*/
+			,REGIST_DT			/*등록일시*/
+			,UPDUSR_ID			/*수정자ID*/
+			,UPDT_DT			/*수정일시*/
+		) 
+	 	VALUES(
+<!-- 			 #CNTRCTR_CSTMR_NO# /*계약자고객번호*/      -->      
+	 		SQ_TBSLS_HCNTRCTR_COCNR_1.NEXTVAL	/*공유자일련번호*/
+	 		,#CNTRCTR_NO#		/*계약자번호*/
+	 		,#HOUSE_CSTMR_NO#	/*주택고객번호*/
+			,#S_USER_ID#		/*등록자ID*/
+			,SYSDATE			/*등록일시*/
+			,#S_USER_ID#		/*수정자ID*/
+			,SYSDATE 			/*수정일시*/
+	 		)
+	</insert>
+	
+	<!-- 주택계약자 공유자 수정 -->
+	<update id="HouseCstmrDAO.hcntrctrCocnrU" parameterClass="java.util.HashMap">
+		UPDATE TBSLS_HCNTRCTR_COCNR SET
+			 HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#	/*주택고객번호*/
+			,UPDUSR_ID = #S_USER_ID#			/*수정자ID*/
+			,UPDT_DT = SYSDATE					/*수정일시*/
+		WHERE 1=1
+		<!-- AND   CNTRCTR_CSTMR_NO = #CNTRCTR_CSTMR_NO# -->
+		AND   COCNR_SN = #COCNR_SN#
+		AND   CNTRCTR_NO = #CNTRCTR_NO#
+		AND   HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#
+	</update>
+	
+	<!-- 주택계약자 공유자 삭제 -->
+	<delete id="HouseCstmrDAO.hcntrctrCocnrD" parameterClass="java.util.HashMap">
+		DELETE FROM TBSLS_HCNTRCTR_COCNR
+		 WHERE 1 = 1
+<!-- 		   AND CNTRCTR_CSTMR_NO = #CNTRCTR_CSTMR_NO# -->
+		   AND   CNTRCTR_NO = #CNTRCTR_NO#
+		   AND COCNR_SN = #COCNR_SN#
+		   AND   HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#
+	</delete>
+	
+	<!-- 주택고객사업자 목록 -->
+	<select id="HouseCstmrDAO.hcntrctrBsnmList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT
+			 A.BSNM_SN			/*사업자일련번호(SQ_TBSLS_HCNTRCTR_BSNM_1)*/
+			,A.CNTRCTR_NO		/*계약자번호*/
+		    ,A.HOUSE_CSTMR_NO	/*주택고객번호*/
+		    ,A.BIZRNO			/*사업자등록번호*/
+		    ,A.MTLTY_NM			/*상호명*/
+		    ,A.BIZCND			/*업태*/
+		    ,A.INDUTY			/*업종*/
+		    ,A.ADRES		/*사업자주소*/
+		    ,A.BSNS_CONFM_DE	/*사업승인일자*/
+		    ,A.RM				/*비고*/
+		    ,B.CSTMR_NM				/*사업자명*/
+		    ,SFCOM_DEC_ALL(B.IHIDNUM) AS IHIDNUM			/*주민등록번호*/
+		    ,B.TELNO			/*전화번호*/
+		    ,B.MBTLNO			/*휴대전화번호*/
+		    ,TO_CHAR(A.REGIST_DT, 'YYYYMMDD') AS REGIST_DT/*등록일자*/
+		FROM 
+			 TBSLS_HCNTRCTR_BSNM A
+		    ,TBSLS_HOUSE_CSTMR B
+		WHERE A.CNTRCTR_NO = #cntrctrNo#
+		AND   A.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO(+)
+	</select>
+	
+	<!-- 주택고객사업자 생성 -->
+	<insert id="HouseCstmrDAO.hcntrctrBsnmC" parameterClass="java.util.HashMap">
+		INSERT INTO TBSLS_HCNTRCTR_BSNM(
+			 BSNM_SN		
+			,CNTRCTR_NO		
+			,HOUSE_CSTMR_NO
+			,BIZRNO			
+			,MTLTY_NM		
+			,BIZCND		
+			,INDUTY			
+			,ADRES	
+			,BSNS_CONFM_DE	
+			,RM	
+			,USE_AT			
+			,REGISTER_ID	
+			,REGIST_DT		
+			,UPDUSR_ID		
+			,UPDT_DT		
+		) 
+		VALUES(
+			 SQ_TBSLS_HCNTRCTR_BSNM_1.NEXTVAL			
+			,#CNTRCTR_NO#		
+			,#HOUSE_CSTMR_NO#	
+			,#BIZRNO#			
+			,#MTLTY_NM#		
+			,#BIZCND#			
+			,#INDUTY#			
+			,#ADRES# || #ADRES_DETAIL#		
+			,#BSNS_CONFM_DE#	
+			,#RM#	
+            <isEqual property="USE_AT" compareValue="Y">
+             ,#USE_AT#      
+            </isEqual>
+            <isEqual property="USE_AT" compareValue="N">
+             ,''     
+            </isEqual>	            						
+			,#S_USER_ID#		
+			,SYSDATE			
+			,#S_USER_ID#		
+			,SYSDATE			
+		)
+	</insert>
+	
+	<!-- 주택고객사업자 수정 -->
+	<update id="HouseCstmrDAO.hcntrctrBsnmU" parameterClass="java.util.HashMap">
+		UPDATE TBSLS_HCNTRCTR_BSNM SET
+			 HOUSE_CSTMR_NO = #HOUSE_CSTMR_NO#	/*주택고객번호*/
+			,BIZRNO	= #BIZRNO#					/*사업자등록번호*/
+			,MTLTY_NM = #MTLTY_NM#				/*상호명*/
+			,BIZCND	= #BIZCND#					/*업태*/
+			,INDUTY	= #INDUTY#					/*업종*/
+			,ADRES	= #ADRES# || #ADRES_DETAIL#			/*사업자주소*/
+			,BSNS_CONFM_DE = #BSNS_CONFM_DE#	/*사업승인일자*/
+			,RM	= #RM#							/*비고*/
+            <isEqual property="USE_AT" compareValue="Y">
+             ,USE_AT	= #USE_AT#      
+            </isEqual>
+            <isEqual property="USE_AT" compareValue="N">
+             ,USE_AT	= ''      
+            </isEqual>	 			
+			,UPDUSR_ID = #S_USER_ID#			/*수정자ID*/
+			,UPDT_DT = SYSDATE					/*수정일시*/
+		WHERE BSNM_SN = #BSNM_SN#
+	</update>
+	
+	<!-- 주택고객사업자 삭제 -->
+	<delete id="HouseCstmrDAO.hcntrctrBsnmD" parameterClass="java.util.HashMap">
+		DELETE FROM TBSLS_HCNTRCTR_BSNM
+		WHERE BSNM_SN = #BSNM_SN#
+	</delete>
+	
+</sqlMap>

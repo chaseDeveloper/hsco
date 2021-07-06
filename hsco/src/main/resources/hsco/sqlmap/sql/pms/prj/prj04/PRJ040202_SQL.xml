@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj04">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_BSNS_SUMRY			사업개요
+		 R   : TBPRJ_WIK_FAIR			주간(월간)공정관리
+	-->
+	<!-- 월간공정 ================================================== -->
+	<!-- 월간공정 조회 -->
+	<select id="PRJ040202.wfList" parameterClass="map" resultClass="hashmap">
+		/* PRJ040202.wfList[월간공정 조회] */
+		SELECT A.BSNS_CODE,									/* 사업코드 */
+			   A.CNTRCT_NO,									/* 계약번호 */
+			   A.WEEK_MT_SE,								/* 주월구분 */
+			   A.ODR,										/* 차수 */
+			   A.BGNDE,										/* 시작일자 */
+			   A.ENDDE,										/* 종료일자 */
+			   A.REPORT_YM,									/* 보고년월 */
+			   A.FAIR_RT_PLAN,								/* 공정율_계획 */
+			   A.FAIR_RT_ACMSLT,							/* 공정율_실적 */
+			   A.FAIR_RT_PLAN - A.FAIR_RT_ACMSLT AS DIFF1,	/* 공정율 차이 */
+			   A.FAIR_RT_GOAL,								/* 공정율_목표 */
+			   SUM(A.FAIR_RT_PLAN) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO, A.WEEK_MT_SE
+					ORDER BY A.REPORT_YM ASC
+					ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS S_1,			/* 누계_계획 */
+			   SUM(A.FAIR_RT_ACMSLT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO, A.WEEK_MT_SE
+					ORDER BY A.REPORT_YM ASC
+					ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS S_2,			/* 누계_실적 */
+			   SUM(A.FAIR_RT_PLAN) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO, A.WEEK_MT_SE
+					ORDER BY A.REPORT_YM ASC
+					ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) - 
+			   SUM(A.FAIR_RT_ACMSLT) OVER (PARTITION BY A.BSNS_CODE, A.CNTRCT_NO, A.WEEK_MT_SE
+					ORDER BY A.REPORT_YM ASC
+					ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS DIFF2,			/* 누계 차이 */
+			   A.FILE_SN,									/* 파일일련번호 */
+			   (SELECT MAX(FILE_ORDR) 
+				  FROM TBCOM_CMMN_ATCHMNFL F
+				  WHERE F.FILE_SN = A.FILE_SN
+			   ) AS FILE_ORDR								/* 파일순차 */
+		FROM TBPRJ_WIK_FAIR A								/* 주간공정 */
+		WHERE A.BSNS_CODE = #BSNS_CODE#						/* 사업코드 */
+		  AND A.CNTRCT_NO = #CNTRCT_NO#						/* 계약번호 */
+		  AND A.WEEK_MT_SE = '2'							/* 주월구분 */
+		ORDER BY A.ODR
+	</select>
+</sqlMap>

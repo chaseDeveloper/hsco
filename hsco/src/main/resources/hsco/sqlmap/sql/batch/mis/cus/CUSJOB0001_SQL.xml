@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUDJOB0001_SQL">	
+    
+    <!-- 반려시 문자발송을 위한 고객담당자 조회 -->
+	<select id="CUSJOB0001.selectCmrCharger" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+			SELECT A.USER_ID AS EMPNO                             /*담당자사번*/
+			     , B.EMPNM                                        /*담당자명*/
+			     , (CASE
+			           WHEN SUBSTR(B.TELNO_1, 0,2) = '01' 
+			             THEN B.TELNO_1
+			           ELSE H_DECRYPT(B.TELNO_2)
+			       END) AS TELNO                                 /*담당자전화번호*/
+			FROM TBCOM_USER_GRP A
+			LEFT OUTER JOIN TBHRM_HR_MASTR B
+			  ON A.USER_ID     = B.EMPNO
+		   WHERE A.AUTH_GRP_ID = 'CUS_USER'
+	</select>
+
+	<!-- 직원칭찬&고객제안 미처리건 조회 -->
+	<select id="CUSJOB0001.cntUnprocess" parameterClass="java.lang.Integer" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH CNT AS(
+			SELECT count(*) AS CNT 
+			     , NULL AS UNPROCESS_CNT
+			FROM  TBCUS_CSTMR_PARTCPTN
+			WHERE REGIST_DT < SYSDATE
+			  AND REGIST_DT > (CASE WHEN TO_CHAR(SYSDATE,'HH') = '09' THEN  SYSDATE - 15/24 
+			                                                          ELSE  SYSDATE -  1/24 END)
+			  AND PARTCPTN_SE  = #value#
+		  UNION ALL
+			SELECT NULL AS CNT 
+			     , count(*) AS UNPROCESS_CNT 
+			 FROM  TBCUS_CSTMR_PARTCPTN
+			 WHERE PROCESS_SE IS NULL
+		)
+		SELECT MAX(CNT) AS CNT , MAX(UNPROCESS_CNT) AS UNPROCESS_CNT
+		FROM CNT
+	]]>
+	</select>
+	
+    <!-- 메신저(인트라웨어) 사원번호 조회 -->
+	<select id="CUSJOB0001.msgEmpno" parameterClass="java.util.HashMap"  resultClass="java.lang.String">
+		SELECT
+		     USER_ID
+		    ,NAME
+		FROM INTRAWARE.USR_GLOBAL A
+		WHERE  USER_ID= ( SELECT B.USER_ID
+					      FROM   INTRAWARE.GW_USER_INFO B
+					      WHERE  B.EMP_CODE=#RCVER_USER_ID#
+					    )
+	</select>
+	
+	
+	<!-- 알림발송내역 추가 -->
+	<insert id="CUSJOB0001.NtcnSndngC" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_NTCN_SNDNG_DTLS (			/** 알림발송내역 */
+        	 SNDNG_DTLS_SN			    /** 발송내역일련번호 */
+        	,SNDNG_DT			        /** 발송일시 */
+        	,RCVER_USER_ID			    /** 수신자사용자ID */
+        	,RCVER_USER_NM			    /** 수신자사용자명 */
+        	,SENDER_USER_ID			    /** 발송자사용자ID */
+        	,SENDER_USER_NM			    /** 발송자사용자명 */
+        	,NTCN_SJ			        /** 알림제목 */
+        	,LINK_ADRES			        /** 링크주소 */
+        	,NTCN_CN			        /** 알림내용 */
+        	,REGISTER_ID			    /** 등록자ID */
+        	,REGIST_DT			        /** 등록일시 */
+        	,UPDUSR_ID			        /** 수정자ID */
+        	,UPDT_DT			        /** 수정일시 */
+        ) VALUES (
+        	 (SELECT NVL(MAX(SNDNG_DTLS_SN)+1,1) FROM TBCOM_NTCN_SNDNG_DTLS)			/** 발송내역일련번호 */
+        	,SYSDATE			        /** 발송일시 */
+        	,#RCVER_USER_ID#			/** 수신자사용자ID */
+        	,#RCVER_USER_NM#			/** 수신자사용자명 */
+        	,#SENDER_USER_ID#			/** 발송자사용자ID */
+        	,#SENDER_USER_NM#			/** 발송자사용자명 */
+        	,#NTCN_SJ#			        /** 알림제목 */
+        	,#LINK_ADRES#			    /** 링크주소 */
+        	,#NTCN_CN#			        /** 알림내용 */
+        	,#S_USER_ID#			    /** 등록자ID */
+        	,SYSDATE			        /** 등록일시 */
+        	,#S_USER_ID#			    /** 수정자ID */
+        	,SYSDATE			        /** 수정일시 */
+        )
+	</insert>
+	
+</sqlMap>

@@ -1,0 +1,189 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/********************************************************
+파일명 : datasetUtil.xjs
+설 명 : 데이터셋 공통 유틸
+수정일 수정자 Version Function 명
+------- -------- ---------- --------------
+2015.09.23 지효정 cmpUtil에서 데이터셋 기능 분리
+*********************************************************/
+
+/***********************************************************************************
+* 설명	: Form에서 공통적으로 적용될 초기화 설정
+***********************************************************************************/
+this.fn_init = function(bSkipEnterFocusInit){
+	//시스템 공통으로 Form을 Initialize 한다.
+	this.gfn_initForm(this);	
+	//폼내의 모든 그리드 초기화
+	this.fn_init_allGrid(this);
+	//search 영역 초기화
+	this.fn_init_search();	
+		
+	//콤포넌트의 엔터키 처리 초기화
+	if(bSkipEnterFocusInit !== true){
+		this.fn_init_enterKeyEvent(this);
+	}
+	//form load시에 공통으로 처리할 기능 정의
+	this.addEventHandler("onload", this._fn_form_onload, this); 
+	//데이터셋 기능 추가
+	this.fn_add_datasetFn();	
+}
+
+this._fn_form_onload = function(obj:Form, e:nexacro.LoadEventInfo){
+	this.debug("_fn_form_onload", true);
+	this.fn_init_fucos();
+}
+
+/***********************************************************************************
+* 설명	: search 영역 초기화 설정
+* div 	: search div 설정, 기본값은 this.div_search
+* fn_search : 조회 함수 설정, 기본값은 this.fn_Search, this.fn_search
+***********************************************************************************/
+this.fn_init_search = function(){
+	div = this.div_search;
+	
+	if(div == null){
+		return;
+	}
+	
+	var len = div.components.length;
+	for(var i=0; i<len; i++){
+		var item = div.components.get_item(i);
+		switch(item.toString()){
+			case "[object Edit]":
+			case "[object MaskEdit]":
+			case "[object TextArea]":
+			case "[object Spin]":
+			case "[object Calendar]":
+				item.addEventHandler("onkeydown", this._fn_searchEditOnkeydownHandler, this);
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: Enter key 입력시 taborder에 따라서 포커스 이동
+***********************************************************************************/
+this.fn_init_enterKeyEvent = function(div){
+	if(div == null){
+		return;
+	}
+	
+	var len = div.components.length;
+	for(var i=0; i<len; i++){
+		var item = div.components.get_item(i);
+		
+		switch(item.toString()){
+			case "[object Edit]":
+			case "[object MaskEdit]":
+			case "[object TextArea]":
+			case "[object Spin]":
+			case "[object Calendar]":
+			case "[object Combo]":
+				item.addEventHandler("onkeydown", this._fn_editOnkeydownHandler, this);
+				break;
+				
+			case "[object Div]":
+			case "[object Tab]":
+			case "[object Tabpage]":
+				this.fn_init_enterKeyEvent(item);
+				break;
+		}
+	}
+}
+
+
+/***********************************************************************************
+* 설명	: 콤보에 "전체", "선택"등의 헤더를 추가 한다. 
+* 바이드될 데이터셋의 컬럼이 "CODE", "DATA"가 기본 값으로 사용됨
+* 바이드될 데이터셋의 컬럼이 "CODE", "DATA"가 아닐경우 값을 세팅해야 함.
+***********************************************************************************/
+this.fn_add_comboHeader = function(form, combo, strHeader, strCodeColumn, strDataColumn){
+	var ds = form[combo.innerdataset];
+	if(strCodeColumn == null) strCodeColumn = combo.codecolumn ? combo.codecolumn : "CODE";
+	if(strDataColumn == null) strDataColumn = combo.datacolumn ? combo.datacolumn : "DATA";
+	ds.insertRow(0);
+	ds.setColumn(0, strCodeColumn, "");
+	ds.setColumn(0, strDataColumn, strHeader);
+	combo.set_index(0);
+}
+
+/***********************************************************************************
+* 설명	: div 영역 내의 Edit 콤포넌트 Enter key 입력시 taborder에 따라서 포커스 이동
+***********************************************************************************/
+this.fn_init_enterKeyEvent = function(div){
+	if(div == null){
+		return;
+	}
+	
+	var len = div.components.length;
+	for(var i=0; i<len; i++){
+		var item = div.components.get_item(i);
+		
+		switch(item.toString()){
+			case "[object Edit]":
+			case "[object MaskEdit]":
+			case "[object TextArea]":
+			case "[object Spin]":
+			case "[object Calendar]":
+			case "[object Combo]":
+				item.addEventHandler("onkeydown", this._fn_editOnkeydownHandler, this);
+				break;
+				
+			case "[object Div]":
+			case "[object Tab]":
+				this.fn_init_enterKeyEvent(item);
+				break;
+		}
+	}
+}
+
+/***********************************************************************************
+* 설명	: 폼 시작시 디폴트 포커스 지정
+***********************************************************************************/
+this.fn_init_fucos = function(){
+	this._fn_find_nextTabIndex(this);
+}
+
+/***********************************************************************************
+* 설명	: div 영역 내의 Edit 콤포넌트 Enter key 이벤트 처리
+***********************************************************************************/
+this._fn_editOnkeydownHandler = function(obj, e)
+{
+	if(e.keycode == 13){
+		this.fn_find_nextTabIndex(obj);
+	}
+}
+
+/***********************************************************************************
+* 설명	: obj의 다음 Taborder 검색후 포커스 지정
+***********************************************************************************/
+this._fn_find_nextTabIndex = function(obj){
+	var objComponent = obj;
+	var nextComponent = this.getNextComponent(obj);
+	while(objComponent != nextComponent){
+		switch(nextComponent.toString()){
+			case "[object Edit]":
+			case "[object MaskEdit]":
+			case "[object TextArea]":
+			case "[object Spin]":
+			case "[object Calendar]":
+			case "[object Combo]":
+				nextComponent.setFocus();
+				return;
+		}
+		
+		objComponent = nextComponent;
+		nextComponent = this.getNextComponent(objComponent, false);
+	}
+}
+/***********************************************************************************
+* 설명	: Y, N, 문자 0을 true, false 로 변환 한다. 
+***********************************************************************************/
+this.fn_boolean = function(value){
+	if(value == 'Y' || value == 'y' || value == '1' || value == 1){
+		return true; 
+	}else if(value == 'N' || value == 'n' || value =='0' || value == 0){
+		return false;
+	}
+	
+	return Boolean(value);
+}]]></Script>

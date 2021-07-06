@@ -1,0 +1,639 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010303_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!--고객 계약 목록조회 -->
+	<select id="CUS010303DAO.selectCstmrList01" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			<![CDATA[
+			SELECT 
+				     A.CSTMR_SE                                              AS CSTMR_SE        		/*고객구분*/
+				   , A.PRMANENT_CSTMR_NO                                     AS PRMANENT_CSTMR_NO   	/*고객번호*/
+				   , A.CNTRCT_AT                                             AS CNTRCT_AT            /*계약자여부*/
+				   , A.NM                                                    AS NM                   /*성명*/
+				   , A.IHIDNUM				                                 AS IHIDNUM              /*주민번호*/
+				   , A.EMAIL                                                 AS EMAIL                /*이메일*/
+				   , TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890')   AS TELNO                /*전화번호 원본 값*/
+				   , TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890') AS MBTLNO               /*핸드폰번호 원본 값*/
+				   , A.ZIP                                                   AS ZIP                  /*고객기본 우편번호*/
+			       , A.ADRES                                                 AS ADRES                /*고객기본 주소*/
+			       , VIEW_SE
+                   , JOB_SE
+                   , CNTRCTR_NO
+                   , HOUSE_CODE
+                   , WAIT_RECEP_DE
+                   , WAITR_SN
+                   , DONG
+                   , HO
+			  FROM ( 
+			  
+				   /*기타고객 정보*/
+					SELECT 
+                           '01'            AS CSTMR_SE          /*고객구분*/
+                          , NULL           AS PRMANENT_CSTMR_NO /*고객번호*/
+                          , '0'            AS CNTRCT_AT         /*계약자여부*/
+                          , REPLACE(MAX(A.CSTMR_NM),'　','')     AS NM
+                          , NULL                                AS IHIDNUM
+                          , MAX(A.GNRL_TLPHON)                  AS TELNO             /*전화번호*/
+                          , MAX(A.MBTLNO)                       AS MBTLNO            /*휴대폰번호*/
+                          , MAX(A.EMAIL)                        AS EMAIL
+                          , MAX(A.ZIP)                          AS ZIP               /*우편번호*/
+                          , MAX(A.ADRES)                        AS ADRES             /*주소*/
+                          , ''	AS	VIEW_SE
+			              , ''	AS	JOB_SE
+			              , ''	AS	CNTRCTR_NO
+			              , ''	AS	HOUSE_CODE
+			              , ''	AS	WAIT_RECEP_DE
+			              , ''	AS	WAITR_SN
+			              , ''	AS	DONG
+			              , ''	AS	HO
+					FROM TBCUS_HMPG_CSTMR_INFO A
+                    WHERE 1=1
+				   ]]>
+				   <isNotEmpty property="SE" prepend="AND">
+				      SE = #SE#
+				   </isNotEmpty>
+                    GROUP BY CSTMR_NM, MBTLNO
+				   <![CDATA[
+
+				UNION ALL
+				        
+					/*온라인고객*/
+                    SELECT '09'                   AS CSTMR_SE          /*고객구분*/
+                          , NULL                  AS PRMANENT_CSTMR_NO /*고객번호*/
+                          , '0'                   AS CNTRCT_AT         /*계약자여부*/
+                          , REPLACE(MAX(A.MEMBER_NAME),'　','')         AS NM
+                          , NULL                                       AS IHIDNUM
+                          , SFCOM_DEC_ALL(MAX(A.MEMBER_TEL1))||SFCOM_DEC_ALL(MAX(A.MEMBER_TEL2))||SFCOM_DEC_ALL(MAX(A.MEMBER_TEL3)) AS TELNO             /*전화번호*/
+                          , SFCOM_DEC_ALL(MAX(A.MEMBER_HP1))||SFCOM_DEC_ALL(MAX(A.MEMBER_HP2))||SFCOM_DEC_ALL(MAX(A.MEMBER_HP3))    AS MBTLNO            /*휴대폰번호*/
+                          , SFCOM_DEC_ALL(MAX(A.MEMBER_EMAIL))         AS EMAIL
+                          , MAX(A.ZIP_CODE)                            AS ZIP               /*우편번호*/
+                          , SFCOM_DEC_ALL(MAX(A.MEMBER_ADDR1)) || ' ' || SFCOM_DEC_ALL(MAX(A.MEMBER_ADDR2))          AS ADRES             /*주소*/
+                          , ''	AS	VIEW_SE
+			              , ''	AS	JOB_SE
+			              , ''	AS	CNTRCTR_NO
+			              , ''	AS	HOUSE_CODE
+			              , ''	AS	WAIT_RECEP_DE
+			              , ''	AS	WAITR_SN
+			              , ''	AS	DONG
+			              , ''	AS	HO
+                    FROM TBHPM_MEMBER A
+                    WHERE 1=1
+					GROUP BY A.MEMBER_ID
+				
+				 UNION ALL
+				
+					/*영구/상가 임대 고객 정보*/
+					SELECT '02' 				AS CSTMR_SE
+					     , TO_CHAR(CSTMR_NO)    AS PRMANENT_CSTMR_NO
+					     , DECODE(VIEW_SE, 'RN1-1', '0', '1')   AS CNTRCT_AT
+					     , CSTMR_NM     AS NM
+					     , CSTMR_IHIDNUM    AS IHIDNUM
+					     , TELNO            AS TELNO
+					     , MBTLNO           AS MBTLNO
+					     , EMAIL            AS EMAIL
+					     , ''               AS ZIP
+					     , ADRES            AS ADRES
+					     , VIEW_SE
+		                 , JOB_SE
+		                 , CNTRCTR_NO
+		                 , HOUSE_CODE
+		                 , WAIT_RECEP_DE
+		                 , WAITR_SN
+		                 , DONG
+		                 , HO
+					 FROM VICUS_CSTMR_INFO
+					WHERE 1=1
+					  AND VIEW_SE IN ('RN1-1', 'RN1-2')
+ 
+				 UNION ALL
+				 
+				 /*매입임대*/
+				 	SELECT '04'                 AS CSTMR_SE          /*고객구분*/
+		            	 , TO_CHAR(CSTMR_NO)    AS PRMANENT_CSTMR_NO
+					     , DECODE(VIEW_SE, 'RN2-1', '0', '1')   AS CNTRCT_AT
+					     , CSTMR_NM     AS NM
+					     , CSTMR_IHIDNUM    AS IHIDNUM
+					     , TELNO            AS TELNO
+					     , MBTLNO           AS MBTLNO
+					     , EMAIL            AS EMAIL
+					     , ''               AS ZIP
+					     , ADRES            AS ADRES
+					     , VIEW_SE
+		                 , JOB_SE
+		                 , CNTRCTR_NO
+		                 , HOUSE_CODE
+		                 , WAIT_RECEP_DE
+		                 , WAITR_SN
+		                 , DONG
+		                 , HO
+					 FROM VICUS_CSTMR_INFO
+					WHERE 1=1
+					  AND VIEW_SE IN ('RN2-1', 'RN2-2')
+				 
+				 UNION ALL 
+				 
+				 /*전세 고객정보*/
+					SELECT '05'                                 AS CSTMR_SE          /*고객구분*/
+                    	 , TO_CHAR(CSTMR_NO)				    AS PRMANENT_CSTMR_NO
+					     , DECODE(VIEW_SE, 'RN3-1', '0', '1')   AS CNTRCT_AT
+					     , CSTMR_NM     	AS NM
+					     , CSTMR_IHIDNUM    AS IHIDNUM
+					     , TELNO            AS TELNO
+					     , MBTLNO           AS MBTLNO
+					     , EMAIL            AS EMAIL
+					     , ''               AS ZIP
+					     , ADRES            AS ADRES
+					     , VIEW_SE
+		                 , JOB_SE
+		                 , CNTRCTR_NO
+		                 , HOUSE_CODE
+		                 , WAIT_RECEP_DE
+		                 , WAITR_SN
+		                 , DONG
+		                 , HO
+					 FROM VICUS_CSTMR_INFO
+					WHERE 1=1
+					  AND VIEW_SE IN ('RN3-1', 'RN3-2')
+
+				 UNION ALL 
+				 
+				 /*보상고객정보만*/
+					SELECT '06'	                                           AS CSTMR_SE
+					       , TO_CHAR(MAX(B.OWNER_NO))                      AS PRMANENT_CSTMR_NO
+					       /*, DECODE(MAX(D.RQEST_SN),NULL,'0','1')          AS CNTRCT_AT         계약자여부*/
+					       , '0'       	 								   AS CNTRCT_AT
+					       , B.OWNER_NM                                    AS NM
+					       , SUBSTR(SFCOM_DEC_ALL(B.IHIDNUM), 0,6)         AS IHIDNUM
+					       , MAX(B.TELNO_1)                                AS TELNO             /*전화번호*/
+					       , MAX(B.TELNO_2)                                AS MBTLNO            /*휴대폰번호*/
+					       , ''                                            AS EMAIL
+					       , MAX(ZIP)                                      AS ZIP
+					       , MAX(B.ADRES) || ' ' || MAX(B.ADRES_DETAIL)    AS ADRES
+					       , ''	AS	VIEW_SE
+			               , ''	AS	JOB_SE
+			               , ''	AS	CNTRCTR_NO
+			               , ''	AS	HOUSE_CODE
+			               , ''	AS	WAIT_RECEP_DE
+			               , ''	AS	WAITR_SN
+			               , ''	AS	DONG
+			               , ''	AS	HO
+					FROM   TBCMP_THING_OWNER A
+					       INNER JOIN TBCMP_OWNER B
+					               ON A.BSNS_AREA_CODE = B.BSNS_AREA_CODE
+					              AND A.OWNER_NO = B.OWNER_NO
+					       INNER JOIN TBCMP_THING_WTNNC C
+					               ON A.BSNS_AREA_CODE = C.BSNS_AREA_CODE
+					              AND A.THING_SN = C.THING_SN
+					       INNER JOIN TBCMP_RWMNY_PYMNT D
+					               ON B.BSNS_AREA_CODE = D.BSNS_AREA_CODE
+					              AND B.OWNER_NO = D.OWNER_NO        
+					WHERE 1=1
+					GROUP BY B.OWNER_NM, B.IHIDNUM
+				 
+				 UNION ALL 
+				 
+				 /*토지고객 정보만*/
+					SELECT '07'                                 AS CSTMR_SE          /*고객구분*/
+                    	 , TO_CHAR(CSTMR_NO)				    AS PRMANENT_CSTMR_NO
+					     , DECODE(VIEW_SE, 'LAD-1', '1', '0')   AS CNTRCT_AT
+					     , CSTMR_NM     AS NM
+					     , CSTMR_IHIDNUM    AS IHIDNUM
+					     , TELNO            AS TELNO
+					     , MBTLNO           AS MBTLNO
+					     , EMAIL            AS EMAIL
+					     , ''               AS ZIP
+					     , ADRES            AS ADRES
+					     , VIEW_SE
+		                 , JOB_SE
+		                 , CNTRCTR_NO
+		                 , HOUSE_CODE
+		                 , WAIT_RECEP_DE
+		                 , WAITR_SN
+		                 , DONG
+		                 , HO
+					 FROM VICUS_CSTMR_INFO
+					WHERE 1=1
+					  AND VIEW_SE = 'LAD-1'
+				 
+				 UNION ALL 
+				 
+				 /*분양(주택)고객 정보만*/
+					SELECT '08' 				AS CSTMR_SE
+					     , TO_CHAR(CSTMR_NO)    AS PRMANENT_CSTMR_NO
+					     , DECODE(VIEW_SE, 'HOU-1', '0', '1')   AS CNTRCT_AT
+					     , CSTMR_NM     	AS NM
+					     , CSTMR_IHIDNUM    AS IHIDNUM
+					     , TELNO            AS TELNO
+					     , MBTLNO           AS MBTLNO
+					     , EMAIL            AS EMAIL
+					     , ''               AS ZIP
+					     , ADRES            AS ADRES
+					     , VIEW_SE
+		                 , JOB_SE
+		                 , CNTRCTR_NO
+		                 , HOUSE_CODE
+		                 , WAIT_RECEP_DE
+		                 , WAITR_SN
+		                 , DONG
+		                 , HO
+					 FROM VICUS_CSTMR_INFO
+					WHERE 1=1
+					  AND VIEW_SE IN ('HOU-1', 'HOU-2', 'HOU-3')
+					                    		 	  
+                  UNION ALL
+                  
+                  /*홍보및마케팅고객*/
+		          SELECT '10'   AS CSTMR_SE
+				     , ''       AS PRMANENT_CSTMR_NO
+				     , '0'      AS CNTRCT_AT 
+				     , A.MEMBER_NAME        AS NM
+				     , SUBSTR(SFCOM_DEC_ALL(BIRTH_YEAR), 3, 2)||SFCOM_DEC_ALL(BIRTH_MONTH)||SFCOM_DEC_ALL(BIRTH_DAY) AS IHIDNUM
+				     , SFCOM_DEC_ALL(A.MEMBER_TEL1)||SFCOM_DEC_ALL(A.MEMBER_TEL2)||SFCOM_DEC_ALL(A.MEMBER_TEL3) AS TELNO
+				     , SFCOM_DEC_ALL(A.MEMBER_HP1)||SFCOM_DEC_ALL(A.MEMBER_HP2)||SFCOM_DEC_ALL(A.MEMBER_HP3) AS MBTLNO
+				     , SFCOM_DEC_ALL(A.MEMBER_EMAIL) AS EMAIL
+				     , ''                            AS ZIP
+				     , SFCOM_DEC_ALL(A.MEMBER_ADDR1)||SFCOM_DEC_ALL(A.MEMBER_ADDR2) AS ADRES
+				     , ''	AS	VIEW_SE
+	                 , ''	AS	JOB_SE
+	                 , ''	AS	CNTRCTR_NO
+	                 , ''	AS	HOUSE_CODE
+	                 , ''	AS	WAIT_RECEP_DE
+	                 , ''	AS	WAITR_SN
+	                 , ''	AS	DONG
+	                 , ''	AS	HO
+				  FROM TBHPM_MEMBER A, 
+				       TBHPG_SMS_ALIMI B
+				 WHERE A.MEMBER_ID = B.MEMBER_ID(+)
+				   AND NVL(B.ALIMI_RECV_YN6, 'N') = 'Y'
+				) A
+                LEFT OUTER JOIN (
+					            SELECT  NM     AS NM
+						              , MBTLNO AS MBTLNO
+						              , NVL(MAX(CSTMR_GRAD), '02') AS CSTMR_GRAD
+						        FROM TBCUS_HMPG_CSTMR_CVPL
+						        GROUP BY NM, MBTLNO 
+				) B
+				 ON A.NM     = B.NM
+				AND TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890') = B.MBTLNO
+			WHERE 1=1
+			  AND A.CSTMR_SE = #CSTMR_SE#
+ 			]]>
+            <isNotEmpty property ="CSTMR_NM">
+            	AND REPLACE(A.NM,'　','') LIKE '%' || #CSTMR_NM# || '%'
+            </isNotEmpty>
+ 			<isNotEmpty property="CSTMR_GRAD">
+ 				AND B.CSTMR_GRAD = #CSTMR_GRAD#
+ 			</isNotEmpty>
+            <isNotEmpty property ="TELNO">
+				AND (TRANSLATE(A.TELNO,'1234567890'||A.TELNO,'1234567890') LIKE '%' || #TELNO# || '%' 
+                 OR 
+                     TRANSLATE(A.MBTLNO,'1234567890'||A.MBTLNO,'1234567890') LIKE '%' || #TELNO# || '%'
+                    )
+			</isNotEmpty>
+	</select>
+	
+   <!--통합고객목록 조회 -->
+	<select id="CUS010303DAO.selectCstmrList" parameterClass="java.util.HashMap" resultClass="hsco.cmm.util.OutMap">
+		<![CDATA[
+				 SELECT 
+                       A.CSTMR_SE       AS CSTMR_SE         /*고객구분*/
+				      ,A.NM             AS NM               /*성명*/
+				      ,A.CSTMR_GRAD     AS CSTMR_GRAD       /*고객등급*/
+				      ,A.ZIP            AS ZIP              /*우편번호 원본 값*/
+				      ,CASE          
+				       WHEN LENGTH(A.ZIP) = 6 THEN SUBSTR(A.ZIP,1,3) || '-' || SUBSTR(A.ZIP,4,3)
+				       WHEN LENGTH(A.ZIP) = 5 THEN ZIP
+				       ELSE NULL END  AS ZIP_2            /*변환 우편번호*/
+				      ,A.ADRES          AS ADRES            /*주소*/
+				      ,A.TELNO          AS TELNO            /*전화번호 원본 값*/
+				      ,A.TELNO          AS TELNO_2          /*변환 전화번호*/
+		              ,A.MBTLNO         AS MBTLNO           /*핸드폰번호 원본 값*/
+				      ,A.MBTLNO         AS MBTLNO_2         /*핸드폰번호*/  
+		              ,A.EMAIL          AS EMAIL            /*이메일*/
+		              ,A.PARTCLR_MATTER AS PARTCLR_MATTER   /*특이사항*/
+		              ,A.REGIST_DT      AS REGIST_DT        /*등록일*/ 
+		              ,A.CSTMR_NO       AS CSTMR_NO         /*상세조회시 사용될 키값*/
+				   FROM  
+				       (
+				         /*기타 고객정보*/
+				         SELECT
+                               '01' AS CSTMR_SE, CSTMR_NM AS NM, CSTMR_GRAD, 
+                               ZIP, ADRES, GNRL_TLPHON AS TELNO, MBTLNO, 
+                               EMAIL, TO_CHAR(PARTCLR_MATTER) AS PARTCLR_MATTER, REGIST_DT, 0 AS CSTMR_NO          
+				           FROM TBCUS_HMPG_CSTMR_INFO
+				      UNION ALL
+				           /*영구임대 계약고객 정보*/
+					     SELECT  
+					           '02' AS CSTMR_SE, NM, '02' AS CSTMR_GRAD,
+								ZIP, ADRES, TELNO, MBTLNO,
+								EMAIL, '' AS PARTCLR_MATTER, REGIST_DT, PRMANENT_CSTMR_NO AS CSTMR_NO
+						   FROM TBRNT_PRMANENT_RENT_CSTMR
+					      WHERE PRMANENT_CSTMR_NO IN( 
+						                             SELECT 
+						                                    A.PRMANENT_CSTMR_NO
+								                       FROM TBRNT_RENT_CNTRCT A
+								                      WHERE A.CNTRCTR_NO NOT IN(SELECT CNTRCTR_NO FROM TBRNT_RENT_RESCI)
+								                        AND RENT_HOUSE_CODE IN(SELECT RENT_HOUSE_CODE FROM TBRNT_RENT_HOUSE WHERE HOUSE_SE IN ('R1') )) /*상가임대 고객이 영구임대고객과 같은 테이블을 씀, R1은 영구임대고객*/
+				      UNION ALL
+				           /*상가임대 계약고객 정보*/
+					     SELECT  
+					           '03' AS CSTMR_SE, NM, '02' AS CSTMR_GRAD,
+								ZIP, ADRES, TELNO, MBTLNO,
+								EMAIL, '' AS PARTCLR_MATTER, REGIST_DT, PRMANENT_CSTMR_NO AS CSTMR_NO
+						   FROM TBRNT_PRMANENT_RENT_CSTMR
+					      WHERE PRMANENT_CSTMR_NO IN( 
+						                             SELECT 
+						                                    A.PRMANENT_CSTMR_NO
+								                       FROM TBRNT_RENT_CNTRCT A
+								                      WHERE A.CNTRCTR_NO NOT IN(SELECT CNTRCTR_NO FROM TBRNT_RENT_RESCI)
+								                        AND RENT_HOUSE_CODE IN(SELECT RENT_HOUSE_CODE FROM TBRNT_RENT_HOUSE WHERE HOUSE_SE IN ('R3') )) /*상가임대 고객이 영구임대고객과 같은 테이블을 씀, R1은 영구임대고객*/
+				      UNION ALL
+				        /*매입임대고객정보*/
+					     SELECT
+					           '04' AS CSTMR_SE, NM, '02' AS CSTMR_GRAD,
+				                ZIP, ADRES, TELNO, MBTLNO,
+				               EMAIL, '' AS PARTCLR_MATTER, REGIST_DT, PUCHAS_CSTMR_NO AS CSTMR_NO
+                           FROM TBRNT_PUCHAS_RENT_CSTMR
+                          WHERE PUCHAS_CSTMR_NO IN
+                                                  ( 
+                                                   SELECT 
+                                                          A.PUCHAS_CSTMR_NO
+                                                     FROM TBRNT_PUCHAS_CNTRCT A
+                                                    WHERE A.CNTRCTR_NO NOT IN(SELECT CNTRCTR_NO FROM TBRNT_PUCHAS_RESCI))
+				      UNION ALL
+				         /*전세 고객정보*/
+				          SELECT 
+				                '05' AS CSTMR_SE, T4.NM, '02' AS CSTMR_GRAD,
+                                T4.ZIP, T4.ADRES, T4.TELNO, T4.MBTLNO,
+                                '' AS EMAIL, '' AS PARTCLR_MATTER, T4.REGIST_DT, T4.LFSTS_CSTMR_NO AS CSTMR_NO
+						   FROM 
+						       (
+						       /*해지된 계약을 제외한 계약의 계약자번호 추출*/
+							    SELECT 
+							         T1.CNTRCTR_NO
+							        ,T2.LFSTS_CSTMR_NO
+							      FROM        
+							          (
+							           /*전세계약 - 해약*/
+							           SELECT 
+							                A.CNTRCTR_NO 
+							                ,A.A_CO
+							                ,B.B_CO
+							             FROM
+							                 (
+							                 SELECT 
+							                      CNTRCTR_NO,MAX(CNTRCTR_CO) AS A_CO
+							                   FROM TBRNT_LFSTS_HOUSE_CNTRCTR
+							               GROUP BY CNTRCTR_NO
+							               ORDER BY CNTRCTR_NO ) A,
+							                 (
+							                 SELECT CNTRCTR_NO,MAX(CNTRCTR_CO) AS B_CO
+							                   FROM TBRNT_LFSTS_RESCI_TRMNAT 
+							               GROUP BY CNTRCTR_NO
+							               ORDER BY CNTRCTR_NO ) B
+							            WHERE A.A_CO > B.B_CO ) T1
+							       INNER JOIN TBRNT_LFSTS_CNTRCT T2
+							               ON T1.CNTRCTR_NO = T2.CNTRCTR_NO
+							         GROUP BY T1.CNTRCTR_NO, T2.LFSTS_CSTMR_NO ) T3
+					   INNER JOIN TBRNT_LFSTS_CSTMR T4
+							   ON T3.LFSTS_CSTMR_NO = T4.LFSTS_CSTMR_NO
+				      UNION ALL
+				         /*보상고객정보만*/
+				         SELECT 
+                               '06' AS CSTMR_SE,OWNER_NM AS NM, '02' AS CSTMR_GRAD,
+                               ZIP, ADRES, TELNO_1 AS TELNO, TELNO_2 AS MBTLNO
+                               ,'' AS EMAIL, '' AS PARTCLR_MATTER, REGIST_DT, OWNER_NO AS CSTMR_NO
+				           FROM TBCMP_OWNER
+				           WHERE OWNER_NO IN (SELECT OWNER_NO FROM TBCMP_RWMNY_PYMNT)
+				      UNION ALL
+				         /*토지고객 정보만*/
+				         SELECT 
+                               '07' AS CSTMR_SE, CSTMR_NM AS NM, '02' AS CSTMR_GRAD,
+                               ZIP,ADRES || '' || ADRES_DETAIL AS ADRES, TELNO, MBTLNO,
+                               EMAIL, '' AS PARTCLR_MATTER, REGIST_DT, LAD_CSTMR_NO AS CSTMR_NO
+				           FROM TBSLS_LAD_CSTMR
+				          WHERE LAD_CSTMR_NO IN (SELECT LAD_CSTMR_NO FROM TBSLS_LCNTRCTR WHERE CANCL_DE IS NULL)
+				      UNION ALL
+				         /*분양(주택)고객 정보만*/
+				         SELECT 
+                               '08' AS CSTMR_SE,CSTMR_NM AS NM, '02' AS CSTMR_GRAD,
+                               ZIP, ADRES || '' || ADRES_DETAIL AS ADRES, TELNO, MBTLNO
+                               ,EMAIL, '' AS PARTCLR_MATTER, REGIST_DT, HOUSE_CSTMR_NO AS CSTMR_NO
+				           FROM TBSLS_HOUSE_CSTMR
+				           WHERE HOUSE_CSTMR_NO IN (SELECT HOUSE_CSTMR_NO FROM TBSLS_HCNTRCTR WHERE CANCL_DE IS NULL)
+				      UNION ALL
+				        /*온라인고객*/
+				        SELECT
+                            '09'                                     AS CSTMR_SE
+                            ,MEMBER_NAME                             AS NM
+                            ,'02'                                    AS CSTMR_GRAD /*고객등급*/
+                            ,ZIP_CODE                                AS ZIP
+                            ,SFCOM_DEC_ALL(MEMBER_ADDR1)|| ' ' ||SFCOM_DEC_ALL(MEMBER_ADDR2)       AS ADRES
+                            ,SFCOM_DEC_ALL(MEMBER_TEL1)||SFCOM_DEC_ALL(MEMBER_HP2)||SFCOM_DEC_ALL(MEMBER_HP3)     AS TELNO
+                            ,SFCOM_DEC_ALL(MEMBER_HP1)||SFCOM_DEC_ALL(MEMBER_HP2)||SFCOM_DEC_ALL(MEMBER_HP3)      AS MBTLNO
+                            ,SFCOM_DEC_ALL(MEMBER_EMAIL)                            AS EMAIL
+                            ,NULL                                    AS PARTCLR_MATTER
+                            ,JOIN_DATE                               AS REGIST_DT
+                            ,TO_NUMBER(MEMBER_DI)                    AS CSTMR_NO
+                        FROM TBHPM_MEMBER
+			       ) A
+					  INNER JOIN (
+						  SELECT MAX(NM)     AS NM
+						       , MAX(MBTLNO) AS MBTLNO 
+						    FROM TBCUS_HMPG_CSTMR_CVPL
+						    GROUP BY MBTLNO 
+					  ) B
+					  ON  A.NM     = B.NM
+					  AND A.MBTLNO = B.MBTLNO
+                   WHERE 1=1
+	    ]]>
+			    <isNotEmpty property="CSTMR_SE">
+			         AND CSTMR_SE LIKE '%' || #CSTMR_SE# ||'%' 
+			    </isNotEmpty>
+			    <isNotEmpty property="NM">
+			         AND NM LIKE '%' || #NM# ||'%'
+			    </isNotEmpty>
+			    <isNotEmpty property="CSTMR_GRAD">
+			         AND CSTMR_GRAD = #CSTMR_GRAD#
+			    </isNotEmpty>
+			    <isNotEmpty property="MBTLNO">
+			         AND MBTLNO LIKE '%' || #MBTLNO# || '%'
+			    </isNotEmpty>
+	    <![CDATA[
+	    	ORDER BY CSTMR_NO,NM
+	    ]]>
+    </select>
+    
+    <!--고객 매입임대상세정보 조회 -->
+	<select id="CUS010303DAO.selectPuchasCntrctInfo2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    		SELECT   A.CNTRCTR_NO					 AS CNTRCTR_NO					/*계약자번호*/
+					,A.RENT_HOUSE_CODE			     AS RENT_HOUSE_CODE				/*임대주택코드*/
+					,A.DONG						     AS DONG						/*동*/
+					,A.HO						     AS HO							/*호*/
+					,NVL(A.HOUSE_POSESN_AT, '0')     AS HOUSE_POSESN_AT				/*주택소유여부*/
+					,A.FAMILY_CO				     AS FAMILY_CO					/*가족수*/
+					,A.FRST_CNTRCT_DE			     AS FRST_CNTRCT_DE				/*최초계약일*/
+					,A.CNTRCT_DE				     AS CNTRCT_DE					/*계약일자*/
+					,NVL(A.DEATH_AT, '0')		     AS DEATH_AT					/*사망여부*/
+					,NVL(A.RE_CNTRCT_IMPRTY_AT, '0') AS RE_CNTRCT_IMPRTY_AT			/*재계약불가여부*/
+					,NVL(A.LWST_PROGRS_AT, '0')      AS LWST_PROGRS_AT				/*소송진행여부*/
+					,A.INCOME_EXCESS			     AS INCOME_EXCESS				/*소득초과여부*/
+					,A.RM						     AS RM							/*비고*/
+					,A.RENT_BGNDE				     AS RENT_BGNDE					/*임대시작일자*/
+					,A.RENT_ENDDE				     AS RENT_ENDDE					/*임대종료일자*/
+					,A.RENT_BGNDE_2				     AS RENT_BGNDE_2				/*임대시작일자2*/
+					,A.RENT_ENDDE_2				     AS RENT_ENDDE_2				/*임대종료일자2*/
+					,A.QUALF_SE					     AS QUALF_SE					/*자격구분*/
+					,A.PAY_TMLMT				     AS PAY_TMLMT					/*납부기한*/
+					,A.RCIV_DE					     AS RCIV_DE						/*수납일자*/
+					,A.RNTCHRG					     AS RNTCHRG						/*월임대료*/
+					,A.SURLUS					     AS SURLUS						/*잔금*/
+					,A.CNTRCT_AMOUNT			     AS CNTRCT_AMOUNT				/*계약금*/
+					,A.SURLUS + A.CNTRCT_AMOUNT      AS GTN							/*보증금*/
+					,A.NPYM_INTR_EXEMPT_AT		     AS NPYM_INTR_EXEMPT_AT			/*체납이자면제*/
+					,A.RECPTN_CHRGE_EXEMPT_AT	     AS RECPTN_CHRGE_EXEMPT_AT		/*수신료면제*/
+					,A.MANAGECT_RDCXPT_AT		     AS MANAGECT_RDCXPT_AT			/*관리비감면*/
+					,A.RNTCHRG_PREPAY_RQEST_AT	     AS RNTCHRG_PREPAY_RQEST_AT 	/*임대료선납청구여부*/
+					,A.RNTCHRG_PREPAY_RQEST_CYCLE    AS RNTCHRG_PREPAY_RQEST_CYCLE	/*임대료선납청구주기*/
+					,C.RENT_HOUSE_NM			     AS RENT_HOUSE_NM				/*임대주택명*/
+					,C.ADRES					     AS ADRES
+					,#NM#                            AS NM
+					,#TELNO#                         AS TELNO
+					,#MBTLNO#                        AS MBTLNO
+			FROM TBRNT_PUCHAS_CNTRCT A 
+	  INNER JOIN (
+				  SELECT PUCHAS_CSTMR_NO
+					FROM TBRNT_PUCHAS_RENT_CSTMR
+				   WHERE 1=1
+					 AND NM    = #NM#
+					 AND (TELNO = #TELNO#
+					     OR MBTLNO = #MBTLNO#
+					     )
+				 ) B 
+			  ON A.PUCHAS_CSTMR_NO = B.PUCHAS_CSTMR_NO
+	  INNER JOIN TBRNT_PUCHAS_HOUSE C
+	          ON A.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+    </select>
+    
+   <!--고객 임대정보 조회 -->
+	<select id="CUS010303DAO.selectRentInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+		      SELECT 
+		            (SELECT HOUSE_NM FROM TBSLS_HOUSE_INFO WHERE HOUSE_CODE = T1.HOUSE_CODE)
+		                             AS HOUSE_CODE
+		           ,DONG_HO          AS DONG_HO
+		           ,CNTRCT_DE        AS CNTRCT_DE
+		           ,RENT_BGNDE       AS RENT_BGNDE
+		           ,RENT_ENDDE       AS RENT_ENDDE
+		           ,HOUSE_SE         AS HOUSE_SE
+                FROM 
+                    (
+				     SELECT 
+				            RENT_HOUSE_CODE    AS HOUSE_CODE
+				           ,DONG || '/' || HO AS DONG_HO
+				           ,CNTRCT_DE         AS CNTRCT_DE
+				           ,RENT_BGNDE        AS RENT_BGNDE
+				           ,RENT_ENDDE        AS RENT_ENDDE 
+				           ,CASE 
+				            WHEN(SELECT HOUSE_SE FROM TBRNT_RENT_HOUSE WHERE RENT_HOUSE_CODE = A.RENT_HOUSE_CODE) = 'R1' THEN '01'   /*영구임대*/
+				            WHEN(SELECT HOUSE_SE FROM TBRNT_RENT_HOUSE WHERE RENT_HOUSE_CODE = A.RENT_HOUSE_CODE) = 'R3' THEN '02'   /*상가임대*/
+				            ELSE NULL END AS HOUSE_SE
+				       FROM TBRNT_RENT_CNTRCT A
+				      WHERE PRMANENT_CSTMR_NO = (
+				                                 SELECT PRMANENT_CSTMR_NO
+				                                   FROM TBRNT_PRMANENT_RENT_CSTMR
+				                                  WHERE NM     = #NM#
+				                                    AND MBTLNO = #MBTLNO#
+				                                    AND TELNO  = #TELNO#
+				                                 )
+		    UNION ALL 
+				     SELECT 
+				           RENT_HOUSE_CODE    AS HOUSE_CODE
+				           ,DONG || '/' || HO AS DONG_HO
+				           ,CNTRCT_DE         AS CNTRCT_DE
+				           ,RENT_BGNDE        AS RENT_BGNDE
+				           ,RENT_ENDDE        AS RENT_ENDDE 
+			               ,'03' AS HOUSE_SE /*매입임대*/
+				       FROM TBRNT_PUCHAS_CNTRCT A
+			          WHERE PUCHAS_CSTMR_NO = (
+			                                   SELECT PUCHAS_CSTMR_NO
+				                                 FROM TBRNT_PUCHAS_RENT_CSTMR
+				                                WHERE NM     = #NM#
+				                                  AND MBTLNO = #MBTLNO#
+				                                  AND TELNO  = #TELNO#                              
+				                              )
+		    UNION ALL 
+ 		             SELECT 
+ 		                   '' AS HOUSE_CODE
+ 		                   ,DONG || '/' || HO AS DONG_HO
+ 		                   ,FRST_CNTRCT_DE AS FRST_CNTRCT_DE
+ 		                   ,'' AS RENT_BGNDE
+ 		                   ,'' AS RENT_ENDDE
+			               ,'04' AS HOUSE_SE /*전세*/
+			           FROM TBRNT_LFSTS_CNTRCT 
+				      WHERE LFSTS_CSTMR_NO=(
+				                            SELECT LFSTS_CSTMR_NO
+				                              FROM TBRNT_LFSTS_CSTMR
+				                             WHERE NM     = #NM#
+				                               AND MBTLNO = #MBTLNO#
+				                               AND TELNO  = #TELNO#
+				                           )
+				)T1
+	    ]]>
+    </select>
+    
+    <!--고객 보상정보 조회 -->
+	<select id="CUS010303DAO.selectRewardInfo" resultClass="java.util.HashMap">
+		      SELECT 
+			       (SELECT BSNS_NM FROM TBPRJ_BSNS_CODE WHERE BSNS_CODE =  T2.BSNS_AREA_CODE) 
+			                                  AS BSNS_AREA_CODE
+			        ,T2.RQEST_DE              AS RQEST_DE
+			        ,T2.PYMNT_DE              AS PYMNT_DE
+			        ,CASE 
+		            WHEN T2.PYMNT_DE IS NULL THEN '02'
+		            WHEN T2.PYMNT_DE IS NOT NULL THEN '01'
+		            ELSE NULL END             AS PYMNT_YN
+			    FROM
+			       (
+			        SELECT 
+			              BSNS_AREA_CODE
+			              ,OWNER_NO
+			          FROM TBCMP_OWNER
+			         WHERE OWNER_NO = #CSTMR_NO#
+			           AND OWNER_NM LIKE '%' || #NM# || '%' ) T1 
+	       INNER JOIN TBCMP_RWMNY_PYMNT T2
+			       ON T1.BSNS_AREA_CODE = T2.BSNS_AREA_CODE
+			      AND T1.OWNER_NO = T2.OWNER_NO
+    </select>
+    
+    <!--고객 택지정보 조회 -->
+	<select id="CUS010303DAO.selectBldlndInfo" resultClass="java.util.HashMap">
+			    SELECT  
+			          (SELECT LAD_NM FROM TBSLS_LAD_INFO WHERE LAD_CODE=A.LAD_CODE) AS LAD_NM
+			          ,BLCK
+			          ,LOT
+			          ,CNTRCT_DE
+				 FROM TBSLS_LCNTRCTR A
+				WHERE LAD_CSTMR_NO = #CSTMR_NO#
+    </select>
+    
+    <!--고객 분양정보 조회 -->
+	<select id="CUS010303DAO.selectLttotInfoInfo" resultClass="java.util.HashMap">
+		<![CDATA[
+		      SELECT 
+		            (SELECT HOUSE_NM FROM TBSLS_HOUSE_INFO WHERE HOUSE_CODE = T1.HOUSE_CODE)
+		                                    AS HOUSE_CODE
+		           ,T1.DONG || '/' || T1.HO AS DONG_HO 
+		           ,T1.CNTRCT_DE            AS CNTRCT_DE
+		           ,T1.RENT_MVN_PRARNDE     AS RENT_MVN_PRARNDE
+			    FROM TBSLS_HCNTRCTR T1
+	      INNER JOIN TBSLS_HOUSE_CSTMR T2
+			      ON T1.HOUSE_CSTMR_NO = T2.HOUSE_CSTMR_NO
+			   WHERE T2.CSTMR_NM = #NM#
+		         AND T2.MBTLNO LIKE '%' || #MBTLNO# || '%'
+			     AND T2.HOUSE_CSTMR_NO = #CSTMR_NO#
+			     
+	    ]]>
+    </select>
+</sqlMap>

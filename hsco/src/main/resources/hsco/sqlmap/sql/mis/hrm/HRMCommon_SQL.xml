@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRMCommon_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+    <!-- get 현재 기준 평가차수(평가연도&차수) -->
+	<select id="HRMCommonDAO.selectCurDevaOdrInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* 공개여부가 설정된 마지막 근무평정차수를 표현 / 아무런 행도 존재하지 않을때에는 현재년도의 차수를 표현*/
+		SELECT NVL(MAX(DEVA_YEAR), TO_CHAR(SYSDATE, 'YYYY'))                                                            AS CUR_DEVA_YEAR
+		      ,NVL(MAX(ODR_SE),    (CASE WHEN TO_CHAR(SYSDATE,'MM') BETWEEN '01' AND '06' THEN '1' ELSE '2' END))       AS CUR_ODR_SE
+		FROM   (
+		        SELECT DEVA_YEAR
+		              ,ODR_SE
+		              ,RANK() OVER (ORDER BY DEVA_YEAR DESC, ODR_SE DESC) AS RNUM
+		        FROM   TBHRM_PEREVA_PD
+		        WHERE  1=1
+		        AND    OTHBC_AT = '1'
+		       )
+		WHERE  RNUM = '1'
+    </select>
+    
+	<!-- get 직전 평가차수(평가연도&차수)  -->
+	<select id="HRMCommonDAO.selectBefDevaOdrInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH VW_ODR AS 
+		       (SELECT ROW_NUMBER() OVER(ORDER BY DEVA_YEAR,ODR_SE ASC) AS NO
+		              ,a.* 
+		         FROM 
+		              (SELECT DEVA_YEAR
+		                     ,ODR_SE 
+		                FROM TBHRM_PEREVA_PD
+                       UNION
+                       SELECT #DEVA_YEAR# AS DEVA_YEAR
+		                     ,#ODR_SE# AS ODR_SE 
+		                FROM DUAL                          
+		              ) a 
+		       ) 
+		SELECT DEVA_YEAR AS BEF_DEVA_YEAR
+		      ,ODR_SE 	 AS BEF_ODR_SE
+		  FROM VW_ODR 
+		 WHERE 1=1 
+	       AND NO = (SELECT TO_NUMBER(NO) - 1 
+			           FROM VW_ODR 
+			          WHERE 1=1 
+			            AND DEVA_YEAR = #DEVA_YEAR#
+			            AND ODR_SE = #ODR_SE#
+			         )
+    </select> 
+    
+    <!-- get 평정단위별 평정자  -->
+	<select id="HRMCommonDAO.selectRaterDtlInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			   a.RATER_DTL_SE AS RATER_DTL_SE
+	      FROM TBHRM_PEREVA_ALLOT a
+		 WHERE 1=1
+		   AND a.DEVA_YEAR  = #DEVA_YEAR#
+		   AND a.ODR_SE 	= #ODR_SE#
+           <![CDATA[						           	
+		   AND a.DBG_SE    = CASE WHEN (#RATER_SE# = '003' AND TO_NUMBER(#CLSF_SE#) >= 4 ) THEN '001' ELSE #DBG_SE# END 
+		    ]]>		   
+           <![CDATA[						           	
+		   AND a.CLSF_SE    = CASE WHEN (TO_NUMBER(#CLSF_SE#) > 4 ) THEN '04' ELSE #CLSF_SE# END 
+		    ]]>
+		   AND a.TRGET_SE 	= #TRGET_SE#
+		   AND a.RATER_SE 	= #RATER_SE#
+		   AND EXISTS ( SELECT b.RATER_DTL_SE  
+		                  FROM TBHRM_PEREVA_RATER b
+		                 WHERE 1=1
+		                  AND b.DEVA_YEAR 	= a.DEVA_YEAR
+		                  AND b.ODR_SE 		= a.ODR_SE 
+		                  AND b.RATER_SE 	= a.RATER_SE
+		               )
+    </select>
+    
+    <!-- get 징계처분코드 -->
+	<select id="HRMCommonDAO.selectDslrcCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT DSLRC_CODE 			AS CODE
+			  ,TRIM(DSLRC_NM)  		AS CODE_NM
+			  ,DSLRC_CODE || ' ' || TRIM(DSLRC_NM)  AS ALL_CODE_NM
+		  FROM TBHRM_DSCPL_STDR
+		 ORDER BY DSLRC_CODE
+    </select> 
+    
+    <!-- get 직무추천부서목록 -->
+	<select id="HRMCommonDAO.selectSportDeptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	    SELECT SPORT_DEPT_CODE  	AS CODE
+	          ,SFHRM_GET_DEPTNM(SPORT_DEPT_CODE,'') AS CODE_NM      
+	      FROM TBHRM_DTY_SPORT_REQST  
+	     WHERE 1=1
+	       AND STDR_YEAR = #STDR_YEAR#
+	       AND ODR_SE = #ODR_SE# 
+	       AND SPORT_SE = '2'
+	       AND NVL (DPRLR_APPN_AT , 0) = '1'
+	     GROUP BY SPORT_DEPT_CODE
+	     ORDER BY 1 
+    </select>
+    
+    <!-- get 현재적용 공모차수(기준년도&차수) -->
+	<select id="HRMCommonDAO.selectCurStdrOdrInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT STDR_YEAR
+		      ,ODR_SE
+		      ,NVL(CLOS_AT, '0') AS CLOS_AT
+		  FROM TBHRM_DTY_SPORT_ODR
+		 WHERE 1=1
+		   AND NVL(CURRENT_AT,'0') = '1'
+    </select>
+    
+    <!-- 접속자 정보 / 현재 접속중인 사용자의 인사정보 -->
+	<select id="HRMCommonDAO.selectUserInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT EMPNO
+		      ,EMPNM
+		      ,RSPOFC_SE
+		      ,JSSFC_SE
+		      ,DTY_SE
+		      ,HR_CLSF_SE
+		FROM   TBHRM_HR_MASTR
+		WHERE  EMPNO = #EMPNO#
+	]]>
+	</select>
+
+    <!-- 사용자정보 조회 -->
+	<select id="HRMCommonDAO.selectEmpnoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT '0' AS CHK,
+			   A.USER_ID,
+               A.USER_ID AS EMPNO,
+               A.USER_NM AS EMPNM,
+               B.ECNY_DE,
+               B.DEPT_CODE,
+               B.DEPT_NM,
+	           (SELECT CODE_NM
+	              FROM TBCOM_CMMN_CODE
+	             WHERE GRP_CODE = 'HRM001' AND CODE = B.JSSFC_SE)
+	           || CASE
+	              WHEN B.HR_CLSF_SE IS NULL THEN ''
+	              ELSE SUBSTR (B.HR_CLSF_SE, 2, 1) || '급'
+	              END
+	           AS HR_CLSF_NM,
+	           B.RSPOFC_SE     AS RSPOFC_SE,
+               (SELECT CODE_NM
+                  FROM TBCOM_CMMN_CODE
+                 WHERE GRP_CODE = 'HRM214' AND CODE = B.RSPOFC_SE)
+               AS RSPOFC_NM,
+               NVL (A.USER_STTUS_CODE, 'JA') AS USER_STTUS_CODE,
+               (SELECT CODE_NM
+                  FROM TBCOM_CMMN_CODE
+                 WHERE GRP_CODE = 'COM011' AND NVL (A.USER_STTUS_CODE, 'JA') = CODE)
+               AS USER_STTUS_NM,
+               B.BRTHDY,
+               (SELECT CODE_NM
+                  FROM TBCOM_CMMN_CODE
+                 WHERE GRP_CODE = 'COM005' AND CODE = B.SEXDSTN)
+               AS SEXDSTN,
+               B.JSSFC_SE      AS JSSFC_SE,
+               D.CODE_NM       AS JSSFC_NM,
+               B.HR_CLSF_SE    AS HR_CLSF_SE,
+               C.CODE_NM       AS HR_CLSF_NM,
+               B.TELNO_1,
+               H_DECRYPT(B.TELNO_2)  AS TELNO_2,
+               B.LXTN_NO,
+               B.ZIP,
+               B.ADRES,
+               B.EMAIL,
+               A.INTRCP_CN,
+               A.PWD,
+               TO_CHAR (A.REGIST_DT, 'YYYY-MM-DD HH:MI:SS') AS REGIST_DT,
+               A.REGIST_DT,
+               A.REGISTER_ID,
+               TO_CHAR (A.UPDT_DT, 'YYYY-MM-DD HH:MI:SS') AS UPDT_DT,
+               A.UPDUSR_ID
+        FROM TBCOM_USER A,
+	         (SELECT AA.*, BB.DEPT_NM
+	           FROM TBHRM_HR_MASTR AA, VWHRM_DEPT BB
+	          WHERE AA.DEPT_CODE = BB.DEPT_CODE AND BB.USE_AT = 1) B,
+	         TBCOM_CMMN_CODE C,
+             TBCOM_CMMN_CODE D
+        WHERE A.EMPNO = B.EMPNO(+) 
+         AND A.USER_STTUS_CODE = 'JA'
+         AND B.HR_CLSF_SE = C.CODE(+)
+         AND C.GRP_CODE(+) = 'HRM237'
+         AND B.JSSFC_SE = D.CODE(+)  
+         AND D.GRP_CODE(+) = 'HRM001' 
+    ]]>
+		<isNotEmpty property="EMPNO">
+			AND B.EMPNO  LIKE  #EMPNO#  ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="EMPNM">
+			AND B.EMPNM  LIKE  #EMPNM#  ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="JSSFC_SE">
+			AND B.JSSFC_SE  = #JSSFC_SE#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			AND B.DEPT_CODE  = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="CLSF_SE">
+		<![CDATA[
+			and B.HR_CLSF_SE <= '02'
+		]]>
+		</isNotEmpty>
+        ORDER BY B.HR_CLSF_SE, B.EMPNO, A.USER_ID, A.USER_NM
+	</select>
+
+    <!-- 사용자정보 조회 -->
+	<select id="HRMCommonDAO.selectUserIdList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT '0' AS CHK,
+               A.USER_ID,
+               A.USER_NM,
+               B.EMPNO,
+               B.EMPNM,
+               B.ECNY_DE,
+               B.DEPT_CODE,
+               B.DEPT_NM,
+	           (SELECT CODE_NM
+	              FROM TBCOM_CMMN_CODE
+	             WHERE GRP_CODE = 'HRM001' AND CODE = B.JSSFC_SE)
+	           || CASE
+	              WHEN B.HR_CLSF_SE IS NULL THEN ''
+	              ELSE SUBSTR (B.HR_CLSF_SE, 2, 1) || '급'
+	              END
+	           AS HR_CLSF_NM,
+	           B.RSPOFC_SE     AS RSPOFC_SE,
+               (SELECT CODE_NM
+                  FROM TBCOM_CMMN_CODE
+                 WHERE GRP_CODE = 'HRM214' AND CODE = B.RSPOFC_SE)
+               AS RSPOFC_NM,
+               NVL (A.USER_STTUS_CODE, 'JA') AS USER_STTUS_CODE,
+               (SELECT CODE_NM
+                  FROM TBCOM_CMMN_CODE
+                 WHERE GRP_CODE = 'COM011' AND NVL (A.USER_STTUS_CODE, 'JA') = CODE)
+               AS USER_STTUS_NM,
+               B.BRTHDY,
+               (SELECT CODE_NM
+                  FROM TBCOM_CMMN_CODE
+                 WHERE GRP_CODE = 'COM005' AND CODE = B.SEXDSTN)
+               AS SEXDSTN,
+               B.JSSFC_SE      AS JSSFC_SE,
+               D.CODE_NM       AS JSSFC_NM,
+               B.HR_CLSF_SE    AS HR_CLSF_SE,
+               C.CODE_NM       AS HR_CLSF_NM,
+               B.TELNO_1,
+               H_DECRYPT(B.TELNO_2),
+               B.LXTN_NO,
+               B.ZIP,
+               B.ADRES,
+               B.EMAIL,
+               A.INTRCP_CN,
+               A.PWD,
+               TO_CHAR (A.REGIST_DT, 'YYYY-MM-DD HH:MI:SS') AS REGIST_DT,
+               A.REGIST_DT,
+               A.REGISTER_ID,
+               TO_CHAR (A.UPDT_DT, 'YYYY-MM-DD HH:MI:SS') AS UPDT_DT,
+               A.UPDUSR_ID
+        FROM TBCOM_USER A,
+	         (SELECT AA.*, BB.DEPT_NM
+	           FROM TBHRM_HR_MASTR AA, VWHRM_DEPT BB
+	          WHERE AA.DEPT_CODE = BB.DEPT_CODE AND BB.USE_AT = 1) B,
+	         TBCOM_CMMN_CODE C,
+             TBCOM_CMMN_CODE D
+        WHERE A.EMPNO = B.EMPNO(+) 
+         AND A.USER_STTUS_CODE = 'JA'
+         AND B.HR_CLSF_SE = C.CODE(+)
+         AND C.GRP_CODE(+) = 'HRM237'
+         AND B.JSSFC_SE = D.CODE(+)  
+         AND D.GRP_CODE(+) = 'HRM001' 
+         And B.EMPNO Is Null
+    ]]>
+		<isNotEmpty property="EMPNO">
+			AND A.USER_ID  LIKE  #EMPNO#  ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="EMPNM">
+			AND B.EMPNM  LIKE  #EMPNM#  ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="JSSFC_SE">
+			AND B.JSSFC_SE  = #JSSFC_SE#
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			AND B.DEPT_CODE  = #DEPT_CODE#
+		</isNotEmpty>
+		<isNotEmpty property="SCRPRO_SE">
+		</isNotEmpty>
+        ORDER BY B.HR_CLSF_SE, B.EMPNO, A.USER_ID, A.USER_NM
+	</select>
+	
+</sqlMap>

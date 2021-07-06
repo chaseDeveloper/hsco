@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM040700_SQL">
+
+	<!-- 사용자 목록조회 -->
+	<select id="SYM040700DAO.getListUser" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT '0' AS CHK, 
+	       B.USER_ID, 
+	       B.USER_NM, 
+	       B.EMPNO, 
+	       C.DEPT_CODE,
+	<isNotEmpty property="BGNDT">
+	       E.GNFD_DE AS GNFD_DE,
+	</isNotEmpty>
+	<isEmpty property="BGNDT">
+			'' AS GNFD_DE,
+	</isEmpty>
+	       D.DEPT_NM, 
+	       (SELECT CODE_NM 
+	         FROM TBCOM_CMMN_CODE 
+	        WHERE GRP_CODE = 'HRM001' 
+	              AND CODE = C.JSSFC_SE 
+	       ) || 
+	       CASE 
+	           WHEN C.HR_CLSF_SE IS NULL 
+	           THEN '' 
+	           ELSE SUBSTR(C.HR_CLSF_SE, 2,1) || '급' 
+	       END AS HR_CLSF_NM, 
+	       listagg( NVL(A.AUTH_GRP_ID,''),',') within  
+	GROUP ( 
+	ORDER BY B.USER_ID, B.USER_NM, B.EMPNO, 
+		<isNotEmpty property="BGNDT">
+		E.GNFD_DE, 
+		</isNotEmpty>
+		D.DEPT_NM, C.JSSFC_SE, C.HR_CLSF_SE, C.DEPT_CODE ) AS AUTH_NM 
+	  FROM TBCOM_USER_GRP A, 
+	       TBCOM_USER B, 
+	       TBHRM_HR_MASTR C,
+	       VWHRM_DEPT D       
+	<isNotEmpty property="BGNDT">
+	       ,(SELECT MAX(GNFD_DE) AS GNFD_DE, 
+	              EMPNO 
+	         FROM TBHRM_GNFD 
+	        WHERE GNFD_DE >= #BGNDT# 
+		<isNotEmpty property="ENDDT">
+		<![CDATA[
+	              AND GNFD_DE <= #ENDDT#
+	     ]]> 
+		</isNotEmpty>
+	        GROUP BY EMPNO
+	       ) E 
+	</isNotEmpty>
+	 WHERE B.USER_ID = A.USER_ID(+) 
+	       AND B.EMPNO = C.EMPNO(+)
+	       <isNotEmpty property="BGNDT">
+	       AND C.EMPNO = E.EMPNO 
+	       </isNotEmpty>
+	       AND C.DEPT_CODE = D.DEPT_CODE(+) 
+	       AND B.USER_STTUS_CODE = 'JA' 
+			<isNotEmpty property="DEPT_CODE">
+			AND C.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+		<isNotEmpty property="SEARCH_CONDITION">
+		    <isEqual property="SEARCH_CONDITION" compareValue="0">
+		    	<isNotEmpty property="SEARCH_KEYWORD" prepend="and">
+		    		B.EMPNO LIKE '%' ||  #SEARCH_KEYWORD# || '%'
+		    	</isNotEmpty>
+		    </isEqual>		    
+		    <isEqual property="SEARCH_CONDITION" compareValue="1">
+		    	<isNotEmpty property="SEARCH_KEYWORD" prepend="and">
+		    		B.USER_ID LIKE '%' ||  #SEARCH_KEYWORD# || '%'
+		    	</isNotEmpty>
+		    </isEqual>	    
+		    <isEqual property="SEARCH_CONDITION" compareValue="2">
+		    	<isNotEmpty property="SEARCH_KEYWORD" prepend="and">
+		    		B.USER_NM LIKE '%' ||  #SEARCH_KEYWORD# || '%'
+		    	</isNotEmpty>		    	
+		    </isEqual>	    
+		</isNotEmpty>	
+	 GROUP BY B.USER_ID, 
+	       B.USER_NM, 
+	       B.EMPNO, 
+	<isNotEmpty property="BGNDT">
+	       E.GNFD_DE, 
+	</isNotEmpty>
+	       D.DEPT_NM,
+	       C.JSSFC_SE, 
+	       C.HR_CLSF_SE,
+	       C.DEPT_CODE		
+    </select>  
+    
+       <!--해당부서의 사원 목록조회-->
+    <select id="SYM040700DAO.selectEmpUserList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    <![CDATA[
+             SELECT 
+                   A.EMPNO AS DEPT_CHARGER_EMPNO          /*사번*/
+                  ,A.EMPNM AS DEPT_CHARGER_NM             /*사원명*/
+                  ,A.USER_ID AS DEPT_CHARGER_USERID
+                  ,A.RSPOFC_SE                            /*직책*/
+                  ,A.OFCPS                                /*직종*/
+                  ,(SELECT DCLZ_SE
+                      FROM TBHRM_WRKCP
+                     WHERE 1=1
+                       AND TO_CHAR(SYSDATE,'YYYYMMDD') >= TO_CHAR(BGNDT,'YYYYMMDD')
+                       AND TO_CHAR(SYSDATE,'YYYYMMDD') <= TO_CHAR(ENDDT,'YYYYMMDD')
+                       AND EMPNO = A.EMPNO
+                       AND ROWNUM = 1
+                   ) AS DCLZ_SE
+               FROM (SELECT 
+                           A.EMPNO
+                          ,A.EMPNM
+                          ,A.RSPOFC_SE
+                          ,B.USER_ID
+                          ,SFHRM_GET_OFCPSCD(A.EMPNO, A.JSSFC_SE, A.HR_CLSF_SE, A.ECNY_DE) AS OFCPS
+                       FROM TBHRM_HR_MASTR A,
+                            TBCOM_USER B
+                      WHERE A.EMPNO = B.EMPNO(+) AND A.DEPT_CODE = #DEPT_CODE#
+                        AND A.RSPOFC_SE NOT IN('080', '091') AND B.USER_STTUS_CODE = 'JA') A
+              WHERE 1=1
+        ]]>  
+		<isNotEmpty property="EMPNO1">
+			    AND A.EMPNO NOT IN (#EMPNO1#) 
+		</isNotEmpty>
+		<isNotEmpty property="EMPNO2">
+			    AND A.EMPNO NOT IN (#EMPNO2#) 
+		</isNotEmpty>
+                ORDER BY RSPOFC_SE, OFCPS, EMPNO
+    </select>
+    
+    <!--해당부서의 사원 목록조회-->
+    <select id="SYM040700DAO.getTranUserGrp" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	SELECT LISTAGG(AUTH_GRP_ID, ',') WITHIN 
+	GROUP (
+	ORDER BY USER_ID) AS TRAN_AUTH_GRP_NM 
+	  FROM TBCOM_USER_GRP_HIS 
+	 WHERE USER_ID = #USER_ID# 
+	   AND HIS_DT = 
+	       (SELECT MAX(HIS_DT) 
+	         FROM TBCOM_USER_GRP_HIS 
+	        WHERE USER_ID = #USER_ID# 
+	       ) 
+    </select>
+    
+    <!--사용자 권한복사 전 권한복사저장 데이터조회-->
+    <select id="SYM040700DAO.checkUserGrp" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	WITH TEMP AS 
+	       (SELECT #AUTH_NM# AS VAL 
+	         FROM DUAL 
+	       ), 
+	       TEMP1 AS 
+	       (SELECT #TRAN_AUTH_GRP_NM# AS VAL 
+	         FROM DUAL 
+	       ) 
+	SELECT #USER_ID# AS USER_ID, 
+	       REGEXP_SUBSTR(VAL, '[^,]+', 1, LEVEL) AS AUTH_GRP_ID, 
+	       'D' AS MOD, 
+	       #TRAN_USER_ID# AS TRAN_USER_ID 
+	   <![CDATA[    	   
+	  FROM TEMP CONNECT BY LEVEL <= REGEXP_COUNT(VAL, ',') + 1 	             
+	   ]]>   
+	UNION ALL 
+	SELECT #USER_ID# AS USER_ID, 
+	       REGEXP_SUBSTR(VAL, '[^,]+', 1, LEVEL) AS AUTH_GRP_ID, 
+	       'I' AS MOD, 
+	       #TRAN_USER_ID# AS TRAN_USER_ID 
+	   <![CDATA[    	   
+	  FROM TEMP1 CONNECT BY LEVEL <= REGEXP_COUNT(VAL, ',') + 1 
+      ]]>   
+	 </select>
+     
+     
+       
+ 	<!-- 그룹 사용자 추가 -->
+    <insert id="SYM040700DAO.SYM040700C" parameterClass="java.util.Map" >
+		INSERT INTO TBCOM_USER_GRP (
+		                AUTH_GRP_ID, USER_ID, INTRCP_AT,
+		                REGISTER_ID, REGIST_DT,
+		                UPDUSR_ID, UPDT_DT
+		            )
+		     VALUES (
+		            #AUTH_GRP_ID#, #USER_ID#, '0',
+		            #S_USER_ID#, SYSDATE,
+		            #S_USER_ID#, SYSDATE
+		        )
+
+	</insert>
+	
+    <!--  그룹 사용자 삭제 -->
+    <delete id="SYM040700DAO.SYM040700D" parameterClass="java.util.Map" >
+
+	      	DELETE FROM TBCOM_USER_GRP
+			WHERE
+				USER_ID = #USER_ID#
+			AND AUTH_GRP_ID = #AUTH_GRP_ID#
+
+    </delete>
+    
+	<insert id="SYM040700DAO.insertUserChg" parameterClass="hashmap" >
+	
+		<selectKey keyProperty="CHG_SN_KEY" resultClass="string">
+			SELECT SQ_COM_USER_AUTH_CHGHST_1.NEXTVAL AS CHG_SN_KEY
+			FROM DUAL
+    	</selectKey>
+    	
+    	INSERT INTO TBCOM_USER_CHGDTL (
+	                USER_ID,
+	                CHG_SN,
+	                CHANGE_DT,
+	                BFCHG_GRP_ID,
+	                AFTCH_GRP_ID,
+	                BF_INDVDLINFO_AUTH,
+	                AFT_INDVDLINFO_AUTH,
+	                REGISTER_ID,
+	                REGIST_DT,
+	                UPDUSR_ID,
+	                UPDT_DT,
+	                TRANSFER_ID
+	            )
+	     VALUES (
+	                #USER_ID#,
+	                #CHG_SN_KEY#,
+	                SYSDATE,
+	                #BFCHG_GRP_ID#,
+	                #AFTCH_GRP_ID#,
+	                #BF_INDVDLINFO_AUTH#,
+	                #AFT_INDVDLINFO_AUTH#,
+	                #S_USER_ID#,
+	                SYSDATE,
+	                #S_USER_ID#,
+	                SYSDATE,
+	                #TRANSFER_ID#
+	            )	
+	</insert>
+</sqlMap>

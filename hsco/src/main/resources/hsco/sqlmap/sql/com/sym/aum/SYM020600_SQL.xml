@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM020600_SQL">
+	
+	
+	
+    <!-- 권한에 대한 화면 목록 -->
+    <select id="SYM020600DAO.getListPage" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+		SELECT 
+		    A.MENU_ID, C.PAGE_ID, A.SYS_SE_CODE,
+		    A.MENU_NM, C.PAGE_NM, C.PAGE_URL,
+		    B.AUTH_GRP_ID, C.PAGE_DC, C.USE_AT
+		FROM 
+		    TBCOM_MENU A,
+		    TBCOM_AUTH_GRP_MENU B,
+		    TBCOM_PAGE C
+		WHERE
+		    A.MENU_ID = B.MENU_ID
+		AND A.PAGE_ID = C.PAGE_ID
+		AND B.AUTH_GRP_ID = #AUTH_GRP_ID#
+		<isNotEmpty property="SEARCH_CONDITION" >
+		  <isNotEmpty property="SEARCH_KEYWORD" >
+		    <isEqual property="SEARCH_CONDITION" compareValue="1">
+              AND C.PAGE_ID = #SEARCH_KEYWORD#
+            </isEqual>
+            <isEqual property="SEARCH_CONDITION" compareValue="0">
+              AND C.PAGE_NM LIKE '%' || #SEARCH_KEYWORD# || '%'
+            </isEqual>
+          </isNotEmpty>
+        </isNotEmpty>
+        <isEmpty property="SEARCH_CONDITION"> 
+          <isNotEmpty property="SEARCH_KEYWORD" >
+            AND (C.PAGE_ID LIKE '%' || #SEARCH_KEYWORD# || '%'
+                 OR C.PAGE_NM LIKE '%' || #SEARCH_KEYWORD# || '%')
+          </isNotEmpty>
+        </isEmpty>
+		ORDER BY PAGE_NM, PAGE_ID
+        		
+    </select>
+    
+	<!-- 메뉴에 대한 차단버튼 목록 -->
+	<select id="SYM020600DAO.getListButton" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	
+        SELECT
+		    A.BUTTON_ID, A.BUTTON_NM, 
+		    A.PROCESS_SE_CODE,
+		    (
+		        SELECT CODE_NM FROM TBCOM_CMMN_CODE 
+		        WHERE GRP_CODE = 'COM026' 
+		        AND CODE = A.PROCESS_SE_CODE 
+		    ) AS PROCESS_SE_NM,
+		    A.BUTTON_DC, A.USE_AT,
+		    #AUTH_GRP_ID# AS AUTH_GRP_ID, B.INTRCP_AT,
+		    #PAGE_ID# AS PAGE_ID
+		FROM
+		    TBCOM_SCRIN_BUTTON A, 
+		    (
+		        SELECT *
+		        FROM TBCOM_AUTH_GRP_SCRIN_BUTTON
+		        WHERE AUTH_GRP_ID = #AUTH_GRP_ID#
+		    ) B
+		WHERE
+		    A.PAGE_ID = B.PAGE_ID(+)
+		AND A.BUTTON_ID = B.BUTTON_ID(+)
+		AND A.PAGE_ID = #PAGE_ID#
+		AND A.USE_AT = '1'
+		ORDER BY BUTTON_NM
+               	     
+    </select>
+        
+ 
+ 	<!-- 버튼 차단 추가 -->
+    <insert id="SYM020600DAO.SYM020600C" parameterClass="java.util.Map" >
+
+		INSERT INTO TBCOM_AUTH_GRP_SCRIN_BUTTON (
+		    AUTH_GRP_ID, PAGE_ID, 
+		    BUTTON_ID, INTRCP_AT,
+		    REGISTER_ID, REGIST_DT,
+		    UPDUSR_ID, UPDT_DT
+		)
+		VALUES (
+		    #AUTH_GRP_ID#, #PAGE_ID#, 
+		    #BUTTON_ID#, #INTRCP_AT#,
+		    #S_USER_ID#, SYSDATE,
+		    #S_USER_ID#, SYSDATE
+		)
+
+	</insert>
+	
+	<!-- 버튼 차단 수정 -->
+	<update id="SYM020600DAO.SYM020600U" parameterClass="java.util.Map" >
+	
+		MERGE INTO TBCOM_AUTH_GRP_SCRIN_BUTTON A
+		USING DUAL
+		ON ( A.AUTH_GRP_ID = #AUTH_GRP_ID# AND A.PAGE_ID = #PAGE_ID# AND A.BUTTON_ID = #BUTTON_ID# )
+		
+		WHEN MATCHED THEN
+	    UPDATE
+	    SET
+	        INTRCP_AT = #INTRCP_AT#,
+	        UPDUSR_ID = #S_USER_ID#,
+	        UPDT_DT = SYSDATE
+	    WHERE
+	        AUTH_GRP_ID = #AUTH_GRP_ID#
+	    AND PAGE_ID = #PAGE_ID#
+	    AND BUTTON_ID = #BUTTON_ID#
+		
+		WHEN NOT MATCHED THEN
+		INSERT (
+		    AUTH_GRP_ID, PAGE_ID, 
+		    BUTTON_ID, INTRCP_AT,
+		    REGISTER_ID, REGIST_DT,
+		    UPDUSR_ID, UPDT_DT
+		)
+		VALUES (
+		    #AUTH_GRP_ID#, #PAGE_ID#, 
+		    #BUTTON_ID#, #INTRCP_AT#,
+		    #S_USER_ID#, SYSDATE,
+		    #S_USER_ID#, SYSDATE
+		)
+
+	</update>
+	
+    <!-- 버튼 차단 삭제 -->
+    <delete id="SYM020600DAO.SYM020600D" parameterClass="java.util.Map" >
+
+	      	DELETE FROM TBCOM_AUTH_GRP_SCRIN_BUTTON
+			WHERE
+		        AUTH_GRP_ID = #AUTH_GRP_ID#
+		    AND PAGE_ID = #PAGE_ID#
+		    AND BUTTON_ID = #BUTTON_ID#
+
+    </delete>    
+    
+  	<select id="SYM020600DAO.getListUserChangeButton" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+  		<![CDATA[ 
+		SELECT AA.USER_ID,
+		       AA.PAGE_ID,
+		       AA.AUTH_GRP_ID,
+		       AA.BUTTON_ID,
+		       AA.BUTTON_NM,
+		       AA.INTRCP_AT,
+		       AA.INTRCP_AT_CNT,
+		       BB.INTRCP_AT AS ORG_INTRCP_AT,
+		       CASE
+		          WHEN BB.INTRCP_AT IS NULL THEN 'I'
+		          WHEN AA.INTRCP_AT = BB.INTRCP_AT THEN 'N'
+		          WHEN AA.INTRCP_AT <> BB.INTRCP_AT THEN 'U'
+		       END FLAG
+		  FROM (  SELECT A.USER_ID,
+		                 PAGE_ID,
+		                 BUTTON_ID,
+		                 BUTTON_NM,
+		                 MAX(A.AUTH_GRP_ID) AS AUTH_GRP_ID,
+		                 (CASE
+		                     WHEN (SUM (CASE WHEN B.INTRCP_AT = '0' THEN 1 ELSE 0 END)) > 0 THEN '0' ELSE  '1'  END) AS INTRCP_AT,
+		                 SUM (CASE WHEN B.INTRCP_AT = '0' THEN 1 ELSE 0 END) AS INTRCP_AT_CNT
+		            FROM (  SELECT K.USER_ID, J.AUTH_GRP_ID
+		                      FROM TBCOM_USER_GRP J,
+		                           (SELECT B.USER_ID
+		                              FROM TBCOM_USER_GRP A,
+		                                   TBCOM_USER B,
+		                                   TBCOM_AUTH_GRP C
+		                             WHERE     1 = 1
+		                                   AND A.USER_ID = B.USER_ID
+		                                   AND A.AUTH_GRP_ID = C.AUTH_GRP_ID
+		                                   AND INTRCP_AT = '0'
+		                                   AND A.AUTH_GRP_ID = #AUTH_GRP_ID#) K
+		                     WHERE J.USER_ID = K.USER_ID
+		                  ORDER BY USER_ID) A,
+		                 (SELECT  	 A.AUTH_GRP_ID,
+						             A.PAGE_ID,
+						             A.BUTTON_ID,
+						             B.BUTTON_NM,
+						             A.INTRCP_AT
+						        FROM TBCOM_AUTH_GRP_SCRIN_BUTTON A, TBCOM_SCRIN_BUTTON B
+						       WHERE     A.BUTTON_ID = B.BUTTON_ID
+						             AND A.PAGE_ID = B.PAGE_ID
+						             AND A.PAGE_ID = #PAGE_ID#
+						             AND A.BUTTON_ID = #BUTTON_ID#
+						UNION
+						SELECT #AUTH_GRP_ID# AS AUTH_GRP_ID, #PAGE_ID# AS PAGE_ID, #BUTTON_ID# AS BUTTON_ID, #BUTTON_NM# AS BUTTON_NM,   '1' AS INTRCP_AT
+						FROM DUAL
+						WHERE   (#AUTH_GRP_ID#, #PAGE_ID#, #BUTTON_ID#) NOT IN 
+						                (SELECT A.AUTH_GRP_ID,
+						                             A.PAGE_ID,
+						                             A.BUTTON_ID
+						                        FROM TBCOM_AUTH_GRP_SCRIN_BUTTON A, TBCOM_SCRIN_BUTTON B
+						                       WHERE     A.BUTTON_ID = B.BUTTON_ID
+						                             AND A.PAGE_ID = B.PAGE_ID
+						                             AND A.PAGE_ID = #PAGE_ID#
+						                             AND A.BUTTON_ID = #BUTTON_ID#)) B
+		           WHERE A.AUTH_GRP_ID = B.AUTH_GRP_ID
+		        GROUP BY A.USER_ID,
+		                 B.PAGE_ID,
+		                 B.BUTTON_ID,
+		                 B.BUTTON_NM) AA,
+		       (SELECT *
+		          FROM TBCOM_USER_SCRIN_BUTTON
+		         WHERE PAGE_ID = #PAGE_ID# AND BUTTON_ID = #BUTTON_ID#) BB
+		 WHERE     AA.USER_ID = BB.USER_ID(+)
+		       AND AA.PAGE_ID = BB.PAGE_ID(+)
+		       AND AA.BUTTON_ID = BB.BUTTON_ID(+)	
+		       		]]>
+    </select>
+    
+    <insert id="SYM020600DAO.saveUserButton" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			INSERT INTO TBCOM_USER_SCRIN_BUTTON (USER_ID,
+			                                     BUTTON_ID,
+			                                     PAGE_ID,
+			                                     AUTH_GRP_ID,
+			                                     BUTTON_NM,
+			                                     INTRCP_AT,
+			                                     REGISTER_ID,
+			                                     REGIST_DT,
+			                                     UPDUSR_ID,
+			                                     UPDT_DT)
+			     VALUES (#USER_ID#,
+			             #BUTTON_ID#,
+			             #PAGE_ID#,
+			             #AUTH_GRP_ID#,
+			             #BUTTON_NM#,
+			             #INTRCP_AT#,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #S_USER_ID#,
+			             SYSDATE)
+		]]>
+	</insert> 	 
+	
+	<update id="SYM020600DAO.updateUserButton" parameterClass="java.util.Map" >
+		UPDATE TBCOM_USER_SCRIN_BUTTON
+		   SET INTRCP_AT = #INTRCP_AT#
+		 WHERE USER_ID = #USER_ID# AND BUTTON_ID = #BUTTON_ID# AND PAGE_ID = #PAGE_ID#
+
+	</update>
+	       
+    <insert id="SYM020600DAO.saveLog" parameterClass="java.util.Map" >
+   		<![CDATA[ 
+			INSERT INTO TBCOM_USER_AUTH_CHGHST (AUTH_CHANGE_SN,
+			                                    USER_ID,
+			                                    CHANGE_AUTH_KND_CODE,
+			                                    CHANG_AUTH_TRGET_ID,
+			                                    AFTCH_AUTH_STTUS_CODE,
+			                                    REGISTER_ID,
+			                                    REGIST_DT,
+			                                    UPDUSR_ID,
+			                                    UPDT_DT,
+			                                    BFCHG_AUTH_STTUS_CODE,
+			                                    EVENT_FNCT)
+			     VALUES (SQ_COM_USER_AUTH_CHGHST_1.NEXTVAL,
+			             #USER_ID#,
+			             #CHANGE_AUTH_KND_CODE#,
+			             #CHANG_AUTH_TRGET_ID#,
+			             #AFTCH_AUTH_STTUS_CODE#,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #S_USER_ID#,
+			             SYSDATE,
+			             #BFCHG_AUTH_STTUS_CODE#,
+			             #EVENT_FNCT#)   
+		]]>
+	</insert> 	        
+
+</sqlMap>

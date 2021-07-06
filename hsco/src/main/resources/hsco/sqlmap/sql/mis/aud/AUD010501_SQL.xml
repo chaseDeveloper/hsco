@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUD010501_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+    <!--감사공개관리 테이블 목록조회 -->
+    <select id="AUD010501DAO.selectAuditKnwldgList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT
+				 A.AUDIT_KNWLDG_SN  AS AUDIT_KNWLDG_SN
+				,A.AUDIT_NO         AS AUDIT_NO
+				,A.AUDIT_INSTT      AS AUDIT_INSTT
+				,A.AUDIT_YEAR       AS AUDIT_YEAR
+				,A.AUDIT_NM         AS AUDIT_NM
+				,A.OTHBC_TY         AS OTHBC_TY
+				,DUCODVL.SFCOM_CODE_NM('AUD034', A.OTHBC_TY, 'CODE_NM') AS BOARD_KIND_NM
+				,A.KNWLDG_SJ        AS KNWLDG_SJ
+				,A.KNWLDG_DLIV_CN   AS KNWLDG_DLIV_CN
+				,A.ATCH_FILE        AS ATCH_FILE
+				,A.RM               AS RM
+				,A.REGISTER_ID      AS REGISTER_ID
+				,A.REGIST_DT        AS REGIST_DT
+				,A.UPDUSR_ID        AS UPDUSR_ID
+				,A.UPDT_DT          AS UPDT_DT
+				,A.AUDUT_SE         AS AUDUT_SE
+				,A.BOARD_IDX		AS BOARD_IDX
+			  FROM TBAUD_AUDIT_KNWLDG A
+			 WHERE A.AUDIT_YEAR = #AUDIT_YEAR# 
+		]]>
+		<isNotEmpty property="AUDIT_NO">
+			   AND A.AUDIT_NO LIKE '%' || #AUDIT_NO# || '%'
+		</isNotEmpty>					
+		<isNotEmpty property="AUDUT_SE">
+			   AND A.AUDUT_SE = #AUDUT_SE#
+		</isNotEmpty>					 	
+		<isNotEmpty property="AUDIT_INSTT">
+			   AND A.AUDIT_INSTT = #AUDIT_INSTT#
+		</isNotEmpty>					 	
+		<isNotEmpty property="OTHBC_TY">
+			   AND A.OTHBC_TY= #OTHBC_TY#
+		</isNotEmpty>
+		<![CDATA[
+			ORDER BY A.AUDIT_YEAR , A.REGIST_DT 
+		]]>
+	</select>
+  
+	<!--감사공개등록을 위한 감사 목록조회 -->
+	<select id="AUD010501DAO.selectAuditList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+				SELECT 
+					 T1.AUDIT_YEAR AS AUDIT_YEAR
+					,T1.AUDIT_NO AS AUDIT_NO
+					,T1.AUDIT_NAME AS AUDIT_NM
+					,T1.AUDIT_INSTT AS AUDIT_INSTT
+					,T1.AUDUT_SE AS AUDUT_SE
+				  FROM (
+						(
+						 SELECT 
+							   A.AUDIT_YEAR AS AUDIT_YEAR
+							  ,A.AUDIT_NO AS AUDIT_NO
+							  ,A.AUDIT_SJ AS AUDIT_NAME
+							  ,A.AUDIT_INSTT AS AUDIT_INSTT
+							  ,'1' AS AUDUT_SE
+						   FROM TBAUD_INNER_EXTRL_AUDIT A 
+						  WHERE 1=1
+						)
+						UNION
+						(
+						 SELECT
+							   A.RCEPT_YEAR AS AUDIT_YEAR
+							  ,A.EDAY_AUDIT_NO AS AUDIT_NO
+							  ,A.EDAY_AUDIT_NM AS AUDIT_NAME
+							  ,'-' AS AUDIT_INSTT
+							  ,'2' AS AUDUT_SE
+						   FROM TBAUD_EDAY_AUDIT A 
+						  WHERE 1=1
+						)
+						UNION 
+						(
+						 SELECT 
+							   A.CNTRCT_JDGMN_YEAR AS AUDIT_YEAR
+							  ,A.CNTRCT_JDGMN_NO AS AUDIT_NO
+							  ,A.CNTRCT_NM AS AUDIT_NAME
+							  ,'-' AS AUDIT_INSTT
+							  ,'3' AS AUDUT_SE
+						   FROM TBAUD_CNTRCT_JDGMN A
+						  WHERE 1=1
+						)
+					   ) T1
+				 WHERE AUDIT_NO = #AUDIT_NO#
+				   AND AUDIT_YEAR = #AUDIT_YEAR#
+			]]>
+	</select>
+
+	<!--감사공개 테이블 등록 -->    
+	<insert id="AUD010501DAO.AuditKnwldgListC" parameterClass="java.util.HashMap">
+		<![CDATA[
+			INSERT INTO TBAUD_AUDIT_KNWLDG (
+					 AUDIT_KNWLDG_SN
+					,AUDIT_NO
+					,AUDIT_INSTT
+					,AUDIT_YEAR
+					,AUDIT_NM
+					,OTHBC_TY
+					,KNWLDG_SJ
+					,KNWLDG_DLIV_CN
+					,ATCH_FILE
+					,RM
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+					,AUDUT_SE
+ 				) VALUES (  
+					 (SELECT CASE WHEN COUNT(AUDIT_KNWLDG_SN) = 0 THEN 1
+								  WHEN COUNT(AUDIT_KNWLDG_SN) > 0 THEN MAX(TO_NUMBER(AUDIT_KNWLDG_SN))+1
+							 ELSE NULL END 
+						FROM (SELECT NVL2(COUNT(AUDIT_KNWLDG_SN),MAX(TO_NUMBER(AUDIT_KNWLDG_SN)),1) AS AUDIT_KNWLDG_SN
+								FROM TBAUD_AUDIT_KNWLDG)
+							GROUP BY AUDIT_KNWLDG_SN)
+					,#AUDIT_NO#
+					,#AUDIT_INSTT#
+					,#AUDIT_YEAR#
+					,#AUDIT_NM#
+					,#OTHBC_TY#
+					,#KNWLDG_SJ#
+					,#KNWLDG_DLIV_CN#
+					,#ATCH_FILE#
+					,#RM#
+					,#S_USER_ID#
+					,SYSDATE
+					,#S_USER_ID#
+					,SYSDATE
+					,#AUDUT_SE#
+				)
+		]]>
+	</insert>
+
+	<!--감사공개관리 테이블 수정 -->
+	<update id="AUD010501DAO.AuditKnwldgListU" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBAUD_AUDIT_KNWLDG SET
+				 AUDIT_NO       = #AUDIT_NO#
+				,AUDIT_INSTT    = #AUDIT_INSTT# 
+				,AUDIT_YEAR     = #AUDIT_YEAR#
+				,AUDIT_NM       = #AUDIT_NM#
+				,OTHBC_TY       = #OTHBC_TY#
+				,KNWLDG_SJ      = #KNWLDG_SJ#
+				,KNWLDG_DLIV_CN = #KNWLDG_DLIV_CN#
+				,ATCH_FILE      = #ATCH_FILE#
+				,RM             = #RM#
+				,UPDUSR_ID      = #S_USER_ID#
+				,UPDT_DT        = SYSDATE
+			WHERE  AUDIT_KNWLDG_SN = #AUDIT_KNWLDG_SN#
+		]]>
+	</update>
+
+	<!--감사공개관리 테이블 삭제 -->
+	<delete id="AUD010501DAO.AuditKnwldgListD" parameterClass="java.util.HashMap">
+		<![CDATA[
+			DELETE FROM TBAUD_AUDIT_KNWLDG 
+			 WHERE AUDIT_KNWLDG_SN = #AUDIT_KNWLDG_SN#
+			   AND AUDIT_YEAR = #AUDIT_YEAR#
+		]]>
+	</delete>
+
+    <!--홈페이지 게시판 신규 BOARD_IDX 채번 -->
+    <select id="AUD010501DAO.selectHpgIdx" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT NVL(MAX(BOARD_IDX),0)+1 AS BOARD_IDX
+    	  FROM TBHPM_BOARD
+    </select>
+    
+    <!--홈페이지 게시판 테이블 등록 -->    
+	<insert id="AUD010501DAO.saveHpgC" parameterClass="java.util.HashMap">
+		<![CDATA[
+			INSERT INTO TBHPM_BOARD (
+					 BOARD_IDX
+					,APP_ID
+					,BOARD_DEPTH
+					,PARENT_IDX
+					,VIEW_COUNT
+					,USER_NAME
+					,BOARD_TITLE
+					,BOARD_CONTENT
+					,BOARD_CONFIRM
+					,INPUT_DATE
+					,BOARD_KIND
+ 				) VALUES (  
+					 #BOARD_IDX#
+					,'thanks'
+					,''
+					,0
+					,0
+					,'감사실'
+					,#BOARD_TITLE#
+					,#BOARD_CONTENT#
+					,1 
+					,to_timestamp(sysdate, 'RR/MM/DD HH24:MI:SSXFF')
+					,DUCODVL.SFCOM_CODE_NM('AUD034', #OTHBC_TY#, 'CODE_NM')
+				)
+		]]>
+	</insert>
+	
+	<!-- 감사지식 BOARD_IDX 갱신 -->
+	<update id="AUD010501DAO.boardIdxU" parameterClass="java.util.HashMap">
+		UPDATE TBAUD_AUDIT_KNWLDG 
+		   SET BOARD_IDX = #BOARD_IDX# 
+		   	  ,UPDUSR_ID      = #S_USER_ID#
+			  ,UPDT_DT        = SYSDATE
+	 	 WHERE AUDIT_KNWLDG_SN = #AUDIT_KNWLDG_SN#
+			   AND AUDIT_YEAR = #AUDIT_YEAR#
+	</update>
+
+	<!-- 홈페이지 게시판 수정 -->
+	<update id="AUD010501DAO.saveHpgU" parameterClass="java.util.HashMap">
+		UPDATE TBHPM_BOARD 
+		   SET BOARD_TITLE   = #BOARD_TITLE# 
+		   	  ,BOARD_CONTENT = #BOARD_CONTENT#
+			  ,BOARD_KIND    = DUCODVL.SFCOM_CODE_NM('AUD034', #OTHBC_TY#, 'CODE_NM')
+	 	 WHERE BOARD_IDX = #BOARD_IDX#
+	</update>
+
+	<!--홈페이지 게시판 삭제 -->
+	<delete id="AUD010501DAO.saveHpgD" parameterClass="java.util.HashMap">
+		<![CDATA[
+			DELETE FROM TBHPM_BOARD 
+			 WHERE BOARD_IDX = #BOARD_IDX#
+		]]>
+	</delete>
+
+    <!--홈페이지 게시판 조회 -->
+    <select id="AUD010501DAO.selectHpgBoardList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT A.BOARD_IDX
+		     , A.APP_ID
+		     , A.BOARD_TITLE
+		     , A.BOARD_CONTENT 
+		  FROM TBHPM_BOARD A
+		 INNER JOIN TBAUD_AUDIT_KNWLDG B
+			ON A.BOARD_IDX=B.BOARD_IDX
+		 WHERE A.APP_ID='thanks'
+		   AND A.BOARD_CONFIRM='1'
+		   AND A.BOARD_KIND IS NOT NULL
+    </select>
+</sqlMap>

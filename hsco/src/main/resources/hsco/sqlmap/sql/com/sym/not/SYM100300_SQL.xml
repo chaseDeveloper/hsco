@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM100300_SQL">
+
+	<resultMap class="java.util.HashMap" id="bbsResult">
+		<result property="RNUM" column="RNUM" />
+		<result property="DEPTH" column="DEPTH" />
+		<result property="SN" column="SN" />
+		<result property="REPLY_SN" column="REPLY_SN" />
+		<result property="SJ" column="SJ" />
+		<result property="CN" column="CN" jdbcType="CLOB" javaType="java.lang.String" />
+		<result property="INQIRE_CO" column="INQIRE_CO" />
+		<result property="REGIST_DT" column="REGIST_DT" />
+		<result property="LIKE_CNT" column="LIKE_CNT" />
+		<result property="HATE_CNT" column="HATE_CNT" />
+		<result property="REPLY_CNT" column="REPLY_CNT" />
+		<result property="REPLY_LIKE_SUM" column="REPLY_LIKE_SUM" />
+		<result property="REPLY_HATE_SUM" column="REPLY_HATE_SUM" />
+	</resultMap>
+	
+	<!-- 익명게시판 목록 조회 -->
+	<select id="SYM100300DAO.selectAnonyMousBbs" parameterClass="java.util.HashMap" resultMap="bbsResult">
+	<![CDATA[/*SYM100300DAO.selectAnonyMousBbs : 익명게시판 목록 조회 */]]>
+		SELECT DENSE_RANK() OVER (ORDER BY X1.SN DESC) AS RNUM
+		      ,X1.DEPTH
+		      ,X1.SN
+		      ,X1.REPLY_SN
+		      ,X1.SJ
+		      ,X1.CN
+		      ,X1.INQIRE_CO
+		      ,X1.REGIST_DT
+		      ,X1.LIKE_CNT
+		      ,X1.HATE_CNT
+		      ,X1.REPLY_CNT
+		      ,NVL(X2.REPLY_LIKE_SUM, 0) AS REPLY_LIKE_SUM
+		      ,NVL(X2.REPLY_HATE_SUM, 0) AS REPLY_HATE_SUM
+		  FROM (
+		        SELECT '1' AS DEPTH   
+		              ,T1.SN             /*일련번호*/
+		              ,NULL AS REPLY_SN /*댓글일련번호*/
+		              ,T1.SJ            /*제목*/
+		              ,T1.CN            /*내용*/
+		              ,T1.INQIRE_CO     /*조회수*/
+		              ,T1.REGIST_DT                                         /*등록일자*/
+		              ,NVL(T2.LIKE_CNT, 0) AS LIKE_CNT                      /*좋아요 건수*/
+		              ,NVL(T2.HATE_CNT, 0) AS HATE_CNT                      /*싫어요 건수*/
+		              ,NVL(T3.REPLY_CNT, 0) AS REPLY_CNT                    /*댓글 건수*/
+		          FROM TBCOM_ANONYMOUS_BBS T1
+		               LEFT OUTER JOIN (
+		                                SELECT C1.SN
+		                                      ,COUNT(CASE WHEN C1.VOTE_SE = '1' THEN 1 END) AS LIKE_CNT /*좋아요 건수*/
+		                                      ,COUNT(CASE WHEN C1.VOTE_SE = '2' THEN 1 END) AS HATE_CNT /*싫어요 건수*/
+		                                  FROM TBCOM_ANONYMOUS_BBS_VOTE C1
+		                                 GROUP BY C1.SN
+		                               )T2
+		                 ON T1.SN = T2.SN
+		               LEFT OUTER JOIN (
+		                                SELECT C1.SN
+		                                      ,COUNT(1) AS REPLY_CNT
+		                                  FROM TBCOM_ANONYMOUS_BBS_REPLY C1
+		                                GROUP BY C1.SN
+		                               )T3
+		                 ON T1.SN = T3.SN
+		        UNION ALL
+		        SELECT '2' AS DEPTH
+		              ,T1.SN /*일련번호*/
+		              ,T1.REPLY_SN AS SN  /*댓글일련번호*/
+		              ,NULL AS SJ       /*제목*/
+		              ,T1.CN            /*내용*/
+		              ,0 AS INQIRE_CO   /*조회수*/
+		              ,T1.REGIST_DT                                         /*등록일자*/
+		              ,NVL(T2.LIKE_CNT, 0) AS LIKE_CNT                      /*좋아요 건수*/
+		              ,NVL(T2.HATE_CNT, 0) AS HATE_CNT                      /*싫어요 건수*/
+		              ,0 AS REPLY_CNT                    /*댓글 건수*/
+		          FROM TBCOM_ANONYMOUS_BBS_REPLY T1   
+		               LEFT OUTER JOIN (
+		                                SELECT C1.SN
+		                                      ,C1.REPLY_SN
+		                                      ,COUNT(CASE WHEN C1.VOTE_SE = '1' THEN 1 END) AS LIKE_CNT /*덧글 좋아요 건수*/
+		                                      ,COUNT(CASE WHEN C1.VOTE_SE = '2' THEN 1 END) AS HATE_CNT /*덧글 싫어요 건수*/
+		                                  FROM TBCOM_ANONYMOUS_BBS_REPLY_VOTE C1
+		                                 GROUP BY C1.SN, C1.REPLY_SN
+		                               )T2
+		                 ON T1.SN = T2.SN
+		                AND T1.REPLY_SN = T2.REPLY_SN
+		        ) X1
+		        LEFT OUTER JOIN (
+		                         SELECT SN
+		                               ,COUNT(CASE WHEN C1.VOTE_SE = '1' THEN '1' END ) AS REPLY_LIKE_SUM
+		                               ,COUNT(CASE WHEN C1.VOTE_SE = '2' THEN '1' END ) AS REPLY_HATE_SUM
+		                           FROM TBCOM_ANONYMOUS_BBS_REPLY_VOTE C1
+		                          GROUP BY C1.SN
+		                        )X2 /*댓글 좋아요 합계*/
+		          ON X1.SN = X2.SN
+		         AND X1.DEPTH = '1'
+		 WHERE 1=1
+		   AND TO_CHAR(X1.REGIST_DT, 'YYYYMMDD') BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#
+		<isNotEmpty property="SJ">
+		   AND X1.SN IN (
+		                 SELECT SN
+		                   FROM TBCOM_ANONYMOUS_BBS C1
+		                  WHERE C1.SJ LIKE '%' || #SJ# || '%'
+		                )
+		</isNotEmpty>
+		 ORDER BY X1.SN DESC, X1.DEPTH ASC, X1.REPLY_SN ASC
+	</select>
+	
+	<!-- 익명게시판 등록 -->
+	<insert id="SYM100300DAO.insertAnonymousBbs" parameterClass="java.util.HashMap">
+		<![CDATA[/*SYM100300DAO.insertAnonymousBbs : 익명게시판 등록 */]]>
+		INSERT INTO TBCOM_ANONYMOUS_BBS(
+		       SN
+		      ,SJ
+		      ,CN
+		      ,INQIRE_CO
+		      ,REGIST_DT
+		)VALUES(
+		       (SELECT NVL(MAX(SN), 0)+1
+		          FROM TBCOM_ANONYMOUS_BBS)
+		      ,#SJ#
+		      ,#CN#
+		      ,#INQIRE_CO#
+		      ,SYSDATE
+		)
+	</insert>
+	
+	<!-- 익명게시판 수정 -->
+	<update id="SYM100300DAO.updateAnonymousBbs" parameterClass="java.util.HashMap">
+		<![CDATA[/*SYM100300DAO.updateAnonymousBbs : 익명게시판 수정 */]]>
+		UPDATE TBCOM_ANONYMOUS_BBS
+		   SET SJ            = #SJ#
+              ,CN            = #CN#
+		 WHERE SN = #SN#
+	</update>
+	
+	<!-- 익명게시판 삭제 -->
+	<delete id="SYM100300DAO.deleteAnonymousBbs" parameterClass="java.util.HashMap">
+		<![CDATA[/*SYM100300DAO.deleteAnonymousBbs : 익명게시판 삭제  */]]>
+		DELETE 
+		  FROM TBCOM_ANONYMOUS_BBS
+		 WHERE SN = #SN#
+	</delete>
+	
+	<!-- 익명게시판 덧글 등록 -->
+	<insert id="SYM100300DAO.insertAnonymousBbsReply" parameterClass="java.util.HashMap">
+		<![CDATA[/*SYM100300DAO.insertAnonymousBbsReply : 익명게시판 덧글 등록 */]]>
+		INSERT INTO TBCOM_ANONYMOUS_BBS_REPLY(
+		       SN
+		      ,REPLY_SN
+		      ,DISC_VALUE
+		      ,CN
+		      ,REGIST_DT
+		)VALUES(
+		       #SN#
+		      ,(SELECT NVL(MAX(REPLY_SN), 0)+1
+		          FROM TBCOM_ANONYMOUS_BBS_REPLY
+		         WHERE SN = #SN#)
+		      ,#DISC_VALUE#
+		      ,#CN#
+		      ,SYSDATE
+		)
+	</insert>
+	
+	<!-- 익명게시판 덧글 수정 -->
+	<update id="SYM100300DAO.updateAnonymousBbsReply" parameterClass="java.util.HashMap">
+		<![CDATA[/*SYM100300DAO.updateAnonymousBbsReply : 익명게시판 덧글 수정 */]]>
+		UPDATE TBCOM_ANONYMOUS_BBS_REPLY
+		   SET CN         = #CN#
+		      ,REGIST_DT  = SYSDATE
+		 WHERE SN = #SN#
+		   AND REPLY_SN = #REPLY_SN#
+	</update>
+	
+	<!-- 익명게시판 덧글 삭제 -->
+	<delete id="SYM100300DAO.deleteAnonymousBbsReply" parameterClass="java.util.HashMap">
+		<![CDATA[/*SYM100300DAO.deleteAnonymousBbsReply : 익명게시판 덧글 삭제 */]]>
+		DELETE 
+		  FROM TBCOM_ANONYMOUS_BBS_REPLY
+		 WHERE SN = #SN#
+		   AND REPLY_SN = #REPLY_SN#
+	</delete>
+	
+	<!-- 익명게시판 덧글 전체 삭제 -->
+	<delete id="SYM100300DAO.deleteAnonymousBbsReplyAll" parameterClass="java.util.HashMap">
+		<![CDATA[/*SYM100300DAO.deleteAnonymousBbsReplyAll : 익명게시판 덧글 전체 삭제 */]]>
+		DELETE 
+		  FROM TBCOM_ANONYMOUS_BBS_REPLY
+		 WHERE SN = #SN#
+	</delete>
+	
+	<!-- 익명게시판 투표 삭제 -->
+	<delete id="SYM100300DAO.deleteAnonymousBbsVoteAll" parameterClass="java.util.HashMap">
+		<![CDATA[/*BBS010101DAO.deleteAnonymousBbsVoteAll : 익명게시판 투표 삭제 */]]>
+		DELETE 
+		  FROM TBCOM_ANONYMOUS_BBS_VOTE
+		 WHERE SN = #SN#
+	</delete>
+	
+	<!-- 익명게시판 덧글 투표 삭제 -->
+	<delete id="SYM100300DAO.deleteAnonymousBbsReplyVote" parameterClass="java.util.HashMap">
+		<![CDATA[/*BBS010101DAO.deleteAnonymousBbsReplyVote : 익명게시판 덧글 투표 삭제 */]]>
+		DELETE 
+		  FROM TBCOM_ANONYMOUS_BBS_REPLY_VOTE
+		 WHERE SN = #SN#
+		   AND REPLY_SN = #REPLY_SN#
+	</delete>
+	
+	<!-- 익명게시판 덧글 투표 전체 삭제 -->
+	<delete id="SYM100300DAO.deleteAnonymousBbsReplyVoteAll" parameterClass="java.util.HashMap">
+		<![CDATA[/*BBS010101DAO.deleteAnonymousBbsReplyVoteAll : 익명게시판 덧글 투표 전체 삭제 */]]>
+		DELETE 
+		  FROM TBCOM_ANONYMOUS_BBS_REPLY_VOTE
+		 WHERE SN = #SN#
+	</delete>
+	
+	
+</sqlMap>

@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUD010109_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 내외부감사목록 조회 -->
+	<select id="AUD010109DAO.selectInExAdList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.AUDIT_PLAN_NO
+		     , A.AUDIT_PLAN_YEAR
+		     , B.DEPT_SN
+		     , B.DEPT_CODE
+		     , C.DEPT_NM
+		     , A.AUDIT_SE
+		     , A.AUDIT_PLAN_INSTT
+		     , A.AUDIT_PLAN_KND
+		     , A.AUDIT_PLAN_CL
+		     , A.AUDIT_PLAN_BGNDE
+		     , A.AUDIT_PLAN_ENDDE
+		     , A.AUDIT_PLAN_SJ
+		     , A.AUDIT_PLAN_MAIN_CN
+		     , A.AUDIT_PLAN_BUDGET
+		     , A.AUDIT_PLAN_CT
+		     , A.ATCH_FILE
+		     , NVL(A.DSPTH_AT, '0')       AS DSPTH_AT
+		     , NVL(A.AUDIT_ED_AT, '0')    AS AUDIT_ED_AT
+		     , A.RM
+		     , A.ATCH_FILE2
+		     , A.PRVYY_AUDIT_ACMSLT
+		     , A.AUDIT_BGNDE
+		     , A.AUDIT_ENDDE
+		  FROM TBAUD_AUDIT_PLAN A
+		       LEFT OUTER JOIN TBAUD_AUDIT_PLAN_TRGET_DEPT B
+		            ON A.AUDIT_PLAN_YEAR = B.AUDIT_PLAN_YEAR
+		           AND A.AUDIT_PLAN_NO   = B.AUDIT_PLAN_NO
+		       LEFT OUTER JOIN TBHRM_DEPT C
+		            ON B.DEPT_CODE = C.DEPT_CODE
+		 WHERE 1 = 1
+		   AND (A.CONFM_AT    = '1' OR A.PLAN_REGIST_AT != '1')
+		   AND A.CONFM_AT2    = '1'
+		   AND A.AUDIT_ED_AT != '0'
+		<![CDATA[
+		   AND A.AUDIT_PLAN_YEAR >= #AUDIT_BGNYEAR#
+		   AND A.AUDIT_PLAN_YEAR <= #AUDIT_ENDYEAR#
+		]]>
+		<isNotEmpty property="AUDIT_INSTT">
+		   AND A.AUDIT_PLAN_INSTT = #AUDIT_INSTT#
+		</isNotEmpty>
+		<isNotEmpty property="AUDIT_KND">
+		   AND A.AUDIT_PLAN_KND   = #AUDIT_KND#
+		</isNotEmpty>
+		<isNotEmpty property="AUDIT_CL">
+		   AND A.AUDIT_PLAN_CL    = #AUDIT_CL#
+		</isNotEmpty>
+		<isNotEmpty property="AUDIT_SE">
+		   AND A.AUDIT_SE         = #AUDIT_SE#
+		</isNotEmpty>
+		<isNotEmpty property="AUDIT_NO">
+		   AND A.AUDIT_PLAN_NO LIKE '%' || #AUDIT_NO# || '%'
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+		   AND (B.DEPT_CODE='000000' OR B.DEPT_CODE = #DEPT_CODE#)
+			</isNotEqual>
+		</isNotEmpty>
+		ORDER BY A.AUDIT_PLAN_NO DESC, B.DEPT_CODE
+	</select>
+	
+	<!-- 수감일지 목록조회 -->
+	<select id="AUD010109DAO.selectAuditDiary" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.DIARY_SN
+			 , A.AUDIT_NO
+			 , A.AUDIT_YEAR
+			 , A.AUDIT_DE
+			 , A.AUDIT_DEPT_CODE
+			 , A.AUDIT_DEPT_NM
+			 , A.ADTOR_NM
+			 , A.REALM_NM
+			 , A.AUDIT_CN
+			 , A.MANAGT_PLAN
+			 , A.DRCT_MATTER
+			 , A.ATCH_FILE
+			 , A.RM
+		  FROM TBAUD_AUDIT_DIARY A 
+		 WHERE A.AUDIT_YEAR = #AUDIT_YEAR#
+		   AND A.AUDIT_NO   = #AUDIT_NO#
+		   AND A.DIARY_SE   = '002' /*수감일지*/
+		<isNotEmpty property="DEPT_CODE">
+		   AND A.AUDIT_DEPT_CODE = #DEPT_CODE#
+		</isNotEmpty>
+		ORDER BY A.DIARY_SN DESC
+	</select>
+	
+	<!-- 수감일지 감사인조회 -->
+	<select id="AUD010109DAO.selectAuditComposi" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT ADTOR_NM AS CODE
+		     , ADTOR_NM AS CODE_NM 
+		  FROM TBAUD_AUDIT_PLAN_AUDIT_COMPOSI
+		 WHERE AUDIT_PLAN_NO    = #AUDIT_NO#
+		   AND AUDIT_PLAN_YEAR  = #AUDIT_YEAR#
+		   AND AUDIT_PLAN_AT   != '1'
+		 ORDER BY ADTOR_NM
+	</select>
+	
+	<!-- 수감일지 등록 -->    
+	<insert id="AUD010109DAO.DiaryListC" parameterClass="java.util.HashMap">
+		INSERT INTO TBAUD_AUDIT_DIARY (
+		       DIARY_SN
+		     , AUDIT_NO
+		     , AUDIT_YEAR
+		     , AUDIT_DE
+		     , DIARY_SE
+		     , AUDIT_DEPT_CODE
+		     , AUDIT_DEPT_NM
+		     , ADTOR_NM
+		     , REALM_NM
+		     , AUDIT_CN
+		     , MANAGT_PLAN
+		     , DRCT_MATTER
+		     , ATCH_FILE
+		     , RM
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		)
+		VALUES (  
+		       (SELECT NVL(MAX(DIARY_SN), 0) + 1 FROM TBAUD_AUDIT_DIARY WHERE AUDIT_NO = #AUDIT_NO# AND AUDIT_YEAR = #AUDIT_YEAR#)
+		     , #AUDIT_NO#
+		     , #AUDIT_YEAR#
+		     , #AUDIT_DE#
+		     , '002'
+		     , #AUDIT_DEPT_CODE#
+		     , #AUDIT_DEPT_NM#
+		     , #ADTOR_NM#
+		     , #REALM_NM#
+		     , #AUDIT_CN#
+		     , #MANAGT_PLAN#
+		     , #DRCT_MATTER#
+		     , #ATCH_FILE#
+		     , #RM#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+	
+	<!-- 수감일지 수정 -->
+	<update id="AUD010109DAO.DiaryListU" parameterClass="java.util.HashMap">
+		UPDATE TBAUD_AUDIT_DIARY
+		   SET AUDIT_DE        = #AUDIT_DE#
+		     , ADTOR_NM        = #ADTOR_NM#
+		     , REALM_NM        = #REALM_NM#
+		     , AUDIT_CN        = #AUDIT_CN#
+		     , MANAGT_PLAN     = #MANAGT_PLAN#
+		     , DRCT_MATTER     = #DRCT_MATTER#
+		     , ATCH_FILE       = #ATCH_FILE#
+		     , RM              = #RM#
+		     , UPDUSR_ID       = #S_USER_ID#
+		     , UPDT_DT         = SYSDATE
+		 WHERE DIARY_SN   = #DIARY_SN#
+		   AND AUDIT_NO   = #AUDIT_NO#
+		   AND AUDIT_YEAR = #AUDIT_YEAR#
+	</update>
+	
+	<!-- 수감일지 삭제 -->
+	<delete id="AUD010109DAO.DiaryListD" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBAUD_AUDIT_DIARY 
+		 WHERE DIARY_SN   = #DIARY_SN#
+		   AND AUDIT_NO   = #AUDIT_NO#
+		   AND AUDIT_YEAR = #AUDIT_YEAR#
+	</delete>
+	
+</sqlMap>

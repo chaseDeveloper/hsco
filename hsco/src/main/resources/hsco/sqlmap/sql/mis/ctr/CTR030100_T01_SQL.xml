@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR030100_T01_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 계약업무처리과정 조회 -->
+	<select id="CTR030100_T01DAO.selectCntrctJobProcessCrse" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR030100_T01DAO.selectCntrctJobProcessCrse*/]]>
+	<![CDATA[
+		SELECT X1.OCCRRNC_DE /*발생일*/
+		      ,X1.OCCRRNC_CN /*내용*/
+		      ,X1.CNTRCT_AM AS CNTRCT_AM /*계약금액*/
+		      ,X1.EXPNDTR_AM /*지출금액*/
+		      ,X1.ACCMLT_EXPNDTR_AM /*지출누계*/
+		      ,X1.BLCE /*잔액*/
+		      ,X1.SUMRY /*비고*/
+		      ,X1.DECSN_NO /*결의번호*/
+		  FROM (
+		        /* 1_계약의뢰 */
+		        SELECT 'TYPE_01' AS P_TYPE
+		              ,R1.REQEST_DE                                           AS OCCRRNC_DE
+		              ,'계약의뢰 등록 (의뢰번호 : ' || R1.REQEST_NO || ')'            AS OCCRRNC_CN
+		              ,NVL(R1.REQEST_AMOUNT, 0) + NVL(R1.PRCURE_FEE, 0)       AS CNTRCT_AM
+		              ,0                                                      AS EXPNDTR_AM
+		              ,0                                                      AS ACCMLT_EXPNDTR_AM
+		              ,NVL(R1.REQEST_AMOUNT, 0) + NVL(R1.PRCURE_FEE, 0)       AS BLCE
+		              ,NULL                                                   AS SUMRY
+		              ,NULL                                                   AS DECSN_NO
+		        FROM   TBCTR_CNTRCT_REQEST R1
+		               INNER JOIN TBCTR_CNTRCT R2
+		                    ON R1.REQEST_NO = R2.REQEST_NO
+		        WHERE  R2.CNTRCT_NO = #CNTRCT_NO#
+		        UNION ALL
+		        /* 2_최초계약 */
+		        SELECT 'TYPE_02' AS P_TYPE
+		              ,CNTRCT_DE                                          AS OCCRRNC_DE        
+		              ,'최초계약 체결 (계약번호 : ' || CNTRCT_NO || ')'           AS OCCRRNC_CN        /*적요*/
+		              ,NVL(FRST_CNTRCT_AMOUNT, 0)                         AS CNTRCT_AM         /*신청액*/
+		              ,0                                                  AS EXPNDTR_AM        /*지출금액*/
+		              ,0                                                  AS ACCMLT_EXPNDTR_AM /*누적지출금액*/
+		              ,NVL(FRST_CNTRCT_AMOUNT, 0)                         AS BLCE              /*잔액*/
+		              ,NULL                                               AS SUMRY
+		              ,NULL                                               AS DECSN_NO
+		        FROM   TBCTR_CNTRCT
+		        WHERE  CNTRCT_NO = #CNTRCT_NO#
+		        UNION ALL
+		        /* 3_변경계약 */
+		        SELECT 'TYPE_03' AS P_TYPE
+		              ,s1.OCCRRNC_DE
+		              ,s1.OCCRRNC_CN
+		              ,s1.CNTRCT_AM
+		              ,s1.EXPNDTR_AM
+		              ,s1.ACCMLT_EXPNDTR_AM
+		              ,s1.BLCE
+		              ,s1.SUMRY
+		              ,s1.DECSN_NO
+		        FROM   (
+		                SELECT T1.CHANGE_DE                          AS OCCRRNC_DE
+		                      ,'변경계약' || '[' || T3.CODE_NM || ']'   AS OCCRRNC_CN
+		                      ,0                                     AS CNTRCT_AM         /*신청액*/
+		                      ,0                                     AS EXPNDTR_AM        /*지출금액*/
+		                      ,0                                     AS ACCMLT_EXPNDTR_AM /*누적지출금액*/
+		                      ,NVL(T1.AFTCH_CNTRCT_AMOUNT, 0)        AS BLCE              /*잔액*/
+		                      ,(CASE WHEN (T1.AFTCH_CNTRCT_AMOUNT-T2.FRST_CNTRCT_AMOUNT)-NVL(LAG(T1.AFTCH_CNTRCT_AMOUNT-T2.FRST_CNTRCT_AMOUNT) OVER(ORDER BY T1.CHANGE_DE),0) = 0
+		                              THEN ''
+		                           WHEN (T1.AFTCH_CNTRCT_AMOUNT-T2.FRST_CNTRCT_AMOUNT)-NVL(LAG(T1.AFTCH_CNTRCT_AMOUNT-T2.FRST_CNTRCT_AMOUNT) OVER(ORDER BY T1.CHANGE_DE),0) > 0
+		                              THEN '증' || LTRIM(TO_CHAR((T1.AFTCH_CNTRCT_AMOUNT-T2.FRST_CNTRCT_AMOUNT)-NVL(LAG(T1.AFTCH_CNTRCT_AMOUNT-T2.FRST_CNTRCT_AMOUNT) OVER(ORDER BY T1.CHANGE_DE),0), 'L999G999G999G999'))
+		                           ELSE    '감' || LTRIM(TO_CHAR((T1.AFTCH_CNTRCT_AMOUNT-T2.FRST_CNTRCT_AMOUNT)-NVL(LAG(T1.AFTCH_CNTRCT_AMOUNT-T2.FRST_CNTRCT_AMOUNT) OVER(ORDER BY T1.CHANGE_DE),0), 'L999G999G999G999'))
+		                        END  )                     AS SUMRY           /*비고*/
+		                      ,NULL  AS DECSN_NO
+		                FROM   TBCTR_CNTRCT_CHANGE T1
+		                       LEFT OUTER JOIN TBCTR_CNTRCT T2
+		                         ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		                       LEFT OUTER JOIN TBCOM_CMMN_CODE T3
+		                            ON T1.CHANGE_SE = T3.CODE
+		                           AND T3.GRP_CODE  = 'CTR044'
+		                WHERE  T1.CNTRCT_NO = #CNTRCT_NO#
+		                AND    T1.CHANGE_SE IN ('1', '3')
+		                ORDER BY T1.CHANGE_DE
+		                        ,T1.CNTRCT_CHANGE_ODR
+		               ) s1
+		        UNION ALL
+		        /* 4_기성내역 & 5_자금지출추가내역 */
+		        SELECT 'TYPE_04' AS P_TYPE
+		              ,S1.OCCRRNC_DE
+		              ,S1.OCCRRNC_CN
+		              ,S1.CNTRCT_AM
+		              ,S1.EXPNDTR_AM
+		              ,NVL(SUM(S1.EXPNDTR_AM) OVER(ORDER BY S1.OCCRRNC_DE ASC, S1.EXP_TYPE ASC, S1.ORD_COL ASC), 0)                           AS ACCMLT_EXPNDTR_AM /*누적지출금액*/
+		              ,NVL(S1.CNTRCT_AM, 0) - (NVL(SUM(S1.EXPNDTR_AM) OVER(ORDER BY S1.OCCRRNC_DE ASC, S1.EXP_TYPE ASC, S1.ORD_COL ASC), 0)) AS BLCE /*잔액*/
+		              ,S1.SUMRY
+		              ,S1.DECSN_NO
+		          FROM (
+		                /* 4_기성내역 */
+		                SELECT TO_CHAR(R1.REGIST_DT, 'YYYYMMDD')                                AS OCCRRNC_DE
+		                      ,R3.CODE_NM || LPAD(R1.PXCOND_ODR, 2, '0') || '차'                AS OCCRRNC_CN       /*적요*/
+		                      ,R4.CNTRCT_AMOUNT                                                 AS CNTRCT_AM        /*신청액*/
+		                      ,NVL(R2.DECSN_AMOUNT,0)                                           AS EXPNDTR_AM       /*지출금액*/
+		                      ,DECODE(R2.EXP_TYPE, 'A2', '[채무확정] ', 'A3', '[지출] ', '') || R2.SUMRY                                                AS SUMRY
+		                      ,(CASE WHEN R2.BUDGET_YEAR IS NOT NULL THEN R2.BUDGET_YEAR || '-' || R2.DECSN_NO ELSE NULL END)                       AS DECSN_NO
+		                      ,R2.EXP_TYPE
+		                      ,TO_CHAR(R1.CNTRCT_DECSN_SN) AS ORD_COL
+		                  FROM TBCTR_CNTRCT_DECSN R1
+		                       INNER JOIN VHACC_EXP_DSN_MASTR R2
+		                          ON R1.DECSN_YEAR = R2.BUDGET_YEAR
+		                         AND R1.DECSN_NO = R2.DECSN_NO
+		                       LEFT OUTER JOIN TBCOM_CMMN_CODE R3
+		                         ON R1.PXCOND_SE = R3.CODE
+		                        AND R3.GRP_CODE  = 'CTR039'
+		                       LEFT OUTER JOIN TBCTR_CNTRCT R4
+		                         ON R1.CNTRCT_NO = R4.CNTRCT_NO
+		                       LEFT OUTER JOIN (
+		                                        SELECT CNTRCT_DECSN_YEAR, CNTRCT_DECSN_SN, SUM(DECSN_AMOUNT)    AS DECSN_AMOUNT
+		                                          FROM   TBCTR_CNTRCT_DECSN_DETAIL
+		                                         GROUP BY CNTRCT_DECSN_YEAR, CNTRCT_DECSN_SN
+		                                       ) R5
+		                         ON R1.CNTRCT_DECSN_YEAR = R5.CNTRCT_DECSN_YEAR
+		                        AND R1.CNTRCT_DECSN_SN = R5.CNTRCT_DECSN_SN
+		                 WHERE R1.CNTRCT_NO = #CNTRCT_NO#
+		                 UNION ALL 
+		                /* 5_자금지출 추가내역 */
+		                SELECT T3.CPTAL_EXPNDTR_ACNTBK_DE AS OCCRRNC_DE /*자금지출장부일자*/
+		                      ,'계약지출' || '(' || T6.BUDGET_ACNT_NM2 || ')' AS OCCRRNC_CN
+		                      ,T4.CNTRCT_AMOUNT AS CNTRCT_AM
+		                      ,NVL(T3.DECSN_AMOUNT, 0) AS EXPNDTR_AM /*지출액*/
+		                      ,T1.SUMRY_1 AS SUMRY
+		                      ,(CASE WHEN T1.BUDGET_YEAR IS NOT NULL THEN T1.BUDGET_YEAR || '-' || T1.DECSN_NO ELSE NULL END) AS DECSN_NO
+		                      ,NULL AS EXP_TYPE
+		                      ,T1.CHIT_NO AS ORD_COL
+		                  FROM TBACC_CHIT_MASTR T1
+		                       INNER JOIN TB_CNTRCT_EXPNDTR_DTLS T2
+		                         ON T1.ACCNUT_YEAR = T2.ACCNUT_YEAR
+		                        AND T1.CHIT_NO = T2.CHIT_NO
+		                       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR T3
+		                         ON T1.DECSN_YEAR = T3.DECSN_YEAR
+		                        AND T1.DECSN_NO = T3.DECSN_NO
+		                       LEFT OUTER JOIN TBCTR_CNTRCT T4
+		                         ON T2.CNTRCT_NO = T4.CNTRCT_NO
+		                       LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE T6
+		                         ON T1.BUDGET_YEAR = T6.YEAR
+		                        AND T1.BSNS_SE = T6.BSNS_SE
+		                        AND T1.BALC_SE = T6.BALC_SE
+		                        AND T1.BUDGET_ACNT_CODE = T6.BUDGET_ACNT_CODE
+		                 WHERE T2.CNTRCT_NO = #CNTRCT_NO#
+		               ) S1
+		       )X1
+		 ORDER BY X1.P_TYPE ASC, X1.OCCRRNC_DE ASC
+	]]>
+	</select>
+
+
+</sqlMap>

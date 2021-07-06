@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="LAW010103_SQL">
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	<!--소송현황 목록조회 -->
+	<select id="LAW010103DAO.selectLwstList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ 
+		SELECT 
+			 A.LWST_MANAGE_NO     AS LWST_MANAGE_NO 
+			,A.INCDNT_NO          AS INCDNT_NO 
+			,A.CNTRWK_POSIT       AS CNTRWK_POSIT 
+			,A.LWST_AGENT         AS LWST_AGENT 
+			,A.LWST_AMOUNT        AS LWST_AMOUNT 
+			,A.REGISTER_ID        AS REGISTER_ID 
+			,A.REGIST_DT          AS REGIST_DT 
+			,A.UPDUSR_ID          AS UPDUSR_ID 
+			,A.UPDT_DT            AS UPDT_DT  
+			,A.REFREEE            AS REFREEE 
+			,A.CMPTNC_COURT       AS CMPTNC_COURT 
+			,(SELECT CODE_ETC_1 FROM TBCOM_CMMN_CODE WHERE GRP_CODE= 'LAW015' AND CODE = A.CMPTNC_COURT) 
+			                      AS CMPTNC_COURT_SE
+			,A.PARTN_LWST_AGENT   AS PARTN_LWST_AGENT 
+			,A.LWST_RESULT_SE     AS LWST_RESULT_SE 
+			,A.JUDMN_CN           AS JUDMN_CN 
+			,A.ATCH_FILE          AS ATCH_FILE 
+		 FROM TBLAW_LWST A
+		WHERE 1=1
+		  AND A.LWST_MANAGE_NO = #LWST_MANAGE_NO#
+	]]>
+	<isNotEmpty property="LWST_RESULT">
+		  AND A.LWST_RESULT_SE = #LWST_RESULT#	  
+	</isNotEmpty>
+	</select>
+	
+	<!--소송지출비용 목록조회 -->
+	<select id="LAW010103DAO.selectLawyerCtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ 
+			SELECT 
+				 A.INCDNT_NO            AS INCDNT_NO
+				,A.PYMNT_SE             AS PYMNT_SE
+				,A.SEQ 					AS SEQ
+				/* ,A.PYMNT_DE             AS PYMNT_DE */
+				,A.LWST_MANAGE_NO       AS LWST_MANAGE_NO
+				,A.PYMNT_AMOUNT         AS PYMNT_AMOUNT
+				,A.PYMNT_DTLS           AS PYMNT_DTLS
+				,A.ATCH_FILE            AS ATCH_FILE
+				,A.DRFT_DE              AS DRFT_DE
+				,A.DRFT_JOB_CONFM_NO    AS DRFT_JOB_CONFM_NO
+				,A.EXPNDTR_DECSN_DE     AS EXPNDTR_DECSN_DE
+				,A.EXPNDTR_DECSN_YEAR   AS EXPNDTR_DECSN_YEAR
+				,A.EXPNDTR_DECSN_NO     AS EXPNDTR_DECSN_NO
+				,A.REGISTER_ID          AS REGISTER_ID
+				,TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS')            AS REGIST_DT
+				,A.UPDUSR_ID            AS UPDUSR_ID
+				,A.UPDT_DT              AS UPDT_DT
+				,A.CPTAL_ASIGN_REQST_DE AS CPTAL_ASIGN_REQST_DE
+				,A.CPTAL_ASIGN_CONFM_NO AS CPTAL_ASIGN_CONFM_NO
+				,A.PYMNT_PLAN_DE        AS PYMNT_PLAN_DE
+				/* ,B.CONFM_AT             AS CONFM_AT	 */			
+				,SEQ
+				, A.DRFT_JOB_CONFM_NO   AS SANCTN_NO                                /* 결재번호       */
+                ,SFCOM_GET_DRFTSTS(A.DRFT_JOB_CONFM_NO, A.REGIST_DT) AS DRFT_STS                       /* 기안상태       */     
+                ,'theme://images/sanctn/' || 'D' || 
+                      SFCOM_GET_DRFTSTS(A.DRFT_JOB_CONFM_NO, A.REGIST_DT) || '.png'        AS DRFT_STS_IMG     /* 기안상태Img */ 
+                ,TO_CHAR(C.DRFT_DT,'YYYY-MM-DD HH24:MI:SS')          AS DRFT_DT          /* 기안일시       */                               
+                ,SFCOM_GET_APPRSTS(A.DRFT_JOB_CONFM_NO, A.REGIST_DT)                       AS SANCTN_STS       /* 결재상태       */
+                ,'theme://images/sanctn/' || 'A' || 
+                      SFCOM_GET_APPRSTS(A.DRFT_JOB_CONFM_NO, A.REGIST_DT) || '.png'        AS SANCTN_STS_IMG     /* 결재상태Img */
+                ,TO_CHAR(C.LAST_SANCTN_DT,'YYYY-MM-DD HH24:MI:SS')   AS LAST_SANCTN_DT   /* 최종결재일시 */
+                ,(SELECT CPTAL_EXPNDTR_ACNTBK_DE 
+		            FROM TBACC_EXP_DSN_MASTR Z1
+		           WHERE Z1.DECSN_NO   = A.EXPNDTR_DECSN_NO
+		             AND Z1.DECSN_YEAR = A.EXPNDTR_DECSN_YEAR
+		        ) AS PYMNT_DE
+		        ,(SELECT CONFM_AT 
+		            FROM TBFUN_WIK_CPTAL_PLAN Z2
+		           WHERE Z2.DECSN_NO = A.EXPNDTR_DECSN_NO) AS CONFM_AT
+		        ,D.EXPNDTR_UNIT_CODE
+		        ,SFBDG_EXPNDTR_UNIT_NM (D.BUDGET_YEAR,
+		                              D.BSNS_SE,
+		                              D.BALC_SE,
+		                              D.BUDGET_ACNT_CODE,
+		                              D.EXPNDTR_UNIT_CODE)
+		          AS EXPNDTR_UNIT_NM
+		        ,(SELECT OFFM_NM FROM TBLAW_JCFFR_OFFM E1 WHERE E1.OFFM_SN=E.LWST_AGENT) AS OFFM_NM
+			 FROM TBLAW_LAWYER_CT A
+  LEFT OUTER JOIN  (
+					SELECT 
+						 CONFM_AT
+						,PLAN_YM || WEEK_ATMB || BUDGET_YEAR || BSNS_SE || BALC_SE || BUDGET_ACNT_CODE || DEPT_CODE || SE || EXPNDTR_UNIT_CODE || SN AS NUMB
+					  FROM TBFUN_WIK_CPTAL_PLAN 
+					)B 
+			   ON A.CPTAL_ASIGN_CONFM_NO  = B.NUMB
+  LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR C
+			   ON A.DRFT_JOB_CONFM_NO = C.SANCTN_NO
+  LEFT OUTER JOIN TBACC_EXP_DSN_MASTR D					/*전자결재 지출과목*/
+         	   ON A.EXPNDTR_DECSN_YEAR = D.DECSN_YEAR
+        	  AND A.EXPNDTR_DECSN_NO   = D.DECSN_NO 
+  LEFT OUTER JOIN TBLAW_LWST_AGENT E					/*전자결재 지출처*/
+  		       ON A.INCDNT_NO   = E.INCDNT_NO
+        	  AND A.LWST_MANAGE_NO = E.LWST_MANAGE_NO
+			WHERE 1=1
+			  AND A.INCDNT_NO = #INCDNT_NO#
+			  AND A.LWST_MANAGE_NO = #LWST_MANAGE_NO#
+	  ]]>
+	</select>
+
+	<!--소송지출비용 입력,수정 -->
+	<!-- 쿼리명 : 소송지출비용 입력,수정
+		    설명 : 소송지출비용 입력,수정
+		    	수정일  			수정자  		수정내용
+		  작성자 : 
+	    최초작성일 : 
+	-->	
+	<insert id="LAW010103DAO.lawyerCtListCU" parameterClass="java.util.HashMap">
+		 MERGE INTO TBLAW_LAWYER_CT
+			  USING DUAL
+			  ON (INCDNT_NO          = #INCDNT_NO#
+				  AND LWST_MANAGE_NO = #LWST_MANAGE_NO#
+				  AND SEQ            = #SEQ#)
+			  WHEN MATCHED THEN
+			  UPDATE SET 
+						 PYMNT_AMOUNT           = #PYMNT_AMOUNT#
+						,PYMNT_DTLS             = #PYMNT_DTLS#
+						,PYMNT_DE               = #PYMNT_DE#
+						,ATCH_FILE              = #ATCH_FILE#
+						,DRFT_DE                = #DRFT_DE#
+						,DRFT_JOB_CONFM_NO      = #DRFT_JOB_CONFM_NO#
+						,EXPNDTR_DECSN_DE       = #EXPNDTR_DECSN_DE#
+						,EXPNDTR_DECSN_YEAR     = #EXPNDTR_DECSN_YEAR#
+						,EXPNDTR_DECSN_NO       = #EXPNDTR_DECSN_NO#
+						,UPDUSR_ID              = #S_USER_ID#
+						,UPDT_DT                = SYSDATE
+						,CPTAL_ASIGN_REQST_DE   = #CPTAL_ASIGN_REQST_DE#
+						,CPTAL_ASIGN_CONFM_NO   = #CPTAL_ASIGN_CONFM_NO#
+			WHEN NOT MATCHED THEN 
+			INSERT(
+					 INCDNT_NO
+					,PYMNT_SE
+					,PYMNT_DE
+					,LWST_MANAGE_NO
+					,PYMNT_AMOUNT
+					,PYMNT_DTLS
+					,ATCH_FILE
+					,DRFT_DE
+					,DRFT_JOB_CONFM_NO
+					,EXPNDTR_DECSN_DE
+					,EXPNDTR_DECSN_YEAR
+					,EXPNDTR_DECSN_NO
+					,REGISTER_ID
+					,REGIST_DT
+					,UPDUSR_ID
+					,UPDT_DT
+					,CPTAL_ASIGN_REQST_DE
+					,CPTAL_ASIGN_CONFM_NO
+					,PYMNT_PLAN_DE
+					,SEQ
+			)VALUES(
+				 #INCDNT_NO#
+				,#PYMNT_SE#
+				,#PYMNT_DE#
+				,#LWST_MANAGE_NO#
+				,#PYMNT_AMOUNT#
+				,#PYMNT_DTLS#
+				,#ATCH_FILE#
+				,#DRFT_DE#
+				,#DRFT_JOB_CONFM_NO#
+				,#EXPNDTR_DECSN_DE#
+				,#EXPNDTR_DECSN_YEAR#
+				,#EXPNDTR_DECSN_NO#
+				,#S_USER_ID#
+				,SYSDATE
+				,#S_USER_ID#
+				,SYSDATE
+				,#CPTAL_ASIGN_REQST_DE#
+				,#CPTAL_ASIGN_CONFM_NO#
+				,#PYMNT_PLAN_DE#
+                ,(SELECT NVL(MAX(SEQ),0) + 1 <!--  MAX(NVL(SEQ, 0))+1  -->
+				    FROM TBLAW_LAWYER_CT 
+				   WHERE INCDNT_NO = #INCDNT_NO# 
+				     AND LWST_MANAGE_NO = #LWST_MANAGE_NO#)
+			)
+	</insert>
+
+	<!--변호사비용지출 목록 삭제 -->
+	<delete id="LAW010103DAO.lawyerCtListD" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE TBLAW_LAWYER_CT		   
+ 		 WHERE INCDNT_NO = #INCDNT_NO#
+		   AND LWST_MANAGE_NO  =  #LWST_MANAGE_NO#
+		   AND SEQ             =  #SEQ#	
+		]]>
+	</delete>
+
+	<!--지출결의 번호 저장-->
+	<update id="LAW010103DAO.updateExpndtrDecsnNo" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		UPDATE TBLAW_LAWYER_CT
+		   SET 
+				 EXPNDTR_DECSN_DE  	= #EXPNDTR_DECSN_DE#
+				,EXPNDTR_DECSN_YEAR = #DSNMASTR.DECSN_YEAR#
+				,EXPNDTR_DECSN_NO  	= #DSNMASTR.DECSN_NO#
+				,UPDUSR_ID         	= #S_USER_ID#
+				,UPDT_DT           	= SYSDATE    
+		 WHERE INCDNT_NO		   	= #INCDNT_NO#
+		   AND LWST_MANAGE_NO      	= #LWST_MANAGE_NO#
+		   AND SEQ                 	= #SEQ#
+		]]>
+	</update>
+
+	<!--내부결재 레포트 데이터셋 -->
+	<select id="LAW010103DAO.innerSanctnUbiDataset" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ 
+		SELECT 
+			 A.INCDNT_NO            AS INCDNT_NO            /*사건번호*/
+			,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAW017' AND CODE = A.PYMNT_SE )
+									AS PYMNT_SE             /*지급구분*/
+			,A.PYMNT_DE             AS PYMNT_DE             /*지급일자*/
+			,A.LWST_MANAGE_NO       AS LWST_MANAGE_NO       /*소송관리번호*/
+			,A.PYMNT_AMOUNT         AS PYMNT_AMOUNT         /*지급금액*/
+			,A.PYMNT_DTLS           AS PYMNT_DTLS           /*지급내역*/
+			,A.ATCH_FILE            AS ATCH_FILE_1          /*지출관리첨부파일*/
+			,A.DRFT_DE              AS DRFT_DE              /*기안일자*/
+			,A.DRFT_JOB_CONFM_NO    AS DRFT_JOB_CONFM_NO    /*기안번호*/
+			,A.EXPNDTR_DECSN_DE     AS EXPNDTR_DECSN_DE     /*결의일자*/
+			,A.CPTAL_ASIGN_REQST_DE AS CPTAL_ASIGN_REQST_DE /*자금배정요청일자*/
+			,A.CPTAL_ASIGN_CONFM_NO AS CPTAL_ASIGN_CONFM_NO /*자금배정승인번호*/
+			,A.PYMNT_PLAN_DE        AS PYMNT_PLAN_DE        /*지급계획일자*/
+			,A.EXPNDTR_DECSN_YEAR   AS EXPNDTR_DECSN_YEAR   /*결의년도*/
+			,B.CNTRWK_POSIT         AS CNTRWK_POSIT         /*공사지위*/
+			,B.LWST_AGENT           AS LWST_AGENT           /*소송대리인*/
+			,B.LWST_AMOUNT          AS LWST_AMOUNT
+			,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAW004' AND CODE = B.REFREEE ) 
+			                        AS REFREEE              /*심급*/
+			,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAW015' AND CODE = B.CMPTNC_COURT )
+			                        AS CMPTNC_COURT         /*법원상세*/
+			,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAW016' AND CODE = (SELECT CODE_ETC_1 FROM TBCOM_CMMN_CODE WHERE GRP_CODE= 'LAW015' AND CODE = B.CMPTNC_COURT) )
+			                        AS CMPTNC_COURT_SE      /*법원분류*/
+			,B.PARTN_LWST_AGENT     AS PARTN_LWST_AGENT     /*상대방소송대리인*/
+			,B.LWST_RESULT_SE       AS LWST_RESULT_SE       /*소송결과*/
+			,B.JUDMN_CN             AS JUDMN_CN
+			,B.ATCH_FILE            AS ATCH_FILE_2          /*소송현황첨부파일*/
+			,C.RCEPT_DE             AS RCEPT_DE             /*접수일자*/
+			,C.ED_AT                AS ED_AT                /*종결여부*/
+			,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAW002' AND CODE = C.INCDNT_SE ) 
+									AS INCDNT_SE            /*사건구분*/
+			,(SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'LAW003' AND CODE = C.LWST_TY )
+									AS LWST_TY              /*소송종류*/
+			,(SELECT '[' || LAD_CODE || ']' || LAD_NM FROM TBSLS_LAD_INFO WHERE LAD_CODE = C.BSNS_CODE)
+									AS LAD_CODE             /*사업지구*/
+			,(SELECT DEPT_NM FROM VWHRM_DEPT WHERE DEPT_CODE = C.CHRG_DEPT)
+									AS CHRG_DEPT            /*담당부서*/ 
+			,C.CHARGER              AS CHARGER              /*담당자*/
+			,C.PARTN                AS PARTN                /*상대방*/ 
+			,C.INCDNT_NM            AS INCDNT_NM            /*사건명*/
+			,C.INCDNT_SUMRY         AS INCDNT_SUMRY         /*사건개요*/
+			,C.END_DE               AS END_DE               /*종결일자*/
+		FROM (SELECT * FROM TBLAW_LAWYER_CT WHERE INCDNT_NO = #INCDNT_NO# AND PYMNT_SE = #PYMNT_SE# AND LWST_MANAGE_NO = #LWST_MANAGE_NO# ) A
+  INNER JOIN (SELECT * FROM TBLAW_LWST WHERE LWST_MANAGE_NO = #LWST_MANAGE_NO# AND INCDNT_NO = #INCDNT_NO#) B
+		  ON A.LWST_MANAGE_NO = B.LWST_MANAGE_NO AND A.INCDNT_NO = B.INCDNT_NO
+  INNER JOIN (SELECT * FROM TBLAW_INCDNT WHERE LWST_MANAGE_NO = #INCDNT_NO#) C
+		  ON B.LWST_MANAGE_NO = C.LWST_MANAGE_NO
+		]]>
+	</select>
+
+	<!--최초 내부결재 진행 여부 체크-->
+	<select id="LAW010103DAO.selectInnerSanctnMasterCheck" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[ 
+		SELECT COUNT(1) AS CHK
+		  FROM TBCOM_INNER_SANCTN_MASTR
+		 WHERE INNER_SANCTN_ID = #KEY#
+	]]>
+	</select>
+	
+	<!--  결재번호 입력-->
+	<update id="LAW010103DAO.approveU" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBLAW_LAWYER_CT
+			SET	 DRFT_JOB_CONFM_NO = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+				,DRFT_DE           = SYSDATE
+				,UPDUSR_ID	       =  #S_USER_ID#
+				,UPDT_DT           =  SYSDATE
+			WHERE INCDNT_NO        = #INCDNT_NO#
+			  AND SEQ              = #SEQ#
+			  AND LWST_MANAGE_NO   = #LWST_MANAGE_NO#
+		]]>
+	</update>
+	
+	
+	<!--소송지출비용 목록조회 -->
+	<select id="LAW010103DAO.selectPymnt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			  SELECT 
+				   '01'            AS PYMNT_SE
+				  ,A.LDGMNT_DE     AS DE
+				  ,A.LDGMNT_AMOUNT AS AMOUNT
+				  ,A.RM
+			  FROM TBLAW_LWST_LDGMNT_AMOUNT A
+			  WHERE 1              =1
+			    AND A.INCDNT_NO      = #INCDNT_NO#
+			    AND A.LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			UNION ALL
+			  SELECT
+				   '02'           AS PYMNT_SE
+				  ,B.OCCRRNC_DE   AS DE
+				  ,B.JUDMN_AMOUNT AS AMOUNT
+				  ,B.RM
+			  FROM TBLAW_LWST_JUDMN_AMOUNT B
+			  WHERE 1              =1
+			    AND B.INCDNT_NO      = #INCDNT_NO#
+			    AND B.LWST_MANAGE_NO = #LWST_MANAGE_NO#
+			UNION ALL
+			  SELECT
+				   '03'        AS PYMNT_SE
+				  ,C.OCCRRNC_DE     AS DE
+				  ,C.DCSN_AMOUNT AS AMOUNT
+				  ,C.RM
+			FROM TBLAW_LWST_CT C
+			  WHERE 1              =1
+			    AND C.INCDNT_NO      = #INCDNT_NO#
+			    AND C.LWST_MANAGE_NO = #LWST_MANAGE_NO#
+	</select>
+</sqlMap>

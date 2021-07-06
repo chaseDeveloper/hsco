@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CUS010209_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 지급일련번호 생성 -->
+	<select id="CUS010209DAO.selectPymntSn" resultClass="java.lang.String">
+		<![CDATA[	
+			SELECT NVL(MAX(PYMNT_SN),0)+1 AS PYMNT_SN
+			FROM  TBCUS_CSTMR_MNTR_STG_EXPNDTR
+		]]>
+	</select>
+		
+	<!--고객모니터단지출 목록조회 -->
+	<select id="CUS010209DAO.selectCstmrMntgStgExpndtr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+            SELECT   A.PYMNT_SN                               AS PYMNT_SN
+                   , A.SJ                                     AS SJ
+                   , A.CPTAL_ASIGN_REQST_DE                   AS CPTAL_ASIGN_REQST_DE
+                   , A.CPTAL_ASIGN_CONFM_NO                   AS CPTAL_ASIGN_CONFM_NO
+                   , A.DRFT_JOB_CONFM_NO                      AS DRFT_JOB_CONFM_NO
+                   , A.EXPNDTR_DECSN_DE                       AS EXPNDTR_DECSN_DE
+                   , A.EXPNDTR_DECSN_NO                       AS EXPNDTR_DECSN_NO
+                   , A.PYMNT_AM_SM                            AS PYMNT_AM_SM
+                   , A.ATCH_FILE                              AS ATCH_FILE
+                   , A.REGISTER_ID                            AS REGISTER_ID
+                   , TO_CHAR(A.REGIST_DT, 'YYYYMMDDHH24MISS') AS REGIST_DT
+                   , A.UPDUSR_ID                              AS UPDUSR_ID
+                   , A.UPDT_DT                                AS UPDT_DT
+                   , A.CN                                     AS CN
+                   , A.ATCH_FILE_2                            AS ATCH_FILE_2
+                   , A.EXPNDTR_PLAN_DE                        AS EXPNDTR_PLAN_DE
+                   , A.EXPNDTR_DECSN_YEAR                     AS EXPNDTR_DECSN_YEAR
+                   , A.CSTMR_EXPNDTR_SE                       AS CSTMR_EXPNDTR_SE
+                   , A.SANCTN_NO							  AS SANCTN_NO
+                   , CASE 
+                     WHEN A.PYMNT_AM_SM IS NULL THEN '1'
+                     WHEN A.PYMNT_AM_SM IS NOT NULL THEN '2'
+                     ELSE NULL END                            AS PYMNT_AT
+                   , B.BSNS_SE                                AS BSNS_SE
+                   , B.BUDGET_ACNT_CODE                       AS BUDGET_ACNT_CODE
+                   , B.EXPNDTR_UNIT_CODE                      AS EXPNDTR_UNIT_CODE
+                   , B.DCSN_AMOUNT                            AS DCSN_AMOUNT                     
+                   , C.BUDGET_ACNT_NM                         AS BUDGET_ACNT_CODE_NM
+                   , C.EXPNDTR_UNIT_NM                        AS EXPNDTR_UNIT_NM              
+                   , D.DETAIL_BSNS_CODE                       AS BSNS_CODE
+                   , E.BSNS_NM                                AS BSNS_NM
+                   , NVL(F.SANCTN_KND, '0')                   AS SANCTN_KND         /* 전자결재상태 */
+                   , NVL(H.CONFM_AT, 0)                       AS CONFM_AT
+                   ,SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT)            AS DRFT_STS           /* 기안상태        */
+              	   ,'theme://images/sanctn/' || 'D' || SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT) || '.png'    AS DRFT_STS_IMG        /* 기안상태Img    */
+              	   ,TO_CHAR(F.DRFT_DT,'YYYY-MM-DD HH24:MI:SS') AS DRFT_DT           /* 기안일시        */
+              	   ,TO_CHAR(F.DRFT_DT,'YYYYMMDD') 			   AS DRFT_DE           /* 기안일시        */
+              	   ,SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT)             AS SANCTN_STS        /* 결재상태        */
+              	   ,'theme://images/sanctn/' || 'A' || SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT) || '.png'    AS SANCTN_STS_IMG    /* 결재상태Img    */
+              	   ,TO_CHAR(F.LAST_SANCTN_DT,'YYYY-MM-DD HH24:MI:SS')     AS LAST_SANCTN_DT    /* 최종결재일시    */
+            FROM   TBCUS_CSTMR_MNTR_STG_EXPNDTR A
+                   LEFT OUTER JOIN (
+                                      SELECT 
+                                               BSNS_SE
+                                             , BUDGET_ACNT_CODE
+                                             , EXPNDTR_UNIT_CODE
+                                             , DCSN_AMOUNT
+                                             , CONFM_AT
+                                             , PLAN_YM 
+                                             , BALC_SE
+                                             , PLAN_YM || WEEK_ATMB || BUDGET_YEAR || BSNS_SE || BALC_SE || BUDGET_ACNT_CODE || DEPT_CODE || SE || EXPNDTR_UNIT_CODE || SN AS NUMB
+                                      FROM   TBFUN_WIK_CPTAL_PLAN 
+                                   )B 
+                                ON A.CPTAL_ASIGN_CONFM_NO  = B.NUMB
+                   LEFT OUTER JOIN (
+                                    SELECT   a1.YEAR
+                                           , a1.BSNS_SE
+                                           , a1.BALC_SE
+                                           , a1.BUDGET_ACNT_CODE
+                                           , a1.BUDGET_ACNT_NM
+                                           , a2.EXPNDTR_UNIT_CODE
+                                           , a2.EXPNDTR_UNIT_NM
+                                      FROM TBBDG_BUDGET_ACNT_CODE a1
+                                           LEFT OUTER JOIN TBBDG_EXPNDTR_UNIT_CODE a2
+                                                        ON a1.YEAR = a2.YEAR
+                                                       AND a1.BSNS_SE = a2.BSNS_SE
+                                                       AND a1.BALC_SE = a2.BALC_SE
+                                                       AND a1.BUDGET_ACNT_CODE = a2.BUDGET_ACNT_CODE
+                                   ) C
+                                ON B.BSNS_SE              = C.BSNS_SE
+                               AND B.BALC_SE              = C.BALC_SE
+                               AND B.BUDGET_ACNT_CODE     = C.BUDGET_ACNT_CODE
+                               AND B.EXPNDTR_UNIT_CODE    = C.EXPNDTR_UNIT_CODE
+                               AND SUBSTR(B.PLAN_YM,0,4)  = C.YEAR
+                   LEFT OUTER JOIN TBBDG_EXECUT_BUDGET D
+                                ON C.YEAR = D.YEAR 
+                               AND C.BSNS_SE = D.BSNS_SE 
+                               AND C.BALC_SE = D.BALC_SE 
+                               AND C.BUDGET_ACNT_CODE = D.BUDGET_ACNT_CODE 
+                               AND C.EXPNDTR_UNIT_CODE = D.EXPNDTR_UNIT_CODE
+                   LEFT OUTER JOIN TBPRJ_BSNS_CODE E
+                                ON D.DETAIL_BSNS_CODE = E.BSNS_CODE              
+                   LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR F
+                                ON A.SANCTN_NO = F.SANCTN_NO
+                   LEFT OUTER JOIN TBACC_EXP_DSN_MASTR G
+                                ON A.EXPNDTR_DECSN_YEAR = G.DECSN_YEAR
+                               AND A.EXPNDTR_DECSN_NO = G.DECSN_NO
+                   LEFT OUTER JOIN TBFUN_WIK_CPTAL_PLAN H
+                                ON G.DECSN_NO = H.DECSN_NO
+            WHERE  1=1
+              AND  A.EXPNDTR_PLAN_DE IS NOT NULL
+              AND  A.EXPNDTR_PLAN_DE <= #END_DE#
+              AND  A.EXPNDTR_PLAN_DE >= #BGN_DE#
+              AND  A.CSTMR_EXPNDTR_SE = '4'
+            ORDER BY A.EXPNDTR_PLAN_DE DESC, A.PYMNT_SN DESC
+		]]>
+	</select>
+
+	<!--고객제안관리 목록조회 -->
+	<select id="CUS010209DAO.selectCstmrPartcptnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">		
+			SELECT 
+				    A.REGIST_NO                                   AS REGIST_NO
+				  , A.PARTCPTN_SE                                 AS PARTCPTN_SE
+				  , A.CSTMR_NM                                    AS CSTMR_NM
+				  , A.MBTLNO                                      AS MBTLNO
+				  , A.EMAIL                                       AS EMAIL
+				  , A.ADRES                                       AS ADRES
+				  , A.SJ                                          AS SJ
+				  , A.CN                                          AS CN
+				  , A.ATCH_FILE                                   AS ATCH_FILE
+				  , A.PROCESS_DE                                  AS PROCESS_DE
+				  , A.PROCESS_SE                                  AS PROCESS_SE
+				  , A.OPETR                                       AS OPETR   
+				  , B.EMPNM                                       AS OPETR_NM       
+				  , A.PROCESS_CN                                  AS PROCESS_CN
+				  , A.PROCESS_ATCH_FILE                           AS PROCESS_ATCH_FILE
+				  , A.INNER_SANCTN_ID                             AS INNER_SANCTN_ID
+				  , A.EXPNDTR_TRGET_AT                            AS EXPNDTR_TRGET_AT
+				  , A.PYMNT_SN                                    AS PYMNT_SN
+				  , A.REGISTER_ID                                 AS REGISTER_ID
+				  , A.REGIST_DT                                   AS REGIST_DT
+				  , A.UPDUSR_ID                                   AS UPDUSR_ID
+				  , A.UPDT_DT                                     AS UPDT_DT
+				  , A.DRFT_DE                                     AS DRFT_DE
+				  , A.DRFT_NO                                     AS DRFT_NO
+				  , (CASE C.LAST_SANCTN_STTUS WHEN 'T12' THEN '1'
+				   	                          ELSE '2' 
+				      END )                                       AS PRC_STATUS
+				  , C.LAST_SANCTN_STTUS                           AS LAST_SANCTN_STTUS 
+			  FROM TBCUS_CSTMR_PARTCPTN A
+                   LEFT OUTER JOIN TBCOM_INNER_SANCTN_MASTR C
+				                ON A.INNER_SANCTN_ID = C.INNER_SANCTN_ID
+				   LEFT OUTER JOIN TBHRM_HR_MASTR B
+				                ON A.OPETR = B.EMPNO
+			 WHERE 1=1       
+			   AND A.PARTCPTN_SE = #PARTCPTN_SE#
+		  <isEqual property="NEW_YN" compareValue="Y">
+		  	<![CDATA[		  	
+		  	   AND A.REGIST_DT >= TO_DATE(#BGN_DE#, 'YYYYMMDD')
+			   AND A.REGIST_DT <  TO_DATE(#END_DE#, 'YYYYMMDD') + 1
+               AND A.EXPNDTR_TRGET_AT = '1'
+               AND NVL(A.PYMNT_SN, 0) = 0
+               /*AND C.LAST_SANCTN_STTUS = 'T12'*/
+             ]]>
+		  </isEqual>			  
+		  <isEqual property="NEW_YN" compareValue="N">
+               AND A.PYMNT_SN = #PYMNT_SN#			  
+		  </isEqual>
+             ORDER BY A.REGIST_NO
+
+	</select>
+
+	<!--고객제안관리 지출번호(지급일련번호) 저장 -->
+	<update id="CUS010209DAO.CstmrPartcptnU" parameterClass="java.util.HashMap">
+			UPDATE TBCUS_CSTMR_PARTCPTN 
+			SET
+                 PYMNT_SN         = #PYMNT_SN#
+				,UPDUSR_ID        = #S_USER_ID#
+				,UPDT_DT          = SYSDATE
+			WHERE REGIST_NO = #REGIST_NO#
+	</update>
+
+	<!--고객제안관리 지출번호(지급일련번호) 삭제 -->
+	<update id="CUS010209DAO.CstmrPartcptnU2" parameterClass="java.util.HashMap">
+			UPDATE TBCUS_CSTMR_PARTCPTN 
+			SET
+                 PYMNT_SN         = NULL
+				,UPDUSR_ID        = #S_USER_ID#
+				,UPDT_DT          = SYSDATE
+			WHERE REGIST_NO = #REGIST_NO#
+	</update>
+		
+	<!--고객모니터단지출 입력,수정 -->
+	<insert id="CUS010209DAO.cstmrMntgStgExpndtrCU" parameterClass="java.util.HashMap">
+	<![CDATA[
+		MERGE INTO TBCUS_CSTMR_MNTR_STG_EXPNDTR
+				  USING DUAL
+				  ON (PYMNT_SN = #PYMNT_SN#)
+				  WHEN MATCHED THEN
+				  UPDATE SET 
+							 SJ                      = #SJ#
+							,CPTAL_ASIGN_REQST_DE    = #CPTAL_ASIGN_REQST_DE#
+							,CPTAL_ASIGN_CONFM_NO    = #CPTAL_ASIGN_CONFM_NO#
+							,DRFT_DE                 = #DRFT_DE#
+							,DRFT_JOB_CONFM_NO       = #DRFT_JOB_CONFM_NO#
+							,EXPNDTR_DECSN_DE        = #EXPNDTR_DECSN_DE#
+							,EXPNDTR_DECSN_NO        = #EXPNDTR_DECSN_NO#
+							,PYMNT_AM_SM             = #PYMNT_AM_SM#
+							,ATCH_FILE               = #ATCH_FILE#
+							,UPDUSR_ID               = #S_USER_ID#
+							,UPDT_DT                 = SYSDATE 
+							,CN                      = #CN#
+							,ATCH_FILE_2             = #ATCH_FILE_2#
+							,CSTMR_EXPNDTR_SE        = #CSTMR_EXPNDTR_SE#
+							,EXPNDTR_PLAN_DE         = #EXPNDTR_PLAN_DE#   
+				  WHEN NOT MATCHED THEN 
+				INSERT(
+							 PYMNT_SN
+							,SJ
+							,CPTAL_ASIGN_REQST_DE
+							,CPTAL_ASIGN_CONFM_NO
+							,DRFT_DE
+							,DRFT_JOB_CONFM_NO
+							,EXPNDTR_DECSN_DE
+							,EXPNDTR_DECSN_NO
+							,PYMNT_AM_SM
+							,ATCH_FILE
+							,REGISTER_ID
+							,REGIST_DT
+							,UPDUSR_ID
+							,UPDT_DT
+							,CN
+							,ATCH_FILE_2
+							,EXPNDTR_PLAN_DE
+							,CSTMR_EXPNDTR_SE
+				  )VALUES(
+					 #PYMNT_SN#
+					,#SJ#
+					,#CPTAL_ASIGN_REQST_DE#
+					,#CPTAL_ASIGN_CONFM_NO#
+					,#DRFT_DE#
+					,#DRFT_JOB_CONFM_NO#
+					,#EXPNDTR_DECSN_DE#
+					,#EXPNDTR_DECSN_NO#
+					,#PYMNT_AM_SM#
+					,#ATCH_FILE#
+					,#S_USER_ID#
+					,SYSDATE
+					,#S_USER_ID#
+					,SYSDATE
+					,#CN#
+					,#ATCH_FILE_2#
+					,#EXPNDTR_PLAN_DE#
+					,'4'
+				  )
+			]]>
+	</insert>
+
+	<!--고객모니터단 지출관리 목록 삭제 -->
+	<delete id="CUS010209DAO.cstmrMntgStgExpndtrD" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE FROM TBCUS_CSTMR_MNTR_STG_EXPNDTR
+		 WHERE PYMNT_SN = #PYMNT_SN#
+		]]>
+	</delete>
+
+	<!--지출결의 번호 저장-->
+	<update id="CUS010209DAO.updateExpndtrDecsnNo" parameterClass="java.util.HashMap" >
+		<![CDATA[
+			UPDATE TBCUS_CSTMR_MNTR_STG_EXPNDTR
+			   SET 
+				     EXPNDTR_DECSN_DE  	= #EXPNDTR_DECSN_DE#
+				    ,EXPNDTR_DECSN_YEAR = #DSNMASTR.DECSN_YEAR#
+					,EXPNDTR_DECSN_NO  	= #DSNMASTR.DECSN_NO#
+					,UPDUSR_ID         	= #S_USER_ID#
+					,UPDT_DT           	= SYSDATE    
+			 WHERE PYMNT_SN            	= #PYMNT_SN#
+		]]>
+	</update>
+	
+	<!-- 전자결재번호 조회 -->
+	<select id="CUS010209DAO.selectSanctnNO" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		<![CDATA[ /* CUS010209DAO.selectSanctnNO */ ]]>
+			SELECT SANCTN_NO 
+			FROM   TBCOM_ELCTRN_SANCTN_MASTR 
+			WHERE  INTRLCK_IDNTFR = #KEY#
+    </select> 	
+
+	<!--  결재번호 입력-->
+	<update id="CUS010209DAO.approveU" parameterClass="java.util.HashMap">
+		<![CDATA[
+			UPDATE TBCUS_CSTMR_MNTR_STG_EXPNDTR
+			SET	SANCTN_NO    = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+			  , DRFT_DE      = TO_CHAR(SYSDATE, 'YYYYMMDD')
+			  , UPDUSR_ID	 =  #S_USER_ID#
+			  , UPDT_DT  	 =  SYSDATE
+			WHERE PYMNT_SN   =  #PYMNT_SN#
+		]]>
+	</update>		
+</sqlMap>

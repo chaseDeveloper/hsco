@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC040202_SQL">	
+	 
+    <!-- 법인카드승인내역 목록 -->
+    <select id="ACC040202DAO.confmDtlsList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+        <![CDATA[ /*ACC040202DAO.confmDtlsList*/ ]]>
+		WITH DE_LIST AS (
+		    SELECT TO_CHAR(TO_DATE(#SRCH_YM# || '01', 'YYYYMMDD') + LEVEL -1, 'YYYYMMDD') AS IN_DATE
+		      FROM DUAL
+		    CONNECT BY LEVEL <![CDATA[<=]]> (LAST_DAY(TO_DATE(#SRCH_YM#, 'YYYYMM')) - TO_DATE(#SRCH_YM# || '01', 'YYYYMMDD')+1)
+		)
+		, RESTDE_LIST AS (
+		    SELECT T1.SYS_DE    AS RESTDE
+		         , T1.HOLY_AT
+		      FROM VWHRM_SYS_DAY T1
+		           INNER JOIN DE_LIST T2
+		                ON T1.SYS_DE = T2.IN_DATE
+		)
+		
+		SELECT TRIM(BANK_CD) AS BANK_CD
+		     , t1.CARD_NO                          /*카드번호*/
+		     , TRIM(t1.APPR_DATE) AS APPR_DATE     /*승인일자*/
+		     , t1.APPR_SEQ                         
+		     , DECODE(t4.DECSN_NO, NULL, '0', '1') 			AS DECSN_YN          	/*지출등록*/
+		     , t3.DEPT_CODE                     /*부서코드*/
+		     , t3.DEPT_NM                       /*부서명*/
+			 ,'['||SUBSTR(t1.CARD_NO,1,4)||'-'||SUBSTR(t1.CARD_NO,5,4)||'-'||SUBSTR(t1.CARD_NO,9,4)||'-'||SUBSTR(t1.CARD_NO,13,4)||'] '||t2.CARD_NM AS CARD_NM
+		     , t1.CHAIN_NM                      /*가맹점*/
+		     , t1.CHAIN_ID 						/*가맹점사업자번호*/ 
+		     , TRIM(t1.APPR_NO) AS APPR_NO	                    /*승인번호*/
+		     , TRIM(t1.APPR_TIME) AS APPR_TIME  /*승인시간*/
+		     , t1.APPR_AMT                      /*승인금액*/
+		     , t1.APPR_TAX        AS VAT        /*부가가치세*/
+		     , NVL(t1.APPR_AMT,0) - NVL(t1.APPR_TAX, 0)         AS SUPLY_AMOUNT /*공급가액*/
+		     , t4.ITNC_DE                       /*결의일자*/
+		     , t1.ATNDNC_MAN                    /*참석자*/
+		     , t1.REAL_USER                     /*실사용자*/
+		     , t9.EMPNM    AS REAL_USER_NM      /*실사용자이름*/
+		     , CASE WHEN t1.CANCEL_YN = 'Y' THEN t1.RETURN_MSG ELSE t1.PRVONSH END  AS REASON /*사유*/
+		     , t4.BUDGET_ACNT_CODE              /*예산코드*/
+		     , t5.BUDGET_ACNT_NM                /*예산명*/
+		     , t4.DECSN_YEAR                    
+		     , t4.DECSN_NO                      /*결의번호*/
+		     , t4.CHECK_NO                      /*수표번호*/
+		     , t2.FNNC_INSTT_CODE               /*결재은행*/
+		     , t2.SETLE_ACNUTNO                 /*결재계좌번호*/
+		     , t12.FNNC_INSTT_CODE    AS DSN_FNNC_INSTT_CODE    /*결의서결재은행*/
+		     , T13.FNNC_INSTT_CODE_NM AS DSN_FNNC_INSTT_CODE_NM /*결의서결재은행명*/
+		     , t12.ACNUTNO            AS DSN_ACNUTNO            /*결의서결재계좌번호*/
+		     , t4.CPTAL_EXPNDTR_ACNTBK_DE                       /*자금지출장부일자*/
+		     , t4.SANCTN_NO             /*결재번호*/
+			 , SFCOM_GET_SANCTN_KND(t4.SANCTN_NO) AS SANCTN_KND  /*결재상태*/
+			 , t4.REGIST_DT
+		     , DECODE(TRIM(t1.CANCEL_YN),'Y','1','0') AS CANCEL_YN	/*취소여부*/
+		     , t10.BCNC_CODE
+		     , t10.ADRES || t10.DETAIL_ADRES  AS ADRES
+		FROM NH_APPR t1
+		  
+		  LEFT OUTER JOIN TBACC_CPR_CARD_MANAGE t2
+		  ON  t1.CARD_NO = t2.CARD_NO
+		  
+		  LEFT OUTER JOIN TBHRM_DEPT t3
+		  ON t2.DEPT_CODE = t3.DEPT_CODE
+		  
+		  LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t4
+		  ON  t1.DECSN_YEAR   = t4.DECSN_YEAR
+		  AND t1.DECSN_NO     = t4.DECSN_NO
+		  
+		  LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t5
+		  ON  t4.BUDGET_YEAR = t5.YEAR
+		  AND t4.BSNS_SE     = t5.BSNS_SE
+		  AND t4.BALC_SE     = t5.BALC_SE
+		  AND t4.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		  
+		  LEFT OUTER JOIN TBACC_EXP_DSN_MTR_DET t6
+		  ON  t4.DECSN_YEAR = t6.DECSN_YEAR
+		  AND t4.DECSN_NO    = t6.DECSN_NO
+		  
+		  LEFT OUTER JOIN TBHRM_HR_MASTR t9
+		  ON  t1.REAL_USER = t9.EMPNO
+		  
+		  LEFT OUTER JOIN TBCTR_BCNC_MASTR t10
+		  ON t1.CHAIN_ID = H_DECRYPT(t10.BIZRNO)
+		  AND t10.USE_AT = '1' 
+		  
+		  LEFT OUTER JOIN RESTDE_LIST t11
+		  ON t1.APPR_DATE = t11.RESTDE
+		  
+		  LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t12
+		  ON  t1.DECSN_YEAR = t12.DECSN_YEAR
+		  AND t1.DECSN_NO   = t12.DECSN_NO
+		  AND t12.SEQ       = '1'
+		  
+		  LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t13
+		  ON  T12.FNNC_INSTT_CODE = t13.FNNC_INSTT_CODE
+		  
+		WHERE SUBSTR(TRIM(t1.APPR_DATE), 1, 6) = #SRCH_YM#
+		<isNotEmpty property="DEPT_CODE">
+			<isNotEqual property="DEPT_CODE" compareValue="000000">
+				<isEqual property="EXCEPTION_AT" compareValue="1">
+				AND t1.CARD_NO IN ('9430160291071515','9430160405002208','9430160405022677')	/*감사실일경우 카드 지정*/
+				</isEqual>
+				<isNotEqual property="EXCEPTION_AT" compareValue="1">
+				AND t3.DEPT_CODE IN (
+				    SELECT s1.DEPT_CODE
+				    FROM VWHRM_DEPT s1
+				    WHERE EXISTS (
+				        SELECT s2.DEPT_CODE
+				        FROM VWHRM_DEPT s2
+				        WHERE s2.DEPT_CODE = #DEPT_CODE#
+				        AND   (s1.UPPER_DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <![CDATA[ <> ]]> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+				                OR s1.DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <![CDATA[ <> ]]> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+				              )
+				    )
+				    <isEqual property="DEPT_CODE" compareValue="070100">
+					    UNION
+					    SELECT '060000' AS DEPT_CODE /*미래구상팀일 경우 임원실 포함*/
+					      FROM DUAL
+				    </isEqual>
+					<isEqual property="EMPNO" compareValue="20150029">
+					    UNION
+					    SELECT '110100' AS DEPT_CODE /*명충식 과장일 경우 대중교통팀 포함, 겸직해제시 원복필요*/
+					      FROM DUAL
+					</isEqual>
+					<isEqual property="EMPNO" compareValue="20040010">
+					    UNION
+					    SELECT '020000' AS DEPT_CODE /*김길태 과장일 경우 경영기획처 포함, 겸직해제시 원복필요*/
+					      FROM DUAL
+					</isEqual>
+				)
+				</isNotEqual>
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEmpty property="CARD_NO">
+			AND t1.CARD_NO   = #CARD_NO#
+		</isNotEmpty>
+		<isNotEmpty property="DECSN_YN">
+		    <isNotEqual property="DECSN_YN" compareValue="0">
+			AND DECODE(t4.DECSN_NO, NULL, '0', '1')   = DECODE(#DECSN_YN#, '0', '1', '0')
+			</isNotEqual>
+		</isNotEmpty>
+		<isNotEqual property="CANCEL_YN" compareValue="1">
+			AND t1.CANCEL_YN != 'Y'
+		</isNotEqual>
+		<isNotEmpty property="APPROVAL_BGN_TIME">
+			<isNotEmpty property="APPROVAL_END_TIME">
+			AND SUBSTR(REPLACE(t1.APPR_TIME, ':', ''), 1, 4) BETWEEN #APPROVAL_BGN_TIME# AND #APPROVAL_END_TIME#
+			</isNotEmpty>
+		</isNotEmpty>
+		<isEqual property="RESTDE_AT" compareValue="1">
+			AND t11.HOLY_AT = '1'
+		</isEqual>
+		<isNotEmpty property="USE_AT">
+			AND t2.USE_AT  = #USE_AT#
+		</isNotEmpty>
+		ORDER BY t2.DEPT_CODE, t1.CARD_NO, t1.APPR_DATE, t1.APPR_NO
+    </select>
+    
+
+    <!-- 카드사 거래처정보 -->
+    <select id="ACC040202DAO.cardBcnc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT
+		      BCNC_CODE
+		     ,BCNC_NM
+		     ,RPRSNTV
+		FROM TBCTR_BCNC_MASTR
+		WHERE BCNC_CODE = #BCNC_CODE#
+    </select>
+
+	<!-- 법인카드사용내역(팝업) -->
+	<select id="ACC040202DAO.selectCprCardUseDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.BANK_CD
+		     , t1.CARD_NO
+		     , TRIM(t1.APPR_DATE) AS APPR_DATE
+		     , (SELECT NVL2(HVOF_DE,1,0) FROM TBHRM_HVOF_INFO WHERE TRIM(t1.APPR_DATE) = HVOF_DE)    AS HVOF
+		     , t1.APPR_SEQ
+		     , DECODE(t4.DECSN_NO, NULL, '0', '1')                                                   AS DECSN_YN
+		     , NVL(t4.EXPNDTR_CNFIRM_AT, '0')                                                        AS EXPNDTR_CNFIRM_AT
+		     , DECODE(NVL(t7.CMPNSP_NO,'0'),'0','0','1')                                             AS EXPNDTR_AT
+		     , t3.DEPT_CODE
+		     , t3.DEPT_NM
+		     , t2.CARD_NM
+		     , t2.CARD_NM
+		     , t1.CHAIN_NM
+		     , t1.BRANCHTYPE
+		     , t1.APPR_NO
+		     , TRIM(t1.APPR_TIME)                                                                    AS APPR_TIME
+		     , t1.APPR_AMT
+		     , t4.ITNC_DE
+		     , t1.REAL_USER
+		     , t8.EMPNM                                                                              AS REAL_USER_NM
+		     , t1.ATNDNC_MAN                                                                         AS PEOPLE
+		     , t1.PRVONSH                                                                            AS REASON
+		     , t4.BUDGET_ACNT_CODE
+		     , t5.BUDGET_ACNT_NM
+		     , t4.DECSN_YEAR
+		     , t4.DECSN_NO
+		     , t4.CHECK_NO
+		     , t2.FNNC_INSTT_CODE
+		     , t2.SETLE_ACNUTNO
+		     , DECODE(TRIM(t1.CANCEL_YN),'Y','1','0')                                                AS CANCEL_YN
+		  FROM NH_APPR t1
+		       LEFT OUTER JOIN TBACC_CPR_CARD_MANAGE t2
+		            ON t1.CARD_NO = t2.CARD_NO
+		       LEFT OUTER JOIN TBHRM_DEPT t3
+		            ON t2.DEPT_CODE = t3.DEPT_CODE
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR t4
+		            ON t1.DATAYEAR    = t4.DECSN_YEAR
+		           AND t1.SEQKEY      = t4.DECSN_NO
+		       LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t5
+		            ON t4.BUDGET_YEAR = t5.YEAR
+		           AND t4.BSNS_SE     = t5.BSNS_SE
+		           AND t4.BALC_SE     = t5.BALC_SE
+		           AND t4.BUDGET_ACNT_CODE = t5.BUDGET_ACNT_CODE
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MTR_DET t6
+		            ON t4.BUDGET_YEAR = t6.DECSN_YEAR
+		           AND t4.DECSN_NO    = t6.DECSN_NO
+		       LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t7
+		            ON t4.DECSN_YEAR = t7.DECSN_YEAR
+		           AND t4.DECSN_NO   = t7.DECSN_NO
+		           AND t1.APPR_NO    = t7.APPR_NO
+		       LEFT OUTER JOIN TBHRM_HR_MASTR t8
+		            ON t1.REAL_USER = t8.EMPNO
+		 WHERE TRIM(t1.APPR_DATE) <![CDATA[>=]]> #APPR_BGNDE#
+			AND TRIM(t1.APPR_DATE) <![CDATA[<=]]> #APPR_ENDDE#
+		<isNotEmpty property="DEPT_CODE">
+			AND t3.DEPT_CODE IN (
+			    SELECT s1.DEPT_CODE
+			    FROM VWHRM_DEPT s1
+			    WHERE EXISTS (
+			        SELECT s2.DEPT_CODE
+			        FROM VWHRM_DEPT s2
+			        WHERE s2.DEPT_CODE = #DEPT_CODE#
+			        AND   (s1.UPPER_DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <![CDATA[ <> ]]> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			                OR s1.DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <![CDATA[ <> ]]> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+			              )
+			    )
+			)
+		</isNotEmpty>
+		<isNotEmpty property="SEARCH_CN">
+			<isEqual property="SEARCH_SE" compareValue="1">
+			  AND t2.CARD_NM LIKE '%' || #SEARCH_CN# || '%'
+			</isEqual>
+			<isEqual property="SEARCH_SE" compareValue="2">
+			  AND t1.CARD_NO LIKE '%' || #SEARCH_CN# || '%'
+			</isEqual>
+		</isNotEmpty>
+		<isNotEmpty property="BRANCHTYPE">
+		   AND t1.BRANCHTYPE LIKE '%' || #BRANCHTYPE# || '%'
+		</isNotEmpty>
+		<isEqual property="DECSN_YN" compareValue="1">
+		   AND t4.DECSN_NO IS NULL
+		</isEqual>
+		<isNotEqual property="CANCEL_YN" compareValue="1">
+		   AND t1.CANCEL_YN != 'Y'
+		</isNotEqual>
+		<isEqual property="EXCL_AT" compareValue="1">
+		   AND NOT EXISTS (
+		                    SELECT *
+		                      FROM TBHRM_EDCCT_EXCCLC_MANAGE s1
+		                     WHERE s1.BANK_CD   = t1.BANK_CD
+		                       AND s1.CARD_NO   = t1.CARD_NO
+		                       AND s1.USE_DE    = t1.APPR_DATE
+		                       AND s1.APPR_TIME = t1.APPR_TIME
+		                       AND s1.APPR_NO   = t1.APPR_NO
+		                       AND s1.USE_AM    = t1.APPR_AMT
+		                       AND s1.CANCEL_YN = t1.CANCEL_YN
+		                  )
+		   AND NOT EXISTS (
+		                    SELECT *
+		                      FROM TBHRM_BTRPS_EXCCLC_MANAGE s1
+		                     WHERE s1.BANK_CD   = t1.BANK_CD
+		                       AND s1.CARD_NO   = t1.CARD_NO
+		                       AND s1.USE_DE    = t1.APPR_DATE
+		                       AND s1.APPR_TIME = t1.APPR_TIME
+		                       AND s1.APPR_NO   = t1.APPR_NO
+		                       AND s1.USE_AM    = t1.APPR_AMT
+		                       AND s1.CANCEL_YN = t1.CANCEL_YN
+		                  )
+		</isEqual>
+		ORDER BY t2.DEPT_CODE, t1.CARD_NO, t1.APPR_DATE, t1.APPR_NO
+	</select>
+	
+	
+	<!-- 법인카드 실사용자/참석자/사유 수정 -->
+	<update id="ACC040202DAO.confmDtlsU" parameterClass="java.util.HashMap">
+		UPDATE NH_APPR
+		SET
+			  ATNDNC_MAN        = #ATNDNC_MAN#
+			 ,PRVONSH           = #REASON#
+			 ,REAL_USER         = #REAL_USER#
+    		 ,LAST_DATE			= TO_CHAR(SYSDATE, 'YYYYMMDD')
+		WHERE TRIM(BANK_CD)		= #BANK_CD#
+		  AND CARD_NO 			= REPLACE(#CARD_NO#,'-','')
+		  AND APPR_DATE 		= #APPR_DATE#
+		  AND TRIM(APPR_NO)		= #APPR_NO#
+		  AND CANCEL_YN			= DECODE(#CANCEL_YN#,'1','Y','N')
+	</update>
+	
+	
+
+    <!-- 카드정보 -->
+    <select id="ACC040202DAO.cardList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT *
+        FROM (
+			SELECT
+				CARD_NO
+			   ,'['||SUBSTR(CARD_NO,1,4)||'-'||SUBSTR(CARD_NO,5,4)||'-'||SUBSTR(CARD_NO,9,4)||'-'||SUBSTR(CARD_NO,13,4)||'] '||CARD_NM AS CARD_NM
+			FROM TBACC_CPR_CARD_MANAGE
+			WHERE 1=1
+			<isNotEmpty property="DEPT_CODE">
+				<isNotEqual property="DEPT_CODE" compareValue="000000">
+					<isEqual property="EXCEPTION_AT" compareValue="1">
+					AND CARD_NO IN ('9430160291071515','9430160405002208','9430160405022677')	/*감사실일경우 카드 지정*/
+					</isEqual>
+					<isNotEqual property="EXCEPTION_AT" compareValue="1">
+					AND DEPT_CODE IN (
+					    SELECT s1.DEPT_CODE
+					    FROM VWHRM_DEPT s1
+					    WHERE EXISTS (
+					        SELECT s2.DEPT_CODE
+					        FROM VWHRM_DEPT s2
+					        WHERE s2.DEPT_CODE = #DEPT_CODE#
+					        AND   (s1.UPPER_DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <![CDATA[ <> ]]> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+					                OR s1.DEPT_CODE = (CASE WHEN s2.UPPER_DEPT_CODE <![CDATA[ <> ]]> '000000' THEN s2.UPPER_DEPT_CODE ELSE s2.DEPT_CODE END)
+					              )
+					    )
+					<isEqual property="EMPNO" compareValue="20150029">
+					    UNION
+					    SELECT '110100' AS DEPT_CODE /*명충식 과장일 경우 대중교통팀 포함, 겸직해제시 원복필요*/
+					      FROM DUAL
+					</isEqual>
+					<isEqual property="EMPNO" compareValue="20040010">
+					    UNION
+					    SELECT '020000' AS DEPT_CODE /*김길태 과장일 경우 경영기획처 포함, 겸직해제시 원복필요*/
+					      FROM DUAL
+					</isEqual>
+					)
+					</isNotEqual>
+				</isNotEqual>
+			</isNotEmpty>
+			<isNotEqual property="OL_CARD_YN" compareValue="1">
+				AND CARD_NM NOT LIKE '%유류%'
+			</isNotEqual>
+			ORDER BY DEPT_CODE, CARD_NO
+		)
+    </select>
+</sqlMap>

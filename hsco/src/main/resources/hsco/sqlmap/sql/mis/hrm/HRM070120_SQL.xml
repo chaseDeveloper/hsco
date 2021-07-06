@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070120_SQL">
+    
+    <!-- 개인별 월별초과근무  -->
+    <select id="HRM070120DAO.selectMtOvtmwrkList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH TBHRM_REWARD_MANAGE_TM AS (
+		  SELECT OVTMWRK_YM
+		       , EMPNO
+		       , REWARD_SE
+		       , SUM(CASE WHEN REWARD_SE = '1' THEN OVTMWRK_TM ELSE '0000' END) AS REWARD_TM
+		       , SUM(CASE WHEN REWARD_SE = '2' THEN OVTMWRK_TM ELSE '0000' END) AS SUBST_TM
+		  FROM OVTMWRK_REWARD_MANAGE
+		  WHERE SUBSTR(OVTMWRK_YM,1,4) = #OVTMWRK_YEAR#
+		  GROUP BY OVTMWRK_YM, EMPNO, REWARD_SE
+		)
+		, TBHRM_OVTMWRK_TM AS (
+		    SELECT SUBSTR(OVTMWRK_DE,1,6) AS OVTMWRK_YM
+		         , DEPT_CODE 
+		         , EMPNO
+		         , SUM(OVTIME_WORK_TIME) AS OVTIME_WORK_TIME /*시간외근무시간*/
+		         , SUM(RESTDE_WORK_TIME) AS RESTDE_WORK_TIME /*휴일근무시간*/
+		         , SUM(NIGHT_WORK_TIME)  AS NIGHT_WORK_TIME  /*야간근무시간*/
+		    FROM TBHRM_OVTMWRK t1
+		    WHERE SUBSTR(OVTMWRK_DE,1,4) = #OVTMWRK_YEAR#
+		  	AND   EMPNO                  = #EMPNO#
+		  	AND EXISTS (
+			  	SELECT 1
+			  	FROM TBCOM_ELCTRN_SANCTN_MASTR t2
+			  	WHERE t1.SANCTN_NO2 = t2.SANCTN_NO
+			  	  AND t2.SANCTN_KND = '5' /* 초과근무확인 결재완료 건만 조회 */
+		  	  )
+		    GROUP BY SUBSTR(OVTMWRK_DE,1,6)
+		           , DEPT_CODE 
+		           , EMPNO
+		)
+		, TBHRM_OVTMWRK_LMT_TIME_TM AS (
+		    SELECT DEPT_CODE
+		         , DEPT_LMT_TIME   /*부서별 한도시간*/
+		         , CMNL_LMT_TIME   /*사규 한도시간*/
+		    FROM TBHRM_OVTMWRK_LMT_TIME
+		    WHERE YEAR = #OVTMWRK_YEAR#
+		)
+		, MONTH12_TM AS (
+		    SELECT #OVTMWRK_YEAR# || LPAD(LEVEL, 2, '0') MONTH_SEQ 
+		    FROM DUAL CONNECT BY LEVEL <= 12
+		)
+		SELECT t1.MONTH_SEQ
+		     , t2.OVTMWRK_YM
+		     , t2.DEPT_CODE 
+		     , t2.EMPNO
+		     , LPAD(NVL(t2.OVTIME_WORK_TIME, '0000'),4, '0') AS OVTIME_WORK_TIME /*시간외근무시간*/
+		     , LPAD(NVL(t2.RESTDE_WORK_TIME, '0000'),4, '0') AS RESTDE_WORK_TIME /*휴일근무시간*/
+		     , LPAD(NVL(t2.NIGHT_WORK_TIME, '0000'),4, '0')  AS NIGHT_WORK_TIME  /*야간근무시간*/
+		     , TO_NUMBER(NVL(SUBSTR(LPAD(NVL(t2.OVTIME_WORK_TIME, '0000'),4, '0'), 1, 2), 0)) AS OVTIME_WORK_TIME2	/*시간외근무시간*/
+		     , TO_NUMBER(NVL(SUBSTR(LPAD(NVL(t2.RESTDE_WORK_TIME, '0000'),4, '0'), 1, 2), 0)) AS RESTDE_WORK_TIME2	/*휴일근무시간*/
+		     , TO_NUMBER(NVL(SUBSTR(LPAD(NVL(t2.NIGHT_WORK_TIME, '0000'),4, '0'), 1, 2), 0))  AS NIGHT_WORK_TIME2	    /*야간근무시간*/
+		     , LPAD(NVL(t3.REWARD_TM, '0000'),4, '0')        AS REWARD_TM        /*보상휴가시간*/
+		     , LPAD(NVL(t3.SUBST_TM, '0000'),4, '0')         AS SUBST_TM         /*대체휴가시간*/
+		     , LPAD(NVL(t2.OVTIME_WORK_TIME, '0000') + NVL(t2.RESTDE_WORK_TIME, '0000') - NVL(t3.REWARD_TM, '0000'),4,'0') AS OVTIME_JAN_TM /*시간외+휴일 잔여시간*/
+		     , LPAD(NVL(t2.NIGHT_WORK_TIME, '0000') - NVL(t3.SUBST_TM, '0000'),4,'0')                                      AS NIGHT_JAN_TM  /*야간근무 잔여시간*/
+		     , CASE WHEN t4.DEPT_LMT_TIME IS NOT NULL THEN t4.DEPT_LMT_TIME
+		            WHEN t4.CMNL_LMT_TIME IS NOT NULL THEN t4.CMNL_LMT_TIME 
+		            ELSE '56' /*디폴트 초과근무 한도값*/
+		       END AS DEPT_LMT_TIME
+		FROM MONTH12_TM t1
+		  LEFT OUTER JOIN TBHRM_OVTMWRK_TM t2
+		    ON  t1.MONTH_SEQ = t2.OVTMWRK_YM
+		  LEFT OUTER JOIN TBHRM_REWARD_MANAGE_TM t3
+		    ON  t2.OVTMWRK_YM = t3.OVTMWRK_YM
+		    AND t2.EMPNO      = t3.EMPNO
+		    AND t3.REWARD_SE  = '1'/*1:보상, 2:대체*/
+		  LEFT OUTER JOIN TBHRM_OVTMWRK_LMT_TIME_TM t4
+		    ON  t2.DEPT_CODE  = t4.DEPT_CODE
+		ORDER BY t1.MONTH_SEQ
+		]]>
+    </select>
+    
+     <!-- 초과근무 상세내역  -->
+    <select id="HRM070120DAO.selectIndvdlOvtmwrkList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	<![CDATA[ /* HRM070120DAO.selectIndvdlOvtmwrkList */ ]]>
+		SELECT t1.OVTMWRK_DE
+		  ,t1.SEQ
+		  ,DECODE(TO_CHAR(TO_DATE(t1.OVTMWRK_DE, 'YYYYMMDD'), 'D'), '1', '일' , '2', '월' , '3', '화' , '4', '수' , '5', '목' , '6', '금' , '7', '토' ) AS OVTMWRK_DAY
+		  ,t1.DEPT_CODE
+		  ,t2.DEPT_NM
+		  ,t5.CODE_NM AS HR_CLSF_NM
+		  ,t1.EMPNO
+		  ,t3.EMPNM
+		  ,t1.REQST_BEGIN_TM														/*신청시작시각*/
+		  ,t1.REQST_END_TM															/*신청종료시각*/
+		  ,t1.REQST_TIME															/*신청시간*/
+		  ,t1.RCOGN_BEGIN_TM														/*인정시작시각*/
+		  ,t1.RCOGN_END_TM															/*인정종료시각*/
+		  ,t1.RCOGN_TIME															/*인정시간*/
+		  ,TO_NUMBER(NVL(SUBSTR(t1.OVTIME_WORK_TIME, 1, 2), 0)) AS OVTIME_WORK_TIME	/*시간외근무시간*/
+		  ,TO_NUMBER(NVL(SUBSTR(t1.RESTDE_WORK_TIME, 1, 2), 0)) AS RESTDE_WORK_TIME	/*휴일근무시간*/
+		  ,TO_NUMBER(NVL(SUBSTR(t1.NIGHT_WORK_TIME, 1, 2), 0)) AS NIGHT_WORK_TIME	/*야간근무시간*/
+		  ,t1.WORK_DRCTR															/*근무지시자*/
+		  ,t1.WORK_PURPS															/*근무목적*/
+		  ,t1.RM                                                                    /*비고*/
+		FROM TBHRM_OVTMWRK t1
+		LEFT OUTER JOIN VWHRM_DEPT t2
+		ON  t1.DEPT_CODE = t2.DEPT_CODE
+		LEFT OUTER JOIN TBHRM_HR_MASTR t3
+		ON  t1.EMPNO = t3.EMPNO
+		LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+		ON  t5.GRP_CODE   = 'HRM002'
+		AND t3.HR_CLSF_SE = t5.CODE
+		WHERE 1=1
+		<isNotEmpty property="OVTMWRK_YM">
+			AND SUBSTR(t1.OVTMWRK_DE,1,6) = #OVTMWRK_YM#
+		</isNotEmpty>
+		<isEmpty property="OVTMWRK_YM">
+			AND t1.OVTMWRK_DE = 'NO_DATA'
+		</isEmpty>
+		AND t1.EMPNO = #EMPNO#
+		AND EXISTS (
+			  	SELECT 1
+			  	FROM TBCOM_ELCTRN_SANCTN_MASTR t6
+			  	WHERE t1.SANCTN_NO2 = t6.SANCTN_NO
+			  	  AND t6.SANCTN_KND = '5' /* 초과근무확인 결재완료 건만 조회 */
+		  	  )
+		ORDER BY t1.OVTMWRK_DE DESC
+		  ,t1.SEQ ASC
+		  ,t1.REQST_BEGIN_TM ASC
+    </select>
+</sqlMap>

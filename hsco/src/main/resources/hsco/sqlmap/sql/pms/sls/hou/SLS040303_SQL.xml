@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS40303_SQL">	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   		
+	
+   	  <!-- 쿼리명      : 주택수납관리>일자별수납내역
+	        설명       : 납부코드 콤보 목록
+	        작성자     : 정윤원
+	        최초작성일 : 2015.09.08
+
+	        수정일  수정자  수정내용
+	   -->
+	  <select id="SLS040303DAO.cmbPayCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT CODE
+				  ,'['||CODE||']'||CODE_NM AS CODE_NM
+			  FROM TBCOM_CMMN_CODE	
+			 WHERE 1        = 1
+			   AND GRP_CODE = 'HOU0B3'
+			   AND USE_AT   = '1'
+             ORDER BY CODE_ORDR ASC
+			       
+		]]>
+	  </select>
+    
+
+        
+      <!-- 쿼리명      : 주택수납관리>일자별수납내역
+	        설명       : 일자별 수납내역
+	        작성자     : 정윤원
+	        최초작성일 : 2015.09.08
+
+	        수정일  수정자  수정내용
+	   -->
+      <select id="SLS040303DAO.selectDeAcctoRcivDtls" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		
+			SELECT 
+			     T1.CNTRCTR_NO                         AS CNTRCTR_NO        /*계약자번호        */
+			     ,ROWNUM                               AS NO			    /*순번              */
+    		    ,( 
+    		       SELECT  CODE_NM 
+    		         FROM TBCOM_CMMN_CODE	
+    		        WHERE GRP_CODE = 'HOU0B5' 
+    		          AND USE_AT = '1' 
+    		          AND CODE = T3.PAY_SE 
+    		      )  AS PAY_SE_NM                                           /*납부구분명          */
+ 	            ,'['||T1.HOUSE_CODE||']'||T2.HOUSE_NM  AS HOUSE_NM          /*[주택코드]주택명  */
+                ,T1.DONG||'동'  AS DONG   		                            /*동'동'            */
+                ,T1.HO||'호'  AS HO   		                                /*호'호'            */
+                ,(SELECT  CODE_NM 
+                    FROM TBCOM_CMMN_CODE	
+                   WHERE GRP_CODE = 'HOU0A7' 
+                     AND USE_AT = '1' 
+                     AND CODE = T3.PAYMTHD  
+                  )                                    AS PAYMTHD_NM           /*납부방법         */
+                ,(SELECT  CODE_NM 
+                    FROM TBCOM_CMMN_CODE	
+                   WHERE GRP_CODE = 'COM021' 
+                     AND USE_AT = '1' 
+                     AND CODE = LPAD(T3.BANK_CODE,3,0) 
+                  ) AS BANK_NAME                                             /*은행명           */
+                ,T3.RCIV_DE                            AS RCIV_DE            /*수납일자         */
+                ,T3.RCIV_AMOUNT                        AS RCIV_AMOUNT        /*수납금액         */
+                ,T3.OVERRPAY_AMOUNT                    AS OVERRPAY_AMOUNT    /*과오금액-수정    */
+                ,T3.ODR_SE||T3.RCIV_SE||T3.RCIV_CO     AS  REC_GUBUN         /*분양금차수       */
+              FROM TBSLS_HCNTRCTR T1                         		         /*주택계약자       */
+                  ,TBSLS_HOUSE_INFO T2                       		         /*주택정보         */
+                  ,TBSLS_HOUSE_RCIV_PSTMRK T3                		         /*수납소인         */
+             WHERE T1.HOUSE_CODE  = T2.HOUSE_CODE(+)
+               AND T1.CNTRCTR_NO  = T3.CNTRCTR_NO
+               AND T3.PSTMRK_AT   = '1'
+			<isNotEmpty property="HOUSE_CODE">              
+               AND T1.HOUSE_CODE  = #HOUSE_CODE#
+            </isNotEmpty>              
+		    
+			/*동*/
+			<isNotEmpty property="DONG">
+		       AND  T1.DONG = LPAD(#DONG# , 4 , '0')
+			</isNotEmpty>
+			
+			/*호*/
+			<isNotEmpty property="HO">
+			   AND T1.HO = LPAD(#HO# , 4 , '0')
+			</isNotEmpty>
+
+			/*  검색 기간 */
+			<isNotEmpty property="ST_DATE">
+			    <isNotEmpty property="ED_DATE">
+			      AND T3.RCIV_DE BETWEEN #ST_DATE# AND #ED_DATE#
+			    </isNotEmpty>
+			</isNotEmpty>
+
+			 /* 납부코드 */
+			 <isNotEmpty property="PAY_SE">
+			 	<iterate property="PAY_SE_LIST" open="AND T3.PAY_SE IN(" close=")" conjunction=",">
+					#PAY_SE_LIST[]#
+				</iterate>
+			 </isNotEmpty>
+			 
+			 /*납부방법*/
+			<isNotEmpty property="PAYMTHD">
+			   	AND   T3.PAYMTHD = #PAYMTHD#
+			</isNotEmpty>
+			
+			 
+       		 ORDER BY T1.HOUSE_CODE
+       			     ,T1.DONG
+                     ,T1.HO ASC
+
+                    
+	  </select>	
+	  
+      
+	 
+</sqlMap>

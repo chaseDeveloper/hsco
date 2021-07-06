@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC050502_SQL">	
+	
+	<!-- 단기금융상품조회-->
+	<select id="ACC050502DAO.ShortInstList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[	
+		WITH STACNT_T AS 
+			(SELECT t1.ACCNUT_YEAR
+       			   ,t1.ACCNUT_ACNT_CODE
+        		   ,t1.ACNUTNO
+        		  ,NVL(SUM(CASE WHEN t1.ACCNUT_MT = '00' AND t2.DBRT_SE = 'D' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0)
+		                        WHEN t1.ACCNUT_MT = '00' AND t2.DBRT_SE = 'D' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0)
+		                        WHEN t1.ACCNUT_MT = '00' AND t2.DBRT_SE = 'C' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0)
+		                        WHEN t1.ACCNUT_MT = '00' AND t2.DBRT_SE = 'C' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0)
+                  		   		ELSE 0
+			       END),0) AS PRE_AMT
+			      ,NVL(SUM(DECODE(t1.ACCNUT_MT,'00',0,NVL(t1.DEBTOR_AMOUNT,0))),0) AS DR_AMT
+			      ,NVL(SUM(DECODE(t1.ACCNUT_MT,'00',0,NVL(t1.CRDIT_AMOUNT,0))),0) AS  CR_AMT
+			      ,NVL(SUM(CASE WHEN t2.DBRT_SE = 'D' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0)
+		                        WHEN t2.DBRT_SE = 'D' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0)
+		                        WHEN t2.DBRT_SE = 'C' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '0' THEN  NVL(t1.CRDIT_AMOUNT,0) - NVL(t1.DEBTOR_AMOUNT,0)
+		                        WHEN t2.DBRT_SE = 'C' AND NVL(t2.RSYMNEY_ACNT_AT,'0') = '1' THEN  NVL(t1.DEBTOR_AMOUNT,0) - NVL(t1.CRDIT_AMOUNT,0)
+			                  	ELSE 0
+			       END),0) AS JAN_AMT
+   			FROM TBACC_ACCNUT_STACNT t1
+         		INNER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+        		 ON  t1.ACCNUT_YEAR      = t2.ACCNUT_YEAR
+        		 AND t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+  		   WHERE t1.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+     			 AND t1.ACCNUT_MT BETWEEN '00' /*이월*/ AND SUBSTR(#YYYYMM#,5,2) /*결산월*/
+     			 AND t2.UPPER_ACNT_CODE = '11102000' /*단기금융상품*/
+    	   GROUP BY t1.ACCNUT_YEAR, t1.ACCNUT_ACNT_CODE, t1.ACNUTNO
+		  )
+		SELECT t2.ACCNUT_ACNT_NM
+    		  ,t4.FNNC_INSTT_CODE_NM
+    		  ,t1.ACNUTNO
+    	      ,t3.ACNUT_NM
+    		  ,NVL(t1.PRE_AMT,0)  AS PRE_AMT
+    	      ,NVL(t1.DR_AMT,0)   AS DR_AMT
+    		  ,NVL(t1.CR_AMT,0)   AS CR_AMT
+    		  ,NVL(t1.JAN_AMT,0)  AS JAN_AMT
+		FROM STACNT_T t1
+     		LEFT OUTER JOIN TBACC_ACCNUT_ACNT_SBJECT t2
+     			ON  t1.ACCNUT_ACNT_CODE = t2.ACCNUT_ACNT_CODE
+     			AND t2.ACCNUT_YEAR = SUBSTR(#YYYYMM#,1,4)
+     		LEFT OUTER JOIN TBFUN_BRANCH_ACNUT t3
+     			ON  REPLACE(t1.ACNUTNO,'-','') = REPLACE(t3.ACNUTNO,'-','')
+     		LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE t4
+     			ON  t3.BANK_CODE = t4.FNNC_INSTT_CODE
+		ORDER BY t1.ACCNUT_ACNT_CODE, t1.ACNUTNO
+		]]>	 
+	</select>
+</sqlMap>

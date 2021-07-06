@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG050104_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+
+	<!-- 부서별조기집행현황 조회 -->
+	<select id="BDG050104DAO.selectDeptAcctoElpdExcutSttus" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*BDG050104DAO.selectDeptAcctoElpdExcutSttus*/]]>
+		WITH TM_BUDGET_ACNT_CODE AS ( /*조기집행대상예산*/
+		    SELECT S1.YEAR
+		         , S1.BSNS_SE
+		         , S1.BALC_SE
+		         , S1.BUDGET_ACNT_CODE
+		         , S1.BUDGET_ACNT_NM
+		         , S1.ACNT_LEVEL
+		         , S1.UPPER_ACNT_CODE
+		         , S1.ELPD_EXCUT_RT
+		         , S1.ELPD_EXCUT_AT
+		         , S1.ELPD_EXCUT_TRGET_RT
+		      FROM TBBDG_BUDGET_ACNT_CODE S1
+		     WHERE S1.YEAR          = #YEAR#
+		       AND S1.BALC_SE       = '2' /*지출:고정*/
+		       AND S1.ELPD_EXCUT_AT = '1' /*조기집행대상*/
+		)
+		, TM_DEPT_EXECUT_BUDGET AS ( /*부서별실행예산*/
+		    SELECT YEAR
+		         , BSNS_SE
+		         , BALC_SE
+		         , DETAIL_BSNS_CODE
+		         , DEPT_CODE
+		         , BUDGET_ACNT_CODE
+		         , SUM(NVL(CYFD_BUDGET, 0))                           AS CYFD_BUDGET_AMT  /*이월예산*/
+		         , SUM(NVL(ORIBDGT, 0))                               AS ORIBDGT_AMT      /*본예산*/
+		         , SUM(NVL(CYFD_BUDGET, 0)) + SUM(NVL(ORIBDGT, 0))    AS EXECUT_BUDGET_AM /*실행예산*/
+		      FROM TBBDG_EXECUT_BUDGET
+		    GROUP BY YEAR
+		           , BSNS_SE
+		           , BALC_SE
+		           , DETAIL_BSNS_CODE
+		           , DEPT_CODE
+		           , BUDGET_ACNT_CODE
+		)
+		, TM_DEPT_TBACC_EXP_DSN_SEMOK AS ( /*부서별세목단위결의서금액*/
+		    SELECT S1.BUDGET_YEAR          AS YEAR
+		         , S1.BSNS_SE
+		         , S1.BALC_SE
+		         , S1.BSNS_CODE
+		         , S1.BUDGET_DEPT_CODE
+		         , S1.BUDGET_ACNT_CODE
+		         , SUM(S1.DECSN_AMOUNT)    AS DECSN_AMOUNT
+		      FROM TBACC_EXP_DSN_MASTR S1
+		     WHERE S1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #BGNDE# AND #ENDDE#
+		       AND SFCOM_GET_SANCTN_KND(S1.SANCTN_NO) = '5'
+		    GROUP BY S1.BUDGET_YEAR
+		           , S1.BSNS_SE
+		           , S1.BALC_SE
+		           , S1.BSNS_CODE
+		           , S1.BUDGET_DEPT_CODE
+		           , S1.BUDGET_ACNT_CODE
+		)
+		, DEPT_ELPD_EXCUT_TRGET_STTUS AS ( /*조기집행대상현황*/
+		    SELECT T1.YEAR
+		         , T1.BSNS_SE
+		         , T1.BALC_SE
+		         , SUBSTR(T3.DETAIL_BSNS_CODE, 1, 1)           AS BSNS_KND
+		         , T3.DEPT_CODE
+		         , T1.BUDGET_ACNT_CODE
+		         , T1.ELPD_EXCUT_RT
+		         , T1.ELPD_EXCUT_AT
+		         , T1.ELPD_EXCUT_TRGET_RT
+		         , NVL(T3.CYFD_BUDGET_AMT, 0)                                                                       AS CYFD_AMT
+		         , NVL(T3.ORIBDGT_AMT, 0)                                                                           AS ORI_AMT
+		         , CEIL(NVL(T3.CYFD_BUDGET_AMT, 0)  * (T1.ELPD_EXCUT_TRGET_RT / 100))                               AS CYFD_BUDGET_AMT
+		         , CEIL(NVL(T3.ORIBDGT_AMT, 0)      * (T1.ELPD_EXCUT_TRGET_RT / 100))                               AS ORIBDGT_AMT
+		         , CEIL(NVL(T3.EXECUT_BUDGET_AM, 0) * (T1.ELPD_EXCUT_TRGET_RT / 100))                               AS EXECUT_BUDGET_AM
+		         , CEIL(NVL(T3.CYFD_BUDGET_AMT, 0)  * (T1.ELPD_EXCUT_TRGET_RT / 100) * (T1.ELPD_EXCUT_RT / 100))    AS TRGET_CYFD_BUDGET_AMT
+		         , CEIL(NVL(T3.ORIBDGT_AMT, 0)      * (T1.ELPD_EXCUT_TRGET_RT / 100) * (T1.ELPD_EXCUT_RT / 100))    AS TRGET_ORIBDGT_AMT
+		         , CEIL(NVL(T3.EXECUT_BUDGET_AM, 0) * (T1.ELPD_EXCUT_TRGET_RT / 100) * (T1.ELPD_EXCUT_RT / 100))    AS TRGET_EXECUT_BUDGET_AM
+		         , CASE WHEN (NVL(T3.CYFD_BUDGET_AMT, 0) = 0 AND NVL(T3.ORIBDGT_AMT, 0) = 0) THEN 0
+		                ELSE NVL(T4.DECSN_AMOUNT, 0)
+		           END AS DECSN_AMOUNT
+		      FROM TM_BUDGET_ACNT_CODE T1
+		           LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE T2
+		                ON T1.YEAR             = T2.YEAR
+		               AND T1.BSNS_SE          = T2.BSNS_SE
+		               AND T1.BALC_SE          = T2.BALC_SE
+		               AND T1.BUDGET_ACNT_CODE = T2.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN TM_DEPT_EXECUT_BUDGET T3
+		                ON T1.YEAR             = T3.YEAR
+		               AND T1.BSNS_SE          = T3.BSNS_SE
+		               AND T1.BALC_SE          = T3.BALC_SE
+		               AND T1.BUDGET_ACNT_CODE = T3.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN TM_DEPT_TBACC_EXP_DSN_SEMOK T4
+		                ON T1.YEAR             = T4.YEAR
+		               AND T1.BSNS_SE          = T4.BSNS_SE
+		               AND T1.BALC_SE          = T4.BALC_SE
+		               AND T3.DETAIL_BSNS_CODE = T4.BSNS_CODE
+		               AND T3.DEPT_CODE        = T4.BUDGET_DEPT_CODE
+		               AND T1.BUDGET_ACNT_CODE = T4.BUDGET_ACNT_CODE
+		)
+		, DEPT_ELPD_EXCUT_AMT AS (
+		    SELECT YEAR
+		         , BSNS_KND
+		         , DEPT_CODE
+		         , MAX(ELPD_EXCUT_RT)                          AS ELPD_EXCUT_RT
+		         , SUM(NVL(CYFD_AMT, 0))                       AS DEPT_CYFD_AMT
+		         , SUM(NVL(ORI_AMT, 0))                        AS DEPT_ORI_AMT
+		         , SUM(NVL(CYFD_BUDGET_AMT, 0))                AS DEPT_CYFD_BUDGET_AMT
+		         , SUM(NVL(ORIBDGT_AMT, 0))                    AS DEPT_ORIBDGT_AMT
+		         , SUM(NVL(EXECUT_BUDGET_AM, 0))               AS DEPT_EXECUT_BUDGET_AM
+		         , SUM(NVL(TRGET_CYFD_BUDGET_AMT, 0))          AS DEPT_TRGET_CYFD_BUDGET_AMT
+		         , SUM(NVL(TRGET_ORIBDGT_AMT, 0))              AS DEPT_TRGET_ORIBDGT_AMT
+		         , SUM(NVL(TRGET_EXECUT_BUDGET_AM, 0))         AS DEPT_TRGET_EXECUT_BUDGET_AM
+		         , SUM(NVL(DECSN_AMOUNT, 0))                   AS DEPT_DECSN_AMOUNT
+		      FROM DEPT_ELPD_EXCUT_TRGET_STTUS
+		    GROUP BY YEAR
+		           , BSNS_KND
+		           , DEPT_CODE
+		)
+		SELECT T1.YEAR
+		     , T1.BSNS_KND
+		     , DECODE(T1.BSNS_KND, 'A', '대행사업', '자체사업')    AS BSNS_KND_NM
+		     , T1.DEPT_CODE
+		     , T2.DEPT_NM
+		     , T1.ELPD_EXCUT_RT
+		     , T1.DEPT_CYFD_AMT
+		     , T1.DEPT_ORI_AMT
+		     , T1.DEPT_CYFD_BUDGET_AMT
+		     , T1.DEPT_ORIBDGT_AMT
+		     , T1.DEPT_EXECUT_BUDGET_AM
+		     , T1.DEPT_TRGET_CYFD_BUDGET_AMT
+		     , T1.DEPT_TRGET_ORIBDGT_AMT
+		     , T1.DEPT_TRGET_EXECUT_BUDGET_AM
+		     , CASE WHEN (T1.DEPT_CYFD_AMT = 0 AND T1.DEPT_ORI_AMT = 0) THEN 0
+		            ELSE CASE WHEN (NVL(T1.DEPT_CYFD_AMT, 0) - NVL(T1.DEPT_DECSN_AMOUNT, 0)) >= 0 THEN NVL(T1.DEPT_DECSN_AMOUNT, 0)
+		                      ELSE NVL(T1.DEPT_CYFD_AMT, 0)
+		                 END
+		       END    AS DEPT_CYFD_BUDGET_EXPNDTR_AM
+		     , CASE WHEN (T1.DEPT_CYFD_AMT = 0 AND T1.DEPT_ORI_AMT = 0) THEN 0
+		            ELSE CASE WHEN (NVL(T1.DEPT_CYFD_AMT, 0) - NVL(T1.DEPT_DECSN_AMOUNT, 0)) >= 0 THEN 0
+		                      ELSE ABS(NVL(T1.DEPT_CYFD_AMT, 0) - NVL(T1.DEPT_DECSN_AMOUNT, 0))
+		                 END
+		       END    AS DEPT_ORIBDGT_EXPNDTR_AM
+		     , CASE WHEN (T1.DEPT_CYFD_AMT = 0 AND T1.DEPT_ORI_AMT = 0) THEN 0
+		            ELSE T1.DEPT_DECSN_AMOUNT
+		       END    AS DEPT_DECSN_AMOUNT
+		     , ROUND(DECODE(T1.DEPT_TRGET_EXECUT_BUDGET_AM, 0, 0, T1.DEPT_DECSN_AMOUNT / T1.DEPT_TRGET_EXECUT_BUDGET_AM * 100), 2)    AS GOAL_ACHIV_RATE
+		     , ROUND(DECODE(T1.DEPT_EXECUT_BUDGET_AM, 0, 0, T1.DEPT_DECSN_AMOUNT / T1.DEPT_EXECUT_BUDGET_AM * 100), 2)                AS TRGET_ACHIV_RATE
+		  FROM DEPT_ELPD_EXCUT_AMT T1
+		       LEFT OUTER JOIN TBHRM_DEPT T2
+		            ON T1.DEPT_CODE = T2.DEPT_CODE
+		ORDER BY T1.BSNS_KND DESC
+		       , T1.DEPT_CODE
+	</select>
+
+
+	<!-- 사업별조기집행현황 조회 -->
+	<select id="BDG050104DAO.selectBsnsAcctoElpdExcutSttus" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[/*BDG050104DAO.selectBsnsAcctoElpdExcutSttus*/]]>
+		WITH TM_BUDGET_ACNT_CODE AS ( /*조기집행대상예산*/
+		    SELECT S1.YEAR
+		         , S1.BSNS_SE
+		         , S1.BALC_SE
+		         , S1.BUDGET_ACNT_CODE
+		         , S1.BUDGET_ACNT_NM
+		         , S1.ACNT_LEVEL
+		         , S1.UPPER_ACNT_CODE
+		         , S1.ELPD_EXCUT_RT
+		         , S1.ELPD_EXCUT_AT
+		         , S1.ELPD_EXCUT_TRGET_RT
+		      FROM TBBDG_BUDGET_ACNT_CODE S1
+		     WHERE S1.YEAR          = #YEAR#
+		       AND S1.BALC_SE       = '2' /*지출:고정*/
+		       AND S1.ELPD_EXCUT_AT = '1' /*조기집행대상*/
+		)
+		, TM_BSNS_EXECUT_BUDGET AS ( /*사업별실행예산*/
+		    SELECT YEAR
+		         , BSNS_SE
+		         , BALC_SE
+		         , DETAIL_BSNS_CODE
+		         , BUDGET_ACNT_CODE
+		         , SUM(NVL(CYFD_BUDGET, 0))                           AS CYFD_BUDGET_AMT  /*이월예산*/
+		         , SUM(NVL(ORIBDGT, 0))                               AS ORIBDGT_AMT      /*본예산*/
+		         , SUM(NVL(CYFD_BUDGET, 0)) + SUM(NVL(ORIBDGT, 0))    AS EXECUT_BUDGET_AM /*실행예산*/
+		      FROM TBBDG_EXECUT_BUDGET
+		    GROUP BY YEAR
+		           , BSNS_SE
+		           , BALC_SE
+		           , DETAIL_BSNS_CODE
+		           , BUDGET_ACNT_CODE
+		)
+		, TM_BSNS_TBACC_EXP_DSN_SEMOK AS ( /*사업별세목단위결의서금액*/
+		    SELECT S1.BUDGET_YEAR          AS YEAR
+		         , S1.BSNS_SE
+		         , S1.BALC_SE
+		         , S1.BSNS_CODE
+		         , S1.BUDGET_ACNT_CODE
+		         , SUM(S1.DECSN_AMOUNT)    AS DECSN_AMOUNT
+		      FROM TBACC_EXP_DSN_MASTR S1
+		     WHERE S1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #BGNDE# AND #ENDDE#
+		       AND SFCOM_GET_SANCTN_KND(S1.SANCTN_NO) = '5'
+		    GROUP BY S1.BUDGET_YEAR
+		           , S1.BSNS_SE
+		           , S1.BALC_SE
+		           , S1.BSNS_CODE
+		           , S1.BUDGET_ACNT_CODE
+		)
+		, BSNS_ELPD_EXCUT_TRGET_STTUS AS ( /*조기집행대상현황*/
+		    SELECT T1.YEAR
+		         , T1.BSNS_SE
+		         , T1.BALC_SE
+		         , SUBSTR(T3.DETAIL_BSNS_CODE, 1, 1)           AS BSNS_KND
+		         , T3.DETAIL_BSNS_CODE                         AS BSNS_CODE
+		         , T1.BUDGET_ACNT_CODE
+		         , T1.ELPD_EXCUT_RT
+		         , T1.ELPD_EXCUT_AT
+		         , T1.ELPD_EXCUT_TRGET_RT
+		         , NVL(T3.CYFD_BUDGET_AMT, 0)                                                                       AS CYFD_AMT
+		         , NVL(T3.ORIBDGT_AMT, 0)                                                                           AS ORI_AMT
+		         , CEIL(NVL(T3.CYFD_BUDGET_AMT, 0)  * (T1.ELPD_EXCUT_TRGET_RT / 100))                               AS CYFD_BUDGET_AMT
+		         , CEIL(NVL(T3.ORIBDGT_AMT, 0)      * (T1.ELPD_EXCUT_TRGET_RT / 100))                               AS ORIBDGT_AMT
+		         , CEIL(NVL(T3.EXECUT_BUDGET_AM, 0) * (T1.ELPD_EXCUT_TRGET_RT / 100))                               AS EXECUT_BUDGET_AM
+		         , CEIL(NVL(T3.CYFD_BUDGET_AMT, 0)  * (T1.ELPD_EXCUT_TRGET_RT / 100) * (T1.ELPD_EXCUT_RT / 100))    AS TRGET_CYFD_BUDGET_AMT
+		         , CEIL(NVL(T3.ORIBDGT_AMT, 0)      * (T1.ELPD_EXCUT_TRGET_RT / 100) * (T1.ELPD_EXCUT_RT / 100))    AS TRGET_ORIBDGT_AMT
+		         , CEIL(NVL(T3.EXECUT_BUDGET_AM, 0) * (T1.ELPD_EXCUT_TRGET_RT / 100) * (T1.ELPD_EXCUT_RT / 100))    AS TRGET_EXECUT_BUDGET_AM
+		         , CASE WHEN (NVL(T3.CYFD_BUDGET_AMT, 0) = 0 AND NVL(T3.ORIBDGT_AMT, 0) = 0) THEN 0
+		                ELSE NVL(T4.DECSN_AMOUNT, 0)
+		           END AS DECSN_AMOUNT
+		      FROM TM_BUDGET_ACNT_CODE T1
+		           LEFT OUTER JOIN VHBDG_BUDGET_ACNT_CODE T2
+		                ON T1.YEAR             = T2.YEAR
+		               AND T1.BSNS_SE          = T2.BSNS_SE
+		               AND T1.BALC_SE          = T2.BALC_SE
+		               AND T1.BUDGET_ACNT_CODE = T2.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN TM_BSNS_EXECUT_BUDGET T3
+		                ON T1.YEAR             = T3.YEAR
+		               AND T1.BSNS_SE          = T3.BSNS_SE
+		               AND T1.BALC_SE          = T3.BALC_SE
+		               AND T1.BUDGET_ACNT_CODE = T3.BUDGET_ACNT_CODE
+		           LEFT OUTER JOIN TM_BSNS_TBACC_EXP_DSN_SEMOK T4
+		                ON T1.YEAR             = T4.YEAR
+		               AND T1.BSNS_SE          = T4.BSNS_SE
+		               AND T1.BALC_SE          = T4.BALC_SE
+		               AND T3.DETAIL_BSNS_CODE = T4.BSNS_CODE
+		               AND T1.BUDGET_ACNT_CODE = T4.BUDGET_ACNT_CODE
+		)
+		, BSNS_ELPD_EXCUT_AMT AS (
+		    SELECT YEAR
+		         , BSNS_KND
+		         , BSNS_CODE
+		         , MAX(ELPD_EXCUT_RT)                          AS ELPD_EXCUT_RT
+		         , SUM(NVL(CYFD_AMT, 0))                       AS BSNS_CYFD_AMT
+		         , SUM(NVL(ORI_AMT, 0))                        AS BSNS_ORI_AMT
+		         , SUM(NVL(CYFD_BUDGET_AMT, 0))                AS BSNS_CYFD_BUDGET_AMT
+		         , SUM(NVL(ORIBDGT_AMT, 0))                    AS BSNS_ORIBDGT_AMT
+		         , SUM(NVL(EXECUT_BUDGET_AM, 0))               AS BSNS_EXECUT_BUDGET_AM
+		         , SUM(NVL(TRGET_CYFD_BUDGET_AMT, 0))          AS BSNS_TRGET_CYFD_BUDGET_AMT
+		         , SUM(NVL(TRGET_ORIBDGT_AMT, 0))              AS BSNS_TRGET_ORIBDGT_AMT
+		         , SUM(NVL(TRGET_EXECUT_BUDGET_AM, 0))         AS BSNS_TRGET_EXECUT_BUDGET_AM
+		         , SUM(NVL(DECSN_AMOUNT, 0))                   AS BSNS_DECSN_AMOUNT
+		      FROM BSNS_ELPD_EXCUT_TRGET_STTUS
+		    GROUP BY YEAR
+		           , BSNS_KND
+		           , BSNS_CODE
+		)
+		SELECT T1.YEAR
+		     , T1.BSNS_KND
+		     , DECODE(T1.BSNS_KND, 'A', '대행사업', '자체사업')    AS BSNS_KND_NM
+		     , T1.BSNS_CODE
+		     , T2.BSNS_NM
+		     , T1.ELPD_EXCUT_RT
+		     , T1.BSNS_CYFD_AMT
+		     , T1.BSNS_ORI_AMT
+		     , T1.BSNS_CYFD_BUDGET_AMT
+		     , T1.BSNS_ORIBDGT_AMT
+		     , T1.BSNS_EXECUT_BUDGET_AM
+		     , T1.BSNS_TRGET_CYFD_BUDGET_AMT
+		     , T1.BSNS_TRGET_ORIBDGT_AMT
+		     , T1.BSNS_TRGET_EXECUT_BUDGET_AM
+		     , CASE WHEN (T1.BSNS_CYFD_AMT = 0 AND T1.BSNS_ORI_AMT = 0) THEN 0
+		            ELSE CASE WHEN (NVL(T1.BSNS_CYFD_AMT, 0) - NVL(T1.BSNS_DECSN_AMOUNT, 0)) >= 0 THEN NVL(T1.BSNS_DECSN_AMOUNT, 0)
+		                      ELSE NVL(T1.BSNS_CYFD_AMT, 0)
+		                 END
+		       END    AS BSNS_CYFD_BUDGET_EXPNDTR_AM
+		     , CASE WHEN (T1.BSNS_CYFD_AMT = 0 AND T1.BSNS_ORI_AMT = 0) THEN 0
+		            ELSE CASE WHEN (NVL(T1.BSNS_CYFD_AMT, 0) - NVL(T1.BSNS_DECSN_AMOUNT, 0)) >= 0 THEN 0
+		                      ELSE ABS(NVL(T1.BSNS_CYFD_AMT, 0) - NVL(T1.BSNS_DECSN_AMOUNT, 0))
+		                 END
+		       END    AS BSNS_ORIBDGT_EXPNDTR_AM
+		     , CASE WHEN (T1.BSNS_CYFD_AMT = 0 AND T1.BSNS_ORI_AMT = 0) THEN 0
+		            ELSE T1.BSNS_DECSN_AMOUNT
+		       END    AS BSNS_DECSN_AMOUNT
+		     , ROUND(DECODE(T1.BSNS_TRGET_EXECUT_BUDGET_AM, 0, 0, T1.BSNS_DECSN_AMOUNT / T1.BSNS_TRGET_EXECUT_BUDGET_AM * 100), 2)    AS GOAL_ACHIV_RATE
+		     , ROUND(DECODE(T1.BSNS_EXECUT_BUDGET_AM, 0, 0, T1.BSNS_DECSN_AMOUNT / T1.BSNS_EXECUT_BUDGET_AM * 100), 2)                AS TRGET_ACHIV_RATE
+		  FROM BSNS_ELPD_EXCUT_AMT T1
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE T2
+		            ON T1.BSNS_CODE = T2.BSNS_CODE
+		ORDER BY T1.BSNS_KND DESC
+		       , T1.BSNS_CODE
+	</select>
+	
+</sqlMap>

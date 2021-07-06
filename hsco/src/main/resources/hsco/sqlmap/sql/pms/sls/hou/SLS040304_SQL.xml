@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS40304_SQL">	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+   		
+	
+   	  <!-- 쿼리명      : 결의구분 리스트
+	        설명       : 결의구분 콤보 목록
+	        작성자     : 변승우
+	        최초작성일 : 2015.10.01
+
+	        수정일  수정자  수정내용
+	   -->
+	   
+	  
+	  <!-- 주택결의서 목록 -->
+	  <select id="SLS040304DAO.selectHouseDecsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+					
+			SELECT /*+USE_HASH(A,B)*/
+			       '1' AS ORD
+			      ,A.DECSN_DE
+			      ,A.DECSN_SE
+			      ,A.BSNS_SE
+			      ,A.BUDGET_ACNT_CODE
+			      ,SFCOM_CODE_NM('HOU0Z2', A.DECSN_SE, 'ALL_CODE_NM') AS DECSN_SE_NM
+			      ,SFCOM_CODE_NM('BDG017', A.BSNS_SE || '1', 'ALL_CODE_NM') AS BSNS_SE_NM
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X
+			         WHERE X.YEAR = A.BUDGET_YEAR
+			           AND X.BSNS_SE = A.BSNS_SE
+			           AND X.BALC_SE = '1'
+			           AND X.BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE) AS BUDGET_ACNT_NM /* 예산계정코드명  */
+			      ,B.OCCRRNC_CO_SUM
+			      ,B.DECSN_AMOUNT_SUM AS DECSN_AMOUNT_SUM
+			      ,SFSLS_HOUSE_NM(A.HOUSE_CODE, 'ALL_HOUSE_NM') AS ALL_HOUSE_NM
+			      ,PAY_TMLMT
+			      ,INCME_DTLS_2 AS REMARK1
+			      ,SUMRY AS REMARK2
+			      ,0 AS TCNT
+			      ,0 AS TAMT,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   X.ACNT_LEVEL = 1
+                            AND SUBSTR (BUDGET_ACNT_CODE, 1, 1) =
+                                  SUBSTR (A.BUDGET_ACNT_CODE, 1, 1)
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_1,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   X.ACNT_LEVEL = 2
+                            AND SUBSTR (BUDGET_ACNT_CODE, 1, 2) =
+                                  SUBSTR (A.BUDGET_ACNT_CODE, 1, 2)
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_2,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   X.ACNT_LEVEL = 3
+                            AND SUBSTR (BUDGET_ACNT_CODE, 1, 3) =
+                                  SUBSTR (A.BUDGET_ACNT_CODE, 1, 3)
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_3,
+                (  SELECT   BUDGET_ACNT_NM
+                     FROM   TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+                    WHERE   BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE
+                            AND X.YEAR = A.BUDGET_YEAR
+                            AND X.BSNS_SE = A.BSNS_SE)
+                    AS F_ACCT_4
+			  FROM TBSLS_HOUSE_DECSN A /* 주택결의 */
+			      ,(SELECT DECSN_DE
+			              ,DECSN_SE
+			              ,BSNS_SE
+			              ,BUDGET_ACNT_CODE
+			              ,MIN(INCME_DECSN_NO) AS INCME_DECSN_NO
+			              ,SUM(OCCRRNC_CO) AS OCCRRNC_CO_SUM
+			              ,SUM(DECSN_AMOUNT) AS DECSN_AMOUNT_SUM
+			          FROM TBSLS_HOUSE_DECSN /* 주택결의 */
+			         WHERE 1 = 1
+			           AND SUBSTR(DECSN_DE,1,6) = #mdat_de#
+					<isNotEmpty property="DECSN_SE">
+					   AND DECSN_SE = #DECSN_SE#
+					</isNotEmpty>			           
+			         GROUP BY DECSN_SE, DECSN_DE, BSNS_SE, BUDGET_ACNT_CODE) B		
+			 WHERE 1 = 1
+			   AND SUBSTR(A.DECSN_DE , 1,6) = #mdat_de#
+			<isNotEmpty property="DECSN_SE">
+			   AND A.DECSN_SE = #DECSN_SE#
+			</isNotEmpty>
+			   AND A.DECSN_DE || A.DECSN_SE || A.INCME_DECSN_NO = B.DECSN_DE || B.DECSN_SE || B.INCME_DECSN_NO
+
+			 ORDER BY 3, 1, 2, 4, 5
+		
+	  </select>
+	  
+	  
+	  <!-- 임대료조정현황 목록 -->
+	  <select id="SLS040304DAO.selectHouseRntchrgMdatList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+					
+			SELECT A.DECSN_DE
+			      ,A.HOUSE_CODE
+			      ,SFSLS_HOUSE_NM(A.HOUSE_CODE, 'HOUSE_NM') AS HOUSE_NM
+			      ,A.DECSN_SE
+			      ,A.BSNS_SE
+			      ,A.BUDGET_ACNT_CODE
+			      ,A.EXPNDTR_UNIT_CODE       
+			      ,SFCOM_CODE_NM('HOU0Z2', A.DECSN_SE, 'ALL_CODE_NM') AS DECSN_SE_NM       
+			      ,SFCOM_CODE_NM('BDG017', A.BSNS_SE || '1', 'ALL_CODE_NM') AS DECSN_SE_NM       
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X
+			         WHERE X.YEAR = A.BUDGET_YEAR
+			           AND X.BSNS_SE = A.BSNS_SE
+			           AND X.BALC_SE = '1'
+			           AND X.BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE) AS BUDGET_ACNT_NM /* 예산계정코드명 */       
+			      ,(SELECT EXPNDTR_UNIT_NM
+			          FROM TBBDG_EXPNDTR_UNIT_CODE X
+			         WHERE X.YEAR = A.BUDGET_YEAR
+			           AND X.BSNS_SE = A.BSNS_SE
+			           AND X.BALC_SE = '1'
+			           AND X.BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE
+			           AND X.EXPNDTR_UNIT_CODE = A.EXPNDTR_UNIT_CODE) EXPNDTR_UNIT_NM /* 지출단위코드명 */
+			      ,PAY_TMLMT
+			      ,B.OCCRRNC_CO_SUM
+			      ,B.DECSN_AMOUNT_SUM AS DECSN_AMOUNT_SUM
+			  FROM TBSLS_HOUSE_DECSN A /* 주택결의 */
+			      ,(SELECT DECSN_DE
+			              ,DECSN_SE
+			              ,HOUSE_CODE
+			              ,BSNS_SE
+			              ,BUDGET_ACNT_CODE
+			              ,EXPNDTR_UNIT_CODE
+			              ,MIN(INCME_DECSN_NO) AS INCME_DECSN_NO
+			              ,SUM(OCCRRNC_CO) AS OCCRRNC_CO_SUM
+			              ,SUM(DECSN_AMOUNT) AS DECSN_AMOUNT_SUM
+			          FROM TBSLS_HOUSE_DECSN /* 주택결의 */
+			         WHERE 1 = 1
+			           AND SUBSTR(DECSN_DE,1,6) = #mdat_de#
+			           
+		           <isNotEmpty property="DECSN_SE">
+					   AND DECSN_SE = #DECSN_SE#
+				   </isNotEmpty>
+			
+			           AND OPERT_SE = 'A'
+			         GROUP BY DECSN_DE
+			                 ,DECSN_SE
+			                 ,HOUSE_CODE
+			                 ,BSNS_SE
+			                 ,BUDGET_ACNT_CODE
+			                 ,EXPNDTR_UNIT_CODE) B
+			
+			 WHERE 1 = 1
+			   AND SUBSTR(A.DECSN_DE,1,6)  = #mdat_de#
+		  
+		   <isNotEmpty property="DECSN_SE">
+			   AND DECSN_SE = #DECSN_SE#
+		   </isNotEmpty>
+		   
+			   AND A.PAY_SE = '2'
+			   AND A.SUMRY NOT LIKE ('%연체%')
+			   AND A.DECSN_DE = B.DECSN_DE
+			   AND A.INCME_DECSN_NO = B.INCME_DECSN_NO
+			   AND A.DECSN_SE = B.DECSN_SE
+			   AND A.HOUSE_CODE = B.HOUSE_CODE
+			   AND A.BSNS_SE = B.BSNS_SE
+			   AND A.BUDGET_ACNT_CODE = B.BUDGET_ACNT_CODE
+			   AND A.EXPNDTR_UNIT_CODE = B.EXPNDTR_UNIT_CODE
+			   AND A.OPERT_SE = 'A'			   
+			 ORDER BY 1, 2, 4, 5, 6, 7
+	
+	  </select>
+	  
+	  
+	  <!-- 주택 수입결의서 조회 -->
+	  <select id="SLS040304DAO.selectHouseIncmeDecsnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			
+			SELECT A.DECSN_SE
+      			  ,SFCOM_CODE_NM('HOU0Z2', A.DECSN_SE, 'ALL_CODE_NM') AS DECSN_SE_NM
+			      ,A.BSNS_SE
+			      ,A.BUDGET_ACNT_CODE
+			      ,TO_CHAR(TO_DATE(A.DECSN_DE), 'YYYY-MM-DD') AS DECSN_DE
+			      ,TO_CHAR(TO_DATE(A.PAY_TMLMT), 'YYYY-MM-DD') AS PAY_TMLMT
+			      ,A.BUDGET_YEAR
+			      ,B.OCCRRNC_CO_SUM
+			      ,B.DECSN_AMOUNT_SUM
+			      ,CASE OCCRRNC_CO_SUM
+			         WHEN 1 THEN
+			          INCME_DTLS_2 || ' ' || A.INCME_DTLS_1
+			         ELSE
+			          INCME_DTLS_2 || ' ' || A.INCME_DTLS_1 || ' 외' ||
+			          TO_CHAR(OCCRRNC_CO_SUM - 1) || '건'
+			       END AS F_REMARK
+			      ,SFSLS_HOUSE_NM(A.HOUSE_CODE, 'ALL_HOUSE_NM') AS ALL_HOUSE_NM
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+			         WHERE X.ACNT_LEVEL = 1
+			           AND SUBSTR(BUDGET_ACNT_CODE, 1, 1) =
+			               SUBSTR(A.BUDGET_ACNT_CODE, 1, 1)
+			           AND X.YEAR = A.BUDGET_YEAR
+			           AND X.BSNS_SE = A.BSNS_SE) AS F_ACCT_1
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+			         WHERE X.ACNT_LEVEL = 2
+			           AND SUBSTR(BUDGET_ACNT_CODE, 1, 2) =
+			               SUBSTR(A.BUDGET_ACNT_CODE, 1, 2)
+			           AND X.YEAR = A.BUDGET_YEAR
+			           AND X.BSNS_SE = A.BSNS_SE) AS F_ACCT_2
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+			         WHERE X.ACNT_LEVEL = 3
+			           AND SUBSTR(BUDGET_ACNT_CODE, 1, 3) =
+			               SUBSTR(A.BUDGET_ACNT_CODE, 1, 3)
+			           AND X.YEAR = A.BUDGET_YEAR
+			           AND X.BSNS_SE = A.BSNS_SE) AS F_ACCT_3
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X /* 예산계정코드 */
+			         WHERE BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE
+			           AND X.YEAR = A.BUDGET_YEAR
+			           AND X.BSNS_SE = A.BSNS_SE) AS F_ACCT_4
+			      ,CASE OCCRRNC_CO_SUM
+			         WHEN 1 THEN
+			          SUMRY
+			         ELSE
+			          SUMRY || ' 외 기타'
+			       END AS F_REMARK2
+			      ,TO_CHAR(TO_DATE(A.NHT_PBLICTE_DE), 'YYYY-MM-DD') AS NHT_PBLICTE_DE /* 고지서발행일자 */
+			      ,A.NHT_NO /* 고지서번호 */
+			      ,TO_CHAR(TO_DATE(A.ACNTBK_STATE_DE), 'YYYY-MM-DD') AS ACNTBK_STATE_DE /* 정리부기재일자 */ 
+			      ,NM1
+		          ,NM2
+		          ,NM3   			      
+			  FROM TBSLS_HOUSE_DECSN A /* 주택결의 */
+			      ,(SELECT MIN(INCME_DECSN_NO) AS INCME_DECSN_NO
+			              ,DECSN_SE
+			              ,BUDGET_YEAR
+			              ,BSNS_SE
+			              ,BUDGET_ACNT_CODE
+			              ,SUM(OCCRRNC_CO) AS OCCRRNC_CO_SUM
+			              ,SUM(DECSN_AMOUNT) AS DECSN_AMOUNT_SUM
+			          FROM TBSLS_HOUSE_DECSN /* 주택결의 */
+			         WHERE DECSN_DE = #DECSN_DE#
+			         GROUP BY DECSN_SE, BUDGET_YEAR, BSNS_SE, BUDGET_ACNT_CODE) B
+			       , (SELECT MAX(DECODE(SANCTN_SN , '0' , EMPNM , '')) AS NM1  
+			              , MAX(DECODE(SANCTN_SN , '1' , EMPNM , '')) AS NM2
+			              , MAX(DECODE(SANCTN_SN , '2' , EMPNM , '')) AS NM3
+			          FROM (
+			                SELECT B.SANCTN_SN,
+			                       B.SANCTNER_ID,
+			                       CASE
+			                         WHEN AGNCY_SANCTNER_ID IS NULL THEN U.USER_NM 
+			                         ELSE U.USER_NM||CHR(13)||CHR(10)||'('||U1.USER_NM||')' 
+			                       END EMPNM,
+			                       B.SANCTN_STEP,
+			                       C.CODE_NM SANCTN_STEP_NM,
+			                       B.SANCTN_STTUS,
+			                       D.CODE_NM SANCTN_STTUS_NM,
+			                       E.CODE OFCPS_SE,
+			                       E.CODE_NM OFCPS_NM,
+			                       TO_CHAR(B.SANCTN_DT,'MM/DD') SANCTN_DT
+			                  FROM TBCOM_INNER_SANCTN_DTLS B
+			                 INNER JOIN TBCOM_INNER_SANCTNER S ON (S.INNER_SANCTN_ID=B.INNER_SANCTN_ID
+			                                                       AND S.SANCTN_SN=B.SANCTN_SN
+			                                                       AND S.SANCTNER_ID=B.SANCTNER_ID)
+			                  LEFT OUTER JOIN TBCOM_USER U ON (U.USER_ID=B.SANCTNER_ID)
+			                  LEFT OUTER JOIN TBCOM_USER U1 ON (U1.USER_ID=B.AGNCY_SANCTNER_ID)
+			                  LEFT OUTER JOIN TBHRM_HR_MASTR A ON (A.EMPNO=U.EMPNO)
+			                  LEFT OUTER JOIN TBCOM_CMMN_CODE C ON (C.GRP_CODE='COM028'
+			                                                        AND C.CODE=B.SANCTN_STEP)
+			                  LEFT OUTER JOIN TBCOM_CMMN_CODE D ON (D.GRP_CODE='COM032'
+			                                                        AND D.CODE=B.SANCTN_STTUS)
+			                  LEFT OUTER JOIN TBCOM_CMMN_CODE E ON (E.GRP_CODE='HRM021'
+			                                                        AND E.CODE=S.OFCPS_NM)
+			                 WHERE B.INNER_SANCTN_ID= (SELECT INNER_SANCTN_NO FROM TBPMS_DECSN_SANCTN WHERE JOB_SE = 'HOU' AND FORMAT_SE = '005' AND DECSN_YM = SUBSTR(#DECSN_DE#,1,6))
+			                   AND B.SANCTN_STEP IN ('S1','S2')
+			                   AND D.CODE = 'S01'
+                 ORDER BY B.SANCTN_SN)) C   				
+			 WHERE A.INCME_DECSN_NO = B.INCME_DECSN_NO
+			   AND A.DECSN_SE = B.DECSN_SE
+			   AND A.BSNS_SE = B.BSNS_SE
+			   AND A.BUDGET_ACNT_CODE = B.BUDGET_ACNT_CODE
+			   AND A.DECSN_DE = #DECSN_DE#
+			   AND A.DECSN_SE = #DECSN_SE#
+			   AND A.BSNS_SE = #BSNS_SE#
+			   AND A.BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+			 ORDER BY A.DECSN_SE
+			         ,A.BUDGET_YEAR
+			         ,A.BSNS_SE
+			         ,A.BUDGET_ACNT_CODE
+			         ,A.HOUSE_CODE || A.DONG || A.HO					
+	
+	  </select>
+	  
+	  <!-- 주택 수입결의서 조회2 -->
+	  <select id="SLS040304DAO.selectHouseIncmeDecsnList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			
+		<![CDATA[		
+			SELECT MAX(SUMRY) AS SUMRY
+			      ,MAX(INCME_DTLS_1) AS INCME_DTLS_1
+			      ,COUNT(*) AS CNT
+			      ,MAX(CASE
+			             WHEN SUBSTR(DECSN_DE, 0, 4) = BUDGET_YEAR THEN '(금년)'
+			             WHEN SUBSTR(DECSN_DE, 0, 4) < BUDGET_YEAR THEN '(과년)'
+			           END) AS YEAR_GB
+			      ,SUM(DECSN_AMOUNT) AS SUM
+			  FROM TBSLS_HOUSE_DECSN /* 주택결의 */
+			 WHERE 1 = 1
+			   AND DECSN_DE = #DECSN_DE#
+			   AND DECSN_SE = #DECSN_SE#
+			   AND BSNS_SE = #BSNS_SE#
+			   AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+			 GROUP BY CNTRCTR_NO
+		]]>
+		
+	  </select>
+	  
+	  
+	  <!-- 주택 수입내역서 조회 -->
+	  <select id="SLS040304DAO.selectHouseIncmeDtstmnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+
+			SELECT TO_CHAR(TO_DATE(A.DECSN_DE), 'YYYY-MM-DD') AS DECSN_DE
+				  ,A.DECSN_SE
+			      ,SFCOM_CODE_NM('HOU0Z2', A.DECSN_SE, 'ALL_CODE_NM') AS DECSN_SE_NM
+			      ,SFSLS_HOUSE_NM(A.HOUSE_CODE, 'ALL_HOUSE_NM') AS ALL_HOUSE_NM
+			      ,SFCOM_CODE_NM('BDG017', A.BSNS_SE || '1', 'ALL_CODE_NM') AS BSNS_SE_NM
+			      ,A.BUDGET_ACNT_CODE
+			      ,(SELECT BUDGET_ACNT_NM
+			          FROM TBBDG_BUDGET_ACNT_CODE X
+			         WHERE X.YEAR = A.BUDGET_YEAR
+			           AND X.BSNS_SE = A.BSNS_SE
+			           AND X.BALC_SE = '1'
+			           AND X.BUDGET_ACNT_CODE = A.BUDGET_ACNT_CODE) AS BUDGET_ACNT_NM /* 예산계정코드명 */
+			      ,TO_CHAR(A.DONG) || '-' || TO_CHAR(A.HO) AS F_BLOCK
+			      ,A.DONG AS VBLOCK
+			      ,A.HO AS VLOT
+			      ,'' AS VLOT_TYPE
+			      ,A.PAY_TMLMT
+			      ,A.DECSN_AMOUNT
+			      ,A.OCCRRNC_CO
+			      ,A.CNTRCTR_NO
+			      ,(SELECT BB.CSTMR_NM
+			          FROM TBSLS_HOUSE_CSTMR BB
+			         WHERE BB.HOUSE_CSTMR_NO = B.HOUSE_CSTMR_NO) AS HOUSE_CSTMR_NM
+			      ,A.INCME_DTLS_1
+			      ,A.INCME_DTLS_2 AS REMARK1
+			      ,A.SUMRY AS REMARK2
+			  FROM TBSLS_HOUSE_DECSN A /* 주택결의 */
+			      ,TBSLS_HCNTRCTR  B /* 주택계약자 */
+			 WHERE 1 = 1
+			   AND A.CNTRCTR_NO = B.CNTRCTR_NO
+			   AND A.HOUSE_CODE = B.HOUSE_CODE
+			   AND A.DONG = B.DONG
+			   AND A.HO = B.HO
+			   
+			   AND DECSN_DE = #DECSN_DE#
+			   AND DECSN_SE = #DECSN_SE#
+			   AND BSNS_SE = #BSNS_SE#
+			   AND BUDGET_ACNT_CODE = #BUDGET_ACNT_CODE#
+			   
+			 ORDER BY A.HOUSE_CODE, VBLOCK, VLOT, A.CNTRCTR_NO
+			 
+	  </select>
+    
+    	 
+</sqlMap>

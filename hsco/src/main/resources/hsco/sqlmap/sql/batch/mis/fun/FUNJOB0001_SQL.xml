@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUNJOB0001_SQL">	
+    
+    <!-- 문자발송을 위한 자금담당자 조회 -->
+	<select id="FUNJOB0001.selectFunCharger" resultClass="java.util.HashMap" >
+		SELECT A.USER_ID AS USER_ID
+		     , B.EMPNO AS EMPNO
+		     , C.EMPNM AS EMPNM
+		     , H_DECRYPT(C.TELNO_2) AS PHONE_NUM
+		FROM TBCOM_USER_GRP A
+		   , TBCOM_USER B
+		   , TBHRM_HR_MASTR C
+		WHERE A.USER_ID = B.USER_ID
+		AND B.EMPNO     = C.EMPNO(+)
+		AND A.AUTH_GRP_ID = 'FUN_USER'
+	</select>
+
+	<!-- 차입금 상환예정일 3일전 공사채권 -->
+	<select id="FUNJOB0001.cntNtcnBeffat" resultClass="java.util.HashMap" >
+	<![CDATA[
+		SELECT TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'YYYY/MM/DD') AS RPAY_DE
+		     , DS AS DS
+		     , COUNT(*) AS CNT
+		  FROM (SELECT RPAY_DE
+		             , BRRW_ACNUT_NM
+		             , MAX(DS) AS DS   /* 1: 이자, 2: 원금 */
+		          FROM (
+		                SELECT  T1.PBNCD_NO
+		                      , T1.BRRW_ACNUT_NM
+		                      , 1 AS DS
+		                      , T2.RPAY_DE
+		                FROM   TBFUN_PBNCD T1
+		                       INNER JOIN TBFUN_PBNCD_INTR_RPAY_PLAN T2
+		                               ON T1.PBNCD_NO = T2.PBNCD_NO
+		                UNION ALL
+		                SELECT  T4.PBNCD_NO
+		                      , T4.BRRW_ACNUT_NM
+		                      , 2 AS DS
+		                      , T5.RPAY_DE
+		                FROM   TBFUN_PBNCD T4
+		                       INNER JOIN TBFUN_PBNCD_PRNCPAL_RPAY_PLAN T5
+		                               ON T4.PBNCD_NO = T5.PBNCD_NO
+		               )
+		         WHERE RPAY_DE = TO_CHAR(SYSDATE+3, 'YYYYMMDD')
+		         GROUP BY RPAY_DE, PBNCD_NO, BRRW_ACNUT_NM
+		       )
+		 GROUP BY RPAY_DE, DS
+	]]>
+	</select>
+	
+	<!-- 차입금 상환예정일 당일 공사채권 -->
+	<select id="FUNJOB0001.cntNtcnToday" resultClass="java.util.HashMap" >
+	<![CDATA[
+		SELECT TO_CHAR(TO_DATE(RPAY_DE, 'YYYYMMDD'), 'YYYY/MM/DD') AS RPAY_DE
+		     , DS AS DS
+		     , COUNT(*) AS CNT
+		  FROM (SELECT RPAY_DE
+		             , BRRW_ACNUT_NM
+		             , MAX(DS) AS DS   /* 1: 이자, 2: 원금 */
+		          FROM (
+		                SELECT  T1.PBNCD_NO
+		                      , T1.BRRW_ACNUT_NM
+		                      , 1 AS DS
+		                      , T2.RPAY_DE
+		                FROM   TBFUN_PBNCD T1
+		                       INNER JOIN TBFUN_PBNCD_INTR_RPAY_PLAN T2
+		                               ON T1.PBNCD_NO = T2.PBNCD_NO
+		                UNION ALL
+		                SELECT  T4.PBNCD_NO
+		                      , T4.BRRW_ACNUT_NM
+		                      , 2 AS DS
+		                      , T5.RPAY_DE
+		                FROM   TBFUN_PBNCD T4
+		                       INNER JOIN TBFUN_PBNCD_PRNCPAL_RPAY_PLAN T5
+		                               ON T4.PBNCD_NO = T5.PBNCD_NO
+		               )
+		         WHERE RPAY_DE = TO_CHAR(SYSDATE, 'YYYYMMDD')
+		         GROUP BY RPAY_DE, PBNCD_NO, BRRW_ACNUT_NM
+		       )
+		 GROUP BY RPAY_DE, DS
+	]]>
+	</select>
+	
+    <!-- 메신저(인트라웨어) 사원번호 조회 -->
+	<select id="FUNJOB0001.msgEmpno" resultClass="java.lang.String">
+		SELECT
+		     USER_ID
+		    ,NAME
+		FROM INTRAWARE.USR_GLOBAL A
+		WHERE  USER_ID= ( SELECT B.USER_ID
+					      FROM   INTRAWARE.GW_USER_INFO B
+					      WHERE  B.EMP_CODE=#RCVER_USER_ID#
+					    )
+	</select>
+	
+	<!-- 알림발송내역 추가 -->
+	<insert id="FUNJOB0001.NtcnSndngC" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_NTCN_SNDNG_DTLS (			/** 알림발송내역 */
+        	 SNDNG_DTLS_SN			    /** 발송내역일련번호 */
+        	,SNDNG_DT			        /** 발송일시 */
+        	,RCVER_USER_ID			    /** 수신자사용자ID */
+        	,RCVER_USER_NM			    /** 수신자사용자명 */
+        	,SENDER_USER_ID			    /** 발송자사용자ID */
+        	,SENDER_USER_NM			    /** 발송자사용자명 */
+        	,NTCN_SJ			        /** 알림제목 */
+        	,LINK_ADRES			        /** 링크주소 */
+        	,NTCN_CN			        /** 알림내용 */
+        	,REGISTER_ID			    /** 등록자ID */
+        	,REGIST_DT			        /** 등록일시 */
+        	,UPDUSR_ID			        /** 수정자ID */
+        	,UPDT_DT			        /** 수정일시 */
+        ) VALUES (
+        	 /* (SELECT NVL(MAX(SNDNG_DTLS_SN)+1,1) FROM TBCOM_NTCN_SNDNG_DTLS)			/** 발송내역일련번호  2016.08.22 */
+        	 TO_CHAR(SYSDATE,'YYYYMMDD')||LPAD(SQ_COM_SNDNG_DTLS_SN.NEXTVAL,12,'0')
+        	,SYSDATE			        /** 발송일시 */
+        	,#RCVER_USER_ID#			/** 수신자사용자ID */
+        	,#RCVER_USER_NM#			/** 수신자사용자명 */
+        	,#SENDER_USER_ID#			/** 발송자사용자ID */
+        	,#SENDER_USER_NM#			/** 발송자사용자명 */
+        	,#NTCN_SJ#			        /** 알림제목 */
+        	,#LINK_ADRES#			    /** 링크주소 */
+        	,#NTCN_CN#			        /** 알림내용 */
+        	,#S_USER_ID#			    /** 등록자ID */
+        	,SYSDATE			        /** 등록일시 */
+        	,#S_USER_ID#			    /** 수정자ID */
+        	,SYSDATE			        /** 수정일시 */
+        )
+	</insert>
+</sqlMap>

@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM120100SQL">	
+
+	<!-- 쿼리명 : 배치 작업  조회
+	설명 : 배치 작업  조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.01.21
+	-->
+	<select id="SYM120100DAO.selectBatchProc" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   SELECT BATCH_OPERT_ID,
+              BATCH_OPERT_NM,
+              BATCH_PROGRM,
+              PARAMTR,
+              USE_AT,
+              JOB_SE_CODE,
+              SUBSTR(BATCH_OPERT_ID,5,1) BATCH_SE,
+              INNER_SANCTN_ID,
+              NVL((SELECT LAST_SANCTN_STTUS
+                     FROM TBCOM_INNER_SANCTN_MASTR z
+                     WHERE INNER_SANCTN_ID = a.INNER_SANCTN_ID),'S00') SANCTN_STTUS,
+              CONFM_YN,
+              REGISTER_ID,
+              (SELECT EMPNM
+                 FROM TBHRM_HR_MASTR z
+                 WHERE EMPNO = a.REGISTER_ID) REGISTER_NM,
+              TO_CHAR(REGIST_DT,'YYYYMMDD') REGIST_DT
+         FROM TBCOM_BATCH_OPERT a
+         WHERE 1 = 1
+         <isNotEmpty property="batchOpertId">
+           AND BATCH_OPERT_ID LIKE '%' || #batchOpertId# || '%'
+         </isNotEmpty>
+         <isNotEmpty property="batchOpertNm">
+           AND BATCH_OPERT_NM LIKE '%' || #batchOpertNm# || '%'
+         </isNotEmpty>
+         <isNotEmpty property="schJobSeCode">
+           AND JOB_SE_CODE = #schJobSeCode#
+         </isNotEmpty>
+         order by BATCH_OPERT_ID
+	</select>
+	
+    <!-- 배지작업아이디 채번 -->
+	<select id="SYM120100DAO.selectBatchOpertId" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	       SELECT 'B' || #JOB_SE_CODE# || #BATCH_SE# || 
+                  (SELECT LPAD(NVL(TO_NUMBER(MAX(SUBSTR(BATCH_OPERT_ID, 6, 9))), 0) + 1, 5, '0')
+                     FROM TBCOM_BATCH_OPERT
+                     WHERE BATCH_OPERT_ID LIKE 'B' || #JOB_SE_CODE# || #BATCH_SE# || '%'
+                     ) BATCH_OPERT_ID
+             FROM DUAL
+		 
+	</select>
+	
+	<!-- 배치작업등록  -->
+	<insert id="SYM120100DAO.insertBatchOpert" parameterClass="java.util.HashMap" >
+	       INSERT INTO TBCOM_BATCH_OPERT
+		                 ( BATCH_OPERT_ID,
+		                   BATCH_OPERT_NM,
+		                   BATCH_PROGRM,
+		                   PARAMTR,
+		                   USE_AT,
+		                   JOB_SE_CODE,
+		                   INNER_SANCTN_ID,
+		                   REGISTER_ID,
+		                   REGIST_DT,
+		                   UPDUSR_ID,
+		                   UPDT_DT)
+		           VALUES( #BATCH_OPERT_ID#,
+		                   #BATCH_OPERT_NM#,
+		                   #BATCH_PROGRM#,
+		                   #PARAMTR#,
+		                   #USE_AT#,
+		                   #JOB_SE_CODE#,
+		                   #INNER_SANCTN_ID#,
+		                   #S_USER_ID#,
+		                   SYSDATE,
+		                   #S_USER_ID#,
+		                   SYSDATE)
+  
+	</insert>
+	
+	<!-- 배치작업 수정 -->
+	<update id="SYM120100DAO.updateBatchOpert" parameterClass="java.util.HashMap" >
+	        UPDATE TBCOM_BATCH_OPERT
+               SET  BATCH_OPERT_NM    =  #BATCH_OPERT_NM#,
+                    BATCH_PROGRM      =  #BATCH_PROGRM#,
+                    PARAMTR           =  #PARAMTR#,
+                    USE_AT            =  #USE_AT#,
+                    JOB_SE_CODE       =  #JOB_SE_CODE#,
+                    INNER_SANCTN_ID   =  #INNER_SANCTN_ID#,
+                    UPDUSR_ID         =  #S_USER_ID#,
+                    UPDT_DT           =  SYSDATE
+             WHERE BATCH_OPERT_ID = #BATCH_OPERT_ID#
+	</update>
+	
+		<!-- 배치작업 삭제  -->
+	<delete id="SYM120100DAO.deleteBatchOpert" parameterClass="java.util.HashMap" >
+	         DELETE FROM TBCOM_BATCH_OPERT
+              WHERE BATCH_OPERT_ID = #BATCH_OPERT_ID#
+
+	</delete>
+	
+	<!-- 배치스케쥴 아이디 채번 -->
+	<select id="SYM120100DAO.selectBatchSchdulId" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	           SELECT #BATCH_OPERT_ID# || '_' ||   TO_CHAR(NVL((SELECT MAX(CNT)  
+										                          FROM(SELECT SUBSTR(BATCH_SCHDUL_ID,INSTR(BATCH_SCHDUL_ID, '_' ,1) + 1,LENGTH(BATCH_SCHDUL_ID) - INSTR(BATCH_SCHDUL_ID, '_' ,1)) CNT
+										                                 FROM TBCOM_BATCH_SCHDUL
+										                                WHERE BATCH_OPERT_ID = #BATCH_OPERT_ID#)),0) + 1) BATCH_SCHDUL_ID
+	             FROM DUAL
+		 
+	</select>
+	
+	<!-- 배치스케쥴 등록  -->
+	<insert id="SYM120100DAO.insertBatchSchdul" parameterClass="java.util.HashMap" >
+	        INSERT INTO TBCOM_BATCH_SCHDUL
+                        ( BATCH_SCHDUL_ID,
+                          BATCH_OPERT_ID,
+                          EXECUT_CYCLE,
+                          EXECUT_SCHDUL_DE,
+                          EXECUT_SCHDUL_HOUR,
+                          EXECUT_SCHDUL_MNT,
+                          EXECUT_SCHDUL_SECND,
+                          REGISTER_ID,
+                          REGIST_DT,
+                          UPDUSR_ID,
+                          UPDT_DT,
+                          USE_AT)
+                     VALUES     
+                        ( #BATCH_SCHDUL_ID#,
+                          #BATCH_OPERT_ID#,
+                          #EXECUT_CYCLE#,
+                          LPAD(NVL(#EXECUT_SCHDUL_YEAR#,'0'),4,'0') || 
+                          LPAD(NVL(#EXECUT_SCHDUL_MONTH#,'0'),2,'0')  ||
+                          LPAD(NVL(#EXECUT_SCHDUL_DAY#,'0'),2,0) ,
+                          #EXECUT_SCHDUL_HOUR#,
+                          #EXECUT_SCHDUL_MNT#,
+                          #EXECUT_SCHDUL_SECND#,
+                          #S_USER_ID#,
+                          SYSDATE,
+                          #S_USER_ID#,
+                          SYSDATE,
+                          '1') 
+	</insert>
+	
+
+	
+	<!-- 배치스케줄 요일등록  -->
+	<insert id="SYM120100DAO.insertBatchSchdulDay" parameterClass="java.util.HashMap" >
+        INSERT INTO TBCOM_BATCH_SCHDUL_DAYWEK
+                    ( BATCH_SCHDUL_ID,
+                      EXECUT_SCHDUL_DAYWEK_SE,
+                      REGISTER_ID,
+                      REGIST_DT,
+                      UPDUSR_ID,
+                      UPDT_DT)
+              VALUES( #BATCH_SCHDUL_ID#,
+                      #EXECUT_SCHDUL_DAYWEK_SE#,
+                      #S_USER_ID#,
+                      SYSDATE,
+                      #S_USER_ID#,
+                      SYSDATE)
+	</insert>
+	
+	
+	<!-- 배치스케줄 업데이트 -->
+	<update id="SYM120100DAO.updateBatchSchdul" parameterClass="java.util.HashMap" >
+	               UPDATE TBCOM_BATCH_SCHDUL
+                     SET  EXECUT_CYCLE           =  #EXECUT_CYCLE#,
+                          EXECUT_SCHDUL_DE       =    LPAD(NVL(#EXECUT_SCHDUL_YEAR#,'0'),4,'0') || 
+                                                      LPAD(NVL(#EXECUT_SCHDUL_MONTH#,'0'),2,'0')  ||
+                                                      LPAD(NVL(#EXECUT_SCHDUL_DAY#,'0'),2,0),
+                          EXECUT_SCHDUL_HOUR     =  #EXECUT_SCHDUL_HOUR#,
+                          EXECUT_SCHDUL_MNT      =  #EXECUT_SCHDUL_MNT#,
+                          EXECUT_SCHDUL_SECND    =  #EXECUT_SCHDUL_SECND#,
+                          UPDUSR_ID              =  #S_USER_ID#,
+                          UPDT_DT                =  SYSDATE
+                   WHERE  BATCH_SCHDUL_ID        = #BATCH_SCHDUL_ID#
+	</update>
+	
+	<!-- 배치스케줄 요일 삭제  -->
+	<delete id="SYM120100DAO.deleteBatchSchdulDay" parameterClass="java.util.HashMap" >
+	  DELETE FROM TBCOM_BATCH_SCHDUL_DAYWEK
+       WHERE BATCH_SCHDUL_ID = #BATCH_SCHDUL_ID# 
+	</delete>
+	
+     <!-- 배치스케줄 삭제  -->
+	<delete id="SYM120100DAO.deleteBatchSchdul" parameterClass="java.util.HashMap" >
+	  DELETE FROM TBCOM_BATCH_SCHDUL
+       WHERE BATCH_SCHDUL_ID = #BATCH_SCHDUL_ID#
+	</delete>
+	
+	
+	<select id="SYM120100DAO.returnBatchOpertId" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT #BATCH_OPERT_ID# BATCH_OPERT_ID
+		    FROM DUAL
+	</select>
+	
+	<!-- 배치스케줄 요일 삭제  (배치작업 삭제시)-->
+	<delete id="SYM120100DAO.clearBatchSchdulDay" parameterClass="java.util.HashMap" >
+	
+	  DELETE 
+	    FROM TBCOM_BATCH_SCHDUL_DAYWEK a
+         WHERE 1 = 1
+           AND EXISTS (SELECT 'X'
+	                    FROM TBCOM_BATCH_SCHDUL z
+	                    WHERE BATCH_SCHDUL_ID = a.BATCH_SCHDUL_ID
+	                      AND BATCH_OPERT_ID =  #BATCH_OPERT_ID#)
+    </delete>
+    
+    <!-- 배치스케줄  삭제  (배치작업 삭제시)-->
+   <delete id="SYM120100DAO.clearBatchSchdul" parameterClass="java.util.HashMap" >
+	   DELETE FROM TBCOM_BATCH_SCHDUL
+        WHERE BATCH_OPERT_ID = #BATCH_OPERT_ID#
+    </delete>
+	
+    <select id="SYM120100DAO.selectBatchSchdulList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	   SELECT a.BATCH_SCHDUL_ID,
+              a.BATCH_OPERT_ID,
+              a.EXECUT_CYCLE,
+              a.EXECUT_SCHDUL_DE,
+              a.EXECUT_SCHDUL_HOUR,
+              a.EXECUT_SCHDUL_MNT,
+              a.EXECUT_SCHDUL_SECND,
+              a.REGISTER_ID,
+              (SELECT EMPNM
+                 FROM TBHRM_HR_MASTR z
+                WHERE EMPNO = a.REGISTER_ID) REGISTER_NM,
+              (SELECT BATCH_OPERT_NM
+                 FROM TBCOM_BATCH_OPERT z
+                 WHERE BATCH_OPERT_ID = a.BATCH_OPERT_ID) BATCH_OPERT_NM,
+              TO_CHAR(a.REGIST_DT,'YYYYMMDD') REGISTER_DT ,
+              nvl(b.CHK_SUN,'0') CHK_SUN,
+              nvl(b.CHK_MON,'0') CHK_MON,
+              nvl(b.CHK_TUE,'0') CHK_TUE,
+              nvl(b.CHK_WED,'0') CHK_WED,
+              nvl(b.CHK_THU,'0') CHK_THU,
+              nvl(b.CHK_FRI,'0') CHK_FRI,
+              nvl(b.CHK_SAT,'0') CHK_SAT,
+              SUBSTR(EXECUT_SCHDUL_DE,1,4) EXECUT_SCHDUL_YEAR,
+              SUBSTR(EXECUT_SCHDUL_DE,5,2) EXECUT_SCHDUL_MONTH,
+              SUBSTR(EXECUT_SCHDUL_DE,7,2) EXECUT_SCHDUL_DAY,
+              CASE a.EXECUT_CYCLE WHEN '01' THEN '[ 매 일 ] '
+                                  WHEN '02' THEN '[ 매 주 ] ' ||  b.DAY_TEXT || ' '
+                                  WHEN '03' THEN '[ 매 월 ] ' ||  SUBSTR(EXECUT_SCHDUL_DE,7,2) || ' 일 '
+                                  WHEN '04' THEN '[ 매 년 ] ' ||  SUBSTR(EXECUT_SCHDUL_DE,5,2) || ' 월 ' || SUBSTR(EXECUT_SCHDUL_DE,7,2) || ' 일 '
+                                  WHEN '05' THEN '[ 수 시 ] ' ||  SUBSTR(EXECUT_SCHDUL_DE,1,4) || ' 년 ' ||  SUBSTR(EXECUT_SCHDUL_DE,5,2) || ' 월 ' || SUBSTR(EXECUT_SCHDUL_DE,7,2) || ' 일 '
+                                  ELSE ''
+                END ||  a.EXECUT_SCHDUL_HOUR || ' 시 ' || a.EXECUT_SCHDUL_MNT || ' 분 ' ||  a.EXECUT_SCHDUL_SECND || ' 초' AS EXECUT_SCHDUL_TEXT
+        FROM TBCOM_BATCH_SCHDUL a,
+             (SELECT BATCH_SCHDUL_ID,
+                     MAX(CASE EXECUT_SCHDUL_DAYWEK_SE  WHEN '1' THEN '1' ELSE '0' END) CHK_SUN,
+                     MAX(CASE EXECUT_SCHDUL_DAYWEK_SE  WHEN '2' THEN '1' ELSE '0' END) CHK_MON,
+                     MAX(CASE EXECUT_SCHDUL_DAYWEK_SE  WHEN '3' THEN '1' ELSE '0' END) CHK_TUE,
+                     MAX(CASE EXECUT_SCHDUL_DAYWEK_SE  WHEN '4' THEN '1' ELSE '0' END) CHK_WED,
+                     MAX(CASE EXECUT_SCHDUL_DAYWEK_SE  WHEN '5' THEN '1' ELSE '0' END) CHK_THU,
+                     MAX(CASE EXECUT_SCHDUL_DAYWEK_SE  WHEN '6' THEN '1' ELSE '0' END) CHK_FRI,
+                     MAX(CASE EXECUT_SCHDUL_DAYWEK_SE  WHEN '7' THEN '1' ELSE '0' END) CHK_SAT,
+                     LISTAGG(b.CODE_NM,' / ')  WITHIN GROUP(ORDER BY  b.CODE)  DAY_TEXT
+                FROM TBCOM_BATCH_SCHDUL_DAYWEK a,
+                     (SELECT CODE,
+                             CODE_NM
+                        FROM TBCOM_CMMN_CODE
+                        WHERE GRP_CODE = 'COM044') b
+                WHERE b.CODE = a.EXECUT_SCHDUL_DAYWEK_SE
+                GROUP BY BATCH_SCHDUL_ID ) b
+        WHERE a.BATCH_OPERT_ID =  #BATCH_OPERT_ID#
+          AND a.BATCH_SCHDUL_ID = b.BATCH_SCHDUL_ID(+)
+	</select>
+	
+	
+	
+	  <!-- 내부결재번호 등록-->
+	<update id="SYM120100DAO.updateInnerSanctionId" parameterClass="java.util.HashMap" >
+	     UPDATE TBCOM_BATCH_OPERT
+             SET INNER_SANCTN_ID = #INNER_SANCTN_ID#,
+                 UPDUSR_ID       = #S_USER_ID#,
+                 UPDT_DT         = SYSDATE
+           WHERE BATCH_OPERT_ID          = #BATCH_OPERT_ID#
+             AND EXISTS(SELECT 'X'
+                         FROM TBCOM_INNER_SANCTN_MASTR z
+                         WHERE INNER_SANCTN_ID = #INNER_SANCTN_ID#)
+	</update>
+	
+	
+
+	
+	<!-- 쿼리명 : 기타수입결의서 조회(리포트)
+	설명 : 기타수입결의서 조회(리포트)
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.02.11
+	-->
+	<select id="SYM120100DAO.innerSanctnUbiDataset" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		     SELECT a.BATCH_OPERT_ID,
+              a.BATCH_OPERT_NM,
+              a.BATCH_PROGRM,
+              a.PARAMTR,
+              a.USE_AT,
+              a.JOB_SE_CODE,
+              (SELECT CODE_NM
+                 FROM TBCOM_CMMN_CODE z
+                 WHERE GRP_CODE = 'COM025'
+                  AND CODE = a.JOB_SE_CODE) JOB_SE_CODE_NM,
+              SUBSTR(BATCH_OPERT_ID,5,1) BATCH_SE,
+              a.INNER_SANCTN_ID,
+              (SELECT LAST_SANCTN_STTUS
+                 FROM TBCOM_INNER_SANCTN_MASTR z
+                 WHERE INNER_SANCTN_ID = a.INNER_SANCTN_ID) SANCTN_STTUS,
+              a.CONFM_YN,
+              a.REGISTER_ID,
+              (SELECT EMPNM
+                 FROM TBHRM_HR_MASTR z
+                 WHERE EMPNO = a.REGISTER_ID) REGISTER_NM,
+              TO_CHAR(REGIST_DT,'YYYYMMDD') REGIST_DT,
+              (SELECT EMPNM FROM TBHRM_HR_MASTR z WHERE EMPNO = b.S1_SANCTNER_ID) S1_SANCTNER_NM,
+              (SELECT EMPNM FROM TBHRM_HR_MASTR z WHERE EMPNO = b.S2_SANCTNER_ID) S2_SANCTNER_NM,
+              (SELECT EMPNM FROM TBHRM_HR_MASTR z WHERE EMPNO = b.S3_SANCTNER_ID) S3_SANCTNER_NM,
+              (SELECT EMPNM FROM TBHRM_HR_MASTR z WHERE EMPNO = b.S4_SANCTNER_ID) S4_SANCTNER_NM,
+              (SELECT EMPNM FROM TBHRM_HR_MASTR z WHERE EMPNO = b.S5_SANCTNER_ID) S5_SANCTNER_NM,
+              (SELECT EMPNM FROM TBHRM_HR_MASTR z WHERE EMPNO = b.S6_SANCTNER_ID) S6_SANCTNER_NM,
+               S1_SANCTN_DT,
+               S2_SANCTN_DT,
+               S3_SANCTN_DT,
+               S4_SANCTN_DT,
+               S5_SANCTN_DT,
+               S6_SANCTN_DT
+         FROM TBCOM_BATCH_OPERT a,
+              (SELECT INNER_SANCTN_ID,
+                      MAX(CASE WHEN SANCTN_STEP = 'S1' THEN SANCTNER_ID ELSE '' END) S1_SANCTNER_ID,
+                      MAX(CASE WHEN SANCTN_STEP = 'S2' THEN SANCTNER_ID ELSE '' END) S2_SANCTNER_ID,
+                      MAX(CASE WHEN SANCTN_STEP = 'S3' THEN SANCTNER_ID ELSE '' END) S3_SANCTNER_ID,
+                      MAX(CASE WHEN SANCTN_STEP = 'S4' THEN SANCTNER_ID ELSE '' END) S4_SANCTNER_ID,
+                      MAX(CASE WHEN SANCTN_STEP = 'S5' THEN SANCTNER_ID ELSE '' END) S5_SANCTNER_ID,
+                      MAX(CASE WHEN SANCTN_STEP = 'S6' THEN SANCTNER_ID ELSE '' END) S6_SANCTNER_ID,
+                      MAX(CASE WHEN SANCTN_STEP = 'S1' THEN TO_CHAR(SANCTN_DT,'YYYYMMDD')   ELSE '' END) S1_SANCTN_DT,
+                      MAX(CASE WHEN SANCTN_STEP = 'S2' THEN TO_CHAR(SANCTN_DT,'YYYYMMDD')   ELSE '' END) S2_SANCTN_DT,
+                      MAX(CASE WHEN SANCTN_STEP = 'S3' THEN TO_CHAR(SANCTN_DT,'YYYYMMDD')   ELSE '' END) S3_SANCTN_DT,
+                      MAX(CASE WHEN SANCTN_STEP = 'S4' THEN TO_CHAR(SANCTN_DT,'YYYYMMDD')   ELSE '' END) S4_SANCTN_DT,
+                      MAX(CASE WHEN SANCTN_STEP = 'S5' THEN TO_CHAR(SANCTN_DT,'YYYYMMDD')   ELSE '' END) S5_SANCTN_DT,
+                      MAX(CASE WHEN SANCTN_STEP = 'S6' THEN TO_CHAR(SANCTN_DT,'YYYYMMDD')   ELSE '' END) S6_SANCTN_DT
+			            FROM TBCOM_INNER_SANCTN_DTLS
+			           GROUP BY INNER_SANCTN_ID) b
+          WHERE BATCH_OPERT_ID = #BATCH_OPERT_ID#
+            AND a.INNER_SANCTN_ID = b.INNER_SANCTN_ID(+)
+	</select>
+	
+    <!-- 내부결재 전결완료시 -->
+	<update id="SYM120100DAO.updateSanctnSttus" parameterClass="java.util.HashMap" >
+	        UPDATE TBCOM_BATCH_OPERT
+               SET CONFM_YN = '1'
+             WHERE BATCH_OPERT_ID = #BATCH_OPERT_ID#
+	</update>
+	
+
+	
+</sqlMap>

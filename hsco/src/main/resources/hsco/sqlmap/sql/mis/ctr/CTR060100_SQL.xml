@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR060100_SQL">
+	<!-- 공사대장 리스트조회 -->
+	<select id="CTR060100DAO.constRuctList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.CNTRCT_NO             /* 계약번호     */
+		      ,t1.BSNS_CODE             /* 사업코드     */
+		      ,t2.BSNS_NM               /* 사업명         */
+		      ,t1.CNTRCT_NM             /* 계약명         */
+		      ,t1.CNTRCT_SE             /* 계약구분코드 */
+		      ,t3.CODE_NM AS CNTRCT_SE_NM /* 계약구분명     */
+		      ,t1.CNTRCT_AMOUNT    /* 계약금액     */
+		      ,t1.CNTRCT_DE             /* 계약일자     */
+		      ,t1.STRWRK_DE             /* 착공일         */
+		      ,t1.COMPET_DE             /* 준공일         */
+		FROM   TBCTR_CNTRCT t1
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE t2
+		            ON t1.BSNS_CODE = t2.BSNS_CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		            ON  t1.CNTRCT_SE = t3.CODE
+		           AND t3.GRP_CODE = 'CTR001'
+		WHERE  1=1
+	<isEqual property="YEAR_GBN" compareValue="1">
+		AND    t1.CNTRCT_DE LIKE #CNTRCT_YR# || '%'    /* 계약년도 */	
+	</isEqual>
+	<isNotEmpty property="CNTRCT_SE">
+		AND    t1.CNTRCT_SE = #CNTRCT_SE# /* 계약구분 */
+	</isNotEmpty>
+	<isNotEmpty property="CNTRCT_NM">
+		AND    t1.CNTRCT_NM LIKE '%'|| #CNTRCT_NM# ||'%' /* 계약명 */
+	</isNotEmpty>
+	<isNotEmpty property="BSNS_CODE">
+		AND    t1.BSNS_CODE = #BSNS_CODE# /* 사업코드 */
+	</isNotEmpty>
+	<isNotEmpty property="CNTRCT_FROM_AMOUNT">
+		AND    NVL(t1.CNTRCT_AMOUNT,0) <![CDATA[>=]]> #CNTRCT_FROM_AMOUNT# /* 계약금액 */
+	</isNotEmpty>
+	<isNotEmpty property="CNTRCT_TO_AMOUNT">
+		AND    NVL(t1.CNTRCT_AMOUNT,0) <![CDATA[<=]]> #CNTRCT_TO_AMOUNT# /* 계약금액 */
+	</isNotEmpty>
+	<isNotEmpty property="CNTRCT_FROM_DE">
+		AND    NVL(CNTRCT_DE,'19800101') <![CDATA[>=]]> #CNTRCT_FROM_DE# /* 계약일자 */
+	</isNotEmpty>
+	<isNotEmpty property="CNTRCT_TO_DE">
+		AND    NVL(CNTRCT_DE,'19800101') <![CDATA[<=]]> #CNTRCT_TO_DE# /* 계약일자 */
+	</isNotEmpty>
+	<isNotEmpty property="COMPET_FROM_DE">
+		AND    NVL(COMPET_DE,'19800101') <![CDATA[>=]]> #COMPET_FROM_DE# /* 준공일자 */
+	</isNotEmpty>
+	<isNotEmpty property="COMPET_TO_DE">
+		AND    NVL(COMPET_DE,'19800101') <![CDATA[<=]]> #COMPET_TO_DE# /* 준공일자 */
+	</isNotEmpty>
+		ORDER BY t2.BSNS_NM, t1.CNTRCT_NO, t1.CNTRCT_NM
+	</select>
+
+	<!-- 공사대장 출력물 조회쿼리 -->
+	<select id="CTR060100DAO.constRuctPrint" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT t1.BSNS_CODE                                                                                           /*사업코드*/
+		      ,t1.CNTRCT_NO                                                                                           /*계약번호*/
+		      ,t1.CNTRCT_NM                                                                                           /*계약명*/
+		      ,CASE WHEN TRIM(t3.RN) IS NOT NULL THEN t3.RN || t3.DETAIL_RDNMADR
+		            ELSE t3.ADRES || t3.DETAIL_ADRES
+		       END AS ADRES
+		      ,t3.BCNC_NM                                                                                             /*상호*/
+		      ,t3.ADRES                                                                                               /*주소*/
+		      ,t1.CNTRCT_AMOUNT                                                                                   /*계약금액*/
+		      ,t3.RPRSNTV                                                                                             /*대표자*/
+		      ,t3.TELNO                                                                                               /*전화번호*/
+		      ,t5.ASSRNC_AMOUNT                                                                                       /*계약보증금액*/
+		      ,CASE WHEN t6.INSRNC_ENDDE IS NOT NULL THEN t6.INSRNC_ENDDE ELSE t5.INSRNC_ENDDE END AS INSRNC_ENDDE    /*계약보증기간*/
+		      ,t7.FLAW_ASSRNC_AMOUNT                                                                                  /*하자보증금액*/
+		      ,t7.ASSRNC_ENDDE                                                                                        /*하자보증기간*/
+		      ,DECODE(t1.CNTRCT_CHRG_MTH,'1','계약담당','분임계약담당') AS CNTRCT_CHRG_MTH                                   /*계약담당방법*/
+		      ,t1.CNTRCT_CHARGER_NM                                                                                   /*계약담당자명*/
+		      ,t1.BID_DE                                                                                              /*입찰일자*/
+		      ,t1.CNTRCT_DE                                                                                           /*계약일자*/
+		      ,t1.STRWRK_DE                                                                                           /*착공일자*/
+		      ,t1.COMPET_DE                                                                                           /*준공일자*/
+		      ,t8.AFTCH_COMPET_DE                                                                                     /*준공일변경내역_단일건으로*/
+		      ,DECODE(t1.ONTPM_DIGSTN,'1','도시철도채권','2','지역개발공채','') AS ONTPM_DIGSTN                               /*공채소화*/
+		      ,t1.UN_DCSN_CDIT_CONFM_DE                                                                               /*미확정채권승인일자*/
+		      ,t1.UN_DCSN_CDIT_RELIS_DE                                                                               /*미확정채권해제일자*/
+		      ,t1.PREARNGE_PC                                                                                         /*예정가격*/
+		      ,t1.INHRTN_PH_NM                                                                                        /*양수인명*/
+		      ,t1.CDIT_AMOUNT                                                                                         /*채권금액*/
+		      ,t4.CODE_NM AS CNTRCT_MTH_NM                                                                            /*계약방법*/
+		      ,t1.DSGN_AMOUNT                                                                                         /*설계금액*/
+		      ,t1.PREARNGE_PC                                                                                         /*예정가격*/
+		      ,t1.REDCN_AM                                                                                            /*절감액*/
+		      ,t1.SCSBID_RT                                                                                           /*낙찰율*/
+		      ,t1.PRVCNTR_PRVONSH                                                                                     /*수의계약사유*/
+		      ,t9.CODE_NM AS ORDER_SE                                                                                 /*발주구분*/
+		      ,t10.CODE_NM AS BID_MTHD                                                                                /*입찰방식*/
+		      ,t1.BSNS_SCALE                                                                                          /*비고(사업규모)*/
+		      ,t11.BSNS_CODE AS BSNS_CODE_COPY                                                                        /*사업코드*/
+		      ,t11.CNTRCT_NO    AS CNTRCT_NO_COPY                                                                     /*계약번호*/
+		FROM   TBCTR_CNTRCT t1
+		       LEFT OUTER JOIN TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS t2
+		            ON t1.CNTRCT_NO = t2.CNTRCT_NO
+		           AND t2.MNGT_AT   = '1'                                                                             /*주관사만 조회*/
+		       LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+		            ON t2.BCNC_CODE = t3.BCNC_CODE
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+		            ON t1.CNTRCT_MTH_CODE = t4.CODE
+		           AND t4.GRP_CODE = 'CTR008'
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                              ,BCNC_CODE
+		                              ,MIN(ASSRNC_AMOUNT) KEEP(DENSE_RANK FIRST ORDER BY PBLICTE_DE ASC, SEQ ASC) AS ASSRNC_AMOUNT
+		                              ,MIN(INSRNC_BGNDE)  KEEP(DENSE_RANK FIRST ORDER BY PBLICTE_DE ASC, SEQ ASC) AS INSRNC_BGNDE             /*계약보증 시작보증기간*/
+		                              ,MIN(INSRNC_ENDDE)  KEEP(DENSE_RANK FIRST ORDER BY PBLICTE_DE ASC, SEQ ASC) AS INSRNC_ENDDE             /*계약보증 완료보증기간*/
+		                        FROM   TBCTR_CNTRCT_ASSRNC_DTLS
+		                        GROUP BY CNTRCT_NO
+		                                ,BCNC_CODE
+		                        ) t5
+		            ON t2.CNTRCT_NO = t5.CNTRCT_NO
+		           AND t2.BCNC_CODE = t5.BCNC_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                              ,BCNC_CODE
+		                              ,MAX(INSRNC_BGNDE) KEEP(DENSE_RANK FIRST ORDER BY ODR DESC) AS INSRNC_BGNDE
+		                              ,MAX(INSRNC_ENDDE) KEEP(DENSE_RANK FIRST ORDER BY ODR DESC) AS INSRNC_ENDDE
+		                        FROM   TBCTR_ENTRPS_CNTRCT_ASSRNC_CHA
+		                        GROUP BY CNTRCT_NO
+		                                ,BCNC_CODE
+		                       ) t6
+		            ON t2.CNTRCT_NO = t6.CNTRCT_NO
+		           AND t2.BCNC_CODE = t6.BCNC_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                              ,BCNC_CODE
+		                              ,MAX(FLAW_ASSRNC_AMOUNT) KEEP(DENSE_RANK FIRST ORDER BY FLAW_NO DESC) AS FLAW_ASSRNC_AMOUNT
+		                              ,MAX(ASSRNC_BEGIN_DE) KEEP(DENSE_RANK FIRST ORDER BY FLAW_NO DESC)    AS ASSRNC_BEGIN_DE
+		                              ,MAX(ASSRNC_ENDDE)    KEEP(DENSE_RANK FIRST ORDER BY FLAW_NO DESC)    AS ASSRNC_ENDDE
+		                        FROM   TBCTR_FLAW_ASSRNC_DTLS
+		                        GROUP BY CNTRCT_NO
+		                                ,BCNC_CODE
+		                       ) t7
+		        ON t2.BSNS_CODE = t7.BSNS_CODE
+		       AND t2.CNTRCT_NO = t7.CNTRCT_NO
+		       AND t2.BCNC_CODE = t7.BCNC_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                              ,MAX(AFTCH_COMPET_DE) KEEP(DENSE_RANK FIRST ORDER BY CNTRCT_CHANGE_ODR DESC) AS AFTCH_COMPET_DE
+		                        FROM   TBCTR_CNTRCT_CHANGE
+		                        WHERE  CHANGE_SE = '2'                                                             /*1:계약금액변경, 2:준공일자변경, 3:금액+일자*/
+		                        GROUP BY CNTRCT_NO
+		                       ) t8
+		            ON t2.CNTRCT_NO = t8.CNTRCT_NO
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t9
+		            ON t1.ORDER_SE = t9.CODE
+		           AND t9.GRP_CODE = 'CTR010'
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE t10
+		            ON t1.BID_MTHD = t10.CODE
+		           AND t10.GRP_CODE = 'CTR011'
+		       LEFT OUTER JOIN TBCTR_CNTRCT t11
+		            ON t1.BSNS_CODE = t11.BSNS_CODE
+		           AND t1.CNTRCT_NO = t11.CNTRCT_NO
+		WHERE  t1.CNTRCT_NO = #CNTRCT_NO#
+	</select>
+
+	<!-- 출력물 : 변경 계약금액 리스트1 -->
+	<select id="CTR060100DAO.constRuctPrintList1" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT CHANGE_DE
+		      ,AFTCH_CNTRCT_AMOUNT - BFCHG_CNTRCT_AMOUNT      AS DIFF_AMT
+		      ,AFTCH_CNTRCT_AMOUNT
+		FROM   TBCTR_CNTRCT_CHANGE
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+		AND    CHANGE_SE IN ('1','3') /*금액변경, 금액+기간*/
+		ORDER BY CNTRCT_CHANGE_ODR ASC
+	</select>
+
+	<!-- 출력물 : 지급내역 리스트2 -->
+	<select id="CTR060100DAO.constRuctPrintList2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT EXPNDTR_DE
+		     , PXCOND_AMOUNT - NVL(ADVAN_EXCCLC_AMOUNT,0) AS PXCOND_AMOUNT	/*지급액*/
+		     , SFCTR_CNTRCT_JANAMT(t1.BSNS_CODE, t1.CNTRCT_NO, EXPNDTR_DE, t1.ODR) AS SS
+		FROM   TBPRJ_PXCOND_DTLS t1
+		WHERE  CNTRCT_NO = #CNTRCT_NO#
+		ORDER BY ODR ASC
+	</select>
+
+	<!-- 출력물 : 보증인 리스트3 -->
+	<select id="CTR060100DAO.constRuctPrintList3" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT t1.SLDRTY_GRNTR
+		      ,MAX(t2.BCNC_NM) || CASE WHEN TRIM(MAX(t2.RPRSNTV)) IS NOT NULL THEN '(' ||TRIM(MAX(t2.RPRSNTV))||')'    ELSE ''     END           AS BCNC_NM
+		FROM   TBCTR_ENTRPS_ACCTO_SLDRTY_ASSR t1
+		       INNER JOIN TBCTR_BCNC_MASTR t2
+		            ON t1.SLDRTY_GRNTR = t2.BCNC_CODE
+		WHERE  t1.CNTRCT_NO = #CNTRCT_NO#
+		GROUP BY t1.SLDRTY_GRNTR
+	</select>
+
+	<!-- 출력물 : 입찰내역 리스트4 -->
+	<select id="CTR060100DAO.constRuctPrintList4" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" >
+		SELECT t1.BID_MAN
+		      ,t1.BID_AMOUNT
+		      ,t1.SUMRY
+		FROM   TBCTR_BID_DTLS t1
+		WHERE  t1.CNTRCT_NO = #CNTRCT_NO#
+		ORDER BY t1.BID_NO ASC
+	</select>
+</sqlMap>

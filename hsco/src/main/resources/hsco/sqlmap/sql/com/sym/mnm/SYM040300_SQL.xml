@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SYM040300_SQL">
+	
+	<!--  권한 메뉴 목록조회 -->
+	<select id="SYM040300DAO.SYM040300List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT DECODE(B.AUTH_GRP_ID, NVL(#AUTH_GRP_ID#, 'DUMMY'), 1, 0) AS HAVE_AUTH, 
+		       #AUTH_GRP_ID# AS AUTH_GRP_ID, 
+		       B.INTRCP_AT,
+		       A.MENU_ID, 
+		       A.SYS_SE_CODE, 
+		       A.MENU_NM, 
+		       A.MENU_LVL, 
+		       A.MENU_GRP, 
+		       A.UPPER_MENU, 
+		       A.MENU_ORDR, 
+		       A.MENU_OPTP, 
+		       A.MENU_PARAMTR, 
+		       A.MENU_STTUS, 
+		       A.MENU_DC, 
+		       A.USE_AT, 
+		       A.MNL_SN, 
+		       A.PAGE_ID,
+		       A.MENU_LVL_MAX,
+		       A.MENU_PATH
+		  FROM (
+		        SELECT A.MENU_ID, 
+		               A.SYS_SE_CODE, 
+		               A.MENU_NM, 
+		               A.MENU_LVL, 
+		               A.MENU_GRP, 
+		               A.UPPER_MENU, 
+		               A.MENU_ORDR, 
+		               A.MENU_OPTP, 
+		               A.MENU_PARAMTR, 
+		               A.MENU_STTUS, 
+		               A.MENU_DC, 
+		               A.USE_AT, 
+		               A.MNL_SN,  
+		               A.PAGE_ID,
+		               LEVEL MENU_LVL_MAX,
+		               SYS_CONNECT_BY_PATH(MENU_ID,'^') MENU_PATH
+		          FROM TBCOM_MENU A
+		       CONNECT BY PRIOR A.MENU_ID = A.UPPER_MENU AND A.USE_AT='1'
+		         START WITH A.MENU_ID IN (0) 
+		         ORDER SIBLINGS BY A.MENU_ORDR) A
+		  LEFT OUTER JOIN TBCOM_AUTH_GRP_MENU B ON (B.AUTH_GRP_ID = #AUTH_GRP_ID#
+		                                            AND B.MENU_ID=A.MENU_ID)
+		 WHERE MENU_OPTP='MAIN'
+		<isNotEmpty property="SYS_SE_CODE">
+		   AND (A.SYS_SE_CODE = #SYS_SE_CODE# OR SYS_SE_CODE IS NULL)
+		</isNotEmpty>
+		<isNotEmpty property="MENU_PATH1">
+		   AND (MENU_PATH ='^0'
+		        OR MENU_PATH = #MENU_PATH1#
+		        OR MENU_PATH LIKE #MENU_PATH2#||'%')
+		</isNotEmpty>
+	</select>
+
+	<!--  권한 메뉴 등록 -->
+	<insert id="SYM040300DAO.SYM040300C" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		INSERT INTO TBCOM_AUTH_GRP_MENU(
+		            AUTH_GRP_ID, MENU_ID,
+		            INTRCP_AT,
+		            REGISTER_ID, REGIST_DT, 
+		            UPDUSR_ID, UPDT_DT 
+		        )
+		VALUES (
+		        #AUTH_GRP_ID#, #MENU_ID#,
+		        NVL(#INTRCP_AT#, 0),
+		        #S_USER_ID#, SYSDATE, 
+		        #S_USER_ID#, SYSDATE
+		       ) 
+		]]>
+	</insert>
+	
+	<!-- 권한메뉴 삭제 --> 
+	<delete id="SYM040300DAO.SYM040300D" parameterClass="java.util.HashMap" >
+		DELETE FROM TBCOM_AUTH_GRP_MENU
+		 WHERE AUTH_GRP_ID = #AUTH_GRP_ID#
+		   AND MENU_ID = #MENU_ID#
+	</delete>
+	
+	<select id="SYM040300DAO.menuCombo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT A.MENU_ID, 
+		       A.MENU_NM,
+		       A.MENU_PATH MENU_PATH 
+		  FROM (		
+		        SELECT A.MENU_ID, 
+		               A.MENU_NM,
+		               A.MENU_OPTP, 
+		               LEVEL MENU_LVL_MAX,
+		               SYS_CONNECT_BY_PATH(MENU_ID,'^') MENU_PATH
+		          FROM TBCOM_MENU A
+		       CONNECT BY PRIOR A.MENU_ID = A.UPPER_MENU AND A.USE_AT='1'
+		         START WITH A.MENU_ID IN (0) 
+		         ORDER SIBLINGS BY A.MENU_ORDR
+		       ) A
+		 WHERE A.MENU_OPTP='MAIN'
+		   AND A.MENU_LVL_MAX=#MENU_LVL_MAX#
+		<isNotEmpty property="MENU_PATH">
+		   AND A.MENU_PATH LIKE #MENU_PATH#||'%'
+		</isNotEmpty>
+	</select>
+
+	<!--  메뉴레벨별 메뉴별 권한 메뉴 목록조회 -->
+	<!-- select id="SYM040300DAO.SYM040300eMenuByLevelList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+              DECODE(B.AUTH_GRP_ID, NVL(#AUTH_GRP_ID#, 'DUMMY'), 1, 0) AS HAVE_AUTH
+            , #AUTH_GRP_ID# AS AUTH_GRP_ID
+            , B.INTRCP_AT
+            , A.*
+        FROM 
+        (
+            SELECT 
+                  A.MENU_ID
+                , A.SYS_SE_CODE
+                , A.MENU_NM
+                , A.MENU_LVL
+                , A.MENU_GRP
+                , A.UPPER_MENU
+                , A.MENU_ORDR
+                , A.MENU_OPTP
+                , A.MENU_PARAMTR
+                , A.MENU_STTUS
+                , A.MENU_DC
+                , A.USE_AT
+                , A.MNL_SN, A.PAGE_ID
+                , (SELECT MAX(MENU_LVL) FROM TBCOM_MENU WHERE UPPER_MENU = A.UPPER_MENU) AS MENU_LVL_MAX
+            FROM TBCOM_MENU A
+            WHERE A.USE_AT='1' 
+              AND A.MENU_ID > 0
+              <isNotEmpty property="SYS_SE_CODE">
+                AND A.SYS_SE_CODE = #SYS_SE_CODE#
+              </isNotEmpty>
+            CONNECT BY PRIOR A.MENU_ID = A.UPPER_MENU
+            START WITH A.UPPER_MENU = NVL(#UPPER_MENU#,0)
+            ORDER SIBLINGS BY A.MENU_ORDR,TO_CHAR(A.MENU_ID) ASC 
+        ) A
+        , (SELECT * FROM TBCOM_AUTH_GRP_MENU WHERE AUTH_GRP_ID = #AUTH_GRP_ID# )  B
+        WHERE A.MENU_ID = B.MENU_ID(+) 
+    </select-->
+</sqlMap>

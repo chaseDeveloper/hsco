@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="AUDJOB0001_SQL">	
+    
+    <!-- 근태, 출장, 휴가 중복사례 조회 -->
+    <select id="AUDJOB0001.dupCnt" resultClass="java.util.HashMap">
+		WITH TBL AS (
+			SELECT 
+			       t1.SRCH_DE
+			      ,t1.EMPNO
+			      ,t1.EMPNM
+			      ,CASE WHEN (t2.EMPNO IS NOT NULL AND t3.EMPNO IS NOT NULL) THEN '1'                                                            /*출입 VS 출장*/
+			            WHEN (t3.EMPNO IS NOT NULL AND t4.EMPNO IS NOT NULL) THEN '2'                                                            /*출장 VS 근태*/
+			            WHEN (t2.EMPNO IS NOT NULL AND t4.EMPNO IS NOT NULL AND t4.DCLZ_SE_NM NOT IN ('000','101','102','103','217')) THEN '3'   /*출입 VS 근태 , 000:정상근무, 101:휴일근무, 102:야간근무, 103:시간외근무, 217:장기근속*/
+			       END AS INJSTC_SE
+			      ,t2.STDR_DE       AS CMG_TIME
+			      ,t2.ATTEND_TM     AS C_TIME
+			      ,t2.LVFFC_TM      AS G_TIME
+			      ,t3.BSRP_PURPS    AS BSRP_NM
+			      ,t3.BGNDE         AS BSRP_BGN_DE
+			      ,t3.BEGIN_TM      AS BSRP_BGN_TIME
+			      ,t3.ENDDE         AS BSRP_END_DE
+			      ,t3.END_TM        AS BSRP_END_TIME
+			      ,t4.DCLZ_SE_NM    AS DCLZ_SE
+			      ,t4.BGNDE         AS DCLZ_BGN_DE
+			      ,t4.BEGIN_TM      AS DCLZ_BGN_TIME
+			      ,t4.ENDDE         AS DCLZ_END_DE
+			      ,t4.END_TM        AS DCLZ_END_TIME
+			FROM   (
+			        /*조회조건*/
+			        SELECT s1.EMPNO
+			              ,s1.EMPNM
+			              ,s2.SRCH_DE
+			        FROM   TBHRM_HR_MASTR s1
+			              ,(
+			                SELECT 1    AS JOIN_KEY
+			                      ,TO_CHAR(SYSDATE-1,'YYYYMMDD')      AS SRCH_DE
+			                FROM   DUAL
+			               ) s2
+			       ) t1
+			       LEFT OUTER JOIN (
+			                        /*출입정보*/
+			                        SELECT EMPNO
+			                              ,TO_CHAR(STDR_DE,'YYYYMMDD')      AS STDR_DE
+			                              ,REPLACE(ATTEND_TM,':','')        AS ATTEND_TM
+			                              ,REPLACE(LVFFC_TM,':','')         AS LVFFC_TM
+			                        FROM   TBHRM_CMG_INFO
+			                        WHERE  1=1
+			                       ) t2
+			            ON t1.EMPNO = t2.EMPNO
+			           AND t1.SRCH_DE = t2.STDR_DE
+			       LEFT OUTER JOIN (
+			                        /*출장정보*/
+			                        SELECT s1.EMPNO
+			                              ,s1.SEQ
+			                              ,s1.BSRP_SE
+			                              ,s2.CODE_NM      AS BSRP_SE_NM
+			                              ,s1.BSRP_PURPS
+			                              ,s1.BGNDE
+			                              ,s1.BEGIN_TM
+			                              ,s1.ENDDE
+			                              ,s1.END_TM
+			                        FROM   TBHRM_BSRP_DTLS s1
+			                               LEFT OUTER JOIN TBCOM_CMMN_CODE s2
+			                                    ON s1.BSRP_SE = s2.CODE
+			                                   AND s2.GRP_CODE = 'HRM241'
+			                        WHERE  1=1
+			                       ) t3
+			            ON t1.EMPNO = t3.EMPNO
+			           AND t1.SRCH_DE BETWEEN t3.BGNDE AND t3.ENDDE
+			       LEFT OUTER JOIN (
+			                        /*근태정보*/
+			                        SELECT s1.EMPNO
+			                              ,s1.SEQ
+			                              ,s1.DCLZ_SE
+			                              ,s2.CODE_NM                                                                                   AS DCLZ_SE_NM
+			                              ,TO_CHAR(s1.BGNDT,'YYYYMMDD')                                                                 AS BGNDE
+			                              ,(CASE WHEN DCLZ_DAYCNT = '0.5' AND INSTR(AM_PM_NM,'오후') > 0 THEN '1200' ELSE '0000' END)     AS BEGIN_TM
+			                              ,TO_CHAR(s1.ENDDT,'YYYYMMDD')                                                                 AS ENDDE
+			                              ,(CASE WHEN DCLZ_DAYCNT = '0.5' AND INSTR(AM_PM_NM,'오전') > 0 THEN '1200' ELSE '2400' END)     AS END_TM
+			                              ,s1.DCLZ_DAYCNT
+			                              ,s1.TIMECNT
+			                              ,s1.AM_PM_NM
+			                              ,s1.RM
+			                        FROM   TBHRM_MNBY_DCLZ_DTLS s1
+			                               LEFT OUTER JOIN TBCOM_CMMN_CODE s2
+			                                    ON s1.DCLZ_SE = s2.CODE
+			                                   AND s2.GRP_CODE = 'SAL009'
+			                        WHERE  1=1
+			                       ) t4
+			            ON t1.EMPNO = t4.EMPNO
+			           AND t1.SRCH_DE BETWEEN t4.BGNDE AND t4.ENDDE
+			WHERE  1=1
+			AND    (
+			        (t2.EMPNO IS NOT NULL AND t3.EMPNO IS NOT NULL)
+			        OR
+			        (t3.EMPNO IS NOT NULL AND t4.EMPNO IS NOT NULL)
+			        OR
+			        (t2.EMPNO IS NOT NULL AND t4.EMPNO IS NOT NULL AND t4.DCLZ_SE_NM NOT IN ('000','101','102','103','217'))
+			       )
+			ORDER BY INJSTC_SE, t2.STDR_DE, EMPNO
+		)
+		SELECT COUNT(*) AS CNT
+			  ,'['||TO_CHAR(SYSDATE-1,'YYYY-MM-DD')||']의 출장, 휴가, 근태 중복사례가 '||COUNT(1)||'건 있습니다.' AS MSG
+		FROM TBL
+    </select>
+    
+    <select id="AUDJOB0001.trgetEmpList" resultClass="java.util.HashMap">
+    	SELECT EMPNO
+    	FROM TBAUD_NTCN_TRGET
+    	WHERE NTCN_SE = '01'
+    </select>
+    
+    <!-- 메신저(인트라웨어) 사원번호 조회 -->
+	<select id="AUDJOB0001.msgEmpno" resultClass="java.lang.String">
+		SELECT
+		     USER_ID
+		    ,NAME
+		FROM INTRAWARE.USR_GLOBAL A
+		WHERE  USER_ID= ( SELECT B.USER_ID
+					      FROM   INTRAWARE.GW_USER_INFO B
+					      WHERE  B.EMP_CODE=#EMPNO#
+					    )
+	</select>
+</sqlMap>

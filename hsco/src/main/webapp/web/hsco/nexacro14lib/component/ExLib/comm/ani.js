@@ -1,0 +1,1 @@
+﻿if(!JsNamespace.exist("Ex.ani")){JsNamespace.declare("Ex.ani",{ffObj:this,jquery:function(_a){var _b="";var _c=_a;var _d=0;if(nexacro.Browser=="Runtime"){return;}while(_c!=application.mainframe){if(_c.toString()=="[object Form]"){_b="form_"+_b;}else{_b=_c.name+((_b!="")?"_":"")+_b;}_d++ ;_c=_c.parent;}return "#mainframe_"+_b;},cssAni:function(){}});}

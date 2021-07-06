@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PRJ010110_SQL">
+	
+	<!-- 공정현황 조회 -->
+	<select id="PRJ010110DAO.selectProcsSttus" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		WITH WEEK_TM AS (
+		    SELECT TO_DATE(T.STRWRK_DE, 'YYYYMMDD') + LEVEL - 1    AS S_DAY
+		         , T.CNTRCT_NO
+		         , T.CNTRCT_CHANGE_ODR
+		         , T.STRWRK_DE
+		         , T.COMPET_DE
+		      FROM (
+		             SELECT S.*
+		               FROM (
+		                     SELECT CNTRCT_NO
+		                          , STRWRK_DE
+		                          , COMPET_DE
+		                          , 0 AS CNTRCT_CHANGE_ODR
+		                       FROM TBCTR_CNTRCT
+		                     
+		                     UNION ALL
+		                     
+		                     SELECT T1.CNTRCT_NO
+		                          , T2.STRWRK_DE
+		                          , T1.AFTCH_COMPET_DE    AS COMPET_DE
+		                          , T1.CNTRCT_CHANGE_ODR
+		                       FROM TBCTR_CNTRCT_CHANGE T1
+		                            LEFT OUTER JOIN TBCTR_CNTRCT T2
+		                                 ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		                    ) S
+		              WHERE S.CNTRCT_NO = #CNTRCT_NO#
+		           ) T
+		    CONNECT BY (TO_DATE(T.STRWRK_DE, 'YYYYMMDD') + LEVEL - 1) <![CDATA[<]]> TO_DATE(T.COMPET_DE, 'YYYYMMDD')
+		)
+		SELECT T1.CNTRCT_NO
+		     , T1.MAX_CHG_TO
+		     , TO_CHAR(T1.MAX_CHG_TO)                                     AS MAX_CHG_TO_S
+		     , T1.PLN_W                                                   AS PPLS_ARSL_Y_W
+		     , T2.WEEK_SDT
+		     , T2.WEEK_EDT
+		     , NVL(T1.PLN_SUM_RT, 0)                                      AS PLN_SUM_RT
+		     , NVL(T3.PRCS_ARSL_RT, 0)                                    AS PRCS_ARSL_RT
+		     , NVL(ROUND(T3.PRCS_ARSL_RT / T1.PLN_SUM_RT * 100, 2), 0)    AS PLN_ARSL_RT
+		     , NVL(T3.PXCOND_PYMNT_RT, 0)                                 AS PXCOND_PYMNT_RT
+		     , TO_CHAR(T3.PCL_FCTS)    AS PCL_FCTS
+		  FROM (
+		        SELECT S1.CNTRCT_NO
+		             , S2.MAX_CHG_TO
+		             , S1.PLN_W
+		             , SUM(S1.PLN_CSTP_RT)    AS PLN_SUM_RT
+		          FROM TBBF_PLN_PRCS_DTLS S1
+		               LEFT OUTER JOIN (
+		                                SELECT CNTRCT_NO
+		                                     , MAX(CHG_TO) AS MAX_CHG_TO
+		                                     , PLN_W
+		                                  FROM TBBF_PLN_PRCS_DTLS
+		                                GROUP BY CNTRCT_NO, PLN_W
+		               ) S2
+		                    ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		                   AND S1.CHG_TO    = S2.MAX_CHG_TO
+		                   AND S1.PLN_W     = S2.PLN_W
+		         WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		           AND S1.CHG_TO    = S2.MAX_CHG_TO
+		        GROUP BY S1.CNTRCT_NO, S2.MAX_CHG_TO, S1.PLN_W
+		       ) T1
+		       LEFT OUTER JOIN (
+		                         SELECT CNTRCT_NO
+		                              , DENSE_RANK() OVER(ORDER BY TRUNC(S_DAY, 'D'))    AS WEEK
+		                              , MIN(S_DAY)    AS WEEK_SDT
+		                              , MAX(S_DAY)    AS WEEK_EDT
+		                           FROM WEEK_TM
+		                         GROUP BY CNTRCT_NO, TRUNC(S_DAY, 'D')
+		                       ) T2
+		            ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		           AND T1.PLN_W     = T2.WEEK
+		       LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL T3
+		            ON T1.CNTRCT_NO = T3.CNTRCT_NO
+		           AND T1.PLN_W    = T3.PPLS_ARSL_Y_W
+		ORDER BY T1.PLN_W
+	</select>
+	
+	<!-- 통계정보 조회 -->
+	<select id="PRJ010110DAO.selectStatsInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		WITH TEMP AS (
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '1' AS SE
+		         , NVL(S1.PLN_CSTP_RT, 0)                                     AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '2' AS SE
+		         , SUM(NVL(S1.PLN_CSTP_RT, 0)) OVER (ORDER BY S1.PLN_W)      AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '3' AS SE
+		         , NVL(S2.PRCS_ARSL_RT, 0)                                    AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '4' AS SE
+		         , SUM(NVL(S2.PRCS_ARSL_RT, 0)) OVER (ORDER BY S1.PLN_W)      AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '5' AS SE
+		         , ROUND(DECODE(NVL(S1.PLN_CSTP_RT, 0), 0, 0, (NVL(S2.PRCS_ARSL_RT, 0) / S1.PLN_CSTP_RT) * 100), 2)   AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '6' AS SE
+		         , ROUND(DECODE(SUM(NVL(S1.PLN_CSTP_RT, 0)) OVER (ORDER BY S1.PLN_W), 0, 0, (SUM(NVL(S2.PRCS_ARSL_RT, 0)) OVER (ORDER BY S1.PLN_W) / SUM(NVL(S1.PLN_CSTP_RT, 0)) OVER (ORDER BY S1.PLN_W)) * 100), 2)   AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    GROUP BY S1.CNTRCT_NO, S1.PLN_W, S1.PLN_CSTP_RT, S2.PRCS_ARSL_RT
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '7' AS SE
+		         , NVL(S2.PXCOND_PYMNT_RT, 0)                                 AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '8' AS SE
+		         , SUM(NVL(S2.PXCOND_PYMNT_RT, 0)) OVER (ORDER BY S1.PLN_W)   AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		)
+		SELECT CNTRCT_NO
+		     , SE
+		     , DECODE(SE, '1', '계획률(%)', '2', '계획률(%)', '3', '실적률(%)', '4', '실적률(%)', '5', '계획대비실적율(%)', '6', '계획대비실적율(%)', '7', '기성금지급률(%)', '8', '기성금지급률(%)')    AS TITLE1
+		     , DECODE(MOD(TO_NUMBER(SE), 2), 1, '당기', 0, '누계')    AS TITLE2
+		<iterate property="WEEK_LIST">
+		     , SUM(DECODE(PLN_W, #WEEK_LIST[]#, RT, 0)) AS SUM_RT_$WEEK_LIST[]$
+		</iterate>
+		  FROM TEMP
+		GROUP BY CNTRCT_NO, SE
+		ORDER BY SE
+	</select>
+	
+	<!-- 차트정보 조회 -->
+	<select id="PRJ010110DAO.selectChartInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		WITH TEMP AS (
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '1' AS SE
+		         , NVL(S1.PLN_CSTP_RT, 0)                                     AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '2' AS SE
+		         , SUM(NVL(S1.PLN_CSTP_RT, 0)) OVER (ORDER BY S1.PLN_W)      AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '3' AS SE
+		         , NVL(S2.PRCS_ARSL_RT, 0)                                    AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '4' AS SE
+		         , SUM(NVL(S2.PRCS_ARSL_RT, 0)) OVER (ORDER BY S1.PLN_W)      AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '5' AS SE
+		         , ROUND(DECODE(NVL(S1.PLN_CSTP_RT, 0), 0, 0, (NVL(S2.PRCS_ARSL_RT, 0) / S1.PLN_CSTP_RT) * 100), 2)   AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '6' AS SE
+		         , ROUND(DECODE(SUM(NVL(S1.PLN_CSTP_RT, 0)) OVER (ORDER BY S1.PLN_W), 0, 0, (SUM(NVL(S2.PRCS_ARSL_RT, 0)) OVER (ORDER BY S1.PLN_W) / SUM(NVL(S1.PLN_CSTP_RT, 0)) OVER (ORDER BY S1.PLN_W)) * 100), 2)   AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    GROUP BY S1.CNTRCT_NO, S1.PLN_W, S1.PLN_CSTP_RT, S2.PRCS_ARSL_RT
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '7' AS SE
+		         , NVL(S2.PXCOND_PYMNT_RT, 0)                                 AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		    UNION ALL
+		    
+		    SELECT S1.CNTRCT_NO
+		         , S1.PLN_W
+		         , '8' AS SE
+		         , SUM(NVL(S2.PXCOND_PYMNT_RT, 0)) OVER (ORDER BY S1.PLN_W)   AS RT
+		      FROM TBBF_PLN_PRCS_DTLS S1
+		           LEFT OUTER JOIN TBBF_PRCS_PPLS_ARSL S2
+		                ON S1.CNTRCT_NO = S2.CNTRCT_NO
+		               AND S1.PLN_W     = S2.PPLS_ARSL_Y_W
+		     WHERE S1.CNTRCT_NO = #CNTRCT_NO#
+		       AND S1.CHG_TO    = #MAX_CHG_TO#
+		    
+		)
+		SELECT CNTRCT_NO
+		     , PLN_W
+		     , SUM(DECODE(SE, '2', RT, 0)) AS SUM_RT_2
+		     , SUM(DECODE(SE, '4', RT, 0)) AS SUM_RT_4
+		     , SUM(DECODE(SE, '8', RT, 0)) AS SUM_RT_8
+		  FROM TEMP
+		GROUP BY CNTRCT_NO, PLN_W
+		ORDER BY PLN_W
+	</select>
+	
+	<!-- 공정현황 수정 -->
+	<update id="PRJ010110DAO.updateProcsSttus" parameterClass="java.util.Map">
+		MERGE INTO TBBF_PRCS_PPLS_ARSL
+		  USING DUAL
+		  ON (
+		          CNTRCT_NO     = #CNTRCT_NO#
+		      AND PPLS_ARSL_Y_W = #PPLS_ARSL_Y_W#
+		     )
+		WHEN MATCHED THEN
+		  UPDATE
+		     SET PRCS_ARSL_RT    = #PRCS_ARSL_RT#
+		       , PXCOND_PYMNT_RT = #PXCOND_PYMNT_RT#
+		       , PCL_FCTS        = #PCL_FCTS#
+		       , LST_CHG_DTTM    = SYSDATE
+		       , LST_CHG_ID      = #S_USER_ID#
+		WHEN NOT MATCHED THEN
+		  INSERT (
+		     CNTRCT_NO
+		   , PPLS_ARSL_Y_W
+		   , PRCS_ARSL_RT
+		   , PXCOND_PYMNT_RT
+		   , PCL_FCTS
+		   , FST_INP_DTTM
+		   , FST_INP_ID
+		   , LST_CHG_DTTM
+		   , LST_CHG_ID
+		  )
+		  VALUES (
+		     #CNTRCT_NO#
+		   , #PPLS_ARSL_Y_W#
+		   , #PRCS_ARSL_RT#
+		   , #PXCOND_PYMNT_RT#
+		   , #PCL_FCTS#
+		   , SYSDATE
+		   , #S_USER_ID#
+		   , SYSDATE
+		   , #S_USER_ID#
+		  )
+	</update>
+	
+</sqlMap>

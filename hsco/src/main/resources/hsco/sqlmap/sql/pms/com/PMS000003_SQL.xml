@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PMS000003SQL">	
+
+	<!-- 쿼리명 : 자동이체 결과조회
+	설명 : 자동이체 결과조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2015.12.18
+	-->
+	<select id="PMS000003DAO.selectAtcngRqestRciv" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+				    SELECT ROWNUM SN,
+						   a.JOB_SE,
+						   a.PAY_SE,			    
+					 	   b. DPSTR,
+						   b.CNTRCTR_NO,
+				           a.DTA_SE,  								/* 자료구분 */
+				           b.ATCNG_SN, 								/* 자동이체일련번호 */
+				           a.DEFRAY_SN, 							/* 출금일련번호 */
+				           a.TRANSFR_FILE_SE, 						/* 이체파일구분 */
+				           a.DEFRAY_YM, 							/* 출금년월 */
+				           a.BANK_CODE, 							/* 은행코드 */
+				           a.ACNUTNO, 								/* 계좌번호 */
+				           a.DEFRAY_REQEST_AMOUNT, 					/* 출금의뢰금액 */
+				           a.DEFRAY_AT, 							/* 출금여부 */
+				           a.ERROR_CODE, 							/* 오류코드 */
+				           a.NEW_SE, 								/* 신규구분*/
+				           a.PAYER_NO, 								/* 납부자번호 */
+				           SUBSTR(a.PAYER_NO, 1, 3) AS HOUSE_CODE,
+				           SUBSTR(a.PAYER_NO, 4, 4) AS DONG,
+				           SUBSTR(a.PAYER_NO, 8, 4) AS HO, 
+				           a.CMPNY_RELATE_INFO, 					/* 회사관련정보 */
+				           a.TRANSFR_RQEST_APNTDT, 					/* 이체청구지정일 */
+				           a.DEFRAY_RESULT, 						/* 출금결과 */
+				           a.TRANSFR_REQEST_DE, 					/* 이체의뢰일자 */
+				           a.DEFRAY_DE, 							/* 출금일자 */
+				           a.PROCESS_SE, 							/* 이체처리구분 */
+				           a.REGISTER_ID,
+				           TO_CHAR(a.REGIST_DT,'YYYY-MM-DD hh24:mi:ss') REGIST_DT,
+				           (SELECT DECODE( #JOB_SE#, 'RN1', (SELECT RENT_HOUSE_NM FROM
+				                                    TBRNT_RENT_HOUSE WHERE RENT_HOUSE_CODE = SUBSTR(A.PAYER_NO, 1, 3) ),
+				                                   'RN2', (SELECT RENT_HOUSE_NM FROM TBRNT_PUCHAS_HOUSE WHERE
+				                                    RENT_HOUSE_CODE = SUBSTR(A.PAYER_NO, 1, 3) ),
+				                                    'RN3', (SELECT CODE_NM FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'RNT004' AND
+				                                    CHRCTR_PREPAR_VALUE_1 = SUBSTR(A.PAYER_NO, 1, 3) ),
+				                                    (SELECT HOUSE_NM FROM TBSLS_HOUSE_INFO WHERE HOUSE_CODE = SUBSTR(A.PAYER_NO,
+				                                   1, 3) )) FROM DUAL) AS HOUSE_NM
+				     FROM  TBPMS_ATCNG_RQEST_RCIV a
+				     JOIN  TBPMS_ATCNG b ON 
+				     			A.JOB_SE = B.JOB_SE
+				          AND A.PAY_SE = B.PAY_SE
+				          AND A.CNTRCTR_NO = B.CNTRCTR_NO
+				     WHERE 1=1
+				       AND a.JOB_SE = #JOB_SE#
+				       AND a.PAY_SE = #PAY_SE#
+				       AND a.DEFRAY_YM = #DEFRAY_YM#
+				       AND a.ERROR_CODE IS NOT NULL
+				       AND b.ATCNG_CANCL_DE IS NULL
+				       AND A.JOB_SE = B.JOB_SE
+							 AND b.ATCNG_REQST_DE = (select max(ATCNG_REQST_DE) from TBPMS_ATCNG d	where d.CNTRCTR_NO = b.CNTRCTR_NO)
+				       AND b.ATCNG_CANCL_DE IS NULL 	
+				       AND a.PROCESS_SE IS NOT NULL
+				       ORDER BY PAYER_NO
+       </select>
+	
+<!--   자동이체 정보내역조회  -->
+	<select id="PMS000003DAO.selectAtcngRqestRcivSum" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	        SELECT  #DEFRAY_YM# DEFRAY_YM,
+                    MAX(TRANSFR_REQEST_DE) TRANSFR_REQEST_DE,
+                    MAX(DEFRAY_DE) DEFRAY_DE,
+                    SUM(CO1) CO1,
+                    SUM(AMOUNT1) AMOUNT1,
+                    SUM(CO2) CO2,
+                    SUM(AMOUNT2) AMOUNT2,
+                    SUM(CO3) CO3,
+                    SUM(AMOUNT3) AMOUNT3
+               FROM(SELECT COUNT(1) CO1,
+                           SUM(DEFRAY_REQEST_AMOUNT) AMOUNT1,
+                           MAX(TRANSFR_REQEST_DE) TRANSFR_REQEST_DE,
+                           MAX(DEFRAY_DE) DEFRAY_DE,
+                           CASE WHEN ERROR_CODE = '0000' THEN COUNT(1) ELSE 0 END CO2,
+                           CASE WHEN ERROR_CODE = '0000' THEN SUM(DEFRAY_REQEST_AMOUNT) ELSE 0 END AMOUNT2,
+                           CASE WHEN ERROR_CODE <![CDATA[<>]]> '0000' THEN COUNT(1) ELSE 0 END CO3,
+                           CASE WHEN ERROR_CODE <![CDATA[<>]]> '0000' THEN SUM(DEFRAY_REQEST_AMOUNT) ELSE 0 END AMOUNT3
+                     FROM  TBPMS_ATCNG_RQEST_RCIV a
+                     WHERE 1=1
+                       AND JOB_SE = #JOB_SE#
+                       AND PAY_SE = #PAY_SE#
+                       AND DEFRAY_YM = #DEFRAY_YM#
+                     GROUP BY ERROR_CODE)
+	</select>
+	      
+<!--   자동이체 기정보 확인  -->
+	<select id="PMS000003DAO.selectAtcngRqestRcivChk" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+             SELECT  count(1) CHK_CNT
+                     FROM  TBPMS_ATCNG_RQEST_RCIV a
+                     WHERE 1=1
+                       AND JOB_SE = #JOB_SE#
+                       AND PAY_SE = #PAY_SE#
+                       AND DEFRAY_YM = #DEFRAY_YM#
+                       AND ERROR_CODE IS NOT NULL
+	</select>
+	
+<!--   R1 주택명 정보 확인  -->
+	<select id="PMS000003DAO.selectHoseNmListRN1" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+             SELECT 
+			  RENT_HOUSE_CODE AS CODE,
+			  RENT_HOUSE_NM AS CODE_NM,
+			  RENT_HOUSE_CODE ||' :'|| RENT_HOUSE_NM AS ALL_CODE_NM 
+			
+			  FROM  TBRNT_RENT_HOUSE
+			  ORDER BY CODE          
+	</select>
+<!--   R2 주택명 정보 확인  -->
+	<select id="PMS000003DAO.selectHoseNmListRN2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+             SELECT 
+			  	RENT_HOUSE_CODE AS CODE,
+			    RENT_HOUSE_NM AS CODE_NM,
+			  RENT_HOUSE_CODE ||' :'|| RENT_HOUSE_NM AS ALL_CODE_NM
+			    FROM TBRNT_PUCHAS_HOUSE 
+			    ORDER BY CODE          
+	</select>
+<!--   R3 주택명 정보 확인  -->
+	<select id="PMS000003DAO.selectHoseNmListRN3" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+             SELECT
+		    	CODE, 
+		        CODE_NM,
+			  	CODE ||' :'|| CODE_NM AS ALL_CODE_NM
+		        FROM TBCOM_CMMN_CODE WHERE GRP_CODE = 'RNT004'  
+		        ORDER BY CODE         
+	</select>
+<!--   HOU 주택명 정보 확인  -->
+	<select id="PMS000003DAO.selectHoseNmListHOU" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+             SELECT 
+		        HOUSE_CODE AS CODE,
+		        HOUSE_NM AS CODE_NM,
+			  	HOUSE_CODE ||' :'||HOUSE_NM AS ALL_CODE_NM 
+		        FROM TBSLS_HOUSE_INFO
+		        ORDER BY CODE           
+	</select>
+ 
+ <!-- 쿼리명 : 월별 자동이체 정구 업데이트
+설명 : 월별 자동이체 정구 업데이트
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->	  
+   <update id="PMS000003DAO.updateAtcngRcivDemand" parameterClass="java.util.HashMap">
+	    UPDATE TBPMS_ATCNG_RQEST_RCIV a
+	       SET ERROR_CODE = #ERROR_CODE#,
+	           PROCESS_SE = 'U',
+	           DEFRAY_AT = #DEFRAY_AT#,
+	           UPDUSR_ID          = #S_USER_ID#,
+	           UPDT_DT            = SYSDATE,
+	           CMPNY_RELATE_INFO  = #CNTRCTR_NO#
+	      WHERE 1=1
+	        AND a.JOB_SE = #JOB_SE#
+	        AND a.PAY_SE = #PAY_SE#
+	        AND a.CNTRCTR_NO = #CNTRCTR_NO#
+	        AND a.DEFRAY_YM = #DEFRAY_YM#
+	           
+  </update>
+  
+<!-- 쿼리명 : 월별 자동이체 결과 업데이트
+설명 : 월별 자동이체 결과 업데이트
+수정일  수정자  수정내용	
+작성자 : 이광원
+최초작성일 : 2015.10.12
+-->	  
+   <update id="PMS000003DAO.updateAtcngRcivResult" parameterClass="java.util.HashMap">
+	    
+	    UPDATE TBPMS_ATCNG_RQEST_RCIV a
+	       SET TRANSFR_PROCESS_SE  = 'C',
+	           UPDUSR_ID           = #S_USER_ID#,
+	           UPDT_DT             = SYSDATE
+	      WHERE 1=1   <!-- a.OCCRRNC_SE   = '02' -->
+	        AND a.JOB_SE = #JOB_SE#
+	        AND a.PAY_SE = #PAY_SE#
+	        AND a.DEFRAY_YM    = #DEFRAY_YM#
+	           
+  </update>
+  
+  	<!--  소인처리여부확인 -->
+  <select id="PMS000003DAO.selectCheck" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+      SELECT NVL((SELECT COUNT(*)
+                    FROM TBPMS_ATCNG_RQEST_RCIV
+                    WHERE 1=1
+                      AND DEFRAY_YM = #DEFRAY_YM#
+                      AND JOB_SE = #JOB_SE#
+                      AND PAY_SE = #PAY_SE#
+                      AND PROCESS_SE = 'I' ),0) CNT
+        FROM DUAL   
+  </select>
+</sqlMap>

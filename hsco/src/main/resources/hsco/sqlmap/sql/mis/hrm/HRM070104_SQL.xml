@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM070104_SQL">
+
+  <!--접속자 정보조회 -->
+	<select id="HRM070104DAO.selectUserInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+			SELECT
+				 t1.EMPNO                                                      /* 사번*/
+				,t2.EMPNM                                                      /* 사원명*/
+				,t2.DEPT_CODE
+				,t3.DEPT_NM                                                    /* 부서명*/
+				,NVL(t4.CODE_NM, ' ') AS CLSF_NM                               /* 직급명*/
+		  FROM TBCOM_USER t1
+	      LEFT OUTER JOIN TBHRM_HR_MASTR t2
+		  	  ON t1.EMPNO = t2.EMPNO
+          LEFT OUTER JOIN TBHRM_DEPT t3
+              ON t2.DEPT_CODE = t3.DEPT_CODE
+		  LEFT OUTER JOIN TBCOM_CMMN_CODE t4
+			ON  t2.HR_CLSF_SE = t4.CODE
+			AND t4.GRP_CODE   = 'HRM002'
+		  WHERE t1.USER_ID = #S_USER_ID#
+	</select>
+	
+  <!--병가신청내역 목록조회 -->
+	<select id="HRM070104DAO.selectDissVcatnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[
+			SELECT
+				 t1.EMPNO                                                      /* 사번*/
+				,t2.EMPNM                                                      /* 사원명*/
+				,t1.DISS_VCATN_SN                                              /* 병가순번*/
+				,t1.DEPT_NM                                                    /* 부서명*/
+				,t1.CLSF_NM                                                    /* 직급명*/
+				,t1.REQST_PRVONSH                                              /* 신청사유*/
+				,t1.DISS_VCATN_BGNDE                                           /* 병가시작일*/
+				,t1.DISS_VCATN_ENDDE                                           /* 병가종료일*/
+				,t1.DISS_VCATN_DAYCNT                                          /* 병가일수*/
+				,t1.EMGNC_CONTACT                                              /* 비상연락망*/
+				,t1.JOB_VRSC_MAN                                               /* 업무대행자*/
+				,t3.EMPNM             AS JOB_VRSC_MAN_NM                       /* 업무대행자 명*/
+				,t4.DEPT_NM           AS JOB_VRSC_MAN_DEPT                     /* 업무대행자 부서명*/
+				,t5.CODE_NM           AS JOB_VRSC_MAN_CLSF                     /* 업무대행자 직급명*/
+				,t1.FILE_SN                                                    /* 파일일련번호*/
+				,t1.SANCTN_NO                                                  /* 결재번호*/
+				,SFCOM_GET_SANCTN_KND(t1.SANCTN_NO)     AS SANCTN_KND          /* 결재상태 */
+			FROM TBHRM_DISS_VCATN t1
+			LEFT OUTER JOIN TBHRM_HR_MASTR t2
+				 ON t1.EMPNO = t2.EMPNO
+			LEFT OUTER JOIN TBHRM_HR_MASTR t3
+				 ON t1.JOB_VRSC_MAN = t3.EMPNO
+			LEFT OUTER JOIN TBHRM_DEPT t4
+				 ON t3.DEPT_CODE = t4.DEPT_CODE
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t5
+				 ON t3.HR_CLSF_SE = t5.CODE
+				AND t5.GRP_CODE   = 'HRM002'
+			LEFT OUTER JOIN TBCOM_ELCTRN_SANCTN_MASTR t6
+				 ON t1.SANCTN_NO = t6.SANCTN_NO
+		  WHERE 1=1
+			AND t1.DISS_VCATN_BGNDE >=  #SEARCH_BGN_DE#
+			AND t1.DISS_VCATN_BGNDE <=  #SEARCH_END_DE#
+			AND t1.DISS_VCATN_ENDDE >=  #SEARCH_BGN_DE#
+			AND t1.DISS_VCATN_ENDDE <=  #SEARCH_END_DE#
+		]]>
+			<isNotEmpty property="EMPNO">
+				AND t1.EMPNO = #EMPNO#
+			</isNotEmpty>
+			ORDER BY t1.EMPNO, t1.DISS_VCATN_SN 
+	</select>
+
+    <!-- 병가 등록 -->
+    <insert id="HRM070104DAO.dissVcatnListC" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+    		INSERT INTO TBHRM_DISS_VCATN ( 
+					  EMPNO
+					, DISS_VCATN_SN
+					, DEPT_NM
+					, CLSF_NM
+					, REQST_PRVONSH
+					, DISS_VCATN_BGNDE
+					, DISS_VCATN_ENDDE
+					, DISS_VCATN_DAYCNT
+					, EMGNC_CONTACT
+					, JOB_VRSC_MAN
+					, FILE_SN
+					, SANCTN_NO
+					, REGISTER_ID
+					, REGIST_DT
+					, UPDUSR_ID
+					, UPDT_DT
+				) VALUES ( 
+					 #EMPNO#
+					,(SELECT NVL(MAX(DISS_VCATN_SN)+1,1) FROM TBHRM_DISS_VCATN WHERE EMPNO = #EMPNO#)
+					,#DEPT_NM#
+					,#CLSF_NM#
+					,#REQST_PRVONSH#
+					,#DISS_VCATN_BGNDE#
+					,#DISS_VCATN_ENDDE#
+					,#DISS_VCATN_DAYCNT#
+					,#EMGNC_CONTACT#
+					,#JOB_VRSC_MAN#
+					,#FILE_SN#
+					,#SANCTN_NO#
+					,#S_USER_ID#
+					,SYSDATE
+					,#S_USER_ID#
+					,SYSDATE
+				)
+		]]>
+    </insert>
+
+    <!--유연근문 수정 -->
+    <update id="HRM070104DAO.dissVcatnListU" parameterClass="java.util.HashMap" >
+    	<![CDATA[
+		UPDATE TBHRM_DISS_VCATN
+		   SET 
+		         DEPT_NM           = #DEPT_NM#
+				,CLSF_NM           = #CLSF_NM#
+				,REQST_PRVONSH     = #REQST_PRVONSH#
+				,DISS_VCATN_BGNDE  = #DISS_VCATN_BGNDE#
+				,DISS_VCATN_ENDDE  = #DISS_VCATN_ENDDE#
+				,DISS_VCATN_DAYCNT = #DISS_VCATN_DAYCNT#
+				,EMGNC_CONTACT     = #EMGNC_CONTACT#
+				,JOB_VRSC_MAN      = #JOB_VRSC_MAN#
+				,FILE_SN           = #FILE_SN#
+				,SANCTN_NO         = #SANCTN_NO#
+		        ,UPDUSR_ID         = #S_USER_ID#
+		        ,UPDT_DT           = SYSDATE
+		 WHERE EMPNO           = #EMPNO#
+		   AND DISS_VCATN_SN   = #DISS_VCATN_SN#
+		]]>
+    </update>
+    
+	<!--병가 삭제-->
+	<delete id="HRM070104DAO.dissVcatnListD" parameterClass="java.util.HashMap" >
+		<![CDATA[
+		DELETE FROM TBHRM_DISS_VCATN
+		 WHERE EMPNO           = #EMPNO#
+		   AND DISS_VCATN_SN   = #DISS_VCATN_SN#
+		]]>
+	</delete>
+	
+	<!--병가 기간중복 체크-->
+	<select id="HRM070104DAO.chkDate" parameterClass="java.util.HashMap" resultClass="java.lang.Integer">
+			SELECT COUNT(*) AS CNT
+			FROM TBHRM_DISS_VCATN t1
+			WHERE 1=1
+		  	AND t1.EMPNO = #EMPNO#
+		<isNotEmpty property="DISS_VCATN_SN">
+			<![CDATA[
+				AND t1.DISS_VCATN_SN <> #DISS_VCATN_SN#
+			]]>
+		</isNotEmpty>
+			AND (t1.DISS_VCATN_BGNDE BETWEEN #BGNDE# AND #ENDDE# OR t1.DISS_VCATN_ENDDE BETWEEN #BGNDE# AND #ENDDE#)
+	</select>
+</sqlMap>

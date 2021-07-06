@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SUP020209_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+		
+    
+	<!-- 제안 목록 조회 -->
+	<select id="SUP020209DAO.selectPropseMastrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*SUP020209DAO.selectPropseMastrList*/ ]]>
+		<![CDATA[	
+			SELECT A.PROPSE_NO                  AS PROPSE_NO
+			       ,A.PROPSE_DE                 AS PROPSE_DE
+			       ,A.PROPSE_SE                 AS PROPSE_SE
+			       ,A.PROPSE_KND                AS PROPSE_KND
+			       ,A.PROPSE_MTH                AS PROPSE_MTH
+			       ,A.PROPSE_SJ                 AS PROPSE_SJ
+			       ,TO_CHAR(A.CUR_MTH)          AS CUR_MTH
+			       ,TO_CHAR(A.CNTRVS)           AS CNTRVS
+			       ,TO_CHAR(A.IMPRVM_ITEM)      AS IMPRVM_ITEM
+			       ,TO_CHAR(A.IMPRVM_EFFECT)    AS IMPRVM_EFFECT
+			       ,A.OPRTN_DEPT                AS OPRTN_DEPT
+			       ,C.DEPT_NM                   AS OPRTN_DEPT_NM
+			       ,A.OPRTN_PD_BEGIN            AS OPRTN_PD_BEGIN
+			       ,A.OPRTN_PD_END              AS OPRTN_PD_END
+			       ,TO_CHAR(A.EXMNT_MATTER)     AS EXMNT_MATTER
+			       ,A.BEFORE_PROPSE_NO          AS BEFORE_PROPSE_NO
+			       ,DECODE(A.CNFIRM_AT, NULL, '0', A.CNFIRM_AT) AS CNFIRM_AT
+			       ,A.FILE_SN                                   AS FILE_SN
+			       ,CASE WHEN H.CNT > 1 THEN H.PROPSE_MAN || '외' || (H.CNT-1) || '명'
+			                      ELSE H.PROPSE_MAN
+			                      END                                        AS PROPSE_MAN			       
+			       ,DECODE(E.EXCL_AT, '1', '제외 제안'
+			                        ,DECODE(E.PROPSE_SCORE, NULL, '심사 미완료'
+			                                              , E.PROPSE_SCORE)) AS PROPSE_SCORE
+			       ,G.CODE_NM                     AS STDR_GRAD_NM
+			       ,A.PROPSE_YEAR                 AS PROPSE_YEAR
+			       ,A.PROPSE_ODR_SE               AS PROPSE_ODR_SE
+			       ,A.FRST_OPRTN_DE               AS FRST_OPRTN_DE
+                   ,A.EFFECT_MESURE_PD            AS EFFECT_MESURE_PD
+			FROM   TBSUP_PROPSE_MASTR A
+			       LEFT OUTER JOIN VWHRM_DEPT C
+			                    ON A.OPRTN_DEPT = C.DEPT_CODE
+			      ,(SELECT D.PROPSE_NO
+			               ,MAX(D.PROPSE_SJ) AS PROPSE_SJ
+			               ,MAX(D.PROPSE_SE) AS PROPSE_SE
+			               ,DECODE(MIN(NVL(D.DCSN_AT,'0')), '1', ROUND((SUM(D.PROPSE_SCORE) - MIN(D.PROPSE_SCORE) - MAX(D.PROPSE_SCORE)) / (COUNT(*)-2),1)
+			                                              , NULL) AS PROPSE_SCORE
+			               ,MAX(D.EXCL_AT)       AS EXCL_AT
+			               ,MAX(D.PROPSE_YEAR)   AS PROPSE_YEAR
+			               ,MAX(D.PROPSE_ODR_SE) AS PROPSE_ODR_SE
+			        FROM   (SELECT A.PROPSE_NO
+			                       ,A.PROPSE_YEAR
+			                       ,A.PROPSE_ODR_SE
+			                       ,A.PROPSE_SJ
+			                       ,C.PROPSE_SCORE
+			                       ,C.DCSN_AT
+			                       ,A.PROPSE_SE
+			                       ,A.EXCL_AT
+			                FROM   TBSUP_PROPSE_MASTR A
+			                       LEFT OUTER JOIN TBSUP_PROPSE_JDGMN_MFCMM B
+			                                    ON A.PROPSE_NO = B.PROPSE_NO
+			                       LEFT OUTER JOIN (SELECT PROPSE_NO
+			                                               ,SN
+			                                               ,SUM(PROPSE_SCORE) AS PROPSE_SCORE
+			                                               ,MAX(DCSN_AT)      AS DCSN_AT
+			                                               ,MAX(PROPSE_SE)    AS PROPSE_SE
+			                                        FROM   TBSUP_PROPSE_JDGMN_RESULT
+			                                        WHERE  1=1
+			                                        GROUP BY PROPSE_NO, SN
+			                                       ) C
+			                                    ON B.PROPSE_NO = C.PROPSE_NO
+			                                   AND B.SN = C.SN
+			                WHERE 1=1
+			                  AND A.PROPSE_YEAR = #PROPSE_YEAR#
+			                  AND A.PROPSE_ODR_SE = #PROPSE_ODR_SE#
+			                  AND A.PROPSE_SE = #PROPSE_SE#
+			                  AND A.CNFIRM_AT = '1'
+			               ) D
+			        GROUP BY D.PROPSE_NO
+			       ) E
+			       LEFT OUTER JOIN TBSUP_PROPSE_RWARD_GLD F
+			                    ON E.PROPSE_YEAR = F.STDR_YEAR
+			                   AND E.PROPSE_ODR_SE = F.ODR_SE
+			                   AND E.PROPSE_SE = F.PROPSE_SE
+			                   AND STDR_SCORE_BEGIN <= E.PROPSE_SCORE
+			                   AND STDR_SCORE_END > CASE WHEN E.PROPSE_SCORE > 99 THEN 99 ELSE E.PROPSE_SCORE END
+			       LEFT OUTER JOIN (SELECT CODE, CODE_NM
+			                        FROM   TBCOM_CMMN_CODE
+			                        WHERE  GRP_CODE = 'SUP007'
+			                       ) G
+			                    ON F.STDR_GRAD = G.CODE
+			       ,(SELECT T1.PROPSE_NO, MIN(T2.EMPNM) KEEP ( DENSE_RANK LAST  ORDER BY T1.SN DESC ) AS PROPSE_MAN, COUNT(*) AS CNT
+			         FROM   TBSUP_PROPSE_PROPSR T1
+			               ,TBHRM_HR_MASTR T2
+			               ,(SELECT PROPSE_NO
+			                 FROM   TBSUP_PROPSE_PROPSR
+			                 WHERE  1=1
+		]]>
+			<isNotEmpty property="EMPNO">	         
+		                       AND  EMPNO = #EMPNO#
+			</isNotEmpty>
+		<![CDATA[                
+			                 GROUP BY PROPSE_NO
+			                ) T3
+			         WHERE T1.EMPNO = T2.EMPNO
+			           AND T1.PROPSE_NO = T3.PROPSE_NO
+			         GROUP BY T1.PROPSE_NO
+			        ) H
+			WHERE A.PROPSE_NO = E.PROPSE_NO
+			  AND A.PROPSE_NO = H.PROPSE_NO
+			/*  AND DECODE(E.EXCL_AT, '1', '1',DECODE(E.PROPSE_SCORE, NULL, '0', '1')) = '1' */
+		]]>
+			<isNotEmpty property="KWRD">
+			  AND (A.PROPSE_SJ LIKE '%'||#KWRD#||'%' 
+			       OR A.CUR_MTH LIKE '%'||#KWRD#||'%'
+			       OR A.CNTRVS LIKE '%'||#KWRD#||'%'
+			       OR A.IMPRVM_ITEM LIKE '%'||#KWRD#||'%'
+			       OR A.IMPRVM_EFFECT LIKE '%'||#KWRD#||'%'
+			       OR A.EXMNT_MATTER LIKE '%'||#KWRD#||'%'
+			      )
+			</isNotEmpty>
+		<![CDATA[			
+			ORDER BY A.PROPSE_NO
+		]]> 		        	     
+    </select>
+    
+	<!-- 제안자 목록 조회 -->
+	<select id="SUP020209DAO.selectPropsePropsrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*SUP020209DAO.selectPropsePropsrList*/ ]]>
+		<![CDATA[	
+			SELECT A.PROPSE_NO   AS PROPSE_NO
+			       ,A.SN         AS SN
+			       ,A.EMPNO      AS EMPNO
+			       ,B.EMPNM      AS EMPNM
+			       ,NVL(A.MAIN_PROPSR_AT, '0') AS MAIN_PROPSR_AT
+			FROM   TBSUP_PROPSE_PROPSR A
+			       ,TBHRM_HR_MASTR B
+			WHERE 1=1
+			  AND A.PROPSE_NO = #PROPSE_NO#
+			  AND A.EMPNO = B.EMPNO
+			ORDER BY A.SN
+		]]> 		        	     
+    </select>
+    
+    <!-- 검토부서 목록 조회 -->
+	<select id="SUP020209DAO.selectPropseExmntDeptList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*SUP020209DAO.selectPropseExmntDeptList*/ ]]>
+		<![CDATA[	
+			SELECT A.PROPSE_NO   AS PROPSE_NO
+			       ,A.DEPT_CODE  AS DEPT_CODE
+			       ,B.DEPT_NM    AS DEPT_NM
+			FROM   TBSUP_PROPSE_EXMNT_DEPT A
+			       ,VWHRM_DEPT B			          
+			WHERE 1=1
+			  AND A.PROPSE_NO = #PROPSE_NO#
+			  AND A.DEPT_CODE = B.DEPT_CODE			  
+			ORDER BY A.DEPT_CODE
+		]]> 		        	     
+    </select>
+    
+    <!-- 검토의견 조회 -->
+	<select id="SUP020209DAO.selectExmntOpinio" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*SUP020209DAO.selectExmntOpinio*/ ]]>
+		<![CDATA[	
+			SELECT A.OTR_INSTT_CASE_AT         AS OTR_INSTT_CASE_AT
+			       ,TO_CHAR(A.DEPT_OPINION)     AS DEPT_OPINION
+			FROM   TBSUP_PROPSE_DEPT_EXMNT_OPINIO A
+			WHERE 1=1
+			  AND A.PROPSE_NO = #PROPSE_NO#
+			  AND A.DEPT_CODE = #DEPT_CODE#
+		]]> 		        	     
+    </select>
+    
+    <!-- 제안실시성과 조회 -->
+	<select id="SUP020209DAO.selectPropseOprtnList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">	    
+		<![CDATA[ /*SUP020209DAO.selectPropseOprtnList*/ ]]>
+		<![CDATA[	
+			SELECT PROPSE_NO                     AS PROPSE_NO
+			       ,SEQ                          AS SEQ
+			       ,MESURE_PD_BEGIN              AS MESURE_PD_BEGIN
+			       ,MESURE_PD_END                AS MESURE_PD_END
+			       ,TO_CHAR(OPRTN_CN)            AS OPRTN_CN
+			       ,TO_CHAR(BUDGET_REDCN_AMONUT) AS BUDGET_REDCN_AMONUT
+			       ,TO_CHAR(IMPRVM_EFFECT)       AS IMPRVM_EFFECT
+			FROM   TBSUP_PROPSE_OPRTN_RSLT
+			WHERE  1=1
+			  AND  PROPSE_NO = #PROPSE_NO#
+			ORDER BY SEQ
+		]]> 		        	     
+    </select>
+</sqlMap>

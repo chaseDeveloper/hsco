@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FUN020101_SQL">	
+	<typeAlias alias="egovMap"          type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 사업지구 조회 -->
+	<select id="FUN020101DAO.selectBsnsCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+            SELECT A.BSNS_CODE     AS BSNS_CODE
+                  ,A.BSNS_NM       AS BSNS_NM
+			  FROM TBPRJ_BSNS_CODE A
+			 WHERE 1=1
+		]]>
+		<isNotEmpty property="BSNS_CODE">
+			AND UPPER(A.BSNS_CODE)  LIKE  UPPER(#BSNS_CODE#)  ||'%'
+		</isNotEmpty>
+		<isNotEmpty property="BSNS_NM">
+			AND A.BSNS_NM  LIKE  #BSNS_NM#  ||'%'
+		</isNotEmpty>
+		<![CDATA[		 
+             ORDER BY A.BSNS_CODE ASC
+		]]>		        	     
+    </select>
+    
+	<!-- 자금구분코드 조회 -->
+	<select id="FUN020101DAO.selectCptalCodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		  SELECT
+	           t1.CODE_SE                             AS CODE_SE
+	          ,t1.CODE                                AS MASTR_CODE
+	          ,t1.CODE_NM                             AS MASTR_CODE_NM
+	          ,t1.CODE||':'||t1.CODE_NM               AS ALL_MASTR_CODE_NM
+	          ,t2.DETAIL_CODE                         AS CODE
+	          ,t2.DETAIL_CODE_NM                      AS CODE_NM
+	          ,t2.DETAIL_CODE||':'||t2.DETAIL_CODE_NM AS ALL_CODE_NM
+	      FROM TBFUN_CPTAL_CODE t1
+	           INNER JOIN TBFUN_CPTAL_DETAIL_CODE t2
+	           ON  t1.CODE_SE = t2.CODE_SE
+	           AND t1.CODE    = t2.CODE
+	      WHERE t1.CODE_SE = '000' /*공사채 자금코드*/
+	      ORDER BY t1.SORT_ORDR, t2.SORT_ORDR
+		]]>		        	     
+    </select>    
+    
+	
+	<!-- 공사채승인내역 조회 -->
+	<select id="FUN020101DAO.selectPbncdConfmList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT A.CONFM_NO                        AS CONFM_NO
+			       ,C.BSNS_CODE                      AS BSNS_CODE
+			       ,C.BSNS_NM                        AS BSNS_NM
+			       ,A.CONFM_AMOUNT                   AS CONFM_AMOUNT
+			       ,A.BOD_CONFM_DE                   AS BOD_CONFM_DE
+			       ,A.GVRN_CONFM_DE                  AS GVRN_CONFM_DE
+			       ,A.CITY_CONFM_DE                  AS CITY_CONFM_DE
+			       ,A.BRRWLN                         AS BRRWLN
+			       ,A.EXPRTN_STRCT                   AS EXPRTN_STRCT
+			       ,A.RM                             AS RM
+			       ,NVL(B.CNT,0)                     AS USE_CNT
+			       ,A.CONFM_AT                       AS CONFM_AT
+			       ,A.REQST_DE                       AS REQST_DE
+			       ,A.REQST_AMOUNT                   AS REQST_AMOUNT
+			       ,(SELECT NVL(SUM(BRRW_AMOUNT),0) AS BRRW_AMT FROM TBFUN_PBNCD WHERE CONFM_NO = A.CONFM_NO) AS BRRW_AMOUNT
+			       ,A.REGISTER_ID                    AS REGISTER_ID
+			       ,TO_CHAR(A.REGIST_DT, 'YYYYMMDD') AS REGIST_DT
+			       ,A.UPDUSR_ID                      AS UPDUSR_ID
+			       ,TO_CHAR(A.UPDT_DT, 'YYYYMMDD')   AS UPDT_DT
+			  FROM TBFUN_PBNCD_CONFM A
+			       LEFT OUTER JOIN (SELECT CONFM_NO
+			                               ,COUNT(*) AS CNT
+			                          FROM TBFUN_PBNCD
+			                         GROUP BY CONFM_NO) B
+			                    ON A.CONFM_NO = B.CONFM_NO
+		           LEFT OUTER JOIN TBPRJ_BSNS_CODE C
+		                        ON A.BSNS_CODE = C.BSNS_CODE
+			 WHERE 1 = 1
+		]]>
+		<isNotEmpty property="BSNS_CODE">
+		       AND A.BSNS_CODE = #BSNS_CODE#
+		</isNotEmpty>
+		<![CDATA[
+		     ORDER BY A.CONFM_NO DESC
+		]]>	        	     
+    </select>
+
+    <!-- 공사채승인내역 수정 -->
+    <update id="FUN020101DAO.PbncdConfmU" parameterClass="java.util.HashMap">
+        <![CDATA[
+            UPDATE TBFUN_PBNCD_CONFM 
+               SET  BSNS_CODE      = #BSNS_CODE#
+                   ,CONFM_AMOUNT   = #CONFM_AMOUNT#
+                   ,BOD_CONFM_DE   = #BOD_CONFM_DE#
+                   ,GVRN_CONFM_DE  = #GVRN_CONFM_DE#
+                   ,CITY_CONFM_DE  = #CITY_CONFM_DE#
+                   ,BRRWLN         = #BRRWLN#
+                   ,RM             = #RM#
+                   ,EXPRTN_STRCT   = #EXPRTN_STRCT#
+                   ,CONFM_AT       = #CONFM_AT#
+                   ,UPDUSR_ID	   = #S_USER_ID#
+                   ,UPDT_DT		   = SYSDATE
+             WHERE 1=1
+               AND CONFM_NO = #CONFM_NO#
+        ]]>
+    </update>
+
+
+    <!-- 공사채승인신청내역 등록 -->
+    <insert id="FUN020101DAO.PbncdConfmC" parameterClass="java.util.HashMap">
+        <![CDATA[
+            INSERT INTO TBFUN_PBNCD_CONFM (
+                 CONFM_NO
+                ,BSNS_CODE
+                ,REQST_AMOUNT
+                ,REQST_DE
+                ,CONFM_AMOUNT
+                ,BOD_CONFM_DE
+                ,GVRN_CONFM_DE
+                ,CITY_CONFM_DE
+                ,BRRWLN
+                ,RM
+                ,EXPRTN_STRCT
+                ,CONFM_AT
+                ,REGISTER_ID
+                ,REGIST_DT
+                ,UPDUSR_ID
+                ,UPDT_DT
+             ) VALUES (
+                (SELECT CONCAT(TO_CHAR(SYSDATE, 'YYYYMM'),LPAD(NVL(MAX(to_number(SUBSTR(A.CONFM_NO, 7, 9))) + 1, 0), 3, '0'))
+			       FROM TBFUN_PBNCD_CONFM A
+			      WHERE 1=1
+			        AND substr(A.CONFM_NO,1,6) = TO_CHAR(sysdate, 'YYYYMM')
+			    )
+			    ,#BSNS_CODE#
+                ,#REQST_AMOUNT#
+                ,#REQST_DE#
+                ,#CONFM_AMOUNT#
+                ,#BOD_CONFM_DE#
+                ,#GVRN_CONFM_DE#
+                ,#CITY_CONFM_DE#
+                ,#BRRWLN#
+                ,#RM#
+                ,#EXPRTN_STRCT#
+                ,#CONFM_AT#
+                ,#S_USER_ID#
+                ,SYSDATE
+                ,#S_USER_ID#
+                ,SYSDATE
+             )
+        ]]>
+    </insert>
+</sqlMap>

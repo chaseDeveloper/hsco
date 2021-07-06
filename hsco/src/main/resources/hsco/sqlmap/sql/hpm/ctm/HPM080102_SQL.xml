@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HPM080102_SQL">   
+
+	<!-- 매출관리 목록 조회  -->
+   <select id="HPM080102DAO.selectRcpmnyDtlsManageList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		WITH NH_ACCT_HIS_TM AS
+		    (SELECT t1.BANK_CD
+		      , t1.ACCT_NO
+		      , t1.CURR_UNIT
+		      , t1.INQNO
+		      , t1.ACCT_TXDAY
+		      , t1.ACCT_TXDAY_SEQ
+		      , t1.TX_AMT
+		      , t1.REMARK1
+		      , t1.REMARK2
+		      , t2.DEPT_CODE
+		    FROM NH_ACCT_HIS t1
+		    LEFT OUTER JOIN TBFUN_BRANCH_ACNUT t2
+		    ON  t1.ACCT_NO     = REPLACE(t2.ACNUTNO, '-', '')
+		    WHERE 1            =1
+		    AND t1.INOUT_GUBUN = '2'
+		        /*입금*/
+			]]>
+			<isNotEmpty property="DEPT_CODE">
+				AND t2.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+		    <![CDATA[
+		    AND t1.ACCT_TXDAY BETWEEN #BGNDE# AND #ENDDE#
+		    AND t2.ACNUT_SE = '01'
+		    )
+		SELECT
+		     z1.DEPT_CODE
+		    ,z2.DEPT_NM
+		    ,z1.STORE_ID
+		    ,z1.SETLE_SE
+		    ,z1.SETLE_STTUS
+		    ,z1.SETLE_INSTT
+		    ,z1.SETLE_DE
+		    ,z1.YM
+		    ,z1.ORDER_NO
+		    ,z1.PURCHSR
+		    ,z1.AMOUNT
+		    ,z1.GOODS_INFO
+		    ,z1.REQST_DE
+		    ,z1.DELNG_NO
+		    ,z1.RM
+		    ,z1.PROGRM_SN
+		FROM (SELECT t1.DEPT_CODE
+		      , t2.STORE_ID
+		      , t1.SETLE_SE
+		      , t1.SETLE_STTUS
+		      , NVL(t3.CODE_NM, t1.RCPMNY_BANK_NM) AS SETLE_INSTT
+		      , t1.SETLE_COMPT_DE AS SETLE_DE
+		      , t1.YM
+		      , NVL(t4.ORDER_NO,t1.ORDER_NO) AS ORDER_NO
+		      , t1.RCPMNYER  AS PURCHSR
+		      , NVL(t1.SETLE_AM,0)           AS AMOUNT
+		      , t4.GOODS_INFO                       
+		      , SUBSTR(t1.REQST_DT, 0, 8) AS REQST_DE
+		      , t4.DELNG_NO
+		      , t1.RM
+		        || '  '
+		        || t4.RM AS RM
+		      , t1.PROGRM_SN
+		    FROM TBHPM_RENT_PROGRM_REQST_MANAGE t1
+		    LEFT OUTER JOIN TBHPM_LGUPLUS_STORE_MANAGE t2
+		    ON  t1.DEPT_CODE = t2.DEPT_CODE
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+			 ON t1.RCPMNY_BANK_CODE  = t3.CODE
+			AND t3.GRP_CODE    = 'COM021'
+		    LEFT OUTER JOIN TBHPM_RCPMNY_DTLS_MANAGE t4
+		    ON  t1.RCPMNY_DTLS_SN   = t4.RCPMNY_DTLS_SN
+		    WHERE 1                 =1
+		    AND NVL(t1.SETLE_AM,0) <> 0
+		    AND t1.SETLE_SE        IN ('001', '003')
+		        /*신용카드, 계좌이체*/
+		    AND t1.SETLE_COMPT_DE BETWEEN #BGNDE# AND #ENDDE#
+		    ]]>
+		    <isNotEmpty property="DEPT_CODE">
+				AND t1.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+		<![CDATA[
+		UNION ALL
+		     SELECT s1.DEPT_CODE
+			      , s2.STORE_ID
+			      , s2.SETLE_SE
+			      , s3.SETLE_STTUS
+			      , s4.CODE_NM AS SETLE_INSTT
+			      , s1.ACCT_TXDAY AS SETLE_DE
+			      , s3.YM
+			      , s2.ORDER_NO
+			      , s2.PURCHSR
+			      , s1.TX_AMT AS AMOUNT
+			      , s2.GOODS_INFO
+			      , SUBSTR(s3.REQST_DT, 0, 8) AS REQST_DE
+			      , s2.DELNG_NO
+			      , NVL2(s2.RCPMNY_DTLS_SN, s2.RM, s1.REMARK1
+			        || s1.REMARK2) AS RM
+		      	  , s3.PROGRM_SN
+		    FROM NH_ACCT_HIS_TM s1
+		LEFT OUTER JOIN TBHPM_RCPMNY_DTLS_MANAGE s2
+		    ON (s1.BANK_CD
+		        ||'-'
+		        || REPLACE(s1.ACCT_NO, '-', '')
+		        ||'-'
+		        || s1.CURR_UNIT
+		        ||'-'
+		        || s1.INQNO
+		        ||'-'
+		        || s1.ACCT_TXDAY
+		        ||'-'
+		        || s1.ACCT_TXDAY_SEQ ) = s2.RCPMNY_DTLS_NO
+		    LEFT OUTER JOIN TBHPM_RENT_PROGRM_REQST_MANAGE s3
+		    ON  s2.RCPMNY_DTLS_SN = s3.RCPMNY_DTLS_SN
+			LEFT OUTER JOIN TBCOM_CMMN_CODE s4
+			 ON s1.BANK_CD  = s4.CODE
+			AND s4.GRP_CODE    = 'COM021'
+		) z1
+		LEFT OUTER JOIN TBHRM_DEPT z2
+		  ON z1.DEPT_CODE = z2.DEPT_CODE
+		WHERE 1=1
+		]]>
+		<isNotEmpty property="SEARCH_CND2">
+            <isEqual property="SEARCH_CND2" compareValue="001">
+               <isNotEmpty prepend="AND"  property="SEARCH_VAL">
+                  z1.PURCHSR   LIKE '%' || #SEARCH_VAL# || '%'
+               </isNotEmpty>
+            </isEqual>
+            <isEqual  property="SEARCH_CND2" compareValue="002">
+               <isNotEmpty prepend="AND"  property="SEARCH_VAL">
+                  z1.GOODS_INFO LIKE '%' || #SEARCH_VAL# || '%'
+               </isNotEmpty>
+            </isEqual>
+         </isNotEmpty>
+         <isNotEmpty prepend="AND" property="SETLE_SE">
+			z1.SETLE_SE = #SETLE_SE#
+		</isNotEmpty>
+		ORDER BY z1.SETLE_DE DESC
+	</select>
+   
+</sqlMap>

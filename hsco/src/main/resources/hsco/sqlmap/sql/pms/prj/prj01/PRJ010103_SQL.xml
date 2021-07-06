@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="pms_prj01">
+
+	<!-- 
+		 R   : TBPRJ_BSNS_CODE			사업코드
+		 R   : TBPRJ_ORDER_ACTPLN		발주계획서
+		 R   : TBCTR_CNTRCT				계약정보
+		 R   : TBPRJ_BSNS_SUMRY			사업개요
+	-->
+
+	<!-- 발주현황 ================================================== -->
+
+	<!-- 발주현황 조회 -->
+	<select id="PRJ010103.mList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.*
+	,DECODE(TRUNC(DIFF/12), 0, '', TRUNC(DIFF/12)|| ' 년') || 
+	 DECODE(TRUNC(DIFF - TRUNC(DIFF/12) * 12), 0, '', ' '||TRUNC(DIFF - TRUNC(DIFF/12) * 12)|| ' 개월') || 
+	 DECODE(TRUNC((DIFF - TRUNC(DIFF)) * 30.5), 0, '', ' '||TRUNC((DIFF - TRUNC(DIFF)) * 30.5)|| ' 일')
+	 AS DIFF_D
+FROM (
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.CNTRCT_NO			/* 계약번호 */
+	,A.CNTRCT_CHANGE_ODR	/* 계약변경차수 */
+	,A.CHANGE_SE			/* 변경구분 */
+	,A.CHANGE_DE			/* 변경일자 */
+
+	,A.AFTCH_CNTRCT_AMOUNT	/* 변경후계약금액 */
+	,A.BFCHG_CNTRCT_AMOUNT	/* 변경전계약금액 */
+	,A.AFTCH_CNTRCT_AMOUNT
+	-A.BFCHG_CNTRCT_AMOUNT
+	 AS AMT_D				/* 증감액 */
+
+	,A.AFTCH_COMPET_DE		/* 변경후준공일자 */
+	,A.BFCHG_COMPET_DE		/* 변경전준공일자 */
+	,TRUNC( A.AFTCH_COMPET_DE
+		  - A.BFCHG_COMPET_DE, 0)
+	 AS DT_D				/* 증감일자 */
+	,NVL(MONTHS_BETWEEN(TO_DATE(A.AFTCH_COMPET_DE, 'YYYYMMDD'), TO_DATE(A.BFCHG_COMPET_DE, 'YYYYMMDD')),0) AS DIFF
+FROM TBCTR_CNTRCT_CHANGE A			/* 계약변경 */
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A.CNTRCT_NO = #CNTRCT_NO#			/* 계약번호 */
+<isNotEmpty property="CD1" >
+</isNotEmpty>
+) A
+ORDER BY 1,2,3,4
+	</select>
+
+	<!-- 업체별계약변경 조회 -->
+	<select id="PRJ010103.rList" parameterClass="map" resultClass="hashmap">
+SELECT
+	 A.BSNS_CODE			/* 사업코드 */
+	,A.CNTRCT_NO			/* 계약번호 */
+	,A.CNTRCT_CHANGE_ODR	/* 계약변경차수 */
+	,A.CHANGE_SE			/* 변경구분 */
+	,A.BCNC_CODE			/* 거래처코드 */
+	,A.CHANGE_DE			/* 변경일자 */
+	,A.BFCHG_CNTRCT_AMOUNT			/* 변경전계약금액 */
+
+	,A.AFTCH_CNTRCT_AMOUNT			/* 변경후계약금액 */
+	,A.BFCHG_COMPET_DE			/* 변경전준공일자 */
+	,A.AFTCH_COMPET_DE			/* 변경후준공일자 */
+	,A.BFCHG_QOTA_RT			/* 변경전지분율 */
+	,A.AFTCH_QOTA_RT			/* 변경후지분율 */
+	,A.CNTRCT_AMOUNT			/* 총계약금액 */
+
+	,C.BIZRNO				/* 사업자등록번호 */
+	,C.BCNC_NM				/* 거래처명 */
+	,C.RPRSNTV				/* 대표자 */
+FROM TBCTR_ENTRPS_ACCTO_CNTRCT_CHAN A			/* 업체별계약변경 */
+LEFT JOIN TBCTR_BCNC_MASTR C						/* 거래처마스타 */
+	ON C.BCNC_CODE = A.BCNC_CODE
+WHERE A.BSNS_CODE = #BSNS_CODE#			/* 사업코드 */
+  AND A.CNTRCT_NO = #CNTRCT_NO#			/* 계약번호 */
+  AND A.CNTRCT_CHANGE_ODR = #CNTRCT_CHANGE_ODR#			/* 계약변경차수 */
+  AND A.CHANGE_SE = #CHANGE_SE#			/* 변경구분 */
+<isNotEmpty property="CD1" >
+</isNotEmpty>
+ORDER BY 1,2,3,4,A.AFTCH_QOTA_RT DESC	/* 변경후지분율 */
+	</select>
+	
+</sqlMap>

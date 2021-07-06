@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="PRJ010118_SQL">
+	
+	<!-- 계약정보 조회 -->
+	<select id="PRJ010118DAO.selectCntrct" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT CNTRCT_NO
+		     , CNTRCT_NM
+		     , CNTRCT_AMOUNT    AS FRST_CNTRCT_AMOUNT
+		     , CNTRCT_DE
+		     , STRWRK_DE
+		     , COMPET_DE
+		  FROM TBCTR_CNTRCT
+		 WHERE CNTRCT_NO = #CNTRCT_NO#
+	</select>
+	
+	<!-- 예비준공검사 조회 -->
+	<select id="PRJ010118DAO.selectPreparCompetPrsec" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT T1.CCW_ADTG_SN
+		     , T1.CNTRCT_NO
+		     , T1.CCW_ADTG_DS_CD  /*준공검사구분코드*/
+		     , T1.APN_DT          /*임명일자*/
+		     , T1.ADTG_ST_DT      /*검사시작일자*/
+		     , T1.DOC_SN          /*문서일련번호*/
+		     , #APRV_PGM_ID#    AS APRV_PGM_ID
+		     , T2.CNTRCT_NM
+		     , T2.CNTRCT_AMOUNT    AS FRST_CNTRCT_AMOUNT
+		     , NVL(SFCTR_GET_CNTRCT_AMOUNT(T1.CNTRCT_NO, T1.ADTG_ST_DT), '0')    AS CNTRCT_AMOUNT
+		     , T2.STRWRK_DE
+		     , T2.COMPET_DE
+		     , CASE WHEN TRUNC(TO_DATE(T2.COMPET_DE, 'YYYYMMDD') - SYSDATE) <![CDATA[<]]> 0 THEN 0
+		            ELSE TRUNC(TO_DATE(T2.COMPET_DE, 'YYYYMMDD') - SYSDATE)
+		       END    AS REM_DAY
+		     , T2.CNTRCT_DE
+		     , T3.CTGRY_FILE_ID
+		     , NVL(T1.CNFIRM_AT, '0')                 AS CNFIRM_AT
+		     , DECODE(T1.CNFIRM_AT, '1', '0', '1')    AS ENABLE_AT
+		  FROM TBBF_CCW_ADTG T1
+		       LEFT OUTER JOIN TBCTR_CNTRCT T2
+		            ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		       LEFT OUTER JOIN TBBF_DOC_RGS T3
+		            ON T1.DOC_SN = T3.DOC_SN
+		 WHERE T1.CNTRCT_NO      = #CNTRCT_NO#
+		   AND T1.CCW_ADTG_DS_CD = #CCW_ADTG_DS_CD#
+		ORDER BY T1.CCW_ADTG_SN
+	</select>
+	
+	<!-- 예비준공검사순번 조회 -->
+	<select id="PRJ010118DAO.selectCcwAdtgSn" parameterClass="java.util.Map" resultClass="java.lang.String">
+		SELECT NVL(MAX(CCW_ADTG_SN), 0) + 1    AS NEXT_CCW_ADTG_SN
+		  FROM TBBF_CCW_ADTG
+	</select>
+	
+	<!-- 예비준공검사 등록 -->
+	<insert id="PRJ010118DAO.insertPreparCompetPrsec" parameterClass="java.util.Map">
+		INSERT INTO TBBF_CCW_ADTG (
+		       CCW_ADTG_SN
+		     , CNTRCT_NO
+		     , CCW_ADTG_DS_CD
+		     , APN_DT
+		     , ADTG_ST_DT
+		     , DOC_SN
+		     , CNFIRM_AT
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		)
+		VALUES (
+		       #CCW_ADTG_SN#
+		     , #CNTRCT_NO#
+		     , #CCW_ADTG_DS_CD#
+		     , #APN_DT#
+		     , #ADTG_ST_DT#
+		     , #DOC_SN#
+		     , NVL(#CNFIRM_AT#, '0')
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+	
+	<!-- 예비준공검사 수정 -->
+	<update id="PRJ010118DAO.updatePreparCompetPrsec" parameterClass="java.util.Map">
+		UPDATE TBBF_CCW_ADTG
+		   SET APN_DT     = #APN_DT#
+		     , ADTG_ST_DT = #ADTG_ST_DT#
+		     , UPDUSR_ID  = #S_USER_ID#
+		     , UPDT_DT    = SYSDATE
+		 WHERE CCW_ADTG_SN = #CCW_ADTG_SN#
+	</update>
+	
+	<!-- 확인여부 수정 -->
+	<update id="PRJ010118DAO.updateCnfirmAt" parameterClass="java.util.Map">
+		UPDATE TBBF_CCW_ADTG
+		   SET CNFIRM_AT = DECODE(CNFIRM_AT, '0', '1', '0')
+		     , UPDUSR_ID = #S_USER_ID#
+		     , UPDT_DT   = SYSDATE
+		 WHERE CCW_ADTG_SN = #CCW_ADTG_SN#
+	</update>
+	
+	<!-- 예비준공검사 삭제 -->
+	<delete id="PRJ010118DAO.deletePreparCompetPrsec" parameterClass="java.util.Map">
+		DELETE
+		  FROM TBBF_CCW_ADTG
+		 WHERE CCW_ADTG_SN = #CCW_ADTG_SN#
+	</delete>
+	
+	<!-- 검사자 조회 -->
+	<select id="PRJ010118DAO.selectInsptrList" parameterClass="java.util.Map" resultClass="java.util.HashMap">
+		SELECT T1.CCW_ADTG_SN
+		     , T1.CHKR_SN
+		     , T1.EMPNO
+		     , T2.EMPNM
+		     , T2.DEPT_CODE
+		     , T3.DEPT_NM
+		     , T2.OFCPS_SE
+		     , T2.HR_CLSF_SE
+		  FROM TBBF_CCW_ADTG_STF T1
+		       LEFT OUTER JOIN TBHRM_HR_MASTR T2
+		            ON T1.EMPNO = T2.EMPNO
+		       LEFT OUTER JOIN TBHRM_DEPT T3
+		            ON T2.DEPT_CODE = T3.DEPT_CODE
+		 WHERE CCW_ADTG_SN = #CCW_ADTG_SN#
+		ORDER BY T1.CHKR_SN
+	</select>
+	
+	<!-- 검사자 등록 -->
+	<insert id="PRJ010118DAO.insertInsptr" parameterClass="java.util.Map">
+		INSERT INTO TBBF_CCW_ADTG_STF (
+		       CCW_ADTG_SN
+		     , CHKR_SN
+		     , EMPNO
+		     , ADTG_FLD_DS_CD
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		)
+		VALUES (
+		       #CCW_ADTG_SN#
+		     , (SELECT NVL(MAX(CHKR_SN), 0) + 1 FROM TBBF_CCW_ADTG_STF WHERE CCW_ADTG_SN = #CCW_ADTG_SN#)
+		     , #EMPNO#
+		     , #ADTG_FLD_DS_CD#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+	
+	<!-- 검사자 수정 -->
+	<update id="PRJ010118DAO.updateInsptr" parameterClass="java.util.Map">
+		UPDATE TBBF_CCW_ADTG_STF
+		   SET EMPNO = #EMPNO#
+		 WHERE CCW_ADTG_SN = #CCW_ADTG_SN#
+		   AND CHKR_SN     = #CHKR_SN#
+	</update>
+	
+	<!-- 검사자 모두 삭제 -->
+	<delete id="PRJ010118DAO.deleteInsptrAll" parameterClass="java.util.Map">
+		DELETE
+		  FROM TBBF_CCW_ADTG_STF
+		 WHERE CCW_ADTG_SN = #CCW_ADTG_SN#
+	</delete>
+	
+	<!-- 검사자 삭제 -->
+	<delete id="PRJ010118DAO.deleteInsptr" parameterClass="java.util.Map">
+		DELETE
+		  FROM TBBF_CCW_ADTG_STF
+		 WHERE CCW_ADTG_SN = #CCW_ADTG_SN#
+		   AND CHKR_SN     = #CHKR_SN#
+	</delete>
+	
+	<!-- 첨부파일 조회 -->
+	<select id="PRJ010118DAO.selectCtgryFile" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT s1.DOC_CS_SN
+		      ,s1.DOC_CS_NM
+		      ,s1.CTGRY_ID
+		      ,s1.ESN_YN
+		      ,s1.DPL_RGS_YN
+		      ,s1.ACTV_CS_SN
+		      ,#DOC_SN#               AS DOC_SN
+		      ,s2.CTGRY_FILE_ID
+		      ,s2.FILE_SN
+		      ,s2.FILE_ORDR
+		      ,s2.ORGINL_FILE_NM
+		      ,#CCW_ADTG_SN#        AS CCW_ADTG_SN
+		FROM   (
+		        SELECT t1.DOC_CS_SN
+		              ,t2.DOC_CS_NM
+		              ,t2.CTGRY_ID
+		              ,t1.ESN_YN
+		              ,t1.DPL_RGS_YN
+		              ,t1.ACTV_CS_SN
+		        FROM   TBBF_SD_ACTV_ATCH_FL t1
+		               LEFT OUTER JOIN TBBF_SD_DOC_CS_CD t2
+		                    ON t1.DOC_CS_SN  = t2.DOC_CS_SN
+		        WHERE  t1.ACTV_CS_SN = '41'
+		       ) s1
+		       LEFT OUTER JOIN (
+		                        SELECT t4.DOC_SN
+		                              ,t1.CTGRY_FILE_ID
+		                              ,t1.FILE_SN
+		                              ,t3.FILE_ORDR
+		                              ,t3.ORGINL_FILE_NM
+		                              ,t1.CTGRY_ID
+		                        FROM   TBBH_CTGRY_FILE t1
+		                               LEFT OUTER JOIN TBCOM_CMMN_ATCHMNFL_MASTR t2
+		                                    ON t1.FILE_SN = t2.FILE_SN
+		                               LEFT OUTER JOIN TBCOM_CMMN_ATCHMNFL t3
+		                                    ON t2.FILE_SN = t3.FILE_SN
+		                               LEFT OUTER JOIN TBBF_DOC_RGS t4
+		                                    ON t1.CTGRY_FILE_ID = t4.CTGRY_FILE_ID
+		                        WHERE  t4.DOC_SN = #DOC_SN#
+		                       ) s2
+		            ON s1.DOC_CS_SN = s2.CTGRY_ID
+		WHERE  1=1
+		ORDER BY s1.DOC_CS_SN, s2.DOC_SN, s2.FILE_SN
+	</select>
+	
+	<!-- 문서번호 채번 -->
+	<select id="PRJ010118DAO.getDocSn" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT NVL(MAX(DOC_SN),0)+1    AS DOC_SN
+		  FROM TBBF_DOC_RGS
+	</select>
+
+
+	<!-- 문서번호 채번 -->
+	<select id="PRJ010118DAO.getCtgryFileId" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT NVL(MAX(CTGRY_FILE_ID),0)+1    AS CTGRY_FILE_ID
+		  FROM TBBH_CTGRY_FILE
+	</select>
+	
+	<!-- 문서번호 갱신 -->
+	<update id="PRJ010118DAO.updateDocSn" parameterClass="java.util.HashMap">
+		UPDATE TBBF_CCW_ADTG
+		   SET DOC_SN    = #DOC_SN#
+		     , UPDUSR_ID = #S_USER_ID#
+		     , UPDT_DT   = SYSDATE
+		 WHERE CCW_ADTG_SN = #CCW_ADTG_SN#
+	</update>
+	
+	<!-- 문서 추가 -->
+	<insert id="PRJ010118DAO.insertDocRgs" parameterClass="java.util.HashMap">
+		INSERT INTO TBBF_DOC_RGS (
+		       DOC_SN
+		     , WOU_DT
+		     , DOC_TL
+		     , ACTV_CS_SN
+		     , CTGRY_FILE_ID
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		)
+		VALUES (
+		       #DOC_SN#
+		     , #WOU_DT#
+		     , #DOC_TL#
+		     , #ACTV_CS_SN#
+		     , #CTGRY_FILE_ID#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+
+
+	<!-- 자료분류체계 추가 -->
+	<insert id="PRJ010118DAO.insertCtgryFile" parameterClass="java.util.HashMap">
+		INSERT INTO TBBH_CTGRY_FILE (
+		     CTGRY_FILE_ID
+		    ,CTGRY_FILE_NM
+		    ,CTGRY_ID
+		    ,MENU_ID
+		    ,FILE_SN
+		    ,KEYWORD
+		    ,RMK
+		    ,INS_ID
+		    ,INS_DT
+		    ,UPD_ID
+		    ,UPD_DT
+		)
+		VALUES (
+		     #CTGRY_FILE_ID#
+		    ,#ORGINL_FILE_NM#
+		    ,#DOC_CS_SN#
+		    ,#MENU_ID#
+		    ,#FILE_SN#
+		    ,NULL
+		    ,#RMK#
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		    ,#S_USER_ID#
+		    ,SYSDATE
+		)
+	</insert>
+
+
+	<!-- 자료분류체계 삭제 -->
+	<update id="PRJ010118DAO.deleteCtgryFile" parameterClass="java.util.HashMap">
+		DELETE
+		FROM   TBBH_CTGRY_FILE
+		WHERE  CTGRY_FILE_ID = #CTGRY_FILE_ID#
+	</update>
+
+
+	<!-- 문서 삭제 -->
+	<update id="PRJ010118DAO.deleteDocRgs" parameterClass="java.util.HashMap">
+		DELETE
+		FROM   TBBF_DOC_RGS
+		WHERE  CTGRY_FILE_ID = #CTGRY_FILE_ID#
+	</update>
+
+</sqlMap>

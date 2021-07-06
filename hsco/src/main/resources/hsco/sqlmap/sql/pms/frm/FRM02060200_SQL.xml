@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="FRM02060200SQL">	
+
+	<!-- 쿼리명 : 대차대조표
+	설명 : 대차대조표 조회
+	수정일  수정자  수정내용
+	
+	작성자 : 김지훈
+	최초작성일 : 2016.02.24
+	-->
+	<select id="FRM02060200DAO.selectFnnrSttus" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	         WITH TEMP
+               AS (SELECT a.ACCNUT_YEAR,
+                          a.ACNT_CODE,
+                          NVL(a.DR_AMT,0) DR_AMT_CUR,
+                          NVL(a.CR_AMT,0) CR_AMT_CUR,
+                          NVL(b.DR_AMT,0) DR_AMT_BEF,
+                          NVL(b.CR_AMT,0) CR_AMT_BEF
+                     FROM(SELECT  '1' GB, /* 당해 */
+                                  SUBSTR(ACCNUT_YM,1,4) ACCNUT_YEAR,
+                                  ACNT_CODE,
+                                  NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT,
+                                  NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+                             FROM TBFRM_ENDW_ACCNUT_STACNT
+                             WHERE ACCNUT_YM BETWEEN SUBSTR(#monCal#,1,4) || '00' AND #monCal#
+                           GROUP BY SUBSTR(ACCNUT_YM,1,4),
+                                    ACNT_CODE) a,
+
+                         (SELECT  '2' GB, /* 전년 */
+                                  SUBSTR(ACCNUT_YM,1,4) ACCNUT_YEAR,
+                                  ACNT_CODE,
+                                  NVL(SUM(DEBTOR_AMOUNT),0) AS DR_AMT,
+                                  NVL(SUM(CRDIT_AMOUNT ),0) AS CR_AMT
+                             FROM TBFRM_ENDW_ACCNUT_STACNT
+                             WHERE ACCNUT_YM BETWEEN SUBSTR(#monCal#,1,4) - 1 || '00' AND SUBSTR(#monCal#,1,4) - 1 || SUBSTR(#monCal#,5,2)
+                           GROUP BY SUBSTR(ACCNUT_YM,1,4),
+                                    ACNT_CODE)  b
+
+                       WHERE a.ACNT_CODE  = b.ACNT_CODE(+)
+                       ORDER BY ACNT_CODE)
+
+              SELECT a.ACNT_CODE,
+                     NVL(b.OUTPT_ACNTCTGR_NM,ACNTCTGR_NM) ACNTCTGR_NM,
+                     NVL(DECODE(b.DBRT_SE, '1', a.DR_AMT_CUR - a.CR_AMT_CUR, '2', a.CR_AMT_CUR - a.DR_AMT_CUR ,a.DR_AMT_CUR - a.CR_AMT_CUR),0)   AS THIS_STACNT_AMT,
+                     NVL(DECODE(b.DBRT_SE, '1', a.DR_AMT_BEF - a.CR_AMT_BEF, '2', a.CR_AMT_BEF - a.DR_AMT_BEF ,a.DR_AMT_BEF - a.CR_AMT_BEF),0)   AS PRE_STACNT_AMT
+                FROM TEMP a,
+                     TBFRM_ENDW_ACNTCTGR b
+                WHERE a.ACCNUT_YEAR = b.ACCNUT_YEAR(+)
+                  AND a.ACNT_CODE   = b.ACNT_CODE(+)
+                  AND b.ENDW_STACNT_SE = '1'
+                  AND b.OUTPT_AT = '1'
+
+              UNION ALL
+
+              SELECT a.ACNT_CODE,
+                     NVL(b.OUTPT_ACNTCTGR_NM,ACNTCTGR_NM) ACNTCTGR_NM,
+                     CASE WHEN a.ACNT_CODE = '12090990' THEN THIS_STACNT_AMT_1
+                          WHEN a.ACNT_CODE = '22070990' THEN THIS_STACNT_AMT_2
+                          WHEN a.ACNT_CODE = '32070990' THEN THIS_STACNT_AMT_3
+                          WHEN a.ACNT_CODE = '32080999' THEN THIS_STACNT_AMT_4
+                          ELSE 0
+                      END THIS_STACNT_AMT,
+                     CASE WHEN a.ACNT_CODE = '12090990' THEN PRE_STACNT_AMT_1
+                          WHEN a.ACNT_CODE = '22070990' THEN PRE_STACNT_AMT_2
+                          WHEN a.ACNT_CODE = '32070990' THEN PRE_STACNT_AMT_3
+                          WHEN a.ACNT_CODE = '32080999' THEN PRE_STACNT_AMT_4
+                          ELSE 0
+                      END PRE_STACNT_AMT
+
+                FROM(SELECT  CASE WHEN SN = 1 THEN '12090990'
+                                  WHEN SN = 2 THEN '22070990'
+                                  WHEN SN = 3 THEN '32070990'
+                                  WHEN SN = 4 THEN '32080999'
+                                  ELSE ''
+                             END ACNT_CODE,
+                             a.*
+                         FROM(SELECT  ACCNUT_YEAR,
+                                      SUM(CASE WHEN ACNT_CODE = '12090990' THEN THIS_STACNT_AMT ELSE 0 END) THIS_STACNT_AMT_1,
+                                      SUM(CASE WHEN ACNT_CODE = '22070990' THEN THIS_STACNT_AMT ELSE 0 END) THIS_STACNT_AMT_2,
+                                      SUM(CASE WHEN ACNT_CODE = '32070990' THEN THIS_STACNT_AMT ELSE 0 END) THIS_STACNT_AMT_3,
+                                      SUM(CASE WHEN ACNT_CODE = '22070990' OR ACNT_CODE = '32070990' THEN THIS_STACNT_AMT ELSE 0 END) THIS_STACNT_AMT_4,
+                                      SUM(CASE WHEN ACNT_CODE = '12090990' THEN PRE_STACNT_AMT ELSE 0 END) PRE_STACNT_AMT_1,
+                                      SUM(CASE WHEN ACNT_CODE = '22070990' THEN PRE_STACNT_AMT ELSE 0 END) PRE_STACNT_AMT_2,
+                                      SUM(CASE WHEN ACNT_CODE = '32070990' THEN PRE_STACNT_AMT ELSE 0 END) PRE_STACNT_AMT_3,
+                                      SUM(CASE WHEN ACNT_CODE = '22070990' OR ACNT_CODE = '32070990' THEN PRE_STACNT_AMT ELSE 0 END) PRE_STACNT_AMT_4
+                                FROM (SELECT a.ACCNUT_YEAR,
+                                             a.ACNT_CODE,
+                                             NVL(DECODE(b.DBRT_SE, '1', a.DR_AMT_CUR - a.CR_AMT_CUR, '2', a.CR_AMT_CUR - a.DR_AMT_CUR ,a.DR_AMT_CUR - a.CR_AMT_CUR),0)   AS THIS_STACNT_AMT,
+                                             NVL(DECODE(b.DBRT_SE, '1', a.DR_AMT_BEF - a.CR_AMT_BEF, '2', a.CR_AMT_BEF - a.DR_AMT_BEF ,a.DR_AMT_BEF - a.CR_AMT_BEF),0)   AS PRE_STACNT_AMT
+                                        FROM(SELECT  ACCNUT_YEAR,
+                                                     CASE WHEN ACNT_CODE = '10000000' THEN '12090990'
+                                                          WHEN ACNT_CODE = '20000000' THEN '22070990'
+                                                          WHEN ACNT_CODE = '30000000' THEN '32070990'
+                                                          ELSE ''
+                                                     END ACNT_CODE,
+                                                     DR_AMT_CUR,
+                                                     CR_AMT_CUR,
+                                                     DR_AMT_BEF,
+                                                     CR_AMT_BEF
+                                               FROM TEMP
+                                               WHERE ACNT_CODE IN('10000000',
+                                                                  '20000000',
+                                                                  '30000000')) a,
+                                              TBFRM_ENDW_ACNTCTGR b
+                                         WHERE a.ACCNUT_YEAR = B.ACCNUT_YEAR
+                                           AND a.ACNT_CODE = b.ACNT_CODE)
+                              GROUP BY  ACCNUT_YEAR) a,
+                              (SELECT ROWNUM SN FROM DUAL CONNECT BY ROWNUM <![CDATA[<]]> 5) b) a,
+                   TBFRM_ENDW_ACNTCTGR b
+             WHERE a.ACCNUT_YEAR = b.ACCNUT_YEAR
+               AND a.ACNT_CODE = b.ACNT_CODE
+             ORDER BY ACNT_CODE NULLS FIRST
+       
+	</select>
+	
+	
+</sqlMap>

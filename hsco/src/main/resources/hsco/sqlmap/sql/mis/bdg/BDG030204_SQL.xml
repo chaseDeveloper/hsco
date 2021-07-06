@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="BDG030204_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 예산집행율(부서) 조회 -->
+	<select id="BDG030204DAO.selectDeptExcutRt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*BDG030204DAO.selectDeptExcutRt*/]]>
+		WITH EXECUT_BUDGET AS (
+		    SELECT r1.YEAR
+		          ,r1.BSNS_SE
+		          ,r1.BALC_SE
+		          ,r1.BUDGET_ACNT_CODE
+		          ,r1.EXPNDTR_UNIT_CODE
+		          ,r1.EXPNDTR_UNIT_NM
+		          ,r1.DEPT_CODE
+		          ,NVL(r1.ORIBDGT,0)
+		               + NVL(r1.RVSPBGT_1_ODR,0)
+		               + NVL(r1.RVSPBGT_2_ODR,0)
+		               + NVL(r1.RVSPBGT_3_ODR,0)
+		               + NVL(r1.RVSPBGT_4_ODR,0)
+		               + NVL(r1.RVSPBGT_5_ODR,0)
+		               + NVL(r1.RVSPBGT_6_ODR,0)
+		               + NVL(r1.RVSPBGT_7_ODR,0)
+		               + NVL(r1.CYFD_BUDGET,0)
+		               + NVL(r1.TRSF_AM,0)
+		               + NVL(r1.MVMN_AM,0)
+		               + NVL(r1.BUKIP_MVMN_AM,0)
+		               + NVL(r1.DVR_AM,0)
+		               + NVL(r1.RSVFND_REQST_AM,0)           AS TOT_BUDGET_AM
+		          ,r2.CAUSE_ACTION_AMOUNT
+		          ,r2.DEBT_AMT
+		          ,r2.DECSN_AMOUNT + r2.CYFD_DECSN_AMOUNT    AS DECSN_AMOUNT
+		          ,r3.CYFD_AM
+		    FROM   TBBDG_EXECUT_BUDGET r1
+		           LEFT OUTER JOIN (
+		                            SELECT BUDGET_YEAR
+		                                  ,BSNS_SE
+		                                  ,BALC_SE
+		                                  ,BUDGET_ACNT_CODE
+		                                  ,EXPNDTR_UNIT_CODE
+		                                  ,NVL(SUM(                     CAUSE_ACTION_AMOUNT    ),0)  AS CAUSE_ACTION_AMOUNT
+		                                  ,NVL(SUM(                     DEBT_AMT               ),0)  AS DEBT_AMT
+		                                  ,NVL(SUM( DECODE(CYFD_SE,'0', DECSN_AMOUNT       ,0) ),0)  AS DECSN_AMOUNT
+		                                  ,NVL(SUM( DECODE(CYFD_SE,'1', DECSN_AMOUNT       ,0) ),0)  AS CYFD_DECSN_AMOUNT
+		                            FROM   VHACC_EXP_DSN_MASTR
+		                            WHERE  CAUSE_ACTION_DE BETWEEN BUDGET_YEAR||'0101' AND BUDGET_YEAR||'1231'
+		                            GROUP BY BUDGET_YEAR
+		                                    ,BSNS_SE
+		                                    ,BALC_SE
+		                                    ,BUDGET_ACNT_CODE
+		                                    ,EXPNDTR_UNIT_CODE
+		                           ) r2
+		                ON r1.YEAR = r2.BUDGET_YEAR
+		               AND r1.BSNS_SE = r2.BSNS_SE
+		               AND r1.BALC_SE = r2.BALC_SE
+		               AND r1.BUDGET_ACNT_CODE = r2.BUDGET_ACNT_CODE
+		               AND r1.EXPNDTR_UNIT_CODE = r2.EXPNDTR_UNIT_CODE
+		           LEFT OUTER JOIN (
+		                            SELECT YEAR
+		                                  ,BSNS_SE
+		                                  ,BALC_SE
+		                                  ,BUDGET_ACNT_CODE
+		                                  ,EXPNDTR_UNIT_CODE
+		                                  ,SUM(NVL(BUDGET_AM,0))                   AS CYFD_AM
+		                            FROM   TBBDG_CYFD_BUDGET
+		                            WHERE  CYFD_DCSN_AT = '1'
+		                            GROUP BY YEAR
+		                                    ,BSNS_SE
+		                                    ,BALC_SE
+		                                    ,BUDGET_ACNT_CODE
+		                                    ,EXPNDTR_UNIT_CODE
+		                           ) r3
+		                ON r1.YEAR = r3.YEAR
+		               AND r1.BSNS_SE = r3.BSNS_SE
+		               AND r1.BALC_SE = r3.BALC_SE
+		               AND r1.BUDGET_ACNT_CODE = r3.BUDGET_ACNT_CODE
+		               AND r1.EXPNDTR_UNIT_CODE = r3.EXPNDTR_UNIT_CODE
+		    WHERE  1=1
+		    AND    r1.YEAR    = #YEAR#
+		    AND    r1.BSNS_SE = #BSNS_SE#
+		    AND    r1.BALC_SE = #BALC_SE#
+		)
+		SELECT t1.YEAR
+		      ,t1.BSNS_SE
+		      ,t1.BALC_SE
+		      ,t1.BUDGET_ACNT_CODE
+		      ,t2.BUDGET_ACNT_NM
+		      ,t1.EXPNDTR_UNIT_CODE
+		      ,t1.EXPNDTR_UNIT_NM
+		      ,t1.TOT_BUDGET_AM
+		      ,t1.CAUSE_ACTION_AMOUNT
+		      ,t1.DEBT_AMT
+		      ,t1.DECSN_AMOUNT
+		      ,t1.CYFD_AM
+		      ,NVL(t1.TOT_BUDGET_AM,0) - NVL(t1.DECSN_AMOUNT,0) - NVL(t1.CYFD_AM,0)                     AS DISUSE_AM
+		      ,ROUND(DECODE(t1.TOT_BUDGET_AM, 0, 0, NVL(t1.DECSN_AMOUNT,0) / TOT_BUDGET_AM) * 100, 2)   AS EXE_RT
+		      ,t1.DEPT_CODE
+		      ,t3.DEPT_NM
+		FROM   EXECUT_BUDGET t1
+		       LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t2
+		            ON t1.YEAR = t2.YEAR
+		           AND t1.BSNS_SE = t2.BSNS_SE
+		           AND t1.BALC_SE = t2.BALC_SE
+		           AND t1.BUDGET_ACNT_CODE = t2.BUDGET_ACNT_CODE
+		       LEFT OUTER JOIN VWHRM_DEPT t3
+		            ON t1.DEPT_CODE = t3.DEPT_CODE
+		ORDER BY t1.YEAR
+		        ,t1.BSNS_SE
+		        ,t1.BALC_SE
+		        ,t1.BUDGET_ACNT_CODE
+		        ,t1.EXPNDTR_UNIT_CODE
+	</select>
+</sqlMap>

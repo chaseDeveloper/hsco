@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM080208_SQL">
+
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+
+	<!-- 교육평정대상 조회 -->
+	<select id="HRM080208DAO.selectEvlTrgter" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[
+		SELECT r1.*
+		      ,CASE WHEN SUBSTR(#YEAR#,1,4) <= '2016' THEN  (
+		                                                        CASE WHEN NVL(r1.EDC_CNFRM_TIME,0) >= DECODE(r1.CLSF_SE, '202', 120, '203', 150, '204', 170, '205', 140) THEN 10
+		                                                             WHEN NVL(r1.EDC_CNFRM_TIME,0) BETWEEN DECODE(r1.CLSF_SE, '202', 111, '203', 131, '204', 161, '205', 131) AND DECODE(r1.CLSF_SE, '202', 119, '203', 149, '204', 169, '205', 139) THEN 7
+		                                                             WHEN NVL(r1.EDC_CNFRM_TIME,0) <= DECODE(r1.CLSF_SE, '202', 110, '203', 130, '204', 160, '205', 130) THEN 5
+		                                                        END
+		                                                       ) 
+		            ELSE (
+		                  CASE WHEN NVL(r1.TOT_EDC_COMPL_TIME,0) = 0                                                THEN 0
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 100 THEN 10
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 90  THEN 9
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 80  THEN 8
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 70  THEN 7
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 60  THEN 6
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 50  THEN 5
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 40  THEN 4
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 30  THEN 3
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 20  THEN 2
+		                       WHEN ROUND(NVL(r1.EDC_CNFRM_TIME,0) / ( NVL(r1.TOT_EDC_COMPL_TIME,0) ) * 100 ,1) >= 10  THEN 1
+		                       ELSE 0 END
+		                 )
+		       END  AS  EVL_SCORE
+		FROM   (
+		        SELECT s1.*
+		              ,NVL(s2.EDC_CNFRM_TIME,0)                                                                                     AS EDC_CNFRM_TIME       /* 당해직급 누적시간(실적) */
+		              ,(CASE WHEN NVL(s2.EDC_CNFRM_TIME,0) >= NVL(s1.TOT_EDC_COMPL_TIME_REGLTN,0) THEN '충족' ELSE '미충족' END)    AS SUFFCN_AT
+		        FROM   (
+		                  WITH CLSF_GNFD_DTLS_TM AS (
+		                      SELECT EMPNO
+		                            ,CLSF_SE
+		                            ,MIN(GNFD_DE) AS CLSF_GNFD_DE
+		                      FROM   TBHRM_GNFD_DTLS
+		                      WHERE  GNFD_SE = '012'
+		                      AND    DCSN_AT = '1'
+		                      GROUP BY EMPNO, CLSF_SE
+		                  )
+		                  SELECT s1.EMPNO
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'EMPNM',     #STDR_DE#)  AS EMPNM
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'DEPT_CODE', #STDR_DE#)  AS DEPT_CODE
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JSSFC_SE',  #STDR_DE#)  AS JSSFC_SE
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE',   #STDR_DE#)  AS CLSF_SE
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JBLN_SE',   #STDR_DE#)  AS JBLN_SE
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'OFCPS_SE',  #STDR_DE#)  AS OFCPS_SE
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'DEPT_NM',   #STDR_DE#)  AS DEPT_NM
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JSSFC_NM',  #STDR_DE#)  AS JSSFC_NM
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_NM',   #STDR_DE#)  AS CLSF_NN
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'JBLN_NM',   #STDR_DE#)  AS JBLN_NM
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'OFCPS_NM',  #STDR_DE#)  AS OFCPS_NM
+		                        ,MAX(s1.ECNY_DE) AS ECNY_DE
+		                        ,MAX(s1.NOW_CLSF_EMPLMN_DE) AS NOW_CLSF_EMPLMN_DE
+		                        ,MAX(s1.BRTHDY) AS BRTHDY
+		                        ,SFHRM_GET_EMPL_INFO(s1.EMPNO, 'STTUS_SE',   #STDR_DE#)  AS STTUS_SE
+		                        ,SFCOM_CODE_NM('HRM005', SFHRM_GET_EMPL_INFO(s1.EMPNO, 'STTUS_SE',   #STDR_DE#), 'CODE_NM') AS STTUS_NM
+		                        ,SUM(NVL(SFHRM_GET_EDC_COMPL_TIME_EMPL(s4.YEAR, 'D2', SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE', #STDR_DE#), s1.EMPNO),0)) AS TOT_EDC_COMPL_TIME        /* 당해직급(총) 의무이수시간 */
+		                        ,SUM(NVL(SFHRM_GET_EDC_COMPL_TIME_EMPL(s4.YEAR, 'D1', SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE', #STDR_DE#), s1.EMPNO),0)) AS TOT_EDC_COMPL_TIME_REGLTN        /* 당해직급(총) 규정이수시간 */
+		                        ,NVL(SFHRM_GET_EDC_COMPL_TIME_EMPL(#YEAR#, 'D1', SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE', #STDR_DE#), s1.EMPNO),0) AS YR_EDC_COMPL_TIME_REGLTN    /* 당해직급(연간) 규정이수시간 */
+		                        ,DECODE(FLOOR((MONTHS_BETWEEN(TO_DATE(#STDR_DE#,'YYYYMMDD'), TO_DATE(NVL(MAX(s1.NOW_CLSF_EMPLMN_DE), MAX(s3.CLSF_GNFD_DE)), 'YYYYMMDD'))) / 12), 0, NULL, FLOOR((MONTHS_BETWEEN(TO_DATE(#STDR_DE#,'YYYYMMDD'), TO_DATE(NVL(MAX(s1.NOW_CLSF_EMPLMN_DE), MAX(s3.CLSF_GNFD_DE)), 'YYYYMMDD'))) / 12))   AS CLSF_YEAR /*현보직근무연수_년*/
+		                  FROM   TBHRM_HR_MASTR s1
+		                         LEFT OUTER JOIN CLSF_GNFD_DTLS_TM s3
+		                              ON s1.EMPNO = s3.EMPNO
+		                             AND SFHRM_GET_EMPL_INFO(s1.EMPNO, 'CLSF_SE', #STDR_DE#) = s3.CLSF_SE
+		                         LEFT OUTER JOIN (
+		                                          SELECT TO_NUMBER(#YEAR#)-LEVEL+1 AS YEAR 
+		                                          FROM DUAL
+		                                          CONNECT BY LEVEL <= (TO_NUMBER(#YEAR#+1)-2016)
+		                                         ) s4
+		                              ON 1=1
+		                  GROUP BY s1.EMPNO
+		               ) s1
+		               LEFT OUTER JOIN (
+		                                SELECT A.EMPNO
+		                                     , SUM(CASE WHEN A.EDC_CNFRM_TIME >= 160 THEN 160 ELSE A.EDC_CNFRM_TIME END) AS EDC_CNFRM_TIME
+		                                FROM (SELECT t2.EMPNO  AS EMPNO
+		                                            ,SUM(CASE WHEN (NVL(t1.FYER_MXMM_RCOGN_TIME,0) <= NVL(t2.EDC_SUM_TIME,0)) THEN NVL(t1.FYER_MXMM_RCOGN_TIME,0) ELSE NVL(t2.EDC_SUM_TIME,0)  END) AS EDC_CNFRM_TIME
+		                                      FROM   TBHRM_EDC_TY_RCOGN_TIME t1
+		                                             INNER JOIN (
+		                                                         SELECT YEAR, EDC_TY_SN, EMPNO, SUM(EDC_RCOGN_TIME) AS EDC_SUM_TIME
+		                                                         FROM TBHRM_EDC_MANAGE 
+		                                                         GROUP BY YEAR, EDC_TY_SN, EMPNO
+		                                                        ) t2
+		                                                  ON t1.YEAR  = t2.YEAR
+		                                                 AND t1.SN    = t2.EDC_TY_SN
+		                                      WHERE  t1.YEAR >= '2016'
+		                                        AND  t1.YEAR <= #YEAR#
+		                                      GROUP BY t1.YEAR, t2.EMPNO
+		                                     ) A
+		                                GROUP BY A.EMPNO
+		                               ) s2
+		                    ON s1.EMPNO = s2.EMPNO
+		        WHERE s1.CLSF_YEAR >= (CASE WHEN s1.CLSF_SE IN ('202', '402') THEN 5 WHEN s1.CLSF_SE IN ('205', '405') THEN 2 ELSE 3 END)
+		        AND   s1.JSSFC_SE IN ('02' /*, '04' 일반직만 대상으로.. 2018.01.15 인사과장 */)
+		        AND   s1.STTUS_SE <> '009'
+		       ) r1
+		WHERE  1=1
+		ORDER BY JSSFC_SE, OFCPS_SE, JBLN_SE, CLSF_SE
+	]]>
+	</select>
+
+
+	<!-- 개인별교육실적 조회 -->
+	<select id="HRM080208DAO.selectIndvdlzAcmslt" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+	<![CDATA[
+		SELECT MAX(t1.YEAR)                                                              AS YEAR
+		      ,MAX(#EMPNO#)                                                              AS EMPNO
+		      ,MAX(t1.EDC_TY_LCLAS) KEEP(DENSE_RANK FIRST ORDER BY t1.YEAR DESC)         AS EDC_TY_LCLAS
+		      ,MAX(t1.EDC_TY_MLSFC) KEEP(DENSE_RANK FIRST ORDER BY t1.YEAR DESC)         AS EDC_TY_MLSFC
+		      ,MAX(t1.EDC_TY_SCLAS) KEEP(DENSE_RANK FIRST ORDER BY t1.YEAR DESC)         AS EDC_TY_SCLAS
+		      ,MAX(t1.RCOGN_TIME_STDR) KEEP(DENSE_RANK FIRST ORDER BY t1.YEAR DESC)      AS RCOGN_TIME_STDR
+		      ,MAX(t1.FYER_MXMM_RCOGN_TIME) KEEP(DENSE_RANK FIRST ORDER BY t1.YEAR DESC) AS FYER_MXMM_RCOGN_TIME /*연간 최대인정시간*/
+	]]>
+			<iterate property="yearList">
+			<![CDATA[
+			 ,MAX(CASE WHEN t1.YEAR = #yearList[].YEAR# AND (NVL(t1.FYER_MXMM_RCOGN_TIME,0) <= NVL(t2.EDC_SUM_TIME,0)) THEN NVL(t1.FYER_MXMM_RCOGN_TIME,0) ELSE (CASE WHEN t2.YEAR = #yearList[].YEAR# THEN NVL(t2.EDC_SUM_TIME,0) ELSE 0 END) END) AS YR_$yearList[].YEAR$_EDC_CNFRM_TIME
+			 ,MAX(CASE WHEN t1.YEAR = #yearList[].YEAR# THEN NVL(t2.EDC_SUM_TIME,0) ELSE 0 END) AS YR_$yearList[].YEAR$_EDC_TIME
+			]]>
+			</iterate>
+	<![CDATA[
+		FROM   TBHRM_EDC_TY_RCOGN_TIME t1
+		       LEFT OUTER JOIN (
+		                        SELECT YEAR, EDC_TY_SN, EMPNO, SUM(EDC_RCOGN_TIME) AS EDC_SUM_TIME
+		                        FROM TBHRM_EDC_MANAGE
+		                        WHERE YEAR >= '2016'
+		                        AND   YEAR <= #YEAR#
+		                        GROUP BY YEAR, EDC_TY_SN, EMPNO
+		                       ) t2
+		            ON t1.YEAR  = t2.YEAR
+		           AND t1.SN    = t2.EDC_TY_SN
+		           AND t2.EMPNO = #EMPNO#
+		WHERE  t1.YEAR >= '2016'
+		  AND  t1.YEAR <= #YEAR#
+		GROUP BY t1.SN
+		ORDER BY t1.SN
+	]]>
+	</select>
+
+
+</sqlMap>

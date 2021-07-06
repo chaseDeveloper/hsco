@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACC020202_SQL">	
+	
+    
+	<!-- 지출결의등록 목록 -->
+	<select id="ACC020202DAO.wikCptalPlanList" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		WITH TB_EXP_DSN_MASTR AS (
+			SELECT T1.*
+			FROM TBACC_EXP_DSN_MASTR T1
+			LEFT OUTER JOIN INTRAWARE.VIEW_MIS_SANCTN_KND@DL_INTRACITY T2
+			     ON T1.SANCTN_NO = T2.SANCTN_NO
+			WHERE 1=1
+			<isNotEmpty property="DEPT_CODE">
+            	<isNotEqual property="DEPT_CODE" compareValue="000000">
+            	AND T1.DEPT_CODE = #DEPT_CODE#
+            	</isNotEqual>
+	        </isNotEmpty>
+	        <isNotEmpty property="ANACT_KND">
+	        	AND T1.ANACT_KND = #ANACT_KND#
+	        </isNotEmpty>
+	        <isNotEmpty property="SEARCH_TEXT">
+				<isEqual property="SEARCH_GUBUN" compareValue="1">
+				AND T1.CHECK_NO = #SEARCH_TEXT#							/* 수표번호			*/
+				</isEqual>
+				 <isEqual property="SEARCH_GUBUN" compareValue="2">
+				AND T1.DECSN_NO LIKE '%' || #SEARCH_TEXT# || '%'		/* 결의번호  			*/
+				</isEqual>
+				<isEqual property="SEARCH_GUBUN" compareValue="3">
+				AND T1.SUMRY LIKE '%' || #SEARCH_TEXT# || '%'		/*적요*/
+				</isEqual>
+			</isNotEmpty>
+			<isEqual property="STDR_DE" compareValue="1">
+				AND T1.ITNC_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#		/* 결의일자			*/
+			</isEqual>
+			<isEqual property="STDR_DE" compareValue="2">
+				AND T1.DET_DCSN_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#	/* 채무확정일자		*/
+			</isEqual>
+			<isEqual property="STDR_DE" compareValue="3">
+				AND T1.CPTAL_EXPNDTR_ACNTBK_DE BETWEEN #SRCH_ST_DT# AND #SRCH_ED_DT#	/* 자금지출일자		*/
+			</isEqual>
+			<isNotEmpty property="SANCTN_KND">
+				AND (
+				     CASE WHEN T1.SANCTN_NO IS NULL THEN '0'
+				          WHEN T1.SANCTN_NO = '0' THEN '5'
+				          ELSE NVL(T2.SANCTN_KND, '0')
+				     END
+				    ) = #SANCTN_KND#
+			</isNotEmpty>
+		)
+		SELECT
+		     NVL(t1.CYFD_SE, '0') AS CYFD_SE                                          /* 이월구분 */
+		    ,t1.DEPT_CODE                                                             /* 부서코드 */
+		    ,t2.DEPT_NM                                                               /* 부서명 */
+		    ,t1.BUDGET_YEAR                                                           /* 예산년도 */
+		    ,t1.BSNS_SE                                                               /* 사업구분(예산계정구분)   */  
+		    ,t1.BALC_SE                                                               /* 수지구분 */        
+		    ,t1.BUDGET_ACNT_CODE                                                      /* 예산계정코드 */
+		    ,t3.BUDGET_ACNT_NM                                                        /* 예산계정명 */
+		    ,t1.EXPNDTR_UNIT_CODE                                                     /* 지출단위코드 */
+		    ,t4.BUKIP_NM AS EXPNDTR_UNIT_NM                                           /* 지출단위명 */
+		    ,NVL(t1.EXPNDTR_CNFIRM_AT,'0') AS EXPNDTR_CNFIRM_AT                       /* 재무팀승인 */
+		    ,t1.EXPNDTR_UPDT_REQ_CN                                                   /* 재무팀수정요청내용*/
+		    ,NVL(t1.TIMHDER_CONFM,'0')    AS TIMHDER_CONFM                         	  /* 지출전송승인 */       
+			,t1.CPTAL_EXPNDTR_ACNTBK_DE                                               /* 자금지출장부등기일자(지출일자) */
+			,t1.ITNC_DE                                                               /* 발의일자(결의일자) */
+		    ,t1.DECSN_AMOUNT                                                          /* 확정금액        */
+		    ,t1.ANACT_KND                                                             /* 결의서종류(지출종류) */
+		    ,t1.CAUSE_ACTION_NO                                                       /* 원인행휘      */
+		    ,t1.DECSN_YEAR                                                            /* 지출년도      */
+		    ,t1.DECSN_NO                                                              /* 결의번호      */  
+		    ,t6.EMPNO AS REGISTER_ID                                                  /* 등록자ID       */
+		    ,t6.EMPNM AS REGISTER_EMPNM                                               /* 등록자명		*/           
+		    ,t8.EMPNO AS UPDUSR_ID                                                    /* 수정자ID       */
+		    ,t8.EMPNM AS UPDUSR_EMPNM                                                 /* 수정자명		*/
+		    ,t1.UPDT_DT                                                               /* 수정일시        */
+		    ,t1.SANCTN_NO                                                             /* 결재번호*/
+			,t1.TRG_FORM_ID
+			,t1.TRG_FORM_ID2
+			, TO_CHAR(t1.REGIST_DT,'YYYYMMDD') AS REGIST_DT
+			,TO_CHAR(t1.CHECK_NO) AS CHECK_NO
+			,t1.SUMRY
+			,CASE WHEN t1.SANCTN_NO IS NULL THEN '0'
+			      WHEN t1.SANCTN_NO = '0' THEN '5'
+			      ELSE t13.SANCTN_KND
+			 END AS SANCTN_KND
+			,CASE WHEN t1.ANACT_KND = '01'
+				  THEN DECODE(t12.CNT,1,t11.RCPT_MAN,t11.RCPT_MAN||' 외 '||(t12.CNT-1)||'건')
+				  ELSE DECODE(t10.CNT,1,t9.RCPT_MAN,t9.RCPT_MAN||' 외 '||(t10.CNT-1)||'건')
+			 END RCPT_MAN
+			,SFCOM_GET_SANCTN_DOC_NO(t1.SANCTN_NO) AS DOC_ID
+			,CASE t1.TRG_FORM_ID 
+			 	WHEN 'ACC020202' 		THEN '지출결의'
+			 	WHEN 'ACC020203' 		THEN '지출결의'
+			 	WHEN 'ACC030111' 		THEN '계산서'
+			 	WHEN 'ACC030111_P02' 	THEN '기타증빙'
+			 	WHEN 'ACC040202' 		THEN '법인카드'
+			 	WHEN 'CTR030600' 		THEN '계약대가'
+			 	WHEN 'HRM070206'		THEN '출장비'
+			 	WHEN 'HRM080306'		THEN '교육비'
+			 	WHEN 'HRM110102' 		THEN '원천세'
+			 	ELSE '기타'
+			 END AS TRG_FORM_NM
+		FROM TB_EXP_DSN_MASTR t1
+		     LEFT OUTER JOIN TBHRM_DEPT t2
+		     ON  t1.DEPT_CODE = t2.DEPT_CODE
+		     LEFT OUTER JOIN TBBDG_BUDGET_ACNT_CODE t3
+		     ON  t1.BUDGET_YEAR       = t3.YEAR 
+		     AND t1.BSNS_SE           = t3.BSNS_SE 
+			 AND t1.BALC_SE           = t3.BALC_SE
+			 AND t1.BUDGET_ACNT_CODE  = t3.BUDGET_ACNT_CODE
+		     LEFT OUTER JOIN TBBDG_BUKIP_CODE t4
+		     ON  t1.EXPNDTR_UNIT_CODE = t4.BUKIP_CODE
+		     LEFT OUTER JOIN TBCOM_USER t5
+		     ON  t1.REGISTER_ID = t5.USER_ID
+		     LEFT OUTER JOIN TBHRM_HR_MASTR t6
+		     ON  t5.EMPNO = t6.EMPNO
+		     LEFT OUTER JOIN TBCOM_USER t7
+		     ON  t1.UPDUSR_ID = t7.USER_ID
+			 LEFT OUTER JOIN TBHRM_HR_MASTR t8
+			 ON  t7.EMPNO = t8.EMPNO
+			 LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL t9
+		     ON  t1.DECSN_YEAR 	= t9.DECSN_YEAR
+		     AND t1.DECSN_NO 	= t9.DECSN_NO
+		     AND t9.SEQ = '1'
+		     LEFT OUTER JOIN (
+		     	SELECT DECSN_YEAR, DECSN_NO, COUNT(*) AS CNT
+		     	FROM TBACC_EXP_DSN_DETAIL a1
+		     	WHERE EXISTS (SELECT 1 FROM TB_EXP_DSN_MASTR a2 WHERE a1.DECSN_YEAR = a2.DECSN_YEAR AND a1.DECSN_NO = a2.DECSN_NO)
+		     	GROUP BY DECSN_YEAR, DECSN_NO
+		     ) t10
+		     ON  t1.DECSN_YEAR 	= t10.DECSN_YEAR
+		     AND t1.DECSN_NO 	= t10.DECSN_NO
+		     LEFT OUTER JOIN TBACC_EXP_DSN_DETAIL_TRVCT t11
+		     ON  t1.DECSN_YEAR 	= t11.DECSN_YEAR
+		     AND t1.DECSN_NO 	= t11.DECSN_NO
+		     AND t11.SEQ = '1'
+		     LEFT OUTER JOIN (
+		     	SELECT DECSN_YEAR, DECSN_NO, COUNT(*) AS CNT
+		     	FROM TBACC_EXP_DSN_DETAIL_TRVCT a1
+		     	WHERE EXISTS (SELECT 1 FROM TB_EXP_DSN_MASTR a2 WHERE a1.DECSN_YEAR = a2.DECSN_YEAR AND a1.DECSN_NO = a2.DECSN_NO)
+		     	GROUP BY DECSN_YEAR, DECSN_NO
+		     ) t12
+		     ON  t1.DECSN_YEAR 	= t12.DECSN_YEAR
+		     AND t1.DECSN_NO 	= t12.DECSN_NO
+		     LEFT OUTER JOIN INTRAWARE.VIEW_MIS_SANCTN_KND@DL_INTRACITY t13
+		     ON t1.SANCTN_NO = t13.SANCTN_NO
+		WHERE 1=1
+		<isNotEmpty property="SEARCH_TEXT">
+			<isEqual property="SEARCH_GUBUN" compareValue="4">
+				AND t3.BUDGET_ACNT_NM LIKE '%' || #SEARCH_TEXT# || '%'
+			</isEqual>
+			 <isEqual property="SEARCH_GUBUN" compareValue="5">
+				AND t4.BUKIP_NM LIKE '%' || #SEARCH_TEXT# || '%'
+			</isEqual>
+			<isEqual property="SEARCH_GUBUN" compareValue="6">
+				AND t6.EMPNM LIKE '%' || #SEARCH_TEXT# || '%'
+			</isEqual> 
+		</isNotEmpty>
+		ORDER BY t1.DECSN_YEAR ASC, t1.CPTAL_EXPNDTR_ACNTBK_DE ASC NULLS LAST, t1.REGIST_DT, t1.DECSN_NO
+	</select>
+	
+</sqlMap>

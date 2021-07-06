@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="HRM050401_SQL">
+	
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 대우임용대상자 존재유무 확인 -->
+    <select id="HRM050401DAO.chkData" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+        SELECT COUNT(*)                     AS EXIST_AT
+          FROM TBHRM_TRTMT_EMP_SELECTN
+         WHERE 1=1
+           AND STDR_DE        = #STDR_DE#
+    </select>
+	
+	<!-- 대우임용대상자 생성 -->
+	<update id="HRM050401DAO.tbhrmTrgterCreat" parameterClass="java.util.HashMap">		
+		INSERT INTO TBHRM_TRTMT_EMP_SELECTN (
+               STDR_DE
+             , EMPNO
+             , DEPT_CODE
+             , JSSFC_SE
+             , OFCPS_SE
+             , RSPOFC_SE
+             , NOW_CLSF_SE
+             , CNWK_YYCNT
+             , CNWK_MONTH
+             , EXCESS_CNWK_YYCNT
+             , EXCESS_CNWK_MONTH_CO
+             , STTUS
+             , SELECTN_DE
+             , RM
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+        )
+        SELECT #STDR_DE#
+             , T2.EMPNO                            AS EMPNO
+             , T2.DEPT_CODE                        AS DEPT_CODE
+             , T2.JSSFC_SE                         AS JSSFC_SE
+             , T2.OFCPS_SE                         AS OFCPS_SE
+             , T2.RSPOFC_SE                        AS RSPOFC_SE
+             , T2.HR_CLSF_SE                       AS NOW_CLSF_SE
+             , T2.CNWK_YYCNT                       AS CNWK_YYCNT
+             , T2.CNWK_MONTH                       AS CNWK_MONTH
+             , T2.CNWK_YYCNT - TPRY.REQRE_YYCNT    AS EXCESS_CNWK_YYCNT
+             , T2.CNWK_MONTH                       AS EXCESS_CNWK_MONTH_CO
+             , '0'                                 AS STTUS
+             , ''                                  AS SELECTN_DE
+             , ''                                  AS RM
+             , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+          FROM TBHRM_PRMOT_REQRE_YYCNT TPRY
+               LEFT OUTER JOIN (
+                               SELECT T1.EMPNO
+                                    , THM.DEPT_CODE
+                                    , THM.JSSFC_SE
+                                    , SFHRM_GET_OFCPSCD(THM.EMPNO, THM.JSSFC_SE, THM.HR_CLSF_SE, THM.ECNY_DE) AS OFCPS_SE
+                                    , THM.RSPOFC_SE
+                                    , THM.HR_CLSF_SE
+                                    , T1.BGN_DE
+                                    , TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T1.BGN_DE, 'YYYYMMDD'))/12) AS CNWK_YYCNT
+                                    , CEIL(MONTHS_BETWEEN(SYSDATE, TO_DATE(T1.BGN_DE, 'YYYYMMDD')) - TRUNC(MONTHS_BETWEEN(SYSDATE, TO_DATE(T1.BGN_DE, 'YYYYMMDD'))/12)*12) AS CNWK_MONTH
+                                 FROM (
+                                      SELECT EMPNO, CLSF_SE, MIN(GNFD_DE) AS BGN_DE
+                                        FROM TBHRM_GNFD
+                                    GROUP BY EMPNO, CLSF_SE) T1
+                                      INNER JOIN TBHRM_HR_MASTR THM
+                                         ON T1.EMPNO = THM.EMPNO
+                                        AND T1.CLSF_SE = THM.HR_CLSF_SE
+                                      WHERE THM.RETIRE_DE IS NULL) T2
+                ON TPRY.NOW_CLSF_SE = T2.HR_CLSF_SE
+               AND TPRY.JSSFC_SE = T2.JSSFC_SE
+         WHERE (T2.CNWK_YYCNT - TPRY.REQRE_YYCNT) >= 2
+           AND NOW_CLSF_SE BETWEEN '02' AND '06'
+	</update>
+	
+	<!-- 대우임용대상자 선발 확정 -->
+	<update id="HRM050401DAO.tbhrmTrgterDcsn" parameterClass="java.util.HashMap">
+		UPDATE TBHRM_TRTMT_EMP_SELECTN
+           SET STTUS = '1'
+         WHERE STDR_DE = #STDR_DE# AND EMPNO = #EMPNO#
+	</update>
+	
+	<!-- 확정 취소 -->
+	<update id="HRM050401DAO.tbhrmDcsnC" parameterClass="java.util.HashMap">
+		UPDATE TBHRM_TRTMT_EMP_SELECTN
+           SET STTUS = '0'
+         WHERE STDR_DE = #STDR_DE# AND EMPNO = #EMPNO#
+	</update>
+	
+	<!-- 대우임용대상자 발령 기초 정보 생성 -->
+	<insert id="HRM050401DAO.tbhrmGnfdBasis" parameterClass="java.util.HashMap">		
+		INSERT INTO TBHRM_GNFD (
+               EMPNO
+             , SEQ
+             , GNFD_DE
+             , GNFD_SE
+             , REGIST_DE
+             , BEFORE_DEPT_CODE
+             , BEFORE_JSSFC_SE
+             , BEFORE_RSPOFC_SE
+             , BEFORE_HR_CLSF_SE
+             , BEFORE_PAY_CLSF_SE
+             , BEFORE_SRCLS_SE
+             , BEFORE_DTY_SE
+             , BEFORE_DTY_NM
+             , REGISTER_ID
+             , REGIST_DT
+             , UPDUSR_ID
+             , UPDT_DT
+        )
+        SELECT EMPNO
+             , (SELECT NVL(MAX(SEQ), 0)+1 FROM TBHRM_GNFD WHERE EMPNO = #EMPNO#)
+             , TO_CHAR(SYSDATE, 'YYYYMMDD')
+             , '030'
+             , TO_CHAR(SYSDATE, 'YYYYMMDD')
+             , DEPT_CODE
+             , JSSFC_SE
+             , RSPOFC_SE
+             , HR_CLSF_SE
+             , PAY_CLSF_SE
+             , SRCLS
+             , DTY_SE
+             , DTY_NM
+             , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+          FROM TBHRM_HR_MASTR
+         WHERE EMPNO = #EMPNO#
+	</insert>
+	
+	<!-- 대우임용대상자 조회 -->
+	<select id="HRM050401DAO.tbhrmTrtmtList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[			
+             SELECT '0'                                            AS CHK
+                  , TTES.STDR_DE
+                  , TTES.EMPNO
+                  , THM.EMPNM                                      AS EMPNM
+                  , TTES.DEPT_CODE
+                  , NVL(SFSAL_GETDEPTNM_01(TTES.DEPT_CODE), SFHRM_GET_DEPTNM(TTES.DEPT_CODE, '0'))  AS DEPT_NM
+                  , TTES.JSSFC_SE
+                  , TTES.OFCPS_SE
+                  , LPAD(TO_NUMBER(TTES.NOW_CLSF_SE)-1, 2, '0')    AS NEXT_CLSF_SE
+                  , TTES.RSPOFC_SE
+                  , TTES.NOW_CLSF_SE
+                  , TTES.CNWK_YYCNT
+                  , TTES.CNWK_MONTH
+                  , TTES.EXCESS_CNWK_YYCNT
+                  , TTES.EXCESS_CNWK_MONTH_CO
+                  , TTES.STTUS
+                  , TTES.SELECTN_DE
+                  , TTES.RM
+               FROM TBHRM_TRTMT_EMP_SELECTN TTES
+                    LEFT OUTER JOIN TBHRM_HR_MASTR THM
+                         ON TTES.EMPNO = THM.EMPNO
+              WHERE 1=1
+		]]>	
+			<isNotEmpty property="STDR_DE" prepend="AND">
+			    TTES.STDR_DE = #STDR_DE#
+			</isNotEmpty>
+			<isNotEmpty property="DEPT_CODE" prepend="AND">
+				TTES.DEPT_CODE = #DEPT_CODE#
+			</isNotEmpty>
+			<isNotEmpty property="EMPNM" prepend="AND">
+				THM.EMPNM LIKE '%' || #EMPNM# || '%'
+			</isNotEmpty>
+		<![CDATA[	
+			 ORDER BY STDR_DE, DEPT_CODE, JSSFC_SE, NOW_CLSF_SE, EMPNO
+		]]>
+    </select>
+    
+    <!-- 대우임용대상자 삭제 -->
+	<delete id="HRM050401DAO.deleteTrtmt" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBHRM_TRTMT_EMP_SELECTN
+		 WHERE STDR_DE = #STDR_DE# AND EMPNO = #EMPNO#
+	</delete>
+</sqlMap>

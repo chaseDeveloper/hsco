@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+
+<sqlMap namespace="FileUpload">
+
+	
+	<!-- 파일일련번호 시퀀스 -->
+	<select id="selectFileSn" resultClass="java.math.BigDecimal">
+	
+		SELECT SQ_ATCHMNFL_1.NEXTVAL FROM DUAL
+		
+	</select>
+	
+	<select id="selectFileSnMap" resultClass="java.util.HashMap">
+	
+		SELECT SQ_ATCHMNFL_1.NEXTVAL AS FILE_SN FROM DUAL
+		
+	</select>
+	
+	<!-- 파일 순차 조회 -->
+	<select id="selectFileOrdr" parameterClass="java.util.HashMap" resultClass="java.lang.Integer">
+	    <![CDATA[	
+        /*+ hsco.cmm.file.FileUploadDao.selectFileOrdr */	
+        SELECT 
+          CASE WHEN FILE_CNT = 0 THEN 1 ELSE NXT_FILE_ORDR END AS NXT_FILE_ORDR
+        FROM ( 
+		SELECT 
+		    MAX(FILE_ORDR) + 1 AS NXT_FILE_ORDR
+		  , COUNT(FILE_ORDR)   AS FILE_CNT
+		FROM TBCOM_CMMN_ATCHMNFL 
+		WHERE 1=1
+		AND    FILE_SN = #FILE_SN#
+		) A
+		]]>
+	</select>
+	
+	<!-- 공통첨부파일마스터 존재여부 체크 -->
+	<select id="checkAtchmnFileMast" parameterClass="java.util.HashMap" resultClass="java.lang.Integer">
+	    SELECT COUNT(*) AS CNT FROM TBCOM_CMMN_ATCHMNFL_MASTR
+	    WHERE FILE_SN = #FILE_SN#			/* 파일일련번호 */
+	</select>
+	
+	<!-- 공통첨부파일마스터 조회 -->
+	<select id="selectAtchmnFileMast" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+        	 A.FILE_SN			    /* 파일일련번호    */
+        	,A.SYS_SE_CODE			/* 시스템구분코드  */
+        	,A.JOB_SE_CODE			/* 업무구분코드    */
+        FROM TBCOM_CMMN_ATCHMNFL_MASTR A			/* 공통첨부파일마스터 */
+        WHERE 1=1
+        <isNotEmpty property="FILE_SN">
+          AND A.FILE_SN = #FILE_SN#			/* 파일일련번호 */
+        </isNotEmpty>
+        ORDER BY 1,2,3
+	</select>
+
+	<!-- 공통첨부파일마스터 추가 -->
+	<insert id="insertAtchmnFileMast" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_CMMN_ATCHMNFL_MASTR (			/* 공통첨부파일마스터 */
+        	 FILE_SN			/* 파일일련번호 */
+        	,SYS_SE_CODE			/* 시스템구분코드 */
+        	,JOB_SE_CODE			/* 업무구분코드 */
+        	,REGISTER_ID			/* 등록자ID */
+        	,REGIST_DT			/* 등록일시  */
+        	,UPDUSR_ID			/* 수정자ID */
+        	,UPDT_DT			/* 수정일시  */
+        ) VALUES (
+        	 #FILE_SN#			/* 파일일련번호            */
+        	,#SYS_SE_CODE#			/* 시스템구분코드 */
+        	,#JOB_SE#			/* 업무구분코드    */
+        	,#S_USER_ID#			/* 등록자ID */
+        	,SYSDATE			/* 등록일시 */
+        	,#S_USER_ID#			/* 수정자ID */
+        	,SYSDATE			/* 수정일시 */
+        )
+	</insert>
+
+	<!-- 공통첨부파일마스터 수정 -->
+	<update id="upateAtchmnFileMast" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_CMMN_ATCHMNFL_MASTR			/* 공통첨부파일마스터 */
+          SET
+        	 SYS_SE_CODE = #SYS_SE_CODE#			/* 시스템구분코드 */
+        	,JOB_SE_CODE = #JOB_SE#			/* 업무구분코드   */
+        	,UPDUSR_ID = #S_USER_ID#			/* 수정자ID */
+        	,UPDT_DT = SYSDATE			    /* 수정일시 */
+        WHERE FILE_SN = #FILE_SN#			/* 파일일련번호 */
+	</update>
+
+	<!-- 공통첨부파일마스터 삭제 -->
+	<delete id="deleteAtchmnFileMast" parameterClass="java.util.HashMap">
+        DELETE FROM TBCOM_CMMN_ATCHMNFL_MASTR			/* 공통첨부파일마스터 */
+        WHERE FILE_SN = #FILE_SN#			            /* 파일일련번호 */
+	</delete>
+	
+	
+	<!-- 첨부파일 목록 조회 조회 -->
+	<select id="selectAtchmnFileList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+        SELECT
+        	  A.FILE_SN			    /*  파일일련번호 */
+        	, A.FILE_ORDR			/*  파일순차 */
+        	, A.FILE_ORDR	AS NEW_FILE_ORDR 	/*신규파일순차*/
+        	, A.FILE_STRE_COURS		/*  파일저장경로 */
+        	, A.STRE_FILE_NM			/*  저장파일명 */
+        	, A.ORGINL_FILE_NM	    /*  원본파일명 */
+        	, A.FILE_EXTSN			/*  파일확장자 */
+        	, A.FILE_CN			    /*  파일내용   */
+        	, A.FILE_MG			    /*  파일크기   */
+        	, A.USE_AT			    /*  사용여부   */
+        	, A.FILE_ID              /*       */
+        	, B.SYS_SE_CODE			/*  시스템구분코드 */
+        	, B.JOB_SE_CODE AS JOB_SE /*  업무구분코드 */
+        	, ROW_NUMBER() OVER (PARTITION BY A.FILE_SN ORDER BY A.FILE_ORDR ASC) AS SN
+        	, A.FILE_TY	
+        	, 'theme://images/fileUpDownload/file_icon_' || DECODE(LOWER(A.FILE_EXTSN), 'zip', 'ZIP','rar', 'ZIP','7z', 'ZIP', 'jpg', 'IMG', 'jpeg', 'IMG', 'gif', 'IMG', 'png', 'IMG', 'bmp', 'IMG', 'txt', 'TXT', 'xml', 'TXT', 'doc', 'DOC', 'docx', 'DOC', 'xls', 'XLS', 'xlsx', 'XLS', 'ppt', 'PPT', 'pptx', 'PPT', 'pdf', 'PDF', 'hwp', 'HWP', 'hwt', 'HWP', 'ETC' ) || '.png' AS FILE_IMAGE
+        	, 100 AS PROGRS
+        	, NULL AS TRNSMIS_FILE_SIZE
+        	, 'theme://images/img_WF_ConfirmE.png' AS DELETE_IMAGE
+        	, NULL AS STTUS
+        	, '0' AS CHK
+        FROM TBCOM_CMMN_ATCHMNFL A 			/* 공통첨부파일 */
+         ,  TBCOM_CMMN_ATCHMNFL_MASTR B 	/* 공통첨부파일마스터 */
+        WHERE 1=1
+          AND A.FILE_SN = B.FILE_SN
+          /* AND A.USE_AT='1' */
+          AND B.FILE_SN = #FILE_SN#			/* 파일일련번호 */
+        <isNotEmpty property="FILE_ORDR">
+          AND A.FILE_ORDR = #FILE_ORDR#		/* 파일순차 */
+        </isNotEmpty>
+        ORDER BY 1,2,3
+	</select>
+	
+	<!-- 공통첨부파일 존재여부 체크 -->
+	<select id="checkAtchmnFile" parameterClass="java.util.HashMap" resultClass="java.lang.Integer">
+	    SELECT COUNT(*) AS CNT FROM TBCOM_CMMN_ATCHMNFL
+	     WHERE FILE_SN = #FILE_SN#			/* 파일일련번호 */
+	</select>
+	
+	<!-- 공통첨부파일 추가 -->
+	<insert id="insertAtchmnFile" parameterClass="java.util.HashMap">
+        INSERT INTO TBCOM_CMMN_ATCHMNFL (			/* 공통첨부파일 */
+        	 FILE_SN			/* 파일일련번호 */
+        	,FILE_ORDR			/* 파일순차 */
+        	,FILE_STRE_COURS			/* 파일저장경로 */
+        	,STRE_FILE_NM			/* 저장파일명 */
+        	,ORGINL_FILE_NM			/* 원본파일명 */
+        	,FILE_EXTSN			/* 파일확장자 */
+        	,FILE_MG			/* 파일크기 */
+        	,USE_AT			/* 사용여부 */
+        	,REGISTER_ID			/* 등록자ID */
+        	,REGIST_DT			/* 등록일시 */
+        	,UPDUSR_ID			/* 수정자ID */
+        	,UPDT_DT			/* 수정일시 */
+        	,FILE_ID
+        	,FILE_TY
+        ) VALUES (
+        	 #FILE_SN#			/* 파일일련번호 */
+        	, #FILE_ORDR#			/* 파일순차 */
+        	,#FILE_STRE_COURS#			/* 파일저장경로 */
+        	,#STRE_FILE_NM#			/* 저장파일명 */
+        	,#ORGINL_FILE_NM#			/* 원본파일명 */
+        	,#FILE_EXTSN#			/* 파일확장자 */
+        	,#FILE_MG#			/* 파일크기 */
+        	,#USE_AT#			/* 사용여부 */
+        	,#S_USER_ID#			/* 등록자ID */
+        	,SYSDATE			/* 등록일시 */
+        	,#S_USER_ID#			/* 수정자ID */
+        	,SYSDATE			/* 수정일시 */
+        	,#FILE_ID#
+        	,#FILE_TY#
+        )
+	</insert>
+
+	<!-- 공통첨부파일 수정 -->
+	<update id="updateAtchmnFile" parameterClass="java.util.HashMap">
+        UPDATE TBCOM_CMMN_ATCHMNFL			/* 공통첨부파일 */
+          SET
+        	 FILE_STRE_COURS = #FILE_STRE_COURS#			/* 파일저장경로 */
+        	,STRE_FILE_NM = #STRE_FILE_NM#			/* 저장파일명 */
+        	,ORGINL_FILE_NM = #ORGINL_FILE_NM#			/* 원본파일명 */
+        	,FILE_EXTSN = #FILE_EXTSN#			/* 파일확장자 */
+        	,FILE_CN = #FILE_CN#			/* 파일내용 */
+        	,FILE_MG = #FILE_MG#			/* 파일크기 */
+        	,USE_AT = #USE_AT#			/* 사용여부 */
+        	,UPDUSR_ID = #S_USER_ID#			/* 수정자ID */
+        	,UPDT_DT = SYSDATE			/* 수정일시 */
+        	,FILE_ID = #FILE_ID#
+        	,FILE_TY = #FILE_TY#
+        WHERE FILE_SN = #FILE_SN#			/* 파일일련번호 */
+          AND FILE_ORDR = #FILE_ORDR#			/* 파일순차 */
+    </update>
+        
+	<!-- 공통첨부파일 미사용처리 -->
+	<update id="updateAtchmnFile2NotUse" parameterClass="java.util.HashMap">
+         UPDATE TBCOM_CMMN_ATCHMNFL			/* 공통첨부파일 */
+          SET  USE_AT = '0'			        /* 사용여부 */
+              ,UPDUSR_ID = #S_USER_ID#		/* 수정자ID */
+        	  ,UPDT_DT = SYSDATE			/* 수정일시 */
+        WHERE FILE_SN = #FILE_SN#			/* 파일일련번호 */
+          AND FILE_ORDR = #FILE_ORDR#		/* 파일순차 */
+	</update>
+	
+	<!-- 공통첨부파일 삭제 -->
+	<delete id="deleteAtchmnFile" parameterClass="java.util.HashMap">
+        DELETE FROM TBCOM_CMMN_ATCHMNFL			/* 공통첨부파일 */
+        WHERE FILE_SN = #FILE_SN#				/* 파일일련번호 */
+        <isNotEmpty property="FILE_ORDR">
+          AND FILE_ORDR = #FILE_ORDR#			/* 파일순차 */
+        </isNotEmpty>
+	</delete>
+	
+	<!-- 온비드 공통첨부파일 추가 -->
+	<insert id="insertOnbidFile" parameterClass="java.util.HashMap">
+        INSERT INTO ONB_IF_ATCH_FILE_I (
+             TRNS_ID
+            ,FILE_SEQ
+            ,DOC_KIND_CD
+            ,ATCH_FILE_NM
+            ,PHYS_FILE_NM
+            ,REFN_KEY
+            ,REFN_KEY_SEQ
+            ,RGST_DTM
+        ) VALUES (
+             #TRNS_ID#
+            ,(SELECT NVL(MAX(FILE_SEQ), 0)+1 FROM ONB_IF_ATCH_FILE_I WHERE TRNS_ID = #TRNS_ID#)
+            ,#DOC_KIND_CD#
+            ,#ATCH_FILE_NM#
+            ,#PHYS_FILE_NM#
+            ,#REFN_KEY#
+            ,#REFN_KEY_SEQ#
+            ,SYSDATE        
+        )
+	</insert>	
+	
+	<!-- 첨부파일 순서변경 -->
+	<update id="updateAtchmnFileOrdr" parameterClass="java.util.HashMap">
+		UPDATE TBCOM_CMMN_ATCHMNFL
+		   SET FILE_ORDR = #NEW_FILE_ORDR#
+		      ,UPDUSR_ID = #S_USER_ID#
+ 		      ,UPDT_DT = SYSDATE	
+		WHERE FILE_SN = #FILE_SN#	
+		AND FILE_ORDR = #FILE_ORDR#	
+	</update>
+</sqlMap>

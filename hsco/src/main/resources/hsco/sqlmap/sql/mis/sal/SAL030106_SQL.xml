@@ -1,0 +1,930 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SAL030106_SQL">	
+
+	<!-- 월급여지급내역 -->
+	<select id="SAL030106DAO.selectMtSalaryList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH MT_SALARY_T AS (
+		    SELECT
+          	 	 PYMNT_YM
+        		,SN
+		        ,COUNT(1) AS CNT
+		        ,SUM(PYMNT_AMT) AS PYMNT_AMT
+		        ,SUM(DDC_AMT) AS DDC_AMT
+		        ,SUM(TOT_AMT) AS TOT_AMT
+		    FROM (
+		          SELECT 
+		          	   t1.PYMNT_YM
+              		  ,t1.SN
+		              ,t3.JSSFC_SE
+		              ,t1.EMPNO
+		              ,SUM(DECODE(t2.PYMNT_DDC_SE,0,t1.AMOUNT,0)) AS PYMNT_AMT
+		              ,SUM(DECODE(t2.PYMNT_DDC_SE,1,t1.AMOUNT,0)) AS DDC_AMT
+		              ,SUM(DECODE(t2.PYMNT_DDC_SE,0,1,-1) * t1.AMOUNT) AS TOT_AMT
+		          FROM TBSAL_MT_SALARY_DTLS t1
+		               INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE t2
+		               ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+		               INNER JOIN TBHRM_HR_MASTR t3
+		               ON t1.EMPNO = t3.EMPNO
+		          WHERE t1.PYMNT_YM LIKE #PYMNT_YEAR#||'%'
+		          GROUP BY t1.PYMNT_YM, t1.SN, t3.JSSFC_SE, t1.EMPNO
+		         )
+		    GROUP BY PYMNT_YM, SN
+		)
+		SELECT
+			 t1.PYMNT_YM
+			,t2.PYMNT_DE
+    		,t1.SN
+		    ,t1.CNT
+		    ,t1.PYMNT_AMT
+		    ,t1.DDC_AMT
+		    ,t1.TOT_AMT
+	        ,NVL(t2.CLOS_AT,'0') AS CLOS_AT
+			FROM MT_SALARY_T t1
+	         	 INNER JOIN TBSAL_MT_SALARY_CALC t2
+	         ON  t1.PYMNT_YM = t2.PYMNT_YM
+	         AND t1.SN = t2.SN
+	        WHERE t2.CLOS_AT = '1'
+	    ORDER BY t1.PYMNT_YM, t1.SN
+	</select>
+	
+	<!-- 월급여지급상세 -->
+	
+	    
+    <!-- 월급여지출정보 목록조회 -->
+	<select id="SAL030106DAO.selectSalaryPymntExpndtrList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+			SELECT A.PYMNT_YM                                                    AS PYMNT_YM
+			     , A.SALARY_SE                                                   AS SALARY_SE
+			     , A.PYMNT_SE                                                    AS PYMNT_SE
+			     , A.PYMNT_DE                                                    AS PYMNT_DE
+			     , A.EMPNO                                                       AS EMPNO
+			     , A.EMPNM                                                       AS EMPNM
+			     , A.EMPL_SE                                                     AS EMPL_SE
+			     , A.ANSLRY_AT                                                   AS ANSLRY_AT
+			     , A.DEPT_CODE                                                   AS DEPT_CODE
+			     , SFSAL_GETDEPTNM_01(A.DEPT_CODE)                               AS DEPT_NM
+			     , A.PRMPC_SE                                                    AS PRMPC_SE
+			     , A.CLSF_CODE                                                   AS CLSF_CODE
+			     , SFHRM_GET_OFCPSCD(A.EMPNO, A.EMPL_SE, A.CLSF_CODE, A.ECNY_DE) AS OFCPS /* 직위 */
+			     , A.RSPOFC_SE                                                   AS RSPOFC_SE
+			     , A.SRCLS                                                       AS SRCLS
+			     , A.ECNY_DE                                                     AS ECNY_DE
+			     , A.RETIRE_DE                                                   AS RETIRE_DE
+			     , A.STDR_DE                                                     AS STDR_DE
+			     , A.CLSF_PRMOT_DE                                               AS CLSF_PRMOT_DE
+			     , A.DCLZ_SE                                                     AS DCLZ_SE
+			     , A.BGNDE                                                       AS BGNDE
+			     , A.ENDDE                                                       AS ENDDE
+			     , A.LBUN_SBSCRB_SE                                              AS LBUN_SBSCRB_SE
+			     , A.DSPSN_GRAD                                                  AS DSPSN_GRAD
+			     , A.WORK_STTUS                                                  AS WORK_STTUS
+			     , A.MT_DAYCNT                                                   AS MT_DAYCNT
+			     , A.NTHG_PLAN_ABSENC_DAYCNT                                     AS NTHG_PLAN_ABSENC_DAYCNT
+			     , A.ABSENC_DAYCNT                                               AS ABSENC_DAYCNT
+			     , A.LATEN_DAYCNT                                                AS LATEN_DAYCNT
+			     , A.SLYRD_RT                                                    AS SLYRD_RT
+			     , A.LAYOFF_SALARY_RT                                            AS LAYOFF_SALARY_RT
+			     , A.INDVDL_PRICEWAGE_PYMNT_RT                                   AS INDVDL_PRICEWAGE_PYMNT_RT
+			     , A.SEIZR_AT                                                    AS SEIZR_AT
+			     , A.HN_DDC_NMPR                                                 AS HN_DDC_NMPR
+			     , A.TIME__ELSE_TIME                                             AS TIME__ELSE_TIME
+			     , A.NIGHT_LABOR_TIME                                            AS NIGHT_LABOR_TIME
+			     , A.RESTDE_LABOR_TIME                                           AS RESTDE_LABOR_TIME
+			     , A.YEAST_HLDY_RCOGN                                            AS YEAST_HLDY_RCOGN
+			     , LPAD(A.SALARY_BANK_CODE, 3, '0')                              AS SALARY_BANK_CODE
+			     , A.SALARY_BANK_ACNUT                                           AS SALARY_BANK_ACNUT
+			     , LPAD(A.ALLWNC_BANK_CODE, 3, '0')                              AS ALLWNC_BANK_CODE
+			     , A.ALLWNC_BANK_ACNUT                                           AS ALLWNC_BANK_ACNUT
+			     , A.BSLRY                                                       AS BSLRY
+			     , A.BSLRY_EXCCLC                                                AS BSLRY_EXCCLC
+			     , A.CNSTRC_ALLWNC                                               AS CNSTRC_ALLWNC
+			     , A.INORG_CNWK_ALLWNC                                           AS INORG_CNWK_ALLWNC
+			     , A.TCHNLGY_ALLWNC                                              AS TCHNLGY_ALLWNC
+			     , A.FAMILY_ALLWNC                                               AS FAMILY_ALLWNC
+			     , A.SPCL_JOB_ALLWNC                                             AS SPCL_JOB_ALLWNC
+			     , A.SPCIFY_JOB_EXC                                              AS SPCIFY_JOB_EXC
+			     , A.DRV_ALLWNC                                                  AS DRV_ALLWNC
+			     , A.RISK_ALLWNC                                                 AS RISK_ALLWNC
+			     , A.TRTMNT_ALLWNC                                               AS TRTMNT_ALLWNC
+			     , A.YRYC_ALLWNC                                                 AS YRYC_ALLWNC
+			     , A.SCHXPN_SBSIDY                                               AS SCHXPN_SBSIDY
+			     , A.INCNTV_PRICEWAGE                                            AS INCNTV_PRICEWAGE
+			     , A.BUDGET_PRICEWAGE                                            AS BUDGET_PRICEWAGE
+			     , A.DTY_ALLWNC                                                  AS DTY_ALLWNC
+			     , A.TIME__ELSE_ALLWNC                                           AS TIME__ELSE_ALLWNC
+			     , A.MLSV_SBSIDY                                                 AS MLSV_SBSIDY
+			     , A.RSPOFC_SBSIDY                                               AS RSPOFC_SBSIDY
+			     , A.TRNSPORT_SBSIDY                                             AS TRNSPORT_SBSIDY
+			     , A.JOB_PRTN_TRVCT                                              AS JOB_PRTN_TRVCT
+			     , A.SPT_SYSM_CT                                                 AS SPT_SYSM_CT
+			     , A.MANAGE_JOB_ALLWNC                                           AS MANAGE_JOB_ALLWNC
+			     , A.RESTDE_ALLWNC                                               AS RESTDE_ALLWNC
+			     , A.INFANT_NRTR_CT                                              AS INFANT_NRTR_CT
+			     , A.MNG_ALLWNC                                                  AS MNG_ALLWNC
+			     , A.ETC_ALLWNC                                                  AS ETC_ALLWNC
+			     , A.ALLWNC_EXCCLC                                               AS ALLWNC_EXCCLC
+			     , A.SALARY_PYMNT_TOTAMT                                         AS SALARY_PYMNT_TOTAMT
+			     , A.ALLWNC_PYMNT_TOTAMT                                         AS ALLWNC_PYMNT_TOTAMT
+			     , A.TOT_PYMNTAMT                                                AS TOT_PYMNTAMT
+			     , A.TOT_PYMNTAMT                                                AS TOT_PYMNTAMT
+			     , A.INCMTAX                                                     AS INCMTAX
+			     , A.LCLTY_INCMTAX                                               AS LCLTY_INCMTAX
+			     , A.HLTHINS                                                     AS HLTHINS
+			     , A.NPN                                                         AS NPN
+			     , A.EMPLYMINSRNC                                                AS EMPLYMINSRNC
+			     , A.ENDW_PRNCPAL                                                AS ENDW_PRNCPAL
+			     , A.ENDW_INTR                                                   AS ENDW_INTR
+			     , A.MXTR_CT                                                     AS MXTR_CT
+			     , A.SRVC_GRP_ENDW                                               AS SRVC_GRP_ENDW
+			     , A.SCHXPN_RPAY                                                 AS SCHXPN_RPAY
+			     , A.YND_EXCCLC                                                  AS YND_EXCCLC
+			     , A.MENDNG_SEIZR                                                AS MENDNG_SEIZR
+			     , A.FSTMP_PURCHS_DDC                                            AS FSTMP_PURCHS_DDC
+			     , A.INCMTAX_EXCCLC                                              AS INCMTAX_EXCCLC
+			     , A.LCLTY_INCMTAX_EXCCLC                                        AS LCLTY_INCMTAX_EXCCLC
+			     , A.HLTHINS_EXCCLC                                              AS HLTHINS_EXCCLC
+			     , A.EMPLYMINSRNC_EXCCLC                                         AS EMPLYMINSRNC_EXCCLC
+			     , A.DDC_TOTAMT                                                  AS DDC_TOTAMT
+			     , A.ODYGS                                                       AS ODYGS
+			     , A.RL_RECPT_AMOUNT                                             AS RL_RECPT_AMOUNT
+			     , A.RL_RECPT_AMOUNT                                             AS RL_RECPT_AMOUNT
+			     , A.CLOS_AT                                                     AS CLOS_AT
+			     , A.CLOS_DE                                                     AS CLOS_DE
+			     , A.RM                                                          AS RM
+			     , A.RSPOFC_SE                                                   AS RSPOFC_SE
+			     , A.PYMNT_SE                                                    AS PYMNT_SE
+			     , A.TAXT_AMOUNT                                                 AS TAXT_AMOUNT
+			     , A.TAXXMPT_AMOUNT                                              AS TAXXMPT_AMOUNT
+			     , A.WAGE_PEAK                                                   AS WAGE_PEAK
+			     , A.SALARY_BANK_CODE                                    		 AS BANK_CD
+			     , SFCMP_GET_CODENM('COM021', A.SALARY_BANK_CODE)                AS BANK_NM
+			     , A.SALARY_BANK_ACNUT                                           AS SALARY_BANK_ACNUT
+			  FROM TBSAL_MT_SALARY_PYMNT A
+			     , VWHRM_DEPT B
+			     , TBHRM_HR_MASTR C
+			 WHERE 1                   = 1
+			   AND A.EMPNO             = C.EMPNO
+			   AND C.DEPT_CODE         = B.DEPT_CODE
+			   AND A.CLOS_AT           = '1'
+			   AND A.CLOS_DE IS NOT NULL
+			   AND B.DEPT_LEVEL_SE IN('1', '2')
+			   AND A.EMPL_SE IN ('000', '001', '002', '003', '004', '007')
+			]]>			
+			<isNotEmpty property="SALARY_SE">
+			   AND A.SALARY_SE = #SALARY_SE#
+			</isNotEmpty>	
+			<isNotEmpty property="PYMNT_SE">
+			   AND A.PYMNT_SE = #PYMNT_SE#
+			</isNotEmpty>			
+			<isNotEmpty property="PYMNT_YM">
+			   AND A.PYMNT_YM = #PYMNT_YM#
+			</isNotEmpty>	
+			<isNotEmpty property="PYMNT_DE">
+			   AND A.PYMNT_DE = #PYMNT_DE#
+			</isNotEmpty>
+				ORDER BY A.PYMNT_YM
+				       , A.SALARY_SE
+				       , A.CLSF_CODE
+				       , A.EMPL_SE
+				       , A.SRCLS DESC
+				       , B.DEPT_LEVEL_SE
+				       , B.DEPT_CODE
+				       , C.RSPOFC_SE
+				       , SFHRM_GET_OFCPSCD(A.EMPNO, C.JSSFC_SE, C.HR_CLSF_SE, C.ECNY_DE)
+				       , A.EMPNO
+			/*
+			   ORDER BY A.PYMNT_YM, A.SALARY_SE, B.DEPT_LEVEL_SE, B.DEPT_CODE,C.RSPOFC_SE,
+			   		 	SFHRM_GET_OFCPSCD(A.EMPNO,C.JSSFC_SE,C.HR_CLSF_SE,C.ECNY_DE),
+						C.PAY_CLSF_SE, C.JSSFC_SE,  A.EMPNO
+			*/
+    </select>  
+    
+    <!-- 월급여지출정보 목록조회 -->
+	<select id="SAL030106DAO.selectSalaryPymntExpndtrList_2" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+            SELECT 
+                     A.PYMNT_YM
+                    ,A.SALARY_SE
+                    ,A.PYMNT_SE  
+                    ,A.PYMNT_DE
+                    ,A.CPTAL_ASIGN_REQST_DE
+                    ,A.CPTAL_ASIGN_CONFM_NO
+                    ,A.DRFT_DE
+                    ,A.INNER_SANCTN_ID
+                    ,A.EXPNDTR_DECSN_DE
+                    ,A.EXPNDTR_DECSN_NO
+                    ,A.PYMNT_AM_SM
+                    ,A.DDC_AM_SM
+                    ,A.ATCH_FILE_1
+					,A.SANCTN_NO
+					,SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT)							AS DRFT_STS			/* 기안상태		*/
+					,'theme://images/sanctn/' || 'D' || SFCOM_GET_DRFTSTS(A.SANCTN_NO, A.REGIST_DT) || '.png'	AS DRFT_STS_IMG		/* 기안상태Img	*/
+					,TO_CHAR(B.DRFT_DT,'YYYY-MM-DD HH24:MI:SS')								AS DRFT_DT			/* 기안일시		*/
+					,SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT)							AS SANCTN_STS		/* 결재상태		*/
+					,'theme://images/sanctn/' || 'A' || SFCOM_GET_APPRSTS(A.SANCTN_NO, A.REGIST_DT) || '.png'	AS SANCTN_STS_IMG	/* 결재상태Img	*/
+					,TO_CHAR(B.LAST_SANCTN_DT,'YYYY-MM-DD HH24:MI:SS')						AS LAST_SANCTN_DT	/* 최종결재일시	*/
+			FROM TBSAL_SALARY_PYMNT_EXPNDTR A
+			  INNER JOIN TBCOM_ELCTRN_SANCTN_MASTR B
+			    ON A.SANCTN_NO = B.SANCTN_NO
+			WHERE A.PYMNT_YM   = #PYMNT_YM#
+			  AND A.PYMNT_DE   = #PYMNT_DE#
+			  AND A.PYMNT_SE   = #PYMNT_SE#
+			  AND A.SALARY_SE  = #SALARY_SE#
+			  AND B.SANCTN_KND != '0'
+    </select>  
+    
+     <!-- 월급여지출정보 목록조회 -->
+	<select id="SAL030106DAO.selectSalaryPymntDeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT A1.PYMNT_YM                                          	 AS PYMNT_YM
+		      , A1.PYMNT_DE                                              AS PYMNT_DE
+		      , DECODE(A1.PYMNT_SE, '1', '복리후생비', '2', '급여', '4', '계약직') AS PYMNT
+		      , A1.PYMNT_SE                                              AS PYMNT_SE
+		      , A1.SALARY_SE                                             AS SALARY_SE
+		      , B.SANCTN_NO
+		      , SFCOM_GET_DRFTSTS(B.SANCTN_NO, A1.REGIST_DT) AS DRFT_STS        												/* 기안상태  */
+		      , 'theme://images/sanctn/' || 'D' || SFCOM_GET_DRFTSTS(B.SANCTN_NO, A1.REGIST_DT) || '.png' AS DRFT_STS_IMG       /* 기안상태Img */
+		      , TO_CHAR(C.DRFT_DT, 'YYYY-MM-DD HH24:MI:SS') AS DRFT_DT        													/* 기안일시  */
+		      , SFCOM_GET_APPRSTS(B.SANCTN_NO, A1.REGIST_DT) AS SANCTN_STS        												/* 결재상태  */
+		      , 'theme://images/sanctn/' || 'A' || SFCOM_GET_APPRSTS(B.SANCTN_NO, A1.REGIST_DT) || '.png' AS SANCTN_STS_IMG     /* 결재상태Img */
+		      , TO_CHAR(C.LAST_SANCTN_DT, 'YYYY-MM-DD HH24:MI:SS') AS LAST_SANCTN_DT        									/* 최종결재일시 */
+		       FROM
+		        (SELECT A.PYMNT_YM                                              AS PYMNT_YM
+		              , A.PYMNT_DE                                              AS PYMNT_DE
+		              , DECODE(A.PYMNT_SE, '1', '복리후생비', '2', '급여', '4', '계약직') AS PYMNT
+		              , A.PYMNT_SE                                              AS PYMNT_SE
+		              , A.SALARY_SE                                             AS SALARY_SE
+		              , MAX(A.REGIST_DT)                                        AS REGIST_DT
+		               FROM TBSAL_MT_SALARY_PYMNT A
+		              WHERE CLOS_AT                  = '1'
+		        <isEqual property="EMPL_SE" compareValue = "1">	
+		            	AND A.PYMNT_SE IN ('1','2')
+		        </isEqual>
+		        <isEqual property="EMPL_SE" compareValue = "4">	
+		            	AND A.PYMNT_SE IN ('4')
+		        </isEqual>
+		                AND A.EMPL_SE               IN ('000', '001', '002', '003', '004', '007')
+		                AND A.SALARY_SE              IN ('1', '3')
+		                AND SUBSTR(A.PYMNT_YM, 1, 4) = #PYMNT_YEAR# 
+		           GROUP BY A.PYMNT_YM
+		              , A.PYMNT_DE
+		              , A.PYMNT_SE
+		              , A.SALARY_SE
+		        ) A1
+		      , TBSAL_SALARY_PYMNT_EXPNDTR B
+		      , TBCOM_ELCTRN_SANCTN_MASTR C
+		      WHERE A1.PYMNT_YM  = B.PYMNT_YM(+)
+		        AND A1.PYMNT_SE  = B.PYMNT_SE(+)
+		        AND A1.PYMNT_DE  = B.PYMNT_DE(+)
+		        AND A1.SALARY_SE = B.SALARY_SE(+)
+		        AND B.SANCTN_NO  = C.SANCTN_NO(+)
+		      ORDER BY A1.PYMNT_YM DESC, A1.PYMNT_DE DESC, A1.PYMNT_SE DESC, A1.SALARY_SE	
+    </select>  
+    
+     <!-- 월급여지출정보 목록조회 -->
+	<select id="SAL030106DAO.selectSalaryPymntSheetList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		    SELECT 
+				     SUBSTR(A.PYMNT_YM,1,4) || '년' || SUBSTR(A.PYMNT_YM,5,2) || '월'   AS YYYYMM
+				    ,SUBSTR(A.PYMNT_YM,5,2)   AS MM1
+				    ,A.PYMNT_YM         AS  PYMNT_YM
+					,A.SALARY_SE        AS  SALARY_SE
+					,A.PYMNT_SE         AS  PYMNT_SE
+					,A.PYMNT_DE         AS  PYMNT_DE
+					,A.EMPNO            AS  EMPNO
+					,A.EMPNM            AS  EMPNM
+					,A.EMPL_SE          AS  EMPL_SE
+					,A.ANSLRY_AT        AS  ANSLRY_AT
+					,A.DEPT_CODE        AS  DEPT_CODE
+					,SFSAL_GETDEPTNM_01(A.DEPT_CODE)  AS DEPT_NM	
+					,A.PRMPC_SE         AS  PRMPC_SE
+					,A.CLSF_CODE || '/' || A.SRCLS       AS  CLSF_CODE
+					,SFHRM_GET_OFCPSCD(A.EMPNO, C.JSSFC_SE, C.PAY_CLSF_SE, C.ECNY_DE)  AS OFCPS   /* 직위 */
+					,A.RSPOFC_SE          AS  RSPOFC_SE
+					,A.SRCLS            AS  SRCLS
+					,A.ECNY_DE          AS  ECNY_DE
+					,A.RETIRE_DE        AS  RETIRE_DE
+					,A.STDR_DE          AS  STDR_DE
+					,A.CLSF_PRMOT_DE    AS  CLSF_PRMOT_DE
+					,A.DCLZ_SE          AS  DCLZ_SE
+					,A.BGNDE            AS  BGNDE
+					,A.ENDDE            AS  ENDDE
+					,A.LBUN_SBSCRB_SE   AS  LBUN_SBSCRB_SE
+					,A.DSPSN_GRAD       AS  DSPSN_GRAD
+					,A.WORK_STTUS       AS  WORK_STTUS
+					,A.MT_DAYCNT        AS  MT_DAYCNT
+					,A.NTHG_PLAN_ABSENC_DAYCNT        AS  NTHG_PLAN_ABSENC_DAYCNT
+					,A.ABSENC_DAYCNT    AS  ABSENC_DAYCNT
+					,A.LATEN_DAYCNT     AS  LATEN_DAYCNT
+					,A.SLYRD_RT         AS  SLYRD_RT
+					,A.LAYOFF_SALARY_RT AS  LAYOFF_SALARY_RT
+					,A.INDVDL_PRICEWAGE_PYMNT_RT        AS  INDVDL_PRICEWAGE_PYMNT_RT
+					,A.SEIZR_AT         AS  SEIZR_AT
+					,A.HN_DDC_NMPR      AS  HN_DDC_NMPR
+					,A.TIME__ELSE_TIME  AS  TIME__ELSE_TIME
+					,A.NIGHT_LABOR_TIME   AS  NIGHT_LABOR_TIME
+					,A.RESTDE_LABOR_TIME  AS  RESTDE_LABOR_TIME
+					,A.YEAST_HLDY_RCOGN   AS  YEAST_HLDY_RCOGN
+					,NVL(A.BSLRY,0)                   AS  BSLRY
+					,NVL(A.BSLRY_EXCCLC,0)            AS  BSLRY_EXCCLC
+					,NVL(A.CNSTRC_ALLWNC,0)           AS  CNSTRC_ALLWNC
+					,NVL(A.INORG_CNWK_ALLWNC,0)       AS  INORG_CNWK_ALLWNC
+					,NVL(A.TCHNLGY_ALLWNC,0)          AS  TCHNLGY_ALLWNC
+					,NVL(A.FAMILY_ALLWNC,0)           AS  FAMILY_ALLWNC
+					,NVL(A.SPCL_JOB_ALLWNC,0)         AS  SPCL_JOB_ALLWNC
+					,NVL(A.SPCIFY_JOB_EXC,0)          AS  SPCIFY_JOB_EXC
+					,NVL(A.DRV_ALLWNC,0)              AS  DRV_ALLWNC
+					,NVL(A.RISK_ALLWNC,0)             AS  RISK_ALLWNC
+					,NVL(A.TRTMNT_ALLWNC,0)           AS  TRTMNT_ALLWNC
+					,NVL(A.YRYC_ALLWNC,0)             AS  YRYC_ALLWNC
+					,NVL(A.SCHXPN_SBSIDY,0)           AS  SCHXPN_SBSIDY
+					,NVL(A.INCNTV_PRICEWAGE,0)        AS  INCNTV_PRICEWAGE
+					,NVL(A.BUDGET_PRICEWAGE,0)        AS  BUDGET_PRICEWAGE
+					,NVL(A.DTY_ALLWNC,0)              AS  DTY_ALLWNC			
+			        ,(SELECT SUM(NVL(D.TIME__ELSE_ALLWNC,0)) 
+			          FROM TBSAL_MT_SALARY_PYMNT D 
+			          WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			          AND D.SALARY_SE 	= A.SALARY_SE
+			          AND D.EMPNO 		= A.EMPNO)  AS TIME__ELSE_ALLWNC    /* 시간외수당 */
+		 
+			        ,(SELECT SUM(NVL(D.MLSV_SBSIDY,0))   
+			          FROM TBSAL_MT_SALARY_PYMNT D 
+			          WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			          AND D.SALARY_SE 	= A.SALARY_SE
+			          AND D.EMPNO 		= A.EMPNO)  AS MLSV_SBSIDY     		/* 급식보조비 */
+		
+			        ,(SELECT SUM(NVL(D.RSPOFC_SBSIDY,0))   
+			          FROM TBSAL_MT_SALARY_PYMNT D 
+			          WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			          AND D.SALARY_SE 	= A.SALARY_SE
+			          AND D.EMPNO 		= A.EMPNO)  AS RSPOFC_SBSIDY     	/* 직책보조비 */
+		 	
+			        ,(SELECT SUM(NVL(D.TRNSPORT_SBSIDY,0))   
+			          FROM TBSAL_MT_SALARY_PYMNT D 
+			          WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			          AND D.SALARY_SE 	= A.SALARY_SE
+			          AND D.EMPNO 		= A.EMPNO)  AS TRNSPORT_SBSIDY     	/* 교통보조비 */
+		
+			        ,(SELECT SUM(NVL(D.JOB_PRTN_TRVCT,0))   
+			          FROM TBSAL_MT_SALARY_PYMNT D 
+			          WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			          AND D.SALARY_SE 	= A.SALARY_SE
+			          AND D.EMPNO 		= A.EMPNO)   AS JOB_PRTN_TRVCT     	/* 업무추진여비 */
+		
+			        ,(SELECT SUM(NVL(D.SPT_SYSM_CT,0))   
+			          FROM TBSAL_MT_SALARY_PYMNT D 
+			          WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			          AND D.SALARY_SE 	= A.SALARY_SE
+			          AND D.EMPNO 		= A.EMPNO)     AS SPT_SYSM_CT    	/* 현장체제비 */
+			
+			        ,(SELECT SUM(NVL(D.MNG_ALLWNC,0))   
+			          FROM TBSAL_MT_SALARY_PYMNT D 
+			          WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			          AND D.SALARY_SE 	= A.SALARY_SE
+			          AND D.EMPNO 		= A.EMPNO)  AS MNG_ALLWNC     		/* 감독수당 */
+		 	
+					,NVL(A.MANAGE_JOB_ALLWNC,0)       AS  MANAGE_JOB_ALLWNC
+					,NVL(A.RESTDE_ALLWNC,0)           AS  RESTDE_ALLWNC
+					,NVL(A.INFANT_NRTR_CT,0)          AS  INFANT_NRTR_CT
+					,NVL(A.ETC_ALLWNC,0)              AS  ETC_ALLWNC
+					,NVL(A.ALLWNC_EXCCLC,0)           AS  ALLWNC_EXCCLC
+					,NVL(A.HOLIDY_VCATN_CT,0)         AS  HOLIDY_VCATN_CT    /* 명절휴가비 */
+					,NVL(A.BONUS,0)                   AS  BONUS              /* 상여금 */
+					,NVL(A.MDAT_ALLWNC,0)             AS  MDAT_ALLWNC        /* 조정수당 */
+					
+					,NVL(A.BSLRY,0) +  
+					 NVL(A.CNSTRC_ALLWNC,0) + 
+					 NVL(A.INORG_CNWK_ALLWNC,0) +
+					 NVL(A.TCHNLGY_ALLWNC,0) +  
+					 NVL(A.FAMILY_ALLWNC,0) + 
+					 NVL(A.SPCL_JOB_ALLWNC,0) +  
+					 NVL(A.SPCIFY_JOB_EXC,0) +  
+					 NVL(A.DRV_ALLWNC,0) + 
+					 NVL(A.RISK_ALLWNC,0) +  
+					 NVL(A.TRTMNT_ALLWNC,0) +  
+					 NVL(A.YRYC_ALLWNC,0) + 
+					 NVL(A.SCHXPN_SBSIDY,0) + 
+					 NVL(A.INCNTV_PRICEWAGE,0) +  
+					 NVL(A.BUDGET_PRICEWAGE,0) + 
+					 NVL(A.DTY_ALLWNC,0) + 
+					 NVL(A.HOLIDY_VCATN_CT,0) + 
+					 NVL(A.BONUS,0) AS  SALARY_PYMNT_TOTAMT    /* 급여총액  */
+					
+					,(SELECT  SUM(NVL(D.TIME__ELSE_ALLWNC,0)) + 
+							  SUM(NVL(D.MLSV_SBSIDY,0)) + 
+							  SUM(NVL(D.RSPOFC_SBSIDY,0)) + 
+							  SUM(NVL(D.TRNSPORT_SBSIDY,0)) +
+							  SUM(NVL(D.JOB_PRTN_TRVCT,0)) + 
+							  SUM(NVL(D.SPT_SYSM_CT,0)) +
+							  SUM(NVL(D.MANAGE_JOB_ALLWNC,0)) + 
+							  SUM(NVL(D.RESTDE_ALLWNC,0)) + 
+							  SUM(NVL(D.INFANT_NRTR_CT,0)) +
+							  SUM(NVL(D.MNG_ALLWNC,0)) + 
+							  SUM(NVL(D.MDAT_ALLWNC,0))
+			            FROM TBSAL_MT_SALARY_PYMNT D 
+			           WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			             AND D.SALARY_SE 	= A.SALARY_SE
+			             AND D.EMPNO 		= A.EMPNO
+			             AND D.EMPL_SE IN ('000','001','002','003','007'))     AS  ALLWNC_PYMNT_TOTAMT    /* 수당총액  */
+			
+			        ,(SELECT SUM(NVL(D.TOT_PYMNTAMT,0))   
+			            FROM TBSAL_MT_SALARY_PYMNT D 
+			           WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			             AND D.SALARY_SE 	= A.SALARY_SE
+			             AND D.EMPNO 		= A.EMPNO)  AS TOT_PYMNTAMT     /* 지급총액 */
+		 		
+					,NVL(A.TOT_PYMNTAMT,0)            AS  TOT_PYMNTAMT
+					,NVL(A.INCMTAX,0)                 AS  INCMTAX
+					,NVL(A.LCLTY_INCMTAX,0)           AS  LCLTY_INCMTAX
+					,NVL(A.HLTHINS,0)                 AS  HLTHINS
+					,NVL(A.NPN,0)                     AS  NPN
+					,NVL(A.EMPLYMINSRNC,0)            AS  EMPLYMINSRNC
+					,NVL(A.ENDW_PRNCPAL,0)            AS  ENDW_PRNCPAL
+					,NVL(A.ENDW_INTR,0)               AS  ENDW_INTR
+					,NVL(A.MXTR_CT,0)                 AS  MXTR_CT
+					,NVL(A.SRVC_GRP_ENDW,0)           AS  SRVC_GRP_ENDW
+					,NVL(A.SCHXPN_RPAY,0)             AS  SCHXPN_RPAY
+					,NVL(A.YND_EXCCLC,0)              AS  YND_EXCCLC
+					,NVL(A.MENDNG_SEIZR,0)            AS  MENDNG_SEIZR
+					,NVL(A.INCMTAX_EXCCLC,0)          AS  INCMTAX_EXCCLC
+					,NVL(A.LCLTY_INCMTAX_EXCCLC,0)    AS  LCLTY_INCMTAX_EXCCLC
+					,NVL(A.HLTHINS_EXCCLC,0)          AS  HLTHINS_EXCCLC
+					,NVL(A.EMPLYMINSRNC_EXCCLC,0)     AS  EMPLYMINSRNC_EXCCLC
+					,NVL(A.ETC_DDC,0)                 AS  ETC_DDC
+					,NVL(A.DDC_TOTAMT,0)              AS  DDC_TOTAMT
+					,NVL(A.ODYGS,0)                   AS  ODYGS
+		            ,NVL(A.FSTMP_PURCHS_DDC,0)        AS  FSTMP_PURCHS_DDC
+			        ,(SELECT SUM(NVL(D.RL_RECPT_AMOUNT,0))   
+			            FROM TBSAL_MT_SALARY_PYMNT D 
+			           WHERE D.PYMNT_YM 	= A.PYMNT_YM
+			             AND D.SALARY_SE 	= A.SALARY_SE
+			             AND D.EMPNO 		= A.EMPNO)  AS RL_RECPT_AMOUNT     /* 실지급액 */
+		 		
+					,NVL(A.RL_RECPT_AMOUNT,0)         AS  RL_RECPT_AMOUNT
+					,A.CLOS_AT                 AS  CLOS_AT
+					,A.CLOS_DE                 AS  CLOS_DE
+					,A.RM			           AS  	RM
+					,A.RSPOFC_SE               AS  RSPOFC_SE
+					,A.PYMNT_SE                AS  PYMNT_SE
+					,A.TAXT_AMOUNT             AS  TAXT_AMOUNT
+					,A.TAXXMPT_AMOUNT          AS  TAXXMPT_AMOUNT
+								
+			FROM TBSAL_MT_SALARY_PYMNT A
+		   	    ,VWHRM_DEPT B
+			    ,TBHRM_HR_MASTR C	   
+			WHERE 1=1
+			AND A.EMPNO 		= C.EMPNO
+			AND C.DEPT_CODE 	= B.DEPT_CODE
+			/* AND B.USE_AT 	= '1' */
+			AND B.DEPT_LEVEL_SE IN('1','2')	
+			AND A.CLOS_AT 		= '1'
+			AND A.CLOS_DE IS NOT NULL
+			AND A.SALARY_SE     = '1'
+            AND A.PYMNT_YM		= #PYMNT_YM#
+            AND A.PYMNT_SE 		= CASE WHEN (	SELECT COUNT(*) 
+            									FROM TBSAL_MT_SALARY_PYMNT ST 
+            									WHERE ST.CLOS_AT = '1' 
+            									AND ST.CLOS_DE IS NOT NULL 
+            									AND ST.SALARY_SE = '1'
+            									AND ST.PYMNT_YM = #PYMNT_YM# 
+            									AND ST.PYMNT_SE = 2
+            								) > 0 
+            							THEN '2'
+            							ELSE #PYMNT_SE# END
+        ]]>
+        <isNotEmpty property="EMPNO">
+			AND A.EMPNO = #EMPNO#	
+		</isNotEmpty>
+		<isNotEmpty property="DEPT_CODE">
+			AND C.DEPT_CODE = #DEPT_CODE#	
+		</isNotEmpty>		 		    
+		    AND A.SALARY_SE = #SALARY_SE#
+		    ORDER BY A.PYMNT_YM, A.SALARY_SE, B.DEPT_LEVEL_SE, B.DEPT_CODE,C.RSPOFC_SE, SFHRM_GET_OFCPSCD(A.EMPNO,C.JSSFC_SE,C.HR_CLSF_SE,C.ECNY_DE), C.PAY_CLSF_SE, C.JSSFC_SE,  A.EMPNO	
+		
+    </select>  
+    
+    
+    <!-- 월급여지출정보 목록조회 -->
+	<select id="SAL030106DAO.selectSalaryPymntIncmtaxList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		    SELECT 
+				     A.PYMNT_DE                       AS  PYMNT_DE
+					,A.EMPNO                          AS  EMPNO
+					,A.EMPNM                          AS  EMPNM					
+					,SFSAL_GETDEPTNM_01(A.DEPT_CODE)  AS  DEPT_NM
+				
+		 		
+					,(SELECT SUM(NVL(D.TOT_PYMNTAMT,0))   
+			          FROM TBSAL_MT_SALARY_PYMNT D 
+			          WHERE D.PYMNT_YM = A.PYMNT_YM
+			          AND D.SALARY_SE = A.SALARY_SE
+			          AND D.EMPNO = A.EMPNO)          AS  TOT_PYMNTAMT     /* 지급총액 */
+					,NVL(A.INCMTAX,0)                 AS  INCMTAX
+					,NVL(A.LCLTY_INCMTAX,0)           AS  LCLTY_INCMTAX				
+					,A.TAXT_AMOUNT                    AS  TAXT_AMOUNT
+					,A.TAXXMPT_AMOUNT                 AS  TAXXMPT_AMOUNT
+								
+			FROM TBSAL_MT_SALARY_PYMNT A
+		   	    ,VWHRM_DEPT B
+			    ,TBHRM_HR_MASTR C	   
+			WHERE 1=1
+			AND A.EMPNO = C.EMPNO
+			AND C.DEPT_CODE = B.DEPT_CODE
+			/* AND B.USE_AT = '1' */
+			AND B.DEPT_LEVEL_SE IN('1','2')	
+			AND A.CLOS_AT = '1'
+			AND A.CLOS_DE IS NOT NULL
+			AND A.PYMNT_YM = #PYMNT_YM#
+            AND A.PYMNT_DE = #PYMNT_DE#
+            AND A.PYMNT_SE = #PYMNT_SE#
+            AND A.EMPL_SE IN ('000','001','002','003','004','007')
+        ]]>
+        <isNotEmpty property="EMPNO">
+			AND A.EMPNO = #EMPNO#	
+		</isNotEmpty>	
+		<isNotEmpty property="DEPT_CODE">
+			AND C.DEPT_CODE = #DEPT_CODE#	
+		</isNotEmpty>		    
+		    AND A.SALARY_SE = #SALARY_SE#
+		    ORDER BY A.PYMNT_YM, A.SALARY_SE, B.DEPT_LEVEL_SE, B.DEPT_CODE,C.RSPOFC_SE, SFHRM_GET_OFCPSCD(A.EMPNO,C.JSSFC_SE,C.HR_CLSF_SE,C.ECNY_DE), C.PAY_CLSF_SE, C.JSSFC_SE,  A.EMPNO	
+		
+    </select>  
+    
+    <!-- 월급여지출정보_장기근속수당 목록조회 -->
+	<select id="SAL030106DAO.selectSalaryPymntLongList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		    SELECT 
+				     A.EMPNO
+				    ,A.EMPNM
+				    ,A.EMPL_SE
+				    ,A.ECNY_DE
+				    ,A.PYMNT_YM || '20' AS STDR_DE
+						,NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD')) / 12) * 12 +
+						      MOD(FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD'))), 12)
+						      FROM TBHRM_HR_MASTR C	WHERE C.STTUS_SE = '000' AND C.EMPNO = A.EMPNO),0) AS A1
+				    ,	NVL((SELECT SUM(E.CRTFC_CAREER_YY) * 12 + SUM(E.CRTFC_CAREER_MT)
+				           FROM  TBHRM_HR_CAREER E	WHERE E.EMPNO = A.EMPNO),0) - 
+				      NVL((SELECT NVL(SUM(F.LMTT_PD),0)
+				           FROM TBHRM_DSCPL_DSPS F	WHERE F.EMPNO = A.EMPNO	AND A.PYMNT_DE BETWEEN F.DSPS_BGNDE AND F.LMTT_ENDDE),0) AS A2
+				    ,	NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD')) / 12) * 12 +
+				           MOD(FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD'))), 12) AS BB
+				           FROM TBHRM_HR_ETC D	WHERE  D.EMPNO = A.EMPNO),0)  AS A3
+				    ,NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD')) / 12) * 12 +
+						      MOD(FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD'))), 12)
+						      FROM TBHRM_HR_MASTR C	WHERE C.STTUS_SE = '000' AND C.EMPNO = A.EMPNO),0) +
+				     NVL((SELECT SUM(E.CRTFC_CAREER_YY) * 12 + SUM(E.CRTFC_CAREER_MT)
+				           FROM  TBHRM_HR_CAREER E	WHERE E.EMPNO = A.EMPNO),0) - 
+				     NVL((SELECT NVL(SUM(F.LMTT_PD),0)
+				           FROM TBHRM_DSCPL_DSPS F	WHERE F.EMPNO = A.EMPNO	AND A.PYMNT_DE BETWEEN F.DSPS_BGNDE AND F.LMTT_ENDDE),0) +
+				     NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD')) / 12) * 12 +
+				           MOD(FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD'))), 12) AS BB
+				           FROM TBHRM_HR_ETC D	WHERE  D.EMPNO = A.EMPNO),0) AS A4    
+				    ,FLOOR((NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD')) / 12) * 12 +
+						      MOD(FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD'))), 12)
+						      FROM TBHRM_HR_MASTR C	WHERE C.STTUS_SE = '000' AND C.EMPNO = A.EMPNO),0) +
+				     NVL((SELECT SUM(E.CRTFC_CAREER_YY) * 12 + SUM(E.CRTFC_CAREER_MT)
+				           FROM  TBHRM_HR_CAREER E	WHERE E.EMPNO = A.EMPNO),0) - 
+				     NVL((SELECT NVL(SUM(F.LMTT_PD),0)
+				           FROM TBHRM_DSCPL_DSPS F	WHERE F.EMPNO = A.EMPNO	AND A.PYMNT_DE BETWEEN F.DSPS_BGNDE AND F.LMTT_ENDDE),0) +
+				     NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD')) / 12) * 12 +
+				           MOD(FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD'))), 12) AS BB
+				           FROM TBHRM_HR_ETC D	WHERE  D.EMPNO = A.EMPNO),0))/12 * 10)/10 AS A5  
+				    ,(SELECT PYMNTAMT 
+				       FROM TBSAL_PYMNT_DETAIL_CODE B
+				       WHERE SUBSTR(B.PYMNT_DETAIL_CODE,1,5) = 'P1060'
+				       AND  FLOOR((NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD')) / 12) * 12 +
+						      MOD(FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD'))), 12)
+						      FROM TBHRM_HR_MASTR C	WHERE C.STTUS_SE = '000' AND C.EMPNO = A.EMPNO),0) +
+				     NVL((SELECT SUM(E.CRTFC_CAREER_YY) * 12 + SUM(E.CRTFC_CAREER_MT)
+				           FROM  TBHRM_HR_CAREER E	WHERE E.EMPNO = A.EMPNO),0) - 
+				     NVL((SELECT NVL(SUM(F.LMTT_PD),0)
+				           FROM TBHRM_DSCPL_DSPS F	WHERE F.EMPNO = A.EMPNO	AND A.PYMNT_DE BETWEEN F.DSPS_BGNDE AND F.LMTT_ENDDE),0) +
+				     NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD')) / 12) * 12 +
+				           MOD(FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD'))), 12) AS BB
+				           FROM TBHRM_HR_ETC D	WHERE  D.EMPNO = A.EMPNO),0))/12) <= B.SE_2
+				      AND  FLOOR((NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD')) / 12) * 12 +
+						      MOD(FLOOR(MONTHS_BETWEEN(to_date(A.PYMNT_DE,'YYYYMMDD' ), TO_DATE(C.ECNY_DE,'YYYYMMDD'))), 12)
+						      FROM TBHRM_HR_MASTR C	WHERE C.STTUS_SE = '000' AND C.EMPNO = A.EMPNO),0) +
+				     NVL((SELECT SUM(E.CRTFC_CAREER_YY) * 12 + SUM(E.CRTFC_CAREER_MT)
+				           FROM  TBHRM_HR_CAREER E	WHERE E.EMPNO = A.EMPNO),0) - 
+				     NVL((SELECT NVL(SUM(F.LMTT_PD),0)
+				           FROM TBHRM_DSCPL_DSPS F	WHERE F.EMPNO = A.EMPNO	AND A.PYMNT_DE BETWEEN F.DSPS_BGNDE AND F.LMTT_ENDDE),0) +
+				     NVL((SELECT  FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD')) / 12) * 12 +
+				           MOD(FLOOR(MONTHS_BETWEEN(to_date(D.DMBLZ_DE,'YYYYMMDD' ), TO_DATE(D.ENST_DE,'YYYYMMDD'))), 12) AS BB
+				           FROM TBHRM_HR_ETC D	WHERE  D.EMPNO = A.EMPNO),0))/12) >= B.SE_1 ) A6    
+				FROM TBSAL_MT_SALARY_PYMNT A
+				WHERE A.PYMNT_YM = #PYMNT_YM#
+				AND A.PYMNT_SE = '2'
+				AND A.SALARY_SE = '1'
+				AND A.ANSLRY_AT IS NULL
+				AND A.EMPL_SE IN ('001','002','003')        
+				AND NVL(A.DCLZ_SE,0) NOT IN ('216')
+			]]>
+			<isNotEmpty property="EMPNO">
+			    AND A.EMPNO = #EMPNO#	
+		   </isNotEmpty>	
+				ORDER BY A.EMPNM
+    </select>  
+    
+    <!-- 월급여지출정보_리포트 목록조회 -->
+	<select id="SAL030106DAO.selectSalaryPymntReportList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		<![CDATA[	
+		      SELECT 
+		         SUM(A.TOT_PYMNTAMT) AS  TOT_PYMNTAMT
+		         ,SFACC_AMOUNT_TRANS(SUM(A.TOT_PYMNTAMT)) AS  TOT_PYMNTAMT_H       
+			     ,SUM(A.DDC_TOTAMT)   AS  DDC_TOTAMT
+			     ,SUM(A.RL_RECPT_AMOUNT)  AS  RL_RECPT_AMOUNT
+			     ,(SELECT  TO_CHAR(TO_DATE(#PYMNT_DE#,'YYYYMMDD'), 'dy') FROM DUAL)  AS DAY
+			     ,(SELECT 
+				    (SELECT EMPNM
+				     FROM (
+				          SELECT B.EMPNM
+				          FROM TBSAL_MT_SALARY_PYMNT A
+				              ,TBHRM_HR_MASTR B		
+				              ,VWHRM_DEPT C
+				          WHERE A.PYMNT_YM = #PYMNT_YM#
+				          AND A.PYMNT_SE = #PYMNT_SE#
+				          AND A.PYMNT_DE = #PYMNT_DE#
+				          AND A.EMPNO = B.EMPNO
+				          AND B.DEPT_CODE = C.DEPT_CODE
+				          AND A.SALARY_SE = #SALARY_SE#
+				          AND A.TOT_PYMNTAMT > 0
+				          ORDER BY C.DEPT_LEVEL_SE, C.DEPT_CODE, B.RSPOFC_SE, SFHRM_GET_OFCPSCD(B.EMPNO,B.JSSFC_SE,B.HR_CLSF_SE,B.ECNY_DE), B.PAY_CLSF_SE, B.JSSFC_SE, B.EMPNO) 
+				      WHERE ROWNUM = 1)
+				      || ' 외 ' ||
+				      (SELECT COUNT(B.EMPNM) -1
+				       FROM TBSAL_MT_SALARY_PYMNT A
+				            ,TBHRM_HR_MASTR B		
+				            ,VWHRM_DEPT C
+				        WHERE A.PYMNT_YM = #PYMNT_YM#
+				        AND A.PYMNT_SE = #PYMNT_SE#
+				        AND A.PYMNT_DE = #PYMNT_DE#
+				        AND A.EMPNO = B.EMPNO
+				        AND B.DEPT_CODE = C.DEPT_CODE
+				        AND A.SALARY_SE = #SALARY_SE#
+				        AND A.TOT_PYMNTAMT > 0
+				      ) || '명'  AS   EMPNM				      
+			      FROM DUAL)  AS EMPNM
+			      
+			      ,(SELECT COUNT(B.EMPNO) 
+                    FROM TBSAL_MT_SALARY_PYMNT B
+				    WHERE B.PYMNT_YM = A.PYMNT_YM
+				    AND B.PYMNT_SE = A.PYMNT_SE
+				    AND B.PYMNT_DE = A.PYMNT_DE
+                    AND B.SALARY_SE = A.SALARY_SE
+                    AND B.EMPL_SE = '000')  AS EMPNM2
+                  ,(SELECT COUNT(B.EMPNO) 
+                    FROM TBSAL_MT_SALARY_PYMNT B
+				    WHERE B.PYMNT_YM = A.PYMNT_YM
+				    AND B.PYMNT_SE = A.PYMNT_SE
+				    AND B.PYMNT_DE = A.PYMNT_DE
+                    AND B.SALARY_SE = A.SALARY_SE
+                    AND B.EMPL_SE IN( '001','002','003'))  AS EMPNM3 
+			      ,(SELECT COUNT(B.EMPNO) 
+                    FROM TBSAL_MT_SALARY_PYMNT B
+				    WHERE B.PYMNT_YM = A.PYMNT_YM
+				    AND B.PYMNT_SE = A.PYMNT_SE
+				    AND B.PYMNT_DE = A.PYMNT_DE
+                    AND B.SALARY_SE = A.SALARY_SE
+                    AND B.DCLZ_SE= '216' ) AS EMPNM4   
+			      
+			FROM TBSAL_MT_SALARY_PYMNT A
+			WHERE A.SALARY_SE = #SALARY_SE#
+			AND A.PYMNT_YM = #PYMNT_YM#
+			AND A.PYMNT_SE = #PYMNT_SE#
+			AND A.PYMNT_DE = #PYMNT_DE#			
+			GROUP BY A.PYMNT_YM, A.PYMNT_DE, A.PYMNT_SE,A.SALARY_SE
+	    ]]>
+    </select> 
+    
+    <!-- 월급여지출정보_리포트 목록조회 -->
+	<select id="SAL030106DAO.selectSalaryPymntReport2List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		  SELECT A.TOT_PYMNTAMT                     AS TOT_PYMNTAMT
+		       , SFACC_AMOUNT_TRANS(A.TOT_PYMNTAMT) AS TOT_PYMNTAMT_H
+		       , A.DDC_TOTAMT                       AS DDC_TOTAMT
+		       , A.RL_RECPT_AMOUNT                  AS RL_RECPT_AMOUNT
+		       , (
+		                SELECT TO_CHAR(TO_DATE(#PYMNT_DE#, 'YYYYMMDD'), 'dy')
+		                  FROM DUAL
+		         )
+		                 AS DAY
+		       , A.EMPNM AS EMPNM
+		       , (
+		                SELECT CODE_NM
+		                  FROM TBCOM_CMMN_CODE
+		                 WHERE GRP_CODE = 'COM021'
+		                   AND CODE     = A.SALARY_BANK_CODE
+		         )
+		                 AS CODE_NM
+		       , A.SALARY_BANK_ACNUT AS SALARY_BANK_ACNUT
+		    FROM TBSAL_MT_SALARY_PYMNT A
+		   WHERE A.SALARY_SE = #SALARY_SE#
+		     AND A.PYMNT_YM  = #PYMNT_YM#
+		     AND A.PYMNT_SE  = #PYMNT_SE#
+		     AND A.PYMNT_DE  = #PYMNT_DE#
+		ORDER BY A.EMPNO
+    </select> 	
+    
+    <!-- 월급여지출정보 입력 -->
+    <insert id="SAL030106DAO.SalaryPymntExpndtrC" parameterClass="java.util.HashMap">
+            MERGE INTO TBSAL_SALARY_PYMNT_EXPNDTR
+            USING DUAL
+            ON(    PYMNT_YM  = #PYMNT_YM#
+               AND SALARY_SE = #SALARY_SE#
+               AND PYMNT_DE  = #PYMNT_DE#
+               AND PYMNT_SE  = #PYMNT_SE#
+            )WHEN MATCHED THEN
+                  UPDATE
+                     SET     SANCTN_NO = (SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+                            ,UPDUSR_ID = #S_USER_ID#
+                            ,UPDT_DT   = SYSDATE
+             WHEN NOT MATCHED THEN
+            INSERT (
+                         PYMNT_YM
+						,SALARY_SE
+						,PYMNT_DE
+						,PYMNT_SE
+						,CPTAL_ASIGN_REQST_DE
+						,CPTAL_ASIGN_CONFM_NO
+						,DRFT_DE
+						,INNER_SANCTN_ID
+						,EXPNDTR_DECSN_DE
+						,EXPNDTR_DECSN_NO
+						,PYMNT_AM_SM
+						,DDC_AM_SM
+						,ATCH_FILE_1
+						,ATCH_FILE_2
+						,ATCH_FILE_3
+						,ATCH_FILE_4
+						,SANCTN_NO
+						,REGISTER_ID
+						,REGIST_DT
+						,UPDUSR_ID
+						,UPDT_DT
+             ) VALUES (
+	                     #PYMNT_YM#
+						,#SALARY_SE#
+						,#PYMNT_DE#
+						,#PYMNT_SE#
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,''
+						,(SELECT SANCTN_NO FROM TBCOM_ELCTRN_SANCTN_MASTR WHERE INTRLCK_IDNTFR = #KEY#)
+	                    ,#S_USER_ID#
+	                    ,SYSDATE
+	                    ,#S_USER_ID#               
+	                    ,SYSDATE
+             )
+    </insert>
+
+
+    <!-- 월급여지출정보 수정 -->
+    <update id="SAL030106DAO.SalaryPymntExpndtrU" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_SALARY_PYMNT_EXPNDTR
+		   SET CPTAL_ASIGN_REQST_DE = #CPTAL_ASIGN_REQST_DE#
+		     , CPTAL_ASIGN_CONFM_NO = #CPTAL_ASIGN_CONFM_NO#
+		     , DRFT_DE              = #DRFT_DE#
+		     , INNER_SANCTN_ID      = #INNER_SANCTN_ID#
+		     , EXPNDTR_DECSN_DE     = #EXPNDTR_DECSN_DE#
+		     , EXPNDTR_DECSN_NO     = #EXPNDTR_DECSN_NO#
+		     , PYMNT_AM_SM          = #PYMNT_AM_SM#
+		     , DDC_AM_SM            = #DDC_AM_SM#
+		     , ATCH_FILE_1          = #ATCH_FILE_1#
+		     , ATCH_FILE_2          = #ATCH_FILE_2#
+		     , ATCH_FILE_3          = #ATCH_FILE_3#
+		     , ATCH_FILE_4          = #ATCH_FILE_4#
+		     , UPDUSR_ID            = #S_USER_ID#
+		     , UPDT_DT              = SYSDATE
+		 WHERE PYMNT_YM             = #PYMNT_YM#
+		   AND SALARY_SE            = #SALARY_SE#
+		   AND PYMNT_DE             = #PYMNT_DE#
+		   AND PYMNT_SE             = #PYMNT_SE#
+    </update>
+
+
+    <!-- 월급여지출정보 삭제 -->
+    <delete id="SAL030106DAO.SalaryPymntExpndtrD" parameterClass="java.util.HashMap">
+		DELETE
+		  FROM TBSAL_SALARY_PYMNT_EXPNDTR
+		 WHERE PYMNT_YM  = #PYMNT_YM#
+		   AND SALARY_SE = #SALARY_SE#
+		   AND PYMNT_DE  = #PYMNT_DE#
+		   AND PYMNT_SE  = #PYMNT_SE#
+    </delete>
+    
+    
+	<!-- 급여내역조회 지급공제항목 조회 -->
+	<select id="SAL030106DAO.selectPymntDdcIem" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+			 t2.PYMNT_DDC_SE
+		  	,t2.PYMNT_DDC_CODE
+		  	,t2.PYMNT_DDC_CODE_NM
+		FROM TBSAL_MT_SALARY_IEM t1
+		INNER JOIN TBSAL_PYMNT_DDC_STDR_CODE t2
+		ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+		WHERE t1.PYMNT_YM = #PYMNT_YM#
+		  AND t1.SN		  = #SN#
+		GROUP BY t2.PYMNT_DDC_SE, t2.PYMNT_DDC_CODE, t2.PYMNT_DDC_CODE_NM
+		ORDER BY t2.PYMNT_DDC_CODE
+	</select>
+	
+	<!-- 급여지급상세정보 -->
+	
+	
+	<!-- ===================== [ 탭1 : 부서별급여지급상세정보 ] ===================== -->
+	
+	<!-- 부서별급여지급상세정보 목록조회 -->
+    <select id="SAL030106DAO.selectDeptSalaryPymntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+    	WITH MAIN_T AS (
+		  	SELECT
+			     t1.PYMNT_YM
+			    ,t3.DEPT_CODE
+			    ,MAX(t3.DEPT_NM) AS DEPT_NM
+			    ,t1.SN
+			    ,t3.PYMNT_DE
+			    <iterate property="pymntDdcIemList" >
+		    	,SUM(DECODE(t1.PYMNT_DDC_CODE, #pymntDdcIemList[].PYMNT_DDC_CODE#, t1.AMOUNT, 0)) AS AMT$pymntDdcIemList[].PYMNT_DDC_CODE$
+		    	</iterate>
+			    ,SUM(DECODE(t2.PYMNT_DDC_SE ,'0', t1.AMOUNT ,0)) AS ETC0
+			    ,SUM(DECODE(t2.PYMNT_DDC_SE ,'1', t1.AMOUNT ,0)) AS ETC1
+			    ,SUM(DECODE(t2.PYMNT_DDC_SE ,'0', t1.AMOUNT ,0) - DECODE(t2.PYMNT_DDC_SE,'1',t1.AMOUNT,0)) AS ETC2
+			FROM TBSAL_MT_SALARY_DTLS t1
+			     INNER JOIN       TBSAL_PYMNT_DDC_STDR_CODE t2 ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+			     RIGHT OUTER JOIN TBSAL_MT_SALARY_PYMNT     t3 ON t1.PYMNT_YM       = t3.PYMNT_YM 
+			                                                  AND t1.EMPNO          = t3.EMPNO 
+			                                                  AND t1.SN             = t3.SN
+			WHERE t1.PYMNT_YM = #PYMNT_YM#
+			GROUP BY t1.PYMNT_YM, t3.DEPT_CODE, t1.SN, t3.PYMNT_DE
+		)
+		SELECT 
+		   t1.*
+		FROM MAIN_T t1
+		  LEFT OUTER JOIN VWHRM_DEPT 		t3 ON t1.DEPT_CODE	=	t3.DEPT_CODE
+		ORDER BY t3.OUTPT_ORDR
+    </select>
+  
+  
+    <!-- ===================== [ 탭2 : 사원별급여지급상세정보 ] ===================== -->
+	
+	<!-- 사원별급여지급상세정보 목록조회 -->
+	<select id="SAL030106DAO.selectEmpSalaryPymntList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">	    
+		WITH MAIN_T AS (
+		  SELECT
+		     t1.PYMNT_YM
+		    ,t1.EMPNO
+		    ,t1.SN
+		    ,t3.PYMNT_DE
+		    <iterate property="pymntDdcIemList" >
+		    ,SUM(DECODE(t1.PYMNT_DDC_CODE, #pymntDdcIemList[].PYMNT_DDC_CODE#, t1.AMOUNT, 0)) AS AMT$pymntDdcIemList[].PYMNT_DDC_CODE$
+		    </iterate>
+		    ,SUM(DECODE(t2.PYMNT_DDC_SE ,'0', t1.AMOUNT ,0)) AS ETC0
+		    ,SUM(DECODE(t2.PYMNT_DDC_SE ,'1', t1.AMOUNT ,0)) AS ETC1
+		    ,SUM(DECODE(t2.PYMNT_DDC_SE ,'0', t1.AMOUNT ,0) - DECODE(t2.PYMNT_DDC_SE,'1',t1.AMOUNT,0)) AS ETC2
+		FROM TBSAL_MT_SALARY_DTLS t1
+		     INNER JOIN       TBSAL_PYMNT_DDC_STDR_CODE t2 ON t1.PYMNT_DDC_CODE = t2.PYMNT_DDC_CODE
+		     RIGHT OUTER JOIN TBSAL_MT_SALARY_PYMNT     t3 ON t1.PYMNT_YM       = t3.PYMNT_YM 
+		                                                  AND t1.EMPNO          = t3.EMPNO 
+		                                                  AND t1.SN             = t3.SN
+		WHERE t1.PYMNT_YM = #PYMNT_YM#			
+		GROUP BY t1.PYMNT_YM, t1.EMPNO, t1.SN, t3.PYMNT_DE
+		ORDER BY t1.EMPNO, t1.PYMNT_YM
+		)
+		SELECT 
+		   t2.EMPNM
+		  ,t2.SRCLS						/*호봉*/
+		  ,t3.DEPT_NM
+		  ,t4.CODE_NM 	AS	JSSFC		/*직종*/
+		  ,t5.CODE_NM 	AS	HR_CLSF  	/*직급*/
+		  ,t1.*
+		FROM MAIN_T t1
+			INNER JOIN 		TBHRM_HR_MASTR  t2 ON t1.EMPNO		=	t2.EMPNO
+			LEFT OUTER JOIN VWHRM_DEPT 		t3 ON t2.DEPT_CODE	=	t3.DEPT_CODE
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t4 ON t4.CODE 		=	t2.JSSFC_SE  	AND t4.GRP_CODE	=	'HRM001'	/*직종*/
+			LEFT OUTER JOIN TBCOM_CMMN_CODE t5 ON t5.CODE		=	t2.HR_CLSF_SE	AND t5.GRP_CODE	=	'HRM002'	/*직급*/
+		ORDER BY t3.OUTPT_ORDR, t2.JSSFC_SE, t2.HR_CLSF_SE, t2.EMPNO
+    </select> 
+    
+ 
+   
+    <!-- 월급여지출정보 결재취소 -->
+    <update id="SAL030106DAO.apprCancel" parameterClass="java.util.HashMap">
+		UPDATE TBSAL_SALARY_PYMNT_EXPNDTR
+		   SET SANCTN_NO     = NULL
+		     , OLD_SANCTN_NO = #SANCTN_NO#
+		     , UPDUSR_ID     = #S_USER_ID#
+		     , UPDT_DT       = SYSDATE
+		 WHERE PYMNT_YM      = #PYMNT_YM#
+		   AND SALARY_SE     = #SALARY_SE#
+		   AND PYMNT_DE      = #PYMNT_DE#
+		   AND PYMNT_SE      = #PYMNT_SE#
+    </update>
+   
+</sqlMap>

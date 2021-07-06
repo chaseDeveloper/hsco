@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01040208_SQL">	
+   <!--  설명  : 체납현황관리
+		작성자 : 지효정 -->
+		
+	<!-- 영구 임대료 체납현황 목록 -->
+	<select id="RNT01040208DAO.rentMtRntchrgList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT a.*,
+		       (SELECT MAX (SEIZR_INCDNT_NO)										
+		          FROM TBRNT_RENT_LWST w
+		         WHERE w.CNTRCTR_NO = a.CNTRCTR_NO AND w.JUDMN_DE = a.JUDMN_DE)
+		          AS SEIZR_INCDNT_NO                                                /* 사건번호 */
+		  FROM (  SELECT '1' AS ORD,	
+		                 a.CNTRCTR_NO,												/* 계약자번호 */
+		                 a.RENT_HOUSE_CODE,											/* 임대주택코드 */
+		                 c.RENT_HOUSE_NM,											/* 임대주택명 */
+		                 a.DONG,													/* 동 */
+		                 a.HO,														/* 호 */
+		                 f.NM,														/* 계약자명 */
+		                 SFCOM_DEC_ALL(f.IHIDNUM) AS IHIDNUM,						/* 주민번호 */
+		                 a.RENT_HOUSE_CODE || a.DONG || a.HO AS ORD2,			
+		                 d.ZIP AS POSTNO,                                           /* 우편번호 */
+		                 d.ADRES || ' ' || d.ADRES_DETAIL AS ADDR_MAIN,             /* 주소1 */
+		                 c.RENT_HOUSE_NM || ' ' || a.DONG || '동 ' || a.HO || '호' AS ADRES,   	/* 주소2 */
+		                 b.CNT AS DEL_CNT,							            	/* 체납개월 */
+		                 b.DEL_AMT AS DEL_AMT,                                      /* 체납금액 */
+		                 b.DEL_INT AS DEL_INT,                                      /* 연체이자 */
+		                 b.TOTAL AS TOTAL,                                          /* 계 */
+		                 f.TELNO,                                                   /* 전화번호 */
+		                 f.MBTLNO,                                                  /* 휴대폰번호 */
+		                 a.GTN AS SEC_AMT,	            							/* 보증금 */
+		                 a.CANCL_DE,                                                /* 해약일자 */
+		                 h.AEA,                                                     /* 평 */
+		                 h.DVR_AR AS PER_AREA,										/* 전용면적 */
+		                 h.CMNUSE_AR AS PUB_AREA,									/* 공용면적 */
+		                 (h.DVR_AR +  h.CMNUSE_AR) AS TOT_AREA,						/* 총면적 */
+		                 (SELECT SUM (s.GTN)
+		                    FROM TBRNT_RENT_GTN s
+		                   WHERE s.CNTRCTR_NO = a.CNTRCTR_NO AND s.RCIV_DE > a.CNTRCT_DE)	
+		                    AS SEC_AMT1,                                            /* 증액보증금 */
+		                 m.TOTAL AS MANAGE_AMT,                                     /* 체납 관리비 */
+		                 m.MCNT,													/* 체납개월*/
+		                 a.RM,                                                      /* 비고 */
+		                 DECODE (a.LWST_PROGRS_AT, '1', '소송진행', '') AS LWST_PROGRS_AT,  	/* 소송진행여부 */
+		                 (SELECT MAX (JUDMN_DE)		
+		                    FROM TBRNT_RENT_LWST w
+		                   WHERE w.CNTRCTR_NO = a.CNTRCTR_NO AND JUDMN_DE IS NOT NULL)
+		                    AS JUDMN_DE,                                            /* 판결일자 */
+		                 v.BANK1 AS BANK_NM_1,                                      /* 은행명1 */
+		                 v.ACCT_NO1 AS VACCT_NO_1,                                  /* 계좌번호1 */
+		                 v.BANK2 AS BANK_NM_2,                                      /* 은행명2 */
+		                 v.ACCT_NO2 AS VACCT_NO_2,                                  /* 계좌번호2 */
+		                 v.BANK3 AS BANK_NM_3,                                      /* 은행명3 */
+		                 v.ACCT_NO3 AS VACCT_NO_3,                                  /* 계좌번호3 */
+		                 v.BANK4 AS BANK_NM_4,                                      /* 은행명4 */
+		                 v.ACCT_NO4 AS VACCT_NO_4,                                  /* 계좌번호4 */
+		                 v.BANK5 AS BANK_NM_5,                                      /* 은행명5 */
+		                 v.ACCT_NO5 AS VACCT_NO_5,                                  /* 계좌번호5 */
+		                 v.BANK6 AS BANK_NM_6,                                      /* 은행명6 */
+		                 v.ACCT_NO6 AS VACCT_NO_6,                                  /* 계좌번호6 */
+		                 f.PRMANENT_CSTMR_NO                                        /* 고객번호 */
+		            FROM TBRNT_RENT_CNTRCT a,
+		                 TBRNT_RENT_HOUSE c,
+		                 (  SELECT CNTRCTR_NO,
+		                           SUM (NVL (RNTCHRG, 0)
+		                              + NVL (RDCAMT_AMOUNT, 0)
+		                              + NVL (OVDINTR, 0)) AS TOTAL,
+		                           COUNT(1) AS CNT,
+		                           SUM (NVL (RNTCHRG, 0) + NVL (RDCAMT_AMOUNT, 0)) AS DEL_AMT,
+		                           SUM (NVL (OVDINTR, 0)) AS DEL_INT
+		                      FROM TBRNT_RENT_MT_RNTCHRG							/* 월별관리비 */
+		                     WHERE     (RCIV_DE IS NULL OR RCIV_DE > #stdrDe#)
+		                           AND PAY_TMLMT BETWEEN #stPayTmlmt# AND #edPayTmlmt#
+		                           AND NVL (RNTCHRG, 0) + NVL (RDCAMT_AMOUNT, 0) > 0
+		                  GROUP BY CNTRCTR_NO
+		                    HAVING     SUM (NVL (RNTCHRG, 0) + NVL (RDCAMT_AMOUNT, 0)) BETWEEN #stOvdintr# AND #edOvdintr#
+		                           AND COUNT (1) BETWEEN #stOvdintrCnt# AND #edOvdintrCnt#) b,
+		                 TBRNT_RENT_HOUSE_DONG d,
+		                 (  SELECT CNTRCTR_NO,
+		                           SUM (TRUNC (TOTAL, -1)) AS TOTAL,
+		                           COUNT (1) AS MCNT
+		                      FROM (  SELECT s.CNTRCTR_NO,
+		                                     s.PAY_TMLMT,
+		                                     SUM (NVL (s.MANAGECT, 0)
+		                                        + NVL (s.RDCAMT_AMOUNT, 0)
+		                                        + NVL (s.OVDINTR, 0))
+		                                        AS TOTAL
+		                                FROM TBRNT_MT_MANAGECT s
+		                               WHERE s.RCIV_DE IS NULL
+		                            GROUP BY s.CNTRCTR_NO, s.PAY_TMLMT
+		                              HAVING TRUNC (
+		                                        SUM (NVL (s.MANAGECT, 0) + NVL (s.RDCAMT_AMOUNT, 0)), -1) > 0)
+		                  GROUP BY CNTRCTR_NO) m,
+		                 TBRNT_RENT_HOUSE_BILD h,
+		                 TBRNT_PRMANENT_RENT_CSTMR f,
+		                 (SELECT *
+		                    FROM VI_VA_MAST
+		                   WHERE crt_div = 'RN'
+		                   AND OPT1	 = '1') v
+		           WHERE     a.CNTRCTR_NO 			= b.CNTRCTR_NO
+		                 AND a.RENT_HOUSE_CODE 		= c.RENT_HOUSE_CODE
+		                 AND a.RENT_HOUSE_CODE 		= d.RENT_HOUSE_CODE
+		                 AND a.DONG 				= d.DONG
+		                 AND a.CNTRCTR_NO 			= m.CNTRCTR_NO(+)
+		                 AND a.RENT_HOUSE_CODE 		= h.RENT_HOUSE_CODE
+		                 AND a.DONG 				= h.DONG
+		                 AND a.HO 					= h.HO
+		                 AND a.PRMANENT_CSTMR_NO	= f.PRMANENT_CSTMR_NO
+		                 AND a.CNTRCTR_NO 			= v.CRT_ID(+)
+					<isNotEmpty property="houseSe">
+						 AND   #houseSe# LIKE '%' || c.HOUSE_SE || '%'
+					</isNotEmpty>
+					<isNotEmpty property="rentHouseCode">
+						 AND   a.RENT_HOUSE_CODE = #rentHouseCode#
+					</isNotEmpty>
+					<isNotEmpty property="dong">
+						 AND   A.DONG = LPAD(#dong#, 4, '0')
+					</isNotEmpty>
+					<isNotEmpty property="ho">
+						 AND   A.HO = LPAD(#ho#, 4, '0')
+					</isNotEmpty>
+					<isNotEmpty property="nm">
+						 AND   f.NM LIKE '%' || #nm# || '%'
+					</isNotEmpty>
+		            <isNotEmpty property="canclSe">
+		                 AND DECODE (a.CANCL_DE, NULL, '1', '0') LIKE #canclSe#
+		            </isNotEmpty>
+		            <isNotEmpty property="lwstProgrsAt">
+		                 AND NVL (a.LWST_PROGRS_AT, '0') LIKE #lwstProgrsAt#
+		            </isNotEmpty>
+		        ORDER BY ORD2, CNTRCTR_NO, ADDR_MAIN, ORD ) a
+		 WHERE 1=1
+		 	<isEqual property="judmnSe" compareValue="1">
+		 	   AND DECODE (JUDMN_DE, '', '0', '1') = #judmnSe#
+		 	</isEqual>
+	</select>
+
+	<!-- 영구 임대료 체납현황 상세 목록 -->
+	<select id="RNT01040208DAO.rentMtRntchrgDtlList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT a.*,
+		       (SELECT MAX (SEIZR_INCDNT_NO)										
+		          FROM TBRNT_RENT_LWST w
+		         WHERE w.CNTRCTR_NO = a.CNTRCTR_NO AND w.JUDMN_DE = a.JUDMN_DE)
+		          AS SEIZR_INCDNT_NO                                                /* 사건번호 */
+		  FROM (  SELECT '1' AS ORD,	
+		                 a.CNTRCTR_NO,												/* 계약자번호 */
+		                 a.RENT_HOUSE_CODE,											/* 임대주택코드 */
+		                 c.RENT_HOUSE_NM,											/* 임대주택명 */
+		                 a.DONG,													/* 동 */
+		                 a.HO,														/* 호 */
+		                 f.NM,														/* 계약자명 */
+		                 SFCOM_DEC_ALL(f.IHIDNUM) AS IHIDNUM,						/* 주민번호 */
+		                 a.RENT_HOUSE_CODE || a.DONG || a.HO AS ORD2,			
+		                 d.ZIP AS POSTNO,                                           /* 우편번호 */
+		                 d.ADRES || ' ' || d.ADRES_DETAIL AS ADDR_MAIN,             /* 주소1 */
+		                 c.RENT_HOUSE_NM || ' ' || a.DONG || '동 ' || a.HO || '호' AS ADRES,   	/* 주소2 */
+		                 TO_CHAR(TO_DATE(b.PAY_TMLMT, 'YYYYMMDD'), 'YYYY-MM-DD') AS DEL_CNT,	/* 납입기한 */
+		                 NVL (b.RNTCHRG, 0) + NVL (b.RDCAMT_AMOUNT, 0)  AS DEL_AMT,                                     /* 체납금액 */
+		                 NVL (b.OVDINTR, 0) AS DEL_INT,                                     /* 연체이자 */
+		                 NVL (b.RNTCHRG, 0) + NVL (b.RDCAMT_AMOUNT, 0)  + NVL (b.OVDINTR, 0) AS TOTAL,                                         /* 계 */
+		                 f.TELNO,                                                   /* 전화번호 */
+		                 f.MBTLNO,                                                  /* 휴대폰번호 */
+		                 a.GTN AS SEC_AMT,	            							/* 보증금 */
+		                 a.CANCL_DE,                                                /* 해약일자 */
+		                 h.AEA,                                                     /* 평 */
+		                 h.DVR_AR AS PER_AREA,										/* 전용면적 */
+		                 h.CMNUSE_AR AS PUB_AREA,									/* 공용면적 */
+		                 (h.DVR_AR +  h.CMNUSE_AR) AS TOT_AREA,						/* 총면적 */
+		                 (SELECT SUM (s.GTN)
+		                    FROM TBRNT_RENT_GTN s
+		                   WHERE s.CNTRCTR_NO = a.CNTRCTR_NO AND s.RCIV_DE > a.CNTRCT_DE)	
+		                    AS SEC_AMT1,                                            /* 증액보증금 */
+		                 m.TOTAL AS MANAGE_AMT,                                     /* 체납 관리비 */
+		                 m.MCNT,													/* 체납개월*/
+		                 a.RM,                                                      /* 비고 */
+		                 DECODE (a.LWST_PROGRS_AT, '1', '소송진행', '') AS LWST_PROGRS_AT,  	/* 소송진행여부 */
+		                 (SELECT MAX (JUDMN_DE)		
+		                    FROM TBRNT_RENT_LWST w
+		                   WHERE w.CNTRCTR_NO = a.CNTRCTR_NO AND JUDMN_DE IS NOT NULL)
+		                    AS JUDMN_DE,                                            /* 판결일자 */
+		                 v.BANK1 AS BANK_NM_1,                                      /* 은행명1 */
+		                 v.ACCT_NO1 AS VACCT_NO_1,                                  /* 계좌번호1 */
+		                 v.BANK2 AS BANK_NM_2,                                      /* 은행명2 */
+		                 v.ACCT_NO2 AS VACCT_NO_2,                                  /* 계좌번호2 */
+		                 v.BANK3 AS BANK_NM_3,                                      /* 은행명3 */
+		                 v.ACCT_NO3 AS VACCT_NO_3,                                  /* 계좌번호3 */
+		                 v.BANK4 AS BANK_NM_4,                                      /* 은행명4 */
+		                 v.ACCT_NO4 AS VACCT_NO_4,                                  /* 계좌번호4 */
+		                 v.BANK5 AS BANK_NM_5,                                      /* 은행명5 */
+		                 v.ACCT_NO5 AS VACCT_NO_5,                                  /* 계좌번호5 */
+		                 v.BANK6 AS BANK_NM_6,                                      /* 은행명6 */
+		                 v.ACCT_NO6 AS VACCT_NO_6                                   /* 계좌번호6 */
+		            FROM TBRNT_RENT_CNTRCT a,
+		            	 TBRNT_RENT_MT_RNTCHRG b,
+		                 TBRNT_RENT_HOUSE c,
+		                 (  SELECT CNTRCTR_NO,
+		                           SUM (NVL (RNTCHRG, 0)
+		                              + NVL (RDCAMT_AMOUNT, 0)
+		                              + NVL (OVDINTR, 0)) AS TOTAL,
+		                           COUNT(1) AS CNT,
+		                           SUM (NVL (RNTCHRG, 0) + NVL (RDCAMT_AMOUNT, 0)) AS DEL_AMT,
+		                           SUM (NVL (OVDINTR, 0)) AS DEL_INT
+		                      FROM TBRNT_RENT_MT_RNTCHRG							/* 월별관리비 */
+		                     WHERE     (RCIV_DE IS NULL OR RCIV_DE > #stdrDe#)
+		                           AND PAY_TMLMT BETWEEN #stPayTmlmt# AND #edPayTmlmt#
+		                           AND NVL (RNTCHRG, 0) + NVL (RDCAMT_AMOUNT, 0) > 0
+		                  GROUP BY CNTRCTR_NO
+		                    HAVING     SUM (NVL (RNTCHRG, 0) + NVL (RDCAMT_AMOUNT, 0)) BETWEEN #stOvdintr# AND #edOvdintr#
+		                           AND COUNT (1) BETWEEN #stOvdintrCnt# AND #edOvdintrCnt#) b1,
+		                 TBRNT_RENT_HOUSE_DONG d,
+		                 (  SELECT CNTRCTR_NO,
+		                           SUM (TRUNC (TOTAL, -1)) AS TOTAL,
+		                           COUNT (1) AS MCNT
+		                      FROM (  SELECT s.CNTRCTR_NO,
+		                                     s.PAY_TMLMT,
+		                                     SUM (NVL (s.MANAGECT, 0)
+		                                        + NVL (s.RDCAMT_AMOUNT, 0)
+		                                        + NVL (s.OVDINTR, 0))
+		                                        AS TOTAL
+		                                FROM TBRNT_MT_MANAGECT s
+		                               WHERE s.RCIV_DE IS NULL
+		                            GROUP BY s.CNTRCTR_NO, s.PAY_TMLMT
+		                              HAVING TRUNC (
+		                                        SUM (NVL (s.MANAGECT, 0) + NVL (s.RDCAMT_AMOUNT, 0)), -1) > 0)
+		                  GROUP BY CNTRCTR_NO) m,
+		                 TBRNT_RENT_HOUSE_BILD h,
+		                 TBRNT_PRMANENT_RENT_CSTMR f,
+		                 (SELECT *
+		                    FROM VI_VA_MAST
+		                   WHERE crt_div = 'RN'
+		                     AND OPT1	 = '1') v
+		           WHERE     a.CNTRCTR_NO 			= b.CNTRCTR_NO
+		           		 AND a.CNTRCTR_NO 			= b1.CNTRCTR_NO
+		                 AND a.RENT_HOUSE_CODE 		= c.RENT_HOUSE_CODE
+		                 AND a.RENT_HOUSE_CODE 		= d.RENT_HOUSE_CODE
+		                 AND a.DONG 				= d.DONG
+		                 AND a.CNTRCTR_NO 			= m.CNTRCTR_NO(+)
+		                 AND a.RENT_HOUSE_CODE 		= h.RENT_HOUSE_CODE
+		                 AND a.DONG 				= h.DONG
+		                 AND a.HO 					= h.HO
+		                 AND a.PRMANENT_CSTMR_NO	= f.PRMANENT_CSTMR_NO
+		                 AND a.CNTRCTR_NO 			= v.CRT_ID(+)
+		                 AND (NVL(b.RNTCHRG, 0) + NVL(b.RDCAMT_AMOUNT, 0)) > 0
+		                 AND (b.RCIV_DE IS NULL OR b.RCIV_DE > #stdrDe#)
+		                 AND b.PAY_TMLMT BETWEEN #stPayTmlmt# AND #edPayTmlmt#
+					<isNotEmpty property="houseSe">
+						 AND   #houseSe# LIKE '%' || C.HOUSE_SE || '%'
+					</isNotEmpty>
+					<isNotEmpty property="rentHouseCode">
+						 AND   a.RENT_HOUSE_CODE = #rentHouseCode#
+					</isNotEmpty>
+					<isNotEmpty property="dong">
+						 AND   A.DONG = LPAD(#dong#, 4, '0')
+					</isNotEmpty>
+					<isNotEmpty property="ho">
+						 AND   A.HO = LPAD(#ho#, 4, '0')
+					</isNotEmpty>
+					<isNotEmpty property="nm">
+						 AND   f.NM LIKE '%' || #nm# || '%'
+					</isNotEmpty>
+		            <isNotEmpty property="canclSe">
+		                 AND DECODE (a.CANCL_DE, NULL, '1', '0') LIKE #canclSe#
+		            </isNotEmpty>
+		            <isNotEmpty property="lwstProgrsAt">
+		                 AND NVL (a.LWST_PROGRS_AT, '0') LIKE #lwstProgrsAt#
+		            </isNotEmpty>
+		        ORDER BY ORD2, CNTRCTR_NO, ADDR_MAIN, ORD ) a
+		 WHERE 1=1
+		 	<isEqual property="judmnSe" compareValue="1">
+		 	   AND DECODE (JUDMN_DE, '', '0', '1') = #judmnSe#
+		 	</isEqual>
+	</select>
+	
+	
+	<!-- 전체체납현황 -->
+	<select id="RNT01040208DAO.rentMtRntchrgSumList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		/* RNT01040208DAO.rentMtRntchrgSumList[전체체납현황] */
+		SELECT A.*,
+			   B.SCNT,
+			   DECODE(A.HOUSE_SE, 'R1', '영구임대', 'R3', '임대상가') AS HOUSE_SE_NM,
+			   NVL((SELECT Z.RENT_HOUSE_NM FROM TBRNT_RENT_HOUSE Z WHERE Z.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE), '소계') AS RENT_HOUSE_NM
+		  FROM (
+				SELECT B.HOUSE_SE,
+					   B.RENT_HOUSE_CODE,
+					   COUNT(1) AS TCNT,
+					   SUM(C.PAY_AMT) AS PAY_AMT,
+					   SUM(C.DEL_INT) AS DEL_INT,
+					   SUM(C.TOTAL) AS TAMT
+				  FROM TBRNT_RENT_CNTRCT A
+				 INNER JOIN TBRNT_RENT_HOUSE B
+					ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+				 INNER JOIN (
+							SELECT A.CNTRCTR_NO,
+								   COUNT(1) PAY_CNT,
+								   SUM(A.RNTCHRG + A.RDCAMT_AMOUNT) AS PAY_AMT,
+								   SUM(A.OVDINTR) AS DEL_INT,
+								   SUM(A.RNTCHRG + A.RDCAMT_AMOUNT + A.OVDINTR) AS TOTAL
+							  FROM TBRNT_RENT_MT_RNTCHRG A
+							 WHERE (A.RCIV_DE IS NULL OR A.RCIV_DE > #stdrDe#)
+							   AND A.PAY_TMLMT BETWEEN #stPayTmlmt# AND #edPayTmlmt#
+							   AND NVL(A.RNTCHRG, 0) + NVL(A.RDCAMT_AMOUNT, 0) > 0
+							 GROUP BY A.CNTRCTR_NO
+						) C
+					ON A.CNTRCTR_NO = C.CNTRCTR_NO
+				 WHERE 1 = 1
+				   AND #houseSe# LIKE '%' || HOUSE_SE || '%'
+		<isNotEmpty property="rentHouseCode">
+				   AND A.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+				   AND A.DONG = LPAD(#dong#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+				   AND A.HO = LPAD(#ho#, 4, '0')
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+				   AND EXISTS (SELECT 1
+								 FROM TBRNT_PRMANENT_RENT_CSTMR Z
+								WHERE Z.PRMANENT_CSTMR_NO = A.PRMANENT_CSTMR_NO
+								  AND Z.NM LIKE '%' || #nm# || '%' )
+		</isNotEmpty>
+				   AND DECODE(A.CANCL_DE, NULL, '1', '0') LIKE #canclSe#
+				   AND NVL(A.LWST_PROGRS_AT, '0') LIKE #lwstProgrsAt#
+				   AND C.PAY_CNT BETWEEN #stOvdintrCnt# AND #edOvdintrCnt#
+				   AND C.PAY_AMT BETWEEN #stOvdintr# AND #edOvdintr#
+		<isEqual property="judmnSe" compareValue="1">
+				   AND EXISTS (SELECT 1
+								 FROM TBRNT_RENT_LWST W
+								WHERE W.CNTRCTR_NO = A.CNTRCTR_NO
+								  AND JUDMN_DE IS NOT NULL )
+		</isEqual>
+				 GROUP BY B.HOUSE_SE, ROLLUP(B.RENT_HOUSE_CODE)
+			   ) A
+		  LEFT JOIN (
+				SELECT B.HOUSE_SE,
+					   B.RENT_HOUSE_CODE,
+					   COUNT(1) AS SCNT
+				  FROM TBRNT_RENT_HOUSE_BILD A
+				 INNER JOIN TBRNT_RENT_HOUSE B
+					ON B.RENT_HOUSE_CODE = A.RENT_HOUSE_CODE
+				 WHERE A.CNTRCTR_NO IS NULL
+				   AND #houseSe# LIKE '%' || HOUSE_SE || '%'
+		<isNotEmpty property="rentHouseCode">
+				   AND B.RENT_HOUSE_CODE = #rentHouseCode#
+		</isNotEmpty>
+				GROUP BY B.HOUSE_SE, ROLLUP(B.RENT_HOUSE_CODE)
+			   ) B
+			ON B.HOUSE_SE = A.HOUSE_SE
+		   AND NVL(B.RENT_HOUSE_CODE, '0') = NVL(A.RENT_HOUSE_CODE, '0')
+		 ORDER BY A.HOUSE_SE, NVL(A.RENT_HOUSE_CODE, '0')
+	</select>
+	
+</sqlMap>

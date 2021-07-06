@@ -1,0 +1,123 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript5.0"><![CDATA[/********************************************************
+파일명 : innerSanctnUtil.xjs
+설 명 : 내부결재 공통 유틸
+수정일 수정자 Version Function 명
+------- -------- ---------- --------------
+2016.03.30 지효정 1.0 최초 생성
+*********************************************************/
+
+/*
+사용방법
+this.fn_sanction = function(){
+	var sanctnObj = {
+		innerSanctnMdlId	: "CMP-100055",
+		ds_recomInfo		: this.ds_recomInfo,
+		ds_sanctn 			: this.DS_TBCMP_RWMNY_PYMNT,
+		keyColumns			: ["BSNS_AREA_CODE", "OWNER_NO", "RQEST_SN"],
+		sysSeCode 			: "SYS",
+		jobSe 				: "PMS"
+	};
+	
+	var reportObj = {
+		strSvcId 			: "innerSanctnUbiDataset",
+		reportTitle  		: "보상금 청구서",
+		reportUri    		: "/pms/cmp/CMP040200_R01.jrf",
+		saveFileName 		: "보상금 청구서",
+		sController   		: "/hsco/pms/cmp/tdd/CMP040200/innerSanctnUbiDataset.do",
+		sInDatasets   		: "input1=ds_cond02",
+		sOutDatasets  		: "DS_TBCMP_THING_OWNER_REPORT=output1"
+							+ " DS_TBCMP_THING_WTNNC_REPORT=output2"
+							+ " DS_TBCMP_RWMNY_PYMNT_REPORT=output3"
+							+ " ds_sanctnerNmDetail=output4"
+	};
+	
+	this.fn_openSanctnPop(sanctnObj, reportObj);
+}
+
+this.gfn_InnerSactionPopup_callback = function(obj){
+	//결재번호 저장
+}
+*/
+
+this.fn_openSanctnPop = function(sanctnObj, reportObj){
+	var keyRow 	= sanctnObj.ds_sanctn.rowposition;
+	var sanctnNo = sanctnObj.ds_sanctn.getColumn(keyRow, "INNER_SANCTN_NO");
+	var innerSanctnMdlId = sanctnObj.innerSanctnMdlId;
+	var sysSeCode = sanctnObj.sysSeCode;
+	var jobSe = sanctnObj.jobSe;
+	var key = "";
+	
+	var len = sanctnObj.keyColumns.length;
+	for(var i=0; i<len; i++){
+		key += sanctnObj.ds_sanctn.getColumn(keyRow, sanctnObj.keyColumns[i]);
+		if(i < len - 1){
+			key += "^";
+		}
+	}
+			
+	sanctnObj.ds_recomInfo.clearData();
+	sanctnObj.ds_recomInfo.addRow();
+	sanctnObj.ds_recomInfo.setColumn(0, "JOB_KEY", key);
+	sanctnObj.ds_recomInfo.setColumn(0, "INNER_SANCTN_MDL_ID", innerSanctnMdlId);
+	sanctnObj.ds_recomInfo.setColumn(0, "INNER_SANCTN_ID", sanctnNo);
+	sanctnObj.ds_recomInfo.setColumn(0, "SYS_SE_CODE", sysSeCode);
+	sanctnObj.ds_recomInfo.setColumn(0, "JOB_SE", jobSe);
+	
+	this.debug(sanctnObj, 1);
+	this.debug(reportObj, 2);
+	
+	//기존결재ID 있을 경우.
+	if(this.comUtils.isNullEmpty(sanctnNo) == false){
+		var param = {
+			arg_0 : this,  
+			arg_1 : sanctnObj.ds_recomInfo
+		};
+
+		this.gfn_popup("InnerSactionPopup2", 999, 735, "내부결재관리", param, "com_sym_ism::SYM090200_P02.xfdl", "fn_InnerSactionPopup_callback");
+	}else{
+		var svcId			= "GetInnerSanctnId";
+		var sController   	= "hsco/com/sym/ism/SYM090200/InnerSanctionId.do";
+		var sInDatasets   	= "input1=" + sanctnObj.ds_recomInfo.id;
+		var sOutDatasets  	= sanctnObj.ds_recomInfo.id + "=output1";
+			
+		delete this["fn_innerSanctioncallBack"];
+		this["fn_innerSanctioncallBack"] = function(strSvcId, nErrorCode, strErrorMsg){
+			var bSuccess = nErrorCode == 0?true:false;
+			if (bSuccess == true){
+				switch(strSvcId){
+					 case "GetInnerSanctnId":  // 내부결재
+						this.fn_popup_InnerSanctionDrft(sanctnObj, reportObj);
+						break;
+				}
+			}
+			this.debug( (bSuccess==true?"Success : ":"Fail : ") + strSvcId);
+		}
+		
+		Ex.core.tran(this, svcId, sController, sInDatasets, sOutDatasets, "", "fn_innerSanctioncallBack");
+	}
+}
+
+/*
+ * 함수명  	: fn_popup_InnerSanctionDrft
+ * 설명 		: 보고서 생성 초기 데이터를 설정하고, 기안을 위한 내부결재관리 팝업창을 팝업처리한다.
+ * params  		: 
+ * return Type 	: None
+ * 사용법		:
+ */ 
+this.fn_popup_InnerSanctionDrft = function(sanctnObj, reportObj){
+	//레포트정보 설정
+    var sanctnId 		= sanctnObj.ds_recomInfo.getColumn(0, "INNER_SANCTN_ID");  //내부결재ID
+	var strSvcId		= reportObj.strSvcId;
+	var reportTitle  	= reportObj.reportTitle;
+	var reportUri    	= reportObj.reportUri;
+	var saveFileName 	= reportObj.saveFileName;
+	var sController   	= reportObj.sController;
+	var sInDatasets   	= reportObj.sInDatasets; 
+	var sOutDatasets  	= reportObj.sOutDatasets;
+
+	this.gfn_makeReportTranInfo(sanctnId, strSvcId, sController, sInDatasets, sOutDatasets, reportTitle, reportUri, saveFileName);
+	
+	this.gfn_openInnerSanctionPopup(this.ds_recomInfo); 
+}
+]]></Script>

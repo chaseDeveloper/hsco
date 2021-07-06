@@ -1,0 +1,969 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="SLS080500DAO">	
+
+	<!-- 쿼리명 : 계약자별 분양납부 내역 조회
+	설명 : 계약자별 분양납부 내역 조회
+	수정일  		수정자  	수정내용
+	2016.02.16	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.16
+	-->   
+	<select id="SLS080500DAO.selectPayInfoList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT /* 토지계약자 납부정보 조회 */
+		       a.CNTRCTR_NO
+			 , a.PAY_CODE				/* 납부코드 */
+		     , c.CODE_NM AS PAY_CODE_NM	/* 납부코드명 */
+		     , '[' || a.PAY_CODE || '] '|| c.CODE_NM AS PAY_CODE_NM_ALL	/* 납부코드명 */
+			 , a.PAY_TMLMT				/* 납부기한일 */
+		<!-- 	 , DECODE (a.rciv_de, NULL , '' ,a.PAY_TMLMT) AS PAY_TMLMT /* 납부기한일 */ -->
+		     , (NVL(a.PAYAMT, 0) + NVL(a.INSTLMT_INTR, 0) ) AS PAYAMT	/* 납부금액 */
+<!-- 		     , b.RCIV_AMOUNT			/* 납부금액 */ -->
+			 /* 손연옥 수정 */             
+             , CASE WHEN a.PAY_CODE = 'SE' AND a.PAYAMT <![CDATA[<]]> 0 THEN 0
+                        ELSE decode(a.rciv_de,null, 0,
+                                 (NVL(a.PAYAMT, 0) + NVL(a.INSTLMT_INTR, 0) + NVL(a.ARRRG_AMOUNT, 0) + NVL(a.PREPAY_DSCNT_AMOUNT, 0) + NVL(a.RDCAMT_AMOUNT, 0) ))
+               end as RCIV_AMOUNT           /* 납부금액 */		       		     
+		     , a.ARRRG_AMOUNT			/* 연체금액 */
+		     , a.PREPAY_DSCNT_AMOUNT	/* 선납할인 */
+		     , (NVL(a.ARRRG_AMOUNT, 0) + NVL(a.PREPAY_DSCNT_AMOUNT, 0)) AS ARRRG_PREPAY_DSCNT_AMOUNT	/* 연체_선납할인 */
+		     , a.INSTLMT_INTR			/* 할부이자 */
+<!-- 		     , CASE WHEN INSTLMT_SE = '3'	/* 할부구분 */
+		            THEN (NVL(a.PAYAMT, 0) + NVL(a.INSTLMT_INTR, 0) + NVL(a.ARRRG_AMOUNT, 0) + NVL(a.RDCAMT_AMOUNT, 0))
+		            ELSE (NVL(a.PAYAMT, 0) + NVL(a.INSTLMT_INTR, 0) + NVL(a.ARRRG_AMOUNT, 0) + NVL(a.PREPAY_DSCNT_AMOUNT, 0) + NVL(a.RDCAMT_AMOUNT, 0) )
+		       END AS PAYAMT_SUM		/* 납부합계 */ -->
+             , (NVL(a.PAYAMT, 0) + NVL(a.INSTLMT_INTR, 0) + NVL(a.ARRRG_AMOUNT, 0) + NVL(a.PREPAY_DSCNT_AMOUNT, 0) + NVL(a.RDCAMT_AMOUNT, 0) ) 
+               AS PAYAMT_SUM            /* 납부합계 */    
+		    <!--  , b.RCIV_DE				/* 수납일자 */ -->
+		     , DECODE (a.rciv_de, NULL , '' ,b.RCIV_DE) AS RCIV_DE /* 수납일자 */
+<!-- 		     , CASE WHEN INSTLMT_SE = '3'
+		            THEN (NVL(a.PAYAMT, 0) + NVL(a.INSTLMT_INTR, 0) + NVL(a.ARRRG_AMOUNT, 0) + NVL(a.RDCAMT_AMOUNT, 0)) - NVL( b.RCIV_AMOUNT, 0 )
+		            ELSE (NVL(a.PAYAMT, 0) + NVL(a.INSTLMT_INTR, 0) + NVL(a.ARRRG_AMOUNT, 0) + NVL(a.PREPAY_DSCNT_AMOUNT, 0) + NVL(a.RDCAMT_AMOUNT, 0) ) - NVL( b.RCIV_AMOUNT, 0)
+		       END AS NPYAMT_SUM		/* 미납합계 */ -->
+             , CASE WHEN a.PAY_CODE = 'SE' AND a.PAYAMT <![CDATA[<]]> 0 THEN 0
+                         ELSE (NVL(a.PAYAMT, 0) + NVL(a.INSTLMT_INTR, 0) + NVL(a.ARRRG_AMOUNT, 0) + NVL(a.PREPAY_DSCNT_AMOUNT, 0) + NVL(a.RDCAMT_AMOUNT, 0) ) - NVL( b.RCIV_AMOUNT, 0)
+               END AS NPYAMT_SUM        /* 미납합계 */		       
+		  FROM TBSLS_LCNTRCTR_PAY a		/* 토지계약자 납부 */
+		     , TBSLS_LAD_RCIV_PSTMRK b			/* 토지수납 */
+		     , (SELECT CODE
+		             , CODE_NM
+		          FROM TBCOM_CMMN_CODE
+		         WHERE GRP_CODE = 'LAD0A1'	/* 토지납부코드 */
+		       ) c
+		 WHERE 1 = 1
+		   AND a.CNTRCTR_NO = b.CNTRCTR_NO(+)
+		   AND a.PAY_NO = b.PAY_NO(+)
+		   AND a.PAY_CODE = c.CODE(+)
+		   AND a.CNTRCTR_NO = #CNTRCTR_NO#			/* 토지계약자번호 */
+		 <isNotEmpty property="LTTOT_RENT_SE">
+		   AND a.LTTOT_RENT_SE = #LTTOT_RENT_SE#	/* 분양임화성분 */
+		 </isNotEmpty>
+		 ORDER BY a.PAY_CODE
+		 		, a.PAY_TMLMT
+    </select>
+    
+    <!-- [BEGIN] 레포트 출력용 데이터 조회 -->
+    
+    <!-- 쿼리명 : A01 부동산거래계약신고서 내용 조회
+	설명 : A01 부동산거래계약신고서 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.18	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.18
+	-->
+    <select id="SLS080500DAO.selectReportA01Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportA01 A1 부동산거래계약신고서 조회 */
+			   a1.CSTMR_NM			/* 고객명 */
+			 , a1.IHIDNUM			/* 주민등록번호 */
+		     , a1.IHIDNUM_MSK		/* 주민등록번호(마스크) */
+		     , a1.CSTMR_ADRES_ALL	/* 고객주소 */
+		     , a1.OWN_QOTA			/* 고객지분(거래지분) */
+		     , a1.TELNO				/* 전화번호 */
+		     , ('(이동전화 : ' || a1.MBTLNO || ')') AS MBTLNO	/* 휴대폰번호 */
+		     , TO_CHAR(TO_DATE(a1.CNTRCT_DE, 'YYYYMMDD'), 'YYYY') AS CNTRCT_DE_Y	/* 계약일자_년 */
+		     , TO_CHAR(TO_DATE(a1.CNTRCT_DE, 'YYYYMMDD'), 'MM') AS CNTRCT_DE_M		/* 계약일자_월 */
+		     , TO_CHAR(TO_DATE(a1.CNTRCT_DE, 'YYYYMMDD'), 'DD') AS CNTRCT_DE_D		/* 계약일자_일 */
+		     , TO_CHAR(TO_DATE(b1.JAN_DE, 'YYYYMMDD'), 'YYYY') AS JAN_DE_Y			/* 잔금지급(예정)일_년 */
+		     , TO_CHAR(TO_DATE(b1.JAN_DE, 'YYYYMMDD'), 'MM') AS JAN_DE_M			/* 잔금지급(예정)일_월 */
+		     , TO_CHAR(TO_DATE(b1.JAN_DE, 'YYYYMMDD'), 'DD') AS JAN_DE_D			/* 잔금지급(예정)일_일 */
+		     , TO_CHAR(TO_DATE(b1.PAYEND_DE, 'YYYYMMDD'), 'YYYY') AS PAYEND_DE_Y	/* 중도지급일_년 */
+		     , TO_CHAR(TO_DATE(b1.PAYEND_DE, 'YYYYMMDD'), 'MM') AS PAYEND_DE_M		/* 중도지급일_월 */
+		     , TO_CHAR(TO_DATE(b1.PAYEND_DE, 'YYYYMMDD'), 'DD') AS PAYEND_DE_D		/* 중도지급일_일 */
+		     , a1.LOCPLC_ADRES			/* 토지소재지 */
+		     , a1.LOCPLC_ADRES_LNM		/* 토지소재지(지번) */
+			 , a1.PRPOS_SE_NM			/* 용도구분(지목) */
+			 , a1.DCSN_AR				/* 확정면적 */
+		     , CASE a1.LAD_COCNR_CNT WHEN 0 THEN '100 분의 100'
+		            ELSE ('100 분의 ' || TO_CHAR(a1.LAD_COCNR_CNT))
+		       END AS COCNR_CNT			/*  */
+		     , a1.PERSON_CONT_AREA		/* 면적 */
+		     , b1.SUM_TOT_PAYAMT		/* 납부금액(총금액) */
+		     , b1.SUM_PAYAMT			/* 계약금 */
+		     , b1.SUM_JAN_AMT			/* 잔금 */
+		     , b1.SUM_PAYEND_AMT		/* 중도금 */
+		     , a1.BUY_RATIO				/* 대지권비율 */
+		     /* 매도인정보 */
+		     , c1.MTLTY					/* 상호 */
+		     , c1.RPRSNTV				/* 대표자 */
+		     , c1.JURIRNO				/* 법인등록번호 */
+		     , c1.CPR_ADRES_ALL			/* 주소 */
+		     , c1.CPR_TELNO				/* 전화번호 */
+		  FROM (SELECT a.CNTRCTR_NO			/* 계약자번호 */
+		             , DECODE(a.CNTRCTR_MTLTY, NULL, c.CSTMR_NM, (a.CNTRCTR_MTLTY || '  (' || c.CSTMR_NM || ')')) AS CSTMR_NM	/* 고객명 */
+		             , c.IHIDNUM			/* 주민등록번호 */
+		             , SUBSTR(SFCOM_DEC_ALL(c.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK		/* 주민등록번호 */
+		             , LTRIM(c.ADRES || ' ' || c.ADRES_DETAIL) AS CSTMR_ADRES_ALL			/* 고객주소 */
+		             , DECODE(c.TELNO, NULL, '                    ', c.TELNO) AS TELNO		/* 전화번호 */
+		             , DECODE(c.MBTLNO, NULL, '                    ', c.MBTLNO) AS MBTLNO	/* 휴대폰번호 */
+		             , a.CNTRCT_DE			/* 계약일자 */
+		             /* 토지정보 */
+		             , LTRIM(b.LOCPLC_BASS_ADRES || ' ' || b.LOCPLC_DETAIL_ADRES) AS LOCPLC_ADRES		/* 토지소재지 */
+		             , LTRIM(b.LOCPLC_BASS_ADRES_LNM || ' ' || b.LOCPLC_DETAIL_ADRES_LNM) AS LOCPLC_ADRES_LNM			/* 토지소재지(지번) */
+		             , DECODE(b.LAD_CODE, '022', '잡종지', NVL(e.CHRCTR_PREPAR_VALUE_0, e.CODE_NM)) AS PRPOS_SE_NM		/* 이용구분(지목) */
+		             , b.DCSN_AR			/* 확정면적 */
+		             , CASE WHEN NVL (d.COCNR_CNT, 0) = 0
+		                    THEN '100 분의 100'
+		                    ELSE (SELECT QOTA
+		                            FROM TBSLS_LCNTRCTR_COCNR
+		                           WHERE CNTRCTR_NO = a.CNTRCTR_NO
+		                             AND LAD_CSTMR_NO_COCNR = a.LAD_CSTMR_NO)
+		               END AS OWN_QOTA	/* 소유지분 */
+		             , DECODE (NVL(b.DCSN_AR, 0), 0, b.BGNN_AR, b.DCSN_AR) AS PERSON_CONT_AREA	/* 면적 */
+		             , NVL(d.COCNR_CNT, 0) AS LAD_COCNR_CNT		/* 계약자수 */
+		             , DECODE(b.ALL_AR, NVL(b.DCSN_AR, b.BGNN_AR), '100 분의 100', b.ALL_AR || ' 분의 ' || NVL (b.DCSN_AR, b.BGNN_AR)) AS BUY_RATIO	/* 대지권 비율 */
+		          FROM TBSLS_LCNTRCTR a			/* 토지계약자 lnt_ct_info */
+		             , TBSLS_LAD_DETAIL_INFO b	/* 토지상세정보 lnt_ln_infomst */
+		             , TBSLS_LAD_CSTMR c		/* 토지고객 */
+		             , (SELECT CNTRCTR_NO					/* 계약자번호 */
+		             		 , COUNT(1) AS COCNR_CNT		/* 공유자수 */
+		             	  FROM TBSLS_LCNTRCTR_COCNR			/* 토지계약자공유자 lnt_ct_cowoner */
+		                 WHERE CNTRCTR_NO = #CNTRCTR_NO#
+		                 GROUP BY CNTRCTR_NO
+		                ) d
+		             , (SELECT CODE
+		                     , CODE_NM
+		                     , CHRCTR_PREPAR_VALUE_0
+		                  FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		                 WHERE GRP_CODE = 'LAD003'	/* 토지용도코드 */
+		                   AND USE_AT = '1'
+		               ) e
+		         WHERE 1 = 1
+		           AND a.LAD_CODE = b.LAD_CODE
+		           AND a.BLCK = b.BLCK
+		           AND a.LOT = b.LOT
+		           AND a.LOT_TY = b.LOT_TY
+		           AND a.CNTRCTR_NO = d.CNTRCTR_NO(+)
+		           AND a.LAD_CSTMR_NO = c.LAD_CSTMR_NO
+		           AND b.PRPOS_SE = e.CODE(+)
+		           AND a.CNTRCTR_NO = #CNTRCTR_NO#
+			   ) a1
+		     , (SELECT SUM(x.PAYAMT) AS SUM_TOT_PAYAMT	/* 납부금액(총금액) */
+		             , SUM(DECODE(x.PAY_CODE, 'S0', x.PAYAMT, 0)) AS SUM_PAYAMT	/* 계약금 */
+		             , SUM(DECODE(x.PAY_CODE, 'S0', 0,  'S9', 0,  'SE', 0,  x.PAYAMT)) AS SUM_PAYEND_AMT	/* 중도금 */
+		             , SUM(DECODE(x.PAY_CODE, 'S9', x.PAYAMT, 0)) AS SUM_JAN_AMT	/* 잔금 */
+		             , MAX(CASE WHEN SUBSTR(x.PAY_CODE, 2, 1) BETWEEN '1' AND '8' THEN x.PAY_TMLMT
+		             	   END) AS PAYEND_DE	/* 중도지급일 */
+		             , MAX(CASE WHEN SUBSTR(x.PAY_CODE, 2, 1) = '9' THEN x.PAY_TMLMT
+		                    END) AS JAN_DE		/* 잔금지급(예정)일 */
+		          FROM TBSLS_LCNTRCTR_PAY x		/* 토지계약자납부 lnt_ct_vote */
+		         WHERE x.CNTRCTR_NO = #CNTRCTR_NO#		/* 계약자번호 */
+		           AND x.PAY_CODE LIKE 'S%'	/* 분양 납부코드 */
+		       ) b1
+		     , (SELECT y.BIZRNO			/* 사업자등록번호 */
+		             , y.MTLTY			/* 상호 */
+		             , y.JURIRNO		/* 법인등록번호  */
+		             , y.RPRSNTV		/* 대표자 */
+		             , LTRIM(y.ADRES || ' ' || y.ADRES_DETAIL) AS CPR_ADRES_ALL	/* 주소 */
+		             , y.ADRES_RN AS CPR_ADRES_RN				/* 주소_도로명 */
+		             , NVL(y.TELNO, '0533500343') AS CPR_TELNO	/* 전화번호 */
+		          FROM TBPMS_CPR_INFO y	/* 법인정보 */
+		         WHERE ROWNUM = 1
+		         ORDER BY y.UPDT_DT DESC
+		       ) c1
+		 WHERE 1 = 1
+    </select>
+    
+    <!-- 쿼리명 : A01 부동산거래계약신고서 별지(공유자 목록) 조회
+	설명 : A01 부동산거래계약신고서 별지(공유자 목록) 조회
+	수정일  		수정자  	수정내용
+	2016.02.18	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.18
+	-->
+    <select id="SLS080500DAO.selectReportA01SubList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportA1Sub 부동산거래계약신고서 별지(공유자 목록) 조회 */
+			   b.CSTMR_NM							/* 고객명 */
+			 , b.IHIDNUM							/* 주민등록번호 */
+			 , SUBSTR(SFCOM_DEC_ALL(b.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK	/* 주민등록번호 마스크 */
+		     , TRIM(b.ADRES || ' ' || b.ADRES_DETAIL) AS ADRES_ALL				/* 전체 주소 */
+		     , a.QOTA								/* 지분 */
+		     , NVL(b.MBTLNO, b.TELNO) AS MBTLNO		/* 이동전화 */
+		  FROM TBSLS_LCNTRCTR_COCNR a 				/* 토지계약자공유자 */
+		     , TBSLS_LAD_CSTMR b					/* 토지고객 */
+		 WHERE 1 = 1
+		   AND a.RELIS_DE IS NULL					/* 해제일자 */
+		   AND NOT EXISTS (SELECT 1
+		   					 FROM TBSLS_LCNTRCTR	/* 토지계약자 */
+		   			        WHERE CNTRCTR_NO 	= a.CNTRCTR_NO
+		                      AND LAD_CSTMR_NO 	= a.LAD_CSTMR_NO_COCNR)
+		   AND a.LAD_CSTMR_NO_COCNR = b.LAD_CSTMR_NO
+		   AND a.CNTRCTR_NO 		= #CNTRCTR_NO#
+		 ORDER BY b.CSTMR_NM
+    </select>
+    
+    <!-- 쿼리명 : C01 토지분양 확인서 내용 조회
+	설명 : C01 토지분양 확인서 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.19	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.19
+	-->
+    <select id="SLS080500DAO.selectReportC01Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC01Info 분양확인서 내용조회 */
+			   /* 토지의 표시 */
+			   d.LOCPLC_BASS_ADRES || ' ' || d.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES_ALL				/* 소재지 주소 */
+		     , d.LOCPLC_BASS_ADRES_LNM || ' ' || d.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM_ALL	/* 소재지 주소_지번 */
+		     , c.LAD_NM						/* 토지명 */
+		     , DECODE(d.REAL_BLCK, NULL, (d.BLCK || '-' || d.LOT || '-' || d.LOT_TY), (d.REAL_BLCK || '-' || d.REAL_LOT || '-' || d.REAL_LOT_TY)) AS LAD_BLT	/* 토지 B.L.T */
+		     , DECODE(NVL(d.DCSN_AR, 0), 0, d.BGNN_AR, d.DCSN_AR) AS DCSN_AR	/* 분양면적(확정면적) */
+		     , e.PAYAMT						/* 분양금액(납부금액) */
+		     , f.CODE_NM AS PRPOS_CODE_NM	/* 용도코드명 */
+		     , g.CODE_NM AS SUPLY_CODE_NM	/* 공급구분코드명 */
+		     /* 분양계약자 */
+		     , b.ADRES || ' ' || b.ADRES_DETAIL AS CSTMR_ADRES_ALL				/* 토지계약자 주소 */
+		     , b.CSTMR_NM					/* 고객명 */
+		     , b.IHIDNUM					/* 주민등록번호 */
+		     , SUBSTR(SFCOM_DEC_ALL(b.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK	/* 주민등록번호_마스크 */
+		     , b.TELNO						/* 전화번호 */
+		     , b.MBTLNO						/* 휴대폰번호 */
+		  FROM TBSLS_LCNTRCTR a 			/* 토지계약자 LNT_CT_INFO */
+		     , TBSLS_LAD_CSTMR b			/* 토지고객 */
+		     , TBSLS_LAD_INFO c				/* 토지정보 */
+		     , TBSLS_LAD_DETAIL_INFO d 		/* 토지상세정보 xhwlLNT_LN_INFOMST */
+		     , (SELECT x.CNTRCTR_NO
+		             , SUM(x.PAYAMT) AS PAYAMT
+		         FROM TBSLS_LCNTRCTR_PAY x	/* 토지계약자 납부 LNT_CT_VOTE */
+		        WHERE x.CNTRCTR_NO = #CNTRCTR_NO#
+		          AND x.PAY_CODE NOT IN ('HG', 'HC')
+		          AND x.PAY_CODE LIKE 'S%'
+		        GROUP BY x.CNTRCTR_NO
+		       ) e
+		     , (SELECT CODE
+		     		 , CODE_NM
+		          FROM TBCOM_CMMN_CODE	/* 공통코드 */
+		         WHERE GRP_CODE = 'LAD003'
+		       ) f
+		     , (SELECT CODE
+		     		 , CODE_NM
+		          FROM TBCOM_CMMN_CODE	/* 공통코드 */
+		         WHERE GRP_CODE = 'LAD004'
+		       ) g
+		 WHERE 1 = 1
+		   AND a.LAD_CSTMR_NO 	= b.LAD_CSTMR_NO(+)
+		   AND a.LAD_CODE 		= c.LAD_CODE
+		   AND a.LAD_CODE 		= d.LAD_CODE
+		   AND a.BLCK 			= d.BLCK
+		   AND a.LOT 			= d.LOT
+		   AND a.LOT_TY			= d.LOT_TY
+		   AND a.CNTRCTR_NO 	= e.CNTRCTR_NO
+		   AND d.PRPOS_SE 		= f.CODE(+)
+		   AND d.SUPLY_CODE 	= g.CODE(+)
+		   AND a.CNTRCTR_NO 	= #CNTRCTR_NO#
+    </select>
+    
+    <!-- 쿼리명 : C02 사실확인서 내용 조회
+	설명 : C02 사실확인서 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.22	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.22
+	-->
+    <select id="SLS080500DAO.selectReportC02Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC02Info C02 사실확인서 내용 조회 */
+			   '화성도시공사에서 조성하여 공급한' || a1.LOCPLC_ADRES_ALL || ' "' || a1.LAD_NM
+			   || '" 내 \n임시로 부여한 지번(블럭-롯트) 및 면적이 다음과 같이 변경 확정되었음을 확인함.' AS INTRO
+		     , a1.LOCPLC_ADRES_ALL || '  ' || DECODE(a1.REAL_BLCK, NULL, (a1.BLCK || '블럭 ' || a1.LOT || '로트'), (a1.REAL_BLCK || '블럭 ' || a1.REAL_LOT || '로트')) AS LN_BEF_ADDR
+		     , a1.LOCPLC_ADRES_ALL AS LN_AFT_ADDR
+		     , a1.BGNN_AR
+		     , a1.DCSN_AR
+		     , '본인(회사)는 화성도시공사에서 조성하여 공급한 ' || a1.LOCPLC_ADRES_ALL || ' 소재 '
+		       || a1.PRPOS_SE_NM || ' 잔금납부, 정산 및 소유권 이전등기 신청과 관련하여 화성도시공사에서 교부한 다음의 서류를 틀림없이 수령하였기에 이 확인서에 서명날인 후 제출합니다.' AS INTRO1
+		  FROM (SELECT b.LOCPLC_BASS_ADRES || '  ' || b.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES_ALL
+		             , b.LOCPLC_BASS_ADRES_LNM || '  ' || b.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM_ALL
+		             , c.LAD_NM
+		             , b.BLCK
+		             , b.LOT
+		             , b.REAL_BLCK
+		             , b.REAL_LOT
+		             , b.BGNN_AR
+		             , b.DCSN_AR
+		             , d.CODE_NM AS PRPOS_SE_NM
+		          FROM TBSLS_LCNTRCTR a				/* 토지계약자 */
+		             , TBSLS_LAD_DETAIL_INFO b		/* 토지상세정보 */
+		             , TBSLS_LAD_INFO c				/* 토지정보 */
+		             , (SELECT CODE
+				     		 , CODE_NM
+				          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+				         WHERE GRP_CODE = 'LAD003'	/* 용도코드 */
+				       ) d
+		         WHERE 1 = 1
+		           AND a.LAD_CODE 	= b.LAD_CODE
+		           AND a.BLCK 		= b.BLCK
+		           AND a.LOT 		= b.LOT
+		           AND a.LOT_TY 	= b.LOT_TY
+		           AND a.LAD_CODE 	= c.LAD_CODE
+		           AND b.PRPOS_SE 	= d.CODE(+)
+		           AND a.CNTRCTR_NO = #CNTRCTR_NO#
+		       ) a1
+		 WHERE 1 = 1
+    </select>
+    
+    <!-- 쿼리명 : C03 위임장(소유권이전) - 부동산 및 등기의무자 정보
+	설명 : C03 위임장(소유권이전) - 부동산 및 등기의무자 정보
+	수정일  		수정자  	수정내용
+	2016.02.22	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.22
+	-->
+    <select id="SLS080500DAO.selectReportC03Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC03Info C03 위임장(소유권이전) 부동산 및 등기의무자 정보 조회  */
+		       a.CNTRCTR_NO						/* 토지계약자번호 */
+		     , b.LOCPLC_BASS_ADRES || '  ' || b.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES				/* 토지주소 */
+		     , b.LOCPLC_BASS_ADRES_LNM || '  ' || b.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM	/* 토지주소_지번 */
+		     , NVL(b.DCSN_AR, 0) AS DCSN_AR		/* 확정면적 */
+		     , d.RCIV_DE						/* 등기일자(계약금 수납일자) */
+		     , c.CSTMR_NM						/* 토지고객명 */
+		     , c.IHIDNUM						/* 주민등록번호 */
+		     , SUBSTR(SFCOM_DEC_ALL(c.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK		/* 주민등록번호_마스크 */
+		     , CASE #ISSU_OFC# WHEN '01'
+		     				  THEN f.CPR_ADRES_ALL
+		     				  ELSE '화성광역시장'
+			   END AS CPR_ADRES					/* 주소 */
+		     , CASE #ISSU_OFC# WHEN '01'
+		     				  THEN f.CPR_ADRES_RN
+		                      ELSE '화성광역시장'
+		       END AS CPR_ADRES_RN				/* 주소_도로명 */
+		     , CASE #ISSU_OFC# WHEN '01'
+		     				  THEN f.MTLTY
+		                      ELSE ''
+		       END AS MTLTY						/* 상호 */
+		     , CASE #ISSU_OFC# WHEN '01'
+		     				  THEN f.RPRSNTV
+		                      ELSE ''
+		       END AS RPRSNTV					/* 대표자 */
+		     , NVL(e.COCNR_CNT, 0) + 1 AS COCNR_CNT
+		     , DECODE(a.SUPLY_SE, '07', '대토보상', '매매') AS SUPLY_SE_NM
+		  FROM TBSLS_LCNTRCTR a				/* 토지계약자 */
+			 , TBSLS_LAD_DETAIL_INFO b		/* 토지상세정보 */
+		     , TBSLS_LAD_CSTMR c			/* 토지고객 */
+		     , (SELECT x.CNTRCTR_NO			/* 계약자번호 */
+		     	     , x.RCIV_DE			/* 수납일자 */
+		          FROM TBSLS_LAD_RCIV_PSTMRK x		/* 토지수납 */
+		         WHERE x.PAY_CODE = 'S0'	/* 납부코드(계약금) */
+		       ) d
+		     , (SELECT y.CNTRCTR_NO				/* 계약자번호 */
+		             , COUNT(1) AS COCNR_CNT	/* 공유자수 */
+		          FROM TBSLS_LCNTRCTR_COCNR y	/* 토지계약자공유자 lnt_ct_cowoner */
+		         WHERE y.RELIS_DE IS NULL		/* 해제일자 */
+		           AND NOT EXISTS (SELECT 1
+		                             FROM TBSLS_LCNTRCTR	/* 토지계약자 */
+		                            WHERE CNTRCTR_NO = y.CNTRCTR_NO
+		                              AND LAD_CSTMR_NO = y.LAD_CSTMR_NO_COCNR)
+		         GROUP BY CNTRCTR_NO
+		        ) e
+		     , (SELECT y.BIZRNO			/* 사업자등록번호 */
+		             , y.MTLTY			/* 상호 */
+		             , y.JURIRNO		/* 법인등록번호  */
+		             , y.RPRSNTV		/* 대표자 */
+		             , LTRIM(y.ADRES || ' ' || y.ADRES_DETAIL) AS CPR_ADRES_ALL	/* 주소 */
+		             , y.ADRES_RN AS CPR_ADRES_RN				/* 주소_도로명 */
+		             , NVL(y.TELNO, '0533500343') AS CPR_TELNO	/* 전화번호 */
+		          FROM TBPMS_CPR_INFO y	/* 법인정보 */
+		         WHERE ROWNUM = 1
+		         ORDER BY y.UPDT_DT DESC
+		       ) f
+		 WHERE 1 = 1
+		   AND a.CANCL_DE IS NULL		/* 해약일자 */
+		   AND a.LAD_CODE 		= b.LAD_CODE
+		   AND a.BLCK 			= b.BLCK
+		   AND a.LOT 			= b.LOT
+		   AND a.LOT_TY 		= b.LOT_TY
+		   AND a.LAD_CSTMR_NO 	= c.LAD_CSTMR_NO(+)
+		   AND a.CNTRCTR_NO 	= d.CNTRCTR_NO(+)
+		   AND a.CNTRCTR_NO 	= e.CNTRCTR_NO(+)
+		   AND a.CNTRCTR_NO 	= #CNTRCTR_NO#
+    </select>
+    
+    <!-- 쿼리명 : C03 위임장(소유권이전) - 등기권리자정보 조회
+	설명 : C03 위임장(소유권이전) - 등기권리자정보 조회
+	수정일  		수정자  	수정내용
+	2016.02.22	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.22
+	-->
+    <select id="SLS080500DAO.selectReportC03AddInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC03AddInfo 등기권리자정보 조회  2건 까지 조회 2건 이상시 별지 처리 */
+		       NVL(MAX(CSTMR_NM1),'* 별지내역과 같음') AS CSTMR_NM1
+		     , MAX(CSTMR_ADRES1) AS CSTMR_ADRES1
+		     , MAX(CSTMR_NM2) AS CSTMR_NM2
+		     , MAX(CSTMR_ADRES2) AS CSTMR_ADRES2
+		  FROM (SELECT DECODE(NUM, 1, CSTMR_NM) AS CSTMR_NM1
+		             , DECODE(NUM, 1, CSTMR_ADRES) AS CSTMR_ADRES1
+		             , DECODE(NUM, 2, CSTMR_NM) AS CSTMR_NM2
+		             , DECODE(NUM, 2, CSTMR_ADRES) AS CSTMR_ADRES2
+		          FROM (SELECT 1 AS NUM
+		                     , LTRIM(b.CSTMR_NM || '(지분 100)') AS CSTMR_NM
+		                     , LTRIM(b.ADRES || '  ' || ADRES_DETAIL) AS CSTMR_ADRES
+		                  FROM TBSLS_LCNTRCTR a				/* 토지계약자 */
+		                     , TBSLS_LAD_CSTMR b			/* 토지고객 */
+		                 WHERE 1 = 1
+		                   AND a.LAD_CSTMR_NO = b.LAD_CSTMR_NO(+)
+		                   AND a.CNTRCTR_NO = DECODE(#COCNR_CNT#, 1, #CNTRCTR_NO#, '1')
+		                UNION
+		                SELECT ROWNUM AS NUNM
+		                     , LTRIM(d.CSTMR_NM || '(지분 ' || c.QOTA || ')' ) AS CSTMR_NM
+		                     , LTRIM(d.ADRES || '  ' || d.ADRES_DETAIL ) AS CSTMR_ADRES
+		                  FROM TBSLS_LCNTRCTR_COCNR c		/* 토지계약자공유자 lnt_ct_cowoner */
+		                     , TBSLS_LAD_CSTMR d			/* 토지고객 */
+		                 WHERE 1 = 1
+		                   AND c.LAD_CSTMR_NO_COCNR = d.LAD_CSTMR_NO(+)
+		                   AND c.RELIS_DE IS NULL		/* 해제일자 */
+		                 <![CDATA[
+		                   AND c.CNTRCTR_NO = (CASE WHEN #COCNR_CNT# <= 2
+		                 ]]>
+		                                            THEN #CNTRCTR_NO#
+		                                            ELSE '1'
+		                                       END)
+		               )
+		       )
+    </select>
+    
+    <!-- 쿼리명 : C04 환매특약말소등기신청 내용 조회
+	설명 : C03 환매특약말소등기신청 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.23	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.23
+	-->
+    <select id="SLS080500DAO.selectReportC04Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC04Info 환매특약말소등기신청 내용 조회 */
+			   a.CNTRCTR_NO						/* 토지계약자번호 */
+		     , b.LOCPLC_BASS_ADRES || '  ' || b.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES				/* 토지주소 */
+		     , b.LOCPLC_BASS_ADRES_LNM || '  ' || b.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM	/* 토지주소_지번 */
+		     , NVL(b.DCSN_AR, 0) AS DCSN_AR		/* 확정면적 */
+		     , a.CANCL_DE						/* 해약일자 */
+		     , c.CSTMR_NM						/* 고객명 */
+		     , c.ADRES || '  ' || c.ADRES_DETAIL AS ADRES	/* 고객주소 */
+		  FROM TBSLS_LCNTRCTR a					/* 토지계약자 lnt_ct_info */
+		     , TBSLS_LAD_DETAIL_INFO b			/* 토지상세정보 lnt_ln_infomst */
+		     , TBSLS_LAD_CSTMR c				/* 토지고객 */
+		 WHERE 1 = 1
+		   AND a.LAD_CODE 		= b.LAD_CODE
+		   AND a.BLCK 			= b.BLCK
+		   AND a.LOT 			= b.LOT
+		   AND a.LOT_TY 		= b.LOT_TY
+		   AND a.LAD_CSTMR_NO 	= c.LAD_CSTMR_NO(+)
+		   AND a.CNTRCTR_NO 	= #CNTRCTR_NO#
+    </select>
+    
+    <!-- 쿼리명 : C05 위임장_환매권말소 내용 조회
+	설명 : C05 위임장_환매권말소 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.23	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.23
+	-->
+    <select id="SLS080500DAO.selectReportC05Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC05Info C05 위임장_환매권말소 내용 조회 */
+			   a.CNTRCTR_NO						/* 토지계약자번호 */
+		     , b.LOCPLC_BASS_ADRES || '  ' || b.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES				/* 토지주소 */
+		     , b.LOCPLC_BASS_ADRES_LNM || '  ' || b.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM	/* 토지주소_지번 */
+		     , NVL(b.DCSN_AR, 0) AS DCSN_AR		/* 확정면적 */
+		     , a.CANCL_DE						/* 해약일자 */
+		     , c.CSTMR_NM						/* 고객명 */
+		     , c.IHIDNUM						/* 주민등록번호 */
+		     , SUBSTR(SFCOM_DEC_ALL(c.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK		/* 주민등록번호_마스크 */
+		     , CASE #ISSU_OFC# WHEN '01'
+		     				  THEN d.CPR_ADRES_ALL
+		     				  ELSE '화성광역시장'
+			   END AS CPR_ADRES					/* 주소 */
+		     , CASE #ISSU_OFC# WHEN '01'
+		     				  THEN d.CPR_ADRES_RN
+		                      ELSE '화성광역시장'
+		       END AS CPR_ADRES_RN				/* 주소_도로명 */
+		     , CASE #ISSU_OFC# WHEN '01'
+		     				  THEN d.MTLTY
+		                      ELSE ''
+		       END AS MTLTY						/* 상호 */
+		     , CASE #ISSU_OFC# WHEN '01'
+		     				  THEN d.RPRSNTV
+		                      ELSE ''
+		       END AS RPRSNTV					/* 대표자 */
+		  FROM TBSLS_LCNTRCTR a					/* 토지계약자 */
+			 , TBSLS_LAD_DETAIL_INFO b			/* 토지상세정보 */
+		     , TBSLS_LAD_CSTMR c				/* 토지고객 */
+		     , (SELECT y.BIZRNO					/* 사업자등록번호 */
+		             , y.MTLTY					/* 상호 */
+		             , y.JURIRNO				/* 법인등록번호  */
+		             , y.RPRSNTV				/* 대표자 */
+		             , LTRIM(y.ADRES || ' ' || y.ADRES_DETAIL) AS CPR_ADRES_ALL	/* 주소 */
+		             , y.ADRES_RN AS CPR_ADRES_RN				/* 주소_도로명 */
+		             , NVL(y.TELNO, '0533500343') AS CPR_TELNO	/* 전화번호 */
+		          FROM TBPMS_CPR_INFO y			/* 법인정보 */
+		         WHERE ROWNUM = 1
+		         ORDER BY y.UPDT_DT DESC
+		       ) d
+		 WHERE 1 = 1
+		   AND a.LAD_CODE 		= b.LAD_CODE
+		   AND a.BLCK 			= b.BLCK
+		   AND a.LOT 			= b.LOT
+		   AND a.LOT_TY 		= b.LOT_TY
+		   AND a.LAD_CSTMR_NO 	= c.LAD_CSTMR_NO(+)
+		   AND a.CNTRCTR_NO 	= #CNTRCTR_NO#
+    </select>
+    
+    <!-- 쿼리명 : C06 해지증서_환매특약 내용 조회
+	설명 : C06 해지증서_환매특약 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.23	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.23
+	-->
+    <select id="SLS080500DAO.selectReportC06Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC06Info C06 해지증서_환매특약 내용 조회 */
+		       a.CNTRCTR_NO						/* 토지계약자번호 */
+		     , b.LOCPLC_BASS_ADRES || '  ' || b.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES				/* 토지주소 */
+		     , b.LOCPLC_BASS_ADRES_LNM || '  ' || b.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM	/* 토지주소_지번 */
+		     , NVL(b.DCSN_AR, 0) AS DCSN_AR		/* 확정면적 */
+		     , c.CSTMR_NM						/* 고객명 */
+		     , c.ADRES || '  ' || c.ADRES_DETAIL AS ADRES	/* 주소_고객 */
+		  FROM TBSLS_LCNTRCTR a					/* 토지계약자 */
+			 , TBSLS_LAD_DETAIL_INFO b			/* 토지상세정보 */
+		     , TBSLS_LAD_CSTMR c				/* 토지고객 */
+		 WHERE 1 = 1
+		   AND a.LAD_CODE 		= b.LAD_CODE
+		   AND a.BLCK 			= b.BLCK
+		   AND a.LOT 			= b.LOT
+		   AND a.LOT_TY 		= b.LOT_TY
+		   AND a.LAD_CSTMR_NO 	= c.LAD_CSTMR_NO(+)
+		   AND a.CNTRCTR_NO 	= #CNTRCTR_NO#
+    </select>
+    
+    <!-- 쿼리명 : C07 추천서 내용 조회
+	설명 : C07 추천서 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.23	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.23
+	-->
+    <select id="SLS080500DAO.selectReportC07Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC07Info C07 추천서 내용 조회 */
+			   a.CNTRCTR_NO						/* 계약자번호 */
+			 , d.CSTMR_NM						/* 고객명 */
+		     , d.IHIDNUM						/* 주민등록번호 */
+		     , SUBSTR(SFCOM_DEC_ALL(d.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK		/* 주민등록번호_마스크 */
+		     , d.ADRES || '  ' || d.ADRES_DETAIL AS ADRES	/* 주소_고객 */
+		     , c.LAD_NM							/* 토지명 */
+		     , DECODE(NVL(b.DCSN_AR, 0), 0, b.BGNN_AR, b.DCSN_AR) AS DCSN_AR
+		     , DECODE(b.REAL_BLCK, NULL, (a.BLCK || 'B ' || a.LOT || 'L' ), ( b.REAL_BLCK || 'B ' || b.REAL_LOT || 'L' )) AS LAD_BLT
+		     , DECODE (a.BLCK, NULL, '', ('('||a.BLCK || '-' || a.LOT || ')')) AS CLAD_BLT
+		     , f.CODE_NM AS PRPOS_SE_NM			/* 용도구분 */
+		     , DECODE(NVL(e.PAYAMT, 0), 0, DECODE(NVL(b.DCSN_AMOUNT, 0), 0, b.BGNN_AMOUNT, b.DCSN_AMOUNT), e.PAYAMT) AS PAYAMT
+		     , a.CNTRCT_DE
+		  FROM TBSLS_LCNTRCTR a					/* 토지계약자 */
+			 , TBSLS_LAD_DETAIL_INFO b			/* 토지상세정보 */
+		     , TBSLS_LAD_INFO c					/* 토지정보 */
+		     , TBSLS_LAD_CSTMR d				/* 토지고객 */
+		     , (SELECT x.CNTRCTR_NO
+		             , SUM(x.PAYAMT) AS PAYAMT
+		          FROM TBSLS_LCNTRCTR_PAY x	/* 토지계약자 납부 */
+		         WHERE x.CNTRCTR_NO = #CNTRCTR_NO#
+		         GROUP BY x.CNTRCTR_NO
+		       ) e
+		     , (SELECT CODE
+		             , CODE_NM
+		          FROM TBCOM_CMMN_CODE	/* 공통코드 */
+		         WHERE GRP_CODE = 'LAD003'
+		       ) f
+		 WHERE 1 = 1
+		   AND a.LAD_CODE 		= b.LAD_CODE
+		   AND a.BLCK 			= b.BLCK
+		   AND a.LOT 			= b.LOT
+		   AND a.LOT_TY 		= b.LOT_TY
+		   AND a.LAD_CODE 		= c.LAD_CODE
+		   AND a.LAD_CSTMR_NO 	= d.LAD_CSTMR_NO(+)
+		   AND a.CNTRCTR_NO 	= e.PAYAMT(+)
+		   AND b.PRPOS_SE 		= f.CODE(+)
+		   AND a.CNTRCTR_NO 	= #CNTRCTR_NO#
+    </select>
+    
+    <!-- 쿼리명 : C07 추천서 내용 조회 - 입금계좌 정보
+	설명 : C07 추천서 내용 조회 - 입금계좌 정보
+	수정일  		수정자  	수정내용
+	2016.02.23	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.23
+	-->
+    <select id="SLS080500DAO.selectReportC07AddInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC07AddInfo C07 추천서 입금(가상)계좌 정보 조회(6개) */
+			   a1.CNTRCTR_NO
+		     , MAX(DECODE(ROWNUM, 1, DECODE(a1.BANK_NM, '', '', a1.BANK_NM||' - '))) || MAX(DECODE(ROWNUM, 1, a1.VACCT_NO)) AS BANK1
+		     , MAX(DECODE(ROWNUM, 2, DECODE(a1.BANK_NM, '', '', a1.BANK_NM||' - '))) || MAX(DECODE(ROWNUM, 2, a1.VACCT_NO)) AS BANK2
+		     , MAX(DECODE(ROWNUM, 3, DECODE(a1.BANK_NM, '', '', a1.BANK_NM||' - '))) || MAX(DECODE(ROWNUM, 3, a1.VACCT_NO)) AS BANK3
+		     , MAX(DECODE(ROWNUM, 4, DECODE(a1.BANK_NM, '', '', a1.BANK_NM||' - '))) || MAX(DECODE(ROWNUM, 4, a1.VACCT_NO)) AS BANK4
+		     , MAX(DECODE(ROWNUM, 5, DECODE(a1.BANK_NM, '', '', a1.BANK_NM||' - '))) || MAX(DECODE(ROWNUM, 5, a1.VACCT_NO)) AS BANK5
+		     , MAX(DECODE(ROWNUM, 6, DECODE(a1.BANK_NM, '', '', a1.BANK_NM||' - '))) || MAX(DECODE(ROWNUM, 6, a1.VACCT_NO)) AS BANK6
+		  FROM (SELECT a.CUST_CD AS CNTRCTR_NO	/* 계약자번호 */
+		             , a.BANK_CD				/* 은행코드 */
+		             , a.VACCT_NO				/* 가상계좌번호 */
+		             , b.CODE_NM AS BANK_NM		/* 은행명 */
+		          FROM VA_MAST a				/* 가상계좌 계좌원장 */
+		             , (SELECT CODE
+		              		 , CODE_NM
+		                  FROM TBCOM_CMMN_CODE x	/* 공통코드 */
+		                 WHERE GRP_CODE = 'COM021'	/* 은행코드 */
+		               ) b
+		         WHERE a.BANK_CD = b.CODE(+)
+		           AND a.CUST_CD = #CNTRCTR_NO#
+		         ORDER BY a.BANK_CD
+		       ) a1
+		 GROUP BY a1.CNTRCTR_NO
+    </select>
+    
+    <!-- 쿼리명 : C07 추천서 내용 조회 - 납부정보 목록 조회
+	설명 : C07 추천서 내용 조회 - 납부정보 목록 조회
+	수정일  		수정자  	수정내용
+	2016.02.23	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.23
+	-->
+    <select id="SLS080500DAO.selectReportC07SubList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC07SubList C07 추천서 납부시기정보 */
+			   d.CODE_NM AS PAY_CODE_NM		/* 남부코드명 */
+			 , b.PAYAMT						/* 납부금액 */
+		     , DECODE(b.PAY_TMLMT, NULL, '사업준공시 별도통보', b.PAY_TMLMT) AS PAY_TMLMT	/* 납부기한일 */
+<!-- 		     , DECODE(c.PAY_CODE, NULL, '', '수납') AS REP_STAT		/* 납부상태 */ -->
+		     , DECODE (b.rciv_de, NULL, '', '수납') AS REP_STAT      /* 납부상태 */
+		  FROM TBSLS_LCNTRCTR a				/* 토지계약자 */
+		  	 , TBSLS_LCNTRCTR_PAY b			/* 토지계약자납부 */
+		     , TBSLS_LAD_RCIV_PSTMRK c		/* 토지수납 */
+		     , (SELECT CODE
+		      		 , CODE_NM
+		          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		         WHERE GRP_CODE = 'LAD0A1'	/* 토지납부코드 */
+		       ) d
+		 WHERE 1 = 1
+		   AND a.CNTRCTR_NO = b.CNTRCTR_NO
+		   AND b.CNTRCTR_NO = c.CNTRCTR_NO(+)
+		   AND b.PAY_NO 	= c.PAY_NO(+)
+		   AND b.PAY_CODE 	= d.CODE(+)
+		   AND a.CNTRCTR_NO = #CNTRCTR_NO#
+		 ORDER BY b.PAY_CODE
+		 		, b.PAY_TMLMT
+    </select>
+    
+    <!-- 쿼리명 : C08 청구서 내용 조회
+	설명 : C08 청구서 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.24	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.24
+	-->
+    <select id="SLS080500DAO.selectReportC08Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC08Info C08 청구서 내용 조회 */
+			   a.CNTRCTR_NO					/* 계약자번호 */
+			 , b.PAYAMT						/* 납부금액 */
+			 , d.LAD_NM						/* 토지명 */
+		     , f.CODE_NM AS PRPOS_SE_NM		/* 용도구분명 */
+		     , DECODE(c.REAL_BLCK, NULL, a.BLCK || 'B ' || a.LOT || 'L ', c.REAL_BLCK || 'B ' || c.REAL_LOT || 'L ') AS LAD_BLT
+		     , c.LOCPLC_BASS_ADRES || '  ' || c.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES
+		     , c.LOCPLC_BASS_ADRES_LNM || '  ' || c.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM
+		     , e.CSTMR_NM					/* 고객명 */
+		     , e.IHIDNUM					/* 주민등록번호 */
+		     , SUBSTR(SFCOM_DEC_ALL(e.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK		/* 주민등록번호_마스크 */
+		     , e.ADRES || '  ' || e.ADRES_DETAIL AS ADRES		/* 주소_고객 */
+		  FROM TBSLS_LCNTRCTR a				/* 토지계약자 */
+		  	 , (SELECT x.CNTRCTR_NO
+		             , x.PAYAMT
+		     	  FROM TBSLS_LCNTRCTR_PAY x	/* 토지계약자 납부 */
+		         WHERE x.PAY_CODE = 'SE'	/* 정산금 */
+		           AND x.CNTRCTR_NO = #CNTRCTR_NO#
+		           AND ROWNUM = 1 			/* 다건일 경우 척행을 기준으로 한다(AS_IS 기준임) */
+			   ) b
+			 , TBSLS_LAD_DETAIL_INFO c		/* 토지상세정보 */
+		     , TBSLS_LAD_INFO d				/* 토지정보 */
+		     , TBSLS_LAD_CSTMR e			/* 토지고객 */
+		     , (SELECT CODE
+		             , CODE_NM
+		          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		         WHERE GRP_CODE = 'LAD003'	/* 용도구분 */
+		       ) f
+		 WHERE 1 = 1
+		   AND a.CNTRCTR_NO 	= b.CNTRCTR_NO
+		   AND a.LAD_CODE 		= c.LAD_CODE
+		   AND a.BLCK 			= c.BLCK
+		   AND a.LOT 			= c.LOT
+		   AND a.LOT_TY 		= c.LOT_TY
+		   AND a.LAD_CODE 		= d.LAD_CODE
+		   AND a.LAD_CSTMR_NO 	= e.LAD_CSTMR_NO(+)
+		   AND c.PRPOS_SE 		= f.CODE(+)
+		   AND a.CNTRCTR_NO 	= #CNTRCTR_NO#
+    </select>
+    
+    <!-- 쿼리명 : C09 토지사용승낙서 내용 조회
+	설명 : C09 토지사용승낙서 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.24	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.24
+	-->
+    <select id="SLS080500DAO.selectReportC09Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* SLS080500DAO.selectReportC09Info C09 토지사용승낙서 토지의 표시 조회 */
+			   a.CNTRCTR_NO					/* 계약자번호 */
+			 , a.LAD_CODE					/* 토지코드 */
+			 , LTRIM(b.LOCPLC_BASS_ADRES || '  ' || b.LOCPLC_DETAIL_ADRES) AS LOCPLC_ADRES	/* 소재지 */
+		     , LTRIM(b.LOCPLC_BASS_ADRES_LNM || '  ' || b.LOCPLC_DETAIL_ADRES_LNM) AS LOCPLC_ADRES_LNM	/* 소재지_지번 */
+		     , c.LAD_NM						/* 토지명 */
+		     , DECODE(b.REAL_BLCK, NULL, (a.BLCK || '-' || a.LOT || '-' || a.LOT_TY), (b.REAL_BLCK || '-' || b.REAL_LOT || '-' || b.REAL_LOT_TY)) AS LAD_BLT	/* 토지 B.L.T */
+		     , DECODE(NVL(b.DCSN_AR, 0), 0, b.BGNN_AR, b.DCSN_AR) AS DCSN_AR	/* 면적(확정면적) */
+		     , d.CODE_NM AS PRPOS_SE_NM		/* 용도구분명 */
+		  FROM TBSLS_LCNTRCTR a				/* 토지계약자 */
+		     , TBSLS_LAD_DETAIL_INFO b		/* 토지상세정보 */
+		     , TBSLS_LAD_INFO c				/* 토지정보 */
+			 , (SELECT CODE
+		             , CODE_NM
+		          FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		         WHERE GRP_CODE = 'LAD003'	/* 용도구분 */
+		       ) d
+		 WHERE 1 = 1
+		   AND a.LAD_CODE 	= b.LAD_CODE
+		   AND a.BLCK 		= b.BLCK
+		   AND a.LOT 		= b.LOT
+		   AND a.LOT_TY 	= b.LOT_TY
+		   AND a.LAD_CODE 	= c.LAD_CODE
+		   AND b.PRPOS_SE 	= d.CODE(+)
+		   AND a.CNTRCTR_NO = #CNTRCTR_NO#
+    </select>
+    
+    <!-- 쿼리명 : C09 토지사용승낙서 내용 조회 - 토지사용자 목록 조회
+	설명 : C09 토지사용승낙서 내용 조회 - 토지사용자 목록 조회
+	수정일  		수정자  	수정내용
+	2016.02.24	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.24
+	-->
+    <select id="SLS080500DAO.selectReportC09SubList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* C09 토지사용승낙서 토지사용자 목록 조회 */
+			   '토지사용자' AS GUBUN
+			 , LTRIM(b.ADRES || '  ' || b.ADRES_DETAIL) AS ADRES
+			 , SUBSTR(b.CSTMR_NM, 1, 10) ||' '|| SUBSTR(b.CSTMR_NM, 11, 10) AS CSTMR_NM
+		     , b.IHIDNUM
+		     , SUBSTR(SFCOM_DEC_ALL(b.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK	/* 주민등록번호 마스크 */
+		  FROM TBSLS_LCNTRCTR a		/* 토지계약자 */
+		     , TBSLS_LAD_CSTMR b	/* 토지고객 */
+		 WHERE 1 = 1
+		   AND a.LAD_CSTMR_NO = b.LAD_CSTMR_NO
+		   AND NOT EXISTS (SELECT 1
+		   					 FROM TBSLS_LCNTRCTR_COCNR 	/* 토지계약자공유자 */
+		   				 	WHERE CNTRCTR_NO = a.CNTRCTR_NO
+		                      AND LAD_CSTMR_NO_COCNR = a.LAD_CSTMR_NO)
+		   AND a.CNTRCTR_NO = #CNTRCTR_NO#
+		UNION ALL
+		SELECT '토지사용자' AS GUBUN
+		     , LTRIM(d.ADRES || '  ' || d.ADRES_DETAIL) AS ADRES
+			 , SUBSTR(d.CSTMR_NM, 1, 10) ||' '|| SUBSTR(d.CSTMR_NM, 11, 10) AS CSTMR_NM
+		     , d.IHIDNUM
+		     , SUBSTR(SFCOM_DEC_ALL(d.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK	/* 주민등록번호 마스크 */
+		  FROM TBSLS_LCNTRCTR_COCNR c 	/* 토지계약자공유자 */
+		  	 , TBSLS_LAD_CSTMR d		/* 토지고객 */
+		 WHERE 1 = 1
+		   AND c.LAD_CSTMR_NO_COCNR = d.LAD_CSTMR_NO
+		   AND c.RELIS_DE IS NULL
+		   AND c.CNTRCTR_NO = #CNTRCTR_NO#
+    </select>
+    
+    <!-- 쿼리명 : C10 공유자 명부 조회
+	설명 : C10 공유자 명부 조회
+	수정일  		수정자  	수정내용
+	2016.02.24	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.24
+	-->
+    <select id="SLS080500DAO.selectReportC10List" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    	SELECT /* C10 공유자 명부 조회 */
+			   ROWNUM AS NUM			/* 순번 */
+			 , a.CNTRCTR_NO				/* 계약자번호 */
+		     , b.CSTMR_NM				/* 고객명 */
+		     , b.IHIDNUM				/* 주민등록번호 */
+		     , SUBSTR(SFCOM_DEC_ALL(b.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK	/* 주민등록번호 마스크 */
+		     , LTRIM(b.ADRES || '  ' ||b.ADRES_DETAIL) AS ADRES	/* 주소_고객 */
+		     , b.TELNO					/* 전화번호 */
+		     , b.MBTLNO					/* 휴대폰번호 */
+		     , a.QOTA					/* 지분 */
+		  FROM TBSLS_LCNTRCTR_COCNR a 	/* 토지계약자공유자 */
+		  	 , TBSLS_LAD_CSTMR b		/* 토지고객 */
+		 WHERE 1 = 1
+		   AND a.RELIS_DE IS NULL		/* 해제일자 */
+		   AND a.LAD_CSTMR_NO_COCNR = b.LAD_CSTMR_NO
+		   AND a.CNTRCTR_NO 		= #CNTRCTR_NO#
+	</select>
+	
+	<!-- 쿼리명 : C11 확인서 내용 조회
+	설명 : C11 확인서 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.25	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.25
+	-->
+    <select id="SLS080500DAO.selectReportC11Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT /* SLS080500DAO.selectReportC11Info C11 확인서 내용 조회 */
+			   a.CNTRCTR_NO				/* 계약자번호 */
+		     , b.LOCPLC_BASS_ADRES || '  ' || b.LOCPLC_DETAIL_ADRES AS LOCPLC_ADRES				/* 소재지 */
+		     , b.LOCPLC_BASS_ADRES_LNM || '  ' || b.LOCPLC_DETAIL_ADRES_LNM AS LOCPLC_ADRES_LNM	/* 소재지_지번 */
+		     , c.LAD_NM					/* 토지명 */
+		     , b.BLCK					/* 블록 */
+		     , b.LOT					/* 롯트 */
+		     , b.LOT_TY					/* 롯트타입 */
+		     , b.REAL_BLCK				/* 실제블록 */
+		     , b.REAL_LOT				/* 실제롯트 */
+		     , b.REAL_LOT_TY			/* 실제롯트타입 */
+		     , b.BGNN_AR				/* 당초면적 */
+		     , b.DCSN_AR				/* 확정면적 */
+		     , d.CODE_NM AS PRPOS_SE_NM	/* 용도코드명 */
+		  FROM TBSLS_LCNTRCTR a			/* 토지계약자 */
+		     , TBSLS_LAD_DETAIL_INFO b	/* 토지상세정보 */
+		     , TBSLS_LAD_INFO c			/* 토지정보 */
+		     , (SELECT CODE
+		             , CODE_NM
+		          FROM TBCOM_CMMN_CODE	/* 공통코드 */
+		         WHERE GRP_CODE = 'LAD003'
+		       ) d
+		 WHERE 1 = 1
+		   AND a.LAD_CODE 	= b.LAD_CODE
+		   AND a.BLCK 		= b.BLCK
+		   AND a.LOT 		= b.LOT
+		   AND a.LOT_TY 	= b.LOT_TY
+		   AND a.LAD_CODE 	= c.LAD_CODE
+		   AND b.PRPOS_SE 	= d.CODE(+)
+		   AND a.CNTRCTR_NO = #CNTRCTR_NO#
+	</select>
+	
+	<!-- 쿼리명 : C12 계약체결결의서 내용 조회
+	설명 : C12 계약체결결의서 내용 조회
+	수정일  		수정자  	수정내용
+	2016.02.25	이상준		최초생성
+	작성자 : 이상준
+	최초작성일 : 2016.02.25
+	-->
+    <select id="SLS080500DAO.selectReportC12Info" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		WITH V_ACNT_CODE AS
+		(
+			SELECT /* 계정과목 목록 */
+				   a.YEAR
+		         , a.BSNS_SE
+		         , a.BALC_SE
+		         , d.BUDGET_ACNT_CODE AS LV1_CODE
+		         , d.BUDGET_ACNT_NM   AS LV1_NM
+		         , c.BUDGET_ACNT_CODE AS LV2_CODE
+		         , c.BUDGET_ACNT_NM   AS LV2_NM
+		         , b.BUDGET_ACNT_CODE AS LV3_CODE
+		         , b.BUDGET_ACNT_NM   AS LV3_NM
+		         , a.BUDGET_ACNT_CODE AS LV4_CODE
+		         , a.BUDGET_ACNT_NM   AS LV4_NM
+		      FROM TBBDG_BUDGET_ACNT_CODE a		/* 예산계정코드 */
+		         , TBBDG_BUDGET_ACNT_CODE b		/* 예산계정코드 */
+		         , TBBDG_BUDGET_ACNT_CODE c		/* 예산계정코드 */
+		         , TBBDG_BUDGET_ACNT_CODE d		/* 예산계정코드 */
+		     WHERE 1 = 1
+		       AND a.YEAR = b.YEAR(+)
+		       AND a.BSNS_SE = b.BSNS_SE(+)
+		       AND a.BALC_SE = b.BALC_SE(+)
+		       AND a.UPPER_ACNT_CODE = b.BUDGET_ACNT_CODE(+)
+		       AND b.YEAR = c.YEAR(+)
+		       AND b.BSNS_SE = c.BSNS_SE(+)
+		       AND b.BALC_SE = c.BALC_SE(+)
+		       AND b.UPPER_ACNT_CODE = c.BUDGET_ACNT_CODE(+)
+		       AND c.YEAR = d.YEAR(+)
+		       AND c.BSNS_SE = d.BSNS_SE(+)
+		       AND c.BALC_SE = d.BALC_SE(+)
+		       AND c.UPPER_ACNT_CODE = d.BUDGET_ACNT_CODE(+)
+		)
+		SELECT /* SLS080500DAO.selectReportC12Info C12 계약체결결의서 내용조회 */
+			   a1.CNTRCTR_NO				/* 계약자번호 */
+			 , a1.LAD_CODE					/* 토지코드 */
+		     , a1.LAD_NM					/* 토지명 */
+		     , a1.BSNS_NM					/* 사업명 */
+		     , a1.PRPOS_SE_NM				/* 용도구분명 */
+		     , a1.LAD_BLT					/* 토지 B.L.T */
+		     , a1.DCSN_AR					/* 면적(확정) */
+		     , a1.CNTRCT_DE_YEAR			/* 계약년도(수입 년도) */
+		     , c1.LV1_NM					/* 관 */
+		     , c1.LV2_NM					/* 항 */
+		     , c1.LV3_NM					/* 세항 */
+		     , c1.LV4_NM					/* 목 */
+		     , a1.CSTMR_NM					/* 고객명 */
+		     , a1.IHIDNUM					/* 주민등록번호 */
+		     , a1.IHIDNUM_MSK				/* 주민등록번호 마스크 */
+		     , a1.ADRES						/* 주소_고객 */
+		     , a1.CNTRCT_DE					/* 계약일자 */
+		     , a1.PAYAMT					/* 납부금액 */
+		  FROM (SELECT a.CNTRCTR_NO
+		             , a.LAD_CODE
+		             , c.LAD_NM
+		             , (SELECT BSNS_NM
+		                  FROM TBPRJ_BSNS_CODE	/* 사업코드 */
+		                  WHERE BSNS_CODE =  SUBSTR(NVL(c.LTTOT_BSNS_CODE, c.RENT_BSNS_CODE), 1, 3) || '00'
+		               ) AS BSNS_NM
+		             , f.CODE_NM AS PRPOS_SE_NM
+		             , DECODE(b.REAL_BLCK, NULL, (a.BLCK || '블록 ' || a.LOT || '놋트'), (b.REAL_BLCK ||'블록 ' || b.REAL_LOT ||'놋트')) AS LAD_BLT
+		             , DECODE(NVL(b.DCSN_AR, 0), 0, b.BGNN_AR, b.DCSN_AR) AS DCSN_AR
+		             , DECODE(a.CNTRCTR_MTLTY, NULL, d.CSTMR_NM, (a.CNTRCTR_MTLTY || ' (' || d.CSTMR_NM || ')')) AS CSTMR_NM
+		             , d.IHIDNUM
+		             , SUBSTR(SFCOM_DEC_ALL(d.IHIDNUM), 0, 7)||'******' AS IHIDNUM_MSK
+		             , d.ADRES || '  ' || d.ADRES_DETAIL AS ADRES
+		             , a.CNTRCT_DE
+		             , b.PRPOS_SE
+		             , TO_CHAR(TO_DATE(a.CNTRCT_DE, 'YYYYMMDD'),'YYYY') AS CNTRCT_DE_YEAR
+		             , NVL(PAYAMT, 0) AS PAYAMT
+		          FROM TBSLS_LCNTRCTR a			/* 토지계약자 */
+		             , TBSLS_LAD_DETAIL_INFO b	/* 토지상세정보 */
+		             , TBSLS_LAD_INFO c			/* 토지정보 */
+		             , TBSLS_LAD_CSTMR d		/* 토지고객 */
+		             , (SELECT CNTRCTR_NO
+		                     , SUM(NVL(PAYAMT, 0)) AS PAYAMT	/* 납부금액 */
+		                  FROM TBSLS_LCNTRCTR_PAY	/* 토지계약자납부 */
+		                 WHERE PAY_CODE LIKE 'S%'
+		                 GROUP BY CNTRCTR_NO
+		               ) e
+		             , (SELECT CODE
+		                     , CODE_NM
+		                  FROM TBCOM_CMMN_CODE		/* 공통코드 */
+		                 WHERE GRP_CODE = 'LAD003'	/* 용도구분 */
+		               ) f
+		         WHERE 1 = 1
+		           AND a.LAD_CODE 		= b.LAD_CODE
+		           AND a.BLCK 			= b.BLCK
+		           AND a.LOT 			= b.LOT
+		           AND a.LOT_TY 		= b.LOT_TY
+		           AND a.LAD_CODE 		= c.LAD_CODE
+		           AND a.LAD_CSTMR_NO 	= d.LAD_CSTMR_NO(+)
+		           AND a.CNTRCTR_NO 	= e.CNTRCTR_NO(+)
+		           AND b.PRPOS_SE 		= f.CODE(+)
+		           AND a.CNTRCTR_NO 	= #CNTRCTR_NO#
+		       ) a1
+		     , TBACC_BUDGET_ACNT_LAD_MAPNG b1	/* 예산계정토지매핑 */
+		     , V_ACNT_CODE c1
+		 WHERE 1 = 1
+		   AND a1.CNTRCT_DE_YEAR 	= b1.BUDGET_YEAR(+)
+		   AND a1.LAD_CODE 			= b1.LAD_CODE(+)
+		   AND a1.PRPOS_SE 			= b1.PRPOS_CODE(+)
+		   AND b1.INCME_SE(+) 		= '01'			/* 수입구분 : 01(분양금) */
+		   AND b1.BUDGET_YEAR 		= c1.YEAR
+		   AND b1.BSNS_SE 			= c1.BSNS_SE
+		   AND b1.BALC_SE 			= c1.BALC_SE
+		   AND b1.BUDGET_ACNT_CODE 	= c1.LV4_CODE
+	</select>
+    
+    <!-- [ END ] 레포트 출력용 데이터 조회 -->
+    
+</sqlMap>

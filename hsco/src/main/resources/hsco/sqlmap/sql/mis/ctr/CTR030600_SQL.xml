@@ -1,0 +1,741 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="CTR030600_SQL">
+
+	<!-- 금융기관목록 조회 -->
+	<select id="CTR030600DAO.selectFnncInsttList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.selectFnncInsttList*/]]>
+		SELECT FNNC_INSTT_CODE
+		      ,FNNC_INSTT_CODE_NM
+		      ,USE_AT
+		FROM   TBACC_FNNC_INSTT_CODE
+		ORDER BY FNNC_INSTT_CODE
+	</select>
+
+	<!-- 검사입회목록 조회 -->
+	<select id="CTR030600DAO.selectPrsecWtnessList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.selectPrsecWtnessList*/]]>
+		SELECT T1.CNTRCT_NO
+		      ,T1.WTNESS_SN
+		      ,T1.PRSEC_SE
+		      ,T4.CODE_NM                                                      AS PRSEC_SE_NM
+		      ,T1.PRSEC_ODR
+		      ,T1.PRSEC_DE
+		      ,NVL(SFCTR_GET_CNTRCT_AMOUNT(T1.CNTRCT_NO, T1.PRSEC_DE), '0')    AS CNTRCT_AMOUNT
+		      ,NVL(T1.PRSEC_AMOUNT, '0')                                       AS PRSEC_AMOUNT
+		      ,NVL(T3.DECSN_AMOUNT, '0')                                       AS DECSN_AMOUNT
+		      ,DECODE(T3.CNTRCT_DECSN_SN, NULL, '0', '1')                      AS PRICE_PYMNT_REGIST_AT
+		      ,DECODE(T3.DECSN_NO,        NULL, '0', '1')                      AS DECSN_REGIST_AT
+		      ,T1.PRSEC_DE
+		      ,T2.MNG_DEPT_CODE
+		      ,T5.DEPT_NM                                                      AS MNG_DEPT_NM
+		      ,T6.BUDGET_ACNT_CODE
+		      ,T2.CNTRCT_NM
+		      ,T7.BCNC_CODE
+		      ,T8.BCNC_NM
+		      ,T1.FILE_SN
+		FROM   TBCTR_PRSEC_WTNESS T1
+		       LEFT OUTER JOIN TBCTR_CNTRCT T2
+		            ON T1.CNTRCT_NO = T2.CNTRCT_NO
+		       LEFT OUTER JOIN TBCTR_CNTRCT_DECSN T3
+		            ON T1.CNTRCT_NO = T3.CNTRCT_NO
+		           AND T1.WTNESS_SN = T3.WTNESS_SN
+		       LEFT OUTER JOIN TBCOM_CMMN_CODE T4
+		            ON T1.PRSEC_SE = T4.CODE
+		           AND T4.GRP_CODE = 'CTR039'
+		       LEFT OUTER JOIN TBHRM_DEPT T5
+		            ON T2.MNG_DEPT_CODE = T5.DEPT_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                              ,SN
+		                              ,BUDGET_YEAR
+		                              ,BSNS_SE
+		                              ,BALC_SE
+		                              ,BUDGET_ACNT_CODE
+		                              ,RM
+		                        FROM   TBCTR_CNTRCT_BUDGET
+		                       ) T6
+		            ON T2.CNTRCT_NO = T6.CNTRCT_NO
+		           AND SUBSTR(T1.PRSEC_DE, 1, 4) = T6.BUDGET_YEAR
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO, MAX(BCNC_CODE) KEEP(DENSE_RANK FIRST ORDER BY QOTA_RT DESC) AS BCNC_CODE
+		                        FROM   TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS
+		                        GROUP BY CNTRCT_NO
+		                       ) T7
+		            ON T1.CNTRCT_NO = T7.CNTRCT_NO
+		       LEFT OUTER JOIN TBCTR_BCNC_MASTR T8
+		            ON T7.BCNC_CODE = T8.BCNC_CODE
+		WHERE  T1.CNTRCT_NO = #CNTRCT_NO#
+		AND    (SFCOM_GET_SANCTN_KND(t1.SANCTN_NO) = '5' OR t1.PRSEC_SE IN ('004', '006') OR t1.INFRML_AT = '1')
+		ORDER BY T1.PRSEC_DE, T1.WTNESS_SN
+	</select>
+	
+	<!-- 계약결의정보 조회 -->
+	<select id="CTR030600DAO.selectCntrctDecsnInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.selectCntrctDecsnInfo*/]]>
+		SELECT T1.CNTRCT_DECSN_YEAR
+		      ,T1.CNTRCT_DECSN_SN
+		      ,T1.DECSN_YEAR
+		      ,T1.DECSN_NO
+		      ,T1.CNTRCT_NO
+		      ,T1.WTNESS_SN
+		      ,T1.PXCOND_SE
+		      ,T1.PXCOND_ODR
+		      ,t1.FILE_SN
+		      ,T1.EXPNDTR_FNNC_INSTT_CODE
+		      ,T7.FNNC_INSTT_CODE_NM                                          AS EXPNDTR_FNNC_INSTT_NM
+		      ,T1.EXPNDTR_ACNUTNO
+		      ,T1.SUMRY
+		      ,t1.PXPAY_AT
+		      ,t1.ANACT_KND
+		      ,T3.MNG_DEPT_CODE                                               AS DEPT_CODE
+		      ,T3.BSNS_CODE
+		      ,T6.BSNS_NM
+		      ,T5.DECSN_YEAR                                                  AS EXP_DECSN_YEAR
+		      ,T5.DECSN_NO                                                    AS EXP_DECSN_NO
+		      ,DECODE(T5.DECSN_NO, NULL, '미등록', '등록')                    AS EXP_DECSN_STR
+		      ,DECODE(T5.DECSN_NO, NULL, '0', '1')                            AS EXP_DECSN_AT
+		      ,DECODE(T5.DECSN_NO, NULL, '1', '0')                            AS ENABLE_AT
+		      ,NVL(T5.EXPNDTR_CNFIRM_AT, '0')                                 AS EXPNDTR_CNFIRM_AT
+		      ,TO_CHAR(t3.REGIST_DT, 'YYYYMMDD')                              AS CNTRCT_REGIST_DT
+		      ,t3.REAL_COMPET_DE
+		      ,T2.ISSU_SEQNO
+		      ,T2.REGS_DATE
+		FROM   TBCTR_CNTRCT_DECSN T1
+		       LEFT OUTER JOIN (SELECT CC1.CNTRCT_DECSN_YEAR
+		                          ,CC1.CNTRCT_DECSN_SN
+		                          ,CC1.ISSU_SEQNO
+		                          ,CC2.REGS_DATE
+		                       FROM (SELECT C1.CNTRCT_DECSN_YEAR
+		                                   ,C1.CNTRCT_DECSN_SN
+		                                   ,MAX(C1.ISSU_SEQNO) AS ISSU_SEQNO
+		                               FROM TBCTR_CNTRCT_DECSN_DETAIL C1 
+		                              GROUP BY C1.CNTRCT_DECSN_YEAR
+		                                      ,C1.CNTRCT_DECSN_SN
+		                             )CC1
+		                             LEFT OUTER JOIN DET_ISSU_MSTR CC2
+		                             ON CC1.ISSU_SEQNO = CC2.ISSU_SEQNO
+		                    ) T2 /*전자세금계산서 정보*/
+		            ON T1.CNTRCT_DECSN_YEAR = T2.CNTRCT_DECSN_YEAR
+		            AND T1.CNTRCT_DECSN_SN = T2.CNTRCT_DECSN_SN
+		       LEFT OUTER JOIN TBCTR_CNTRCT T3
+		            ON T1.CNTRCT_NO = T3.CNTRCT_NO
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR T5
+		            ON T1.DECSN_YEAR = T5.DECSN_YEAR
+		           AND T1.DECSN_NO   = T5.DECSN_NO
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE T6
+		            ON T3.BSNS_CODE = T6.BSNS_CODE
+		       LEFT OUTER JOIN TBACC_FNNC_INSTT_CODE T7
+		            ON T1.EXPNDTR_FNNC_INSTT_CODE = T7.FNNC_INSTT_CODE
+		WHERE  T1.CNTRCT_NO = #CNTRCT_NO#
+		AND    T1.WTNESS_SN = #WTNESS_SN#
+	</select>
+	
+	<!-- 계약정보 조회 -->
+	<select id="CTR030600DAO.selectCntrctDecsnDetail" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.selectCntrctDecsnDetail*/]]>
+		WITH ENTRPS_TM AS (
+		    SELECT t1.CNTRCT_NO
+		          ,'원도급'                AS ENTRPS_SE_NM
+		          ,t1.MNGT_AT
+		          ,t2.CODE_NM            AS MNGT_AT_NM
+		          ,t1.QOTA_RT
+		          ,t1.BCNC_CODE
+		          ,t3.BCNC_NM
+		          ,NULL                  AS ORGINL_OUTSRC_BCNC_CODE
+		          ,NULL                  AS ORGINL_OUTSRC_BCNC_NM
+		          ,t4.BANK_CODE
+		          ,t4.DPSTR_NM
+		          ,t4.ACNUTNO
+		    FROM   TBCTR_ENTRPS_ACCTO_CNTRCT_DTLS t1
+		           LEFT OUTER JOIN TBCOM_CMMN_CODE t2
+		                ON t1.MNGT_AT = t2.CODE
+		               AND t2.GRP_CODE = 'CTR046'
+		           LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+		                ON t1.BCNC_CODE = t3.BCNC_CODE
+		           LEFT OUTER JOIN TBCTR_BCNC_ACNUT t4
+		                ON t3.BCNC_CODE = t4.BCNC_CODE
+		    WHERE  1=1
+		    UNION ALL
+		    SELECT t1.CNTRCT_NO
+		          ,'하도급'
+		          ,NULL                    AS MNGT_AT
+		          ,NULL                    AS CODE_NM
+		          ,NULL                    AS QOTA_RT
+		          ,t1.SUBCNTR_ENTRPS_CODE  AS BCNC_CODE
+		          ,t3.BCNC_NM              AS SUBCNTR_ENTRPS
+		          ,t1.BCNC_CODE
+		          ,DECODE(t5.BCNC_NM, NULL, NULL, DECODE(t1.SUBCNTR_CNST, NULL, NULL, ' (' || t1.SUBCNTR_CNST || ')' || '  [원도급업체 : '|| t5.BCNC_NM ||' ]'))    AS ORGINL_OUTSRC_BCNC_NM
+		          ,t4.BANK_CODE
+		          ,t4.DPSTR_NM
+		          ,t4.ACNUTNO
+		    FROM   TBCTR_ENTRPS_ACCTO_SUBCNTR_CNT t1
+		           LEFT OUTER JOIN TBCTR_BCNC_MASTR t3
+		                ON t1.SUBCNTR_ENTRPS_CODE = t3.BCNC_CODE
+		           LEFT OUTER JOIN TBCTR_BCNC_ACNUT t4
+		                ON t3.BCNC_CODE = t4.BCNC_CODE
+		           LEFT OUTER JOIN TBCTR_BCNC_MASTR t5
+		                ON t1.BCNC_CODE = t5.BCNC_CODE
+		    WHERE  1=1
+		), CNTRCT_DECSN_DETAIL_TM AS (
+		    SELECT t2.CNTRCT_NO
+		          ,t1.CNTRCT_DECSN_YEAR
+		          ,t1.CNTRCT_DECSN_SN
+		          ,t1.DETAIL_SN
+		          ,DECODE(t1.ORGINL_OUTSRC_BCNC_CODE, NULL, '원도급', '하도급')       AS ENTRPS_SE_NM
+		          ,t1.MNGT_AT
+		          ,t3.CODE_NM           AS MNGT_AT_NM
+		          ,t1.QOTA_RT
+		          ,t1.BCNC_CODE
+		          ,t1.BCNC_NM
+		          ,t1.ORGINL_OUTSRC_BCNC_CODE
+		          ,t1.ORGINL_OUTSRC_BCNC_NM
+		          ,t1.PYMNT_FNNC_INSTT_CODE
+		          ,t1.PYMNT_ACNUTNO
+		          ,t1.PYMNT_DPSTR_NM
+		          ,t1.DECSN_AMOUNT
+		          ,t1.SUPLY_AMOUNT
+		          ,t1.VAT
+		          ,t1.ISSU_SEQNO
+		    FROM   TBCTR_CNTRCT_DECSN_DETAIL t1
+		           INNER JOIN TBCTR_CNTRCT_DECSN t2
+		                ON t1.CNTRCT_DECSN_YEAR = t2.CNTRCT_DECSN_YEAR
+		               AND t1.CNTRCT_DECSN_SN = t2.CNTRCT_DECSN_SN
+		           LEFT OUTER JOIN TBCOM_CMMN_CODE t3
+		                    ON t1.MNGT_AT = t3.CODE
+		                   AND t3.GRP_CODE = 'CTR046'
+		    WHERE  1=1
+		), DATA_TM AS (
+		    SELECT '1'                  AS DECSN_CHK
+		          ,CNTRCT_NO
+		          ,CNTRCT_DECSN_YEAR
+		          ,TO_CHAR(CNTRCT_DECSN_SN)   AS CNTRCT_DECSN_SN
+		          ,DETAIL_SN
+		          ,ENTRPS_SE_NM
+		          ,MNGT_AT
+		          ,MNGT_AT_NM
+		          ,QOTA_RT
+		          ,BCNC_CODE
+		          ,BCNC_NM
+		          ,ORGINL_OUTSRC_BCNC_CODE
+		          ,ORGINL_OUTSRC_BCNC_NM
+		          ,PYMNT_FNNC_INSTT_CODE
+		          ,PYMNT_DPSTR_NM
+		          ,PYMNT_ACNUTNO
+		          ,DECSN_AMOUNT
+		          ,SUPLY_AMOUNT
+		          ,VAT
+		          ,ISSU_SEQNO
+		    FROM   CNTRCT_DECSN_DETAIL_TM
+		    WHERE  CNTRCT_DECSN_YEAR = #CNTRCT_DECSN_YEAR#
+		    AND    CNTRCT_DECSN_SN   = #CNTRCT_DECSN_SN#
+		    UNION ALL
+		    SELECT '0'                  AS DECSN_CHK
+		          ,s1.CNTRCT_NO
+		          ,#CNTRCT_DECSN_YEAR#  AS CNTRCT_DECSN_YEAR
+		          ,#CNTRCT_DECSN_SN#    AS CNTRCT_DECSN_SN
+		          ,NULL                 AS DETAIL_SN
+		          ,s1.ENTRPS_SE_NM
+		          ,s1.MNGT_AT
+		          ,s1.MNGT_AT_NM
+		          ,s1.QOTA_RT
+		          ,s1.BCNC_CODE
+		          ,s1.BCNC_NM
+		          ,s1.ORGINL_OUTSRC_BCNC_CODE
+		          ,s1.ORGINL_OUTSRC_BCNC_NM
+		          ,s1.BANK_CODE
+		          ,s1.DPSTR_NM
+		          ,s1.ACNUTNO
+		          ,NULL             AS DECSN_AMOUNT
+		          ,NULL             AS SUPLY_AMOUNT
+		          ,NULL             AS VAT
+		          ,NULL             AS ISSU_SEQNO
+		    FROM   ENTRPS_TM s1
+		    WHERE  NOT EXISTS (
+		        SELECT *
+		        FROM   CNTRCT_DECSN_DETAIL_TM q1
+		        WHERE  q1.CNTRCT_NO = s1.CNTRCT_NO
+		        AND    q1.ENTRPS_SE_NM = s1.ENTRPS_SE_NM
+		        AND    q1.BCNC_CODE = s1.BCNC_CODE
+		        AND    q1.PYMNT_FNNC_INSTT_CODE = s1.BANK_CODE
+		        AND    q1.PYMNT_ACNUTNO = s1.ACNUTNO
+		        AND    q1.CNTRCT_DECSN_YEAR = #CNTRCT_DECSN_YEAR#
+		        AND    q1.CNTRCT_DECSN_SN   = #CNTRCT_DECSN_SN#
+		    )
+		    AND    s1.CNTRCT_NO = #CNTRCT_NO#
+		)
+		SELECT m1.DECSN_CHK
+		      ,m1.CNTRCT_NO
+		      ,m1.CNTRCT_DECSN_YEAR
+		      ,m1.CNTRCT_DECSN_SN
+		      ,m1.DETAIL_SN
+		      ,m1.ENTRPS_SE_NM
+		      ,m1.MNGT_AT
+		      ,m1.MNGT_AT_NM
+		      ,m1.QOTA_RT
+		      ,m1.BCNC_CODE
+		      ,m1.BCNC_NM
+		      ,m1.BCNC_NM || ORGINL_OUTSRC_BCNC_NM         AS BCNC_NM2
+		      ,m1.ORGINL_OUTSRC_BCNC_CODE
+		      ,m1.ORGINL_OUTSRC_BCNC_NM
+		      ,m1.PYMNT_FNNC_INSTT_CODE
+		      ,m1.PYMNT_DPSTR_NM
+		      ,m1.PYMNT_ACNUTNO
+		      ,m1.DECSN_AMOUNT
+		      ,m1.SUPLY_AMOUNT
+		      ,m1.VAT
+		      ,m1.ISSU_SEQNO
+		      ,m2.BILL_TYPE
+		      ,DECODE(SUBSTR(m2.TAX_TYPE, 1, 2),  '01', '1',  '02', '1',  '03', '2',  '04', '2') AS BILL_KND
+		      ,m2.TAX_TYPE
+		      ,m2.POPS_CODE
+		      ,m2.ISSU_ID
+		      ,m3.ADRES
+		      ,m3.SMLPZ_SE                                                    AS ENTRPRS_SE
+		      ,m3.EVRFRND_AT                                                  AS EVRFRND
+		      ,m3.TCNDVLP                                                     AS TCNDVLP
+		      ,m3.CNTRWK_PRPOS_MTRIL                                          AS CNTRWK_PRPOS_MTRIL
+		      ,m3.AREA_ENTRPS_AT                                              AS AREA_ENTRPS
+		      ,m3.FEMALE_ENTRPRS_AT                                           AS FEMALE_ENTRPRS
+		      ,m3.DSPSN_ENTRPRS_AT                                            AS DSPSN
+		      ,m3.SRSILL_DSPSN_ENTRPRS_AT                                     AS SRSILL_DSPSN
+		      ,m3.SOCENT_AT                                                   AS SOCTY_ENTRPRS
+		      ,m3.DSPSN_PRDCTN_FCLTY_AT                                       AS DSPSN_PRDCTN_FCLTY
+		      ,m3.SOCTY_CPER_MXTR_AT                                          AS SOCTY_CPER_MXTR
+		      ,m3.GREEN_PRDUCT_AT                                             AS GREEN_PRDUCT
+		      ,m3.DSPSN_STD_BPLC                                              AS DSPSN_STD_BPLC
+		      ,m3.WATER_INDUST                                                AS WATER_INDUST
+		      ,m3.MDLC_INDUST                                                 AS MDLC_INDUST
+		      ,m3.FARMNG_INDUST                                               AS FARMNG_INDUST
+		      ,m3.ENERGY_INDUST                                               AS ENERGY_INDUST
+		FROM   DATA_TM m1
+		       LEFT OUTER JOIN DET_ISSU_MSTR m2
+		            ON m1.ISSU_SEQNO = m2.ISSU_SEQNO
+		       LEFT OUTER JOIN TBCTR_BCNC_MASTR m3
+		            ON m1.BCNC_CODE = m3.BCNC_CODE
+		ORDER BY m1.ENTRPS_SE_NM
+		        ,m1.MNGT_AT
+		        ,m1.QOTA_RT
+		        ,m1.BCNC_NM
+		        ,m1.PYMNT_FNNC_INSTT_CODE
+		        ,m1.PYMNT_ACNUTNO
+	</select>
+
+
+	<!-- 계약정보 조회 -->
+	<select id="CTR030600DAO.selectCntrct" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.selectCntrct*/]]>
+		SELECT t1.CNTRCT_NO
+		      ,t1.BSNS_CODE
+		      ,t3.BSNS_NM
+		      ,t1.REQEST_NO
+		      ,t1.CNTRCT_SE
+		      ,t1.DETAIL_SE
+		      ,t1.CNTRCT_NM
+		      ,t1.CNTRCT_AMOUNT
+		      ,t1.CNTRCT_MTH_SE
+		      ,t1.CNTRCT_DISPOS_SE
+		      ,t1.OUTSRC_MTH_SE
+		      ,t1.BID_DE
+		      ,t1.CNTRCT_DE
+		      ,t1.REAL_COMPET_DE
+		      ,t1.STRWRK_DE
+		      ,t1.COMPET_DE
+		      ,t1.PRVCNTR_PRVONSH
+		      ,t1.PRCURE_CNTRCT_NO
+		      ,t1.PRCURE_FEE
+		      ,t1.FILE_SN
+		      ,t1.MNG_DEPT_CODE
+		      ,t2.DEPT_NM              AS MNG_DEPT_NM
+		      ,t4.MANGR_EMPNM
+		      ,t1.SPT_LOCPLC
+		      ,DECODE(t1.INFRML_CNTRCT_AT, '1', '간이계약', '정식계약')      AS INFRML_CNTRCT_AT 
+		FROM   TBCTR_CNTRCT t1
+		       LEFT OUTER JOIN TBHRM_DEPT t2
+		            ON t1.MNG_DEPT_CODE = t2.DEPT_CODE
+		       LEFT OUTER JOIN TBPRJ_BSNS_CODE t3
+		            ON t1.BSNS_CODE = t3.BSNS_CODE
+		       LEFT OUTER JOIN (
+		                        SELECT CNTRCT_NO
+		                              ,LISTAGG(MANGR_EMPNM, ', ') WITHIN GROUP(ORDER BY MANGR_EMPNM) AS MANGR_EMPNM
+		                        FROM   (
+		                                SELECT s1.CNTRCT_NO
+		                                      ,s1.SN
+		                                      ,s1.MANGR_EMPNO
+		                                      ,s3.DEPT_NM || ' ' || s4.CODE_NM || DECODE(s7.CODE_NM,NULL,'','('||s7.CODE_NM||')') || ' ' || s5.CODE_NM || ' ' || s6.CODE_NM || ' ' || s2.EMPNM       AS MANGR_EMPNM
+		                                FROM   TBCTR_CNTRCT_MANGR s1
+		                                       LEFT OUTER JOIN TBHRM_HR_MASTR s2
+		                                            ON s1.MANGR_EMPNO = s2.EMPNO
+		                                       LEFT OUTER JOIN TBHRM_DEPT s3
+		                                            ON s2.DEPT_CODE = s3.DEPT_CODE
+		                                       LEFT OUTER JOIN TBCOM_CMMN_CODE s4
+		                                            ON s2.JSSFC_SE = s4.CODE
+		                                           AND s4.GRP_CODE = 'HRM001'
+		                                       LEFT OUTER JOIN TBCOM_CMMN_CODE s5
+		                                            ON s2.HR_CLSF_SE = s5.CODE
+		                                           AND s5.GRP_CODE = 'HRM002'
+		                                       LEFT OUTER JOIN TBCOM_CMMN_CODE s6
+		                                            ON s2.OFCPS_SE = s6.CODE
+		                                           AND s6.GRP_CODE = 'HRM003'
+		                                       LEFT OUTER JOIN TBCOM_CMMN_CODE s7
+		                                            ON s2.JBLN_SE = s7.CODE
+		                                           AND s7.GRP_CODE = 'HRM004'
+		                                WHERE  s1.CONFM_AT = '1'
+		                                ORDER BY s1.SN
+		                               )
+		                        GROUP BY CNTRCT_NO
+		                       ) t4
+		            ON t1.CNTRCT_NO = t4.CNTRCT_NO
+		WHERE  t1.CNTRCT_NO = #CNTRCT_NO#
+	</select>
+
+
+	<!-- 계약결의번호 -->
+	<select id="CTR020100DAO.cntrctDecsnSn" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+		SELECT NVL(MAX(CNTRCT_DECSN_SN), 0) + 1
+		FROM   TBCTR_CNTRCT_DECSN
+		WHERE  CNTRCT_DECSN_YEAR = #CNTRCT_DECSN_YEAR#
+	</select>
+
+
+	<!-- 계약결의정보 생성 -->
+	<insert id="CTR030600DAO.cntrctDecsnInfoC" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.cntrctDecsnInfoC*/]]>
+		INSERT INTO TBCTR_CNTRCT_DECSN (
+		       CNTRCT_DECSN_YEAR
+		     , CNTRCT_DECSN_SN
+		     , CNTRCT_NO
+		     , WTNESS_SN
+		     , PXCOND_SE
+		     , PXCOND_ODR
+		     , CAUSE_ACTION_NO
+		     , EXPNDTR_FNNC_INSTT_CODE
+		     , EXPNDTR_ACNUTNO
+		     , SUMRY
+		     , BCNC_CODE
+		     , BCNC_NM
+		     , PYMNT_FNNC_INSTT_CODE
+		     , PYMNT_ACNUTNO
+		     , DECSN_AMOUNT
+		     , PXPAY_AT
+		     , ANACT_KND
+		     , FILE_SN
+		     , REGISTER_ID
+		     , REGIST_DT
+		     , UPDUSR_ID
+		     , UPDT_DT
+		) VALUES (
+		       #CNTRCT_DECSN_YEAR#
+		     , #CNTRCT_DECSN_SN#
+		     , #CNTRCT_NO#
+		     , #WTNESS_SN#
+		     , #PXCOND_SE#
+		     , #PXCOND_ODR#
+		     , #CAUSE_ACTION_NO#
+		     , #EXPNDTR_FNNC_INSTT_CODE#
+		     , #EXPNDTR_ACNUTNO#
+		     , #SUMRY#
+		     , #BCNC_CODE#
+		     , #BCNC_NM#
+		     , #PYMNT_FNNC_INSTT_CODE#
+		     , #PYMNT_ACNUTNO#
+		     , #DECSN_AMOUNT#
+		     , #PXPAY_AT#
+		     , #ANACT_KND#
+		     , #FILE_SN#
+		     , #S_USER_ID#
+		     , SYSDATE
+		     , #S_USER_ID#
+		     , SYSDATE
+		)
+	</insert>
+	
+	<!-- 계약결의정보 수정 -->
+	<update id="CTR030600DAO.cntrctDecsnInfoU" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.cntrctDecsnInfoU*/]]>
+		UPDATE TBCTR_CNTRCT_DECSN
+		   SET CAUSE_ACTION_NO          = #CAUSE_ACTION_NO#
+		     , EXPNDTR_FNNC_INSTT_CODE  = #EXPNDTR_FNNC_INSTT_CODE#
+		     , EXPNDTR_ACNUTNO          = #EXPNDTR_ACNUTNO#
+		     , SUMRY                    = #SUMRY#
+		     , BCNC_CODE                = #BCNC_CODE#
+		     , BCNC_NM                  = #BCNC_NM#
+		     , PYMNT_FNNC_INSTT_CODE    = #PYMNT_FNNC_INSTT_CODE#
+		     , PYMNT_ACNUTNO            = #PYMNT_ACNUTNO#
+		     , DECSN_AMOUNT             = #DECSN_AMOUNT#
+		     , PXPAY_AT                 = #PXPAY_AT#
+		     , ANACT_KND                = #ANACT_KND#
+		     , FILE_SN                  = #FILE_SN#
+		     , UPDUSR_ID                = #S_USER_ID# 
+		     , UPDT_DT                  = SYSDATE     
+		 WHERE CNTRCT_DECSN_YEAR = #CNTRCT_DECSN_YEAR# 
+		   AND CNTRCT_DECSN_SN   = #CNTRCT_DECSN_SN#  
+	</update>
+	
+	<!-- 계약결의정보 삭제 -->
+	<delete id="CTR030600DAO.cntrctDecsnInfoD" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.cntrctDecsnInfoD*/]]>
+		DELETE
+		  FROM TBCTR_CNTRCT_DECSN
+		 WHERE CNTRCT_DECSN_YEAR = #CNTRCT_DECSN_YEAR# 
+		   AND CNTRCT_DECSN_SN   = #CNTRCT_DECSN_SN#  
+	</delete>
+
+
+	<!-- 계약결의상세 추가 -->
+	<insert id="CTR030600DAO.mergeCntrctDecsnDetail" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.mergeCntrctDecsnDetail*/]]>
+		MERGE INTO TBCTR_CNTRCT_DECSN_DETAIL
+		USING DUAL
+		ON    (
+		           CNTRCT_DECSN_YEAR = #CNTRCT_DECSN_YEAR#
+		       AND CNTRCT_DECSN_SN   = #CNTRCT_DECSN_SN#
+		       AND DETAIL_SN         = #DETAIL_SN#
+		      )
+		WHEN MATCHED THEN
+		    UPDATE
+		    SET    BCNC_CODE               = #BCNC_CODE#
+		          ,BCNC_NM                 = #BCNC_NM#
+		          ,MNGT_AT                 = #MNGT_AT#
+		          ,QOTA_RT                 = #QOTA_RT#
+		          ,ORGINL_OUTSRC_BCNC_CODE = #ORGINL_OUTSRC_BCNC_CODE#
+		          ,PYMNT_FNNC_INSTT_CODE   = #PYMNT_FNNC_INSTT_CODE#
+		          ,PYMNT_ACNUTNO           = #PYMNT_ACNUTNO#
+		          ,PYMNT_DPSTR_NM          = #PYMNT_DPSTR_NM#
+		          ,DECSN_AMOUNT            = NVL(#DECSN_AMOUNT#,0)
+		          ,SUPLY_AMOUNT            = NVL(#SUPLY_AMOUNT#,0)
+		          ,VAT                     = NVL(#VAT#,0)
+		          ,ISSU_SEQNO              = #ISSU_SEQNO#
+		          ,UPDUSR_ID               = #S_USER_ID#
+		          ,UPDT_DT                 = SYSDATE
+		WHEN NOT MATCHED THEN
+		    INSERT (
+		         CNTRCT_DECSN_YEAR
+		        ,CNTRCT_DECSN_SN
+		        ,DETAIL_SN
+		        ,BCNC_CODE
+		        ,BCNC_NM
+		        ,MNGT_AT
+		        ,QOTA_RT
+		        ,ORGINL_OUTSRC_BCNC_CODE
+		        ,PYMNT_FNNC_INSTT_CODE
+		        ,PYMNT_ACNUTNO
+		        ,PYMNT_DPSTR_NM
+		        ,DECSN_AMOUNT
+		        ,SUPLY_AMOUNT
+		        ,VAT
+		        ,ISSU_SEQNO
+		        ,REGISTER_ID
+		        ,REGIST_DT
+		        ,UPDUSR_ID
+		        ,UPDT_DT
+		    )
+		    VALUES (
+		         #CNTRCT_DECSN_YEAR#
+		        ,#CNTRCT_DECSN_SN#
+		        ,(
+		          SELECT NVL(MAX(DETAIL_SN),0) + 1
+		          FROM   TBCTR_CNTRCT_DECSN_DETAIL
+		          WHERE  CNTRCT_DECSN_YEAR = #CNTRCT_DECSN_YEAR#
+		          AND    CNTRCT_DECSN_SN   = #CNTRCT_DECSN_SN#
+		         )
+		        ,#BCNC_CODE#
+		        ,#BCNC_NM#
+		        ,#MNGT_AT#
+		        ,#QOTA_RT#
+		        ,#ORGINL_OUTSRC_BCNC_CODE#
+		        ,#PYMNT_FNNC_INSTT_CODE#
+		        ,#PYMNT_ACNUTNO#
+		        ,#PYMNT_DPSTR_NM#
+		        ,NVL(#DECSN_AMOUNT#,0)
+		        ,NVL(#SUPLY_AMOUNT#,0)
+		        ,NVL(#VAT#,0)
+		        ,#ISSU_SEQNO#
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		        ,#S_USER_ID#
+		        ,SYSDATE
+		    )
+	</insert>
+
+
+	<!-- 계약결의상세 삭제 -->
+	<delete id="CTR030600DAO.deleteCntrctDecsnDetail" parameterClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.deleteCntrctDecsnDetail*/]]>
+		DELETE
+		FROM   TBCTR_CNTRCT_DECSN_DETAIL
+		WHERE  CNTRCT_DECSN_YEAR     = #CNTRCT_DECSN_YEAR#
+		AND    CNTRCT_DECSN_SN       = #CNTRCT_DECSN_SN#
+	<isNotEmpty property="DETAIL_SN">
+		AND    DETAIL_SN             = #DETAIL_SN#
+	</isNotEmpty>
+	</delete>
+
+
+	<!-- (팝업) 세금계산서 목록 조회 -->
+	<select id="CTR030600DAO.selectDetIssuMstr" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+	<![CDATA[/*CTR030600DAO.selectDetIssuMstr*/]]>
+		SELECT T1.TAXBILL_NO
+		     , T1.REGS_DATE
+		     , T1.SELR_CORP_NO
+		     , T1.SELR_CODE
+		     , T1.SELR_CORP_NM
+		     , T1.SELR_CEO
+		     , NVL(T1.TOTL_AMT, 0)    AS TOTL_AMT
+		     , NVL(T1.CHRG_AMT, 0)    AS CHRG_AMT
+		     , NVL(T1.TAX_AMT, 0)     AS TAX_AMT
+		     , T1.NOTE1
+		     , T2.ITEM_DESP
+		     , T3.ITEM_NM
+		     , T1.SELR_CHRG_EMAIL
+		     , T1.ISSU_SEQNO
+		     , T1.BILL_TYPE
+		     , T1.ISSU_DATE
+		     , T1.ISSU_ID
+		     , T1.TAX_TYPE
+		     , DECODE(SUBSTR(T1.TAX_TYPE, 1, 2), '01', '1', '02', '1', '03', '2', '04', '2')    AS BILL_KND
+		     , T1.POPS_CODE
+		     , T1.MODY_CODE
+		     , T1.STAT_CODE
+		     , NVL(T1.TAX_DEDUC_YN, DECODE(T1.TAX_AMT, 0, '0', '1')) AS TAX_DEDUC_YN /*용도변경 - 부가세여부*/
+		     , T1.PCHS_TAX_NOTAX_RSN
+		     , T4.DECSN_YEAR
+		     , T4.DECSN_NO
+		     , NVL(T5.DECSN_AMOUNT, 0)    AS DECSN_AMOUNT
+		     , T7.BCNC_CODE
+		     , H_DECRYPT(T7.BIZRNO)       AS BIZRNO
+		     , T7.BCNC_NM
+		     , T7.RPRSNTV
+		     , T7.BIZCND
+		     , T7.INDUTY
+		     , T7.RN
+		     , T7.DETAIL_RDNMADR
+		     , T7.ADRES
+		     , T7.DETAIL_ADRES
+		     , T7.SMLPZ_SE
+		     , T7.EVRFRND_AT
+		     , T7.TCNDVLP
+		     , T7.CNTRWK_PRPOS_MTRIL
+		     , T7.AREA_ENTRPS_AT
+		     , T7.FEMALE_ENTRPRS_AT
+		     , T7.DSPSN_ENTRPRS_AT
+		     , T7.SRSILL_DSPSN_ENTRPRS_AT
+		     , T7.SOCENT_AT
+		     , T7.GREEN_PRDUCT_AT
+		     , T7.DSPSN_PRDCTN_FCLTY_AT
+		     , T7.SOCTY_CPER_MXTR_AT
+		     , T7.DSPSN_STD_BPLC
+		     , T7.WATER_INDUST
+		     , T7.MDLC_INDUST
+		     , T7.FARMNG_INDUST
+		     , T7.ENERGY_INDUST
+		     , T8.BANK_CODE
+		     , T8.DPSTR_NM
+		     , T8.ACNUTNO
+		  FROM DET_ISSU_MSTR T1
+		       LEFT OUTER JOIN DET_ISSU_DETAIL T2
+		            ON T1.ISSU_SEQNO = T2.ISSU_SEQNO
+		       LEFT OUTER JOIN (
+		                         SELECT T1.ISSU_SEQNO
+		                              , LISTAGG(T2.ITEM_NM, ',') WITHIN GROUP (ORDER BY T1.SELR_CORP_NO) AS ITEM_NM
+		                           FROM DET_ISSU_MSTR T1
+		                                LEFT OUTER JOIN DET_ISSU_DETAIL T2
+		                                     ON T1.ISSU_SEQNO = T2.ISSU_SEQNO
+		                         GROUP BY T1.ISSU_SEQNO
+		                       ) T3
+		            ON T1.ISSU_SEQNO = T3.ISSU_SEQNO
+		       LEFT OUTER JOIN TBACC_TAXBIL_MASTER T4
+		            ON T1.TAXBILL_NO = T4.TAXBILL_NO
+		       LEFT OUTER JOIN TBACC_EXP_DSN_MASTR T5
+		            ON T4.DECSN_YEAR = T5.DECSN_YEAR
+		           AND T4.DECSN_NO   = T5.DECSN_NO
+		       LEFT OUTER JOIN (
+		                         SELECT MAX(S1.BCNC_CODE)     AS BCNC_CODE
+		                              , H_DECRYPT(S1.BIZRNO)  AS BIZRNO
+		                           FROM TBCTR_BCNC_MASTR S1
+		                         GROUP BY H_DECRYPT(S1.BIZRNO)
+		                       ) T6
+		            ON T1.SELR_CORP_NO = T6.BIZRNO
+		       LEFT OUTER JOIN TBCTR_BCNC_MASTR T7
+		            ON T6.BCNC_CODE = T7.BCNC_CODE
+		       LEFT OUTER JOIN TBCTR_BCNC_ACNUT T8
+		            ON T7.BCNC_CODE     = T8.BCNC_CODE
+		           AND T8.MNBS_ACNUT_AT = '1'
+		WHERE  (t1.BILL_TYPE = '2' OR t1.BILL_TYPE = '4')
+		AND    t1.TAXBILL_NO IS NULL
+		AND    t1.REGS_DATE BETWEEN #BGNDE# AND #ENDDE#
+		AND    t1.SELR_CORP_NM LIKE '%' || #SELR_CORP_NM# || '%'
+	<isNotEmpty property="ISSU_SEQNO">
+		AND    t1.ISSU_SEQNO LIKE '%' || #ISSU_SEQNO# || '%'
+	</isNotEmpty>
+	<isNotEmpty property="ISSU_ID">
+		AND    t1.ISSU_ID LIKE '%' || #ISSU_ID# || '%'
+	</isNotEmpty>
+	<isNotEmpty property="BILL_KND">
+		AND    DECODE(SUBSTR(t1.TAX_TYPE, 1, 2),  '01', '1',  '02', '1',  '03', '2',  '04', '2') = #BILL_KND#
+	</isNotEmpty>
+		ORDER BY t1.REGS_DATE, t1.SELR_CORP_NO
+	</select>
+
+
+	<!--지출결의 번호 저장-->
+	<update id="CTR030600DAO.updateCntrctDecsnNo" parameterClass="java.util.HashMap" >
+	<![CDATA[
+		DECLARE
+		BEGIN
+		    /* 계약 */
+		    UPDATE TBCTR_CNTRCT_DECSN
+		    SET    DECSN_YEAR        = #DSNMASTR.DECSN_YEAR#
+		          ,DECSN_NO          = #DSNMASTR.DECSN_NO#
+		          ,UPDUSR_ID         = #S_USER_ID#
+		          ,UPDT_DT           = SYSDATE
+		    WHERE  CNTRCT_DECSN_YEAR = #CNTRCT_DECSN_YEAR#
+		    AND    CNTRCT_DECSN_SN   = #CNTRCT_DECSN_SN#;
+		    
+		    /* 회계 */
+		    UPDATE TBACC_EXP_DSN_MASTR
+		    SET    CNTRCT_NO    = #CNTRCT_NO#
+		    WHERE  DECSN_YEAR   = #DSNMASTR.DECSN_YEAR#
+		    AND    DECSN_NO     = #DSNMASTR.DECSN_NO#;
+		END;
+	]]>
+	</update>
+	
+	<!--지출결의 번호 삭제-->
+	<update id="CTR030600DAO.updateCntrctDecsnNoToNull" parameterClass="java.util.HashMap" >
+	<![CDATA[
+		DECLARE
+		BEGIN
+		    /* 계약 */
+		    UPDATE TBCTR_CNTRCT_DECSN
+		    SET    DECSN_YEAR          = NULL
+		          ,DECSN_NO            = NULL
+		          ,UPDUSR_ID           = #S_USER_ID#
+		          ,UPDT_DT             = SYSDATE
+		    WHERE  DECSN_YEAR          = #DECSN_YEAR#
+		    AND    DECSN_NO            = #DECSN_NO#;
+		    
+		    /* 회계 */
+		    UPDATE TBACC_EXP_DSN_MASTR
+		    SET    CNTRCT_NO    = NULL
+		          ,UPDUSR_ID    = #S_USER_ID#
+		          ,UPDT_DT      = SYSDATE
+		    WHERE  DECSN_YEAR   = #DECSN_YEAR#
+		    AND    DECSN_NO     = #DECSN_NO#;
+		END;
+	]]>
+	</update>
+
+	<!-- 계약대가지급 중복검사 -->
+	<select id="CTR030600DAO.selectCntrctDecsnCnt" parameterClass="java.util.HashMap" resultClass="java.lang.String">
+	<![CDATA[/*CTR030600DAO.selectCntrctDecsnCnt*/]]>	
+		SELECT COUNT(*)
+		FROM TBCTR_CNTRCT_DECSN t1	/*계약결의*/
+			LEFT OUTER JOIN TBCTR_PRSEC_WTNESS t2 /*검사검수*/
+			  ON t1.CNTRCT_NO = t2.CNTRCT_NO
+			 AND t1.WTNESS_SN = t2.WTNESS_SN
+		WHERE 1          =1
+		  AND t2.CNTRCT_NO = #CNTRCT_NO#
+		  AND t2.WTNESS_SN = #WTNESS_SN#
+	</select>
+</sqlMap>

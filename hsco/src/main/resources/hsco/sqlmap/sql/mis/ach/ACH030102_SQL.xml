@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="ACH030102_SQL">
+	<typeAlias alias="egovMap" type="egovframework.rte.psl.dataaccess.util.EgovMap"/>
+	
+	<!-- 지표가중치 배부목록 조회 -->
+	<select id="ACH030102DAO.selectList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap" remapResults="true">
+		WITH VW_WGHTVAL AS (
+				              SELECT AA.*
+			                     , SFACH_GET_IXNM(AA.EVL_YEAR, AA.ODR_SE,AA.S_IX_CODE ) AS S_IX_NM
+			                     , SFACH_GET_IXNM(AA.EVL_YEAR, AA.ODR_SE,AA.C_IX_CODE ) AS C_IX_NM 
+							          FROM 
+							             (SELECT A.EVL_YEAR AS EVL_YEAR
+							                     , A.ODR_SE AS ODR_SE
+							                     , SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'001') AS V_IX_CODE
+							                     , SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'002') AS S_IX_CODE
+							                     , SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'003') AS C_IX_CODE
+							                     , A.IX_CODE AS IX_CODE
+							                     , '[ ' || A.IX_CODE || ' ] ' || A.IX_NM AS IX_CDNM
+							                     , DECODE(A.IX_CHARCT,'000',C.ORGNZT_CODE,'001',D.ORGNZT_CODE) AS ORGNZT_CODE
+							                     , A.IX_CHARCT AS IX_CHARCT
+							                     , A.APPLC_SCOPE_SE AS APPLC_SCOPE_SE
+							                     , DECODE(A.IX_CHARCT,'000',NVL(C.EVL_WGHTVAL,0),'001',NVL(D.EVL_WGHTVAL,0)) AS Q_EVL_WGHTVAL
+							                FROM TBACH_KPI A
+							                     , TBACH_QYEVAL_RESULT C
+							                     , TBACH_QLEVAL_RESULT D 
+							               WHERE 1=1 
+                                             AND A.IX_CODE NOT IN('00000','P','C','L','F')
+                                             AND A.EVL_YEAR     = C.EVL_YEAR(+)
+                                             AND A.ODR_SE       = C.ODR_SE(+)
+                                             AND A.IX_CODE      = C.IX_CODE(+)
+                                             AND A.EVL_YEAR     = D.EVL_YEAR(+)
+                                             AND A.ODR_SE       = D.ODR_SE(+)
+                                             AND A.IX_CODE      = D.IX_CODE(+)
+                                             AND D.SEQ(+)       = 0
+                                             AND A.IX_SE        = '004'
+						                     AND A.EVL_YEAR     = #EVL_YEAR# 
+						                     AND A.ODR_SE       = #ODR_SE#
+							              ) AA 
+		)
+		 SELECT 
+				<iterate property="deptList" conjunction="," close=",">
+				NVL($deptList[].COL_NM$,0) AS "$deptList[].COL_NM$"
+				</iterate>   
+		        V_IX_CODE
+		        , S_IX_CODE
+		        , S_IX_NM
+		        , C_IX_CODE
+		        , C_IX_NM
+		        , IX_CODE
+		        , IX_CDNM
+		        , IX_CHARCT
+		        , APPLC_SCOPE_SE
+		    FROM VW_WGHTVAL
+			       PIVOT ( MAX(Q_EVL_WGHTVAL)
+			         FOR ORGNZT_CODE
+			         IN (
+		          <iterate property="deptList" conjunction=",">
+		             '$deptList[].DEPT_CODE$' AS "$deptList[].COL_NM$"
+		       		</iterate>				   
+			             ) ) 
+		 ORDER BY V_IX_CODE
+		         ,S_IX_CODE
+		         ,C_IX_CODE
+		         ,IX_CODE
+    </select>
+    
+    <!-- iterate를 위한 조직목록 조회 -->
+	<select id="ACH030102DAO.selectDeptcodeList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT ORGNZT_CODE 	AS DEPT_CODE
+		      ,'DEPT' || ORGNZT_CODE  AS COL_NM
+		      ,ORGNZT_NM 	AS DEPT_NM
+		  FROM TBACH_EVL_TRGET_ORGNZT
+		 WHERE 1=1
+		   AND EVL_YEAR = #EVL_YEAR#
+		   AND ODR_SE 	= #ODR_SE#
+		 ORDER BY ORGNZT_CODE		
+    </select>  
+    
+    <!-- 배부현황 Report 조회 -->
+	<select id="ACH030102DAO.selectListReport" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT AA.* , 
+		        SFACH_GET_IXNM(AA.EVL_YEAR, AA.ODR_SE,AA.V_IX_CODE ) AS V_IX_NM ,  
+		        SFACH_GET_IXNM(AA.EVL_YEAR, AA.ODR_SE,AA.S_IX_CODE ) AS S_IX_NM , 
+		        SFACH_GET_IXNM(AA.EVL_YEAR, AA.ODR_SE,AA.C_IX_CODE ) AS C_IX_NM 
+		   FROM 
+		        (SELECT A.EVL_YEAR AS EVL_YEAR
+		                , A.ODR_SE AS ODR_SE
+		                , SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'001') AS V_IX_CODE
+		                , SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'002') AS S_IX_CODE
+		                , SFACH_GET_UPIXCD(A.EVL_YEAR,A.ODR_SE,A.IX_CODE,'003') AS C_IX_CODE
+		                , A.IX_CODE AS IX_CODE
+		                , A.IX_NM AS IX_CDNM
+                        , A.ORGNZT_CODE AS ORGNZT_CODE
+                        , A.ORGNZT_NM AS ORGNZT_NM
+		                , A.IX_CHARCT AS IX_CHARCT
+		                , DECODE(A.IX_CHARCT,'000',NVL(C.EVL_WGHTVAL,0),'001',NVL(D.EVL_WGHTVAL,0)) AS Q_EVL_WGHTVAL 
+		          FROM (SELECT A.EVL_YEAR AS EVL_YEAR
+                               , A.ODR_SE AS ODR_SE
+                               , A.IX_CODE AS IX_CODE
+                               , A.IX_NM AS IX_NM
+                               , A.IX_CHARCT AS IX_CHARCT
+                               , B.ORGNZT_CODE AS ORGNZT_CODE
+                               , B.ORGNZT_NM AS ORGNZT_NM
+                        FROM TBACH_KPI A ,
+                             TBACH_EVL_TRGET_ORGNZT B
+		                WHERE 1=1 
+		                  AND A.IX_CODE NOT IN('00000','P','C','L','F')
+                          AND A.IX_SE = '004'
+		                  AND A.EVL_YEAR = #EVL_YEAR#
+		                  AND A.ODR_SE   = #ODR_SE#
+                          AND A.EVL_YEAR = B.EVL_YEAR
+                          AND A.ODR_SE   = B.ODR_SE
+                       )A
+		               , TBACH_QYEVAL_RESULT C 
+		               , TBACH_QLEVAL_RESULT D 
+		         WHERE 1=1 
+		           AND A.EVL_YEAR    = C.EVL_YEAR(+) 
+		           AND A.ODR_SE      = C.ODR_SE(+) 
+		           AND A.IX_CODE     = C.IX_CODE(+)
+                   AND A.ORGNZT_CODE = C.ORGNZT_CODE(+)
+		           AND A.EVL_YEAR    = D.EVL_YEAR(+) 
+		           AND A.ODR_SE      = D.ODR_SE(+) 
+		           AND A.IX_CODE     = D.IX_CODE(+)
+                   AND A.ORGNZT_CODE = D.ORGNZT_CODE(+)
+		           AND D.SEQ(+)      = 0
+		        ) AA 
+		ORDER BY AA.V_IX_CODE ,
+				 AA.S_IX_CODE ,
+				 AA.C_IX_CODE ,
+				 AA.IX_CODE ,
+				 AA.ORGNZT_CODE	
+    </select>       	
+
+</sqlMap>

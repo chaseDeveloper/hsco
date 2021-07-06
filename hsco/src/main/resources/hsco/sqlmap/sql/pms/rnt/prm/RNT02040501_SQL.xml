@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02040501_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 문자발송내역 조회
+			 설명 : 매입임대문자발송내역 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.10.28
+	-->
+	<select id="RNT02040501DAO.selectPuchasRentHouseSmsList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+    SELECT 
+            '0' AS CHK
+            ,'PRM' AS JOB_SE
+            ,A.CNTRCTR_NO
+			      ,A.RENT_HOUSE_CODE AS HOUSE_CODE
+			      ,H.RENT_HOUSE_NM AS HOUSE_NM
+			      ,A.DONG
+			      ,A.HO
+			      ,'' AS LOT_TY
+			      ,C.NM
+			      ,NVL(C.MBTLNO, C.TELNO) AS MBTLNO
+			      ,A.CNTRCT_DE
+<!-- 			      ,A.CNTRCT_SE   -->
+			      ,A.RENT_BGNDE
+			      ,A.RENT_ENDDE
+			      ,A.QUALF_SE       
+			      ,(SELECT CODE_NM
+			          FROM TBCOM_CMMN_CODE Z
+			         WHERE GRP_CODE = 'RNT001'
+			           AND CODE = A.QUALF_SE) QUALF_SE_NM			           			      
+			      ,B.REG_DATE AS SNDNG_DT
+			      ,B.CONTENT AS SNDNG_DTLS
+			      ,B.MSG_STATUS
+			  FROM TBRNT_PUCHAS_CNTRCT A
+			  	  ,TBRNT_PUCHAS_RENT_CSTMR C
+			  	  ,TBRNT_PUCHAS_HOUSE H
+			  	  ,TBRNT_PUCHAS_RESCI R
+			  	  ,(   SELECT *
+					     FROM (
+						        SELECT 
+								        A.MT_PR
+								       ,A.MT_SEQ 
+								       ,(SELECT SFSAL_GETDEPTNM_01(MT_REFKEY) 
+								           FROM EMMA.EM_SMT_TRAN
+								          WHERE MT_PR = A.MT_PR)  AS DEPT_CODE              /* 부서코드*/
+								       ,(SELECT TO_CHAR(DATE_CLIENT_REQ,'YYYY-MM-DD HH24:MI')
+								           FROM EMMA.EM_SMT_TRAN
+								          WHERE MT_PR = A.MT_PR)	           AS REG_DATE     /* 발송일시 */  
+								       ,TO_CHAR(DATE_RSLT,'YYYY-MM-DD HH24:MI')  AS DATE_RSLT    /* 단말기수신일시 */        
+								       ,(SELECT SERVICE_TYPE 
+								           FROM EMMA.EM_SMT_TRAN
+								          WHERE MT_PR = A.MT_PR)   AS  SERVICE_TYPE         /* SMS,MMX */
+								       ,A.MSG_STATUS
+								       ,A.RECIPIENT_NUM
+								       ,A.CHANGE_WORD5
+								       ,(SELECT CONTENT
+								           FROM EMMA.EM_SMT_TRAN
+								          WHERE MT_PR = A.MT_PR)  AS  CONTENT   /* 메시지 */
+								 FROM EMMA.EM_SMT_CLIENT A
+								WHERE 1=1					
+								  AND A.MT_PR IN  (SELECT MT_PR 
+								                     FROM EMMA.EM_SMT_TRAN
+								                    WHERE MT_REFKEY = #DEPT_CODE#)
+
+							    UNION ALL
+							
+								SELECT 
+								        A.MT_PR
+								       ,A.MT_SEQ 
+								       ,(SELECT SFSAL_GETDEPTNM_01(MT_REFKEY) 
+								           FROM EMMA.EM_MMT_TRAN
+								           WHERE MT_PR = A.MT_PR)  AS DEPT_CODE              /* 부서코드*/
+								       ,(SELECT TO_CHAR(DATE_CLIENT_REQ,'YYYY-MM-DD HH24:MI')
+								           FROM EMMA.EM_MMT_TRAN
+								          WHERE MT_PR = A.MT_PR)	           AS REG_DATE     /* 발송일시 */  
+								       ,TO_CHAR(DATE_RSLT,'YYYY-MM-DD HH24:MI')  AS DATE_RSLT    /* 단말기수신일시 */        
+								       ,(SELECT SERVICE_TYPE 
+								           FROM EMMA.EM_MMT_TRAN
+								          WHERE MT_PR = A.MT_PR)   AS  SERVICE_TYPE         /* SMS,MMX */
+								       ,A.MSG_STATUS
+								       ,A.RECIPIENT_NUM
+								       ,A.CHANGE_WORD5
+								       ,(SELECT CONTENT
+								           FROM EMMA.EM_MMT_TRAN
+								          WHERE MT_PR = A.MT_PR)  AS  CONTENT   /* 메시지 */
+								 FROM EMMA.EM_MMT_CLIENT A
+								WHERE 1=1				
+								  AND A.MT_PR IN  (SELECT MT_PR 
+								                     FROM EMMA.EM_MMT_TRAN
+								                    WHERE MT_REFKEY = #DEPT_CODE#)
+								)
+					) B
+			 WHERE 1 = 1
+			   AND A.RENT_HOUSE_CODE = H.RENT_HOUSE_CODE
+			   AND A.PUCHAS_CSTMR_NO = C.PUCHAS_CSTMR_NO
+			   AND NVL(C.MBTLNO, C.TELNO) = B.RECIPIENT_NUM(+)		   
+			   <isNotEmpty property="houseCode">
+			   AND A.RENT_HOUSE_CODE LIKE #houseCode#
+			   </isNotEmpty>
+         	   <isNotEmpty property="dong">
+         	   AND A.DONG = #dong#
+         	   </isNotEmpty>
+	    	   <isNotEmpty property="ho">
+	    	   AND A.HO = #ho#
+	    	   </isNotEmpty>
+	    	   <isNotEmpty property="infoType">
+               AND D.GUIDANCE_TY = #infoType#
+               </isNotEmpty>
+          		AND A.CNTRCTR_NO = R.CNTRCTR_NO(+)
+          		AND R.CANCL_DE IS NULL
+			ORDER BY A.RENT_HOUSE_CODE, A.DONG, A.HO, B.REG_DATE DESC		
+	</select>
+
+
+	<!-- SMS 발송내역 입력 -->
+    <insert id="RNT02040501DAO.puchasHouseSmsC" parameterClass="java.util.HashMap">
+        <![CDATA[
+            INSERT INTO TBPMS_SMS_SNDNG (
+                         JOB_SE
+                        ,SNDNG_SN
+						,HOUSE_CODE
+						,DONG
+						,HO
+						,LOT_TY
+						,CNTRCTR_NO
+						,MBTLNO
+						,GUIDANCE_TY
+						,SNDNG_DT
+						,SNDNG_DTLS
+						,REGISTER_ID
+						,REGIST_DT
+						,UPDUSR_ID
+						,UPDT_DT
+             ) VALUES (
+                         #JOB_SE#
+                        ,(SELECT NVL(MAX(SNDNG_SN),0) + 1 FROM TBPMS_SMS_SNDNG WHERE JOB_SE = #JOB_SE#)
+						,#HOUSE_CODE#
+						,#DONG#
+						,#HO#
+						,#LOT_TY#
+						,#CNTRCTR_NO#
+						,#MBTLNO#
+						,#GUIDANCE_TY#
+						,SYSDATE
+						,#SNDNG_DTLS#
+						,#S_USER_ID#			    /** 등록자ID */
+        	            ,SYSDATE			        	/** 등록일시 */
+        	            ,#S_USER_ID#			    /** 수정자ID */
+        	            ,SYSDATE			       		/** 수정일시 */
+             )
+        ]]>    
+    </insert>
+</sqlMap>

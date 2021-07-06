@@ -1,0 +1,424 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT01040203_SQL">	
+   <!--  설명  : 월임대료관리
+		작성자 : 지효정 -->
+
+	<!-- 임대료 목록 -->
+	<select id="RNT01040203DAO.rentMtRntchrgList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		 SELECT 
+		     '1' AS CHK
+		 	,A.MDAT_YM		/*조정년월*/
+		    ,A.MDAT_DE		/*조정일자*/
+		    ,A.PAY_TMLMT	/*납부기한*/
+		    ,A.RNTCHRG		/*임대료*/
+		    ,A.OVDINTR		/*연체료*/
+		    ,A.RDCAMT_DE		/* 감액일자 */
+		    ,A.RDCAMT_AMOUNT		/*차액*/
+		    ,A.RCIV_DE		/*수납일자*/
+			,NVL(A.RNTCHRG,0) + NVL(A.RDCAMT_AMOUNT,0) + NVL(A.OVDINTR,0) AS TOTAL_AMOUNT
+			,NHT_SN
+			,CNTRCTR_NO
+			,NHT_SN
+		 FROM TBRNT_RENT_MT_RNTCHRG A
+		 WHERE A.CNTRCTR_NO = #cntrctrNo#
+		 AND   A.RCIV_DE IS NULL
+		 <isNotEmpty property="stMdatYm">
+		 AND   A.MDAT_YM <![CDATA[>=]]> #stMdatYm#
+		 </isNotEmpty>
+		 <isNotEmpty property="edMdatYm">
+		 AND   A.MDAT_YM <![CDATA[<=]]> #edMdatYm#
+		 </isNotEmpty>
+		 ORDER BY A.PAY_TMLMT
+	</select>
+	
+	<!-- 임대료 목록(팝업) -->
+	<select id="RNT01040203DAO.rentMtRntchrgPopList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+		 	 C.NM				/*계약자명*/
+		    ,A.RENT_HOUSE_CODE	/*주택코드*/
+		    ,B.RENT_HOUSE_NM	/*주택명*/
+		    ,A.DONG				/*동*/
+		    ,A.HO				/*호*/
+		    ,D.PAY_TMLMT		/*납입기한*/
+		    ,SUBSTR(D.PAY_TMLMT,1,4) AS BILL_YM
+		    ,D.RNTCHRG			/*임대료*/
+		    ,D.OVDINTR			/*연체료*/
+		    ,D.RDCAMT_AMOUNT		/*차액*/
+		    ,NVL(D.RNTCHRG,0) + NVL(D.OVDINTR,0) + NVL(D.RDCAMT_AMOUNT,0) AS TOT_AMOUNT
+		    ,D.RCIV_AMOUNT		/*수납금액*/
+		    ,D.RCIV_DE			/*수납일자*/
+		    ,D.CASH_RCIPT_RGSDE	/*현금영수증 발행일*/
+		 FROM 
+		  	 TBRNT_RENT_CNTRCT A
+			,TBRNT_RENT_HOUSE B
+		    ,TBRNT_PRMANENT_RENT_CSTMR C
+		    ,TBRNT_RENT_MT_RNTCHRG D
+		 WHERE A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		 AND   A.PRMANENT_CSTMR_NO = C.PRMANENT_CSTMR_NO
+		 AND   A.CNTRCTR_NO = D.CNTRCTR_NO
+		 AND   B.HOUSE_SE IN('R1', 'R3')
+		 AND   A.CNTRCTR_NO = #cntrctrNo#
+		 <isNotEmpty property="stMdatYm">
+		 AND   D.MDAT_YM <![CDATA[>=]]> #stMdatYm#
+		 </isNotEmpty>
+		 <isNotEmpty property="edMdatYm">
+		 AND   D.MDAT_YM <![CDATA[<=]]> #edMdatYm#
+		 </isNotEmpty>
+		 
+		 <isEqual property="rcivAt" compareValue="0">
+		 AND   D.RCIV_DE IS NULL
+		 </isEqual>
+		 <isNotEqual property="rcivAt" compareValue="0">
+			 <isNotEmpty property="stRcivDe">
+			 AND   D.RCIV_DE <![CDATA[>=]]> #stRcivDe#
+			 </isNotEmpty>
+			 <isNotEmpty property="edRcivDe">
+			 AND   D.RCIV_DE <![CDATA[<=]]> #edRcivDe#
+			 </isNotEmpty>
+			 <isEqual property="rcivAt" compareValue="1">
+			 AND   D.RCIV_DE IS NOT NULL
+			 </isEqual>
+		 </isNotEqual>
+		 ORDER BY D.PAY_TMLMT
+	</select>
+	
+	<!-- 임대료연체이자생성 -->	
+	<update id="RNT01040203DAO.rentMtRntchrgU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_RENT_MT_RNTCHRG 
+		   SET OVDINTR = SFRNT_LFSTS_DELAY_RATE('RN1', #rentHouseCode#, PAY_TMLMT, #payTmlmt#, NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0))
+		 WHERE CNTRCTR_NO = #cntrctrNo#
+		   AND PAY_TMLMT  <![CDATA[<=]]> #payTmlmt# /* 조정년월 */
+		   AND RCIV_DE IS NULL /* 수납일자 */
+	</update>
+	
+	<!-- 임대료연체이자생성(CHK) -->	
+	<update id="RNT01040203DAO.rentMtRntchrgChkU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_RENT_MT_RNTCHRG 
+		   SET OVDINTR = SFRNT_LFSTS_DELAY_RATE('RN1', #rentHouseCode#, PAY_TMLMT, #payTmlmt#, NVL(RNTCHRG, 0) + NVL(RDCAMT_AMOUNT, 0))
+		 WHERE CNTRCTR_NO = #cntrctrNo#
+		   AND PAY_TMLMT  <![CDATA[<=]]> #payTmlmt# /* 조정년월 */
+		   AND RCIV_DE IS NULL /* 수납일자 */
+		   AND MDAT_YM = #mdatYm#
+		   AND MDAT_DE = #mdatDe#
+		   AND NHT_SN = #nhtSn#
+	</update>
+	
+	<!-- 보증금연체이자생성 -->	
+	<update id="RNT01040203DAO.rentGtnMtRntchrgU" parameterClass="java.util.HashMap">
+		UPDATE TBRNT_RENT_GTN 
+		   SET OVDINTR = SFRNT_LFSTS_DELAY_RATE('RN1', #rentHouseCode#, PAY_TMLMT, #payTmlmt#, NVL(GTN, 0))
+		 WHERE CNTRCTR_NO = #cntrctrNo#
+		   AND PAY_TMLMT  <![CDATA[<=]]> #payTmlmt# /* 조정년월 */
+		   AND RCIV_DE IS NULL /* 수납일자 */
+		   AND GTN_SN = #gtnSn#
+	</update>
+	
+	<!-- 고지서 내역 -->
+	<select id="RNT01040203DAO.rentMtRntNhtSheetInfo" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT  A.RENT_HOUSE_CODE 								             AS RENT_HOUSE_CODE 
+		       ,A.DONG 														 AS DONG            
+		       ,A.HO 														 AS HO              
+		       ,B.RENT_HOUSE_NM 									         AS RENT_HOUSE_NM   
+		       ,C.ADRES || ' ' || C.ADRES_DETAIL 	                         AS ADRES           
+		       ,C.ZIP                                                       AS ZIP             
+		       ,( SELECT X.NM
+		           FROM TBRNT_PRMANENT_RENT_CSTMR X
+		          WHERE 1=1
+		            AND A.PRMANENT_CSTMR_NO = X.PRMANENT_CSTMR_NO ) 		  AS CONT_NAME
+		       ,B.RENT_HOUSE_NM || ' ' || A.DONG || '동 ' || A.HO || '호'       AS ADDR
+		       ,A.DONG || '동 ' || A.HO || '호' 								  AS DONGHO
+		       ,SUBSTR(V.PAY_TMLMT,1,4) 									  AS YYYY_1
+		       ,SUBSTR(V.PAY_TMLMT,5,2) 									  AS MM_1
+		       ,SUBSTR(#payTmlmt#,1,4) 										  AS YYYY
+		       ,SUBSTR(#payTmlmt#,5,2) 										  AS MM
+		       ,SUBSTR(#payTmlmt#,7,2) 										  AS DD
+		       ,NVL(V.RNTCHRG,0) + NVL(V.RDCAMT_AMOUNT,0) 					  AS RENT_AMT
+		       ,NVL(V1.DEL_AMT,0) 											  AS DEL_AMT
+		       ,NVL(V1.DEL_INT,0) + NVL(V.OVDINTR,0) 						  AS DEL_INT 
+		       ,0 															  AS SEC_AMT
+		       ,NVL(V.RNTCHRG,0) + NVL(V.RDCAMT_AMOUNT,0) + NVL(V1.DEL_AMT,0) +  NVL(V1.DEL_INT,0) + NVL(V.OVDINTR,0)    AS TOTAL_AMT
+		       ,( '2' || A.RENT_HOUSE_CODE || A.DONG || A.HO ||  V.PAY_TMLMT ||  LPAD( NVL(V.RNTCHRG,0) + NVL(V.RDCAMT_AMOUNT,0) + NVL(V1.DEL_AMT,0) +  NVL(V1.DEL_INT,0) + NVL(V.OVDINTR,0),10,'0')
+		             || SUBSTR(SFRNT_OCR_CODE_CHECK( '2' || A.RENT_HOUSE_CODE || A.DONG || A.HO ||  V.PAY_TMLMT 
+		             || LPAD( NVL(V.RNTCHRG,0) + NVL(V.RDCAMT_AMOUNT,0) + NVL(V1.DEL_AMT,0) +  NVL(V1.DEL_INT,0) + NVL(V.OVDINTR,0),10,'0') ),1,50) 
+		             || '100' ) 										      AS OCRBAND
+		       ,V2.BANK1                                                      AS BANK1
+		       ,V2.BANK2                                                      AS BANK2
+		       ,V2.BANK3                                                      AS BANK3
+		       ,V2.BANK4                                                      AS BANK4
+		       ,V2.BANK5                                                      AS BANK5
+		       ,V2.BANK6                                                      AS BANK6
+		       ,(SELECT SFSAL_GETEMPNO_01(CHRCTR_PREPAR_VALUE_0)
+		           FROM TBCOM_CMMN_CODE
+		          WHERE 1=1
+		            AND GRP_CODE = 'RNT016'
+		            AND CODE = DECODE(B.HOUSE_SE,'R2','12','11')) 			  AS CHARGE_NAME
+		       ,(SELECT CHRCTR_PREPAR_VALUE_1
+		           FROM TBCOM_CMMN_CODE
+		          WHERE 1=1
+		            AND GRP_CODE = 'RNT016'
+		            AND CODE = DECODE(B.HOUSE_SE,'R2','12','11'))  			  AS CHARGE_TEL
+		  FROM TBRNT_RENT_CNTRCT A
+		      ,TBRNT_RENT_MT_RNTCHRG V
+		      ,TBRNT_RENT_HOUSE B
+		      ,TBRNT_RENT_HOUSE_DONG C
+		      ,(SELECT CNTRCTR_NO
+		              ,SUM(NVL(RNTCHRG,0) + NVL(RDCAMT_AMOUNT,0)) AS DEL_AMT
+		              ,SUM(NVL(OVDINTR,0)) AS DEL_INT
+		         FROM TBRNT_RENT_MT_RNTCHRG
+		        WHERE 1=1
+		          AND CNTRCTR_NO = #cntrctrNo#
+		          AND MDAT_YM >= #stMdatYm#
+		          AND MDAT_YM <![CDATA[<]]> #edMdatYm#
+		          AND RCIV_DE IS NULL
+		        GROUP BY CNTRCTR_NO
+		       ) V1
+		      ,(SELECT CRT_ID AS CNTRCTR_NO
+		              ,MAX(DECODE(ROWNUM,1,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,1,VACCT_NO)) AS BANK1
+		              ,MAX(DECODE(ROWNUM,2,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,2,VACCT_NO)) AS BANK2
+		              ,MAX(DECODE(ROWNUM,3,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,3,VACCT_NO)) AS BANK3
+		              ,MAX(DECODE(ROWNUM,4,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,4,VACCT_NO)) AS BANK4
+		              ,MAX(DECODE(ROWNUM,5,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,5,VACCT_NO)) AS BANK5
+		              ,MAX(DECODE(ROWNUM,6,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,6,VACCT_NO)) AS BANK6
+		         FROM
+		              (SELECT A.CRT_ID
+		                     ,A.BANK_CD
+		                     ,A.VACCT_NO
+		                     ,SFCOM_CODE_NM('COM021',A.BANK_CD) AS  BANK_NM
+		                FROM VA_BILL A
+		               WHERE 1=1
+		                 AND A.CRT_ID = #cntrctrNo#
+		                ORDER BY 2
+		              )
+		        GROUP BY CRT_ID
+		       ) V2
+		 WHERE 1=1
+		   AND A.RENT_HOUSE_CODE = B.RENT_HOUSE_CODE
+		   AND A.CNTRCTR_NO = #cntrctrNo#
+		   AND A.CNTRCTR_NO = V.CNTRCTR_NO
+		   AND V.RCIV_DE IS NULL
+		   AND V.MDAT_YM = #edMdatYm#
+		   AND A.CNTRCTR_NO = V1.CNTRCTR_NO(+)
+		   AND A.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE(+)
+		   AND A.DONG = C.DONG(+)
+		   AND A.CNTRCTR_NO = V2.CNTRCTR_NO(+)	
+	</select>
+	
+		<!-- 사용자 고지서 출력 -->
+	<select id="RNT01040203DAO.selectUserNoticeSheetReportList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+<!-- 
+		SELECT 
+			  	#RENT_HOUSE_CODE# AS RENT_HOUSE_CODE
+				,#DONG# AS DONG
+				,#HO# AS HO
+				,#RENT_HOUSE_NM# AS RENT_HOUSE_NM
+				,#NM# AS NM
+				,d.ADRES || ' ' || d.ADRES_DETAIL AS ADRES
+				,d.ZIP
+				,#RENT_HOUSE_NM# || ' ' || #DONG# || '동 ' || #HO# || '호' AS ADDR
+				,#DONG# || '동 ' || #HO# || '호' AS DONGHO
+				,substr(#PAY_TMLMT#, 1,4) AS YYYY
+				,substr(#PAY_TMLMT#, 5,2) AS MM
+				,substr(#PAY_TMLMT#, 7,2) AS DD
+				,#RNTCHRG# AS RENT_AMT
+				,#NPYM_AMOUNT# AS DEL_AMT
+				,#OVDINTR# AS DEL_INT
+				,#GTN# AS GTN
+				,#USER_CATEGORY# AS ITEM
+				,#CATEGORY_AMOUNT# AS ITEM_AMT
+				,#TOTAL_AMOUNT# AS TOTAL_AMT
+				,('1' || #RENT_HOUSE_CODE# || lpad(#DONG#, 4, '0') || lpad(#HO#, 4, '0') || #PAY_TMLMT# || lpad(#TOTAL_AMOUNT#, 10, '0') || substr(SFRNT_OCR_CODE_CHECK('1' || #RENT_HOUSE_CODE# || lpad(#DONG#, 4, '0') || lpad(#HO#, 4, '0') || #PAY_TMLMT# || lpad(#TOTAL_AMOUNT#, 10, '0')), 1, 50) || '300') AS OCRBAND
+		FROM dual
+			,TBRNT_RENT_HOUSE_DONG d
+		WHERE d.RENT_HOUSE_CODE = #RENT_HOUSE_CODE#
+		   AND d.DONG = lpad(#DONG#, 4, '0')
+-->
+
+SELECT   #RENT_HOUSE_CODE# AS RENT_HOUSE_CODE,
+         #DONG# AS DONG,
+         #HO# AS HO,
+         #RENT_HOUSE_NM# AS RENT_HOUSE_NM,
+         #NM# AS NM,
+         d.ADRES || ' ' || d.ADRES_DETAIL AS ADRES,
+         d.ZIP,
+         #RENT_HOUSE_NM# || ' ' || #DONG# || '동 ' || #HO# || '호'
+            AS ADDR,
+         #DONG# || '동 ' || #HO# || '호' AS DONGHO,
+         SUBSTR (#PAY_TMLMT#, 1, 4) AS YYYY,
+         SUBSTR (#PAY_TMLMT#, 5, 2) AS MM,
+         SUBSTR (#PAY_TMLMT#, 7, 2) AS DD,
+         A.RNTCHRG, /* 당월임대료 */
+         A.T_RNTCHRG,/* 미수납임대료 합계 */
+         A.T_OVDINTR,/* 이자합계 */
+         A.T_RDCAMT_AMOUNT, /* 감액합계 */ 
+         A.TOT AS TOT, /* 합계 */
+         (   '2'
+          || #RENT_HOUSE_CODE#
+          || LPAD (#DONG#, 4, '0')
+          || LPAD (#HO#, 4, '0')
+          || #PAY_TMLMT#
+          || LPAD (A.TOT, 10, '0')
+          || SUBSTR (
+                SFRNT_OCR_CODE_CHECK(   '2'
+                                     || #RENT_HOUSE_CODE#
+                                     || LPAD (#DONG#, 4, '0')
+                                     || LPAD (#HO#, 4, '0')
+                                     || #PAY_TMLMT#
+                                     || LPAD (A.TOT, 10, '0')),
+                1,
+                50
+             )
+          || '100')
+            AS OCRBAND 
+            ,F.*
+  FROM   DUAL
+  JOIN   TBRNT_RENT_CNTRCT E ON CNTRCTR_NO = #CNTRCTR_NO#
+  JOIN   TBRNT_RENT_HOUSE_DONG d ON D.RENT_HOUSE_CODE = E.RENT_HOUSE_CODE AND D.DONG = E.DONG
+  <isEqual property="NTIC_SE" compareValue="2">
+  JOIN   (SELECT A.CNTRCTR_NO , 
+                 SUM(A.RQEST_AMOUNT) AS RNTCHRG , 
+                 SUM(A.RQEST_AMOUNT)  AS T_RNTCHRG , 
+                 '0' AS T_OVDINTR  , 
+                 '0' AS T_RDCAMT_AMOUNT , 
+                 A.RQEST_AMOUNT AS TOT
+            FROM TBRNT_GTN_SPORT A
+           WHERE RCIV_DE IS NULL
+             AND SUBSTR(PAY_TMLMT,1,6) <![CDATA[<=]]> #PAY_TMLMT#
+           GROUP BY A.CNTRCTR_N) A ON A.CNTRCTR_NO = E.CNTRCTR_NO  
+  </isEqual>
+  <isEqual property="NTIC_SE" compareValue="1">
+  JOIN   (SELECT   A.CNTRCTR_NO,
+                   SUM(A.RNTCHRG) AS RNTCHRG,
+                   SUM(A.RNTCHRG) AS T_RNTCHRG,
+                   SUM(NVL (A.OVDINTR, 0)) AS T_OVDINTR,
+                   SUM(NVL (A.RDCAMT_AMOUNT, 0)) AS T_RDCAMT_AMOUNT,
+                   SUM(A.RNTCHRG) + SUM(NVL(A.OVDINTR, 0)) + SUM(NVL(A.RDCAMT_AMOUNT, 0)) AS TOT
+            FROM   TBRNT_RENT_MT_RNTCHRG A
+           WHERE   A.RCIV_DE IS NULL
+				<isNotEmpty property="NHT_SN">
+				      AND A.NHT_SN IN
+				<iterate property="ARR_NHT_SN"  open="(" close=")" conjunction="," >
+				      #ARR_NHT_SN[]#
+				</iterate>
+				</isNotEmpty>           
+               GROUP BY A.CNTRCTR_NO) A ON A.CNTRCTR_NO = E.CNTRCTR_NO
+  </isEqual>                  
+  JOIN   (SELECT CRT_ID
+		              ,MAX(DECODE(ROWNUM,1,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,1,VACCT_NO)) AS BANK_CD1
+		              ,MAX(DECODE(ROWNUM,2,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,2,VACCT_NO)) AS BANK_CD2
+		              ,MAX(DECODE(ROWNUM,3,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,3,VACCT_NO)) AS BANK_CD3
+		              ,MAX(DECODE(ROWNUM,4,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,4,VACCT_NO)) AS BANK_CD4
+		              ,MAX(DECODE(ROWNUM,5,DECODE(BANK_NM,'','',BANK_NM||' - '))) || MAX(DECODE(ROWNUM,5,VACCT_NO)) AS BANK_CD5
+		         FROM
+		              (SELECT A.CRT_ID
+		                     ,A.BANK_CD
+		                     ,A.VACCT_NO
+		                     ,SFCOM_CODE_NM('COM021',A.BANK_CD) AS  BANK_NM
+		                FROM VA_BILL A
+		               WHERE 1=1
+		                 AND A.CRT_DIV = (DECODE (#NTIC_SE#, '1', 'RN', 'BS'))
+		                 AND A.CRT_ID = #CNTRCTR_NO#
+		                ORDER BY 2
+		              )
+		        GROUP BY CRT_ID) F ON E.CNTRCTR_NO = F.CRT_ID
+ WHERE   d.RENT_HOUSE_CODE = #RENT_HOUSE_CODE# AND d.DONG = LPAD (#DONG#, 4, '0')
+ 
+	</select>	
+	
+	
+	<!-- 쿼리명 : 영구임대 월임대료 정보 입력
+			 설명 : 영구임대 월임대료 입력 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 이광원
+	 최초작성일 : 2016.08.11
+	-->	
+	<insert id="RNT01040203DAO.saveRentRntchrgC" parameterClass="java.util.HashMap">
+		INSERT INTO TBRNT_RENT_MT_RNTCHRG(							/*매입압류 테이블*/
+					CNTRCTR_NO													/*계약자번호*/
+					,MDAT_YM														/*조정년월*/
+					,MDAT_DE														/*조정일자*/
+					,NHT_SN															/*고지서순번*/
+					,RNTCHRG														/*임대료*/
+					,OVDINTR															/*연체이자*/
+					,PAY_TMLMT														/*납부기한*/
+					,RCIV_AMOUNT													/*수납금액*/
+					,RCIV_DE															/*수납일자*/
+					,RDCAMT_DE														/*감액일자*/
+					,RDCAMT_AMOUNT												/*감액금액*/
+					,PAYMTHD														/*납부방법*/
+					,OPERT_SE														/*작업구분*/
+					,CASH_RCIPT_RGSDE											/*현금영수증등록일*/
+					,CASH_RCIPT_SN													/*현금영수증일련번호*/
+					,REGISTER_ID														/*등록자ID*/
+					,REGIST_DT														/*등록일시*/
+					,UPDUSR_ID														/*수정자ID*/
+					,UPDT_DT															/*수정일시*/
+					)
+		VALUES(
+					#CNTRCTR_NO#													/*계약자번호*/   
+					,SUBSTR(#MDAT_YM#,0,6)													/*조정년월*/
+					,#MDAT_DE#														/*조정일자*/
+					,NVL((
+							SELECT max(NHT_SN)
+							FROM TBRNT_RENT_MT_RNTCHRG
+							WHERE MDAT_DE = #MDAT_DE#
+							),0)+1														/*고지서순번*/
+					,#RNTCHRG#														/*임대료*/
+					,#OVDINTR#														/*연체이자*/
+					,#PAY_TMLMT#													/*납부기한*/
+					,#RCIV_AMOUNT#												/*수납금액*/
+					,#RCIV_DE#														/*수납일자*/
+					,#RDCAMT_DE#													/*감액일자*/
+					,#RDCAMT_AMOUNT#											/*감액금액*/
+					,#PAYMTHD#														/*납부방법*/
+					,'B'																	/*작업구분*/
+					,#CASH_RCIPT_RGSDE#											/*현금영수증등록일*/
+					,#CASH_RCIPT_SN#												/*현금영수증일련번호*/
+					,#S_USER_ID#													/*등록자ID*/
+					,SYSDATE															/*등록일시*/
+					,#S_USER_ID#													/*수정자ID*/
+					,SYSDATE															/*수정일시*/
+				)
+	</insert>
+
+
+	<!-- 쿼리명 : 영구임대 월임대료 정보 수정
+			 설명 : 매입임대 월임대료 정보 수정 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 이광원
+	 최초작성일 : 2013.08.11
+	-->	
+	<update id="RNT01040203DAO.saveRentRntchrgU" parameterClass="java.util.HashMap">
+			UPDATE TBRNT_RENT_MT_RNTCHRG SET 
+						   PAY_TMLMT  = #PAY_TMLMT#
+					       ,RCIV_AMOUNT   = #RCIV_AMOUNT#
+					       ,RCIV_DE  = #RCIV_DE#
+					       ,RDCAMT_DE  = #RDCAMT_DE#
+					       ,RNTCHRG   = #RNTCHRG#
+					       ,RDCAMT_AMOUNT    = #RDCAMT_AMOUNT#
+					       ,OVDINTR = #OVDINTR#
+					       ,UPDUSR_ID = #S_USER_ID#
+					       ,UPDT_DT  = SYSDATE
+			 WHERE MDAT_YM    = #MDAT_YM#
+				AND CNTRCTR_NO = #CNTRCTR_NO#
+				AND NHT_SN   = #NHT_SN#
+				AND MDAT_DE   = #MDAT_DE#
+	</update>
+	
+	
+	<!-- 쿼리명 : 영구임대 월임대료 정보 삭제
+			 설명 : 영구임대 월임대료 정보 삭제 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 이광원
+	 최초작성일 : 2016.08.11
+	-->	
+	<delete id="RNT01040203DAO.saveRentRntchrgD" parameterClass="java.util.HashMap">
+			DELETE 
+			FROM TBRNT_RENT_MT_RNTCHRG
+			 WHERE MDAT_YM    = #MDAT_YM#
+				AND CNTRCTR_NO = #CNTRCTR_NO#
+				AND NHT_SN   = #NHT_SN#
+				AND MDAT_DE   = #MDAT_DE#
+	</delete>		
+
+</sqlMap>

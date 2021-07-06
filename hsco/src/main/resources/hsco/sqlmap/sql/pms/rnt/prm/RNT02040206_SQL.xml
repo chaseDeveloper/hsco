@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd" >
+<sqlMap namespace="RNT02040206_SQL">	
+
+
+	<!-- 쿼리명 : 매입임대 과오납처리 내역 조회
+			 설명 : 매입임대 과오납처리 내역 조회 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.01
+	-->	
+	<select id="RNT02040206DAO.selectPuchasOverRpayList" parameterClass="java.util.HashMap" resultClass="java.util.HashMap">
+		SELECT 
+					/**************************** 고객 and 주택정보 ****************************/
+					A.NM																					/*계약자*/
+					,C.CNTRCTR_NO																	/*계약자번호*/
+					,B.RENT_HOUSE_CODE															/*주택코드*/
+					,B.RENT_HOUSE_NM																/*주택명*/
+					,C.DONG																				/*동*/
+					,C.HO																					/*호*/
+					,A.IHIDNUM																			/*주민번호*/
+					,A.TELNO 
+					, A.MBTLNO								
+					,(SELECT
+								BD.ADRES || ' ' || BD.ADRES_DETAIL || ' ' || B.RENT_HOUSE_NM || ' ' ||
+								TO_NUMBER(C.DONG) || '동 ' || TO_NUMBER(C.HO) || '호'
+					  FROM	TBRNT_PUCHAS_HOUSE_DONG	BD
+					  WHERE BD.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+					  AND BD.DONG	=	C.DONG
+					  ) AS ADDR																			/*주소*/
+					/****************************     납부내역     ****************************/
+					,D.PAY_SE																			/*납부구분*/
+					,D.PAY_TMLMT																		/*납부기일*/
+					,D.RCIV_DE																			/*수납일자*/
+					,D.RCIV_AMOUNT																	/*수납금액*/
+					,D.RCIV_NO																			/*수납번호 : 고지구분별 일련번호*/
+					,D.RCIV_AMOUNT - D.FALT_AMOUNT AS RAMT							/*수납금액 - 과오금액*/
+					/****************************     과오내역     ****************************/
+					,E.NTIC_SE
+					,E.OVERRPAY_NO
+         			 ,TRUNC(((D.FALT_AMOUNT * 0) / 100 * (SYSDATE - TO_DATE(D.RCIV_DE, 'YYYYMMDD')) + 1) / 365, - 1) AS FALT_INT
+					,NVL(TRUNC(( (D.FALT_AMOUNT*0) / 100 * (SYSDATE - TO_DATE(D.RCIV_DE, 'YYYYMMDD'))+1) / 365, -1 ) + D.FALT_AMOUNT,0) AS FALT_AMOUNT	/*과오금액*/
+					,NVL(E.RETURN_AT,0)	AS	RETURN_AT											/*처리유무*/
+					,(CASE WHEN E.RETURN_AT = '1'
+							 THEN '처리'
+							 ELSE '미처리' 
+							 END)		AS		RETURN_AT_NM										/*반환여부명*/
+					,E.RETURN_DE																		/*처리일자*/
+					,NVL(E.BANK_CODE,	D.BANK_CODE)	AS	BANK_CODE						/*은행*/
+		          , (SELECT MAX(CODE_NM)
+		             FROM TBCOM_CMMN_CODE
+		              WHERE GRP_CODE = 'COM021'
+		              AND   CODE = E.BANK_CODE) AS BANK_NM					
+					,E.ACNUTNO																		/*계좌번호*/
+					,E.DPSTR																				/*예금주*/
+					,E.PROCESS_DTLS																	/*과오처리내역*/
+					,E.RM																					/*비고*/
+					/****************************     예산계정 구분     ****************************/                    
+		          ,(
+		            SELECT CODE_NM
+		            FROM TBCOM_CMMN_CODE d
+		            WHERE GRP_CODE = 'BDG017'
+		              AND CODE = bg.BSNS_SE||'1'
+		            ) AS  BG_ATCLASS_NM
+		          ,(
+		            SELECT BUDGET_ACNT_NM
+		            FROM TBBDG_BUDGET_ACNT_CODE d
+		            WHERE YEAR = bg.BUDGET_YEAR
+		              AND BSNS_SE = bg.BSNS_SE
+		              AND BUDGET_ACNT_CODE = (
+		                SELECT UPPER_ACNT_CODE
+		                FROM TBBDG_BUDGET_ACNT_CODE d
+		                WHERE YEAR = bg.BUDGET_YEAR
+		                  AND BSNS_SE = bg.BSNS_SE
+		                  AND BUDGET_ACNT_CODE = (
+		                    SELECT UPPER_ACNT_CODE
+		                    FROM TBBDG_BUDGET_ACNT_CODE d
+		                    WHERE YEAR = bg.BUDGET_YEAR
+		                      AND BSNS_SE = bg.BSNS_SE
+		                      AND BUDGET_ACNT_CODE = bg.BUDGET_ACNT_CODE
+		                    )
+		                )
+		            ) AS BG_ATCLASS1_NM
+		          ,(
+		            SELECT BUDGET_ACNT_NM
+		            FROM TBBDG_BUDGET_ACNT_CODE d
+		            WHERE YEAR = bg.BUDGET_YEAR
+		              AND BSNS_SE = bg.BSNS_SE
+		              AND BUDGET_ACNT_CODE = (
+		                SELECT UPPER_ACNT_CODE
+		                FROM TBBDG_BUDGET_ACNT_CODE d
+		                WHERE YEAR = bg.BUDGET_YEAR
+		                  AND BSNS_SE = bg.BSNS_SE
+		                  AND BUDGET_ACNT_CODE = bg.BUDGET_ACNT_CODE
+		                )
+		            ) AS BG_ATCLASS2_NM
+		          ,(
+		            SELECT BUDGET_ACNT_NM
+		            FROM TBBDG_BUDGET_ACNT_CODE d
+		            WHERE d.YEAR = bg.BUDGET_YEAR
+		              AND d.BSNS_SE = bg.BSNS_SE
+		              AND d.BUDGET_ACNT_CODE = bg.BUDGET_ACNT_CODE
+		            ) AS BG_ATCODE_NM      
+		FROM	TBRNT_PUCHAS_RENT_CSTMR A												/*매입임대고객 테이블*/
+					,TBRNT_PUCHAS_HOUSE B														/*매입주택 테이블*/
+					,TBRNT_PUCHAS_CNTRCT C														/*매입계약 테이블*/
+					,TBRNT_PUCHAS_RCIV D															/*매입수납 테이블*/
+					,TBRNT_PUCHAS_OVERRPAY E													/*매입과오납 테이블*/
+					,TBACC_BUDGET_ACNT_RENT_MAPNG bg					
+		WHERE	A.PUCHAS_CSTMR_NO	=	C.PUCHAS_CSTMR_NO
+	    AND   C.RENT_HOUSE_CODE = bg.RENT_HOUSE_CODE
+	    AND   SUBSTR(D.PAY_TMLMT,1,4) = bg.BUDGET_YEAR(+)
+	    AND   D.PAY_SE = bg.PAY_SE
+		AND		B.RENT_HOUSE_CODE		=	C.RENT_HOUSE_CODE
+		AND		(D.RCIV_SE = '3'	OR		D.FALT_AMOUNT != 0 	OR		 D.OPERT_SE = 'O')
+		AND		C.CNTRCTR_NO				=	D.CNTRCTR_NO
+		AND		D.CNTRCTR_NO				=	E.CNTRCTR_NO(+)
+		AND		D.RCIV_DE					=	E.RCIV_DE(+)
+		AND		D.RCIV_NO					=	E.RCIV_NO(+)
+		AND		D.PAY_SE					=	E.PAY_SE(+)
+		AND     D.NTIC_SE                   =   '1'
+		<isNotEmpty property="houseCode">
+		AND		B.RENT_HOUSE_CODE		LIKE	#houseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND		C.DONG	LIKE	#dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND		C.HO	LIKE	#ho#
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+			AND	A.NM	LIKE	'%'	||	#nm#	||	'%'
+		</isNotEmpty> 
+		AND		D.RCIV_DE BETWEEN	#stRcivDe#	AND	#edRcivDe#
+UNION ALL
+		SELECT 
+					/**************************** 고객 and 주택정보 ****************************/
+					A.NM																					/*계약자*/
+					,C.CNTRCTR_NO																	/*계약자번호*/
+					,B.RENT_HOUSE_CODE															/*주택코드*/
+					,B.RENT_HOUSE_NM																/*주택명*/
+					,C.DONG																				/*동*/
+					,C.HO																					/*호*/
+					,A.IHIDNUM																			/*주민번호*/
+					,A.TELNO 
+					, A.MBTLNO								
+					,(SELECT
+								BD.ADRES || ' ' || BD.ADRES_DETAIL || ' ' || B.RENT_HOUSE_NM || ' ' ||
+								TO_NUMBER(C.DONG) || '동 ' || TO_NUMBER(C.HO) || '호'
+					  FROM	TBRNT_PUCHAS_HOUSE_DONG	BD
+					  WHERE BD.RENT_HOUSE_CODE = C.RENT_HOUSE_CODE
+					  AND BD.DONG	=	C.DONG
+					  ) AS ADDR																			/*주소*/
+					/****************************     납부내역     ****************************/
+					,D.PAY_SE																			/*납부구분*/
+					,D.PAY_TMLMT																		/*납부기일*/
+					,D.RCIV_DE																			/*수납일자*/
+					,D.RCIV_AMOUNT																	/*수납금액*/
+					,D.RCIV_NO																			/*수납번호 : 고지구분별 일련번호*/
+					,D.RCIV_AMOUNT - D.FALT_AMOUNT AS RAMT							/*수납금액 - 과오금액*/
+					/****************************     과오내역     ****************************/
+					,E.NTIC_SE
+					,E.OVERRPAY_NO
+         			 ,TRUNC(((D.FALT_AMOUNT * 0) / 100 * (SYSDATE - TO_DATE(D.RCIV_DE, 'YYYYMMDD')) + 1) / 365, - 1) AS FALT_INT
+					,NVL(TRUNC(( (D.FALT_AMOUNT*0) / 100 * (SYSDATE - TO_DATE(D.RCIV_DE, 'YYYYMMDD'))+1) / 365, -1 ) + D.FALT_AMOUNT,0) AS FALT_AMOUNT	/*과오금액*/
+					,NVL(E.RETURN_AT,0)	AS	RETURN_AT											/*처리유무*/
+					,(CASE WHEN E.RETURN_AT = '1'
+							 THEN '처리'
+							 ELSE '미처리' 
+							 END)		AS		RETURN_AT_NM										/*반환여부명*/
+					,E.RETURN_DE																		/*처리일자*/
+					,NVL(E.BANK_CODE,	D.BANK_CODE)	AS	BANK_CODE						/*은행*/
+		          , (SELECT MAX(CODE_NM)
+		             FROM TBCOM_CMMN_CODE
+		              WHERE GRP_CODE = 'COM021'
+		              AND   CODE = E.BANK_CODE) AS BANK_NM					
+					,E.ACNUTNO																		/*계좌번호*/
+					,E.DPSTR																				/*예금주*/
+					,E.PROCESS_DTLS																	/*과오처리내역*/
+					,E.RM																					/*비고*/
+					/****************************     예산계정 구분     ****************************/                    
+		          ,'' AS  BG_ATCLASS_NM
+		          ,'' AS BG_ATCLASS1_NM
+		          ,'' AS BG_ATCLASS2_NM
+		          ,'' AS BG_ATCODE_NM      
+		FROM	TBRNT_PUCHAS_RENT_CSTMR A												/*매입임대고객 테이블*/
+					,TBRNT_PUCHAS_HOUSE B														/*매입주택 테이블*/
+					,TBRNT_PUCHAS_CNTRCT C														/*매입계약 테이블*/
+					,TBRNT_PUCHAS_RCIV D															/*매입수납 테이블*/
+					,TBRNT_PUCHAS_OVERRPAY E													/*매입과오납 테이블*/					
+		WHERE	A.PUCHAS_CSTMR_NO	=	C.PUCHAS_CSTMR_NO
+		AND		B.RENT_HOUSE_CODE		=	C.RENT_HOUSE_CODE
+		AND		(D.RCIV_SE = '3'	OR		D.FALT_AMOUNT != 0 	OR		 D.OPERT_SE = 'O')
+		AND		C.CNTRCTR_NO				=	D.CNTRCTR_NO
+		AND		D.CNTRCTR_NO				=	E.CNTRCTR_NO(+)
+		AND		D.RCIV_DE					=	E.RCIV_DE(+)
+		AND		D.RCIV_NO					=	E.RCIV_NO(+)
+		/*AND		D.PAY_SE					=	E.PAY_SE(+)*/
+		AND     D.NTIC_SE                   =   '2'
+		AND     E.PAY_SE                    =   'M'
+		<isNotEmpty property="houseCode">
+		AND		B.RENT_HOUSE_CODE		LIKE	#houseCode#
+		</isNotEmpty>
+		<isNotEmpty property="dong">
+		AND		C.DONG	LIKE	#dong#
+		</isNotEmpty>
+		<isNotEmpty property="ho">
+		AND		C.HO	LIKE	#ho#
+		</isNotEmpty>
+		<isNotEmpty property="nm">
+			AND	A.NM	LIKE	'%'	||	#nm#	||	'%'
+		</isNotEmpty> 
+		AND		D.RCIV_DE BETWEEN	#stRcivDe#	AND	#edRcivDe#		
+		ORDER BY	RENT_HOUSE_CODE,	DONG,		HO
+	</select>
+
+
+	<parameterMap id="SPRNT_PUCHAS_REC_DESC_MISS_IU_PARAM" class="java.util.HashMap">
+		<parameter property="NTIC_SE" jdbcType="VARCHAR" javaType="string" mode="IN" />	 
+		<parameter property="OVERRPAY_NO" jdbcType="VARCHAR" javaType="string" mode="IN" />	 			
+		<parameter property="PAY_SE" jdbcType="VARCHAR" javaType="string" mode="IN" />	 
+		<parameter property="CNTRCTR_NO" jdbcType="VARCHAR" javaType="string" mode="IN" />	 
+		<parameter property="RCIV_NO" jdbcType="NUMBER" javaType="string" mode="IN" />
+		<parameter property="PAY_TMLMT" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RCIV_DE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RCIV_AMOUNT" jdbcType="NUMBER" javaType="string" mode="IN" />
+		<parameter property="FALT_AMOUNT" jdbcType="NUMBER" javaType="string" mode="IN" />
+		<parameter property="RETURN_AT" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RETURN_DE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="BANK_CODE" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="ACNUTNO" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="DPSTR" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="PROCESS_DTLS" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="RM" jdbcType="VARCHAR" javaType="string" mode="IN" />
+		<parameter property="S_USER_ID" jdbcType="VARCHAR" javaType="string" mode="IN" />
+	</parameterMap>	
+
+
+
+	<!-- 쿼리명 : 매입임대 과오납(반환처리,반환보류) 처리
+			 설명 : 매입임대 과오납(반환처리,반환보류) 처리 쿼리
+		  수정일 : 수정자  수정내용	
+		  작성자 : 변승우
+	 최초작성일 : 2015.12.01
+	-->	
+	<procedure id="RNT02040206DAO.SPRNT_PUCHAS_REC_DESC_MISS_IU" parameterMap="SPRNT_PUCHAS_REC_DESC_MISS_IU_PARAM">
+		{ CALL SPRNT_PUCHAS_REC_DESC_MISS_IU(?, ? ,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) }
+	</procedure>
+</sqlMap>
